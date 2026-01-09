@@ -5,15 +5,19 @@ from neo4j import GraphDatabase
 
 app = FastAPI(title="Mini-Me Agent Prototype")
 
-# Neo4j connection (CHANGE password if needed)
+# Neo4j connection - CHANGE password if needed
 NEO4J_URI = "bolt://localhost:7687"
 NEO4J_USER = "neo4j"
-NEO4J_PASS = "***REDACTED***"  # your password
+NEO4J_PASS = "***REDACTED***"  # your current password
 
 driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASS))
 
 class Question(BaseModel):
     query: str
+
+class NewTrace(BaseModel):
+    thought: str
+    motive: str
 
 @app.get("/")
 def root():
@@ -26,29 +30,47 @@ def ask(question: Question):
         result = session.run("MATCH (d:Decision) RETURN d.thought, d.motive")
         decisions = [record for record in result]
 
-    # Build context from graph
+    # Build context from your personal traces
     context = ""
     if decisions:
         context = "Your personal context from past decisions:\n"
         for d in decisions:
             context += f"- Thought: {d['d.thought']}\n  Motive: {d['d.motive']}\n\n"
 
-    # Personalized prompt with your context
-    prompt = f"""You are a personalized AI agent that thinks and reasons like the user.
-Use the following personal context to inform your response:
+    # Personalized system prompt
+    system_prompt = f"""You are a personalized AI agent that thinks and reasons exactly like the user.
+Use the following personal context to inform every response:
 
 {context}
 
-User question: {question.query}
+Always consider uncertainty, complexity, long-term perspective, geopolitics, investing risks, and privacy.
+Respond thoughtfully, nuanced, and pragmatic — never give financial advice without disclaimer.
 
-Respond thoughtfully, considering uncertainty, complexity, geopolitics, investing, and the user's worldview."""
+User question: {question.query}"""
 
     response = ollama.chat(
         model='gemma3:1b',
         messages=[
-            {'role': 'system', 'content': prompt},
+            {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': question.query}
         ]
     )
 
     return {"answer": response['message']['content']}
+
+@app.post("/add_trace")
+def add_trace(trace: NewTrace):
+    with driver.session() as session:
+        session.run(
+            """
+            CREATE (d:Decision {
+                thought: $thought,
+                motive: $motive,
+                timestamp: datetime()
+            })
+            """,
+            thought=trace.thought,
+            motive=trace.motive
+        )
+    return {"message": "New decision trace added to context graph!"}
+
