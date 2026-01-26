@@ -74,3 +74,26 @@ def add_trace(trace: NewTrace):
         )
     return {"message": "New decision trace added to context graph!"}
 
+@app.get("/traces")
+def get_traces(limit: int = 10):
+    with driver.session() as session:
+        result = session.run(
+            """
+            MATCH (d:Decision)
+            RETURN d.thought, d.motive, d.timestamp
+            ORDER BY d.timestamp DESC
+            LIMIT $limit
+            """,
+            limit=limit
+        )
+        traces = [
+            {
+                "thought": record["d.thought"],
+                "motive": record["d.motive"],
+                "timestamp": record["d.timestamp"]
+            }
+            for record in result
+        ]
+    return {"traces": traces}
+
+
