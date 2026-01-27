@@ -74,18 +74,53 @@ def add_trace(trace: NewTrace):
         )
     return {"message": "New decision trace added to context graph!"}
 
+#@app.get("/traces")
+#def get_traces(limit: int = 10):
+#    with driver.session() as session:
+#        result = session.run(
+#            """
+#            MATCH (d:Decision)
+#            RETURN d.thought, d.motive, d.timestamp
+#            ORDER BY d.timestamp DESC
+#            LIMIT $limit
+#            """,
+#            limit=limit
+#        )
+#        traces = [
+#            {
+#                "thought": record["d.thought"],
+#                "motive": record["d.motive"],
+#                "timestamp": record["d.timestamp"]
+#            }
+#            for record in result
+#        ]
+#    return {"traces": traces}
+
+
+
+
 @app.get("/traces")
-def get_traces(limit: int = 10):
+def get_traces(limit: int = 10, keyword: str = None):
+    cypher = """
+    MATCH (d:Decision)
+    """
+    params = {"limit": limit}
+
+    if keyword:
+        cypher += """
+        WHERE toLower(d.thought) CONTAINS toLower($keyword)
+           OR toLower(d.motive) CONTAINS toLower($keyword)
+        """
+        params["keyword"] = keyword
+
+    cypher += """
+    RETURN d.thought, d.motive, d.timestamp
+    ORDER BY d.timestamp DESC
+    LIMIT $limit
+    """
+
     with driver.session() as session:
-        result = session.run(
-            """
-            MATCH (d:Decision)
-            RETURN d.thought, d.motive, d.timestamp
-            ORDER BY d.timestamp DESC
-            LIMIT $limit
-            """,
-            limit=limit
-        )
+        result = session.run(cypher, **params)
         traces = [
             {
                 "thought": record["d.thought"],
@@ -95,5 +130,8 @@ def get_traces(limit: int = 10):
             for record in result
         ]
     return {"traces": traces}
+
+
+
 
 
