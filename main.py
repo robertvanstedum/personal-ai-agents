@@ -3,6 +3,34 @@ from pydantic import BaseModel
 import ollama
 from neo4j import GraphDatabase
 
+# Adding Scheduler
+from apscheduler.schedulers.background import BackgroundScheduler
+from datetime import datetime
+
+def auto_add_daily_trace():
+    thought = f"Daily reflection on {datetime.now().strftime('%Y-%m-%d')}"
+    motive = "Continuing to monitor geopolitical and investing landscape; patience, fundamentals, and adaptation remain core principles under uncertainty."
+
+    with driver.session() as session:
+        session.run(
+            """
+            CREATE (d:Decision {
+                thought: $thought,
+                motive: $motive,
+                timestamp: datetime()
+            })
+            """,
+            thought=thought,
+            motive=motive
+        )
+    print(f"Auto-added trace at {datetime.now()}")
+
+# Start scheduler when server starts
+scheduler = BackgroundScheduler()
+scheduler.add_job(auto_add_daily_trace, 'interval', hours=1)  # every hour for testing
+scheduler.start()
+
+
 app = FastAPI(title="Mini-Me Agent Prototype")
 
 # Neo4j connection - CHANGE password if needed
@@ -58,6 +86,7 @@ User question: {question.query}"""
 
     return {"answer": response['message']['content']}
 
+# fixing date handling between neo4j and python
 @app.post("/add_trace")
 def add_trace(trace: NewTrace):
     with driver.session() as session:
@@ -66,7 +95,7 @@ def add_trace(trace: NewTrace):
             CREATE (d:Decision {
                 thought: $thought,
                 motive: $motive,
-                timestamp: datetime()
+                timestamp: datetime()  // correct: Neo4j server current time
             })
             """,
             thought=trace.thought,
@@ -74,11 +103,17 @@ def add_trace(trace: NewTrace):
         )
     return {"message": "New decision trace added to context graph!"}
 
+# updating get traces to reformat date
 @app.get("/traces")
 def get_traces(limit: int = 10, keyword: str = None, sort: str = "desc"):
-    # Validate sort param
+    sort = sort.lower()
     if sort not in ["asc", "desc"]:
-        sort = "desc"  # default to newest first
+        sort = "desc"
+
+    if limit < 1:
+        limit = 5
+    if limit > 20:
+        limit = 20
 
     cypher = """
     MATCH (d:Decision)
@@ -93,7 +128,7 @@ def get_traces(limit: int = 10, keyword: str = None, sort: str = "desc"):
         params["keyword"] = keyword
 
     cypher += f"""
-    RETURN d.thought, d.motive, d.timestamp
+    RETURN d.thought, d.motive, toString(d.timestamp) AS timestamp
     ORDER BY d.timestamp {sort.upper()}
     LIMIT $limit
     """
@@ -104,7 +139,7 @@ def get_traces(limit: int = 10, keyword: str = None, sort: str = "desc"):
             {
                 "thought": record["d.thought"],
                 "motive": record["d.motive"],
-                "timestamp": record["d.timestamp"]
+                "timestamp": record["timestamp"]  # now a clean string
             }
             for record in result
         ]
