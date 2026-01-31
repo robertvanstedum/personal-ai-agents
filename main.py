@@ -150,8 +150,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
 
 def auto_search_and_trace():
-    topic = "gold price geopolitical impact January 2026"
-
+   # topic = "gold price geopolitical impact January 2026"
+     topic = "US stock market resilience despite geopolitical tensions January 2026"
     # Stub / fake search results (no real web call yet – safe & fast for testing)
     search_results = """
     - Gold hits new highs amid ongoing US-China tensions
@@ -189,9 +189,9 @@ def auto_search_and_trace():
 
 # Start scheduler when server starts
 scheduler = BackgroundScheduler()
-scheduler.add_job(auto_search_and_trace, 'interval', minutes=1)  # every 5 min for quick testing
+scheduler.add_job(auto_search_and_trace, 'interval', hours=1)  # every 1 hour
 scheduler.start()
-print("Background scheduler started - auto-stub-traces every 5 minutes")
-
+print("Background scheduler started - auto-stub-traces every 1 hour")
+ 
 
 
