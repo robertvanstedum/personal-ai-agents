@@ -146,6 +146,52 @@ def get_traces(limit: int = 10, keyword: str = None, sort: str = "desc"):
     return {"traces": traces}
 
 
+from apscheduler.schedulers.background import BackgroundScheduler
+from datetime import datetime
+
+def auto_search_and_trace():
+    topic = "gold price geopolitical impact January 2026"
+
+    # Stub / fake search results (no real web call yet – safe & fast for testing)
+    search_results = """
+    - Gold hits new highs amid ongoing US-China tensions
+    - Central banks increase gold reserves in Q1 2026
+    - Geopolitical risks drive safe-haven demand despite strong US equities
+    - Analysts expect continued volatility in precious metals
+    - Inflation concerns linger despite Fed policy
+    """
+
+    # Summarize stub with Ollama
+    summary_prompt = f"Summarize the following search results about '{topic}' in one short paragraph, focusing on market impact and geopolitical factors:\n\n{search_results}"
+    summary_response = ollama.chat(
+        model='gemma3:1b',
+        messages=[{'role': 'user', 'content': summary_prompt}]
+    )
+    summary = summary_response['message']['content']
+
+    # Create trace
+    thought = f"Auto-stub summary on {topic} - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    motive = f"Geopolitical and market news update (stub): {summary}. This informs my long-term investing view under uncertainty and complexity."
+
+    with driver.session() as session:
+        session.run(
+            """
+            CREATE (d:Decision {
+                thought: $thought,
+                motive: $motive,
+                timestamp: datetime()
+            })
+            """,
+            thought=thought,
+            motive=motive
+        )
+    print(f"Auto-added stub trace: {thought}")
+
+# Start scheduler when server starts
+scheduler = BackgroundScheduler()
+scheduler.add_job(auto_search_and_trace, 'interval', minutes=1)  # every 5 min for quick testing
+scheduler.start()
+print("Background scheduler started - auto-stub-traces every 5 minutes")
 
 
 
