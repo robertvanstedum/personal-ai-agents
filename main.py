@@ -150,17 +150,12 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
 
 def auto_search_and_trace():
-    topic = "US stock market resilience despite geopolitical tensions January 2026"
-    # Stub / fake search results (no real web call yet – safe & fast for testing)
-    search_results = """
-    - Gold hits new highs amid ongoing US-China tensions
-    - Central banks increase gold reserves in Q1 2026
-    - Geopolitical risks drive safe-haven demand despite strong US equities
-    - Analysts expect continued volatility in precious metals
-    - Inflation concerns linger despite Fed policy
-    """
+    topic = "gold price geopolitical impact January 2026"
 
-    # Summarize stub with Ollama
+    # Use the toggled search function
+    search_results = search_function(topic)
+
+    # Summarize with Ollama (same as before)
     summary_prompt = f"Summarize the following search results about '{topic}' in one short paragraph, focusing on market impact and geopolitical factors:\n\n{search_results}"
     summary_response = ollama.chat(
         model='gemma3:1b',
@@ -168,9 +163,8 @@ def auto_search_and_trace():
     )
     summary = summary_response['message']['content']
 
-    # Create trace
-    thought = f"Auto-stub summary on {topic} - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-    motive = f"Geopolitical and market news update (stub): {summary}. This informs my long-term investing view under uncertainty and complexity."
+    thought = f"Auto-search summary on {topic} - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    motive = f"Geopolitical and market news update: {summary}. This informs my long-term investing view under uncertainty and complexity."
 
     with driver.session() as session:
         session.run(
@@ -184,13 +178,38 @@ def auto_search_and_trace():
             thought=thought,
             motive=motive
         )
-    print(f"Auto-added stub trace: {thought}")
+    print(f"Auto-added trace: {thought}")
 
 # Start scheduler when server starts
 scheduler = BackgroundScheduler()
-scheduler.add_job(auto_search_and_trace, 'interval', hours=1)  # every 1 hour
+scheduler.add_job(auto_search_and_trace, 'interval', minutes=1)  # every 1 minute
 scheduler.start()
-print("Background scheduler started - auto-stub-traces every 1 hour")
+print("Background scheduler started - auto-stub-traces every 1 minute")
  
+
+# === STUB VERSION (fake data – fast, no network, great for testing) ===
+def stub_search(topic):
+    return f"""
+    - Gold hits new highs amid ongoing US-China tensions
+    - Central banks buying gold at record pace in 2026
+    - Geopolitical risks drive safe-haven demand despite strong US equities
+    - Analysts expect continued volatility in precious metals
+    - Inflation concerns linger despite Fed policy
+    """
+
+# === REAL VERSION (uses your web_search tool) ===
+def real_search(topic):
+    try:
+        results = web_search(query=topic, num_results=5)
+        # Convert to text (handles list/dict format)
+        if isinstance(results, list):
+            return "\n".join([str(r) for r in results])
+        return str(results)
+    except Exception as e:
+        return f"Web search failed: {str(e)}. Using fallback summary."
+
+# Choose mode here (toggle this line)
+search_function = stub_search   # Change to real_search when ready for live data
+# search_function = real_search
 
 
