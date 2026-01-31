@@ -150,8 +150,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
 
 def auto_search_and_trace():
-   # topic = "gold price geopolitical impact January 2026"
-     topic = "US stock market resilience despite geopolitical tensions January 2026"
+    topic = "US stock market resilience despite geopolitical tensions January 2026"
     # Stub / fake search results (no real web call yet – safe & fast for testing)
     search_results = """
     - Gold hits new highs amid ongoing US-China tensions
