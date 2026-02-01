@@ -2,10 +2,12 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import ollama
 from neo4j import GraphDatabase
+import httpx
 
 # Adding Scheduler
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
+
 
 def auto_add_daily_trace():
     thought = f"Daily reflection on {datetime.now().strftime('%Y-%m-%d')}"
@@ -152,10 +154,8 @@ from datetime import datetime
 def auto_search_and_trace():
     topic = "gold price geopolitical impact January 2026"
 
-    # Use the toggled search function
-    search_results = search_function(topic)
+    search_results = search_function(topic)  # uses stub now
 
-    # Summarize with Ollama (same as before)
     summary_prompt = f"Summarize the following search results about '{topic}' in one short paragraph, focusing on market impact and geopolitical factors:\n\n{search_results}"
     summary_response = ollama.chat(
         model='gemma3:1b',
@@ -178,7 +178,58 @@ def auto_search_and_trace():
             thought=thought,
             motive=motive
         )
-    print(f"Auto-added trace: {thought}")
+    print(f"Auto-added trace: {thought}")  # ← make sure this line is here
+
+
+    # Real web search with debug
+
+def search_real(topic):
+    try:
+        # DuckDuckGo Lite – free, no key, returns HTML with results
+        url = f"https://lite.duckduckgo.com/lite/?q={topic.replace(' ', '+')}"
+        response = httpx.get(url, timeout=10)
+        # Take first chunk of HTML
+        search_text = response.text[:4000]
+        # Clean up (remove newlines/spaces)
+        search_text = ' '.join(search_text.split())
+        print("DuckDuckGo search text:", search_text[:200])  # debug print
+    except Exception as e:
+        search_text = f"Search failed: {str(e)}. Using fallback."
+        print("Search failed:", str(e))
+    return search_text
+
+    # Convert to text safely
+    if isinstance(search_results, list):
+        search_text = "\n".join([str(r) for r in search_results])
+    elif isinstance(search_results, dict):
+        search_text = str(search_results)
+    else:
+        search_text = str(search_results) if search_results else "No results returned."
+
+    # Summarize with Ollama
+    summary_prompt = f"Summarize the following search results about '{topic}' in one short paragraph, focusing on market impact and geopolitical factors:\n\n{search_text}"
+    summary_response = ollama.chat(
+        model='gemma3:1b',
+        messages=[{'role': 'user', 'content': summary_prompt}]
+    )
+    summary = summary_response['message']['content']
+
+    thought = f"Auto-search summary on {topic} - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    motive = f"Geopolitical and market news update: {summary}. This informs my long-term investing view under uncertainty and complexity."
+
+    with driver.session() as session:
+        session.run(
+            """
+            CREATE (d:Decision {
+                thought: $thought,
+                motive: $motive,
+                timestamp: datetime()
+            })
+            """,
+            thought=thought,
+            motive=motive
+        )
+    print(f"Auto-added real trace: {thought}")
 
 # Start scheduler when server starts
 scheduler = BackgroundScheduler()
@@ -198,18 +249,19 @@ def stub_search(topic):
     """
 
 # === REAL VERSION (uses your web_search tool) ===
-def real_search(topic):
+
+
+def search_real(topic):
     try:
-        results = web_search(query=topic, num_results=5)
-        # Convert to text (handles list/dict format)
-        if isinstance(results, list):
-            return "\n".join([str(r) for r in results])
-        return str(results)
+        url = f"https://lite.duckduckgo.com/lite/?q={topic.replace(' ', '+')}"
+        response = httpx.get(url, timeout=10)
+        search_text = response.text[:4000]  # first chunk of HTML
+        search_text = ' '.join(search_text.split())  # clean up
     except Exception as e:
-        return f"Web search failed: {str(e)}. Using fallback summary."
+        search_text = f"Search failed: {str(e)}. Using fallback."
+    return search_text
 
 # Choose mode here (toggle this line)
 search_function = stub_search   # Change to real_search when ready for live data
-# search_function = real_search
 
 
