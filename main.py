@@ -250,15 +250,18 @@ def stub_search(topic):
 
 # === REAL VERSION (uses your web_search tool) ===
 
-
 def search_real(topic):
     try:
-        url = f"https://lite.duckduckgo.com/lite/?q={topic.replace(' ', '+')}"
-        response = httpx.get(url, timeout=10)
-        search_text = response.text[:4000]  # first chunk of HTML
-        search_text = ' '.join(search_text.split())  # clean up
+        # Use the imported ollama web_search
+        results = web_search(query=topic, max_results=5)
+        # Extract text from response
+        if hasattr(results, 'results'):
+            search_text = "\n".join([r.get('title', '') + ": " + r.get('snippet', '') for r in results.results])
+        else:
+            search_text = str(results)
     except Exception as e:
-        search_text = f"Search failed: {str(e)}. Using fallback."
+        search_text = f"Web search failed: {str(e)}. Using fallback."
+        print("Web search failed:", str(e))
     return search_text
 
 # Choose mode here (toggle this line)
