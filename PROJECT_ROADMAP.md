@@ -85,17 +85,17 @@ With infrastructure settling and cost strategy clear, next big feature emerged: 
 ### Phase 1: Architecture & Cleanup 🔄
 **Status:** In progress (Weekend of Feb 8-9, 2026)  
 **Goals:**
-1. Lock down architecture decisions (see ARCHITECTURE.md)
-2. Complete Gmail cleanup task
-3. Push personal-ai-agents to GitHub
-4. Establish repository structure
+1. ✅ Lock down architecture decisions (see ARCHITECTURE.md) — DONE 2026-02-07
+2. ⏳ Complete Gmail cleanup task — In progress
+3. ✅ Push personal-ai-agents to GitHub — DONE 2026-02-07
+4. ⏳ Establish repository structure — Next after Gmail
 
-**Open Decisions:**
-- [ ] Git strategy (mono-repo vs multi-repo)
-- [ ] Docker strategy (unified compose)
-- [ ] Server target (Mac Mini, VPS)
-- [ ] Naming conventions
-- [ ] Backup strategy
+**Architecture Decisions Made (2026-02-07):**
+- ✅ **Git strategy:** Mono-repo now, multi-repo later for public version
+- ✅ **Docker strategy:** Unified compose (modern container architecture)
+- ✅ **Server target:** Mac Mini next, keep optionality
+- ✅ **Naming:** `ai-infrastructure` repo, `ai-*` prefix for containers
+- ✅ **Backups:** Daily automated, 30-day retention, monthly cloud archive
 
 ### Phase 2: Geopolitics Curator 📅
 **Status:** Planned  
