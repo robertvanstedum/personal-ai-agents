@@ -3,6 +3,8 @@ from pydantic import BaseModel
 import ollama
 from neo4j import GraphDatabase
 import httpx
+from search_duckduckgo import search_duckduckgo
+
 
 # Adding Scheduler
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -26,12 +28,6 @@ def auto_add_daily_trace():
             motive=motive
         )
     print(f"Auto-added trace at {datetime.now()}")
-
-# Start scheduler when server starts
-scheduler = BackgroundScheduler()
-scheduler.add_job(auto_add_daily_trace, 'interval', hours=1)  # every hour for testing
-scheduler.start()
-
 
 app = FastAPI(title="Mini-Me Agent Prototype")
 
@@ -147,10 +143,6 @@ def get_traces(limit: int = 10, keyword: str = None, sort: str = "desc"):
         ]
     return {"traces": traces}
 
-
-from apscheduler.schedulers.background import BackgroundScheduler
-from datetime import datetime
-
 def auto_search_and_trace():
     topic = "gold price geopolitical impact January 2026"
 
@@ -233,9 +225,9 @@ def search_real(topic):
 
 # Start scheduler when server starts
 scheduler = BackgroundScheduler()
-scheduler.add_job(auto_search_and_trace, 'interval', minutes=1)  # every 1 minute
+scheduler.add_job(auto_search_and_trace, 'interval', hours=12)  # every 12 hourse
 scheduler.start()
-print("Background scheduler started - auto-stub-traces every 1 minute")
+print("Background scheduler started - auto-stub-traces every 12 hours")
  
 
 # === STUB VERSION (fake data – fast, no network, great for testing) ===
@@ -248,23 +240,13 @@ def stub_search(topic):
     - Inflation concerns linger despite Fed policy
     """
 
-# === REAL VERSION (uses your web_search tool) ===
-
-def search_real(topic):
-    try:
-        # Use the imported ollama web_search
-        results = web_search(query=topic, max_results=5)
-        # Extract text from response
-        if hasattr(results, 'results'):
-            search_text = "\n".join([r.get('title', '') + ": " + r.get('snippet', '') for r in results.results])
-        else:
-            search_text = str(results)
-    except Exception as e:
-        search_text = f"Web search failed: {str(e)}. Using fallback."
-        print("Web search failed:", str(e))
-    return search_text
 
 # Choose mode here (toggle this line)
-search_function = stub_search   # Change to real_search when ready for live data
+search_function = search_real   # Change to search_real  when ready for live data
+
+# Start the server
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
