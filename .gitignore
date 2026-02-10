@@ -2,3 +2,8 @@ ai-env/
 __pycache__/
 *.pyc
 .DS_Store
+
+# Curator output files (generated, not source)
+curator_output.txt
+curator_briefing.html
+telegram_message*.txt
