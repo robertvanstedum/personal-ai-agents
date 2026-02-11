@@ -6,4 +6,6 @@ __pycache__/
 # Curator output files (generated, not source)
 curator_output.txt
 curator_briefing.html
+curator_latest.html
+curator_index.html
 telegram_message*.txt

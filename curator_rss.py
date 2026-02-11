@@ -400,6 +400,161 @@ def format_html(entries: List[Dict]) -> str:
 """
     return html
 
+def generate_index_page(archive_dir: str):
+    """Generate an index.html page listing all archived briefings"""
+    import os
+    from datetime import datetime
+    
+    # Get all archive files, sorted newest first
+    archive_files = []
+    if os.path.exists(archive_dir):
+        for filename in os.listdir(archive_dir):
+            if filename.startswith("curator_") and filename.endswith(".html"):
+                date_str = filename.replace("curator_", "").replace(".html", "")
+                try:
+                    date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+                    archive_files.append((date_str, filename, date_obj))
+                except ValueError:
+                    pass
+    
+    # Sort by date, newest first
+    archive_files.sort(key=lambda x: x[2], reverse=True)
+    
+    # Generate HTML
+    html = """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curator Archive</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+        }
+        .quick-links {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+        .quick-links a {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        .quick-links a:hover {
+            background: #5568d3;
+        }
+        .archive-list {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .archive-item {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .archive-item:last-child {
+            border-bottom: none;
+        }
+        .archive-item:hover {
+            background: #f8f8f8;
+        }
+        .archive-date {
+            font-weight: 600;
+            color: #333;
+        }
+        .archive-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .archive-link:hover {
+            text-decoration: underline;
+        }
+        .stats {
+            text-align: center;
+            color: #666;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📚 Curator Archive</h1>
+        <p>Your daily geopolitics & finance briefings</p>
+    </div>
+    
+    <div class="quick-links">
+        <a href="curator_latest.html">📰 Today's Briefing</a>
+    </div>
+    
+    <div class="archive-list">
+        <h2>Past Briefings</h2>
+"""
+    
+    if archive_files:
+        for date_str, filename, date_obj in archive_files:
+            formatted_date = date_obj.strftime("%B %d, %Y")  # e.g., "February 10, 2026"
+            day_of_week = date_obj.strftime("%A")  # e.g., "Monday"
+            html += f"""
+        <div class="archive-item">
+            <div>
+                <span class="archive-date">{formatted_date}</span>
+                <span style="color: #999; margin-left: 10px;">{day_of_week}</span>
+            </div>
+            <a href="{archive_dir}/{filename}" class="archive-link">View Briefing →</a>
+        </div>
+"""
+    else:
+        html += """
+        <p style="text-align: center; color: #999; padding: 40px 0;">
+            No archived briefings yet. Check back after your first automated run!
+        </p>
+"""
+    
+    html += f"""
+    </div>
+    
+    <div class="stats">
+        <p>{len(archive_files)} briefing(s) archived</p>
+    </div>
+</body>
+</html>
+"""
+    
+    # Save index
+    with open("curator_index.html", "w") as f:
+        f.write(html)
+    print(f"📑 Index page updated: curator_index.html")
+
 def main():
     """Run the curator and display results"""
     import sys
@@ -424,16 +579,42 @@ def main():
     
     # HTML generation (default: always generate)
     html_content = format_html(top_articles)
+    
+    # Create dated archive file
+    import os
+    from datetime import datetime
+    today = datetime.now().strftime("%Y-%m-%d")
+    archive_file = f"curator_{today}.html"
+    
+    # Create archive directory if it doesn't exist
+    archive_dir = "curator_archive"
+    os.makedirs(archive_dir, exist_ok=True)
+    
+    # Save dated archive
+    archive_path = os.path.join(archive_dir, archive_file)
+    with open(archive_path, "w") as f:
+        f.write(html_content)
+    print(f"📁 Archive saved to {archive_path}")
+    
+    # Save as "latest" for bookmarking
+    latest_file = "curator_latest.html"
+    with open(latest_file, "w") as f:
+        f.write(html_content)
+    print(f"🔖 Latest briefing: {latest_file} (bookmark this!)")
+    
+    # Keep old curator_briefing.html for compatibility
     html_file = "curator_briefing.html"
     with open(html_file, "w") as f:
         f.write(html_content)
-    print(f"🌐 HTML briefing saved to {html_file}")
+    
+    # Generate index page with archive links
+    generate_index_page(archive_dir)
     
     # Auto-open in browser
     if auto_open:
         try:
-            subprocess.run(["open", html_file], check=True)
-            print(f"✅ Opened {html_file} in browser")
+            subprocess.run(["open", latest_file], check=True)
+            print(f"✅ Opened {latest_file} in browser")
         except Exception as e:
             print(f"⚠️  Could not auto-open: {e}")
     
