@@ -73,6 +73,7 @@ With infrastructure settling and cost strategy clear, next big feature emerged: 
 - **Batch sizes matter** - 1000 items > 100 items (fewer API calls)
 - **Planning > fixing** - Structure upfront saves refactoring later
 - **Model strategy matters** - Right model for the job saves money without sacrificing quality
+- **Balance monitoring critical** - Feb 11: Curator cron timeout caused by low balance ($0.40). Silent failure, no alert. Need proactive monitoring before hitting limits. (See `/workspace/projects/balance-monitoring.md`)
 
 ---
 
@@ -97,9 +98,16 @@ With infrastructure settling and cost strategy clear, next big feature emerged: 
 - ✅ **Naming:** `ai-infrastructure` repo, `ai-*` prefix for containers
 - ✅ **Backups:** Daily automated, 30-day retention, monthly cloud archive
 
-### Phase 2: Geopolitics Curator 📅
-**Status:** Planned  
+### Phase 2: Geopolitics Curator ✅🔄
+**Status:** MVP Live (Feb 10, 2026) → AI Enhancement Next  
 **Why this matters:** This is the first "smart agent" feature that demonstrates the full power of the integrated system — automated curation, personalized analysis, and learning from user behavior over time.
+
+**Current Status (Feb 11, 2026):**
+- ✅ MVP working (mechanical keyword scoring + source diversity)
+- ✅ Telegram delivery automated (7am daily via OpenClaw cron)
+- ✅ HTML bookmark system (curator_latest.html + dated archives)
+- 🔄 **Next:** Add AI filtering (Haiku pre-filter → Sonnet quality ranking)
+- 🔄 **Next:** Context-aware curation (read Neo4j for your recent interests)
 
 ---
 
@@ -227,20 +235,55 @@ This plugs perfectly into the personal-ai-agents setup:
 4. **Portfolio piece** - Clear, impressive demo of AI-human collaboration
 5. **Learning opportunity** - Iterative refinement based on real usage patterns
 
-### Phase 3: Unified Memory Architecture 📅
+### Phase 3: RVS Associates LLC Website 📅
+**Status:** Planned (Capital Investment Project)  
+**Why this matters:** Use this AI collaboration to build a functional, professional LLC website. Demonstrates capabilities to potential clients, showcases AI-human partnership, and establishes digital presence for RVS Associates LLC.
+
+**Business Context:**
+- Company: RVS Associates LLC
+- Investment: Capital expense (AI infrastructure + development)
+- Billing: Switch Anthropic to corporate card
+- Goal: Professional portfolio + business development
+
+**Deliverables:**
+- Modern, professional website design
+- Portfolio showcasing AI agent work
+- Clear value proposition for consulting services
+- Case studies from this collaboration
+- Contact/inquiry system
+
+**Technical Approach:**
+- Built collaboratively (Robert + Mini-moi)
+- Modern stack (to be determined based on needs)
+- Hosted/deployed professionally
+- Mobile-responsive, accessible
+
+**Timeline:** TBD (after curator Phase 2 AI enhancement)
+
+### Phase 4: Unified Memory Architecture 📅
 **Status:** Future  
 **Goals:**
 - Integrate OpenClaw MEMORY.md with Neo4j context graph
 - Automated memory consolidation
 - Cross-reference personal context with research artifacts
 
-### Phase 4: Production Migration 📅
-**Status:** Future  
+### Phase 5: Production Migration & Monitoring 📅
+**Status:** Planned (April 2026)  
 **Goals:**
 - Move from MacBook to dedicated server (Mac Mini or VPS)
 - Production Docker setup
+- **Security hardening:**
+  - Migrate credentials (keychain → encrypted .env or Docker secrets)
+  - See `PRODUCTION_SECURITY.md` for full migration plan
+  - Full-disk encryption, firewall rules
+  - Credential rotation procedures
 - Backup automation
-- Monitoring & alerting
+- **Monitoring & alerting:**
+  - Balance alerts (Anthropic API usage)
+  - Error pattern detection (quota, rate limits)
+  - Cron job health checks
+  - Security event monitoring
+  - Telegram notifications for critical issues
 
 ---
 
@@ -295,12 +338,33 @@ Demonstrates AI-human strategic collaboration to future employers, investors, or
 
 ## Timeline
 
-**Feb 8-9, 2026** - Lock down architecture + finish Gmail cleanup  
-**Feb 10-14, 2026** - Build geopolitics curator Phase 2.1 (MVP)  
-**Feb 15-21, 2026** - Iterate curator, add Postgres integration  
-**March 2026** - Unified memory architecture  
-**Q2 2026** - Production migration
+**Target: Production by April 2026** 🎯
+
+**Week of Feb 10-16, 2026**
+- ✅ Curator MVP live (mechanical scoring + automation)
+- ⏳ AI enhancement (Haiku pre-filter + Sonnet ranking)
+- ⏳ Context-aware curation (Neo4j integration)
+
+**Week of Feb 17-23, 2026**
+- Postgres integration (save selected articles)
+- Source scoring (track engagement patterns)
+- Balance monitoring & alerting
+
+**Week of Feb 24 - Mar 2, 2026**
+- RVS Associates LLC website (design + structure)
+- Portfolio content (case studies from collaboration)
+
+**March 2026**
+- Website build & deployment
+- Unified memory architecture
+- Advanced curator features
+
+**April 2026** 🚀
+- Production migration (server deployment)
+- Monitoring & backup automation
+- System hardening & documentation
+- **Go live: Professional LLC presence + AI infrastructure**
 
 ---
 
-_Last updated: 2026-02-07 by Mini-moi_
+_Last updated: 2026-02-11 by Mini-moi_
