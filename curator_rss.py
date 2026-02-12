@@ -34,9 +34,10 @@ from datetime import datetime, timezone
 from typing import List, Dict
 import time
 
-# RSS Feed Sources (refined 2026-02-09)
+# RSS Feed Sources (updated 2026-02-11)
 # Focus: Analysis over noise, trend-oriented macro content
 FEEDS = {
+    "Geopolitical Futures": "https://geopoliticalfutures.com/feed/",  # Premium geopolitical analysis, strategic forecasting
     "ZeroHedge": "https://cms.zerohedge.com/fullrss2.xml",  # Contrarian edge, debasement/gold/dollar
     "The Big Picture": "https://ritholtz.com/feed/",  # Macro synthesis, behavioral takes
     "Fed On The Economy": "https://www.stlouisfed.org/rss/page%20resources/publications/blog-entries",  # Fed analysis layer
@@ -115,6 +116,7 @@ def score_entry(entry: Dict) -> float:
     
     # Source priority (optional: weight trusted sources higher)
     source_weights = {
+        "Geopolitical Futures": 1.4,  # Premium geopolitical analysis (subscription)
         "The Big Picture": 1.2,
         "ZeroHedge": 1.1,
         "Fed On The Economy": 1.2,  # Fed analysis layer
