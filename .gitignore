@@ -3,6 +3,11 @@ __pycache__/
 *.pyc
 .DS_Store
 
+# Credentials (NEVER COMMIT!)
+.env
+credentials.json
+secrets.json
+
 # Curator output files (generated, not source)
 curator_output.txt
 curator_briefing.html
