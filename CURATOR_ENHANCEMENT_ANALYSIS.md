@@ -72,8 +72,17 @@ Reality: Highly relevant (China buying gold/dumping dollars)
 - Time per day: 30 minutes (skim 150 articles, pick 20)
 - Days per month: 30
 - Total time: 15 hours/month
-- Hourly value: $100/hour (consultant rate)
-- **Monthly cost: $1,500** (opportunity cost)
+- **Hard constraint: $300/month max** (would reduce scope/frequency to stay under)
+
+**At $300 budget, realistic options:**
+1. Full scope (30 min/day): Values time at $20/hour
+2. Reduced scope (6 min/day): Values time at $100/hour but only 3 hours/month
+3. Lower frequency (2x/week): Skip most days to stay in budget
+
+**None are ideal:**
+- Option 1: Undervalues time
+- Option 2: Sacrifices completeness  
+- Option 3: Loses daily habit
 
 **Current automation:**
 - $0/month (mechanical scoring)
@@ -187,12 +196,14 @@ Provide final score + reasoning.
 - Perfect context understanding
 
 **Cons:**
-- $1,500/month opportunity cost
-- 15 hours/month time investment
+- $300/month budget cap forces trade-offs:
+  - Either undervalue time ($20/hr)
+  - Or reduce scope/frequency (incomplete coverage)
+- 15 hours/month time investment (if full scope)
 - Doesn't scale
 - Inconsistent (depends on daily energy)
 
-**ROI:** Negative (time > value for routine curation)
+**ROI:** Negative (time cost forces quality/scope compromises)
 
 ---
 
@@ -252,19 +263,21 @@ Provide final score + reasoning.
 
 | Approach | Monthly Cost | Quality | Time Required |
 |----------|-------------|---------|---------------|
-| Manual | $1,500 | High | 15 hours |
+| Manual (capped) | $300 | Compromised* | 15 hours or reduced scope |
 | Mechanical | $0 | Medium | 0 hours |
 | AI-Enhanced | $27 | High | 0 hours |
 
+*At $300 cap, must either undervalue time or reduce scope/frequency
+
 **Savings vs. Manual:**
-- Cost: $1,500 - $27 = **$1,473/month saved**
+- Cost: $300 - $27 = **$273/month saved** (91% reduction)
 - Time: 15 hours/month freed
-- Quality: Maintained (or improved with challenge-factor)
+- Quality: Better (no compromises needed to meet budget)
 
 **Cost vs. Mechanical:**
 - Additional cost: $27/month
 - Quality gain: Medium → High
-- **Worth it?** Yes, if you value high-quality curation
+- **Worth it?** Yes — 10x cost increase for major quality jump
 
 ---
 
@@ -288,11 +301,12 @@ Provide final score + reasoning.
 - Per month: ~15 hours
 - Per year: 180 hours
 
-**Value of time saved (@ $100/hour):**
-- Monthly: $1,500
-- Annual: $18,000
+**Value of time saved:**
+- At $20/hour (budget-constrained rate): $300/month = $3,600/year
+- At $50/hour (realistic rate): $750/month = $9,000/year  
+- At $100/hour (consultant rate): $1,500/month = $18,000/year
 
-**Even at $50/hour:** $9,000/year saved
+**But reality:** You'd cap at $300/month, forcing trade-offs (scope, frequency, or quality)
 
 ---
 
@@ -386,11 +400,11 @@ Result: Filtered out
 
 | Approach | Monthly Cost | Winner |
 |----------|--------------|--------|
-| Manual | $1,500 | ❌ |
+| Manual (capped) | $300 | ❌ |
 | Mechanical | $0 | ✅ (but...) |
 | AI-Enhanced | $27 | ✅ |
 
-**AI is 98% cheaper than manual.** $27 vs $0 is negligible in context.
+**AI is 91% cheaper than capped manual.** Gets full quality without budget compromises.
 
 ---
 
@@ -477,31 +491,36 @@ Result: Filtered out
 
 > "In early 2026, I built an AI-enhanced news curator that broke the traditional project management triangle.
 >
-> **The challenge:** I was spending 30 minutes daily curating 150 articles to 20 relevant ones — $1,500/month opportunity cost. Basic keyword automation was free but low-quality.
+> **The challenge:** Manual curation would take 30 minutes daily. At my $300/month budget cap, I'd have to either undervalue my time at $20/hour, or reduce scope/frequency. Basic keyword automation was free but low-quality.
 >
 > **The solution:** Two-stage AI filter — Haiku for bulk relevance ($0.15), Sonnet for quality ranking ($0.75). Total: $0.90/day or $27/month.
 >
 > **The results:**
 > - **Speed:** 30 minutes → 15 seconds (99% faster)
-> - **Cost:** $1,500/month → $27/month (98% cheaper)
-> - **Quality:** Maintained high quality with context understanding
+> - **Cost:** $27/month (91% under budget cap, no compromises needed)
+> - **Quality:** High quality without sacrificing scope or frequency
 >
-> **The insight:** AI enables simultaneous optimization across dimensions that traditionally required trade-offs. This isn't 'pick two anymore' — with the right architecture, you can have all three."
+> **The insight:** AI eliminates forced trade-offs. At $27/month, I get full quality daily curation that would require budget-breaking time investment or quality compromises manually. This is how you beat the iron triangle."
 
 ---
 
 **"How do you think about AI ROI?"**
 
-> "I compare three dimensions: time, cost, and quality — against human alternatives, not just against zero.
+> "I compare three dimensions: time, cost, and quality — with realistic budget constraints, not idealized scenarios.
 >
-> For my curator:
-> - Time: AI saves 15 hours/month (value: $1,500)
-> - Cost: AI costs $27/month (investment: negligible)
-> - Quality: AI matches human judgment (understands context, not just keywords)
+> For my curator, I had a $300/month cap. Manual curation at that budget meant either:
+> - Undervalue time ($20/hour for consulting-level work)
+> - Reduce scope (miss important articles)
+> - Lower frequency (break daily habit)
 >
-> **ROI: 5,500%** (save $1,500, invest $27)
+> AI solution costs $27/month with no compromises:
+> - Full daily coverage
+> - High-quality analysis
+> - 15 hours/month time freed
 >
-> The key: Use the right model for each job. Haiku for bulk ($0.15), Sonnet for quality ($0.75). This two-stage design is 10x cheaper than using Sonnet for everything, while maintaining quality."
+> **ROI: 1,000%** (save $273/month, invest $27, plus avoid forced trade-offs)
+>
+> The key: Right model for each job. Haiku for bulk ($0.15), Sonnet for quality ($0.75). This two-stage design is 10x cheaper than using Sonnet for everything."
 
 ---
 
@@ -511,13 +530,13 @@ Result: Filtered out
 >
 > 1. **Right model for the job** — Don't use premium models for bulk work
 > 2. **Batch efficiently** — One Haiku call for 150 articles, not 150 calls
-> 3. **Compare to alternatives** — $27/month AI vs $1,500/month human time = obvious win
+> 3. **Compare to real constraints** — Budget caps force manual compromises; AI eliminates them
 >
-> In my curator: Stage 1 (Haiku, cheap) filters 150 → 50. Stage 2 (Sonnet, premium) ranks 50 → 20. This costs $0.90/day.
+> In my curator: Stage 1 (Haiku, cheap) filters 150 → 50. Stage 2 (Sonnet, premium) ranks 50 → 20. This costs $0.90/day = $27/month.
 >
-> If I used Sonnet for everything, it would cost ~$3/day. If I did it manually, it would cost $50/day (opportunity cost).
+> My budget cap: $300/month. Manual curation at that price means either undervalued time, reduced scope, or lower frequency. AI gives full quality with $273/month headroom.
 >
-> **The win:** High quality at 97% cost reduction vs. manual."
+> **The win:** High quality at 91% under budget, with no forced trade-offs."
 
 ---
 
@@ -553,13 +572,13 @@ Result: Filtered out
 
 **Proof:** Curator enhancement achieves:
 - ✅ **Faster:** 15 seconds vs. 30 minutes
-- ✅ **Cheaper:** $27/month vs. $1,500/month
-- ✅ **Better:** High quality with context understanding
+- ✅ **Cheaper:** $27/month vs. $300/month cap (91% under budget)
+- ✅ **Better:** High quality without forced trade-offs
 
 **Strategic value:**
-- 98% cost reduction vs. manual
+- No budget-driven compromises (scope, frequency, or quality)
 - 15 hours/month freed for high-value work
-- Quality maintained or improved
+- Quality exceeds what's achievable at $300 manual budget
 - Scales perfectly (add more sources = same cost)
 
 **This isn't just automation** — it's intelligent automation that simultaneously optimizes all dimensions.
