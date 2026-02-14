@@ -58,6 +58,20 @@
             font-size: 0.85em;
             margin-right: 10px;
         }
+        .category-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: 600;
+            margin-right: 10px;
+        }
+        .cat-geo_major { background: #ffe5e5; color: #c00; }
+        .cat-geo_other { background: #fff0e5; color: #c60; }
+        .cat-monetary { background: #fff8e5; color: #c90; }
+        .cat-fiscal { background: #f0e5ff; color: #90c; }
+        .cat-technology { background: #e5f0ff; color: #05c; }
+        .cat-other { background: #f0f0f0; color: #666; }
         .article-time {
             color: #888;
             font-size: 0.85em;
@@ -94,172 +108,115 @@
             color: #888;
             font-size: 0.8em;
         }
-        .source-zerohedge { background: #ffe5e5; }
-        .source-bigpicture { background: #e5f3ff; }
-        .source-fed { background: #e5ffe5; }
-        .source-treasury { background: #fff5e5; }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>🧠 Your Morning Briefing</h1>
         <p>Friday, February 13, 2026</p>
-        <p>📊 20 curated articles from 4 sources</p>
+        <p>📊 20 curated articles • Category-aware curation</p>
     </div>
 
-    <div class="article source-zerohedge">
+    <div class="article">
         <div>
             <span class="article-number">#1</span>
-            <span class="article-source">ZeroHedge</span>
-            <span class="article-time">14h ago</span>
+            <span class="category-badge cat-geo_major">GEO_MAJOR</span>
+            <span class="article-source">Geopolitical Futures</span>
+            <span class="article-time">12h ago</span>
         </div>
         <div class="article-title">
-            <a href="https://www.zerohedge.com/precious-metals/chinas-central-bank-keeps-buying-gold-and-dumping-us-debt" target="_blank">China's Central Bank Keeps Buying Gold... And Dumping US Debt</a>
+            <a href="https://geopoliticalfutures.com/daily-memo-european-defense-us-presence-in-syria/" target="_blank">Daily Memo: European Defense, US Presence in Syria</a>
         </div>
-        <a href="https://www.zerohedge.com/precious-metals/chinas-central-bank-keeps-buying-gold-and-dumping-us-debt" class="article-link" target="_blank">🔗 Read article →</a>
+        <a href="https://geopoliticalfutures.com/daily-memo-european-defense-us-presence-in-syria/" class="article-link" target="_blank">🔗 Read article →</a>
         <div class="article-meta">
-            <span class="score">Base score: 169.4 | Final score: 169.4</span>
+            <span class="score">Score: 7.7/10 (mechanical) | Raw: 153.5 | Final: 7.7</span>
         </div>
     </div>
 
-    <div class="article ">
+    <div class="article">
         <div>
             <span class="article-number">#2</span>
-            <span class="article-source">Geopolitical Futures</span>
-            <span class="article-time">21h ago</span>
+            <span class="category-badge cat-monetary">MONETARY</span>
+            <span class="article-source">ZeroHedge</span>
+            <span class="article-time">10h ago</span>
         </div>
         <div class="article-title">
-            <a href="https://geopoliticalfutures.com/daily-memo-us-piles-more-pressure-on-iran-russian-oil-production-falls-short/" target="_blank">Daily Memo: US Piles More Pressure on Iran, Russian Oil Production Falls Short</a>
+            <a href="https://www.zerohedge.com/markets/philly-pair-admit-35m-ai-housing-aid-scam-minnesota" target="_blank">Two Philadelphia Men Admit To AI-Assisted $3.5M Housing Aid Scam In Minnesota</a>
         </div>
-        <a href="https://geopoliticalfutures.com/daily-memo-us-piles-more-pressure-on-iran-russian-oil-production-falls-short/" class="article-link" target="_blank">🔗 Read article →</a>
+        <a href="https://www.zerohedge.com/markets/philly-pair-admit-35m-ai-housing-aid-scam-minnesota" class="article-link" target="_blank">🔗 Read article →</a>
         <div class="article-meta">
-            <span class="score">Base score: 155.6 | Final score: 155.6</span>
+            <span class="score">Score: 5.8/10 (mechanical) | Raw: 116.3 | Final: 5.8</span>
         </div>
     </div>
 
-    <div class="article source-zerohedge">
+    <div class="article">
         <div>
             <span class="article-number">#3</span>
-            <span class="article-source">ZeroHedge</span>
-            <span class="article-time">46m ago</span>
-        </div>
-        <div class="article-title">
-            <a href="https://www.zerohedge.com/economics/warsh-likes-it-hot-and-will-move-feds-inflation-target-25-35" target="_blank">Warsh Likes It Hot, And Will Move The Fed's Inflation Target To 2.5-3.5%</a>
-        </div>
-        <a href="https://www.zerohedge.com/economics/warsh-likes-it-hot-and-will-move-feds-inflation-target-25-35" class="article-link" target="_blank">🔗 Read article →</a>
-        <div class="article-meta">
-            <span class="score">Base score: 153.6 | Final score: 144.6</span>
-        </div>
-    </div>
-
-    <div class="article ">
-        <div>
-            <span class="article-number">#4</span>
-            <span class="article-source">Geopolitical Futures</span>
-            <span class="article-time">2h ago</span>
-        </div>
-        <div class="article-title">
-            <a href="https://geopoliticalfutures.com/irans-future-hinges-on-irgc-artesh-power-sharing/" target="_blank">Iran’s Future Hinges on IRGC-Artesh Power-Sharing</a>
-        </div>
-        <a href="https://geopoliticalfutures.com/irans-future-hinges-on-irgc-artesh-power-sharing/" class="article-link" target="_blank">🔗 Read article →</a>
-        <div class="article-meta">
-            <span class="score">Base score: 152.8 | Final score: 143.8</span>
-        </div>
-    </div>
-
-    <div class="article source-bigpicture">
-        <div>
-            <span class="article-number">#5</span>
-            <span class="article-source">The Big Picture</span>
-            <span class="article-time">1h ago</span>
-        </div>
-        <div class="article-title">
-            <a href="https://ritholtz.com/2026/02/10-friday-the-13th-reads/" target="_blank">10 Friday the 13th Reads</a>
-        </div>
-        <a href="https://ritholtz.com/2026/02/10-friday-the-13th-reads/" class="article-link" target="_blank">🔗 Read article →</a>
-        <div class="article-meta">
-            <span class="score">Base score: 119.2 | Final score: 119.2</span>
-        </div>
-    </div>
-
-    <div class="article source-fed">
-        <div>
-            <span class="article-number">#6</span>
+            <span class="category-badge cat-other">OTHER</span>
             <span class="article-source">Fed On The Economy</span>
-            <span class="article-time">18h ago</span>
+            <span class="article-time">1d ago</span>
         </div>
         <div class="article-title">
             <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/when-houses-outrun-paychecks-lost-decades-housing-affordability" target="_blank">When Houses Outrun Paychecks: The Lost Decades of Housing Affordability</a>
         </div>
         <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/when-houses-outrun-paychecks-lost-decades-housing-affordability" class="article-link" target="_blank">🔗 Read article →</a>
         <div class="article-meta">
-            <span class="score">Base score: 110.7 | Final score: 110.7</span>
+            <span class="score">Score: 5.1/10 (mechanical) | Raw: 102.9 | Final: 5.1</span>
         </div>
     </div>
 
-    <div class="article source-bigpicture">
+    <div class="article">
+        <div>
+            <span class="article-number">#4</span>
+            <span class="category-badge cat-fiscal">FISCAL</span>
+            <span class="article-source">Treasury MSPD</span>
+            <span class="article-time">8d ago</span>
+        </div>
+        <div class="article-title">
+            <a href="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding" target="_blank">Monthly Statement of the Public Debt, January 31, 2026</a>
+        </div>
+        <a href="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding" class="article-link" target="_blank">🔗 Read article →</a>
+        <div class="article-meta">
+            <span class="score">Score: 1.7/10 (mechanical) | Raw: 34.3 | Final: 1.7</span>
+        </div>
+    </div>
+
+    <div class="article">
+        <div>
+            <span class="article-number">#5</span>
+            <span class="category-badge cat-geo_major">GEO_MAJOR</span>
+            <span class="article-source">The Big Picture</span>
+            <span class="article-time">17h ago</span>
+        </div>
+        <div class="article-title">
+            <a href="https://ritholtz.com/2026/02/10-friday-the-13th-reads/" target="_blank">10 Friday the 13th Reads</a>
+        </div>
+        <a href="https://ritholtz.com/2026/02/10-friday-the-13th-reads/" class="article-link" target="_blank">🔗 Read article →</a>
+        <div class="article-meta">
+            <span class="score">Score: 5.6/10 (mechanical) | Raw: 111.4 | Final: 1.1</span>
+        </div>
+    </div>
+
+    <div class="article">
+        <div>
+            <span class="article-number">#6</span>
+            <span class="category-badge cat-fiscal">FISCAL</span>
+            <span class="article-source">ZeroHedge</span>
+            <span class="article-time">6h ago</span>
+        </div>
+        <div class="article-title">
+            <a href="https://www.zerohedge.com/personal-finance/you-can-buy-love-its-never-been-more-expensive" target="_blank">You Can Buy Love... (But It's Never Been More Expensive)</a>
+        </div>
+        <a href="https://www.zerohedge.com/personal-finance/you-can-buy-love-its-never-been-more-expensive" class="article-link" target="_blank">🔗 Read article →</a>
+        <div class="article-meta">
+            <span class="score">Score: 5.6/10 (mechanical) | Raw: 112.3 | Final: -7.9</span>
+        </div>
+    </div>
+
+    <div class="article">
         <div>
             <span class="article-number">#7</span>
-            <span class="article-source">The Big Picture</span>
-            <span class="article-time">20h ago</span>
-        </div>
-        <div class="article-title">
-            <a href="https://ritholtz.com/2026/02/mib-drew-warshaw/" target="_blank">MiB: Drew Warshaw, Democratic Candidate for New York State Comptroller</a>
-        </div>
-        <a href="https://ritholtz.com/2026/02/mib-drew-warshaw/" class="article-link" target="_blank">🔗 Read article →</a>
-        <div class="article-meta">
-            <span class="score">Base score: 115.7 | Final score: 106.7</span>
-        </div>
-    </div>
-
-    <div class="article source-zerohedge">
-        <div>
-            <span class="article-number">#8</span>
-            <span class="article-source">ZeroHedge</span>
-            <span class="article-time">5h ago</span>
-        </div>
-        <div class="article-title">
-            <a href="https://www.zerohedge.com/energy/russian-oil-slovakia-damaged-druzhba-pipeline-still-halted-accusations-fly" target="_blank">Russian Oil To Slovakia Via Damaged Druzhba Pipeline Still Halted As Accusations Fly</a>
-        </div>
-        <a href="https://www.zerohedge.com/energy/russian-oil-slovakia-damaged-druzhba-pipeline-still-halted-accusations-fly" class="article-link" target="_blank">🔗 Read article →</a>
-        <div class="article-meta">
-            <span class="score">Base score: 140.5 | Final score: 104.5</span>
-        </div>
-    </div>
-
-    <div class="article ">
-        <div>
-            <span class="article-number">#9</span>
-            <span class="article-source">Geopolitical Futures</span>
-            <span class="article-time">1d ago</span>
-        </div>
-        <div class="article-title">
-            <a href="https://geopoliticalfutures.com/the-deeper-meaning-of-balkan-protests-2/" target="_blank">The Deeper Meaning of Balkan Protests</a>
-        </div>
-        <a href="https://geopoliticalfutures.com/the-deeper-meaning-of-balkan-protests-2/" class="article-link" target="_blank">🔗 Read article →</a>
-        <div class="article-meta">
-            <span class="score">Base score: 138.9 | Final score: 102.9</span>
-        </div>
-    </div>
-
-    <div class="article source-fed">
-        <div>
-            <span class="article-number">#10</span>
-            <span class="article-source">Fed On The Economy</span>
-            <span class="article-time">1d ago</span>
-        </div>
-        <div class="article-title">
-            <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/flash-report-january-jobless-data-may-signal-improving-labor-market" target="_blank">Flash Report: January Jobless Data May Signal Improving Labor Market</a>
-        </div>
-        <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/flash-report-january-jobless-data-may-signal-improving-labor-market" class="article-link" target="_blank">🔗 Read article →</a>
-        <div class="article-meta">
-            <span class="score">Base score: 100.1 | Final score: 91.1</span>
-        </div>
-    </div>
-
-    <div class="article source-bigpicture">
-        <div>
-            <span class="article-number">#11</span>
+            <span class="category-badge cat-other">OTHER</span>
             <span class="article-source">The Big Picture</span>
             <span class="article-time">1d ago</span>
         </div>
@@ -268,142 +225,215 @@
         </div>
         <a href="https://ritholtz.com/2026/02/10-thursday-am-reads-484/" class="article-link" target="_blank">🔗 Read article →</a>
         <div class="article-meta">
-            <span class="score">Base score: 107.2 | Final score: 71.2</span>
+            <span class="score">Score: 5.0/10 (mechanical) | Raw: 99.4 | Final: -8.5</span>
         </div>
     </div>
 
-    <div class="article source-zerohedge">
+    <div class="article">
         <div>
-            <span class="article-number">#12</span>
-            <span class="article-source">ZeroHedge</span>
-            <span class="article-time">12h ago</span>
+            <span class="article-number">#8</span>
+            <span class="category-badge cat-geo_other">GEO_OTHER</span>
+            <span class="article-source">Fed On The Economy</span>
+            <span class="article-time">164d ago</span>
         </div>
         <div class="article-title">
-            <a href="https://www.zerohedge.com/ai/microsoft-ai-ceo-warns-most-white-collar-jobs-will-be-fully-automated-within-next-12-18-months" target="_blank">Microsoft AI CEO Warns Most White Collar Jobs Fully Automated "Within Next 12-18 Months"; Anthropic Fears Potential For 'Heinous Crimes'</a>
+            <a href="https://www.stlouisfed.org/on-the-economy/2025/sep/developing-nations-prone-transnational-terrorism-foreign-aid-fdi" target="_blank">Where Developing Nations Prone to Transnational Terrorism Stand in Foreign Aid and FDI</a>
         </div>
-        <a href="https://www.zerohedge.com/ai/microsoft-ai-ceo-warns-most-white-collar-jobs-will-be-fully-automated-within-next-12-18-months" class="article-link" target="_blank">🔗 Read article →</a>
+        <a href="https://www.stlouisfed.org/on-the-economy/2025/sep/developing-nations-prone-transnational-terrorism-foreign-aid-fdi" class="article-link" target="_blank">🔗 Read article →</a>
         <div class="article-meta">
-            <span class="score">Base score: 137.1 | Final score: 56.1</span>
+            <span class="score">Score: 0.0/10 (mechanical) | Raw: 0.0 | Final: -9.0</span>
         </div>
     </div>
 
-    <div class="article ">
+    <div class="article">
         <div>
-            <span class="article-number">#13</span>
+            <span class="article-number">#9</span>
+            <span class="category-badge cat-geo_major">GEO_MAJOR</span>
             <span class="article-source">Geopolitical Futures</span>
             <span class="article-time">1d ago</span>
         </div>
         <div class="article-title">
-            <a href="https://geopoliticalfutures.com/daily-memo-us-iran-developments-egypt-russia-talks/" target="_blank">Daily Memo: US-Iran Developments, Egypt-Russia Talks</a>
+            <a href="https://geopoliticalfutures.com/daily-memo-us-piles-more-pressure-on-iran-russian-oil-production-falls-short/" target="_blank">Daily Memo: US Piles More Pressure on Iran, Russian Oil Production Falls Short</a>
         </div>
-        <a href="https://geopoliticalfutures.com/daily-memo-us-iran-developments-egypt-russia-talks/" class="article-link" target="_blank">🔗 Read article →</a>
+        <a href="https://geopoliticalfutures.com/daily-memo-us-piles-more-pressure-on-iran-russian-oil-production-falls-short/" class="article-link" target="_blank">🔗 Read article →</a>
         <div class="article-meta">
-            <span class="score">Base score: 134.5 | Final score: 53.5</span>
+            <span class="score">Score: 7.3/10 (mechanical) | Raw: 146.5 | Final: -19.7</span>
         </div>
     </div>
 
-    <div class="article source-fed">
+    <div class="article">
         <div>
-            <span class="article-number">#14</span>
-            <span class="article-source">Fed On The Economy</span>
-            <span class="article-time">2d ago</span>
-        </div>
-        <div class="article-title">
-            <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/do-government-shutdowns-affect-subsequent-data-revisions" target="_blank">Do Government Shutdowns Affect Subsequent Data Revisions?</a>
-        </div>
-        <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/do-government-shutdowns-affect-subsequent-data-revisions" class="article-link" target="_blank">🔗 Read article →</a>
-        <div class="article-meta">
-            <span class="score">Base score: 84.9 | Final score: 48.9</span>
-        </div>
-    </div>
-
-    <div class="article source-treasury">
-        <div>
-            <span class="article-number">#15</span>
+            <span class="article-number">#10</span>
+            <span class="category-badge cat-fiscal">FISCAL</span>
             <span class="article-source">Treasury MSPD</span>
-            <span class="article-time">7d ago</span>
-        </div>
-        <div class="article-title">
-            <a href="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding" target="_blank">Monthly Statement of the Public Debt, January 31, 2026</a>
-        </div>
-        <a href="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding" class="article-link" target="_blank">🔗 Read article →</a>
-        <div class="article-meta">
-            <span class="score">Base score: 42.7 | Final score: 42.7</span>
-        </div>
-    </div>
-
-    <div class="article source-bigpicture">
-        <div>
-            <span class="article-number">#16</span>
-            <span class="article-source">The Big Picture</span>
-            <span class="article-time">1d ago</span>
-        </div>
-        <div class="article-title">
-            <a href="https://ritholtz.com/2026/02/nonfarm-payrolls-confirmation-bias-edition/" target="_blank">NonFarm Payrolls, Confirmation Bias edition</a>
-        </div>
-        <a href="https://ritholtz.com/2026/02/nonfarm-payrolls-confirmation-bias-edition/" class="article-link" target="_blank">🔗 Read article →</a>
-        <div class="article-meta">
-            <span class="score">Base score: 105.9 | Final score: 24.9</span>
-        </div>
-    </div>
-
-    <div class="article source-treasury">
-        <div>
-            <span class="article-number">#17</span>
-            <span class="article-source">Treasury MSPD</span>
-            <span class="article-time">36d ago</span>
+            <span class="article-time">37d ago</span>
         </div>
         <div class="article-title">
             <a href="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding" target="_blank">Monthly Statement of the Public Debt, December 31, 2025</a>
         </div>
         <a href="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding" class="article-link" target="_blank">🔗 Read article →</a>
         <div class="article-meta">
-            <span class="score">Base score: 13.0 | Final score: 4.0</span>
+            <span class="score">Score: 0.7/10 (mechanical) | Raw: 13.0 | Final: -26.4</span>
         </div>
     </div>
 
-    <div class="article source-zerohedge">
+    <div class="article">
         <div>
-            <span class="article-number">#18</span>
-            <span class="article-source">ZeroHedge</span>
-            <span class="article-time">12h ago</span>
+            <span class="article-number">#11</span>
+            <span class="category-badge cat-monetary">MONETARY</span>
+            <span class="article-source">The Big Picture</span>
+            <span class="article-time">3d ago</span>
         </div>
         <div class="article-title">
-            <a href="https://www.zerohedge.com/political/american-colleges-received-52-billion-foreign-funding-2025-education-department-reveals" target="_blank">American Colleges Received $5.2 Billion In Foreign Funding In 2025, Education Department Reveals</a>
+            <a href="https://ritholtz.com/2026/02/10-tuesday-am-reads-462/" target="_blank">10 Tuesday AM Reads</a>
         </div>
-        <a href="https://www.zerohedge.com/political/american-colleges-received-52-billion-foreign-funding-2025-education-department-reveals" class="article-link" target="_blank">🔗 Read article →</a>
+        <a href="https://ritholtz.com/2026/02/10-tuesday-am-reads-462/" class="article-link" target="_blank">🔗 Read article →</a>
         <div class="article-meta">
-            <span class="score">Base score: 137.1 | Final score: -6.9</span>
+            <span class="score">Score: 3.8/10 (mechanical) | Raw: 75.4 | Final: -36.7</span>
         </div>
     </div>
 
-    <div class="article source-fed">
+    <div class="article">
         <div>
-            <span class="article-number">#19</span>
+            <span class="article-number">#12</span>
+            <span class="category-badge cat-other">OTHER</span>
+            <span class="article-source">ZeroHedge</span>
+            <span class="article-time">6h ago</span>
+        </div>
+        <div class="article-title">
+            <a href="https://www.zerohedge.com/markets/nypd-told-stop-ejecting-homeless-nyc-subways-due-freezing-temperatures" target="_blank">NYPD Told To Stop Ejecting Homeless From NYC Subways Due To Freezing Temperatures</a>
+        </div>
+        <a href="https://www.zerohedge.com/markets/nypd-told-stop-ejecting-homeless-nyc-subways-due-freezing-temperatures" class="article-link" target="_blank">🔗 Read article →</a>
+        <div class="article-meta">
+            <span class="score">Score: 5.4/10 (mechanical) | Raw: 107.1 | Final: -48.6</span>
+        </div>
+    </div>
+
+    <div class="article">
+        <div>
+            <span class="article-number">#13</span>
+            <span class="category-badge cat-geo_major">GEO_MAJOR</span>
+            <span class="article-source">Geopolitical Futures</span>
+            <span class="article-time">17h ago</span>
+        </div>
+        <div class="article-title">
+            <a href="https://geopoliticalfutures.com/irans-future-hinges-on-irgc-artesh-power-sharing/" target="_blank">Iran’s Future Hinges on IRGC-Artesh Power-Sharing</a>
+        </div>
+        <a href="https://geopoliticalfutures.com/irans-future-hinges-on-irgc-artesh-power-sharing/" class="article-link" target="_blank">🔗 Read article →</a>
+        <div class="article-meta">
+            <span class="score">Score: 7.2/10 (mechanical) | Raw: 143.7 | Final: -69.3</span>
+        </div>
+    </div>
+
+    <div class="article">
+        <div>
+            <span class="article-number">#14</span>
+            <span class="category-badge cat-other">OTHER</span>
+            <span class="article-source">Fed On The Economy</span>
+            <span class="article-time">2d ago</span>
+        </div>
+        <div class="article-title">
+            <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/flash-report-january-jobless-data-may-signal-improving-labor-market" target="_blank">Flash Report: January Jobless Data May Signal Improving Labor Market</a>
+        </div>
+        <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/flash-report-january-jobless-data-may-signal-improving-labor-market" class="article-link" target="_blank">🔗 Read article →</a>
+        <div class="article-meta">
+            <span class="score">Score: 4.6/10 (mechanical) | Raw: 92.3 | Final: -71.9</span>
+        </div>
+    </div>
+
+    <div class="article">
+        <div>
+            <span class="article-number">#15</span>
+            <span class="category-badge cat-fiscal">FISCAL</span>
+            <span class="article-source">Treasury MSPD</span>
+            <span class="article-time">71d ago</span>
+        </div>
+        <div class="article-title">
+            <a href="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding" target="_blank">Monthly Statement of the Public Debt, November 30, 2025</a>
+        </div>
+        <a href="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding" class="article-link" target="_blank">🔗 Read article →</a>
+        <div class="article-meta">
+            <span class="score">Score: 0.7/10 (mechanical) | Raw: 13.0 | Final: -75.8</span>
+        </div>
+    </div>
+
+    <div class="article">
+        <div>
+            <span class="article-number">#16</span>
+            <span class="category-badge cat-monetary">MONETARY</span>
+            <span class="article-source">The Big Picture</span>
+            <span class="article-time">4d ago</span>
+        </div>
+        <div class="article-title">
+            <a href="https://ritholtz.com/2026/02/10-monday-am-reads-461/" target="_blank">10 Monday AM Reads</a>
+        </div>
+        <a href="https://ritholtz.com/2026/02/10-monday-am-reads-461/" class="article-link" target="_blank">🔗 Read article →</a>
+        <div class="article-meta">
+            <span class="score">Score: 3.2/10 (mechanical) | Raw: 63.4 | Final: -95.8</span>
+        </div>
+    </div>
+
+    <div class="article">
+        <div>
+            <span class="article-number">#17</span>
+            <span class="category-badge cat-geo_major">GEO_MAJOR</span>
+            <span class="article-source">ZeroHedge</span>
+            <span class="article-time">6h ago</span>
+        </div>
+        <div class="article-title">
+            <a href="https://www.zerohedge.com/political/midterm-palpitations" target="_blank">Midterm Palpitations</a>
+        </div>
+        <a href="https://www.zerohedge.com/political/midterm-palpitations" class="article-link" target="_blank">🔗 Read article →</a>
+        <div class="article-meta">
+            <span class="score">Score: 7.5/10 (mechanical) | Raw: 151.0 | Final: -145.5</span>
+        </div>
+    </div>
+
+    <div class="article">
+        <div>
+            <span class="article-number">#18</span>
+            <span class="category-badge cat-other">OTHER</span>
             <span class="article-source">Fed On The Economy</span>
             <span class="article-time">3d ago</span>
         </div>
         <div class="article-title">
-            <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/using-211-data-gauge-eighth-district-economic-conditions" target="_blank">Using 211 Data to Gauge Eighth District Economic Conditions</a>
+            <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/do-government-shutdowns-affect-subsequent-data-revisions" target="_blank">Do Government Shutdowns Affect Subsequent Data Revisions?</a>
         </div>
-        <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/using-211-data-gauge-eighth-district-economic-conditions" class="article-link" target="_blank">🔗 Read article →</a>
+        <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/do-government-shutdowns-affect-subsequent-data-revisions" class="article-link" target="_blank">🔗 Read article →</a>
         <div class="article-meta">
-            <span class="score">Base score: 72.7 | Final score: -8.3</span>
+            <span class="score">Score: 3.9/10 (mechanical) | Raw: 77.2 | Final: -149.1</span>
         </div>
     </div>
 
-    <div class="article ">
+    <div class="article">
         <div>
-            <span class="article-number">#20</span>
-            <span class="article-source">Geopolitical Futures</span>
-            <span class="article-time">2d ago</span>
+            <span class="article-number">#19</span>
+            <span class="category-badge cat-fiscal">FISCAL</span>
+            <span class="article-source">Treasury MSPD</span>
+            <span class="article-time">99d ago</span>
         </div>
         <div class="article-title">
-            <a href="https://geopoliticalfutures.com/russo-chinese-ties-lose-their-luster/" target="_blank">Russo-Chinese Ties Lose Their Luster</a>
+            <a href="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding" target="_blank">Monthly Statement of the Public Debt, October 31, 2025</a>
         </div>
-        <a href="https://geopoliticalfutures.com/russo-chinese-ties-lose-their-luster/" class="article-link" target="_blank">🔗 Read article →</a>
+        <a href="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding" class="article-link" target="_blank">🔗 Read article →</a>
         <div class="article-meta">
-            <span class="score">Base score: 124.8 | Final score: -19.2</span>
+            <span class="score">Score: 0.7/10 (mechanical) | Raw: 13.0 | Final: -152.3</span>
+        </div>
+    </div>
+
+    <div class="article">
+        <div>
+            <span class="article-number">#20</span>
+            <span class="category-badge cat-monetary">MONETARY</span>
+            <span class="article-source">The Big Picture</span>
+            <span class="article-time">5d ago</span>
+        </div>
+        <div class="article-title">
+            <a href="https://ritholtz.com/2026/02/10-sunday-morning-reads-7/" target="_blank">10 Sunday Morning Reads</a>
+        </div>
+        <a href="https://ritholtz.com/2026/02/10-sunday-morning-reads-7/" class="article-link" target="_blank">🔗 Read article →</a>
+        <div class="article-meta">
+            <span class="score">Score: 2.9/10 (mechanical) | Raw: 57.4 | Final: -181.6</span>
         </div>
     </div>
 

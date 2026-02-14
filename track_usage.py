@@ -7,15 +7,17 @@ Tracks:
 - Tokens (input/output/cache read/write)
 - Estimated costs
 - Per-session breakdown
+- Account balance warnings
 
 Storage: JSON (for now) → migrate to Postgres later
 """
 
 import json
 import os
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 # Pricing (as of Feb 2026 - Claude Sonnet 4)
 PRICING = {
@@ -26,6 +28,55 @@ PRICING = {
 }
 
 USAGE_LOG = Path.home() / ".openclaw" / "workspace" / "logs" / "usage" / "daily_usage.json"
+
+# Balance thresholds
+BALANCE_THRESHOLDS = {
+    'getting_low': 10.0,
+    'critically_low': 5.0,
+    'severely_low': 1.0
+}
+
+def check_balance() -> Tuple[Optional[float], Optional[str]]:
+    """
+    Check Anthropic account balance and return (balance, warning_level).
+    Returns (None, None) if unable to fetch balance.
+    Warning levels: 'SEVERE', 'CRITICAL', 'WARNING', or None
+    """
+    api_key = os.environ.get('ANTHROPIC_API_KEY')
+    if not api_key:
+        return None, None
+    
+    try:
+        import requests
+        response = requests.get(
+            'https://api.anthropic.com/v1/organization/balance',
+            headers={
+                'x-api-key': api_key,
+                'anthropic-version': '2023-06-01'
+            },
+            timeout=5
+        )
+        
+        if response.status_code != 200:
+            return None, None
+        
+        data = response.json()
+        # Balance is typically in cents
+        balance = data.get('balance', 0) / 100.0
+        
+        # Check thresholds
+        if balance <= BALANCE_THRESHOLDS['severely_low']:
+            return balance, 'SEVERE'
+        elif balance <= BALANCE_THRESHOLDS['critically_low']:
+            return balance, 'CRITICAL'
+        elif balance <= BALANCE_THRESHOLDS['getting_low']:
+            return balance, 'WARNING'
+        else:
+            return balance, None
+            
+    except Exception as e:
+        # Silently fail - balance check is optional
+        return None, None
 
 def load_usage_log() -> Dict:
     """Load existing usage log or create new"""
@@ -204,14 +255,34 @@ def format_report() -> str:
     today_data = track_today()
     weekly = get_weekly_summary()
     
+    # Check account balance
+    balance, warning_level = check_balance()
+    
     # Get yesterday's data if available
     from datetime import timedelta
     log = load_usage_log()
     yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
     yesterday_data = log["days"].get(yesterday)
     
+    # Balance warning header
+    balance_warning = ""
+    if balance is not None and warning_level:
+        warning_emojis = {
+            'SEVERE': '🚨🚨🚨',
+            'CRITICAL': '⚠️⚠️',
+            'WARNING': '⚡'
+        }
+        warning_msgs = {
+            'SEVERE': f'SEVERELY LOW BALANCE: ${balance:.2f} (threshold: ${BALANCE_THRESHOLDS["severely_low"]})',
+            'CRITICAL': f'CRITICALLY LOW BALANCE: ${balance:.2f} (threshold: ${BALANCE_THRESHOLDS["critically_low"]})',
+            'WARNING': f'Getting Low Balance: ${balance:.2f} (threshold: ${BALANCE_THRESHOLDS["getting_low"]})'
+        }
+        emoji = warning_emojis.get(warning_level, '⚠️')
+        msg = warning_msgs.get(warning_level, f'Low balance: ${balance:.2f}')
+        balance_warning = f"\n{emoji} *{msg}*\n🔗 Top up now: https://console.anthropic.com/settings/billing\n"
+    
     report = f"""📊 *Daily Usage Report* - {today_data['date']}
-
+{balance_warning}
 *Today (so far):*
 • API Calls: {today_data['api_calls']:,}
 • Tokens: {today_data['tokens']['total']:,}
@@ -226,14 +297,17 @@ def format_report() -> str:
 • Cost: ${yesterday_data['cost_usd']:.2f}
 """
     
+    balance_line = f"• Balance: ${balance:.2f}" if balance is not None else ""
+    
     report += f"""
 *This Week:*
 • Total Calls: {weekly['total_calls']:,}
 • Total Tokens: {weekly['total_tokens']:,}
 • Total Cost: ${weekly['total_cost']:.2f}
 • Daily Average: ${weekly['daily_average']:.2f}
+{balance_line}
 
-💡 Check balance: https://console.anthropic.com/settings/billing
+💡 Console: https://console.anthropic.com/settings/billing
 """
     
     return report
