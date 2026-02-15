@@ -12,6 +12,7 @@ Tracks:
 Storage: JSON (for now) → migrate to Postgres later
 """
 
+import keyring
 import json
 import os
 import sys
@@ -42,7 +43,13 @@ def check_balance() -> Tuple[Optional[float], Optional[str]]:
     Returns (None, None) if unable to fetch balance.
     Warning levels: 'SEVERE', 'CRITICAL', 'WARNING', or None
     """
-    api_key = os.environ.get('ANTHROPIC_API_KEY')
+
+    try:
+        api_key = keyring.get_password('anthropic', 'api_key')
+
+    except:
+        api_key = None
+
     if not api_key:
         return None, None
     
