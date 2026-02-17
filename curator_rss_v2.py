@@ -744,6 +744,82 @@ ARTICLES:
         else:
             raise
 
+
+def load_active_interests():
+    """
+    Load all active (non-expired) interests from interests/ directory.
+    Returns dict mapping categories/keywords to score modifiers.
+    """
+    import re
+    from pathlib import Path
+    from datetime import datetime
+    
+    interests_dir = Path(__file__).parent / "interests"
+    
+    if not interests_dir.exists():
+        return {}
+    
+    active_interests = {}
+    today = datetime.now()
+    
+    # Read all flagged files
+    for interest_file in interests_dir.glob("*-flagged.md"):
+        try:
+            with open(interest_file, 'r') as f:
+                file_content = f.read()
+            
+            # Parse each flagged article
+            pattern = r'\#\# \[([^\]]+)\] (.+?)\n- \*\*URL:\*\* (.+?)\n- \*\*Source:\*\* (.+?)\n- \*\*Category:\*\* (.+?)\n.*?- \*\*Expires:\*\* (.+?)\n- \*\*Score Modifier:\*\* ([+-]\d+)'
+            
+            for match in re.finditer(pattern, file_content, re.DOTALL):
+                priority = match.group(1)
+                title = match.group(2)
+                category = match.group(5)
+                expires_str = match.group(6)
+                score_modifier = int(match.group(7))
+                
+                # Check if expired
+                if expires_str != "No expiry":
+                    try:
+                        expiry_date = datetime.strptime(expires_str, '%Y-%m-%d')
+                        if expiry_date < today:
+                            continue  # Skip expired
+                    except:
+                        pass
+                
+                # Store by category (primary match)
+                if category not in active_interests:
+                    active_interests[category] = []
+                
+                active_interests[category].append({
+                    'priority': priority,
+                    'title': title,
+                    'modifier': score_modifier
+                })
+        
+        except Exception as e:
+            print(f"⚠️  Error loading interests from {interest_file}: {e}")
+    
+    return active_interests
+
+
+def apply_interest_boost(entry: Dict, active_interests: Dict) -> int:
+    """
+    Apply score boost/penalty based on active interests.
+    Returns total modifier to add to entry score.
+    """
+    total_modifier = 0
+    
+    # Match by category (strongest signal)
+    category = entry.get('category', 'other')
+    if category in active_interests:
+        for interest in active_interests[category]:
+            total_modifier += interest['modifier']
+    
+    return total_modifier
+
+
+
 def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanical', 
            fallback_on_error: bool = False) -> List[Dict]:
     """
@@ -776,6 +852,15 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
         time.sleep(0.5)
     
     print(f"\n📊 Total entries fetched: {len(all_entries)}")
+    
+    
+    # Load active interests for score boosting
+    active_interests = load_active_interests()
+    if active_interests:
+        total_interests = sum(len(v) for v in active_interests.values())
+        print(f"📌 Loaded {total_interests} active interests from interests/ directory")
+        for category, interests in active_interests.items():
+            print(f"   {category}: {len(interests)} flagged articles ({sum(i['modifier'] for i in interests):+d} total boost)")
     
     # Score all entries using selected mode
     if mode == 'ai-two-stage':
@@ -830,7 +915,12 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
             # Less aggressive than source penalty (we want some depth per topic)
             category_penalty = (category_count ** 2) * 15 * diversity_weight
             
-            entry["final_score"] = entry["score"] - source_penalty - category_penalty
+            # Apply interest-based boosting
+            interest_boost = apply_interest_boost(entry, active_interests)
+            entry["final_score"] = entry["score"] - source_penalty - category_penalty + interest_boost
+            if interest_boost != 0:
+                entry["interest_boosted"] = True
+                entry["interest_modifier"] = interest_boost
         
         # Pick the highest-scoring candidate
         candidates.sort(key=lambda x: x["final_score"], reverse=True)
