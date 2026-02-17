@@ -23,9 +23,40 @@ What began as a straightforward feature request ("add article flagging and deep 
 3. Store interests for future curator scoring
 4. Deliver results via Telegram
 
+**Time estimate:** ~3 hours
+
 **Expected approach:** "Build it fast, ship it, iterate later"
 
-**What actually happened:** We spent 50% of time discussing architecture before writing code.
+---
+
+## How The Session Actually Started
+
+**What happened initially:**
+
+The agent defaulted to "vibe coding" mode—generated working code in the first few minutes, ready to ship. Three Python files, basic functionality, done.
+
+**The course correction:**
+
+Robert stopped the process: "That's not the approach we want."
+
+The session wasn't about shipping fast. It was about understanding what we were building and why. Robert wanted to think through the architecture, explore alternatives, understand the components, and make deliberate choices—not just accept the first solution that worked.
+
+**The adjustment:**
+
+We backed up and restarted with a different methodology:
+- Discuss before building
+- Explore alternatives (even ones we'd reject)
+- Explain technical concepts as we encountered them
+- Document decisions in real-time
+- Build simple, document complexity for later
+
+**The outcome:**
+
+The session still took the estimated 3 hours. But instead of "finished in 5 minutes with 2.5 hours of polish," it was "2.5 hours of thinking, 30 minutes of building what we'd designed."
+
+And we got more than initially planned: better architecture, emergent features (natural language interface, HTML archive), and genuine understanding of how it worked.
+
+Same duration. Better result. More sustainable approach.
 
 ---
 
@@ -262,25 +293,28 @@ Captured decisions as made, not after the fact:
 
 ### For Humans Working with AI Agents
 
-1. **Slow down to speed up:** 3 hours of thoughtful design > 30 minutes of hasty coding
-2. **Ask "why" and "what if":** Forces better solutions to surface
-3. **Declare learning goals:** Changes agent behavior from "ship fast" to "teach well"
-4. **Explore before building:** Discussing and rejecting options is productive work
-5. **Pause deliberately:** "Let me think" prevents premature commitment
-6. **Document as you go:** Future-you will thank present-you
-7. **Simplicity is strength:** Resist premature optimization
-8. **Emergent features are best:** The natural language interface wasn't planned
+1. **Redirect when needed:** If agent jumps to "vibe coding," stop and reset. "That's not the approach" works.
+2. **Set the methodology upfront:** Declare learning goals before the agent starts generating code
+3. **Slow down to speed up:** 3 hours of thoughtful design > 5 minutes of code + 2.5 hours fixing it
+4. **Ask "why" and "what if":** Forces better solutions to surface
+5. **Explore before building:** Discussing and rejecting options is productive work
+6. **Pause deliberately:** "Let me think" prevents premature commitment
+7. **Document as you go:** Future-you will thank present-you
+8. **Simplicity is strength:** Resist premature optimization
+9. **Emergent features are best:** The natural language interface wasn't planned
 
 ### For AI Agents Working with Humans
 
-1. **Read the room:** "It took a few hours" was approval, not complaint
-2. **Teach, don't just build:** Explain client pattern, not just use it
-3. **Offer alternatives:** Present options, let human choose
-4. **Document decisions:** Capture WHY, not just WHAT
-5. **Respect pauses:** When human says "I'm thinking," wait—insight is coming
-6. **Question assumptions:** "Do you want X or Y?" often reveals Z is better
-7. **Incremental complexity:** Simple first, document upgrade paths
-8. **Celebrate discovery:** When better solution emerges, acknowledge it together
+1. **Don't default to vibe coding:** Fast ≠ helpful. Check if this is a learning session or shipping deadline
+2. **Accept course corrections gracefully:** "That's not the approach" is feedback, not criticism
+3. **Read the room:** "It took a few hours" was approval, not complaint
+4. **Teach, don't just build:** Explain client pattern, not just use it
+5. **Offer alternatives:** Present options, let human choose
+6. **Document decisions:** Capture WHY, not just WHAT
+7. **Respect pauses:** When human says "I'm thinking," wait—insight is coming
+8. **Question assumptions:** "Do you want X or Y?" often reveals Z is better
+9. **Incremental complexity:** Simple first, document upgrade paths
+10. **Celebrate discovery:** When better solution emerges, acknowledge it together
 
 ---
 
@@ -325,18 +359,22 @@ Want to replicate this collaborative approach?
 4. **Document decisions:** Capture why you chose option A over B
 
 ### Red Flags (Vibe Coding)
+- ❌ Agent ships "complete solution" in first 5 minutes
 - ❌ Agent generates 500 lines of code in 30 seconds
 - ❌ No discussion of alternatives
 - ❌ No documentation of decisions
 - ❌ "Just try this and see if it works"
 - ❌ Hard-coded assumptions
+- ❌ Human has to say "stop, that's not the approach"
 
 ### Green Flags (Collaborative Engineering)
+- ✅ Human can redirect approach and agent accepts it
 - ✅ Discussion takes as long as implementation
 - ✅ Multiple paths explored, most rejected
 - ✅ Documentation created during, not after
 - ✅ Learning moments explicitly called out
 - ✅ Simpler solutions chosen over complex ones
+- ✅ Same time estimate, better outcome
 
 ---
 
