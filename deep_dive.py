@@ -7,14 +7,58 @@ Usage:
   python deep_dive.py <article_url>
   
 Features:
-- Fetches full article content
+- Fetches full article content (BeautifulSoup)
 - Claude Sonnet 4 analysis
 - Contrarian perspectives
 - Challenge factors ("what could go wrong")
 - Connections to other topics
-- Delivered to Telegram
+- Saved to interests/deep-dives/
+- Delivered to Telegram (if OpenClaw running)
 
 Cost: ~$0.10-0.15 per analysis
+
+CURRENT IMPLEMENTATION (Phase 1 - Simple):
+  - Article extraction: BeautifulSoup (portable, standalone)
+  - LLM provider: Anthropic Sonnet 4 (best known quality)
+  - Single mode, no toggles
+
+FUTURE ENHANCEMENTS (Documented, Not Yet Implemented):
+
+1. ARTICLE EXTRACTION OPTIONS:
+   - Current: BeautifulSoup (simple HTML, works for 90% of feeds)
+   - Future: OpenClaw web_fetch (better for JS-heavy sites, paywalls)
+   - Implementation: Abstraction layer with fetch_article(method='beautifulsoup'|'openclaw')
+   - When to upgrade: If extraction quality insufficient on important sites
+   
+2. MULTI-MODEL LLM FRAMEWORK (A/B/C Testing):
+   - Model A: Anthropic Claude (~$0.15/analysis, best quality)
+   - Model B: xAI Grok (free with subscription, unknown quality)
+   - Model C: Local LLM via Ollama (privacy-first, free, slower)
+   
+   Benefits:
+     - Cost optimization: $0.15 → $0 for routine analyses
+     - Privacy: Sensitive content never leaves machine (local LLM)
+     - Vendor independence: No lock-in to single provider
+     - Quality evaluation: Scientific comparison framework
+   
+   Implementation:
+     - Create LLMClient abstraction (unified interface)
+     - Add --llm=anthropic|xai|ollama flag
+     - Build evaluation rubric (contrarian depth, specificity, etc.)
+     - Smart model selection based on: article sensitivity, budget, importance
+   
+   Usage examples:
+     python deep_dive.py <url> --llm=anthropic  # Best quality
+     python deep_dive.py <url> --llm=xai        # Free, good quality
+     python deep_dive.py <url> --llm=ollama     # Privacy-first
+   
+3. PRODUCTION OPTIMIZATION:
+   - Smart routing: sensitive → local, critical → Anthropic, default → xAI
+   - Cost tracking dashboard
+   - Quality monitoring (automated scoring)
+   - A/B testing framework for model selection
+
+See: INTEREST_CAPTURE_README.md for full feature roadmap
 """
 
 import sys
@@ -32,14 +76,23 @@ PROJECT_ROOT = Path(__file__).parent
 
 def fetch_article_content(url: str) -> Optional[str]:
     """
-    Fetch and extract article content using web scraping.
-    Returns markdown-formatted content.
+    Fetch and extract article content using BeautifulSoup.
+    
+    CURRENT: BeautifulSoup (simple, portable, works for most sites)
+    FUTURE SWAP: OpenClaw web_fetch for better extraction quality
+    
+    To upgrade extraction:
+      1. Replace this function with OpenClaw web_fetch call
+      2. Better handling of: JavaScript-rendered sites, paywalls, complex layouts
+      3. See: https://docs.openclaw.ai/tools/web-fetch
+    
+    Returns:
+        Article text (markdown-formatted) or None if fetch fails
     """
     try:
         print(f"📡 Fetching article from {url}...")
         
-        # Use requests + BeautifulSoup for basic extraction
-        # (In production, you'd use your OpenClaw web_fetch tool)
+        # BeautifulSoup implementation (simple, works for 90% of feeds)
         response = requests.get(url, timeout=30, headers={
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
         })
@@ -74,7 +127,26 @@ def fetch_article_content(url: str) -> Optional[str]:
 def analyze_with_sonnet(article_content: str, article_url: str) -> Optional[str]:
     """
     Analyze article using Claude Sonnet 4.
-    Returns formatted analysis.
+    
+    CURRENT: Anthropic Sonnet 4 (~$0.15/analysis, best known quality)
+    FUTURE OPTIONS:
+      - xAI Grok: Free with premium subscription (unknown quality, needs testing)
+      - Local LLM (Ollama): Privacy-first, free, slower (~50s vs 20s)
+    
+    To enable multi-model testing:
+      1. Create LLMClient abstraction (unified interface for all providers)
+      2. Add --llm flag: python deep_dive.py <url> --llm=anthropic|xai|ollama
+      3. Run A/B/C comparison to evaluate quality vs cost vs privacy
+      4. Implement smart model selection based on article sensitivity + budget
+    
+    Quality comparison (planned):
+      - Run same article through all 3 models
+      - Score: contrarian depth, challenge factors, specificity, connections
+      - Choose production model based on quality/cost trade-off
+      - Potential savings: $0.15 → $0 (xAI or local) if quality acceptable
+    
+    Returns:
+        Formatted analysis string or None if analysis fails
     """
     try:
         # Get API key
