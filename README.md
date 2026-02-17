@@ -199,13 +199,24 @@ crontab -e
 
 ## 📚 Documentation
 
+### Architecture & Design
 - [ARCHITECTURE.md](ARCHITECTURE.md) - System design and technical decisions
 - [PROJECT_ROADMAP.md](PROJECT_ROADMAP.md) - Development phases and milestones
-- [CURATOR_ROADMAP.md](CURATOR_ROADMAP.md) - RSS curator feature evolution
-- [CURATOR_ENHANCEMENT_ANALYSIS.md](CURATOR_ENHANCEMENT_ANALYSIS.md) - AI curation cost/benefit analysis
 - [PRODUCTION_SECURITY.md](PRODUCTION_SECURITY.md) - Security best practices
 - [CRON-SETUP.md](CRON-SETUP.md) - System cron installation guide
+
+### Feature Documentation
+- [CURATOR_ROADMAP.md](CURATOR_ROADMAP.md) - RSS curator feature evolution
+- [CURATOR_ENHANCEMENT_ANALYSIS.md](CURATOR_ENHANCEMENT_ANALYSIS.md) - AI curation cost/benefit analysis
+- [INTEREST_CAPTURE_README.md](INTEREST_CAPTURE_README.md) - Deep dive analysis system
 - [AI_TOOLS_EVALUATION.md](AI_TOOLS_EVALUATION.md) - Tool selection rationale
+
+### Learning & Methodology
+- [📖 Case Study: Human-AI Co-Building](docs/CASE-STUDY-DEEP-DIVE-FEATURE.md) - **How we built the deep dive feature through collaborative exploration** (3-hour session, Feb 16 2026)
+  - Methodology: Learning-focused development vs "vibe coding"
+  - Technical learning moments (client pattern, abstractions, dependencies)
+  - Emergent discoveries (natural language interface)
+  - Lessons for humans and AI agents working together
 
 ---
 
