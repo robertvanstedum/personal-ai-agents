@@ -15,3 +15,7 @@ curator_latest.html
 curator_index.html
 telegram_message*.txt
 curator_archive/
+
+# Personal feedback data (contains preferences and feedback history)
+curator_preferences.json
+curator_errors.log
