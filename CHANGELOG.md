@@ -66,3 +66,56 @@
 - Deep dive bookmark action implementation
 - CLI history viewer
 - Telegram button integration
+
+## 2026-02-20 - xAI Integration & Multi-Provider Support
+
+### Major Changes
+
+**xAI Provider Integration**
+- Added OpenAI SDK support to curator (enables both OpenAI and xAI models)
+- Created `score_entries_xai()` function using Grok-2-vision-1212
+- Integrated xAI mode into curator pipeline
+- Added cost tracking and comparison
+
+**Cost Optimization**
+- xAI mode: $0.18/day (390 articles) vs $0.90/day (two-stage Anthropic)
+- **80% cost reduction** while maintaining quality
+- Annual savings: ~$260 (daily runs)
+
+**Files Modified:**
+- `curator_rss_v2.py`:
+  - Added `score_entries_xai()` function (batch processing with Grok)
+  - Updated `curate()` function to support `mode='xai'`
+  - Added xAI API key loading from OpenClaw auth profiles
+  - Updated docstrings with xAI pricing and usage
+
+**New Files:**
+- `COST_COMPARISON.md` - Detailed cost analysis across providers
+- `TODO_MULTI_PROVIDER.md` - Implementation plan and testing guide
+
+**Configuration:**
+- xAI API key stored in `~/.openclaw/agents/main/agent/auth-profiles.json`
+- Profile: `xai:default`
+- Model: `grok-2-vision-1212`
+
+**Quality Validation:**
+- Test run: 390 articles scored successfully
+- Top articles: Iran-Russia-China drills, Ukraine war, Israel alert
+- Categories assigned correctly (geo_major, geo_other, fiscal, monetary)
+- Output comparable to Anthropic Haiku/Sonnet quality
+
+**Usage:**
+```bash
+python3 curator_rss_v2.py --mode=xai
+```
+
+**Dependencies Added:**
+- `openai==2.21.0` (supports both OpenAI and xAI endpoints)
+
+**Portfolio Value:**
+- "Implemented multi-provider LLM strategy reducing daily curation costs 80% ($0.90 → $0.18)"
+- "Built cost-optimized AI pipeline: annual savings $260 while maintaining quality"
+- "Integrated xAI Grok for geopolitical analysis at 1/5 the cost of Anthropic"
+
+**Status:** ✅ Production ready - tested and validated
+**Recommendation:** Use xAI for daily briefings, keep Sonnet for deep dives

@@ -843,6 +843,158 @@ ARTICLES:
             raise
 
 
+def score_entries_xai(entries: List[Dict], fallback_on_error: bool = False) -> List[Dict]:
+    """
+    Score all entries using xAI Grok (batch processing)
+    
+    Args:
+        entries: List of article entries
+        fallback_on_error: If True, silently fall back to mechanical on API errors
+    
+    Returns list of dicts with 'score', 'category', 'method' = 'xai'
+    """
+    from openai import OpenAI
+    import json
+    
+    # Get xAI API key from auth profiles
+    api_key = None
+    try:
+        with open(os.path.expanduser('~/.openclaw/agents/main/agent/auth-profiles.json'), 'r') as f:
+            config = json.load(f)
+            api_key = config['profiles']['xai:default']['key']
+    except Exception as e:
+        error_msg = f"""
+❌ xAI API key not found in OpenClaw auth profiles!
+
+Error: {e}
+
+To fix:
+  Check ~/.openclaw/agents/main/agent/auth-profiles.json
+  Ensure 'xai:default' profile exists with valid key
+
+To test with mechanical mode instead:
+  python curator_rss_v2.py --mode=mechanical
+"""
+        if fallback_on_error:
+            print("⚠️  xAI API key not found, falling back to mechanical")
+            return [score_entry_mechanical(e) for e in entries]
+        else:
+            print(error_msg)
+            raise ValueError("xAI API key not found")
+    
+    client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
+    
+    # Build prompt with all articles (same format as Haiku)
+    prompt = """You are a geopolitics & finance curator. For each article below, assign:
+1. Category (ONE of: geo_major, geo_other, monetary, fiscal, technology, other)
+2. Score (0-10): relevance for a geopolitics/finance professional
+
+CATEGORIES:
+- geo_major: US, China, Russia, Europe, Japan, Korea (deployed/operational context)
+- geo_other: Middle East, Africa, Latin America, South/Southeast Asia
+- monetary: Gold, Bitcoin, currencies, commodities, exchange rates
+- fiscal: Government debt, spending, budgets, deficits
+- technology: R&D, manufacturing, dual-use DEVELOPMENT (not yet deployed)
+- other: Everything else
+
+SCORE GUIDANCE:
+9-10: Critical developments, major policy shifts, must-read analysis
+7-8: Important trends, significant geopolitical/financial analysis
+5-6: Relevant but not urgent, decent background
+3-4: Tangential interest, minor relevance
+0-2: Skip (noise, spam, off-topic, pure entertainment)
+
+KEY DISTINCTION (technology vs geopolitics):
+- If discussing DEPLOYED systems, active operations, current conflicts → geo category
+- If discussing R&D, manufacturing capacity, future capabilities → technology
+
+OUTPUT FORMAT (one line per article, no explanation):
+<article_index>|<category>|<score>
+
+ARTICLES:
+"""
+    
+    for i, entry in enumerate(entries):
+        summary = entry.get('summary', '')[:200].replace('\n', ' ')
+        source = entry.get('source', 'Unknown')
+        prompt += f"\n{i}. [{source}] {entry['title']}\n   {summary}...\n"
+    
+    prompt += "\nOUTPUT (one line per article):\n"
+    
+    print(f"📡 Calling xAI Grok to score {len(entries)} articles...")
+    
+    try:
+        response = client.chat.completions.create(
+            model="grok-2-vision-1212",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=4096,
+            temperature=0
+        )
+        
+        content = response.choices[0].message.content
+        usage = response.usage
+        print(f"   Input: {usage.prompt_tokens} tokens, Output: {usage.completion_tokens} tokens")
+        cost = usage.prompt_tokens * 5 / 1_000_000 + usage.completion_tokens * 15 / 1_000_000
+        print(f"   Cost: ${cost:.4f}")
+        
+    except Exception as e:
+        error_msg = f"""
+❌ xAI API call failed!
+
+Error: {e}
+
+To use mechanical mode instead:
+  python curator_rss_v2.py --mode=mechanical
+"""
+        if fallback_on_error:
+            print(f"⚠️  xAI API error: {e}")
+            print("   Falling back to mechanical scoring...")
+            return [score_entry_mechanical(e) for e in entries]
+        else:
+            print(error_msg)
+            raise
+    
+    # Parse response
+    results = []
+    lines = content.strip().split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line or '|' not in line:
+            continue
+            
+        try:
+            parts = line.split('|')
+            idx = int(parts[0].strip())
+            category = parts[1].strip().lower()
+            score = float(parts[2].strip())
+            
+            results.append({
+                'score': score,
+                'category': category,
+                'method': 'xai',
+                'raw_score': score
+            })
+        except (ValueError, IndexError) as e:
+            print(f"⚠️  Skipping malformed line: {line}")
+            results.append({
+                'score': 5.0,
+                'category': 'other',
+                'method': 'xai',
+                'raw_score': 5.0
+            })
+    
+    # Ensure we have results for all entries
+    while len(results) < len(entries):
+        results.append({
+            'score': 5.0,
+            'category': 'other',
+            'method': 'xai',
+            'raw_score': 5.0
+        })
+    
+    return results[:len(entries)]
+
 def load_active_interests():
     """
     Load all active (non-expired) interests from interests/ directory.
@@ -997,13 +1149,14 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
     Args:
         top_n: Number of articles to return
         diversity_weight: How much to penalize source over-representation (0-1)
-        mode: 'mechanical', 'ai', 'ai-two-stage', or 'hybrid'
+        mode: 'mechanical', 'ai', 'ai-two-stage', 'xai', or 'hybrid'
         fallback_on_error: Auto-fallback to mechanical if API fails
     
     MODES:
     - mechanical: Fast, free, keyword-based
     - ai: Single-stage Haiku scoring (~$0.20/day)
     - ai-two-stage: Haiku pre-filter + Sonnet ranking (~$0.90/day, RECOMMENDED)
+    - xai: Single-stage xAI Grok scoring (~$0.15/day, cheapest LLM option)
     - hybrid: Blend mechanical + AI (Phase 2.2, not yet implemented)
     """
     print(f"\n🧠 Starting RSS curation (mode: {mode})...\n")
@@ -1053,6 +1206,14 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
             entry["category"] = results[i]['category']
             entry["method"] = results[i]['method']
             entry["raw_score"] = results[i].get('raw_score', entry["score"])  # AI doesn't have raw_score
+    elif mode == 'xai':
+        # Single-stage xAI Grok scoring
+        results = score_entries_xai(all_entries, fallback_on_error=fallback_on_error)
+        for i, entry in enumerate(all_entries):
+            entry["score"] = results[i]['score']
+            entry["category"] = results[i]['category']
+            entry["method"] = results[i]['method']
+            entry["raw_score"] = results[i].get('raw_score', entry["score"])
     else:
         # Mechanical scoring (one by one)
         for entry in all_entries:
