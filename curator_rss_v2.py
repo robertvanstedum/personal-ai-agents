@@ -295,6 +295,31 @@ def get_anthropic_api_key() -> str:
     
     return ""
 
+def get_xai_api_key() -> str:
+    """
+    Get xAI API key from (in priority order):
+    1. macOS Keychain (via keyring)
+    2. Environment variable XAI_API_KEY
+    3. .env file
+    
+    Returns empty string if not found.
+    """
+    # Try keychain first (most secure)
+    try:
+        import keyring
+        api_key = keyring.get_password("xai", "api_key")
+        if api_key:
+            return api_key
+    except Exception as e:
+        pass  # Keychain not available or error
+    
+    # Try environment variable (from .env or shell)
+    api_key = os.environ.get('XAI_API_KEY')
+    if api_key:
+        return api_key
+    
+    return ""
+
 def get_telegram_token() -> str:
     """
     Get Telegram bot token from (in priority order):
