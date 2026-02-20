@@ -1619,6 +1619,7 @@ def format_html(entries: List[Dict]) -> str:
     # Generate table rows
     for i, entry in enumerate(entries, 1):
         rank = i
+        hash_id = entry.get('hash_id', '')
         category = entry.get('category', 'other').upper()
         source = entry.get('source', 'Unknown')
         title = entry.get('title', 'Untitled')
@@ -1648,7 +1649,7 @@ def format_html(entries: List[Dict]) -> str:
             except:
                 pass
         
-        html += f"""                <tr>
+        html += f"""                <tr data-hash-id="{hash_id}">
                     <td class="col-rank"><span class="rank-badge">{rank}</span></td>
                     <td class="col-category"><span class="category-badge cat-{category.lower()}">{category}</span></td>
                     <td class="col-source"><span class="source-name">{source}</span></td>
@@ -1664,9 +1665,9 @@ def format_html(entries: List[Dict]) -> str:
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback('like', {rank});">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback('dislike', {rank});">👎</button>
-                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback('save', {rank});">💾</button>
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback('like', {rank}, '{hash_id}');">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback('dislike', {rank}, '{hash_id}');">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback('save', {rank}, '{hash_id}');">💾</button>
                         </div>
                     </td>
                 </tr>
@@ -1677,8 +1678,8 @@ def format_html(entries: List[Dict]) -> str:
     </div>
     
     <script>
-    function showFeedback(action, rank) {
-        console.log('showFeedback called:', action, rank);
+    function showFeedback(action, rank, hashId) {
+        console.log('showFeedback called:', action, rank, hashId);
         
         // Immediate visual feedback
         const button = event.target;
@@ -1686,8 +1687,8 @@ def format_html(entries: List[Dict]) -> str:
         button.style.opacity = '0.5';
         button.disabled = true;
         
-        // Send to feedback server
-        fetch('http://localhost:8765/feedback?action=' + action + '&rank=' + rank)
+        // Send to feedback server (with hash_id for deep dive)
+        fetch('http://localhost:8765/feedback?action=' + action + '&rank=' + rank + '&hash_id=' + hashId)
             .then(response => {
                 console.log('Response status:', response.status);
                 return response.json();
@@ -1704,7 +1705,7 @@ def format_html(entries: List[Dict]) -> str:
                 
                 // If liked or saved, add deep dive button
                 if (action === 'like' || action === 'save') {
-                    addDeepDiveButton(rank);
+                    addDeepDiveButton(rank, hashId);
                 }
             })
             .catch(error => {
@@ -1748,7 +1749,7 @@ def format_html(entries: List[Dict]) -> str:
         }, 2500);
     }
     
-    function showDeepDiveModal(rank, diveBtn) {
+    function showDeepDiveModal(rank, hashId, diveBtn) {
         // Create modal overlay
         var overlay = document.createElement('div');
         overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;';
@@ -1797,8 +1798,8 @@ def format_html(entries: List[Dict]) -> str:
             diveBtn.textContent = '⏳ Analyzing...';
             diveBtn.style.opacity = '0.6';
             
-            // Send to server with interest and focus
-            var url = 'http://localhost:8765/deepdive?rank=' + rank + '&interest=' + encodeURIComponent(interest);
+            // Send to server with hash_id, interest and focus
+            var url = 'http://localhost:8765/deepdive?hash_id=' + hashId + '&interest=' + encodeURIComponent(interest);
             if (focus) {
                 url += '&focus=' + encodeURIComponent(focus);
             }
@@ -1838,7 +1839,7 @@ def format_html(entries: List[Dict]) -> str:
         };
     }
     
-    function addDeepDiveButton(rank) {
+    function addDeepDiveButton(rank, hashId) {
         // Find the action buttons container for this rank
         var rows = document.querySelectorAll('tbody tr');
         for (var i = 0; i < rows.length; i++) {
@@ -1858,12 +1859,12 @@ def format_html(entries: List[Dict]) -> str:
                 diveBtn.textContent = '🔖 Deep Dive';
                 diveBtn.title = 'Request deep dive analysis (~30s, costs ~$0.15)';
                 diveBtn.style.cssText = 'background: #f39c12; color: white;';
-                // Use IIFE to capture rank and diveBtn by value (not reference)
-                diveBtn.onclick = (function(capturedRank, capturedBtn) {
+                // Use IIFE to capture rank, hashId and diveBtn by value (not reference)
+                diveBtn.onclick = (function(capturedRank, capturedHashId, capturedBtn) {
                     return function() {
-                        showDeepDiveModal(capturedRank, capturedBtn);
+                        showDeepDiveModal(capturedRank, capturedHashId, capturedBtn);
                     };
-                })(rank, diveBtn);
+                })(rank, hashId, diveBtn);
                 
                 // Insert at the beginning
                 actionButtons.insertBefore(diveBtn, actionButtons.firstChild);
