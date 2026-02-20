@@ -162,31 +162,35 @@ class FeedbackHandler(BaseHTTPRequestHandler):
                 output = result.stdout.decode()
                 print(f"Deep dive output:\n{output}")
                 
-                # Extract file path - look for MD path first, then convert to HTML
+                # Extract file path - look for MD path (absolute path)
                 import re
-                md_match = re.search(r'Saved to: (interests/[^\s]+\.md)', output)
+                md_match = re.search(r'Saved to:\s+(.+\.md)', output)
                 
                 if md_match:
-                    md_path = md_match.group(1)
-                    html_path = md_path.replace('.md', '.html')
+                    md_full_path = Path(md_match.group(1).strip())
+                    html_full_path = Path(str(md_full_path).replace('.md', '.html'))
+                    
+                    # Convert to relative path for browser
+                    base_dir = Path(__file__).parent
+                    html_rel_path = html_full_path.relative_to(base_dir)
                     
                     # Verify HTML file exists
-                    html_full_path = Path(__file__).parent / html_path
                     if html_full_path.exists():
-                        print(f"✅ Deep dive HTML found: {html_path}")
+                        print(f"✅ Deep dive HTML found: {html_rel_path}")
                         return {
                             'success': True,
                             'message': 'Deep dive complete!',
-                            'html_path': html_path
+                            'html_path': str(html_rel_path)
                         }
                     else:
                         print(f"⚠️  HTML not found at {html_full_path}")
                         return {
                             'success': True,
-                            'message': f'Deep dive saved as {md_path}'
+                            'message': f'Deep dive saved (HTML not generated)'
                         }
                 else:
                     print(f"⚠️  Could not extract path from output")
+                    print(f"Output was: {output[:200]}")
                     return {
                         'success': True,
                         'message': 'Deep dive complete (check terminal)'
