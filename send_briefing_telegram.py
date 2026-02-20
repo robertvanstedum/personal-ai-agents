@@ -75,7 +75,7 @@ def send_briefing():
         print("❌ No Telegram token found")
         return
     
-    chat_id = os.environ.get('TELEGRAM_CHAT_ID', '8379221702')
+    chat_id = os.environ.get('TELEGRAM_CHAT_ID', 'YOUR_TELEGRAM_CHAT_ID')
     
     # Parse curator output
     with open('curator_output.txt', 'r') as f:
