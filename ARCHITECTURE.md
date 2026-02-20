@@ -298,7 +298,7 @@ echo "Backup complete: $HOME/Backups/ai-system/ai-system-$DATE.tar.gz"
 #!/bin/bash
 # Migrate to new server
 
-SERVER_USER="robert"
+SERVER_USER="your_username"
 SERVER_HOST="macmini.local"  # or IP address
 
 # 1. Copy infrastructure

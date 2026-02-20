@@ -73,11 +73,16 @@ python3 curator_rss_v2.py --provider xai  # Test first (key ready)
 ## First Test
 ```bash
 # Test xAI with OpenAI SDK
+# API key will be loaded from keychain via get_xai_api_key()
 python3 << 'PYEOF'
 from openai import OpenAI
+import keyring
+
+# Get API key from keychain
+api_key = keyring.get_password("xai", "api_key")
 
 client = OpenAI(
-    api_key="xai-B8cHzhPbR6xkgeb1lGD0kS8vB3HioLEXawS7UrqIJ93N25rsB5set2Zehc8bnfDifVv3K24SckfrRnM9",
+    api_key=api_key,
     base_url="https://api.x.ai/v1"
 )
 

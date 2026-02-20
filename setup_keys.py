@@ -4,6 +4,7 @@ Store API keys/tokens in macOS Keychain
 
 Stores:
 - Anthropic API key (service: anthropic, account: api_key)
+- xAI API key (service: xai, account: api_key)
 - Telegram bot token (service: telegram, account: bot_token)
 """
 
@@ -26,9 +27,24 @@ def store_anthropic():
     else:
         print("⏭️  Skipped")
 
+def store_xai():
+    """Store xAI API key"""
+    print("\n2️⃣  xAI API Key")
+    print("=" * 50)
+    key = getpass.getpass("Enter xAI API key (or press Enter to skip): ")
+    
+    if key:
+        try:
+            keyring.set_password("xai", "api_key", key)
+            print("✅ xAI API key stored in Keychain")
+        except Exception as e:
+            print(f"❌ Failed: {e}")
+    else:
+        print("⏭️  Skipped")
+
 def store_telegram():
     """Store Telegram bot token"""
-    print("\n2️⃣  Telegram Bot Token")
+    print("\n3️⃣  Telegram Bot Token")
     print("=" * 50)
     token = getpass.getpass("Enter Telegram bot token (or press Enter to skip): ")
     
@@ -56,6 +72,15 @@ def verify_keys():
         print(f"⚠️  Anthropic API key: Error reading ({e})")
     
     try:
+        xai_key = keyring.get_password("xai", "api_key")
+        if xai_key:
+            print(f"✅ xAI API key: xai-...{xai_key[-6:]}")
+        else:
+            print("⚠️  xAI API key: Not found")
+    except Exception as e:
+        print(f"⚠️  xAI API key: Error reading ({e})")
+    
+    try:
         telegram_token = keyring.get_password("telegram", "bot_token")
         if telegram_token:
             # Bot tokens format: 123456:ABC-DEF...
@@ -76,12 +101,14 @@ def main():
     print("You can skip any key by pressing Enter.")
     
     store_anthropic()
+    store_xai()
     store_telegram()
     verify_keys()
     
     print("\n✨ Done!")
     print("\nTo manually check keys:")
     print('  python3 -c "import keyring; print(keyring.get_password(\\"anthropic\\", \\"api_key\\"))"')
+    print('  python3 -c "import keyring; print(keyring.get_password(\\"xai\\", \\"api_key\\"))"')
     print('  python3 -c "import keyring; print(keyring.get_password(\\"telegram\\", \\"bot_token\\"))"')
     print()
 

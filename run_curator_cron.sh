@@ -3,7 +3,7 @@
 # Mode: Single-stage AI (Haiku) ~$0.20/day = $6/month
 # To be called by OpenClaw cron at 7am daily
 
-PROJECT_DIR="/Users/vanstedum/Projects/personal-ai-agents"
+PROJECT_DIR="$HOME/Projects/personal-ai-agents"
 
 cd "$PROJECT_DIR" || exit 1
 

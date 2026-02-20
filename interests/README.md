@@ -20,7 +20,7 @@
 ### 1. Command Line (Fastest)
 
 ```bash
-cd /Users/vanstedum/Projects/personal-ai-agents
+cd ~/Projects/personal-ai-agents
 
 # Quick capture
 python3 capture_interest.py "[THIS-WEEK] Iran sanctions endgame"

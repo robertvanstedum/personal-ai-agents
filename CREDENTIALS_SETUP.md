@@ -12,8 +12,8 @@ Multi-layer approach to protect your credentials:
 ### Step 1: Install Required Packages
 
 ```bash
-cd /Users/vanstedum/Projects/personal-ai-agents
-source ai-env/bin/activate
+cd ~/Projects/personal-ai-agents
+source venv/bin/activate
 pip install keyring python-dotenv
 ```
 
