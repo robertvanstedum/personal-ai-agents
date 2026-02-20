@@ -124,16 +124,16 @@ class FeedbackHandler(BaseHTTPRequestHandler):
     def trigger_deepdive(self, rank):
         """Trigger deep dive analysis for an article"""
         try:
-            # Use curator_feedback.py save with auto deep dive
-            cmd = ['python', 'curator_feedback.py', 'save', rank]
+            # Use curator_feedback.py deepdive command
+            cmd = ['python', 'curator_feedback.py', 'deepdive', rank]
             
             # Run in virtual environment
             venv_python = Path(__file__).parent / 'venv' / 'bin' / 'python'
             if venv_python.exists():
                 cmd[0] = str(venv_python)
             
-            # Input: save reason + empty focus (triggers deep dive)
-            input_text = "Deep dive from web UI\n\n"
+            # Input: interest reason + optional focus areas
+            input_text = "Deep dive from web UI (expand on contrarian angles)\n\n"
             
             result = subprocess.run(
                 cmd,
@@ -145,34 +145,47 @@ class FeedbackHandler(BaseHTTPRequestHandler):
             
             if result.returncode == 0:
                 output = result.stdout.decode()
+                print(f"Deep dive output:\n{output}")
                 
-                # Try to extract the HTML file path from output
+                # Extract file path - look for MD path first, then convert to HTML
                 import re
-                html_match = re.search(r'(interests/\S+\.html)', output)
+                md_match = re.search(r'Saved to: (interests/[^\s]+\.md)', output)
                 
-                if html_match:
-                    html_path = html_match.group(1)
-                    print(f"✅ Deep dive generated: {html_path}")
-                    return {
-                        'success': True,
-                        'message': f'Deep dive complete!',
-                        'html_path': html_path
-                    }
+                if md_match:
+                    md_path = md_match.group(1)
+                    html_path = md_path.replace('.md', '.html')
+                    
+                    # Verify HTML file exists
+                    html_full_path = Path(__file__).parent / html_path
+                    if html_full_path.exists():
+                        print(f"✅ Deep dive HTML found: {html_path}")
+                        return {
+                            'success': True,
+                            'message': 'Deep dive complete!',
+                            'html_path': html_path
+                        }
+                    else:
+                        print(f"⚠️  HTML not found at {html_full_path}")
+                        return {
+                            'success': True,
+                            'message': f'Deep dive saved as {md_path}'
+                        }
                 else:
+                    print(f"⚠️  Could not extract path from output")
                     return {
                         'success': True,
-                        'message': 'Deep dive complete (check console for output)'
+                        'message': 'Deep dive complete (check terminal)'
                     }
             else:
                 error = result.stderr.decode()
-                print(f"❌ Error generating deep dive: {error}")
+                print(f"❌ Deep dive error: {error}")
                 return {
                     'success': False,
-                    'message': f'Deep dive failed: {error[:100]}'
+                    'message': f'Failed: {error[:100]}'
                 }
         
         except subprocess.TimeoutExpired:
-            return {'success': False, 'message': 'Deep dive timeout (>60s)'}
+            return {'success': False, 'message': 'Timeout (>60s)'}
         except Exception as e:
             return {'success': False, 'message': f'Error: {str(e)}'}
     
