@@ -6,7 +6,7 @@
 set -euo pipefail
 
 SCRIPT_PATH="$1"
-CHAT_ID="${2:-8379221702}"  # Default to your Telegram chat
+CHAT_ID="${2:-YOUR_TELEGRAM_CHAT_ID}"  # Default to your Telegram chat
 OPENCLAW_BIN="${OPENCLAW_BIN:-openclaw}"
 
 # Validate script exists

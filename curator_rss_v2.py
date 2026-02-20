@@ -357,7 +357,7 @@ def send_telegram_alert(message: str, chat_id: str = None) -> bool:
         True if sent successfully, False otherwise
     """
     if chat_id is None:
-        chat_id = os.environ.get('TELEGRAM_CHAT_ID', '8379221702')
+        chat_id = os.environ.get('TELEGRAM_CHAT_ID', 'YOUR_TELEGRAM_CHAT_ID')
     
     token = get_telegram_token()
     if not token:
@@ -2144,7 +2144,7 @@ def main():
         print(f"📱 Telegram message saved to telegram_message.txt")
         
         # Actually send to Telegram
-        telegram_chat_id = os.environ.get('TELEGRAM_CHAT_ID', '8379221702')
+        telegram_chat_id = os.environ.get('TELEGRAM_CHAT_ID', 'YOUR_TELEGRAM_CHAT_ID')
         
         # Get bot token (keychain → env → .env)
         telegram_token = get_telegram_token()

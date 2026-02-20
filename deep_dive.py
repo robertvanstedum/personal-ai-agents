@@ -235,7 +235,7 @@ def send_to_telegram(message: str) -> bool:
     """
     try:
         telegram_token = keyring.get_password('telegram', 'bot_token')
-        telegram_chat_id = os.environ.get('TELEGRAM_CHAT_ID', '8379221702')
+        telegram_chat_id = os.environ.get('TELEGRAM_CHAT_ID', 'YOUR_TELEGRAM_CHAT_ID')
         
         if not telegram_token:
             print("⚠️  TELEGRAM_BOT_TOKEN not found in keyring", file=sys.stderr)

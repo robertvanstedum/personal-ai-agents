@@ -13,7 +13,7 @@ def get_telegram_token():
         return os.environ.get('TELEGRAM_BOT_TOKEN')
 
 token = get_telegram_token()
-chat_id = os.environ.get('TELEGRAM_CHAT_ID', '8379221702')
+chat_id = os.environ.get('TELEGRAM_CHAT_ID', 'YOUR_TELEGRAM_CHAT_ID')
 
 if not token:
     print("❌ No Telegram token found")
