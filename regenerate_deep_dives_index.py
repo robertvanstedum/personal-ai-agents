@@ -1,4 +1,60 @@
-<!DOCTYPE html>
+#!/usr/bin/env python3
+"""
+Regenerate deep dives index.html
+"""
+
+from pathlib import Path
+from datetime import datetime
+import json
+import re
+
+def regenerate_deep_dives_index():
+    """Scan deep-dives directory and regenerate index.html"""
+    
+    deep_dives_dir = Path(__file__).parent / "interests" / "2026" / "deep-dives"
+    
+    if not deep_dives_dir.exists():
+        print(f"❌ Deep dives directory not found: {deep_dives_dir}")
+        return
+    
+    # Scan for markdown files (exclude index.html)
+    dives = []
+    
+    for md_file in deep_dives_dir.glob("*.md"):
+        # Read metadata from markdown
+        with open(md_file, 'r') as f:
+            content = f.read()
+        
+        # Extract title, source, date
+        title_match = re.search(r'^# (.+)$', content, re.MULTILINE)
+        source_match = re.search(r'\*\*Source:\*\* (.+)$', content, re.MULTILINE)
+        date_match = re.search(r'\*\*Date:\*\* (.+)$', content, re.MULTILINE)
+        
+        if title_match and source_match and date_match:
+            title = title_match.group(1).strip()
+            source = source_match.group(1).strip()
+            date_str = date_match.group(1).strip()
+            
+            html_file = md_file.stem + '.html'
+            
+            try:
+                date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+            except:
+                date_obj = datetime.now()
+            
+            dives.append({
+                'title': title,
+                'source': source,
+                'date': date_obj,
+                'date_str': date_str,
+                'html_file': html_file
+            })
+    
+    # Sort by date, newest first
+    dives.sort(key=lambda x: x['date'], reverse=True)
+    
+    # Generate HTML
+    html = """<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -112,7 +168,7 @@
     <div class="header">
         <h1>🔍 Deep Dive Archive</h1>
         <div>
-            <span class="header-meta">3 deep dives</span>
+            <span class="header-meta">""" + str(len(dives)) + """ deep dives</span>
             <span class="header-meta">•</span>
             <span class="header-meta">In-depth research</span>
         </div>
@@ -135,38 +191,43 @@
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td><span class="date-badge">Feb 20, 2026</span></td>
-                    <td><span class="source-name">ZeroHedge</span></td>
+"""
+    
+    if dives:
+        for dive in dives:
+            formatted_date = dive['date'].strftime("%b %d, %Y")
+            html += f"""                <tr>
+                    <td><span class="date-badge">{formatted_date}</span></td>
+                    <td><span class="source-name">{dive['source']}</span></td>
                     <td class="dive-title">
-                        <a href="74050-escobar-munich-in-security-conference-targets-re-c.html">
-                            Escobar: Munich (In)Security Conference Targets Re-Colonization Of The Global South
+                        <a href="{dive['html_file']}">
+                            {dive['title']}
                         </a>
                     </td>
-                    <td><a href="74050-escobar-munich-in-security-conference-targets-re-c.html" class="nav-btn">Read Analysis →</a></td>
+                    <td><a href="{dive['html_file']}" class="nav-btn">Read Analysis →</a></td>
                 </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 20, 2026</span></td>
-                    <td><span class="source-name">Geopolitical Futures</span></td>
-                    <td class="dive-title">
-                        <a href="435ce-why-trump-is-not-to-blame-for-europe-s-predicament.html">
-                            Why Trump is Not to Blame for Europe’s Predicament | George Friedman
-                        </a>
+"""
+    else:
+        html += """                <tr>
+                    <td colspan="4" style="text-align: center; padding: 30px; color: #888;">
+                        No deep dives yet. Like or save an article, then click 🔖 Deep Dive!
                     </td>
-                    <td><a href="435ce-why-trump-is-not-to-blame-for-europe-s-predicament.html" class="nav-btn">Read Analysis →</a></td>
                 </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 19, 2026</span></td>
-                    <td><span class="source-name">ZeroHedge</span></td>
-                    <td class="dive-title">
-                        <a href="90610-futures-slide-as-iran-war-risks-add-to-growing-ai.html">
-                            Futures Slide As Iran War Risks Add To Growing AI Disruption Fears; Oil Surges
-                        </a>
-                    </td>
-                    <td><a href="90610-futures-slide-as-iran-war-risks-add-to-growing-ai.html" class="nav-btn">Read Analysis →</a></td>
-                </tr>
-            </tbody>
+"""
+    
+    html += """            </tbody>
         </table>
     </div>
 </body>
 </html>
+"""
+    
+    # Write index
+    index_file = deep_dives_dir / "index.html"
+    with open(index_file, 'w') as f:
+        f.write(html)
+    
+    print(f"✅ Deep dives index regenerated: {len(dives)} entries")
+
+if __name__ == '__main__':
+    regenerate_deep_dives_index()

@@ -332,6 +332,107 @@ Write directly - no preamble."""
         print(f"❌ Error generating deep dive: {e}")
         return None, None, None
 
+def regenerate_deep_dives_index():
+    """Regenerate deep dives index.html after creating a new deep dive"""
+    deep_dives_dir = Path(__file__).parent / "interests" / "2026" / "deep-dives"
+    
+    if not deep_dives_dir.exists():
+        return
+    
+    # Scan for markdown files
+    dives = []
+    for md_file in deep_dives_dir.glob("*.md"):
+        with open(md_file, 'r') as f:
+            content = f.read()
+        
+        # Extract metadata
+        title_match = re.search(r'^# (.+)$', content, re.MULTILINE)
+        source_match = re.search(r'\*\*Source:\*\* (.+)$', content, re.MULTILINE)
+        date_match = re.search(r'\*\*Date:\*\* (.+)$', content, re.MULTILINE)
+        
+        if title_match and source_match and date_match:
+            from datetime import datetime
+            title = title_match.group(1).strip()
+            source = source_match.group(1).strip()
+            date_str = date_match.group(1).strip()
+            html_file = md_file.stem + '.html'
+            
+            try:
+                date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+            except:
+                date_obj = datetime.now()
+            
+            dives.append({
+                'title': title,
+                'source': source,
+                'date': date_obj,
+                'html_file': html_file
+            })
+    
+    # Sort newest first
+    dives.sort(key=lambda x: x['date'], reverse=True)
+    
+    # Generate HTML (simplified version)
+    rows = ""
+    for dive in dives:
+        formatted_date = dive['date'].strftime("%b %d, %Y")
+        rows += f'''                <tr>
+                    <td><span class="date-badge">{formatted_date}</span></td>
+                    <td><span class="source-name">{dive['source']}</span></td>
+                    <td class="dive-title">
+                        <a href="{dive['html_file']}">{dive['title']}</a>
+                    </td>
+                    <td><a href="{dive['html_file']}" class="nav-btn">Read Analysis →</a></td>
+                </tr>
+'''
+    
+    if not rows:
+        rows = '''                <tr>
+                    <td colspan="4" style="text-align: center; padding: 30px; color: #888;">
+                        No deep dives yet. Like or save an article, then click 🔖 Deep Dive!
+                    </td>
+                </tr>
+'''
+    
+    html = f'''<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Deep Dive Archive</title>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 1400px; margin: 15px auto; padding: 12px; background: #f5f5f5; }}
+        .header {{ margin-bottom: 15px; padding: 12px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-radius: 5px; text-align: center; }}
+        .nav-buttons {{ display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }}
+        .nav-btn {{ padding: 8px 16px; background: #667eea; color: white; text-decoration: none; border-radius: 4px; }}
+        .nav-btn:hover {{ background: #5568d3; }}
+        table {{ width: 100%; border-collapse: collapse; background: white; }}
+        th {{ padding: 11px 12px; text-align: left; background: #f8f9fa; border-bottom: 2px solid #ddd; }}
+        td {{ padding: 12px; border-bottom: 1px solid #ddd; }}
+        tr:hover {{ background: #f0f4ff; }}
+        .dive-title a {{ color: #333; text-decoration: none; }}
+        .dive-title a:hover {{ color: #667eea; }}
+        .date-badge {{ color: #888; font-size: 0.9em; }}
+        .source-name {{ color: #666; }}
+    </style>
+</head>
+<body>
+    <div class="header"><h1>🔍 Deep Dive Archive</h1><div>{len(dives)} deep dives</div></div>
+    <div class="nav-buttons">
+        <a href="../../../curator_briefing.html" class="nav-btn">📰 Today</a>
+        <a href="../../../curator_index.html" class="nav-btn">📚 Archive</a>
+        <a href="index.html" class="nav-btn">🔍 Deep Dives</a>
+    </div>
+    <table><thead><tr><th>Date</th><th>Source</th><th>Title</th><th>Action</th></tr></thead><tbody>
+{rows}    </tbody></table>
+</body>
+</html>'''
+    
+    index_file = deep_dives_dir / "index.html"
+    with open(index_file, 'w') as f:
+        f.write(html)
+    
+    print(f"📑 Deep dives index updated ({len(dives)} entries)")
+
 def generate_deep_dive_html(hash_id, article_data, initial_interest, dive_focus, analysis_content, cost, input_tokens, output_tokens):
     """Generate HTML version of deep dive analysis"""
     from datetime import datetime
@@ -875,6 +976,9 @@ def main():
                 
                 with open(history_file, 'w') as f:
                     json.dump(history, f, indent=2)
+            
+            # Regenerate deep dives index
+            regenerate_deep_dives_index()
         else:
             print("❌ Deep dive generation failed")
         
