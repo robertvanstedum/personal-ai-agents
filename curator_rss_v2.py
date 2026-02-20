@@ -1458,6 +1458,49 @@ def format_html(entries: List[Dict]) -> str:
             width: 120px;
             text-align: right;
         }}
+        .col-actions {{
+            width: 110px;
+            text-align: center;
+            white-space: nowrap;
+        }}
+        .action-buttons {{
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+        }}
+        .action-btn {{
+            padding: 4px 8px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: 500;
+            transition: all 0.2s;
+        }}
+        .btn-like {{
+            background: #d4edda;
+            color: #155724;
+        }}
+        .btn-like:hover {{
+            background: #c3e6cb;
+            transform: scale(1.05);
+        }}
+        .btn-dislike {{
+            background: #f8d7da;
+            color: #721c24;
+        }}
+        .btn-dislike:hover {{
+            background: #f5c6cb;
+            transform: scale(1.05);
+        }}
+        .btn-save {{
+            background: #cfe2ff;
+            color: #084298;
+        }}
+        .btn-save:hover {{
+            background: #b6d4fe;
+            transform: scale(1.05);
+        }}
         .rank-badge {{
             display: inline-block;
             background: #667eea;
@@ -1542,6 +1585,7 @@ def format_html(entries: List[Dict]) -> str:
                     <th class="col-title">Title</th>
                     <th class="col-time">Time</th>
                     <th class="col-score">Score</th>
+                    <th class="col-actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -1593,12 +1637,139 @@ def format_html(entries: List[Dict]) -> str:
                         <div class="score-value">{score:.1f}</div>
                         <div class="score-details">{raw_score:.1f} → {score:.1f}</div>
                     </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback('like', {rank});">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback('dislike', {rank});">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback('save', {rank});">💾</button>
+                        </div>
+                    </td>
                 </tr>
 """
     
     html += """            </tbody>
         </table>
     </div>
+    
+    <script>
+    function showFeedback(action, rank) {
+        // Send to feedback server
+        fetch(`http://localhost:8765/feedback?action=${action}&rank=${rank}`)
+            .then(response => response.json())
+            .then(data => {
+                // Create subtle toast notification
+                const toast = document.createElement('div');
+                toast.textContent = data.message || `Article #${rank} ${action}d`;
+                toast.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: #4f46e5;
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 8px;
+                    font-weight: 500;
+                    font-size: 14px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    z-index: 9999;
+                    opacity: 0;
+                    transform: translateX(100%);
+                    transition: all 0.3s ease;
+                `;
+                
+                document.body.appendChild(toast);
+                
+                // Animate in
+                setTimeout(() => {
+                    toast.style.opacity = '1';
+                    toast.style.transform = 'translateX(0)';
+                }, 100);
+                
+                // Animate out after 2 seconds
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    toast.style.transform = 'translateX(100%)';
+                    setTimeout(() => document.body.removeChild(toast), 300);
+                }, 2000);
+                
+                // If liked or saved, add deep dive button
+                if (action === 'like' || action === 'save') {
+                    addDeepDiveButton(rank);
+                }
+            })
+            .catch(error => {
+                console.error('Feedback error:', error);
+                // Show fallback toast
+                const toast = document.createElement('div');
+                toast.textContent = 'Feedback server not running. Start: python curator_server.py';
+                toast.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: #ef4444;
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 8px;
+                    font-weight: 500;
+                    font-size: 14px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    z-index: 9999;
+                `;
+                document.body.appendChild(toast);
+                setTimeout(() => document.body.removeChild(toast), 4000);
+            });
+    }
+    
+    function addDeepDiveButton(rank) {
+        // Find the action buttons container for this rank
+        const rows = document.querySelectorAll('tbody tr');
+        for (const row of rows) {
+            const rankBadge = row.querySelector('.rank-badge');
+            if (rankBadge && rankBadge.textContent === rank.toString()) {
+                const actionButtons = row.querySelector('.action-buttons');
+                
+                // Check if deep dive button already exists
+                if (actionButtons.querySelector('.btn-dive')) {
+                    return;
+                }
+                
+                // Create deep dive button
+                const diveBtn = document.createElement('button');
+                diveBtn.className = 'action-btn btn-dive';
+                diveBtn.textContent = '🔖 Deep Dive';
+                diveBtn.title = 'Request deep dive analysis';
+                diveBtn.style.cssText = `
+                    background: #f39c12;
+                    color: white;
+                `;
+                diveBtn.onclick = () => {
+                    window.location.href = `curator_deepdive.html?rank=${rank}`;
+                };
+                
+                // Insert at the beginning
+                actionButtons.insertBefore(diveBtn, actionButtons.firstChild);
+                
+                // Visual feedback
+                diveBtn.style.animation = 'fadeIn 0.3s ease';
+                break;
+            }
+        }
+    }
+    </script>
+    <style>
+    @keyframes fadeIn {
+        from { opacity: 0; transform: scale(0.9); }
+        to { opacity: 1; transform: scale(1); }
+    }
+    .btn-dive {
+        background: #f39c12 !important;
+        color: white !important;
+    }
+    .btn-dive:hover {
+        background: #e67e22 !important;
+        transform: scale(1.05);
+    }
+    </style>
 </body>
 </html>
 """
