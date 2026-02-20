@@ -1662,7 +1662,7 @@ def format_html(entries: List[Dict]) -> str:
         button.disabled = true;
         
         // Send to feedback server
-        fetch(\`http://localhost:8765/feedback?action=\${action}&rank=\${rank}\`)
+        fetch('http://localhost:8765/feedback?action=' + action + '&rank=' + rank)
             .then(response => {
                 console.log('Response status:', response.status);
                 return response.json();
@@ -1675,7 +1675,7 @@ def format_html(entries: List[Dict]) -> str:
                 button.disabled = false;
                 
                 // Show toast notification
-                showToast(data.message || \`Article #\${rank} \${action}d\`, 'success');
+                showToast(data.message || 'Article #' + rank + ' ' + action + 'd', 'success');
                 
                 // If liked or saved, add deep dive button
                 if (action === 'like' || action === 'save') {
@@ -1690,44 +1690,32 @@ def format_html(entries: List[Dict]) -> str:
             });
     }
     
-    function showToast(message, type = 'success') {
+    function showToast(message, type) {
+        type = type || 'success';
         console.log('showToast:', message, type);
         
         const toast = document.createElement('div');
         toast.textContent = message;
-        toast.style.cssText = \`
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: \${type === 'error' ? '#ef4444' : '#10b981'};
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            font-weight: 500;
-            font-size: 14px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 9999;
-            opacity: 0;
-            transform: translateY(-20px);
-            transition: all 0.3s ease;
-        \`;
+        
+        var bgColor = (type === 'error') ? '#ef4444' : '#10b981';
+        toast.style.cssText = 'position: fixed; top: 20px; right: 20px; background: ' + bgColor + '; color: white; padding: 12px 20px; border-radius: 8px; font-weight: 500; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999; opacity: 0; transform: translateY(-20px); transition: all 0.3s ease;';
         
         document.body.appendChild(toast);
         console.log('Toast added to body');
         
         // Animate in
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
+        requestAnimationFrame(function() {
+            requestAnimationFrame(function() {
                 toast.style.opacity = '1';
                 toast.style.transform = 'translateY(0)';
             });
         });
         
         // Animate out after 2.5 seconds
-        setTimeout(() => {
+        setTimeout(function() {
             toast.style.opacity = '0';
             toast.style.transform = 'translateY(-20px)';
-            setTimeout(() => {
+            setTimeout(function() {
                 if (toast.parentNode) {
                     document.body.removeChild(toast);
                 }
@@ -1737,11 +1725,12 @@ def format_html(entries: List[Dict]) -> str:
     
     function addDeepDiveButton(rank) {
         // Find the action buttons container for this rank
-        const rows = document.querySelectorAll('tbody tr');
-        for (const row of rows) {
-            const rankBadge = row.querySelector('.rank-badge');
+        var rows = document.querySelectorAll('tbody tr');
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var rankBadge = row.querySelector('.rank-badge');
             if (rankBadge && rankBadge.textContent === rank.toString()) {
-                const actionButtons = row.querySelector('.action-buttons');
+                var actionButtons = row.querySelector('.action-buttons');
                 
                 // Check if deep dive button already exists
                 if (actionButtons.querySelector('.btn-dive')) {
@@ -1749,24 +1738,21 @@ def format_html(entries: List[Dict]) -> str:
                 }
                 
                 // Create deep dive button
-                const diveBtn = document.createElement('button');
+                var diveBtn = document.createElement('button');
                 diveBtn.className = 'action-btn btn-dive';
                 diveBtn.textContent = '🔖 Deep Dive';
                 diveBtn.title = 'Request deep dive analysis (~30s, costs ~$0.15)';
-                diveBtn.style.cssText = `
-                    background: #f39c12;
-                    color: white;
-                `;
-                diveBtn.onclick = () => {
+                diveBtn.style.cssText = 'background: #f39c12; color: white;';
+                diveBtn.onclick = function() {
                     // Disable button and show loading
                     diveBtn.disabled = true;
                     diveBtn.textContent = '⏳ Analyzing...';
                     diveBtn.style.opacity = '0.6';
                     
                     // Trigger deep dive
-                    fetch(\`http://localhost:8765/deepdive?rank=\${rank}\`)
-                        .then(response => response.json())
-                        .then(data => {
+                    fetch('http://localhost:8765/deepdive?rank=' + rank)
+                        .then(function(response) { return response.json(); })
+                        .then(function(data) {
                             if (data.success && data.html_path) {
                                 // Open deep dive in new tab
                                 window.open(data.html_path, '_blank');
@@ -1774,7 +1760,7 @@ def format_html(entries: List[Dict]) -> str:
                                 diveBtn.style.background = '#27ae60';
                                 diveBtn.disabled = false;
                                 diveBtn.style.opacity = '1';
-                                diveBtn.onclick = () => window.open(data.html_path, '_blank');
+                                diveBtn.onclick = function() { window.open(data.html_path, '_blank'); };
                             } else {
                                 diveBtn.textContent = '✅ Done';
                                 diveBtn.disabled = false;
@@ -1782,7 +1768,7 @@ def format_html(entries: List[Dict]) -> str:
                                 alert(data.message || 'Deep dive complete! Check console.');
                             }
                         })
-                        .catch(error => {
+                        .catch(function(error) {
                             console.error('Deep dive error:', error);
                             diveBtn.textContent = '❌ Failed';
                             diveBtn.style.background = '#e74c3c';
