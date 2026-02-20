@@ -56,13 +56,22 @@ class FeedbackHandler(BaseHTTPRequestHandler):
             # Trigger deep dive analysis
             params = urllib.parse.parse_qs(parsed.query)
             rank = params.get('rank', [''])[0]
+            interest = params.get('interest', [''])[0]
+            focus = params.get('focus', [''])[0]
             
             if not rank:
                 self.send_error(400, "Missing rank")
                 return
             
+            if not interest:
+                self.send_error(400, "Missing interest")
+                return
+            
             print(f"\n🔍 Deep dive requested for article #{rank}")
-            result = self.trigger_deepdive(rank)
+            print(f"   Interest: {interest[:100]}...")
+            if focus:
+                print(f"   Focus: {focus[:100]}...")
+            result = self.trigger_deepdive(rank, interest, focus)
             
             # Send response
             self.send_response(200)
@@ -121,7 +130,7 @@ class FeedbackHandler(BaseHTTPRequestHandler):
         except Exception as e:
             return {'success': False, 'message': f'Error: {str(e)}'}
     
-    def trigger_deepdive(self, rank):
+    def trigger_deepdive(self, rank, interest, focus=''):
         """Trigger deep dive analysis for an article"""
         try:
             # Use curator_feedback.py deepdive command
@@ -132,8 +141,8 @@ class FeedbackHandler(BaseHTTPRequestHandler):
             if venv_python.exists():
                 cmd[0] = str(venv_python)
             
-            # Input: interest reason + optional focus areas
-            input_text = "Deep dive from web UI (expand on contrarian angles)\n\n"
+            # Input: interest reason + optional focus areas (matches interactive prompts)
+            input_text = interest + "\n" + focus + "\n"
             
             result = subprocess.run(
                 cmd,

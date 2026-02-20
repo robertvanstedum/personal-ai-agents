@@ -1723,6 +1723,96 @@ def format_html(entries: List[Dict]) -> str:
         }, 2500);
     }
     
+    function showDeepDiveModal(rank, diveBtn) {
+        // Create modal overlay
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+        
+        // Create modal
+        var modal = document.createElement('div');
+        modal.style.cssText = 'background: white; padding: 30px; border-radius: 12px; max-width: 500px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.3);';
+        
+        modal.innerHTML = '<h2 style="margin: 0 0 20px 0; color: #2c3e50;">Deep Dive Analysis</h2>' +
+            '<p style="color: #666; margin-bottom: 20px;">This generates a research briefing with bibliography tailored to YOUR interests.</p>' +
+            '<label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">What interests you about this article?</label>' +
+            '<textarea id="interest-input" placeholder="e.g., Geopolitical implications, economic impact, contrarian perspectives..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: inherit; margin-bottom: 20px; box-sizing: border-box;"></textarea>' +
+            '<label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">Specific focus areas? (optional)</label>' +
+            '<input id="focus-input" type="text" placeholder="e.g., Historical precedents, key players, data sources..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; font-family: inherit; margin-bottom: 20px; box-sizing: border-box;">' +
+            '<div style="display: flex; gap: 10px; justify-content: flex-end;">' +
+            '<button id="modal-cancel" style="padding: 10px 20px; border: 1px solid #ddd; background: white; border-radius: 6px; cursor: pointer; font-weight: 500;">Cancel</button>' +
+            '<button id="modal-submit" style="padding: 10px 20px; border: none; background: #f39c12; color: white; border-radius: 6px; cursor: pointer; font-weight: 500;">Generate (~30s, $0.15)</button>' +
+            '</div>';
+        
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        
+        // Focus on interest input
+        document.getElementById('interest-input').focus();
+        
+        // Handle cancel
+        document.getElementById('modal-cancel').onclick = function() {
+            document.body.removeChild(overlay);
+        };
+        
+        // Handle submit
+        document.getElementById('modal-submit').onclick = function() {
+            var interest = document.getElementById('interest-input').value.trim();
+            var focus = document.getElementById('focus-input').value.trim();
+            
+            if (!interest) {
+                alert('Please describe what interests you about this article.');
+                return;
+            }
+            
+            // Close modal
+            document.body.removeChild(overlay);
+            
+            // Update button and trigger deep dive
+            diveBtn.disabled = true;
+            diveBtn.textContent = '⏳ Analyzing...';
+            diveBtn.style.opacity = '0.6';
+            
+            // Send to server with interest and focus
+            var url = 'http://localhost:8765/deepdive?rank=' + rank + '&interest=' + encodeURIComponent(interest);
+            if (focus) {
+                url += '&focus=' + encodeURIComponent(focus);
+            }
+            
+            fetch(url)
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.success && data.html_path) {
+                        window.open(data.html_path, '_blank');
+                        diveBtn.textContent = '✅ View Again';
+                        diveBtn.style.background = '#27ae60';
+                        diveBtn.disabled = false;
+                        diveBtn.style.opacity = '1';
+                        diveBtn.onclick = function() { window.open(data.html_path, '_blank'); };
+                    } else {
+                        diveBtn.textContent = '✅ Done';
+                        diveBtn.disabled = false;
+                        diveBtn.style.opacity = '1';
+                        showToast(data.message || 'Deep dive complete!', 'success');
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Deep dive error:', error);
+                    diveBtn.textContent = '❌ Failed';
+                    diveBtn.style.background = '#e74c3c';
+                    diveBtn.disabled = false;
+                    diveBtn.style.opacity = '1';
+                    showToast('Deep dive failed. Is curator_server.py running?', 'error');
+                });
+        };
+        
+        // Close on overlay click
+        overlay.onclick = function(e) {
+            if (e.target === overlay) {
+                document.body.removeChild(overlay);
+            }
+        };
+    }
+    
     function addDeepDiveButton(rank) {
         // Find the action buttons container for this rank
         var rows = document.querySelectorAll('tbody tr');
@@ -1744,38 +1834,8 @@ def format_html(entries: List[Dict]) -> str:
                 diveBtn.title = 'Request deep dive analysis (~30s, costs ~$0.15)';
                 diveBtn.style.cssText = 'background: #f39c12; color: white;';
                 diveBtn.onclick = function() {
-                    // Disable button and show loading
-                    diveBtn.disabled = true;
-                    diveBtn.textContent = '⏳ Analyzing...';
-                    diveBtn.style.opacity = '0.6';
-                    
-                    // Trigger deep dive
-                    fetch('http://localhost:8765/deepdive?rank=' + rank)
-                        .then(function(response) { return response.json(); })
-                        .then(function(data) {
-                            if (data.success && data.html_path) {
-                                // Open deep dive in new tab
-                                window.open(data.html_path, '_blank');
-                                diveBtn.textContent = '✅ View Again';
-                                diveBtn.style.background = '#27ae60';
-                                diveBtn.disabled = false;
-                                diveBtn.style.opacity = '1';
-                                diveBtn.onclick = function() { window.open(data.html_path, '_blank'); };
-                            } else {
-                                diveBtn.textContent = '✅ Done';
-                                diveBtn.disabled = false;
-                                diveBtn.style.opacity = '1';
-                                alert(data.message || 'Deep dive complete! Check console.');
-                            }
-                        })
-                        .catch(function(error) {
-                            console.error('Deep dive error:', error);
-                            diveBtn.textContent = '❌ Failed';
-                            diveBtn.style.background = '#e74c3c';
-                            diveBtn.disabled = false;
-                            diveBtn.style.opacity = '1';
-                            alert('Deep dive failed. Is curator_server.py running?');
-                        });
+                    // Show modal for interest/focus
+                    showDeepDiveModal(rank, diveBtn);
                 };
                 
                 // Insert at the beginning
