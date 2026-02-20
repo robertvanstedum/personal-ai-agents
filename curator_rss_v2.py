@@ -1858,10 +1858,12 @@ def format_html(entries: List[Dict]) -> str:
                 diveBtn.textContent = '🔖 Deep Dive';
                 diveBtn.title = 'Request deep dive analysis (~30s, costs ~$0.15)';
                 diveBtn.style.cssText = 'background: #f39c12; color: white;';
-                diveBtn.onclick = function() {
-                    // Show modal for interest/focus
-                    showDeepDiveModal(rank, diveBtn);
-                };
+                // Use IIFE to capture rank and diveBtn by value (not reference)
+                diveBtn.onclick = (function(capturedRank, capturedBtn) {
+                    return function() {
+                        showDeepDiveModal(capturedRank, capturedBtn);
+                    };
+                })(rank, diveBtn);
                 
                 // Insert at the beginning
                 actionButtons.insertBefore(diveBtn, actionButtons.firstChild);
