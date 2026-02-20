@@ -133,8 +133,14 @@ class FeedbackHandler(BaseHTTPRequestHandler):
     def trigger_deepdive(self, rank, interest, focus=''):
         """Trigger deep dive analysis for an article"""
         try:
-            # Use curator_feedback.py deepdive command
-            cmd = ['python', 'curator_feedback.py', 'deepdive', rank]
+            from datetime import datetime
+            
+            # Use curator_feedback.py bookmark command (which triggers deep dive)
+            # Convert rank to date-rank format: YYYY-MM-DD-N
+            today = datetime.now().strftime("%Y-%m-%d")
+            date_rank = f"{today}-{rank}"
+            
+            cmd = ['python', 'curator_feedback.py', 'bookmark', date_rank]
             
             # Run in virtual environment
             venv_python = Path(__file__).parent / 'venv' / 'bin' / 'python'

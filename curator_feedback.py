@@ -322,7 +322,7 @@ Write directly - no preamble."""
             hash_id, article_data, initial_interest, dive_focus,
             content, cost, input_tokens, output_tokens
         )
-        html_path = output_path.replace('.md', '.html')
+        html_path = str(output_path).replace('.md', '.html')
         with open(html_path, 'w') as f:
             f.write(html)
         
@@ -817,17 +817,43 @@ def main():
                 break
         
         if not like_comment:
-            print("📌 No Like found for this article.")
-            like_comment = input("What interests you about it? ").strip()
-            if not like_comment:
-                print("❌ No context provided. Cancelled.")
-                sys.exit(0)
-            print()
-        
-        # Prompt for deep dive focus (optional)
-        print("Add focus areas for deep dive? (Enter to skip)")
-        dive_focus = input("> ").strip()
-        print()
+            # Check if stdin is piped (non-interactive mode)
+            if not sys.stdin.isatty():
+                # Read from stdin (web UI provides interest + focus)
+                lines = sys.stdin.read().strip().split('\n')
+                like_comment = lines[0] if len(lines) > 0 else ""
+                dive_focus = lines[1] if len(lines) > 1 else ""
+                
+                if not like_comment:
+                    print("❌ No interest provided. Cancelled.")
+                    sys.exit(0)
+                    
+                print(f"📌 Interest: {like_comment}")
+                if dive_focus:
+                    print(f"📌 Focus: {dive_focus}")
+                print()
+            else:
+                # Interactive mode
+                print("📌 No Like found for this article.")
+                like_comment = input("What interests you about it? ").strip()
+                if not like_comment:
+                    print("❌ No context provided. Cancelled.")
+                    sys.exit(0)
+                print()
+                
+                # Prompt for deep dive focus (optional)
+                print("Add focus areas for deep dive? (Enter to skip)")
+                dive_focus = input("> ").strip()
+                print()
+        else:
+            # Had existing like, check for focus from stdin or prompt
+            if not sys.stdin.isatty():
+                lines = sys.stdin.read().strip().split('\n')
+                dive_focus = lines[1] if len(lines) > 1 else ""
+            else:
+                print("Add focus areas for deep dive? (Enter to skip)")
+                dive_focus = input("> ").strip()
+                print()
         
         # Generate deep dive
         markdown, cost, output_path = generate_deep_dive(hash_id, article_data, like_comment, dive_focus)
