@@ -614,6 +614,9 @@ def generate_deep_dive_html(hash_id, article_data, initial_interest, dive_focus,
     # Convert markdown analysis to basic HTML
     # Simple conversion: h2, h3, bold, lists
     
+    # Strip any leading "Deep Dive Analysis" heading from AI output (we add it in template)
+    analysis_content = re.sub(r'^##\s+Deep Dive Analysis\s*\n', '', analysis_content, flags=re.IGNORECASE)
+    
     # Check if there's a Sources/Bibliography section
     has_sources = bool(re.search(r'^## (Sources|Bibliography|Further Reading|References)', analysis_content, flags=re.MULTILINE))
     
