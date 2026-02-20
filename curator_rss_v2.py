@@ -1737,13 +1737,44 @@ def format_html(entries: List[Dict]) -> str:
                 const diveBtn = document.createElement('button');
                 diveBtn.className = 'action-btn btn-dive';
                 diveBtn.textContent = '🔖 Deep Dive';
-                diveBtn.title = 'Request deep dive analysis';
+                diveBtn.title = 'Request deep dive analysis (~30s, costs ~$0.15)';
                 diveBtn.style.cssText = `
                     background: #f39c12;
                     color: white;
                 `;
                 diveBtn.onclick = () => {
-                    window.location.href = `curator_deepdive.html?rank=${rank}`;
+                    // Disable button and show loading
+                    diveBtn.disabled = true;
+                    diveBtn.textContent = '⏳ Analyzing...';
+                    diveBtn.style.opacity = '0.6';
+                    
+                    // Trigger deep dive
+                    fetch(\`http://localhost:8765/deepdive?rank=\${rank}\`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.html_path) {
+                                // Open deep dive in new tab
+                                window.open(data.html_path, '_blank');
+                                diveBtn.textContent = '✅ View Again';
+                                diveBtn.style.background = '#27ae60';
+                                diveBtn.disabled = false;
+                                diveBtn.style.opacity = '1';
+                                diveBtn.onclick = () => window.open(data.html_path, '_blank');
+                            } else {
+                                diveBtn.textContent = '✅ Done';
+                                diveBtn.disabled = false;
+                                diveBtn.style.opacity = '1';
+                                alert(data.message || 'Deep dive complete! Check console.');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Deep dive error:', error);
+                            diveBtn.textContent = '❌ Failed';
+                            diveBtn.style.background = '#e74c3c';
+                            diveBtn.disabled = false;
+                            diveBtn.style.opacity = '1';
+                            alert('Deep dive failed. Is curator_server.py running?');
+                        });
                 };
                 
                 // Insert at the beginning

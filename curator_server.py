@@ -52,6 +52,26 @@ class FeedbackHandler(BaseHTTPRequestHandler):
             }
             self.wfile.write(json.dumps(response).encode())
         
+        elif parsed.path == '/deepdive':
+            # Trigger deep dive analysis
+            params = urllib.parse.parse_qs(parsed.query)
+            rank = params.get('rank', [''])[0]
+            
+            if not rank:
+                self.send_error(400, "Missing rank")
+                return
+            
+            print(f"\n🔍 Deep dive requested for article #{rank}")
+            result = self.trigger_deepdive(rank)
+            
+            # Send response
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            self.wfile.write(json.dumps(result).encode())
+        
         else:
             self.send_error(404, "Not found")
     
@@ -98,6 +118,61 @@ class FeedbackHandler(BaseHTTPRequestHandler):
         
         except subprocess.TimeoutExpired:
             return {'success': False, 'message': 'Timeout waiting for feedback script'}
+        except Exception as e:
+            return {'success': False, 'message': f'Error: {str(e)}'}
+    
+    def trigger_deepdive(self, rank):
+        """Trigger deep dive analysis for an article"""
+        try:
+            # Use curator_feedback.py save with auto deep dive
+            cmd = ['python', 'curator_feedback.py', 'save', rank]
+            
+            # Run in virtual environment
+            venv_python = Path(__file__).parent / 'venv' / 'bin' / 'python'
+            if venv_python.exists():
+                cmd[0] = str(venv_python)
+            
+            # Input: save reason + empty focus (triggers deep dive)
+            input_text = "Deep dive from web UI\n\n"
+            
+            result = subprocess.run(
+                cmd,
+                input=input_text.encode(),
+                capture_output=True,
+                cwd=Path(__file__).parent,
+                timeout=60  # Deep dives take longer
+            )
+            
+            if result.returncode == 0:
+                output = result.stdout.decode()
+                
+                # Try to extract the HTML file path from output
+                import re
+                html_match = re.search(r'(interests/\S+\.html)', output)
+                
+                if html_match:
+                    html_path = html_match.group(1)
+                    print(f"✅ Deep dive generated: {html_path}")
+                    return {
+                        'success': True,
+                        'message': f'Deep dive complete!',
+                        'html_path': html_path
+                    }
+                else:
+                    return {
+                        'success': True,
+                        'message': 'Deep dive complete (check console for output)'
+                    }
+            else:
+                error = result.stderr.decode()
+                print(f"❌ Error generating deep dive: {error}")
+                return {
+                    'success': False,
+                    'message': f'Deep dive failed: {error[:100]}'
+                }
+        
+        except subprocess.TimeoutExpired:
+            return {'success': False, 'message': 'Deep dive timeout (>60s)'}
         except Exception as e:
             return {'success': False, 'message': f'Error: {str(e)}'}
     
