@@ -2,161 +2,71 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deep Dive Archive - Briefing Platform</title>
+    <title>Deep Dive Archive</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            font-size: 14px;
-            max-width: 1400px;
-            margin: 15px auto;
-            padding: 12px;
-            background: #f5f5f5;
-            color: #333;
-        }
-        .header {
-            margin-bottom: 15px;
-            padding: 12px 15px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 5px;
-            text-align: center;
-        }
-        .header h1 {
-            margin: 0 0 6px 0;
-            font-size: 1.5em;
-            font-weight: 600;
-        }
-        .header-meta {
-            opacity: 0.9;
-            font-size: 0.88em;
-            margin: 0 8px;
-            display: inline-block;
-        }
-        .nav-buttons {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-bottom: 15px;
-        }
-        .nav-btn {
-            padding: 8px 16px;
-            background: #667eea;
-            color: white;
-            text-decoration: none;
-            border-radius: 4px;
-            font-size: 0.9em;
-            font-weight: 500;
-        }
-        .nav-btn:hover {
-            background: #5568d3;
-        }
-        .dives-table {
-            background: white;
-            border-radius: 5px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        thead {
-            background: #f8f9fa;
-            border-bottom: 2px solid #ddd;
-        }
-        th {
-            padding: 11px 12px;
-            text-align: left;
-            font-weight: 600;
-            font-size: 0.9em;
-            color: #495057;
-        }
-        td {
-            padding: 12px;
-            border-bottom: 1px solid #ddd;
-            vertical-align: middle;
-        }
-        tbody tr:nth-child(even) {
-            background: #fafafa;
-        }
-        tbody tr:last-child td {
-            border-bottom: none;
-        }
-        tbody tr:hover {
-            background: #f0f4ff;
-        }
-        .dive-title {
-            font-weight: 500;
-            color: #333;
-            line-height: 1.4;
-        }
-        .dive-title a {
-            color: #333;
-            text-decoration: none;
-        }
-        .dive-title a:hover {
-            color: #667eea;
-        }
-        .date-badge {
-            color: #888;
-            font-size: 0.9em;
-        }
-        .source-name {
-            color: #666;
-            font-size: 0.95em;
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 1400px; margin: 15px auto; padding: 12px; background: #f5f5f5; }
+        .header { margin-bottom: 15px; padding: 12px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-radius: 5px; text-align: center; }
+        .nav-buttons { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }
+        .nav-btn { padding: 8px 16px; background: #667eea; color: white; text-decoration: none; border-radius: 4px; }
+        .nav-btn:hover { background: #5568d3; }
+        table { width: 100%; border-collapse: collapse; background: white; }
+        th { padding: 11px 12px; text-align: left; background: #f8f9fa; border-bottom: 2px solid #ddd; }
+        td { padding: 12px; border-bottom: 1px solid #ddd; }
+        tr:hover { background: #f0f4ff; }
+        .dive-title a { color: #333; text-decoration: none; }
+        .dive-title a:hover { color: #667eea; }
+        .date-badge { color: #888; font-size: 0.9em; }
+        .source-name { color: #666; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>🔍 Deep Dive Archive</h1>
-        <div>
-            <span class="header-meta">2 deep dives</span>
-            <span class="header-meta">•</span>
-            <span class="header-meta">In-depth research</span>
-        </div>
-    </div>
-
+    <div class="header"><h1>🔍 Deep Dive Archive</h1><div>5 deep dives</div></div>
     <div class="nav-buttons">
         <a href="../../../curator_briefing.html" class="nav-btn">📰 Today</a>
         <a href="../../../curator_index.html" class="nav-btn">📚 Archive</a>
         <a href="index.html" class="nav-btn">🔍 Deep Dives</a>
     </div>
-
-    <div class="dives-table">
-        <table>
-            <thead>
+    <table><thead><tr><th>Date</th><th>Source</th><th>Title</th><th>Action</th></tr></thead><tbody>
                 <tr>
-                    <th>Date</th>
-                    <th>Source</th>
-                    <th>Title</th>
-                    <th>Action</th>
+                    <td><span class="date-badge">Feb 20, 2026</span></td>
+                    <td><span class="source-name">ZeroHedge</span></td>
+                    <td class="dive-title">
+                        <a href="d6456-ex-cia-analyst-peels-back-the-us-information-opera.html">Ex-CIA Analyst Peels Back The US Information Operation In Iran</a>
+                    </td>
+                    <td><a href="d6456-ex-cia-analyst-peels-back-the-us-information-opera.html" class="nav-btn">Read Analysis →</a></td>
                 </tr>
-            </thead>
-            <tbody>
                 <tr>
                     <td><span class="date-badge">Feb 20, 2026</span></td>
                     <td><span class="source-name">Geopolitical Futures</span></td>
                     <td class="dive-title">
-                        <a href="435ce-why-trump-is-not-to-blame-for-europe-s-predicament.html">
-                            Why Trump is Not to Blame for Europe’s Predicament | George Friedman
-                        </a>
+                        <a href="a19c5-taiwan-at-the-center-of-a-fragile-us-china-rapproc.html">Taiwan at the Center of a Fragile US-China Rapprochement</a>
+                    </td>
+                    <td><a href="a19c5-taiwan-at-the-center-of-a-fragile-us-china-rapproc.html" class="nav-btn">Read Analysis →</a></td>
+                </tr>
+                <tr>
+                    <td><span class="date-badge">Feb 20, 2026</span></td>
+                    <td><span class="source-name">Geopolitical Futures</span></td>
+                    <td class="dive-title">
+                        <a href="435ce-why-trump-is-not-to-blame-for-europe-s-predicament.html">Why Trump is Not to Blame for Europe’s Predicament | George Friedman</a>
                     </td>
                     <td><a href="435ce-why-trump-is-not-to-blame-for-europe-s-predicament.html" class="nav-btn">Read Analysis →</a></td>
+                </tr>
+                <tr>
+                    <td><span class="date-badge">Feb 20, 2026</span></td>
+                    <td><span class="source-name">Deutsche Welle</span></td>
+                    <td class="dive-title">
+                        <a href="93439-trump-sweeping-tariffs-struck-down-what-happens-ne.html">Trump sweeping tariffs struck down: What happens next?</a>
+                    </td>
+                    <td><a href="93439-trump-sweeping-tariffs-struck-down-what-happens-ne.html" class="nav-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 19, 2026</span></td>
                     <td><span class="source-name">ZeroHedge</span></td>
                     <td class="dive-title">
-                        <a href="90610-futures-slide-as-iran-war-risks-add-to-growing-ai.html">
-                            Futures Slide As Iran War Risks Add To Growing AI Disruption Fears; Oil Surges
-                        </a>
+                        <a href="90610-futures-slide-as-iran-war-risks-add-to-growing-ai.html">Futures Slide As Iran War Risks Add To Growing AI Disruption Fears; Oil Surges</a>
                     </td>
                     <td><a href="90610-futures-slide-as-iran-war-risks-add-to-growing-ai.html" class="nav-btn">Read Analysis →</a></td>
                 </tr>
-            </tbody>
-        </table>
-    </div>
+    </tbody></table>
 </body>
 </html>
