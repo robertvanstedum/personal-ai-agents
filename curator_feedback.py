@@ -482,8 +482,8 @@ def generate_deep_dive_html(hash_id, article_data, initial_interest, dive_focus,
 <body>
     <div class="container">
         <div class="nav-bar">
-            <a href="../../curator_briefing.html" class="nav-link">📰 Today's Briefing</a>
-            <a href="../../curator_index.html" class="nav-link">📚 Archive</a>
+            <a href="../../../curator_briefing.html" class="nav-link">📰 Today's Briefing</a>
+            <a href="../../../curator_index.html" class="nav-link">📚 Archive</a>
             <a href="index.html" class="nav-link">🔍 Deep Dives</a>
         </div>
         
