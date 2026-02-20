@@ -119,3 +119,51 @@ python3 curator_rss_v2.py --mode=xai
 
 **Status:** ✅ Production ready - tested and validated
 **Recommendation:** Use xAI for daily briefings, keep Sonnet for deep dives
+
+## 2026-02-20 - Bug Fixes: Deep Dive Feature
+
+### Bug Fixes (Claude-Identified)
+
+**1. Duplicate "Deep Dive Analysis" Heading**
+- **Issue:** The AI-generated markdown was including its own title heading which doubled up with the HTML template's heading
+- **Root Cause:** Both `curator_feedback.py` template (line 611) and AI output (line 307) included "Deep Dive Analysis" heading
+- **Fix:** Strip any leading `## Deep Dive Analysis` from AI markdown before rendering
+- **File:** `curator_feedback.py` - Added regex to remove duplicate heading
+- **Commit:** `d2b8b20`
+
+**2. Deep Dive Closure Bug**
+- **Issue:** When multiple deep dive buttons were created, they all triggered deep dive on the same article (the last one processed)
+- **Root Cause:** The `addDeepDiveButton()` JavaScript function was capturing `rank` by reference in a loop, not by value
+- **Impact:** All buttons pointed to the wrong article because `rank` variable was shared
+- **Fix:** Use IIFE (Immediately Invoked Function Expression) to capture `rank` and `diveBtn` by value at button creation time
+- **File:** `curator_rss_v2.py` - Updated `addDeepDiveButton()` function
+- **Commit:** `418b971`
+
+**3. Hash_id Lookup Ambiguity**
+- **Issue:** When curator ran multiple times per day, date-rank format (`2026-02-20-2`) could match multiple articles, returning the FIRST match instead of the correct one
+- **Root Cause:** Multiple runs per day created duplicate ranks, and lookup didn't distinguish between them
+- **Impact:** Deep dive could analyze a different article than the one clicked
+- **Fix:** Pass unique `hash_id` through entire flow (HTML → JS → Server → Lookup) instead of date-rank format
+- **Files Modified:**
+  - `curator_rss_v2.py` - Add `data-hash-id` attribute, pass through JS functions
+  - `curator_server.py` - Accept `hash_id` instead of `rank` for deep dive requests
+- **Commit:** `dc14d53`
+
+**Credits:**
+- Claude AI identified the JavaScript closure bug and duplicate heading issue
+- OpenClaw (Mini-moi) identified the hash_id lookup ambiguity
+
+**Testing:**
+- All three bugs fixed and tested with fresh curator run
+- Deep dive flow now correctly analyzes the exact article clicked
+- No more duplicate headings in deep dive HTML output
+
+### Files Changed
+- `curator_rss_v2.py` - JavaScript closure fix, hash_id integration
+- `curator_server.py` - Hash_id parameter handling
+- `curator_feedback.py` - Duplicate heading removal
+
+### Impact
+- ✅ Deep dive now reliably analyzes the correct article
+- ✅ Clean HTML output (no duplicate headings)
+- ✅ Robust to multiple curator runs per day
