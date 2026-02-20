@@ -271,25 +271,32 @@ def format_report() -> str:
     yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
     yesterday_data = log["days"].get(yesterday)
     
-    # Balance warning header
+    # Balance warning header (disabled - API doesn't work)
     balance_warning = ""
-    if balance is not None and warning_level:
-        warning_emojis = {
-            'SEVERE': '🚨🚨🚨',
-            'CRITICAL': '⚠️⚠️',
-            'WARNING': '⚡'
-        }
-        warning_msgs = {
-            'SEVERE': f'SEVERELY LOW BALANCE: ${balance:.2f} (threshold: ${BALANCE_THRESHOLDS["severely_low"]})',
-            'CRITICAL': f'CRITICALLY LOW BALANCE: ${balance:.2f} (threshold: ${BALANCE_THRESHOLDS["critically_low"]})',
-            'WARNING': f'Getting Low Balance: ${balance:.2f} (threshold: ${BALANCE_THRESHOLDS["getting_low"]})'
-        }
-        emoji = warning_emojis.get(warning_level, '⚠️')
-        msg = warning_msgs.get(warning_level, f'Low balance: ${balance:.2f}')
-        balance_warning = f"\n{emoji} *{msg}*\n🔗 Top up now: https://console.anthropic.com/settings/billing\n"
+    # if balance is not None and warning_level:
+    #     warning_emojis = {
+    #         'SEVERE': '🚨🚨🚨',
+    #         'CRITICAL': '⚠️⚠️',
+    #         'WARNING': '⚡'
+    #     }
+    #     warning_msgs = {
+    #         'SEVERE': f'SEVERELY LOW BALANCE: ${balance:.2f} (threshold: ${BALANCE_THRESHOLDS["severely_low"]})',
+    #         'CRITICAL': f'CRITICALLY LOW BALANCE: ${balance:.2f} (threshold: ${BALANCE_THRESHOLDS["critically_low"]})',
+    #         'WARNING': f'Getting Low Balance: ${balance:.2f} (threshold: ${BALANCE_THRESHOLDS["getting_low"]})'
+    #     }
+    #     emoji = warning_emojis.get(warning_level, '⚠️')
+    #     msg = warning_msgs.get(warning_level, f'Low balance: ${balance:.2f}')
+    #     balance_warning = f"\n{emoji} *{msg}*\n🔗 Top up now: https://console.anthropic.com/settings/billing\n"
+    
+    # Heavy usage warning
+    usage_warning = ""
+    if yesterday_data and yesterday_data['cost_usd'] > 15.0:
+        usage_warning = f"\n⚠️ *HEAVY USAGE ALERT*\nYesterday's cost (${yesterday_data['cost_usd']:.2f}) was unusually high!\nTypical daily: $1-5. Check if something ran unexpectedly.\n"
+    elif yesterday_data and yesterday_data['cost_usd'] > 10.0:
+        usage_warning = f"\n💰 *High Usage Notice*\nYesterday: ${yesterday_data['cost_usd']:.2f} (above typical $1-5)\n"
     
     report = f"""📊 *Daily Usage Report* - {today_data['date']}
-{balance_warning}
+{balance_warning}{usage_warning}
 *Today (so far):*
 • API Calls: {today_data['api_calls']:,}
 • Tokens: {today_data['tokens']['total']:,}
@@ -304,15 +311,12 @@ def format_report() -> str:
 • Cost: ${yesterday_data['cost_usd']:.2f}
 """
     
-    balance_line = f"• Balance: ${balance:.2f}" if balance is not None else ""
-    
     report += f"""
 *This Week:*
 • Total Calls: {weekly['total_calls']:,}
 • Total Tokens: {weekly['total_tokens']:,}
 • Total Cost: ${weekly['total_cost']:.2f}
 • Daily Average: ${weekly['daily_average']:.2f}
-{balance_line}
 
 💡 Console: https://console.anthropic.com/settings/billing
 """
