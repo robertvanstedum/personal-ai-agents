@@ -1653,44 +1653,29 @@ def format_html(entries: List[Dict]) -> str:
     
     <script>
     function showFeedback(action, rank) {
+        console.log('showFeedback called:', action, rank);
+        
+        // Immediate visual feedback
+        const button = event.target;
+        const originalText = button.textContent;
+        button.style.opacity = '0.5';
+        button.disabled = true;
+        
         // Send to feedback server
-        fetch(`http://localhost:8765/feedback?action=${action}&rank=${rank}`)
-            .then(response => response.json())
+        fetch(\`http://localhost:8765/feedback?action=\${action}&rank=\${rank}\`)
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json();
+            })
             .then(data => {
-                // Create subtle toast notification
-                const toast = document.createElement('div');
-                toast.textContent = data.message || `Article #${rank} ${action}d`;
-                toast.style.cssText = `
-                    position: fixed;
-                    top: 20px;
-                    right: 20px;
-                    background: #4f46e5;
-                    color: white;
-                    padding: 12px 20px;
-                    border-radius: 8px;
-                    font-weight: 500;
-                    font-size: 14px;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                    z-index: 9999;
-                    opacity: 0;
-                    transform: translateX(100%);
-                    transition: all 0.3s ease;
-                `;
+                console.log('Response data:', data);
                 
-                document.body.appendChild(toast);
+                // Re-enable button
+                button.style.opacity = '1';
+                button.disabled = false;
                 
-                // Animate in
-                setTimeout(() => {
-                    toast.style.opacity = '1';
-                    toast.style.transform = 'translateX(0)';
-                }, 100);
-                
-                // Animate out after 2 seconds
-                setTimeout(() => {
-                    toast.style.opacity = '0';
-                    toast.style.transform = 'translateX(100%)';
-                    setTimeout(() => document.body.removeChild(toast), 300);
-                }, 2000);
+                // Show toast notification
+                showToast(data.message || \`Article #\${rank} \${action}d\`, 'success');
                 
                 // If liked or saved, add deep dive button
                 if (action === 'like' || action === 'save') {
@@ -1699,25 +1684,55 @@ def format_html(entries: List[Dict]) -> str:
             })
             .catch(error => {
                 console.error('Feedback error:', error);
-                // Show fallback toast
-                const toast = document.createElement('div');
-                toast.textContent = 'Feedback server not running. Start: python curator_server.py';
-                toast.style.cssText = `
-                    position: fixed;
-                    top: 20px;
-                    right: 20px;
-                    background: #ef4444;
-                    color: white;
-                    padding: 12px 20px;
-                    border-radius: 8px;
-                    font-weight: 500;
-                    font-size: 14px;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                    z-index: 9999;
-                `;
-                document.body.appendChild(toast);
-                setTimeout(() => document.body.removeChild(toast), 4000);
+                button.style.opacity = '1';
+                button.disabled = false;
+                showToast('Server error - is curator_server.py running?', 'error');
             });
+    }
+    
+    function showToast(message, type = 'success') {
+        console.log('showToast:', message, type);
+        
+        const toast = document.createElement('div');
+        toast.textContent = message;
+        toast.style.cssText = \`
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: \${type === 'error' ? '#ef4444' : '#10b981'};
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 9999;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.3s ease;
+        \`;
+        
+        document.body.appendChild(toast);
+        console.log('Toast added to body');
+        
+        // Animate in
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                toast.style.opacity = '1';
+                toast.style.transform = 'translateY(0)';
+            });
+        });
+        
+        // Animate out after 2.5 seconds
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(-20px)';
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    document.body.removeChild(toast);
+                }
+            }, 300);
+        }, 2500);
     }
     
     function addDeepDiveButton(rank) {
