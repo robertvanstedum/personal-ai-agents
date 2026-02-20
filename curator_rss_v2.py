@@ -63,6 +63,7 @@ from typing import List, Dict, Tuple
 import time
 import os
 import json
+import hashlib
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -70,11 +71,26 @@ load_dotenv()
 
 # RSS Feed Sources
 FEEDS = {
+    # Original sources
     "Geopolitical Futures": "https://geopoliticalfutures.com/feed/",
     "ZeroHedge": "https://cms.zerohedge.com/fullrss2.xml",
     "The Big Picture": "https://ritholtz.com/feed/",
     "Fed On The Economy": "https://www.stlouisfed.org/rss/page%20resources/publications/blog-entries",
     "Treasury MSPD": "https://www.treasurydirect.gov/rss/mspd.xml",
+    
+    # NEW - Feb 18, 2026: Expanded source diversity
+    "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",  # Non-Western perspective
+    "ProPublica": "https://www.propublica.org/feeds/propublica/main",  # Investigative journalism
+    "Antiwar.com": "https://news.antiwar.com/feed/",  # Contrarian/realist geopolitics
+    "Investing.com": "https://www.investing.com/rss/news.rss",  # Finance/markets
+    "The Duran": "https://theduran.com/feed/",  # Contrarian analysis
+    "O Globo": "https://oglobo.globo.com/rss.xml",  # Brazilian/Portuguese perspective
+    
+    # German sources (Feb 18, 2026)
+    "Deutsche Welle": "https://rss.dw.com/xml/rss-en-all",  # Public broadcaster, English, no paywall
+    "Spiegel International": "https://www.spiegel.de/international/index.rss",  # English, partial paywall
+    "FAZ": "https://www.faz.net/rss/aktuell/",  # German, partial paywall
+    "Die Welt": "https://www.welt.de/feeds/latest.rss",  # German, partial paywall
 }
 
 # Keywords for scoring (legacy mechanical mode)
@@ -135,7 +151,12 @@ def fetch_feed(name: str, url: str) -> List[Dict]:
             elif hasattr(entry, 'updated_parsed') and entry.updated_parsed:
                 pub_date = datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
             
+            # Generate stable hash ID from URL
+            url = entry.get("link", "")
+            hash_id = hashlib.md5(url.encode('utf-8')).hexdigest()[:5] if url else None
+            
             entries.append({
+                "hash_id": hash_id,  # Stable ID for history tracking
                 "source": name,
                 "title": entry.get("title", "No title"),
                 "link": entry.get("link", ""),
@@ -299,6 +320,64 @@ def get_telegram_token() -> str:
     
     return ""
 
+def send_telegram_alert(message: str, chat_id: str = None) -> bool:
+    """
+    Send error alert via Telegram
+    
+    Args:
+        message: Alert message to send
+        chat_id: Telegram chat ID (defaults to env var)
+    
+    Returns:
+        True if sent successfully, False otherwise
+    """
+    if chat_id is None:
+        chat_id = os.environ.get('TELEGRAM_CHAT_ID', '8379221702')
+    
+    token = get_telegram_token()
+    if not token:
+        print("⚠️  No Telegram token found, skipping alert")
+        return False
+    
+    try:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        data = {
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": "HTML"
+        }
+        response = requests.post(url, json=data, timeout=10)
+        response.raise_for_status()
+        print("✅ Telegram alert sent")
+        return True
+    except Exception as e:
+        print(f"⚠️  Failed to send Telegram alert: {e}")
+        return False
+
+def log_error(error_type: str, error_msg: str, context: str = ""):
+    """
+    Log error to file with timestamp
+    
+    Args:
+        error_type: Type of error (e.g., "APIError", "BillingError")
+        error_msg: Error message
+        context: Additional context (e.g., "Haiku API call")
+    """
+    log_file = "curator_errors.log"
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    log_entry = f"[{timestamp}] {error_type}"
+    if context:
+        log_entry += f" ({context})"
+    log_entry += f": {error_msg}\n"
+    
+    try:
+        with open(log_file, "a") as f:
+            f.write(log_entry)
+        print(f"📝 Error logged to {log_file}")
+    except Exception as e:
+        print(f"⚠️  Could not write to log file: {e}")
+
 def score_entries_haiku(entries: List[Dict], fallback_on_error: bool = False) -> List[Dict]:
     """
     Score all entries using Haiku LLM (batch processing)
@@ -448,6 +527,9 @@ ARTICLES:
         error_type = type(e).__name__
         error_msg = str(e)
         
+        # Log error to file
+        log_error(error_type, error_msg, context="Haiku API call")
+        
         error_report = f"""
 ❌ Haiku API Error: {error_type}
 
@@ -455,6 +537,10 @@ Details: {error_msg}
 
 Common causes:
 """
+        
+        # Detect billing issues
+        is_billing_error = False
+        telegram_alert = None
         
         # Classify error and provide specific guidance
         if "authentication" in error_msg.lower() or "api key" in error_msg.lower():
@@ -464,13 +550,18 @@ Common causes:
   Fix: Update your API key
     python store_api_key.py
 """
-        elif "insufficient" in error_msg.lower() or "credit" in error_msg.lower() or "balance" in error_msg.lower():
+            telegram_alert = "🔴 <b>Curator API Error</b>\n\nAuthentication failed - API key invalid or expired.\n\nFix: Update API key via store_api_key.py"
+            
+        elif "insufficient" in error_msg.lower() or "credit" in error_msg.lower() or "balance" in error_msg.lower() or "overloaded" in error_msg.lower():
             error_report += """
   • Insufficient credits / out of funds
   
   Fix: Add credits at https://console.anthropic.com/settings/billing
   Check balance: https://console.anthropic.com/settings/usage
 """
+            is_billing_error = True
+            telegram_alert = f"🔴 <b>Curator Billing Alert</b>\n\n⚠️ Out of Anthropic credits!\n\nError: {error_type}\n\n🔗 Add credits: https://console.anthropic.com/settings/billing\n\n📊 Check usage: https://console.anthropic.com/settings/usage"
+            
         elif "rate limit" in error_msg.lower():
             error_report += """
   • Rate limit exceeded
@@ -478,6 +569,8 @@ Common causes:
   Fix: Wait a few minutes and try again
   Or: Upgrade plan at https://console.anthropic.com/settings/plans
 """
+            telegram_alert = f"⚠️ <b>Curator Rate Limited</b>\n\nRate limit exceeded. Will retry later.\n\nError: {error_type}"
+            
         elif "timeout" in error_msg.lower() or "connection" in error_msg.lower():
             error_report += """
   • Network/connection error
@@ -491,6 +584,7 @@ Common causes:
   Check: https://console.anthropic.com/settings/keys
   Check: https://status.anthropic.com/
 """
+            telegram_alert = f"⚠️ <b>Curator Error</b>\n\n{error_type}: {error_msg[:200]}"
         
         error_report += """
 To test with mechanical mode instead:
@@ -501,6 +595,10 @@ To enable automatic fallback (for cron jobs):
 """
         
         print(error_report)
+        
+        # Send Telegram alert for critical errors
+        if telegram_alert:
+            send_telegram_alert(telegram_alert)
         
         if fallback_on_error:
             print("⚠️  Falling back to mechanical scoring...")
@@ -819,6 +917,77 @@ def apply_interest_boost(entry: Dict, active_interests: Dict) -> int:
     return total_modifier
 
 
+def save_to_history(entries: List[Dict], output_dir: str = "."):
+    """Save articles to history index and cache (with duplicate protection)"""
+    from pathlib import Path
+    
+    # Create directories
+    cache_dir = Path(output_dir) / "curator_cache"
+    cache_dir.mkdir(exist_ok=True)
+    
+    # Load existing history
+    history_file = Path(output_dir) / "curator_history.json"
+    history = {}
+    if history_file.exists():
+        with open(history_file, 'r') as f:
+            history = json.load(f)
+    
+    # Process each article
+    today = datetime.now().strftime("%Y-%m-%d")
+    
+    for rank, entry in enumerate(entries, 1):
+        hash_id = entry.get('hash_id')
+        if not hash_id:
+            continue
+            
+        # Add/update in history index
+        if hash_id not in history:
+            history[hash_id] = {
+                "hash_id": hash_id,
+                "first_seen": today,
+                "title": entry["title"],
+                "source": entry["source"],
+                "url": entry["link"],
+                "appearances": []
+            }
+        
+        # Record this appearance (prevent same-day duplicates)
+        existing_today = [a for a in history[hash_id]["appearances"] if a["date"] == today]
+        if not existing_today:
+            history[hash_id]["appearances"].append({
+                "date": today,
+                "rank": rank,
+                "score": entry["score"]
+            })
+        else:
+            # Update existing entry (in case scores changed)
+            for appearance in history[hash_id]["appearances"]:
+                if appearance["date"] == today:
+                    appearance["rank"] = rank
+                    appearance["score"] = entry["score"]
+                    break
+        
+        # Save full article to cache
+        cache_file = cache_dir / f"{hash_id}.json"
+        with open(cache_file, 'w') as f:
+            json.dump({
+                "hash_id": hash_id,
+                "title": entry["title"],
+                "source": entry["source"],
+                "url": entry["link"],
+                "summary": entry["summary"],
+                "published": entry["published"].isoformat() if entry["published"] else None,
+                "category": entry.get("category"),
+                "score": entry["score"],
+                "cached_date": today
+            }, f, indent=2)
+    
+    # Save updated history
+    with open(history_file, 'w') as f:
+        json.dump(history, f, indent=2)
+    
+    print(f"💾 History updated: {len(entries)} articles saved")
+
 
 def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanical', 
            fallback_on_error: bool = False) -> List[Dict]:
@@ -1012,76 +1181,138 @@ def format_telegram(entries: List[Dict]) -> str:
     return output
 
 def format_html(entries: List[Dict]) -> str:
-    """Format as HTML with clickable links and category badges"""
+    """Format as table HTML (unified briefing platform style)"""
     from datetime import datetime
+    
+    today = datetime.now()
+    date_str = today.strftime('%B %d, %Y')
+    day_str = today.strftime('%A')
     
     html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Morning Briefing - {datetime.now().strftime('%b %d, %Y')}</title>
+    <title>Morning Briefing - {date_str}</title>
     <style>
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            max-width: 900px;
-            margin: 40px auto;
-            padding: 20px;
+            font-size: 14px;
+            max-width: 1400px;
+            margin: 15px auto;
+            padding: 12px;
             background: #f5f5f5;
             color: #333;
         }}
         .header {{
-            text-align: center;
-            margin-bottom: 40px;
-            padding: 20px;
+            margin-bottom: 15px;
+            padding: 12px 15px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            border-radius: 10px;
+            border-radius: 5px;
+            text-align: center;
         }}
         .header h1 {{
-            margin: 0;
-            font-size: 2em;
+            margin: 0 0 6px 0;
+            font-size: 1.5em;
+            font-weight: 600;
         }}
-        .header p {{
-            margin: 10px 0 0 0;
+        .header-meta {{
             opacity: 0.9;
+            font-size: 0.88em;
+            margin: 0 8px;
+            display: inline-block;
         }}
-        .article {{
+        .nav-buttons {{
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 15px;
+        }}
+        .nav-btn {{
+            padding: 6px 14px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }}
+        .nav-btn:hover {{
+            background: #5568d3;
+        }}
+        .briefing-table {{
             background: white;
-            padding: 20px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: transform 0.2s, box-shadow 0.2s;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
         }}
-        .article:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        table {{
+            width: 100%;
+            border-collapse: collapse;
         }}
-        .article-number {{
+        thead {{
+            background: #f8f9fa;
+            border-bottom: 2px solid #ddd;
+        }}
+        th {{
+            padding: 11px 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: #495057;
+            white-space: nowrap;
+        }}
+        td {{
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            vertical-align: middle;
+        }}
+        tbody tr:nth-child(even) {{
+            background: #fafafa;
+        }}
+        tbody tr:last-child td {{
+            border-bottom: none;
+        }}
+        tbody tr:hover {{
+            background: #f0f4ff;
+        }}
+        .col-rank {{
+            width: 40px;
+            text-align: center;
+        }}
+        .col-category {{
+            width: 110px;
+        }}
+        .col-source {{
+            width: 140px;
+        }}
+        .col-title {{
+            min-width: 300px;
+        }}
+        .col-time {{
+            width: 80px;
+        }}
+        .col-score {{
+            width: 120px;
+            text-align: right;
+        }}
+        .rank-badge {{
             display: inline-block;
             background: #667eea;
             color: white;
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-weight: bold;
-            margin-right: 10px;
-        }}
-        .article-source {{
-            display: inline-block;
-            background: #f0f0f0;
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 0.85em;
-            margin-right: 10px;
+            padding: 3px 9px;
+            border-radius: 3px;
+            font-weight: 600;
+            font-size: 0.9em;
         }}
         .category-badge {{
             display: inline-block;
-            padding: 4px 10px;
-            border-radius: 4px;
+            padding: 4px 9px;
+            border-radius: 3px;
             font-size: 0.8em;
             font-weight: 600;
-            margin-right: 10px;
+            white-space: nowrap;
         }}
         .cat-geo_major {{ background: #ffe5e5; color: #c00; }}
         .cat-geo_other {{ background: #fff0e5; color: #c60; }}
@@ -1089,15 +1320,11 @@ def format_html(entries: List[Dict]) -> str:
         .cat-fiscal {{ background: #f0e5ff; color: #90c; }}
         .cat-technology {{ background: #e5f0ff; color: #05c; }}
         .cat-other {{ background: #f0f0f0; color: #666; }}
-        .article-time {{
-            color: #888;
-            font-size: 0.85em;
-        }}
         .article-title {{
-            font-size: 1.2em;
-            font-weight: 600;
-            margin: 10px 0;
+            font-weight: 500;
+            font-size: 1.0em;
             color: #333;
+            line-height: 1.4;
         }}
         .article-title a {{
             color: #333;
@@ -1106,84 +1333,118 @@ def format_html(entries: List[Dict]) -> str:
         .article-title a:hover {{
             color: #667eea;
         }}
-        .article-link {{
-            display: inline-block;
-            margin-top: 10px;
-            color: #667eea;
-            text-decoration: none;
-            font-size: 0.9em;
-        }}
-        .article-link:hover {{
-            text-decoration: underline;
-        }}
-        .article-meta {{
-            margin-top: 10px;
-            font-size: 0.85em;
+        .source-name {{
             color: #666;
+            font-size: 0.95em;
         }}
-        .score {{
-            color: #888;
-            font-size: 0.8em;
+        .time-ago {{
+            color: #999;
+            font-size: 0.95em;
+        }}
+        .score-value {{
+            font-weight: 500;
+            font-size: 1.05em;
+            color: #667eea;
+        }}
+        .score-details {{
+            color: #999;
+            font-size: 0.85em;
+            white-space: nowrap;
         }}
     </style>
 </head>
 <body>
     <div class="header">
         <h1>🧠 Your Morning Briefing</h1>
-        <p>{datetime.now().strftime('%A, %B %d, %Y')}</p>
-        <p>📊 {len(entries)} curated articles • Category-aware curation</p>
-    </div>
-"""
-    
-    for i, entry in enumerate(entries, 1):
-        # Time ago string
-        if entry["published"]:
-            age_hours = (datetime.now(timezone.utc) - entry["published"]).total_seconds() / 3600
-            if age_hours < 1:
-                time_str = f"{int(age_hours * 60)}m ago"
-            elif age_hours < 24:
-                time_str = f"{int(age_hours)}h ago"
-            else:
-                time_str = f"{int(age_hours / 24)}d ago"
-        else:
-            time_str = "unknown"
-        
-        # Category styling
-        category = entry.get("category", "other")
-        cat_class = f"cat-{category}"
-        
-        # Scores
-        score = entry.get("score", 0)
-        raw_score = entry.get("raw_score", 0)
-        final_score = entry.get("final_score", score)
-        method = entry.get("method", "unknown")
-        
-        html += f"""
-    <div class="article">
         <div>
-            <span class="article-number">#{i}</span>
-            <span class="category-badge {cat_class}">{category.upper()}</span>
-            <span class="article-source">{entry['source']}</span>
-            <span class="article-time">{time_str}</span>
-        </div>
-        <div class="article-title">
-            <a href="{entry['link']}" target="_blank">{entry['title']}</a>
-        </div>
-        <a href="{entry['link']}" class="article-link" target="_blank">🔗 Read article →</a>
-        <div class="article-meta">
-            <span class="score">Score: {score:.1f}/10 ({method}) | Raw: {raw_score:.1f} | Final: {final_score:.1f}</span>
+            <span class="header-meta">{day_str}, {date_str}</span>
+            <span class="header-meta">•</span>
+            <span class="header-meta">📊 {len(entries)} curated articles</span>
+            <span class="header-meta">•</span>
+            <span class="header-meta">Category-aware curation</span>
         </div>
     </div>
+
+    <div class="nav-buttons">
+        <a href="curator_index.html" class="nav-btn">📚 Archive</a>
+        <a href="curator_latest_with_buttons.html" class="nav-btn">🔝 Top 20</a>
+        <a href="interests/2026/deep-dives/index.html" class="nav-btn">🔍 Deep Dives</a>
+    </div>
+
+    <div class="briefing-table">
+        <table>
+            <thead>
+                <tr>
+                    <th class="col-rank">#</th>
+                    <th class="col-category">Category</th>
+                    <th class="col-source">Source</th>
+                    <th class="col-title">Title</th>
+                    <th class="col-time">Time</th>
+                    <th class="col-score">Score</th>
+                </tr>
+            </thead>
+            <tbody>
 """
     
-    html += """
+    # Generate table rows
+    for i, entry in enumerate(entries, 1):
+        rank = i
+        category = entry.get('category', 'other').upper()
+        source = entry.get('source', 'Unknown')
+        title = entry.get('title', 'Untitled')
+        url = entry.get('link', '#')
+        published = entry.get('published', '')
+        score = entry.get('final_score', 0)
+        raw_score = entry.get('raw_score', 0)
+        
+        # Calculate time ago
+        time_ago = "N/A"
+        if published:
+            try:
+                from datetime import datetime, timezone
+                import dateutil.parser
+                pub_dt = dateutil.parser.parse(published)
+                if pub_dt.tzinfo is None:
+                    pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+                now = datetime.now(timezone.utc)
+                diff = now - pub_dt
+                hours = diff.total_seconds() / 3600
+                if hours < 1:
+                    time_ago = f"{int(diff.total_seconds() / 60)}m ago"
+                elif hours < 24:
+                    time_ago = f"{int(hours)}h ago"
+                else:
+                    time_ago = f"{int(hours / 24)}d ago"
+            except:
+                pass
+        
+        html += f"""                <tr>
+                    <td class="col-rank"><span class="rank-badge">{rank}</span></td>
+                    <td class="col-category"><span class="category-badge cat-{category.lower()}">{category}</span></td>
+                    <td class="col-source"><span class="source-name">{source}</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="{url}" target="_blank">{title}</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">{time_ago}</span></td>
+                    <td class="col-score">
+                        <div class="score-value">{score:.1f}</div>
+                        <div class="score-details">{raw_score:.1f} → {score:.1f}</div>
+                    </td>
+                </tr>
+"""
+    
+    html += """            </tbody>
+        </table>
+    </div>
 </body>
 </html>
 """
+    
     return html
-
 def generate_index_page(archive_dir: str):
-    """Generate an index.html page listing all archived briefings"""
+    """Generate unified archive index page"""
     import os
     from datetime import datetime
     
@@ -1209,121 +1470,138 @@ def generate_index_page(archive_dir: str):
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            max-width: 800px;
-            margin: 40px auto;
-            padding: 20px;
+            font-size: 14px;
+            max-width: 1400px;
+            margin: 15px auto;
+            padding: 12px;
             background: #f5f5f5;
+            color: #333;
         }
         .header {
-            text-align: center;
-            margin-bottom: 40px;
-            padding: 30px;
+            margin-bottom: 15px;
+            padding: 12px 15px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            border-radius: 10px;
+            border-radius: 5px;
+            text-align: center;
         }
         .header h1 {
-            margin: 0;
-            font-size: 2.5em;
+            margin: 0 0 6px 0;
+            font-size: 1.5em;
+            font-weight: 600;
         }
-        .header p {
-            margin: 10px 0 0 0;
+        .header-meta {
             opacity: 0.9;
+            font-size: 0.88em;
         }
-        .quick-links {
+        .nav-buttons {
             display: flex;
             gap: 10px;
             justify-content: center;
-            margin-bottom: 30px;
+            margin-bottom: 15px;
         }
-        .quick-links a {
-            padding: 10px 20px;
+        .nav-btn {
+            padding: 6px 14px;
             background: #667eea;
             color: white;
             text-decoration: none;
-            border-radius: 6px;
+            border-radius: 4px;
+            font-size: 0.85em;
             font-weight: 500;
         }
-        .quick-links a:hover {
+        .nav-btn:hover {
             background: #5568d3;
         }
-        .archive-list {
+        .archive-table {
             background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
         }
-        .archive-item {
-            padding: 15px;
-            border-bottom: 1px solid #eee;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        table {
+            width: 100%;
+            border-collapse: collapse;
         }
-        .archive-item:last-child {
+        thead {
+            background: #f8f9fa;
+            border-bottom: 2px solid #ddd;
+        }
+        th {
+            padding: 11px 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: #495057;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            vertical-align: middle;
+        }
+        tbody tr:nth-child(even) {
+            background: #fafafa;
+        }
+        tbody tr:last-child td {
             border-bottom: none;
         }
-        .archive-item:hover {
-            background: #f8f8f8;
+        tbody tr:hover {
+            background: #f0f4ff;
         }
-        .archive-date {
-            font-weight: 600;
-            color: #333;
-        }
-        .archive-link {
+        .date-link {
+            font-weight: 500;
             color: #667eea;
             text-decoration: none;
-            font-weight: 500;
+            font-size: 1.05em;
         }
-        .archive-link:hover {
+        .date-link:hover {
             text-decoration: underline;
-        }
-        .stats {
-            text-align: center;
-            color: #666;
-            margin-top: 20px;
         }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>📚 Curator Archive</h1>
-        <p>Your daily geopolitics & finance briefings</p>
+        <div><span class="header-meta">Daily Intelligence Briefings</span></div>
     </div>
-    
-    <div class="quick-links">
-        <a href="curator_latest.html">📰 Today's Briefing</a>
+
+    <div class="nav-buttons">
+        <a href="curator_briefing.html" class="nav-btn">📰 Today</a>
+        <a href="curator_index.html" class="nav-btn">📚 Archive</a>
+        <a href="interests/2026/deep-dives/index.html" class="nav-btn">🔍 Deep Dives</a>
     </div>
-    
-    <div class="archive-list">
-        <h2>Past Briefings</h2>
+
+    <div class="archive-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Day</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
 """
     
     if archive_files:
         for date_str, filename, date_obj in archive_files:
             formatted_date = date_obj.strftime("%B %d, %Y")
             day_of_week = date_obj.strftime("%A")
-            html += f"""
-        <div class="archive-item">
-            <div>
-                <span class="archive-date">{formatted_date}</span>
-                <span style="color: #999; margin-left: 10px;">{day_of_week}</span>
-            </div>
-            <a href="{archive_dir}/{filename}" class="archive-link">View Briefing →</a>
-        </div>
+            html += f"""                <tr>
+                    <td><a href="{archive_dir}/{filename}" class="date-link">{formatted_date}</a></td>
+                    <td>{day_of_week}</td>
+                    <td><a href="{archive_dir}/{filename}" class="nav-btn">View →</a></td>
+                </tr>
 """
     else:
-        html += """
-        <p style="text-align: center; color: #999; padding: 40px 0;">
-            No archived briefings yet. Check back after your first automated run!
-        </p>
+        html += """                <tr>
+                    <td colspan="3" style="text-align: center; color: #999; padding: 40px 0;">
+                        No archived briefings yet
+                    </td>
+                </tr>
 """
     
-    html += f"""
-    </div>
-    
-    <div class="stats">
-        <p>{len(archive_files)} briefing(s) archived</p>
+    html += """            </tbody>
+        </table>
     </div>
 </body>
 </html>
@@ -1332,7 +1610,6 @@ def generate_index_page(archive_dir: str):
     with open("curator_index.html", "w") as f:
         f.write(html)
     print(f"📑 Index page updated: curator_index.html")
-
 def main():
     """Run the curator and display results"""
     import sys
@@ -1358,6 +1635,9 @@ def main():
         print(f"\n💥 Curation failed: {e}")
         print("\nTip: Run with --mode=mechanical to test everything except API")
         sys.exit(1)
+    
+    # Save to history (with duplicate protection)
+    save_to_history(top_articles)
     
     # Console output
     output = format_output(top_articles)

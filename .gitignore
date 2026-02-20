@@ -19,3 +19,15 @@ curator_archive/
 # Personal feedback data (contains preferences and feedback history)
 curator_preferences.json
 curator_errors.log
+
+# Deep dive system (generated content)
+curator_cache/
+curator_history.json
+curator_latest_with_buttons.html
+
+# Temporary/test files
+curator_briefing_old.html
+curator_briefing_table.html
+html_button_snippet.html
+test_feedback.sh
+scripts/test_cron.sh

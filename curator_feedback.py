@@ -124,6 +124,457 @@ def parse_curator_output():
     
     return articles
 
+def resolve_article_reference(ref):
+    """
+    Resolve article reference to hash_id
+    
+    Accepts:
+    - hash ID: "90610"
+    - date-rank: "2026-02-19-1"
+    - yesterday-N: "yesterday-1"
+    
+    Returns: (hash_id, article_data) or (None, None) if not found
+    """
+    from datetime import datetime, timedelta
+    
+    history_file = Path(__file__).parent / "curator_history.json"
+    cache_dir = Path(__file__).parent / "curator_cache"
+    
+    if not history_file.exists():
+        print("❌ History file not found. Run curator first to build history.")
+        return None, None
+    
+    with open(history_file, 'r') as f:
+        history = json.load(f)
+    
+    hash_id = None
+    
+    # Case 1: Direct hash ID
+    if ref in history:
+        hash_id = ref
+    
+    # Case 2: yesterday-N format
+    elif ref.startswith('yesterday-'):
+        try:
+            rank = int(ref.split('-')[1])
+            yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+            
+            # Find article with matching date and rank
+            for hid, data in history.items():
+                for appearance in data.get('appearances', []):
+                    if appearance['date'] == yesterday and appearance['rank'] == rank:
+                        hash_id = hid
+                        break
+                if hash_id:
+                    break
+        except (ValueError, IndexError):
+            pass
+    
+    # Case 3: date-rank format (YYYY-MM-DD-N)
+    elif '-' in ref:
+        parts = ref.rsplit('-', 1)
+        if len(parts) == 2:
+            date_str, rank_str = parts
+            try:
+                rank = int(rank_str)
+                # Find article with matching date and rank
+                for hid, data in history.items():
+                    for appearance in data.get('appearances', []):
+                        if appearance['date'] == date_str and appearance['rank'] == rank:
+                            hash_id = hid
+                            break
+                    if hash_id:
+                        break
+            except ValueError:
+                pass
+    
+    if not hash_id:
+        print(f"❌ Could not resolve reference: {ref}")
+        print("\nValid formats:")
+        print("  - Hash ID: 90610")
+        print("  - Date-rank: 2026-02-19-1")
+        print("  - Yesterday: yesterday-1")
+        return None, None
+    
+    # Load article from cache
+    cache_file = cache_dir / f"{hash_id}.json"
+    if not cache_file.exists():
+        print(f"❌ Cache file not found for {hash_id}")
+        return None, None
+    
+    with open(cache_file, 'r') as f:
+        article_data = json.load(f)
+    
+    return hash_id, article_data
+
+def generate_deep_dive(hash_id, article_data, initial_interest, dive_focus=None):
+    """
+    Generate deep dive analysis using Sonnet
+    
+    Returns: (markdown_content, cost, output_path) or (None, None, None) on error
+    """
+    from datetime import datetime
+    
+    api_key = get_anthropic_api_key()
+    if not api_key:
+        print("❌ No Anthropic API key found")
+        return None, None, None
+    
+    client = Anthropic(api_key=api_key)
+    
+    # Build prompt
+    context_parts = [f"Your initial interest: \"{initial_interest}\""]
+    if dive_focus:
+        context_parts.append(f"Deep dive focus: \"{dive_focus}\"")
+    
+    context = "\n".join(context_parts)
+    
+    prompt = f"""Provide a concise deep dive analysis of this article. This is a point of departure for further research, not a complete explanation.
+
+ARTICLE:
+Title: {article_data['title']}
+Source: {article_data['source']}
+URL: {article_data['url']}
+Published: {article_data.get('published', 'Unknown')}
+
+Summary:
+{article_data.get('summary', 'No summary available')[:1000]}
+
+USER CONTEXT:
+{context}
+
+Provide CONCISE analysis covering:
+
+1. **Why This Matters** - Key implications and connections (2-3 sentences max)
+2. **Core Argument** - Central claim and evidence (brief)
+3. **Contrarian Take** - What critics would say (1-2 points)
+4. **Connections** - Related trends or patterns (brief)
+5. **Key Data** - Specific numbers or quotes worth remembering
+6. **Next Questions** - What to investigate further (3-4 questions)
+
+7. **Sources & Further Reading** - THE MOST IMPORTANT SECTION. List 5-8 sources for deeper research. Format as proper citations:
+   - Author/Organization. "Title" or Report Name. Publisher/Journal, Year. URL if available.
+   - Focus on PRIMARY sources: research papers, official reports, data sources
+   - Include URLs, DOIs, or specific search terms
+   - Skip explanations - just provide clean citations the user can look up
+
+Keep sections 1-6 concise. Make section 7 (Sources) the most detailed and useful.
+Write directly - no preamble."""
+
+    print("🧠 Calling Sonnet for deep dive analysis...")
+    
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=4000,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        
+        content = response.content[0].text
+        
+        # Calculate cost
+        input_tokens = response.usage.input_tokens
+        output_tokens = response.usage.output_tokens
+        cost = (input_tokens * 0.000003) + (output_tokens * 0.000015)
+        
+        # Create output path
+        slug = re.sub(r'[^a-z0-9]+', '-', article_data['title'].lower())[:50].strip('-')
+        today = datetime.now().strftime("%Y-%m-%d")
+        output_dir = Path(__file__).parent / "interests" / "2026" / "deep-dives"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        output_path = output_dir / f"{hash_id}-{slug}.md"
+        
+        # Build markdown document
+        markdown = f"""# {article_data['title']}
+
+**Source:** {article_data['source']}  
+**URL:** {article_data['url']}  
+**Date:** {today}  
+**Hash ID:** {hash_id}
+
+## Your Interest
+
+{initial_interest}
+"""
+        
+        if dive_focus:
+            markdown += f"\n**Focus:** {dive_focus}\n"
+        
+        markdown += f"""
+---
+
+## Deep Dive Analysis
+
+{content}
+
+---
+
+*Generated by Claude Sonnet • {input_tokens} input + {output_tokens} output tokens • ${cost:.4f}*
+"""
+        
+        # Save markdown
+        with open(output_path, 'w') as f:
+            f.write(markdown)
+        
+        # Also save HTML version
+        html = generate_deep_dive_html(
+            hash_id, article_data, initial_interest, dive_focus,
+            content, cost, input_tokens, output_tokens
+        )
+        html_path = output_path.replace('.md', '.html')
+        with open(html_path, 'w') as f:
+            f.write(html)
+        
+        return markdown, cost, str(output_path)
+        
+    except Exception as e:
+        print(f"❌ Error generating deep dive: {e}")
+        return None, None, None
+
+def generate_deep_dive_html(hash_id, article_data, initial_interest, dive_focus, analysis_content, cost, input_tokens, output_tokens):
+    """Generate HTML version of deep dive analysis"""
+    from datetime import datetime
+    
+    today = datetime.now().strftime("%Y-%m-%d")
+    
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{article_data['title']} - Deep Dive</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            font-size: 15px;
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 0 20px;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+        }}
+        .container {{
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }}
+        h1 {{
+            color: #2c3e50;
+            font-size: 1.8em;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }}
+        .meta {{
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+            font-size: 0.95em;
+        }}
+        .meta strong {{
+            color: #2c3e50;
+        }}
+        .interest-box {{
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 12px 15px;
+            margin: 15px 0;
+            font-size: 0.9em;
+        }}
+        .interest-box h2 {{
+            margin-top: 0;
+            margin-bottom: 8px;
+            color: #856404;
+            font-size: 1.1em;
+        }}
+        .interest-box p {{
+            margin: 6px 0;
+        }}
+        .analysis {{
+            margin-top: 30px;
+        }}
+        .analysis h2 {{
+            color: #2c3e50;
+            font-size: 1.4em;
+            margin-top: 30px;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 8px;
+        }}
+        .analysis h3 {{
+            color: #34495e;
+            font-size: 1.15em;
+            margin-top: 20px;
+        }}
+        .bibliography {{
+            background: #f8f9fa;
+            border-left: 4px solid #6c757d;
+            padding: 20px;
+            margin: 30px 0;
+            border-radius: 4px;
+        }}
+        .bibliography h2 {{
+            margin-top: 0;
+            color: #495057;
+            font-size: 1.3em;
+        }}
+        .bibliography ul {{
+            margin-top: 15px;
+            list-style-type: none;
+            padding-left: 0;
+        }}
+        .bibliography li {{
+            margin-bottom: 15px;
+            line-height: 1.6;
+            padding-left: 20px;
+            text-indent: -20px;
+        }}
+        .bibliography a {{
+            color: #0066cc;
+            word-break: break-all;
+        }}
+        .bibliography code {{
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }}
+        .footer {{
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ecf0f1;
+            font-size: 0.9em;
+            color: #7f8c8d;
+            text-align: center;
+        }}
+        a {{
+            color: #3498db;
+            text-decoration: none;
+        }}
+        a:hover {{
+            text-decoration: underline;
+        }}
+        .nav-bar {{
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }}
+        .nav-link {{
+            display: inline-block;
+            padding: 5px 12px;
+            background: #667eea;
+            color: white;
+            border-radius: 3px;
+            font-size: 0.85em;
+            text-decoration: none;
+            font-weight: 500;
+        }}
+        .nav-link:hover {{
+            background: #5568d3;
+            text-decoration: none;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-bar">
+            <a href="../../curator_briefing.html" class="nav-link">📰 Today's Briefing</a>
+            <a href="../../curator_index.html" class="nav-link">📚 Archive</a>
+            <a href="index.html" class="nav-link">🔍 Deep Dives</a>
+        </div>
+        
+        <h1>{article_data['title']}</h1>
+        
+        <div class="meta">
+            <strong>Source:</strong> {article_data['source']}<br>
+            <strong>URL:</strong> <a href="{article_data['url']}" target="_blank">{article_data['url']}</a><br>
+            <strong>Date:</strong> {today}<br>
+            <strong>Hash ID:</strong> {hash_id}
+        </div>
+        
+        <div class="interest-box">
+            <h2>Your Interest</h2>
+            <p>{initial_interest}</p>
+"""
+    
+    if dive_focus:
+        html += f"            <p><strong>Focus:</strong> {dive_focus}</p>\n"
+    
+    html += """        </div>
+        
+        <div class="analysis">
+            <h2>Deep Dive Analysis</h2>
+"""
+    
+    # Convert markdown analysis to basic HTML
+    # Simple conversion: h2, h3, bold, lists
+    
+    # Check if there's a Sources/Bibliography section
+    has_sources = bool(re.search(r'^## (Sources|Bibliography|Further Reading|References)', analysis_content, flags=re.MULTILINE))
+    
+    if has_sources:
+        # Split at Sources section
+        parts = re.split(r'(^## (?:Sources|Bibliography|Further Reading|References)[^\n]*\n)', analysis_content, maxsplit=1, flags=re.MULTILINE)
+        main_content = parts[0] if len(parts) > 0 else analysis_content
+        sources_heading = parts[1] if len(parts) > 1 else ''
+        sources_content = parts[2] if len(parts) > 2 else ''
+    else:
+        main_content = analysis_content
+        sources_heading = ''
+        sources_content = ''
+    
+    # Convert main content
+    analysis_html = re.sub(r'^## (.+)$', '<h2>\\1</h2>', main_content, flags=re.MULTILINE)
+    analysis_html = re.sub(r'^### (.+)$', '<h3>\\1</h3>', analysis_html, flags=re.MULTILINE)
+    analysis_html = re.sub(r'\*\*(.+?)\*\*', '<strong>\\1</strong>', analysis_html)
+    analysis_html = re.sub(r'^- (.+)$', '<li>\\1</li>', analysis_html, flags=re.MULTILINE)
+    analysis_html = re.sub(r'(<li>.*</li>)', '<ul>\\1</ul>', analysis_html, flags=re.DOTALL)
+    
+    # Paragraphs
+    paragraphs = analysis_html.split('\n\n')
+    analysis_html = '\n'.join([f'<p>{p}</p>' if not p.startswith('<') else p for p in paragraphs if p.strip()])
+    
+    html += analysis_html
+    
+    # Add sources section if present
+    if has_sources and sources_content.strip():
+        sources_html = re.sub(r'\*\*(.+?)\*\*', '<strong>\\1</strong>', sources_content)
+        sources_html = re.sub(r'^- (.+)$', '<li>\\1</li>', sources_html, flags=re.MULTILINE)
+        sources_html = re.sub(r'(<li>.*</li>)', '<ul>\\1</ul>', sources_html, flags=re.DOTALL)
+        
+        # Extract title from heading
+        sources_title = re.search(r'## (.+)', sources_heading)
+        title = sources_title.group(1) if sources_title else 'Sources & Further Reading'
+        
+        html += f"""
+        </div>
+        
+        <div class="bibliography">
+            <h2>📚 {title}</h2>
+{sources_html}
+        </div>
+        
+        <div class="analysis">
+"""
+    
+    html += f"""
+        </div>
+        
+        <div class="footer">
+            Generated by Claude Sonnet<br>
+            {input_tokens} input + {output_tokens} output tokens • ${cost:.4f}
+        </div>
+    </div>
+</body>
+</html>
+"""
+    
+    return html
+
 def extract_metadata(article, user_words, feedback_type):
     """Use Claude to extract metadata from user feedback"""
     api_key = get_anthropic_api_key()
@@ -322,7 +773,7 @@ def show_recent_feedback():
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python curator_feedback.py <like|dislike|save|show> [rank]")
+        print("Usage: python curator_feedback.py <like|dislike|save|show|bookmark> [rank|reference]")
         sys.exit(1)
     
     command = sys.argv[1].lower()
@@ -331,6 +782,79 @@ def main():
         show_recent_feedback()
         return
     
+    # Bookmark command uses reference (hash ID, date-rank, or yesterday-N)
+    if command == 'bookmark':
+        if len(sys.argv) < 3:
+            print("Error: bookmark requires article reference")
+            print("Examples:")
+            print("  python curator_feedback.py bookmark 90610")
+            print("  python curator_feedback.py bookmark 2026-02-19-1")
+            print("  python curator_feedback.py bookmark yesterday-1")
+            sys.exit(1)
+        
+        ref = sys.argv[2]
+        hash_id, article_data = resolve_article_reference(ref)
+        
+        if not hash_id:
+            sys.exit(1)
+        
+        # Show article details
+        print(f"\n📰 Article [{hash_id}]")
+        print(f"   Title: {article_data['title']}")
+        print(f"   Source: {article_data['source']}")
+        print(f"   URL: {article_data['url']}")
+        print()
+        
+        # Check for existing Like comments
+        prefs = load_preferences()
+        like_comment = None
+        
+        for feedback_id, feedback in prefs['feedback_history'].items():
+            if feedback.get('article', {}).get('url') == article_data['url'] and feedback['feedback_type'] == 'liked':
+                like_comment = feedback['user_words']
+                print(f"📌 Found your Like comment: \"{like_comment}\"")
+                print()
+                break
+        
+        if not like_comment:
+            print("📌 No Like found for this article.")
+            like_comment = input("What interests you about it? ").strip()
+            if not like_comment:
+                print("❌ No context provided. Cancelled.")
+                sys.exit(0)
+            print()
+        
+        # Prompt for deep dive focus (optional)
+        print("Add focus areas for deep dive? (Enter to skip)")
+        dive_focus = input("> ").strip()
+        print()
+        
+        # Generate deep dive
+        markdown, cost, output_path = generate_deep_dive(hash_id, article_data, like_comment, dive_focus)
+        
+        if output_path:
+            print("✅ Deep dive generated!")
+            print(f"   📄 Saved to: {output_path}")
+            print(f"   💰 Cost: ${cost:.4f}")
+            
+            # Update history with bookmark flag
+            history_file = Path(__file__).parent / "curator_history.json"
+            with open(history_file, 'r') as f:
+                history = json.load(f)
+            
+            if hash_id in history:
+                history[hash_id]['bookmarked'] = True
+                history[hash_id]['deep_dive_path'] = output_path
+                history[hash_id]['bookmark_date'] = datetime.now().strftime("%Y-%m-%d")
+                
+                with open(history_file, 'w') as f:
+                    json.dump(history, f, indent=2)
+        else:
+            print("❌ Deep dive generation failed")
+        
+        return
+    
+    # Standard commands (like, dislike, save) use rank
     if len(sys.argv) < 3:
         print(f"Error: {command} requires article rank number")
         print("Example: python curator_feedback.py like 3")
@@ -376,7 +900,7 @@ def main():
     
     else:
         print(f"❌ Unknown command: {command}")
-        print("Valid commands: like, dislike, save, show")
+        print("Valid commands: like, dislike, save, show, bookmark")
         sys.exit(1)
 
 if __name__ == '__main__':
