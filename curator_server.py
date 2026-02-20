@@ -55,23 +55,23 @@ class FeedbackHandler(BaseHTTPRequestHandler):
         elif parsed.path == '/deepdive':
             # Trigger deep dive analysis
             params = urllib.parse.parse_qs(parsed.query)
-            rank = params.get('rank', [''])[0]
+            hash_id = params.get('hash_id', [''])[0]
             interest = params.get('interest', [''])[0]
             focus = params.get('focus', [''])[0]
             
-            if not rank:
-                self.send_error(400, "Missing rank")
+            if not hash_id:
+                self.send_error(400, "Missing hash_id")
                 return
             
             if not interest:
                 self.send_error(400, "Missing interest")
                 return
             
-            print(f"\n🔍 Deep dive requested for article #{rank}")
+            print(f"\n🔍 Deep dive requested for article {hash_id}")
             print(f"   Interest: {interest[:100]}...")
             if focus:
                 print(f"   Focus: {focus[:100]}...")
-            result = self.trigger_deepdive(rank, interest, focus)
+            result = self.trigger_deepdive(hash_id, interest, focus)
             
             # Send response
             self.send_response(200)
@@ -130,17 +130,12 @@ class FeedbackHandler(BaseHTTPRequestHandler):
         except Exception as e:
             return {'success': False, 'message': f'Error: {str(e)}'}
     
-    def trigger_deepdive(self, rank, interest, focus=''):
+    def trigger_deepdive(self, hash_id, interest, focus=''):
         """Trigger deep dive analysis for an article"""
         try:
-            from datetime import datetime
-            
             # Use curator_feedback.py bookmark command (which triggers deep dive)
-            # Convert rank to date-rank format: YYYY-MM-DD-N
-            today = datetime.now().strftime("%Y-%m-%d")
-            date_rank = f"{today}-{rank}"
-            
-            cmd = ['python', 'curator_feedback.py', 'bookmark', date_rank]
+            # Pass hash_id directly (unique identifier, no ambiguity)
+            cmd = ['python', 'curator_feedback.py', 'bookmark', hash_id]
             
             # Run in virtual environment
             venv_python = Path(__file__).parent / 'venv' / 'bin' / 'python'
