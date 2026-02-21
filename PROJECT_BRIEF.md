@@ -127,6 +127,49 @@ interests/2026/deep-dives/  # Deep dive archive
 
 ---
 
+## Deployment & Infrastructure
+
+### Current Setup (MacBook Air)
+- **Challenge:** `curator_server.py` requires manual start after reboots/crashes
+- **Limitation:** MacBook not always-on → server unavailable when closed/sleeping
+- **Impact:** Interactive features (deep dive buttons) fail when server down
+
+### Mac Mini Migration Plan
+
+**Phase 1: MacBook Auto-Start (Immediate Fix)**
+- Create launchd plist to keep `curator_server.py` running
+- Auto-start on login
+- Auto-restart on crash
+- Location: `~/Library/LaunchAgents/com.user.curator-server.plist`
+
+**Phase 2: Mac Mini as Always-On Server**
+
+**Setup Steps:**
+1. Set up Python 3.14 + venv on Mac Mini
+2. Clone `personal-ai-agents` repo to Mini
+3. Migrate credentials from MacBook Keychain → Mini Keychain
+   - Anthropic API key
+   - xAI API key
+   - Telegram bot token
+   - Use `setup_keys.py` on Mini
+4. Set up launchd on Mini for `curator_server.py` auto-start
+5. Move cron jobs from MacBook to Mini
+   - Daily curator run (7 AM CST)
+   - Balance tracking
+6. Update `curator_latest.html` to point to Mini's local IP
+   - Change `localhost:8765` → `{mini-ip}:8765`
+   - Configure Mini firewall to allow port 8765
+7. Test end-to-end: MacBook browser → Mini server → deep dive generation
+
+**Benefits:**
+- 24/7 availability for interactive features
+- MacBook can sleep/travel without breaking workflow
+- Centralized automation (one machine for all cron jobs)
+
+**Status:** Phase 1 (launchd plist) - next immediate task
+
+---
+
 ## Pending Features
 
 ### Delete Deep Dive (Requested Feb 20)
