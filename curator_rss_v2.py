@@ -950,7 +950,7 @@ ARTICLES:
     
     try:
         response = client.chat.completions.create(
-            model="grok-2-vision-1212",
+            model="grok-3-mini",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=4096,
             temperature=0
