@@ -236,6 +236,53 @@ Not recommended for daily use (Keychain is more secure).
 
 ---
 
+## Cost Management
+
+### OpenClaw Session Context
+
+**The Problem:** Long OpenClaw sessions accumulate context (conversation history), making each message progressively more expensive.
+
+**Example from Feb 21, 2026:**
+- Session ran all day (9 AM - 5 PM)
+- Context grew to 141k tokens (1.4MB session file)
+- Each message cost **$0.52+** due to context size
+- A few back-and-forth messages = $3-5 quickly
+
+**Rule of thumb:** Context size matters more than task complexity for cost.
+
+### Session Reset Best Practices
+
+**After major working sessions:**
+1. Close the webchat/session
+2. Start a fresh session for next task
+3. All work is preserved (git commits, files, memory)
+4. Only the conversation context resets
+
+**When to reset:**
+- After multi-hour working sessions
+- After completing a major feature/task
+- When you notice slow responses (likely large context)
+- Before starting unrelated work
+
+**Cost comparison:**
+- Fresh session: $0.003-0.01 per message
+- 141k context: $0.52+ per message
+- **170x difference!**
+
+### Three-Way Workflow Cost Optimization
+
+**Expensive (avoid):**
+- Long exploratory sessions in OpenClaw ($50-100+)
+
+**Efficient (use this):**
+1. **Claude** - Exploratory design, architecture ($20/month flat)
+2. **OpenClaw** - Focused execution with tight spec (low token count)
+3. **Regular resets** - Keep OpenClaw sessions short
+
+**Target:** OpenClaw sessions under 50k tokens (<$0.10/message)
+
+---
+
 ## Troubleshooting
 
 ### Deep Dive Buttons Not Working
