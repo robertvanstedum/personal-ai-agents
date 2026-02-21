@@ -17,42 +17,44 @@ MODES:
 - hybrid: Blend mechanical + AI with confidence weighting (Phase 2.2, not yet implemented)
 
 COST COMPARISON:
-- mechanical: $0/month (free, keyword-based)
-- ai: $6/month (single Haiku pass, good quality)
-- ai-two-stage: $27/month (Haiku + Sonnet, best quality with challenge-factor scoring)
+- ollama: $0/month (free, local Ollama/phi)
+- xai: $0.18/day ($5.40/month, grok-3-mini)
+- sonnet: $0.90/day ($27/month, claude-sonnet-4, premium quality)
 
 USAGE:
   python curator_rss_v2.py [options]
 
   Options:
-    --mode=mechanical    Use keyword-based scoring (default, FREE)
-    --mode=ai            Use single-stage Haiku scoring ($6/month)
-    --mode=ai-two-stage  Use Haiku pre-filter + Sonnet ranking ($27/month)
-    --mode=hybrid        Use blended scoring (not yet implemented)
+    --model=ollama       Use local Ollama/phi (default: FREE)
+    --model=xai          Use xAI grok-3-mini ($0.18/day - RECOMMENDED)
+    --model=sonnet       Use Anthropic claude-sonnet-4 (premium, $0.90/day)
     
-    --fallback           Auto-fallback to mechanical if API fails (for cron jobs)
-                         Without this flag, API errors stop execution (recommended for manual runs)
+    --dry-run            Preview without saving (output to curator_preview.html)
+                         Buttons disabled, no archive/history updates
+    
+    --fallback           Auto-fallback to ollama if API fails (for cron jobs)
+                         Without this flag, API errors stop execution
     
     --telegram           Send to Telegram after completion
     --open               Auto-open HTML in browser
   
   Examples:
-    # Free mechanical mode (test/fallback)
-    python curator_rss_v2.py --mode=mechanical --open
+    # Free local test (dry run)
+    python curator_rss_v2.py --dry-run --model=ollama
     
-    # Single-stage AI (good quality, $6/month - DAILY PRODUCTION)
-    python curator_rss_v2.py --mode=ai --telegram
+    # Production default (xAI grok-3-mini)
+    python curator_rss_v2.py --model=xai --telegram
     
-    # Two-stage AI (best quality, $27/month - manual deep analysis)
-    python curator_rss_v2.py --mode=ai-two-stage --telegram
+    # Evaluate Sonnet quality (dry run)
+    python curator_rss_v2.py --dry-run --model=sonnet --open
     
-    # AI with fallback (for cron jobs)
-    python curator_rss_v2.py --mode=ai --fallback --telegram
+    # Save local run to archive
+    python curator_rss_v2.py --model=ollama --telegram
 
 ERROR HANDLING:
 - By default, API errors STOP execution (fail fast)
 - This lets you diagnose problems: out of credits? bad key? rate limit?
-- Use --mode=mechanical to test everything except the API
+- Use --model=ollama to test everything locally (free)
 - Use --fallback only for automated/cron runs where you want best-effort
 """
 
@@ -445,7 +447,7 @@ To fix:
      echo "ANTHROPIC_API_KEY=your-key-here" > .env
 
 To test with mechanical mode instead:
-  python curator_rss_v2.py --mode=mechanical
+  python curator_rss_v2.py --model=ollama
 """
         if fallback_on_error:
             print("⚠️  API key not found, falling back to mechanical")
@@ -613,7 +615,7 @@ Common causes:
         
         error_report += """
 To test with mechanical mode instead:
-  python curator_rss_v2.py --mode=mechanical
+  python curator_rss_v2.py --model=ollama
 
 To enable automatic fallback (for cron jobs):
   python curator_rss_v2.py --mode=ai --fallback
@@ -898,7 +900,7 @@ To fix:
   Ensure 'xai:default' profile exists with valid key
 
 To test with mechanical mode instead:
-  python curator_rss_v2.py --mode=mechanical
+  python curator_rss_v2.py --model=ollama
 """
         if fallback_on_error:
             print("⚠️  xAI API key not found, falling back to mechanical")
@@ -969,7 +971,7 @@ ARTICLES:
 Error: {e}
 
 To use mechanical mode instead:
-  python curator_rss_v2.py --mode=mechanical
+  python curator_rss_v2.py --model=ollama
 """
         if fallback_on_error:
             print(f"⚠️  xAI API error: {e}")
@@ -1366,8 +1368,14 @@ def format_telegram(entries: List[Dict]) -> str:
     
     return output
 
-def format_html(entries: List[Dict], mode: str = "mechanical") -> str:
-    """Format as table HTML (unified briefing platform style)"""
+def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "production") -> str:
+    """Format as table HTML (unified briefing platform style)
+    
+    Args:
+        entries: List of article entries
+        model: Model name (ollama|xai|sonnet)
+        run_mode: Run mode (production|dry-run)
+    """
     from datetime import datetime
     
     today = datetime.now()
@@ -1375,12 +1383,21 @@ def format_html(entries: List[Dict], mode: str = "mechanical") -> str:
     day_str = today.strftime('%A')
     timestamp_str = today.strftime('%Y-%m-%d %H:%M:%S')
     
+    # Map model names to display names
+    model_display_map = {
+        'ollama': 'ollama/phi',
+        'xai': 'grok-3-mini',
+        'sonnet': 'claude-sonnet-4'
+    }
+    model_display = model_display_map.get(model, model)
+    
     html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="curator-model" content="{mode}">
+    <meta name="curator-model" content="{model_display}">
+    <meta name="curator-mode" content="{run_mode}">
     <meta name="curator-timestamp" content="{timestamp_str}">
     <meta name="curator-articles" content="{len(entries)}">
     <title>Morning Briefing - {date_str}</title>
@@ -1586,7 +1603,7 @@ def format_html(entries: List[Dict], mode: str = "mechanical") -> str:
         }}
     </style>
 </head>
-<body>
+<body data-run-mode="{run_mode}">
     <div class="header">
         <h1>🧠 Your Morning Briefing</h1>
         <div>
@@ -1668,10 +1685,21 @@ def format_html(entries: List[Dict], mode: str = "mechanical") -> str:
                         <div class="score-details">{raw_score:.1f} → {score:.1f}</div>
                     </td>
                     <td class="col-actions">
-                        <div class="action-buttons">
+                        <div class="action-buttons">"""
+    
+    # Add disabled buttons in dry-run mode
+    if run_mode == "dry-run":
+        html += f"""
+                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
+                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
+                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>"""
+    else:
+        html += f"""
                             <button class="action-btn btn-like" title="Like this article" onclick="showFeedback('like', {rank}, '{hash_id}');">👍</button>
                             <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback('dislike', {rank}, '{hash_id}');">👎</button>
-                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback('save', {rank}, '{hash_id}');">💾</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback('save', {rank}, '{hash_id}');">💾</button>"""
+    
+    html += """
                         </div>
                     </td>
                 </tr>
@@ -1861,14 +1889,23 @@ def format_html(entries: List[Dict], mode: str = "mechanical") -> str:
                 var diveBtn = document.createElement('button');
                 diveBtn.className = 'action-btn btn-dive';
                 diveBtn.textContent = '🔖 Deep Dive';
-                diveBtn.title = 'Request deep dive analysis (~30s, costs ~$0.15)';
-                diveBtn.style.cssText = 'background: #f39c12; color: white;';
-                // Use IIFE to capture rank, hashId and diveBtn by value (not reference)
-                diveBtn.onclick = (function(capturedRank, capturedHashId, capturedBtn) {
-                    return function() {
-                        showDeepDiveModal(capturedRank, capturedHashId, capturedBtn);
-                    };
-                })(rank, hashId, diveBtn);
+                
+                // Check if this is a dry run
+                var isDryRun = document.body.getAttribute('data-run-mode') === 'dry-run';
+                if (isDryRun) {
+                    diveBtn.title = 'Dry run — buttons disabled';
+                    diveBtn.disabled = true;
+                    diveBtn.style.cssText = 'background: #95a5a6; color: white; cursor: not-allowed; opacity: 0.6;';
+                } else {
+                    diveBtn.title = 'Request deep dive analysis (~30s, costs ~$0.15)';
+                    diveBtn.style.cssText = 'background: #f39c12; color: white;';
+                    // Use IIFE to capture rank, hashId and diveBtn by value (not reference)
+                    diveBtn.onclick = (function(capturedRank, capturedHashId, capturedBtn) {
+                        return function() {
+                            showDeepDiveModal(capturedRank, capturedHashId, capturedBtn);
+                        };
+                    })(rank, hashId, diveBtn);
+                }
                 
                 // Insert at the beginning
                 actionButtons.insertBefore(diveBtn, actionButtons.firstChild);
@@ -2067,20 +2104,35 @@ def generate_index_page(archive_dir: str):
     if archive_files:
         for timestamp_str, filename, datetime_obj, model, article_count in archive_files:
             formatted_date = datetime_obj.strftime("%b %d, %Y")
-            formatted_time = datetime_obj.strftime("%I:%M %p")
             
-            # Format model name for display
-            model_display = {
-                "xai": "grok-3-mini",
-                "anthropic": "claude-sonnet",
-                "mechanical": "mechanical"
-            }.get(model, model)
+            # Check if this is a legacy entry (old date-only format, no timestamp)
+            is_legacy = '-' not in timestamp_str or timestamp_str.count('-') == 2
+            
+            if is_legacy:
+                # Legacy entry: show "-" for time and articles
+                formatted_time = "-"
+                display_article_count = "-"
+                # Map old model names or show "legacy" for unknown
+                if model == "unknown":
+                    model_display = "legacy"
+                elif model == "xai":
+                    model_display = "grok-beta"  # Old xai entries
+                elif model == "mechanical":
+                    model_display = "ollama"
+                else:
+                    model_display = model
+            else:
+                # New entry: show full metadata
+                formatted_time = datetime_obj.strftime("%I:%M %p")
+                display_article_count = article_count
+                # Use model name as-is from metadata (already formatted)
+                model_display = model if model != "unknown" else "legacy"
             
             html += f"""                <tr>
                     <td><a href="{archive_dir}/{filename}" class="date-link">{formatted_date}</a></td>
-                    <td>{formatted_time}</td>
+                    <td style="text-align: center;">{formatted_time}</td>
                     <td><span style="font-family: monospace; font-size: 0.9em;">{model_display}</span></td>
-                    <td style="text-align: center;">{article_count}</td>
+                    <td style="text-align: center;">{display_article_count}</td>
                     <td><a href="{archive_dir}/{filename}" class="nav-btn">View →</a></td>
                 </tr>
 """
@@ -2113,12 +2165,21 @@ def main():
     fallback_on_error = "--fallback" in sys.argv
     dry_run = "--dry-run" in sys.argv
     
-    # Mode selection (default: mechanical)
-    mode = 'mechanical'
+    # Model selection (default: xai)
+    # --model=[ollama|xai|sonnet] controls which LLM is used
+    model = 'xai'
     for arg in sys.argv:
-        if arg.startswith('--mode='):
-            mode = arg.split('=')[1]
+        if arg.startswith('--model='):
+            model = arg.split('=')[1]
             break
+    
+    # Map model names to internal modes
+    mode_map = {
+        'ollama': 'mechanical',  # Free local Ollama/phi
+        'xai': 'xai',            # grok-3-mini ($0.18/day)
+        'sonnet': 'anthropic'    # Anthropic Sonnet (premium)
+    }
+    mode = mode_map.get(model, 'xai')  # Fallback to xai if unknown
     
     # Dry run banner
     if dry_run:
@@ -2133,7 +2194,7 @@ def main():
     except (ValueError, RuntimeError) as e:
         # API error with no fallback - exit with error
         print(f"\n💥 Curation failed: {e}")
-        print("\nTip: Run with --mode=mechanical to test everything except API")
+        print("\nTip: Run with --model=ollama to test everything except API")
         sys.exit(1)
     
     # Save to history (with duplicate protection)
@@ -2153,7 +2214,8 @@ def main():
     print(f"💾 Results saved to {output_file}")
     
     # HTML generation
-    html_content = format_html(top_articles, mode=mode)
+    run_mode = "dry-run" if dry_run else "production"
+    html_content = format_html(top_articles, model=model, run_mode=run_mode)
     
     # Create dated archive (skip in dry run)
     import os
