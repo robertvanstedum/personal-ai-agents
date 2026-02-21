@@ -2245,10 +2245,11 @@ def main():
         # Generate index
         generate_index_page(archive_dir)
     else:
-        # Dry run: save to preview file only
+        # Dry run: save to preview file only (fix relative paths for root directory)
         preview_file = "curator_preview.html"
+        preview_html = html_content.replace('href="../', 'href="')
         with open(preview_file, "w") as f:
-            f.write(html_content)
+            f.write(preview_html)
         print(f"🧪 Preview saved to {preview_file}")
         latest_file = preview_file  # For auto-open to work
     
