@@ -1686,20 +1686,20 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">"""
-    
-    # Add disabled buttons in dry-run mode
-    if run_mode == "dry-run":
-        html += f"""
+        
+        # Add disabled buttons in dry-run mode
+        if run_mode == "dry-run":
+            html += f"""
                             <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
                             <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
                             <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>"""
-    else:
-        html += f"""
+        else:
+            html += f"""
                             <button class="action-btn btn-like" title="Like this article" onclick="showFeedback('like', {rank}, '{hash_id}');">👍</button>
                             <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback('dislike', {rank}, '{hash_id}');">👎</button>
                             <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback('save', {rank}, '{hash_id}');">💾</button>"""
-    
-    html += """
+        
+        html += """
                         </div>
                     </td>
                 </tr>
