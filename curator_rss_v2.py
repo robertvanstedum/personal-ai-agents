@@ -1366,19 +1366,23 @@ def format_telegram(entries: List[Dict]) -> str:
     
     return output
 
-def format_html(entries: List[Dict]) -> str:
+def format_html(entries: List[Dict], mode: str = "mechanical") -> str:
     """Format as table HTML (unified briefing platform style)"""
     from datetime import datetime
     
     today = datetime.now()
     date_str = today.strftime('%B %d, %Y')
     day_str = today.strftime('%A')
+    timestamp_str = today.strftime('%Y-%m-%d %H:%M:%S')
     
     html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="curator-model" content="{mode}">
+    <meta name="curator-timestamp" content="{timestamp_str}">
+    <meta name="curator-articles" content="{len(entries)}">
     <title>Morning Briefing - {date_str}</title>
     <style>
         body {{
@@ -1896,20 +1900,44 @@ def format_html(entries: List[Dict]) -> str:
     
     return html
 def generate_index_page(archive_dir: str):
-    """Generate unified archive index page"""
+    """Generate unified archive index page with timestamp and model info"""
     import os
+    import re
     from datetime import datetime
     
     archive_files = []
     if os.path.exists(archive_dir):
         for filename in os.listdir(archive_dir):
             if filename.startswith("curator_") and filename.endswith(".html"):
-                date_str = filename.replace("curator_", "").replace(".html", "")
+                timestamp_str = filename.replace("curator_", "").replace(".html", "")
+                
+                # Try new format first: YYYY-MM-DD-HHMM
                 try:
-                    date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-                    archive_files.append((date_str, filename, date_obj))
+                    datetime_obj = datetime.strptime(timestamp_str, "%Y-%m-%d-%H%M")
                 except ValueError:
+                    # Fallback to old format: YYYY-MM-DD
+                    try:
+                        datetime_obj = datetime.strptime(timestamp_str, "%Y-%m-%d")
+                    except ValueError:
+                        continue
+                
+                # Extract metadata from HTML file
+                filepath = os.path.join(archive_dir, filename)
+                model = "unknown"
+                article_count = "?"
+                try:
+                    with open(filepath, 'r') as f:
+                        content = f.read(2000)  # Only read first 2KB for metadata
+                        model_match = re.search(r'<meta name="curator-model" content="([^"]+)"', content)
+                        articles_match = re.search(r'<meta name="curator-articles" content="([^"]+)"', content)
+                        if model_match:
+                            model = model_match.group(1)
+                        if articles_match:
+                            article_count = articles_match.group(1)
+                except Exception:
                     pass
+                
+                archive_files.append((timestamp_str, filename, datetime_obj, model, article_count))
     
     archive_files.sort(key=lambda x: x[2], reverse=True)
     
@@ -2027,7 +2055,9 @@ def generate_index_page(archive_dir: str):
             <thead>
                 <tr>
                     <th>Date</th>
-                    <th>Day</th>
+                    <th>Time</th>
+                    <th>Model</th>
+                    <th>Articles</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -2035,18 +2065,28 @@ def generate_index_page(archive_dir: str):
 """
     
     if archive_files:
-        for date_str, filename, date_obj in archive_files:
-            formatted_date = date_obj.strftime("%B %d, %Y")
-            day_of_week = date_obj.strftime("%A")
+        for timestamp_str, filename, datetime_obj, model, article_count in archive_files:
+            formatted_date = datetime_obj.strftime("%b %d, %Y")
+            formatted_time = datetime_obj.strftime("%I:%M %p")
+            
+            # Format model name for display
+            model_display = {
+                "xai": "grok-3-mini",
+                "anthropic": "claude-sonnet",
+                "mechanical": "mechanical"
+            }.get(model, model)
+            
             html += f"""                <tr>
                     <td><a href="{archive_dir}/{filename}" class="date-link">{formatted_date}</a></td>
-                    <td>{day_of_week}</td>
+                    <td>{formatted_time}</td>
+                    <td><span style="font-family: monospace; font-size: 0.9em;">{model_display}</span></td>
+                    <td style="text-align: center;">{article_count}</td>
                     <td><a href="{archive_dir}/{filename}" class="nav-btn">View →</a></td>
                 </tr>
 """
     else:
         html += """                <tr>
-                    <td colspan="3" style="text-align: center; color: #999; padding: 40px 0;">
+                    <td colspan="5" style="text-align: center; color: #999; padding: 40px 0;">
                         No archived briefings yet
                     </td>
                 </tr>
@@ -2113,18 +2153,18 @@ def main():
     print(f"💾 Results saved to {output_file}")
     
     # HTML generation
-    html_content = format_html(top_articles)
+    html_content = format_html(top_articles, mode=mode)
     
     # Create dated archive (skip in dry run)
     import os
     from datetime import datetime
     
     if not dry_run:
-        today = datetime.now().strftime("%Y-%m-%d")
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H%M")
         archive_dir = "curator_archive"
         os.makedirs(archive_dir, exist_ok=True)
         
-        archive_path = os.path.join(archive_dir, f"curator_{today}.html")
+        archive_path = os.path.join(archive_dir, f"curator_{timestamp}.html")
         with open(archive_path, "w") as f:
             f.write(html_content)
         print(f"📁 Archive saved to {archive_path}")
