@@ -2071,6 +2071,7 @@ def main():
     send_telegram = "--telegram" in sys.argv
     auto_open = "--open" in sys.argv
     fallback_on_error = "--fallback" in sys.argv
+    dry_run = "--dry-run" in sys.argv
     
     # Mode selection (default: mechanical)
     mode = 'mechanical'
@@ -2078,6 +2079,13 @@ def main():
         if arg.startswith('--mode='):
             mode = arg.split('=')[1]
             break
+    
+    # Dry run banner
+    if dry_run:
+        print("="*60)
+        print("🧪 DRY RUN MODE - No archive or history will be saved")
+        print("="*60)
+        print()
     
     # Run curation
     try:
@@ -2089,7 +2097,10 @@ def main():
         sys.exit(1)
     
     # Save to history (with duplicate protection)
-    save_to_history(top_articles)
+    if not dry_run:
+        save_to_history(top_articles)
+    else:
+        print("🧪 Skipping history update (dry run)")
     
     # Console output
     output = format_output(top_articles)
@@ -2104,30 +2115,39 @@ def main():
     # HTML generation
     html_content = format_html(top_articles)
     
-    # Create dated archive
+    # Create dated archive (skip in dry run)
     import os
     from datetime import datetime
-    today = datetime.now().strftime("%Y-%m-%d")
-    archive_dir = "curator_archive"
-    os.makedirs(archive_dir, exist_ok=True)
     
-    archive_path = os.path.join(archive_dir, f"curator_{today}.html")
-    with open(archive_path, "w") as f:
-        f.write(html_content)
-    print(f"📁 Archive saved to {archive_path}")
-    
-    # Save as "latest"
-    latest_file = "curator_latest.html"
-    with open(latest_file, "w") as f:
-        f.write(html_content)
-    print(f"🔖 Latest briefing: {latest_file}")
-    
-    # Backward compatibility
-    with open("curator_briefing.html", "w") as f:
-        f.write(html_content)
-    
-    # Generate index
-    generate_index_page(archive_dir)
+    if not dry_run:
+        today = datetime.now().strftime("%Y-%m-%d")
+        archive_dir = "curator_archive"
+        os.makedirs(archive_dir, exist_ok=True)
+        
+        archive_path = os.path.join(archive_dir, f"curator_{today}.html")
+        with open(archive_path, "w") as f:
+            f.write(html_content)
+        print(f"📁 Archive saved to {archive_path}")
+        
+        # Save as "latest"
+        latest_file = "curator_latest.html"
+        with open(latest_file, "w") as f:
+            f.write(html_content)
+        print(f"🔖 Latest briefing: {latest_file}")
+        
+        # Backward compatibility
+        with open("curator_briefing.html", "w") as f:
+            f.write(html_content)
+        
+        # Generate index
+        generate_index_page(archive_dir)
+    else:
+        # Dry run: save to preview file only
+        preview_file = "curator_preview.html"
+        with open(preview_file, "w") as f:
+            f.write(html_content)
+        print(f"🧪 Preview saved to {preview_file}")
+        latest_file = preview_file  # For auto-open to work
     
     # Auto-open
     if auto_open:
@@ -2205,6 +2225,13 @@ def main():
         else:
             print(f"⚠️  TELEGRAM_BOT_TOKEN not set, message saved to file only")
             print(f"   To enable auto-send: export TELEGRAM_BOT_TOKEN='your-token'")
+    
+    # Final dry run reminder
+    if dry_run:
+        print()
+        print("="*60)
+        print("🧪 DRY RUN COMPLETE - No archive or history saved")
+        print("="*60)
 
 if __name__ == "__main__":
     main()
