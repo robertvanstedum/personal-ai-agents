@@ -45,9 +45,27 @@ This runs the full pipeline:
 
 **Files generated:**
 - `curator_latest.html` - Current briefing (opens in browser)
-- `curator_briefing_YYYYMMDD_HHMM.html` - Archived copy
+- `curator_archive/curator_YYYY-MM-DD.html` - Dated archive
 - `curator_output.txt` - Text summary
 - `telegram_message.txt` - Message sent to Telegram
+
+### Testing Changes (Dry Run)
+
+```bash
+cd ~/Projects/personal-ai-agents
+python curator_rss_v2.py --dry-run --mode=xai --open
+```
+
+Use `--dry-run` when testing:
+- Model changes
+- Configuration tweaks
+- Scoring logic
+
+**Dry run behavior:**
+- Runs full pipeline normally
+- Saves to `curator_preview.html` (not `curator_latest.html`)
+- Does NOT update archive or history
+- Safe for testing without polluting data
 
 ### Checking What's Running
 
@@ -70,6 +88,42 @@ open ~/Projects/personal-ai-agents/curator_latest.html
 # List recent archives
 ls -lt ~/Projects/personal-ai-agents/curator_archive/ | head -10
 ```
+
+---
+
+## Known Behaviors
+
+### Multiple Runs Same Day
+
+**Archive behavior:** Running the curator multiple times on the same day **overwrites** the archive HTML file.
+
+- First run (9:00 AM): Creates `curator_2026-02-21.html`
+- Second run (11:00 AM): **Overwrites** `curator_2026-02-21.html` (first version is lost)
+
+**History behavior:** `curator_history.json` handles multiple runs gracefully:
+- Updates existing entries with new rank/score
+- No duplicate appearances for same day
+
+**Recommendation:** Use `--dry-run` for testing model or configuration changes.
+
+### Testing Without Archive Pollution
+
+```bash
+# Test run (no archive/history updates)
+cd ~/Projects/personal-ai-agents
+python curator_rss_v2.py --dry-run --mode=xai --open
+
+# Output saved to curator_preview.html
+# Archive and history remain unchanged
+```
+
+**When to use dry run:**
+- Testing model changes (e.g., trying grok-3-mini vs grok-2)
+- Testing config tweaks
+- Debugging scoring logic
+- Preview before committing to archive
+
+**Future enhancement:** Timestamp-based archiving planned if multiple real runs per day become needed.
 
 ---
 
@@ -313,6 +367,9 @@ tail -20 ~/Projects/personal-ai-agents/logs/curator_server_stderr.log
 
 # RUN CURATOR MANUALLY
 cd ~/Projects/personal-ai-agents && ./run_curator_cron.sh
+
+# TEST CHANGES (DRY RUN)
+cd ~/Projects/personal-ai-agents && python curator_rss_v2.py --dry-run --mode=xai --open
 
 # CHECK WHAT'S RUNNING
 launchctl list | grep curator
