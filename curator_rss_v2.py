@@ -2118,15 +2118,20 @@ def generate_index_page(archive_dir: str):
                 elif model == "xai":
                     model_display = "grok-beta"  # Old xai entries
                 elif model == "mechanical":
-                    model_display = "ollama"
+                    model_display = "ollama/phi"  # Old mechanical entries
                 else:
-                    model_display = model
+                    model_display = "legacy" if model == "?" else model
             else:
                 # New entry: show full metadata
                 formatted_time = datetime_obj.strftime("%I:%M %p")
                 display_article_count = article_count
-                # Use model name as-is from metadata (already formatted)
-                model_display = model if model != "unknown" else "legacy"
+                # Map old "mechanical" to new "ollama/phi" for consistency
+                if model == "mechanical":
+                    model_display = "ollama/phi"
+                elif model == "unknown":
+                    model_display = "legacy"
+                else:
+                    model_display = model  # Use as-is from metadata (already formatted)
             
             html += f"""                <tr>
                     <td><a href="{archive_dir}/{filename}" class="date-link">{formatted_date}</a></td>
