@@ -38,9 +38,10 @@
 
 **1. Curator (`curator_rss_v2.py`)**
 - Fetches 390 articles from 15 RSS feeds daily
-- Scores/ranks with AI (xAI Grok or Anthropic)
+- Scores/ranks with AI (grok-3-mini, ollama/phi, or claude-sonnet-4)
 - Generates HTML briefing (top 20 articles)
-- Cost: $0.18/day (xAI mode) or $0.90/day (two-stage Anthropic)
+- Cost: Free (ollama) | $0.18/day (grok-3-mini) | $0.90/day (claude-sonnet-4)
+- Flags: `--model=[ollama|xai|sonnet]` `--dry-run` (optional preview)
 
 **2. Web Server (`curator_server.py`)**
 - Runs on localhost:8765
@@ -72,9 +73,44 @@ interests/2026/deep-dives/  # Deep dive archive
 
 ---
 
-## Recent Work (Feb 20, 2026)
+## Recent Work (Feb 21, 2026)
 
-### Completed
+### Completed Today
+
+✅ **Upgraded xAI Model** - grok-beta → grok-3-mini (newer model, better performance)  
+✅ **Independent Flags** - Implemented `--dry-run` and `--model` as separate, composable flags  
+  - `--dry-run` - Preview without saving (buttons disabled, no archive/history)  
+  - `--model=[ollama|xai|sonnet]` - Choose LLM (free local | $0.18/day | premium)  
+  - Mix and match: `--dry-run --model=sonnet` tests premium without committing  
+✅ **Timestamp Archive** - Archive naming now includes time (YYYY-MM-DD-HHMM)  
+  - Multiple runs per day preserved instead of overwriting  
+  - Archive index shows: Date | Time | Model | Articles  
+✅ **Model Tracking** - Metadata stored in HTML for reproducibility  
+  - Know exactly which model generated each briefing  
+  - Enables A/B comparison of model performance  
+✅ **Display Polish** - Legacy entries show clean "-" instead of "unknown"/"?"  
+✅ **Navigation Fixes** - Deleted orphaned files, fixed relative paths  
+✅ **Operations Manual** - Created OPERATIONS.md with daily health checks  
+✅ **Mac Mini Planning** - Documented migration plan in PROJECT_BRIEF.md  
+
+### Designed (Not Yet Built)
+
+📋 **Deep Dive Rating System** - See `docs/FEATURE_DEEP_DIVE_RATINGS.md`  
+  - 4-star rating with optional comments  
+  - Two-sided feedback loop (what to do more/less of)  
+  - AI-assisted theme extraction  
+  - Automatic prompt injection for future deep dives  
+📋 **Deep Dive Delete Feature** - Cleanup for mistaken/low-quality dives  
+
+### Next Session
+
+- Mac Mini migration (always-on server setup)  
+- Implement Deep Dive ratings (Phase 1: UI)  
+- Implement Deep Dive delete feature  
+
+---
+
+## Previous Work (Feb 20, 2026)
 
 ✅ **Security Cleanup** - Removed all credentials from public repo (API keys in keyring)  
 ✅ **xAI Integration** - 80% cost reduction ($0.90 → $0.18/day)  
@@ -83,10 +119,6 @@ interests/2026/deep-dives/  # Deep dive archive
 ✅ **Bug Fix: Duplicate Heading** - Removed double "Deep Dive Analysis" heading (Claude-identified)  
 ✅ **Three-Way Workflow** - Documented Claude Web + CLI + OpenClaw collaboration pattern  
 ✅ **Repository Public** - `personal-ai-agents` now public on GitHub
-
-### In Progress
-
-🟡 **Delete Feature** - Add trash icon to deep dive archive for cleanup (design in progress with Claude)
 
 ### Technical Decisions
 
@@ -335,5 +367,5 @@ pkill -f curator_server && python3 curator_server.py &
 
 ---
 
-**Last Updated:** Feb 20, 2026, 11:20 AM CST  
-**Version:** 1.0 (Initial brief for Claude memory integration)
+**Last Updated:** Feb 21, 2026, 1:47 PM CST  
+**Version:** 1.1 (Added Feb 21 updates: --dry-run, --model flags, timestamp archive, model tracking)
