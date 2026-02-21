@@ -159,14 +159,15 @@ crontab -e
 **File:** `curator_rss_v2.py`
 
 - Fetches from geopolitics, finance, tech, and treasury sources
-- AI scoring (Haiku) for relevance (~$0.20/day)
+- AI scoring with grok-3-mini (~$0.18/day)
 - Category weighting + diversity boosting
 - Automatic Telegram delivery
 
-**Modes:**
-- `--mode=mechanical` - Free keyword-based
-- `--mode=ai` - Single-stage Haiku ($6/month)
-- `--mode=ai-two-stage` - Haiku + Sonnet ranking ($27/month)
+**Model Selection:**
+- `--model=ollama` - Free local (Ollama/phi)
+- `--model=xai` - grok-3-mini ($0.18/day, recommended)
+- `--model=sonnet` - Claude Sonnet 4 (premium, $0.90/day)
+- `--dry-run` - Preview without saving (optional)
 
 **See:** [CURATOR_README.md](CURATOR_README.md)
 
@@ -354,4 +355,4 @@ MIT License - See [LICENSE](LICENSE) for details.
 ---
 
 **Status:** Production (daily use since Feb 2026)  
-**Last Updated:** 2026-02-16
+**Last Updated:** 2026-02-21
