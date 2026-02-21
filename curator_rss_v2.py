@@ -1595,9 +1595,9 @@ def format_html(entries: List[Dict]) -> str:
     </div>
 
     <div class="nav-buttons">
-        <a href="curator_index.html" class="nav-btn">📚 Archive</a>
-        <a href="curator_latest_with_buttons.html" class="nav-btn">🔝 Top 20</a>
-        <a href="interests/2026/deep-dives/index.html" class="nav-btn">🔍 Deep Dives</a>
+        <a href="../curator_index.html" class="nav-btn">📚 Archive</a>
+        <a href="../curator_latest.html" class="nav-btn">🔝 Latest</a>
+        <a href="../interests/2026/deep-dives/index.html" class="nav-btn">🔍 Deep Dives</a>
     </div>
 
     <div class="briefing-table">
@@ -2129,15 +2129,16 @@ def main():
             f.write(html_content)
         print(f"📁 Archive saved to {archive_path}")
         
-        # Save as "latest"
+        # Save as "latest" (fix relative paths for root directory)
         latest_file = "curator_latest.html"
+        latest_html = html_content.replace('href="../', 'href="')
         with open(latest_file, "w") as f:
-            f.write(html_content)
+            f.write(latest_html)
         print(f"🔖 Latest briefing: {latest_file}")
         
         # Backward compatibility
         with open("curator_briefing.html", "w") as f:
-            f.write(html_content)
+            f.write(latest_html)
         
         # Generate index
         generate_index_page(archive_dir)
