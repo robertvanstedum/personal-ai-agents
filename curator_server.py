@@ -155,7 +155,7 @@ def api_library():
                 articles[url] = {
                     'article_id':     url,
                     'hash_id':        hash_id,
-                    'type':           'bookmarked',
+                    'type':           'saved',
                     'date':           bookmark_date,
                     'timestamp':      bookmark_date,
                     'title':          item.get('title', ''),
@@ -185,6 +185,24 @@ def api_library():
 @app.route('/curator_library.html')
 def library_page():
     return send_from_directory(BASE_DIR, 'curator_library.html')
+
+@app.route('/curator_briefing.html')
+def briefing_page():
+    return send_from_directory(BASE_DIR, 'curator_briefing.html')
+
+@app.route('/curator_latest.html')
+def latest_page():
+    return send_from_directory(BASE_DIR, 'curator_latest.html')
+
+@app.route('/curator_index.html')
+def index_page():
+    return send_from_directory(BASE_DIR, 'curator_index.html')
+
+@app.route('/interests/<path:filepath>')
+def serve_interests(filepath):
+    """Serve deep dive markdown and HTML files from interests directory"""
+    interests_dir = BASE_DIR / 'interests'
+    return send_from_directory(interests_dir, filepath)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
