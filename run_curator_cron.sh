@@ -1,22 +1,24 @@
 #!/bin/bash
 # Curator cron job - generates briefing + sends to Telegram automatically
 # Mode: Single-stage AI (Haiku) ~$0.20/day = $6/month
-# To be called by OpenClaw cron at 7am daily
+# To be called by launchd at 7am daily
 
 PROJECT_DIR="$HOME/Projects/personal-ai-agents"
 
 cd "$PROJECT_DIR" || exit 1
 
-# Activate virtual environment and run curator with AI mode
+# Activate virtual environment and run curator
 source venv/bin/activate
-python curator_rss_v2.py --mode=ai --telegram --fallback
+python curator_rss_v2.py --mode=ai --fallback
 
-# Check that message was generated
-if [ -f "telegram_message.txt" ]; then
-    echo "✅ Curator briefing generated successfully at $(date)"
-    echo "📱 Message sent to Telegram automatically"
+# Send briefing via unified Telegram bot
+export TELEGRAM_CHAT_ID="8379221702"
+python telegram_bot.py --send
+
+if [ $? -eq 0 ]; then
+    echo "✅ Curator briefing generated and sent successfully at $(date)"
     exit 0
 else
-    echo "❌ ERROR: telegram_message.txt not found"
+    echo "❌ ERROR: Failed to send Telegram briefing"
     exit 1
 fi
