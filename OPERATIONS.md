@@ -281,6 +281,40 @@ Not recommended for daily use (Keychain is more secure).
 
 **Target:** OpenClaw sessions under 50k tokens (<$0.10/message)
 
+### Future: Telegram → OpenClaw Integration
+
+**Status:** Design only, not built yet
+
+**Approach:** Minimal persistent memory via `TELEGRAM_CONTEXT.md`
+- Each Telegram session reads context file instead of full history
+- File stays under 50 lines / 3kb max
+- Contains: last 5-10 commands, current tasks, key preferences
+- After each command: update file, close session
+- **Result:** flat low cost regardless of usage history
+
+**Commands planned:**
+- `"daily report"` → run curator, send summary
+- `"status"` → system health check
+- `"balance"` → API spend check
+- `"deep dive [topic]"` → trigger analysis
+- `"archive"` → list recent briefings
+
+**Design principle:** Telegram = command interface, NOT chat interface.
+- Short in, short out
+- No exploratory work on Telegram - that's Claude's job
+
+### Future: Session Cost Monitor (Feature Request)
+
+**Status:** To be built in OpenClaw core
+
+**Requirement:** Warn when session context gets expensive
+- At 50k tokens: prepend ⚠️ warning to responses
+- Warning text: `"Session at Xk tokens (~$Y/msg) - consider reset"`
+- Include estimated cost per message
+- Add to `session_status` output automatically
+
+**Why needed:** Prevents surprise costs like Feb 21's 141k token session ($0.52/msg)
+
 ---
 
 ## Troubleshooting
