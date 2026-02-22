@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reading Library — Curator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f11;
+    --surface: #17171a;
+    --surface2: #1e1e22;
+    --border: #2a2a30;
+    --border2: #333340;
+    --text: #e8e8f0;
+    --text-muted: #7a7a8c;
+    --text-dim: #4a4a5a;
+    --accent: #c8a96e;
+    --accent-dim: rgba(200,169,110,0.12);
+    --accent-glow: rgba(200,169,110,0.25);
+    --liked: #6ec8a9;
+    --liked-bg: rgba(110,200,169,0.10);
+    --saved: #6ea9c8;
+    --saved-bg: rgba(110,169,200,0.10);
+    --bookmarked: #c86ea9;
+    --bookmarked-bg: rgba(200,110,169,0.10);
+    --geo: #e8a87c;
+    --fiscal: #7cb8e8;
+    --monetary: #a87ce8;
+    --other: #7a7a8c;
+    --row-hover: rgba(200,169,110,0.04);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Instrument Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    position: sticky;
+    top: 0;
+    background: rgba(15,15,17,0.92);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+
+  .logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 20px;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+  }
+
+  .logo-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .header-nav {
+    display: flex;
+    gap: 4px;
+  }
+
+  .nav-link {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    letter-spacing: 0.05em;
+    transition: all 0.15s;
+  }
+
+  .nav-link:hover { color: var(--text); background: var(--surface2); }
+  .nav-link.active { color: var(--accent); background: var(--accent-dim); }
+
+  /* ── Main layout ── */
+  main {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px 32px 64px;
+  }
+
+  /* ── Page title ── */
+  .page-header {
+    margin-bottom: 28px;
+  }
+
+  .page-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 32px;
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 6px;
+  }
+
+  .page-title em {
+    color: var(--accent);
+    font-style: italic;
+  }
+
+  .page-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Stats bar ── */
+  .stats-bar {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 24px;
+  }
+
+  .stat-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+  }
+
+  .stat-pill strong {
+    font-size: 18px;
+    font-family: 'DM Serif Display', serif;
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+
+  .stat-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ── Controls ── */
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 220px;
+    max-width: 380px;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-dim);
+    font-size: 13px;
+    pointer-events: none;
+  }
+
+  input[type="search"] {
+    width: 100%;
+    padding: 9px 12px 9px 34px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  input[type="search"]:focus { border-color: var(--accent); }
+  input[type="search"]::placeholder { color: var(--text-dim); }
+
+  .filter-group {
+    display: flex;
+    gap: 4px;
+  }
+
+  .filter-btn {
+    padding: 7px 13px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text-muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .filter-btn:hover { border-color: var(--border2); color: var(--text); }
+
+  .filter-btn.active-liked {
+    background: var(--liked-bg);
+    border-color: var(--liked);
+    color: var(--liked);
+  }
+
+  .filter-btn.active-saved {
+    background: var(--saved-bg);
+    border-color: var(--saved);
+    color: var(--saved);
+  }
+
+  .filter-btn.active-all {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .select-filter {
+    padding: 7px 28px 7px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text-muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%234a4a5a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    transition: all 0.15s;
+  }
+
+  .select-filter:hover { border-color: var(--border2); color: var(--text); }
+  .select-filter:focus { border-color: var(--accent); }
+  .select-filter option { background: var(--surface2); }
+
+  /* ── Table ── */
+  .table-wrap {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    padding: 11px 16px;
+    text-align: left;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  th.sortable { cursor: pointer; }
+  th.sortable:hover { color: var(--text-muted); }
+  th.sort-asc::after { content: ' ↑'; color: var(--accent); }
+  th.sort-desc::after { content: ' ↓'; color: var(--accent); }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+    cursor: pointer;
+  }
+
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--row-hover); }
+
+  td {
+    padding: 14px 16px;
+    vertical-align: top;
+  }
+
+  /* Title cell */
+  .td-title {
+    max-width: 380px;
+  }
+
+  .article-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.4;
+    margin-bottom: 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .article-note {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.4;
+  }
+
+  /* Source cell */
+  .td-source {
+    white-space: nowrap;
+  }
+
+  .source-name {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  /* Category badge */
+  .cat-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .cat-geo_major, .cat-geo_minor { background: rgba(232,168,124,0.12); color: var(--geo); }
+  .cat-fiscal { background: rgba(124,184,232,0.12); color: var(--fiscal); }
+  .cat-monetary { background: rgba(168,124,232,0.12); color: var(--monetary); }
+  .cat-other, .cat-unknown { background: rgba(122,122,140,0.12); color: var(--other); }
+
+  /* Score */
+  .score-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .score-bar {
+    height: 2px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 4px;
+    width: 48px;
+    overflow: hidden;
+  }
+
+  .score-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--accent);
+    transition: width 0.3s ease;
+  }
+
+  /* Type badge */
+  .type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+
+  .type-liked { background: var(--liked-bg); color: var(--liked); }
+  .type-saved { background: var(--saved-bg); color: var(--saved); }
+  .type-bookmarked { background: var(--bookmarked-bg); color: var(--bookmarked); }
+
+  /* Date */
+  .date-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  /* Actions */
+  .actions-cell {
+    white-space: nowrap;
+  }
+
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-right: 4px;
+  }
+
+  .action-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .action-btn.deep-dive {
+    border-color: var(--bookmarked-bg);
+    color: var(--bookmarked);
+    background: var(--bookmarked-bg);
+  }
+
+  .action-btn.deep-dive:hover {
+    border-color: var(--bookmarked);
+    background: rgba(200,110,169,0.2);
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 64px 32px;
+    color: var(--text-dim);
+  }
+
+  .empty-state-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .empty-state-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 18px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  .empty-state-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+
+  /* Loading */
+  .loading {
+    text-align: center;
+    padding: 64px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+  }
+
+  .loading::after {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid var(--border2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-left: 10px;
+    vertical-align: middle;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Row expand (note tooltip) */
+  .note-full {
+    display: none;
+    position: absolute;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+    max-width: 320px;
+    line-height: 1.5;
+    z-index: 50;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    pointer-events: none;
+  }
+
+  .article-note:hover + .note-full,
+  .note-wrap:hover .note-full { display: block; }
+
+  .note-wrap { position: relative; }
+
+  /* Appearances badge */
+  .appearances {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 3px;
+  }
+
+  .appearances span {
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  /* Result count */
+  .result-count {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-left: auto;
+    letter-spacing: 0.04em;
+    align-self: center;
+  }
+
+  /* Fade-in animation for rows */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  tbody tr { animation: fadeIn 0.2s ease both; }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .td-source, th:nth-child(3) { display: none; }
+  }
+  @media (max-width: 700px) {
+    main { padding: 16px; }
+    .td-title { max-width: 220px; }
+    .controls { gap: 6px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <span class="logo">📚 Curator</span>
+    <span class="logo-sub">Reading Library</span>
+  </div>
+  <nav class="header-nav">
+    <a href="/curator_library.html" class="nav-link active">Library</a>
+    <a href="/curator_briefing.html" class="nav-link">Today</a>
+    <a href="/curator_index.html" class="nav-link">Archive</a>
+  </nav>
+</header>
+
+<main>
+  <div class="page-header">
+    <h1 class="page-title">Your <em>reading library</em></h1>
+    <p class="page-meta" id="meta-line">Loading articles...</p>
+  </div>
+
+  <div class="stats-bar" id="stats-bar">
+    <div class="stat-pill">
+      <div class="stat-dot" style="background:var(--liked)"></div>
+      <strong id="stat-liked">—</strong> liked
+    </div>
+    <div class="stat-pill">
+      <div class="stat-dot" style="background:var(--saved)"></div>
+      <strong id="stat-saved">—</strong> saved
+    </div>
+    <div class="stat-pill">
+      <div class="stat-dot" style="background:var(--bookmarked)"></div>
+      <strong id="stat-bookmarked">—</strong> bookmarked
+    </div>
+    <div class="stat-pill" style="margin-left:auto">
+      <strong id="stat-total">—</strong> total
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="search-wrap">
+      <span class="search-icon">⌕</span>
+      <input type="search" id="search-input" placeholder="Search titles, sources, notes…">
+    </div>
+
+    <div class="filter-group" id="type-filters">
+      <button class="filter-btn active-all" data-type="all">All</button>
+      <button class="filter-btn" data-type="liked">👍 Liked</button>
+      <button class="filter-btn" data-type="saved">🔖 Saved</button>
+      <button class="filter-btn" data-type="bookmarked">📌 Bookmarked</button>
+    </div>
+
+    <select class="select-filter" id="category-filter">
+      <option value="all">All categories</option>
+      <option value="geo_major">Geo Major</option>
+      <option value="geo_minor">Geo Minor</option>
+      <option value="fiscal">Fiscal</option>
+      <option value="monetary">Monetary</option>
+      <option value="other">Other</option>
+    </select>
+
+    <span class="result-count" id="result-count"></span>
+  </div>
+
+  <div class="table-wrap">
+    <div class="loading" id="loading">Loading your library</div>
+    <table id="library-table" style="display:none">
+      <thead>
+        <tr>
+          <th class="sortable" data-col="date" data-dir="desc">Date <span class="sort-indicator">↓</span></th>
+          <th>Title & Note</th>
+          <th class="sortable" data-col="source">Source</th>
+          <th class="sortable" data-col="category">Category</th>
+          <th class="sortable" data-col="score" data-dir="desc">Score</th>
+          <th>Type</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+    <div class="empty-state" id="empty-state" style="display:none">
+      <span class="empty-state-icon">🔍</span>
+      <div class="empty-state-title">No articles found</div>
+      <div class="empty-state-sub">Try adjusting your filters or search term</div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let allArticles = [];
+let sortCol = 'date';
+let sortDir = 'desc';
+let typeFilter = 'all';
+let categoryFilter = 'all';
+let searchQuery = '';
+
+// ── Data loading ───────────────────────────────────────────────────────────
+async function loadData() {
+  try {
+    const res = await fetch('/api/library');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    allArticles = data.articles || [];
+    updateStats();
+    render();
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('library-table').style.display = 'table';
+  } catch (err) {
+    document.getElementById('loading').textContent = `Error loading data: ${err.message}`;
+    console.error(err);
+  }
+}
+
+// ── Stats ──────────────────────────────────────────────────────────────────
+function updateStats() {
+  const liked      = allArticles.filter(a => a.type === 'liked').length;
+  const saved      = allArticles.filter(a => a.type === 'saved').length;
+  const bookmarked = allArticles.filter(a => a.type === 'bookmarked').length;
+  document.getElementById('stat-liked').textContent      = liked;
+  document.getElementById('stat-saved').textContent      = saved;
+  document.getElementById('stat-bookmarked').textContent = bookmarked;
+  document.getElementById('stat-total').textContent      = allArticles.length;
+
+  const dates = allArticles.map(a => a.date).filter(Boolean).sort();
+  if (dates.length) {
+    const first = new Date(dates[0]).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+    const last  = new Date(dates[dates.length-1]).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+    document.getElementById('meta-line').textContent =
+      `${allArticles.length} articles saved · ${first} – ${last}`;
+  }
+}
+
+// ── Filter & sort ──────────────────────────────────────────────────────────
+function filteredArticles() {
+  return allArticles
+    .filter(a => {
+      if (typeFilter !== 'all' && a.type !== typeFilter) return false;
+      if (categoryFilter !== 'all' && a.category !== categoryFilter) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const haystack = `${a.title} ${a.source} ${a.note || ''}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      let va = a[sortCol] ?? '';
+      let vb = b[sortCol] ?? '';
+      if (sortCol === 'score') { va = parseFloat(va)||0; vb = parseFloat(vb)||0; }
+      if (sortCol === 'date')  { va = va.replace(/\D/g,''); vb = vb.replace(/\D/g,''); }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ?  1 : -1;
+      return 0;
+    });
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function render() {
+  const rows = filteredArticles();
+  const tbody = document.getElementById('table-body');
+  const empty = document.getElementById('empty-state');
+  const count = document.getElementById('result-count');
+
+  count.textContent = rows.length === allArticles.length
+    ? `${rows.length} articles`
+    : `${rows.length} of ${allArticles.length}`;
+
+  if (!rows.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = rows.map((a, i) => {
+    const date = a.date
+      ? new Date(a.date).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
+      : '—';
+    const scoreNum = parseFloat(a.score) || 0;
+    const scorePct = (scoreNum / 10 * 100).toFixed(0);
+    const typeClass = `type-${a.type}`;
+    const typeLabel = a.type === 'liked' ? '👍 Liked'
+                    : a.type === 'saved' ? '🔖 Saved'
+                    : '📌 Bookmarked';
+    const catClass = `cat-${(a.category||'other').toLowerCase()}`;
+    const catLabel = (a.category||'other').replace('_',' ');
+
+    const noteHtml = a.note
+      ? `<div class="note-wrap">
+           <div class="article-note" title="${escHtml(a.note)}">${escHtml(a.note.substring(0,80))}${a.note.length > 80 ? '…' : ''}</div>
+         </div>`
+      : '';
+
+    const appearancesHtml = a.appearances && a.appearances.length > 1
+      ? `<div class="appearances">Appeared <span>${a.appearances.length}×</span> · peak score <span>${Math.max(...a.appearances.map(x=>x.score||0)).toFixed(1)}</span></div>`
+      : '';
+
+    const deepDiveBtn = a.deep_dive_path
+      ? `<a class="action-btn deep-dive" href="/deep_dive/${a.hash_id}" title="Open deep dive">🔭 Deep Dive</a>`
+      : '';
+
+    return `<tr style="animation-delay:${Math.min(i*20, 300)}ms" onclick="window.open('${escHtml(a.url)}','_blank')">
+      <td><span class="date-val">${date}</span></td>
+      <td class="td-title">
+        <div class="article-title">${escHtml(a.title)}</div>
+        ${noteHtml}
+        ${appearancesHtml}
+      </td>
+      <td class="td-source"><span class="source-name">${escHtml(a.source||'')}</span></td>
+      <td><span class="cat-badge ${catClass}">${catLabel}</span></td>
+      <td>
+        <div class="score-val">${scoreNum > 0 ? scoreNum.toFixed(1) : '—'}</div>
+        ${scoreNum > 0 ? `<div class="score-bar"><div class="score-fill" style="width:${scorePct}%"></div></div>` : ''}
+      </td>
+      <td><span class="type-badge ${typeClass}">${typeLabel}</span></td>
+      <td class="actions-cell" onclick="event.stopPropagation()">
+        <a class="action-btn" href="${escHtml(a.url)}" target="_blank" rel="noopener">↗ Read</a>
+        ${deepDiveBtn}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function escHtml(str) {
+  return String(str||'')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Sort headers ───────────────────────────────────────────────────────────
+document.querySelectorAll('th.sortable').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (sortCol === col) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortCol = col;
+      sortDir = th.dataset.dir || 'asc';
+    }
+    document.querySelectorAll('th.sortable').forEach(t => {
+      t.classList.remove('sort-asc','sort-desc');
+    });
+    th.classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+    render();
+  });
+});
+
+// ── Type filter buttons ────────────────────────────────────────────────────
+document.querySelectorAll('#type-filters .filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    typeFilter = btn.dataset.type;
+    document.querySelectorAll('#type-filters .filter-btn').forEach(b => {
+      b.className = 'filter-btn';
+    });
+    btn.classList.add(`active-${typeFilter === 'all' ? 'all' : typeFilter}`);
+    render();
+  });
+});
+
+// ── Category filter ────────────────────────────────────────────────────────
+document.getElementById('category-filter').addEventListener('change', e => {
+  categoryFilter = e.target.value;
+  render();
+});
+
+// ── Search ─────────────────────────────────────────────────────────────────
+let searchTimeout;
+document.getElementById('search-input').addEventListener('input', e => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    searchQuery = e.target.value.trim();
+    render();
+  }, 200);
+});
+
+// ── Init ───────────────────────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>
