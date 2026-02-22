@@ -1,4 +1,4 @@
-# RVS Personal AI Agents
+# Personal AI Agents
 
 **Production-grade AI automation system** for daily intelligence briefings, cost monitoring, and personalized task automation.
 
