@@ -1400,227 +1400,368 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
     <meta name="curator-mode" content="{run_mode}">
     <meta name="curator-timestamp" content="{timestamp_str}">
     <meta name="curator-articles" content="{len(entries)}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
     <title>Morning Briefing - {date_str}</title>
     <style>
+        :root {{
+            --bg: #f5f0e8;
+            --bg-texture: #ede8df;
+            --surface: #faf7f2;
+            --surface2: #f0ebe0;
+            --border: #ddd6c8;
+            --border2: #c8bfaf;
+            --text: #2a2418;
+            --text-muted: #6b5f4e;
+            --text-dim: #9e9080;
+            --accent: #8b5e2a;
+            --accent-dim: rgba(139,94,42,0.08);
+            --accent-glow: rgba(139,94,42,0.18);
+            --shadow: rgba(42,36,24,0.08);
+        }}
+
+        *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-family: 'Source Sans 3', sans-serif;
+            background: var(--bg);
+            background-image:
+                radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
+            color: var(--text);
+            min-height: 100vh;
             font-size: 14px;
-            max-width: 1400px;
-            margin: 15px auto;
-            padding: 12px;
-            background: #f5f5f5;
-            color: #333;
+            line-height: 1.5;
         }}
-        .header {{
-            margin-bottom: 15px;
-            padding: 12px 15px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 5px;
-            text-align: center;
-        }}
-        .header h1 {{
-            margin: 0 0 6px 0;
-            font-size: 1.5em;
-            font-weight: 600;
-        }}
-        .header-meta {{
-            opacity: 0.9;
-            font-size: 0.88em;
-            margin: 0 8px;
-            display: inline-block;
-        }}
-        .nav-buttons {{
+
+        /* ── Header ── */
+        header {{
+            border-bottom: 1px solid var(--border);
+            padding: 0 32px;
             display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-bottom: 15px;
+            align-items: center;
+            justify-content: space-between;
+            height: 60px;
+            position: sticky;
+            top: 0;
+            background: rgba(245,240,232,0.94);
+            backdrop-filter: blur(12px);
+            z-index: 100;
+            box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
         }}
-        .nav-btn {{
-            padding: 6px 14px;
-            background: #667eea;
-            color: white;
+
+        .header-left {{
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+        }}
+
+        .logo {{
+            font-family: 'Playfair Display', serif;
+            font-size: 20px;
+            color: var(--accent);
+            letter-spacing: -0.02em;
             text-decoration: none;
-            border-radius: 4px;
-            font-size: 0.85em;
-            font-weight: 500;
         }}
-        .nav-btn:hover {{
-            background: #5568d3;
+
+        .logo-sub {{
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
         }}
+
+        .header-nav {{
+            display: flex;
+            gap: 4px;
+        }}
+
+        .nav-link {{
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            letter-spacing: 0.05em;
+            transition: all 0.15s;
+            border: 1px solid transparent;
+        }}
+
+        .nav-link:hover {{
+            color: var(--text);
+            background: var(--surface2);
+        }}
+
+        .nav-link.active {{
+            color: var(--accent);
+            background: var(--accent-dim);
+            border-color: rgba(139,94,42,0.2);
+        }}
+
+        /* ── Main Content ── */
+        main {{
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px;
+        }}
+
+        /* ── Table ── */
         .briefing-table {{
-            background: white;
-            border-radius: 5px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid var(--border);
+            border-radius: 12px;
             overflow: hidden;
+            box-shadow: 0 2px 12px var(--shadow);
+            background: var(--surface);
         }}
+
         table {{
             width: 100%;
             border-collapse: collapse;
         }}
+
         thead {{
-            background: #f8f9fa;
-            border-bottom: 2px solid #ddd;
+            background: var(--bg-texture);
+            border-bottom: 2px solid var(--border);
         }}
+
         th {{
-            padding: 11px 12px;
+            padding: 11px 16px;
             text-align: left;
-            font-weight: 600;
-            font-size: 0.9em;
-            color: #495057;
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--text-dim);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
             white-space: nowrap;
         }}
-        td {{
-            padding: 12px;
-            border-bottom: 1px solid #ddd;
-            vertical-align: middle;
+
+        tbody tr {{
+            border-bottom: 1px solid var(--border);
+            transition: background 0.1s;
+            background: var(--surface);
         }}
-        tbody tr:nth-child(even) {{
-            background: #fafafa;
-        }}
-        tbody tr:last-child td {{
+
+        tbody tr:last-child {{
             border-bottom: none;
         }}
+
         tbody tr:hover {{
-            background: #f0f4ff;
+            background: rgba(139,94,42,0.04);
         }}
+
+        td {{
+            padding: 14px 16px;
+            vertical-align: top;
+        }}
+
         .col-rank {{
             width: 40px;
             text-align: center;
         }}
+
         .col-category {{
             width: 110px;
         }}
+
         .col-source {{
             width: 140px;
         }}
+
         .col-title {{
-            min-width: 300px;
+            max-width: 380px;
         }}
+
         .col-time {{
             width: 80px;
         }}
+
         .col-score {{
             width: 120px;
-            text-align: right;
         }}
+
         .col-actions {{
             width: 110px;
             text-align: center;
             white-space: nowrap;
         }}
+
+        .rank-badge {{
+            display: inline-block;
+            background: var(--accent);
+            color: white;
+            padding: 3px 9px;
+            border-radius: 4px;
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            font-weight: 500;
+        }}
+
+        .cat-badge {{
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.04em;
+            font-weight: 500;
+            white-space: nowrap;
+            border: 1px solid transparent;
+        }}
+
+        .cat-geo_major, .cat-geo_minor {{
+            background: rgba(139,69,19,0.08);
+            color: var(--geo);
+            border-color: rgba(139,69,19,0.2);
+        }}
+
+        .cat-fiscal {{
+            background: rgba(26,74,122,0.08);
+            color: var(--fiscal);
+            border-color: rgba(26,74,122,0.2);
+        }}
+
+        .cat-monetary {{
+            background: rgba(74,42,122,0.08);
+            color: var(--monetary);
+            border-color: rgba(74,42,122,0.2);
+        }}
+
+        .cat-geo_other,
+        .cat-technology,
+        .cat-other,
+        .cat-unknown {{
+            background: rgba(107,95,78,0.08);
+            color: var(--other);
+            border-color: rgba(107,95,78,0.2);
+        }}
+
+        .article-title {{
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            line-height: 1.4;
+            margin-bottom: 0;
+        }}
+
+        .article-title a {{
+            color: var(--text);
+            text-decoration: none;
+        }}
+
+        .article-title a:hover {{
+            color: var(--accent);
+        }}
+
+        .source-name {{
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }}
+
+        .time-ago {{
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+        }}
+
+        .score-val {{
+            font-family: 'DM Mono', monospace;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text);
+        }}
+
+        .score-bar {{
+            height: 2px;
+            background: var(--border);
+            border-radius: 2px;
+            margin-top: 4px;
+            width: 48px;
+            overflow: hidden;
+        }}
+
+        .score-fill {{
+            height: 100%;
+            border-radius: 2px;
+            background: var(--accent);
+        }}
+
+        .score-details {{
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            color: var(--text-dim);
+            margin-top: 2px;
+        }}
+
         .action-buttons {{
             display: flex;
             gap: 6px;
             justify-content: center;
         }}
+
         .action-btn {{
             padding: 4px 8px;
-            border: none;
-            border-radius: 3px;
+            border: 1px solid transparent;
+            border-radius: 4px;
             cursor: pointer;
-            font-size: 0.85em;
+            font-size: 11px;
             font-weight: 500;
-            transition: all 0.2s;
+            transition: all 0.15s;
+            background: var(--surface2);
+            color: var(--text-muted);
         }}
+
         .btn-like {{
-            background: #d4edda;
-            color: #155724;
+            background: rgba(46,125,82,0.08);
+            color: #2e7d52;
+            border-color: rgba(46,125,82,0.2);
         }}
+
         .btn-like:hover {{
-            background: #c3e6cb;
+            background: rgba(46,125,82,0.15);
             transform: scale(1.05);
         }}
+
         .btn-dislike {{
-            background: #f8d7da;
-            color: #721c24;
+            background: rgba(180,60,60,0.08);
+            color: #b43c3c;
+            border-color: rgba(180,60,60,0.2);
         }}
+
         .btn-dislike:hover {{
-            background: #f5c6cb;
+            background: rgba(180,60,60,0.15);
             transform: scale(1.05);
         }}
+
         .btn-save {{
-            background: #cfe2ff;
-            color: #084298;
+            background: rgba(26,92,138,0.08);
+            color: #1a5c8a;
+            border-color: rgba(26,92,138,0.2);
         }}
+
         .btn-save:hover {{
-            background: #b6d4fe;
+            background: rgba(26,92,138,0.15);
             transform: scale(1.05);
-        }}
-        .rank-badge {{
-            display: inline-block;
-            background: #667eea;
-            color: white;
-            padding: 3px 9px;
-            border-radius: 3px;
-            font-weight: 600;
-            font-size: 0.9em;
-        }}
-        .category-badge {{
-            display: inline-block;
-            padding: 4px 9px;
-            border-radius: 3px;
-            font-size: 0.8em;
-            font-weight: 600;
-            white-space: nowrap;
-        }}
-        .cat-geo_major {{ background: #ffe5e5; color: #c00; }}
-        .cat-geo_other {{ background: #fff0e5; color: #c60; }}
-        .cat-monetary {{ background: #fff8e5; color: #c90; }}
-        .cat-fiscal {{ background: #f0e5ff; color: #90c; }}
-        .cat-technology {{ background: #e5f0ff; color: #05c; }}
-        .cat-other {{ background: #f0f0f0; color: #666; }}
-        .article-title {{
-            font-weight: 500;
-            font-size: 1.0em;
-            color: #333;
-            line-height: 1.4;
-        }}
-        .article-title a {{
-            color: #333;
-            text-decoration: none;
-        }}
-        .article-title a:hover {{
-            color: #667eea;
-        }}
-        .source-name {{
-            color: #666;
-            font-size: 0.95em;
-        }}
-        .time-ago {{
-            color: #999;
-            font-size: 0.95em;
-        }}
-        .score-value {{
-            font-weight: 500;
-            font-size: 1.05em;
-            color: #667eea;
-        }}
-        .score-details {{
-            color: #999;
-            font-size: 0.85em;
-            white-space: nowrap;
         }}
     </style>
 </head>
 <body data-run-mode="{run_mode}">
-    <div class="header">
-        <h1>🧠 Your Morning Briefing</h1>
-        <div>
-            <span class="header-meta">{day_str}, {date_str}</span>
-            <span class="header-meta">•</span>
-            <span class="header-meta">📊 {len(entries)} curated articles</span>
-            <span class="header-meta">•</span>
-            <span class="header-meta">Category-aware curation</span>
-        </div>
-    </div>
+<header class="curator-header">
+  <div class="header-left">
+    <a href="/" class="logo">📚 Curator</a>
+    <span class="logo-sub">Morning Briefing</span>
+  </div>
+  <nav class="header-nav">
+    <a href="/" class="nav-link active">Daily</a>
+    <a href="curator_library.html" class="nav-link">Library</a>
+    <a href="interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
+  </nav>
+</header>
 
-    <div class="nav-buttons">
-        <a href="../curator_index.html" class="nav-btn">📚 Archive</a>
-        <a href="../curator_latest.html" class="nav-btn">🔝 Latest</a>
-        <a href="../interests/2026/deep-dives/index.html" class="nav-btn">🔍 Deep Dives</a>
-    </div>
-
+<main>
     <div class="briefing-table">
         <table>
             <thead>
@@ -1641,13 +1782,17 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
     for i, entry in enumerate(entries, 1):
         rank = i
         hash_id = entry.get('hash_id', '')
-        category = entry.get('category', 'other').upper()
+        category = entry.get('category', 'other')
         source = entry.get('source', 'Unknown')
         title = entry.get('title', 'Untitled')
         url = entry.get('link', '#')
         published = entry.get('published', '')
         score = entry.get('final_score', 0)
         raw_score = entry.get('raw_score', 0)
+        
+        # Calculate score percentage for visual bar (normalize to 0-100)
+        # Assume max score of 20 for full bar
+        score_pct = min(100, max(0, (score / 20.0) * 100)) if score > 0 else 0
         
         # Calculate time ago
         time_ago = "N/A"
@@ -1672,7 +1817,7 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
         
         html += f"""                <tr data-hash-id="{hash_id}">
                     <td class="col-rank"><span class="rank-badge">{rank}</span></td>
-                    <td class="col-category"><span class="category-badge cat-{category.lower()}">{category}</span></td>
+                    <td class="col-category"><span class="cat-badge cat-{category.lower()}">{category.lower()}</span></td>
                     <td class="col-source"><span class="source-name">{source}</span></td>
                     <td class="col-title">
                         <div class="article-title">
@@ -1681,8 +1826,8 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
                     </td>
                     <td class="col-time"><span class="time-ago">{time_ago}</span></td>
                     <td class="col-score">
-                        <div class="score-value">{score:.1f}</div>
-                        <div class="score-details">{raw_score:.1f} → {score:.1f}</div>
+                        <div class="score-val">{score:.1f}</div>
+                        <div class="score-bar"><div class="score-fill" style="width:{score_pct:.0f}%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">"""
@@ -1708,6 +1853,7 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
     html += """            </tbody>
         </table>
     </div>
+</main>
     
     <script>
     function showFeedback(action, rank, hashId) {
@@ -1983,110 +2129,197 @@ def generate_index_page(archive_dir: str):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
     <title>Curator Archive</title>
     <style>
+        :root {
+            --bg: #f5f0e8;
+            --bg-texture: #ede8df;
+            --surface: #faf7f2;
+            --surface2: #f0ebe0;
+            --border: #ddd6c8;
+            --border2: #c8bfaf;
+            --text: #2a2418;
+            --text-muted: #6b5f4e;
+            --text-dim: #9e9080;
+            --accent: #8b5e2a;
+            --accent-dim: rgba(139,94,42,0.08);
+            --accent-glow: rgba(139,94,42,0.18);
+            --shadow: rgba(42,36,24,0.08);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-family: 'Source Sans 3', sans-serif;
+            background: var(--bg);
+            background-image:
+                radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
+            color: var(--text);
+            min-height: 100vh;
             font-size: 14px;
-            max-width: 1400px;
-            margin: 15px auto;
-            padding: 12px;
-            background: #f5f5f5;
-            color: #333;
+            line-height: 1.5;
         }
-        .header {
-            margin-bottom: 15px;
-            padding: 12px 15px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 5px;
-            text-align: center;
-        }
-        .header h1 {
-            margin: 0 0 6px 0;
-            font-size: 1.5em;
-            font-weight: 600;
-        }
-        .header-meta {
-            opacity: 0.9;
-            font-size: 0.88em;
-        }
-        .nav-buttons {
+
+        /* ── Header ── */
+        header {
+            border-bottom: 1px solid var(--border);
+            padding: 0 32px;
             display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-bottom: 15px;
+            align-items: center;
+            justify-content: space-between;
+            height: 60px;
+            position: sticky;
+            top: 0;
+            background: rgba(245,240,232,0.94);
+            backdrop-filter: blur(12px);
+            z-index: 100;
+            box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
         }
-        .nav-btn {
-            padding: 6px 14px;
-            background: #667eea;
-            color: white;
+
+        .header-left {
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+        }
+
+        .logo {
+            font-family: 'Playfair Display', serif;
+            font-size: 20px;
+            color: var(--accent);
+            letter-spacing: -0.02em;
             text-decoration: none;
-            border-radius: 4px;
-            font-size: 0.85em;
-            font-weight: 500;
         }
-        .nav-btn:hover {
-            background: #5568d3;
+
+        .logo-sub {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
         }
+
+        .header-nav {
+            display: flex;
+            gap: 4px;
+        }
+
+        .nav-link {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            letter-spacing: 0.05em;
+            transition: all 0.15s;
+            border: 1px solid transparent;
+        }
+
+        .nav-link:hover {
+            color: var(--text);
+            background: var(--surface2);
+        }
+
+        .nav-link.active {
+            color: var(--accent);
+            background: var(--accent-dim);
+            border-color: rgba(139,94,42,0.2);
+        }
+
+        /* ── Main ── */
+        main {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px;
+        }
+
         .archive-table {
-            background: white;
-            border-radius: 5px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid var(--border);
+            border-radius: 12px;
             overflow: hidden;
+            box-shadow: 0 2px 12px var(--shadow);
+            background: var(--surface);
         }
+
         table {
             width: 100%;
             border-collapse: collapse;
         }
+
         thead {
-            background: #f8f9fa;
-            border-bottom: 2px solid #ddd;
+            background: var(--bg-texture);
+            border-bottom: 2px solid var(--border);
         }
+
         th {
-            padding: 11px 12px;
+            padding: 11px 16px;
             text-align: left;
-            font-weight: 600;
-            font-size: 0.9em;
-            color: #495057;
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--text-dim);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
         }
-        td {
-            padding: 12px;
-            border-bottom: 1px solid #ddd;
-            vertical-align: middle;
+
+        tbody tr {
+            border-bottom: 1px solid var(--border);
+            transition: background 0.1s;
+            background: var(--surface);
         }
-        tbody tr:nth-child(even) {
-            background: #fafafa;
-        }
-        tbody tr:last-child td {
+
+        tbody tr:last-child {
             border-bottom: none;
         }
+
         tbody tr:hover {
-            background: #f0f4ff;
+            background: rgba(139,94,42,0.04);
         }
+
+        td {
+            padding: 14px 16px;
+            vertical-align: middle;
+        }
+
         .date-link {
-            font-weight: 500;
-            color: #667eea;
+            font-weight: 600;
+            color: var(--accent);
             text-decoration: none;
-            font-size: 1.05em;
+            font-size: 13px;
         }
+
         .date-link:hover {
+            text-decoration: underline;
+        }
+
+        .nav-btn {
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 13px;
+        }
+
+        .nav-btn:hover {
             text-decoration: underline;
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>📚 Curator Archive</h1>
-        <div><span class="header-meta">Daily Intelligence Briefings</span></div>
-    </div>
+<header>
+  <div class="header-left">
+    <a href="/" class="logo">📚 Curator</a>
+    <span class="logo-sub">Archive</span>
+  </div>
+  <nav class="header-nav">
+    <a href="/" class="nav-link">Daily</a>
+    <a href="curator_library.html" class="nav-link">Library</a>
+    <a href="interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
+  </nav>
+</header>
 
-    <div class="nav-buttons">
-        <a href="curator_briefing.html" class="nav-btn">📰 Today</a>
-        <a href="curator_index.html" class="nav-btn">📚 Archive</a>
-        <a href="interests/2026/deep-dives/index.html" class="nav-btn">🔍 Deep Dives</a>
-    </div>
-
+<main>
     <div class="archive-table">
         <table>
             <thead>
@@ -2152,6 +2385,7 @@ def generate_index_page(archive_dir: str):
     html += """            </tbody>
         </table>
     </div>
+</main>
 </body>
 </html>
 """

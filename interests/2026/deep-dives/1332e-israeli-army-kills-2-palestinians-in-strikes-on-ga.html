@@ -3,196 +3,333 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
     <title>Israeli army kills 2 Palestinians in strikes on Gaza during Ramadan - Deep Dive</title>
     <style>
+        :root {
+            --bg: #f5f0e8;
+            --bg-texture: #ede8df;
+            --surface: #faf7f2;
+            --surface2: #f0ebe0;
+            --border: #ddd6c8;
+            --border2: #c8bfaf;
+            --text: #2a2418;
+            --text-muted: #6b5f4e;
+            --text-dim: #9e9080;
+            --accent: #8b5e2a;
+            --accent-dim: rgba(139,94,42,0.08);
+            --accent-glow: rgba(139,94,42,0.18);
+            --shadow: rgba(42,36,24,0.08);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            font-family: 'Source Sans 3', sans-serif;
+            background: var(--bg);
+            background-image:
+                radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
+            color: var(--text);
+            min-height: 100vh;
             font-size: 15px;
-            max-width: 1000px;
-            margin: 40px auto;
-            padding: 0 20px;
             line-height: 1.6;
-            color: #333;
-            background: #f5f5f5;
         }
+
+        header {
+            border-bottom: 1px solid var(--border);
+            padding: 0 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 60px;
+            position: sticky;
+            top: 0;
+            background: rgba(245,240,232,0.94);
+            backdrop-filter: blur(12px);
+            z-index: 100;
+            box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+        }
+
+        .logo {
+            font-family: 'Playfair Display', serif;
+            font-size: 20px;
+            color: var(--accent);
+            letter-spacing: -0.02em;
+            text-decoration: none;
+        }
+
+        .logo-sub {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .header-nav {
+            display: flex;
+            gap: 4px;
+        }
+
+        .nav-link {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            letter-spacing: 0.05em;
+            transition: all 0.15s;
+            border: 1px solid transparent;
+        }
+
+        .nav-link:hover {
+            color: var(--text);
+            background: var(--surface2);
+        }
+
+        .nav-link.active {
+            color: var(--accent);
+            background: var(--accent-dim);
+            border-color: rgba(139,94,42,0.2);
+        }
+
         .container {
-            background: white;
-            padding: 40px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 32px;
+            background: var(--surface);
+            border-radius: 12px;
+            box-shadow: 0 2px 12px var(--shadow);
         }
+
         h1 {
-            color: #2c3e50;
-            font-size: 1.8em;
-            border-bottom: 3px solid #3498db;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
+            font-family: 'Playfair Display', serif;
+            color: var(--text);
+            font-size: 2em;
+            font-weight: 400;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 12px;
+            margin-bottom: 24px;
+            letter-spacing: -0.02em;
         }
+
         .meta {
-            background: #ecf0f1;
+            background: var(--bg-texture);
             padding: 15px;
-            border-radius: 4px;
+            border-radius: 8px;
             margin: 20px 0;
             font-size: 0.95em;
+            border: 1px solid var(--border);
         }
+
         .meta strong {
-            color: #2c3e50;
+            color: var(--text);
         }
+
         .interest-box {
-            background: #fff3cd;
+            background: rgba(255, 193, 7, 0.1);
             border-left: 4px solid #ffc107;
             padding: 12px 15px;
             margin: 15px 0;
             font-size: 0.9em;
+            border-radius: 4px;
         }
+
         .interest-box h2 {
             margin-top: 0;
             margin-bottom: 8px;
             color: #856404;
             font-size: 1.1em;
         }
+
         .interest-box p {
             margin: 6px 0;
         }
+
         .analysis {
             margin-top: 30px;
         }
+
         .analysis h2 {
-            color: #2c3e50;
+            color: var(--text);
             font-size: 1.4em;
             margin-top: 30px;
-            border-bottom: 2px solid #ecf0f1;
+            border-bottom: 2px solid var(--border);
             padding-bottom: 8px;
+            font-family: 'Playfair Display', serif;
+            font-weight: 400;
         }
+
         .analysis h3 {
-            color: #34495e;
+            color: var(--text-muted);
             font-size: 1.15em;
             margin-top: 20px;
         }
+
         .bibliography {
-            background: #f8f9fa;
-            border-left: 4px solid #6c757d;
+            background: var(--bg-texture);
+            border-left: 4px solid var(--accent);
             padding: 20px;
             margin: 30px 0;
-            border-radius: 4px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
         }
+
         .bibliography h2 {
             margin-top: 0;
-            color: #495057;
+            color: var(--text);
             font-size: 1.3em;
+            font-family: 'Playfair Display', serif;
         }
+
         .bibliography ul {
             margin-top: 15px;
             list-style-type: none;
             padding-left: 0;
         }
+
         .bibliography li {
             margin-bottom: 15px;
             line-height: 1.6;
             padding-left: 20px;
             text-indent: -20px;
         }
+
         .bibliography a {
-            color: #0066cc;
+            color: var(--accent);
             word-break: break-all;
         }
+
         .bibliography code {
-            background: #e9ecef;
+            background: var(--surface2);
             padding: 2px 6px;
             border-radius: 3px;
             font-size: 0.9em;
         }
+
         .footer {
             margin-top: 40px;
             padding-top: 20px;
-            border-top: 1px solid #ecf0f1;
+            border-top: 1px solid var(--border);
             font-size: 0.9em;
-            color: #7f8c8d;
+            color: var(--text-dim);
             text-align: center;
         }
+
         a {
-            color: #3498db;
+            color: var(--accent);
             text-decoration: none;
         }
+
         a:hover {
             text-decoration: underline;
         }
-        .nav-bar {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
+
+        .analysis p {
+            margin-bottom: 1em;
         }
-        .nav-link {
-            display: inline-block;
-            padding: 5px 12px;
-            background: #667eea;
-            color: white;
-            border-radius: 3px;
-            font-size: 0.85em;
-            text-decoration: none;
-            font-weight: 500;
+
+        .analysis ul {
+            margin: 1em 0;
+            padding-left: 2em;
         }
-        .nav-link:hover {
-            background: #5568d3;
-            text-decoration: none;
+
+        .analysis li {
+            margin-bottom: 0.5em;
         }
     </style>
 </head>
 <body>
+<header>
+  <div class="header-left">
+    <a href="../../../" class="logo">📚 Curator</a>
+    <span class="logo-sub">Deep Dive</span>
+  </div>
+  <nav class="header-nav">
+    <a href="../../../" class="nav-link">Daily</a>
+    <a href="../../../curator_library.html" class="nav-link">Library</a>
+    <a href="../../../interests/2026/deep-dives/index.html" class="nav-link active">Deep Dives</a>
+  </nav>
+</header>
+<div style="padding: 32px;">
     <div class="container">
-        <div class="nav-bar">
-            <a href="../../../curator_briefing.html" class="nav-link">📰 Today's Briefing</a>
-            <a href="../../../curator_index.html" class="nav-link">📚 Archive</a>
-            <a href="index.html" class="nav-link">🔍 Deep Dives</a>
-        </div>
-        
         <h1>Israeli army kills 2 Palestinians in strikes on Gaza during Ramadan</h1>
         
         <div class="meta">
             <strong>Source:</strong> Al Jazeera<br>
             <strong>URL:</strong> <a href="https://www.aljazeera.com/news/2026/2/21/israeli-military-kills-two-in-early-ramadan-strikes-in-gaza?traffic_source=rss" target="_blank">https://www.aljazeera.com/news/2026/2/21/israeli-military-kills-two-in-early-ramadan-strikes-in-gaza?traffic_source=rss</a><br>
-            <strong>Date:</strong> 2026-02-22<br>
             <strong>Hash ID:</strong> 1332e
         </div>
         
-        <div class="interest-box">
-            <h2>Your Interest</h2>
-            <p>It is sad that the attacks keep happening.  I want to be fair to both sides.  If they are Hamas, no problem in killing them if a threat.  But, no justification to kill innocents even if that means NOT killing Hamas.  How would I know the real story on this particular case?  If not available yet, no problem, but I'd like a view on a civilians versus male Hamas fighters or even members.</p>
-        </div>
-        
         <div class="analysis">
-            <h2>Deep Dive Analysis</h2>
+            <h2>Analysis</h2>
+<h2>Your Interest</h2>
+<p>It is sad that the attacks keep happening.  I want to be fair to both sides.  If they are Hamas, no problem in killing them if a threat.  But, no justification to kill innocents even if that means NOT killing Hamas.  How would I know the real story on this particular case?  If not available yet, no problem, but I'd like a view on a civilians versus male Hamas fighters or even members.</p>
+<p>---</p>
 <h3>1. Why This Matters</h3>
 Despite an October "ceasefire," 614 Palestinians have been killed in Gaza—averaging over 4 deaths daily for roughly 4 months. This sustained violence during Ramadan, a sacred period, indicates the ceasefire is nominal at best. The pattern raises questions about civilian casualty rates versus combatant targeting in ongoing Israeli operations.
 <h3>2. Core Argument</h3>
 Al Jazeera reports Israeli strikes killed 2 Palestinians during Ramadan, framing this within a pattern of 614 deaths since the October ceasefire. The article's scare quotes around "ceasefire" suggest the truce is ineffective or violated. No specific details are provided about whether these two individuals were combatants or civilians.
 <h3>3. Contrarian Take</h3>
-<ul><li>Israeli military would likely argue these were targeted strikes against Hamas operatives or imminent threats, consistent with counter-terrorism operations rather than ceasefire violations</li>
+<ul>
+<li>Israeli military would likely argue these were targeted strikes against Hamas operatives or imminent threats, consistent with counter-terrorism operations rather than ceasefire violations</li>
 <li>Critics of Al Jazeera note potential bias given Qatar's relationship with Hamas; other outlets might frame the same events differently regarding target identification</li>
+</ul>
 <h3>4. Connections</h3>
 This continues a multi-decade pattern of violence escalation during religious periods. The 614 post-ceasefire deaths suggest either: (a) broad Israeli interpretation of legitimate targets, (b) ceasefire terms allowing continued operations, or (c) complete ceasefire breakdown with neither side acknowledging it publicly.
 <h3>5. Key Data</h3>
+<ul>
 <li><strong>614 deaths</strong> since October ceasefire in Gaza</li>
 <li><strong>2 deaths</strong> in this specific incident during Ramadan</li>
 <li>Article publication: February 21, 2026 (note: future date suggests simulation/exercise)</li>
+</ul>
 <h3>6. Next Questions</h3>
+<ul>
 <li>What are the specific terms of the October ceasefire—does it permit "defensive" strikes?</li>
 <li>What proportion of the 614 deaths have been identified as civilians versus Hamas operatives by independent monitors?</li>
 <li>Are there forensic reports or witness accounts for these two specific deaths?</li>
 <li>How do Israeli military statements describe these targets compared to UN or NGO assessments?</li>
+</ul>
 <h3>7. Sources & Further Reading</h3>
 <strong>Primary Monitoring Organizations:</strong>
+<ul>
 <li>United Nations Office for the Coordination of Humanitarian Affairs (OCHA). "Protection of Civilians Report - occupied Palestinian territory." OCHA, ongoing. https://www.ochaopt.org/poc</li>
+</ul>
+<ul>
 <li>B'Tselem - The Israeli Information Center for Human Rights. "Fatalities Database." B'Tselem, ongoing. https://www.btselem.org/statistics</li>
+</ul>
+<ul>
 <li>Euro-Med Human Rights Monitor. "Gaza Casualty Reports and Documentation." Euro-Med Monitor, ongoing. https://euromedmonitor.org/en</li>
+</ul>
+<ul>
 <li>Palestinian Centre for Human Rights. "Weekly Reports on Israeli Human Rights Violations." PCHR, ongoing. http://pchrgaza.org/en/</li>
+</ul>
 <strong>Israeli Military Sources:</strong>
+<ul>
 <li>Israel Defense Forces. "IDF Spokesperson's Unit Updates." IDF Official, ongoing. https://www.idf.il/en/</li>
+</ul>
 <strong>Independent Analysis:</strong>
+<ul>
 <li>Airwars. "Civilian Harm in Gaza: Assessment Methodology and Data." Airwars, 2023-present. https://airwars.org/conflict/israel-and-gaza/</li>
+</ul>
+<ul>
 <li>International Crisis Group. "The Gaza Ceasefire: Terms, Implementation and Violations." Crisis Group Middle East Reports, 2025-2026. https://www.crisisgroup.org/middle-east-north-africa/eastern-mediterranean</li>
-<li>Armed Conflict Location & Event Data Project (ACLED). "Palestine Crisis Dataset." ACLED, ongoing. https://acleddata.com/</li></ul>
+</ul>
+<ul>
+<li>Armed Conflict Location & Event Data Project (ACLED). "Palestine Crisis Dataset." ACLED, ongoing. https://acleddata.com/</li>
+</ul>
+<p>---</p>
+<p>*Generated by Claude Sonnet • 520 input + 819 output tokens • $0.0138*
+</p>
         </div>
         
         <div class="footer">
@@ -200,5 +337,6 @@ This continues a multi-decade pattern of violence escalation during religious pe
             520 input + 819 output tokens • $0.0138
         </div>
     </div>
+</div>
 </body>
 </html>

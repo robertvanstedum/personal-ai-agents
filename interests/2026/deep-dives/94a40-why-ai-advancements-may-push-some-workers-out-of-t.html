@@ -3,191 +3,326 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
     <title>Why AI Advancements May Push Some Workers Out of the Labor Force - Deep Dive</title>
     <style>
+        :root {
+            --bg: #f5f0e8;
+            --bg-texture: #ede8df;
+            --surface: #faf7f2;
+            --surface2: #f0ebe0;
+            --border: #ddd6c8;
+            --border2: #c8bfaf;
+            --text: #2a2418;
+            --text-muted: #6b5f4e;
+            --text-dim: #9e9080;
+            --accent: #8b5e2a;
+            --accent-dim: rgba(139,94,42,0.08);
+            --accent-glow: rgba(139,94,42,0.18);
+            --shadow: rgba(42,36,24,0.08);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            font-family: 'Source Sans 3', sans-serif;
+            background: var(--bg);
+            background-image:
+                radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
+            color: var(--text);
+            min-height: 100vh;
             font-size: 15px;
-            max-width: 1000px;
-            margin: 40px auto;
-            padding: 0 20px;
             line-height: 1.6;
-            color: #333;
-            background: #f5f5f5;
         }
+
+        header {
+            border-bottom: 1px solid var(--border);
+            padding: 0 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 60px;
+            position: sticky;
+            top: 0;
+            background: rgba(245,240,232,0.94);
+            backdrop-filter: blur(12px);
+            z-index: 100;
+            box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+        }
+
+        .logo {
+            font-family: 'Playfair Display', serif;
+            font-size: 20px;
+            color: var(--accent);
+            letter-spacing: -0.02em;
+            text-decoration: none;
+        }
+
+        .logo-sub {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .header-nav {
+            display: flex;
+            gap: 4px;
+        }
+
+        .nav-link {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            letter-spacing: 0.05em;
+            transition: all 0.15s;
+            border: 1px solid transparent;
+        }
+
+        .nav-link:hover {
+            color: var(--text);
+            background: var(--surface2);
+        }
+
+        .nav-link.active {
+            color: var(--accent);
+            background: var(--accent-dim);
+            border-color: rgba(139,94,42,0.2);
+        }
+
         .container {
-            background: white;
-            padding: 40px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 32px;
+            background: var(--surface);
+            border-radius: 12px;
+            box-shadow: 0 2px 12px var(--shadow);
         }
+
         h1 {
-            color: #2c3e50;
-            font-size: 1.8em;
-            border-bottom: 3px solid #3498db;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
+            font-family: 'Playfair Display', serif;
+            color: var(--text);
+            font-size: 2em;
+            font-weight: 400;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 12px;
+            margin-bottom: 24px;
+            letter-spacing: -0.02em;
         }
+
         .meta {
-            background: #ecf0f1;
+            background: var(--bg-texture);
             padding: 15px;
-            border-radius: 4px;
+            border-radius: 8px;
             margin: 20px 0;
             font-size: 0.95em;
+            border: 1px solid var(--border);
         }
+
         .meta strong {
-            color: #2c3e50;
+            color: var(--text);
         }
+
         .interest-box {
-            background: #fff3cd;
+            background: rgba(255, 193, 7, 0.1);
             border-left: 4px solid #ffc107;
             padding: 12px 15px;
             margin: 15px 0;
             font-size: 0.9em;
+            border-radius: 4px;
         }
+
         .interest-box h2 {
             margin-top: 0;
             margin-bottom: 8px;
             color: #856404;
             font-size: 1.1em;
         }
+
         .interest-box p {
             margin: 6px 0;
         }
+
         .analysis {
             margin-top: 30px;
         }
+
         .analysis h2 {
-            color: #2c3e50;
+            color: var(--text);
             font-size: 1.4em;
             margin-top: 30px;
-            border-bottom: 2px solid #ecf0f1;
+            border-bottom: 2px solid var(--border);
             padding-bottom: 8px;
+            font-family: 'Playfair Display', serif;
+            font-weight: 400;
         }
+
         .analysis h3 {
-            color: #34495e;
+            color: var(--text-muted);
             font-size: 1.15em;
             margin-top: 20px;
         }
+
         .bibliography {
-            background: #f8f9fa;
-            border-left: 4px solid #6c757d;
+            background: var(--bg-texture);
+            border-left: 4px solid var(--accent);
             padding: 20px;
             margin: 30px 0;
-            border-radius: 4px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
         }
+
         .bibliography h2 {
             margin-top: 0;
-            color: #495057;
+            color: var(--text);
             font-size: 1.3em;
+            font-family: 'Playfair Display', serif;
         }
+
         .bibliography ul {
             margin-top: 15px;
             list-style-type: none;
             padding-left: 0;
         }
+
         .bibliography li {
             margin-bottom: 15px;
             line-height: 1.6;
             padding-left: 20px;
             text-indent: -20px;
         }
+
         .bibliography a {
-            color: #0066cc;
+            color: var(--accent);
             word-break: break-all;
         }
+
         .bibliography code {
-            background: #e9ecef;
+            background: var(--surface2);
             padding: 2px 6px;
             border-radius: 3px;
             font-size: 0.9em;
         }
+
         .footer {
             margin-top: 40px;
             padding-top: 20px;
-            border-top: 1px solid #ecf0f1;
+            border-top: 1px solid var(--border);
             font-size: 0.9em;
-            color: #7f8c8d;
+            color: var(--text-dim);
             text-align: center;
         }
+
         a {
-            color: #3498db;
+            color: var(--accent);
             text-decoration: none;
         }
+
         a:hover {
             text-decoration: underline;
         }
-        .nav-bar {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
+
+        .analysis p {
+            margin-bottom: 1em;
         }
-        .nav-link {
-            display: inline-block;
-            padding: 5px 12px;
-            background: #667eea;
-            color: white;
-            border-radius: 3px;
-            font-size: 0.85em;
-            text-decoration: none;
-            font-weight: 500;
+
+        .analysis ul {
+            margin: 1em 0;
+            padding-left: 2em;
         }
-        .nav-link:hover {
-            background: #5568d3;
-            text-decoration: none;
+
+        .analysis li {
+            margin-bottom: 0.5em;
         }
     </style>
 </head>
 <body>
+<header>
+  <div class="header-left">
+    <a href="../../../" class="logo">📚 Curator</a>
+    <span class="logo-sub">Deep Dive</span>
+  </div>
+  <nav class="header-nav">
+    <a href="../../../" class="nav-link">Daily</a>
+    <a href="../../../curator_library.html" class="nav-link">Library</a>
+    <a href="../../../interests/2026/deep-dives/index.html" class="nav-link active">Deep Dives</a>
+  </nav>
+</header>
+<div style="padding: 32px;">
     <div class="container">
-        <div class="nav-bar">
-            <a href="../../../curator_briefing.html" class="nav-link">📰 Today's Briefing</a>
-            <a href="../../../curator_index.html" class="nav-link">📚 Archive</a>
-            <a href="index.html" class="nav-link">🔍 Deep Dives</a>
-        </div>
-        
         <h1>Why AI Advancements May Push Some Workers Out of the Labor Force</h1>
         
         <div class="meta">
             <strong>Source:</strong> Fed On The Economy<br>
             <strong>URL:</strong> <a href="https://www.stlouisfed.org/on-the-economy/2026/jan/why-ai-advancements-may-push-some-worker-out-labor-force" target="_blank">https://www.stlouisfed.org/on-the-economy/2026/jan/why-ai-advancements-may-push-some-worker-out-labor-force</a><br>
-            <strong>Date:</strong> 2026-02-21<br>
             <strong>Hash ID:</strong> 94a40
         </div>
         
-        <div class="interest-box">
-            <h2>Your Interest</h2>
-            <p>I think this is really econ 101 and overlooks the political near term impact.  The way a company works in the real world is the AI will allow the company to do more with less.  The "AI Effective" will stay.  However, that is not how layoffs work.  They will layoff a lot of smart "AI effective" employees.  This is a sickle harvest, not picking one by one.  Those workers will struggle to find work because all existing companies need less workers.  The lag from new companies needing new workers will not avoid years of pain.</p>
-        </div>
-        
         <div class="analysis">
-            <h2>Deep Dive Analysis</h2>
+            <h2>Analysis</h2>
+<h2>Your Interest</h2>
+<p>I think this is really econ 101 and overlooks the political near term impact.  The way a company works in the real world is the AI will allow the company to do more with less.  The "AI Effective" will stay.  However, that is not how layoffs work.  They will layoff a lot of smart "AI effective" employees.  This is a sickle harvest, not picking one by one.  Those workers will struggle to find work because all existing companies need less workers.  The lag from new companies needing new workers will not avoid years of pain.</p>
+<p>---</p>
 <h2>1. Why This Matters</h2>
 The St. Louis Fed is signaling that AI displacement may force workers to permanently exit employment rather than transition to new roles—a fundamental shift from historical automation patterns. This validates concerns about structural unemployment rather than just temporary displacement, with significant implications for social safety nets, labor force participation rates, and inequality.
 <h2>2. Core Argument</h2>
 The Fed's model suggests AI improvements create a "skill obsolescence" effect where certain labor types become economically unviable, not just temporarily displaced. Unlike previous automation waves, AI's ability to perform cognitive tasks may eliminate entire occupational categories without creating equivalent substitute roles at the same skill levels.
 <h2>3. Contrarian Take</h2>
-<ul><li><strong>Historical precedent</strong>: Every major technological shift (electricity, computers, internet) initially appeared job-destroying but ultimately expanded employment through productivity gains and new sectors</li>
+<ul>
+<li><strong>Historical precedent</strong>: Every major technological shift (electricity, computers, internet) initially appeared job-destroying but ultimately expanded employment through productivity gains and new sectors</li>
 <li><strong>Political Economy blind spot</strong>: The model assumes efficient market clearing; it ignores that employment outcomes depend heavily on policy interventions, retraining programs, and redistribution mechanisms that can prevent labor force exit</li>
+</ul>
 <h2>4. Connections</h2>
 Ties to declining prime-age labor force participation since 2000, "deaths of despair" research in deindustrialized communities, and emerging debates about Universal Basic Income as automation accelerates. Parallels the "China shock" literature showing trade displacement effects persisted far longer than models predicted.
 <h2>5. Key Data</h2>
 The article itself is conceptual/theoretical—no specific statistics provided. The Fed is using "a simple economic model" for long-run projections, suggesting qualitative framework rather than empirical analysis. Notable that a Federal Reserve bank is publicly discussing permanent labor force exit scenarios.
 <h2>6. Next Questions</h2>
+<ul>
 <li>What is the historical lag time between automation waves and new job creation across previous technological transitions?</li>
 <li>Which specific occupational categories does BLS data show declining versus growing in AI-exposed sectors 2020-2025?</li>
 <li>How do mass layoff events (WARN notice data) correlate with firm-level AI adoption rates?</li>
 <li>What percentage of displaced workers in previous automation waves (1980s manufacturing) permanently exited vs. found comparable work?</li>
+</ul>
 <h2>7. Sources & Further Reading</h2>
+<ul>
 <li>Acemoglu, Daron and Pascual Restrepo. "Automation and New Tasks: How Technology Displaces and Reinstates Labor." Journal of Economic Perspectives 33(2), 2019. https://doi.org/10.1257/jep.33.2.3</li>
+</ul>
+<ul>
 <li>Autor, David H., David Dorn, and Gordon H. Hanson. "The China Shock: Learning from Labor-Market Adjustment to Large Changes in Trade." Annual Review of Economics 8, 2016. https://doi.org/10.1146/annurev-economics-080315-015041</li>
+</ul>
+<ul>
 <li>Autor, David, Caroline Chin, Anna Salomons, and Bryan Seegmiller. "New Frontiers: The Origins and Content of New Work, 1940-2018." NBER Working Paper 30389, 2022. https://www.nber.org/papers/w30389</li>
+</ul>
+<ul>
 <li>Eloundou, Tyna, et al. "GPTs are GPTs: An Early Look at the Labor Market Impact Potential of Large Language Models." OpenAI/University of Pennsylvania, 2023. https://arxiv.org/abs/2303.10130</li>
+</ul>
+<ul>
 <li>Case, Anne and Angus Deaton. Deaths of Despair and the Future of Capitalism. Princeton University Press, 2020.</li>
+</ul>
+<ul>
 <li>Bureau of Labor Statistics. "Mass Layoff Statistics (WARN Notices)" and "Employment Projections by Occupation." https://www.bls.gov/mls/ and https://www.bls.gov/emp/</li>
+</ul>
+<ul>
 <li>Brynjolfsson, Erik, Danielle Li, and Lindsey Raymond. "Generative AI at Work." NBER Working Paper 31161, 2023. https://www.nber.org/papers/w31161</li>
-<li>Council of Economic Advisers. "The Impact of Artificial Intelligence on the Future of Workforces in the European Union and the United States." White House Report, 2022. https://www.whitehouse.gov/cea/</li></ul>
+</ul>
+<ul>
+<li>Council of Economic Advisers. "The Impact of Artificial Intelligence on the Future of Workforces in the European Union and the United States." White House Report, 2022. https://www.whitehouse.gov/cea/</li>
+</ul>
+<p>---</p>
+<p>*Generated by Claude Sonnet • 558 input + 948 output tokens • $0.0159*
+</p>
         </div>
         
         <div class="footer">
@@ -195,5 +330,6 @@ The article itself is conceptual/theoretical—no specific statistics provided. 
             558 input + 948 output tokens • $0.0159
         </div>
     </div>
+</div>
 </body>
 </html>

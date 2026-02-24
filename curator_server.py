@@ -20,6 +20,15 @@ BASE_DIR = Path(__file__).parent
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
+# Shared navigation HTML
+SHARED_NAV_HTML = """
+  <nav class="header-nav">
+    <a href="/" class="nav-link {briefing_active}">Daily</a>
+    <a href="/curator_library.html" class="nav-link {library_active}">Library</a>
+    <a href="/interests/2026/deep-dives/index.html" class="nav-link {deepdives_active}">Deep Dives</a>
+  </nav>
+"""
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Legacy feedback endpoints (converted from old HTTP server)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -182,6 +191,11 @@ def api_library():
     })
 
 
+@app.route('/')
+def index():
+    """Root URL redirects to latest briefing"""
+    return send_from_directory(BASE_DIR, 'curator_latest.html')
+
 @app.route('/curator_library.html')
 def library_page():
     return send_from_directory(BASE_DIR, 'curator_library.html')
@@ -203,6 +217,12 @@ def serve_interests(filepath):
     """Serve deep dive markdown and HTML files from interests directory"""
     interests_dir = BASE_DIR / 'interests'
     return send_from_directory(interests_dir, filepath)
+
+@app.route('/curator_archive/<path:filename>')
+def serve_archive(filename):
+    """Serve archived briefing HTML files"""
+    archive_dir = BASE_DIR / 'curator_archive'
+    return send_from_directory(archive_dir, filename)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

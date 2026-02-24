@@ -382,7 +382,7 @@ def regenerate_deep_dives_index():
                     <td class="dive-title">
                         <a href="{dive['html_file']}">{dive['title']}</a>
                     </td>
-                    <td><a href="{dive['html_file']}" class="nav-btn">Read Analysis →</a></td>
+                    <td><a href="{dive['html_file']}" class="action-btn">Read Analysis →</a></td>
                 </tr>
 '''
     
@@ -398,32 +398,259 @@ def regenerate_deep_dives_index():
 <html>
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
     <title>Deep Dive Archive</title>
     <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 1400px; margin: 15px auto; padding: 12px; background: #f5f5f5; }}
-        .header {{ margin-bottom: 15px; padding: 12px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-radius: 5px; text-align: center; }}
-        .nav-buttons {{ display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }}
-        .nav-btn {{ padding: 8px 16px; background: #667eea; color: white; text-decoration: none; border-radius: 4px; }}
-        .nav-btn:hover {{ background: #5568d3; }}
-        table {{ width: 100%; border-collapse: collapse; background: white; }}
-        th {{ padding: 11px 12px; text-align: left; background: #f8f9fa; border-bottom: 2px solid #ddd; }}
-        td {{ padding: 12px; border-bottom: 1px solid #ddd; }}
-        tr:hover {{ background: #f0f4ff; }}
-        .dive-title a {{ color: #333; text-decoration: none; }}
-        .dive-title a:hover {{ color: #667eea; }}
-        .date-badge {{ color: #888; font-size: 0.9em; }}
-        .source-name {{ color: #666; }}
+        :root {{
+            --bg: #f5f0e8;
+            --bg-texture: #ede8df;
+            --surface: #faf7f2;
+            --surface2: #f0ebe0;
+            --border: #ddd6c8;
+            --border2: #c8bfaf;
+            --text: #2a2418;
+            --text-muted: #6b5f4e;
+            --text-dim: #9e9080;
+            --accent: #8b5e2a;
+            --accent-dim: rgba(139,94,42,0.08);
+            --accent-glow: rgba(139,94,42,0.18);
+            --shadow: rgba(42,36,24,0.08);
+        }}
+
+        *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+
+        body {{
+            font-family: 'Source Sans 3', sans-serif;
+            background: var(--bg);
+            background-image:
+                radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
+            color: var(--text);
+            min-height: 100vh;
+            font-size: 14px;
+            line-height: 1.5;
+        }}
+
+        header {{
+            border-bottom: 1px solid var(--border);
+            padding: 0 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 60px;
+            position: sticky;
+            top: 0;
+            background: rgba(245,240,232,0.94);
+            backdrop-filter: blur(12px);
+            z-index: 100;
+            box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
+        }}
+
+        .header-left {{
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+        }}
+
+        .logo {{
+            font-family: 'Playfair Display', serif;
+            font-size: 20px;
+            color: var(--accent);
+            letter-spacing: -0.02em;
+            text-decoration: none;
+        }}
+
+        .logo-sub {{
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }}
+
+        .header-nav {{
+            display: flex;
+            gap: 4px;
+        }}
+
+        .nav-link {{
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            letter-spacing: 0.05em;
+            transition: all 0.15s;
+            border: 1px solid transparent;
+        }}
+
+        .nav-link:hover {{
+            color: var(--text);
+            background: var(--surface2);
+        }}
+
+        .nav-link.active {{
+            color: var(--accent);
+            background: var(--accent-dim);
+            border-color: rgba(139,94,42,0.2);
+        }}
+
+        main {{
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px;
+        }}
+
+        .page-header {{
+            margin-bottom: 28px;
+        }}
+
+        .page-title {{
+            font-family: 'Playfair Display', serif;
+            font-size: 32px;
+            font-weight: 400;
+            color: var(--text);
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+            margin-bottom: 6px;
+        }}
+
+        .page-meta {{
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            letter-spacing: 0.04em;
+        }}
+
+        .table-wrap {{
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px var(--shadow);
+            background: var(--surface);
+        }}
+
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+        }}
+
+        thead {{
+            background: var(--bg-texture);
+            border-bottom: 2px solid var(--border);
+        }}
+
+        th {{
+            padding: 11px 16px;
+            text-align: left;
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--text-dim);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }}
+
+        tbody tr {{
+            border-bottom: 1px solid var(--border);
+            transition: background 0.1s;
+            background: var(--surface);
+        }}
+
+        tbody tr:last-child {{
+            border-bottom: none;
+        }}
+
+        tbody tr:hover {{
+            background: rgba(139,94,42,0.04);
+        }}
+
+        td {{
+            padding: 14px 16px;
+            vertical-align: top;
+        }}
+
+        .dive-title a {{
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            text-decoration: none;
+            line-height: 1.4;
+        }}
+
+        .dive-title a:hover {{
+            color: var(--accent);
+        }}
+
+        .date-badge {{
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+        }}
+
+        .source-name {{
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }}
+
+        .action-btn {{
+            padding: 4px 12px;
+            background: var(--accent-dim);
+            color: var(--accent);
+            text-decoration: none;
+            border-radius: 4px;
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            font-weight: 500;
+            border: 1px solid rgba(139,94,42,0.2);
+            transition: all 0.15s;
+        }}
+
+        .action-btn:hover {{
+            background: rgba(139,94,42,0.15);
+        }}
     </style>
 </head>
 <body>
-    <div class="header"><h1>🔍 Deep Dive Archive</h1><div>{len(dives)} deep dives</div></div>
-    <div class="nav-buttons">
-        <a href="../../../curator_briefing.html" class="nav-btn">📰 Today</a>
-        <a href="../../../curator_index.html" class="nav-btn">📚 Archive</a>
-        <a href="index.html" class="nav-btn">🔍 Deep Dives</a>
+<header>
+  <div class="header-left">
+    <a href="../../../" class="logo">📚 Curator</a>
+    <span class="logo-sub">Deep Dives</span>
+  </div>
+  <nav class="header-nav">
+    <a href="../../../" class="nav-link">Daily</a>
+    <a href="../../../curator_library.html" class="nav-link">Library</a>
+    <a href="../../../interests/2026/deep-dives/index.html" class="nav-link active">Deep Dives</a>
+  </nav>
+</header>
+
+<main>
+    <div class="page-header">
+        <h1 class="page-title">🔍 Deep Dive Archive</h1>
+        <p class="page-meta">{len(dives)} deep dives</p>
     </div>
-    <table><thead><tr><th>Date</th><th>Source</th><th>Title</th><th>Action</th></tr></thead><tbody>
-{rows}    </tbody></table>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Source</th>
+                    <th>Title</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+{rows}            </tbody>
+        </table>
+    </div>
+</main>
+
 </body>
 </html>'''
     
@@ -444,30 +671,122 @@ def generate_deep_dive_html(hash_id, article_data, initial_interest, dive_focus,
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
     <title>{article_data['title']} - Deep Dive</title>
     <style>
+        :root {{
+            --bg: #f5f0e8;
+            --bg-texture: #ede8df;
+            --surface: #faf7f2;
+            --surface2: #f0ebe0;
+            --border: #ddd6c8;
+            --border2: #c8bfaf;
+            --text: #2a2418;
+            --text-muted: #6b5f4e;
+            --text-dim: #9e9080;
+            --accent: #8b5e2a;
+            --accent-dim: rgba(139,94,42,0.08);
+            --accent-glow: rgba(139,94,42,0.18);
+            --shadow: rgba(42,36,24,0.08);
+        }}
+
+        *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            font-family: 'Source Sans 3', sans-serif;
+            background: var(--bg);
+            background-image:
+                radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
+            color: var(--text);
+            min-height: 100vh;
             font-size: 15px;
-            max-width: 1000px;
-            margin: 40px auto;
-            padding: 0 20px;
             line-height: 1.6;
-            color: #333;
-            background: #f5f5f5;
+        }}
+
+        /* ── Header ── */
+        header {{
+            border-bottom: 1px solid var(--border);
+            padding: 0 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 60px;
+            position: sticky;
+            top: 0;
+            background: rgba(245,240,232,0.94);
+            backdrop-filter: blur(12px);
+            z-index: 100;
+            box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
+        }}
+
+        .header-left {{
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+        }}
+
+        .logo {{
+            font-family: 'Playfair Display', serif;
+            font-size: 20px;
+            color: var(--accent);
+            letter-spacing: -0.02em;
+            text-decoration: none;
+        }}
+
+        .logo-sub {{
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }}
+
+        .header-nav {{
+            display: flex;
+            gap: 4px;
+        }}
+
+        .nav-link {{
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            letter-spacing: 0.05em;
+            transition: all 0.15s;
+            border: 1px solid transparent;
+        }}
+
+        .nav-link:hover {{
+            color: var(--text);
+            background: var(--surface2);
+        }}
+
+        .nav-link.active {{
+            color: var(--accent);
+            background: var(--accent-dim);
+            border-color: rgba(139,94,42,0.2);
         }}
         .container {{
-            background: white;
-            padding: 40px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 32px;
+            background: var(--surface);
+            border-radius: 12px;
+            box-shadow: 0 2px 12px var(--shadow);
         }}
         h1 {{
-            color: #2c3e50;
-            font-size: 1.8em;
-            border-bottom: 3px solid #3498db;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
+            font-family: 'Playfair Display', serif;
+            color: var(--text);
+            font-size: 2em;
+            font-weight: 400;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 12px;
+            margin-bottom: 24px;
+            letter-spacing: -0.02em;
         }}
         .meta {{
             background: #ecf0f1;
@@ -552,41 +871,28 @@ def generate_deep_dive_html(hash_id, article_data, initial_interest, dive_focus,
             text-align: center;
         }}
         a {{
-            color: #3498db;
+            color: var(--accent);
             text-decoration: none;
         }}
         a:hover {{
             text-decoration: underline;
         }}
-        .nav-bar {{
-            display: flex;
-            gap: 8px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }}
-        .nav-link {{
-            display: inline-block;
-            padding: 5px 12px;
-            background: #667eea;
-            color: white;
-            border-radius: 3px;
-            font-size: 0.85em;
-            text-decoration: none;
-            font-weight: 500;
-        }}
-        .nav-link:hover {{
-            background: #5568d3;
-            text-decoration: none;
-        }}
     </style>
 </head>
 <body>
+<header>
+  <div class="header-left">
+    <a href="../../../" class="logo">📚 Curator</a>
+    <span class="logo-sub">Deep Dive</span>
+  </div>
+  <nav class="header-nav">
+    <a href="../../../" class="nav-link">Daily</a>
+    <a href="../../../curator_library.html" class="nav-link">Library</a>
+    <a href="../../../interests/2026/deep-dives/index.html" class="nav-link active">Deep Dives</a>
+  </nav>
+</header>
+<div style="padding: 32px;">
     <div class="container">
-        <div class="nav-bar">
-            <a href="../../../curator_briefing.html" class="nav-link">📰 Today's Briefing</a>
-            <a href="../../../curator_index.html" class="nav-link">📚 Archive</a>
-            <a href="index.html" class="nav-link">🔍 Deep Dives</a>
-        </div>
         
         <h1>{article_data['title']}</h1>
         
@@ -614,8 +920,10 @@ def generate_deep_dive_html(hash_id, article_data, initial_interest, dive_focus,
     # Convert markdown analysis to basic HTML
     # Simple conversion: h2, h3, bold, lists
     
-    # Strip any leading "Deep Dive Analysis" heading from AI output (we add it in template)
-    analysis_content = re.sub(r'^##\s+Deep Dive Analysis\s*\n', '', analysis_content, flags=re.IGNORECASE)
+    # Strip ALL "Deep Dive Analysis" headings from AI output (we add it in template)
+    # Run twice to handle duplicate headings that sometimes appear
+    analysis_content = re.sub(r'^##\s+Deep Dive Analysis\s*\n', '', analysis_content, flags=re.IGNORECASE | re.MULTILINE)
+    analysis_content = re.sub(r'^##\s+Deep Dive Analysis\s*\n', '', analysis_content, flags=re.IGNORECASE | re.MULTILINE)
     
     # Check if there's a Sources/Bibliography section
     has_sources = bool(re.search(r'^## (Sources|Bibliography|Further Reading|References)', analysis_content, flags=re.MULTILINE))
@@ -673,6 +981,7 @@ def generate_deep_dive_html(hash_id, article_data, initial_interest, dive_focus,
             {input_tokens} input + {output_tokens} output tokens • ${cost:.4f}
         </div>
     </div>
+</div>
 </body>
 </html>
 """
