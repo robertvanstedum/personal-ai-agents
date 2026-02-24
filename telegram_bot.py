@@ -46,7 +46,7 @@ def send_message(token, chat_id, text, parse_mode="HTML"):
     )
 
 def send_article(token, chat_id, num, title, url, source, category, score):
-    """Send one article (buttons temporarily disabled pending webhook setup)"""
+    """Send one article with interactive buttons"""
     message = (
         f"<b>#{num}</b> • {category.upper()} • {source}\n\n"
         f"<b>{title}</b>\n\n"
@@ -54,18 +54,13 @@ def send_article(token, chat_id, num, title, url, source, category, score):
         f"Score: {score}"
     )
     
-    # TEMPORARILY DISABLED: Like/Dislike/Save buttons
-    # Reason: Polling conflict between OpenClaw and telegram_bot.py
-    # Future: Implement webhook mode with Cloudflare Tunnel (HTTPS)
-    # See: TELEGRAM_WEBHOOK_PLAN.md for architecture details
-    #
-    # keyboard = {
-    #     "inline_keyboard": [[
-    #         {"text": "👍 Like", "callback_data": f"like:{num}"},
-    #         {"text": "👎 Dislike", "callback_data": f"dislike:{num}"},
-    #         {"text": "🔖 Save", "callback_data": f"save:{num}"},
-    #     ]]
-    # }
+    keyboard = {
+        "inline_keyboard": [[
+            {"text": "👍 Like", "callback_data": f"like:{num}"},
+            {"text": "👎 Dislike", "callback_data": f"dislike:{num}"},
+            {"text": "🔖 Save", "callback_data": f"save:{num}"},
+        ]]
+    }
     
     requests.post(
         f"https://api.telegram.org/bot{token}/sendMessage",
@@ -73,7 +68,7 @@ def send_article(token, chat_id, num, title, url, source, category, score):
             "chat_id": chat_id,
             "text": message.strip(),
             "parse_mode": "HTML",
-            # "reply_markup": keyboard,  # Disabled pending webhook setup
+            "reply_markup": keyboard,
             "disable_web_page_preview": True,
         },
         timeout=10
@@ -281,12 +276,141 @@ def run_bot_mode():
     print("✅ Listening for callbacks and commands...")
     app.run_polling()
 
+def run_webhook_mode():
+    """Run Flask webhook server on localhost:8444"""
+    from flask import Flask, request, jsonify
+    
+    token = get_token()
+    if not token:
+        print("❌ No Telegram token found")
+        return
+    
+    app = Flask(__name__)
+    
+    @app.route('/webhook', methods=['POST'])
+    def webhook():
+        """Handle incoming webhook updates from Telegram"""
+        try:
+            update_json = request.get_json()
+            
+            # Handle callback_query (button presses)
+            if 'callback_query' in update_json:
+                handle_webhook_callback(update_json['callback_query'], token)
+                return jsonify({'ok': True})
+            
+            # Handle commands (future)
+            if 'message' in update_json:
+                msg = update_json['message']
+                if 'text' in msg and msg['text'].startswith('/'):
+                    handle_webhook_command(msg, token)
+                return jsonify({'ok': True})
+            
+            return jsonify({'ok': True})
+        except Exception as e:
+            print(f"❌ Webhook error: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/health', methods=['GET'])
+    def health():
+        """Health check endpoint"""
+        return jsonify({'status': 'ok', 'mode': 'webhook'})
+    
+    print("🌐 Starting webhook server on http://localhost:8444")
+    print("📡 Waiting for Telegram updates...")
+    app.run(host='0.0.0.0', port=8444, debug=False)
+
+def handle_webhook_callback(callback_query, token):
+    """Process button callback from webhook"""
+    query_id = callback_query['id']
+    data = callback_query['data']
+    message = callback_query['message']
+    
+    try:
+        action, rank = data.split(':')
+    except ValueError:
+        answer_callback(token, query_id, "❌ Invalid button data", alert=True)
+        return
+    
+    callback_id = f"{message['message_id']}:{action}:{rank}"
+    if callback_id in processed_callbacks:
+        answer_callback(token, query_id, "Already recorded!", alert=True)
+        return
+    
+    processed_callbacks.add(callback_id)
+    answer_callback(token, query_id, f"⏳ Recording {action}...")
+    
+    result = record_feedback(action, rank)
+    
+    if result['success']:
+        original = message['text']
+        if "✅" in original:
+            original = original.split('\n✅')[0]
+        
+        edit_message(token, message['chat']['id'], message['message_id'], 
+                    original + f"\n\n✅ {action.capitalize()}d!")
+    else:
+        answer_callback(token, query_id, f"❌ {result['message']}", alert=True)
+
+def handle_webhook_command(message, token):
+    """Process commands from webhook"""
+    chat_id = message['chat']['id']
+    text = message['text']
+    
+    if text == '/briefing':
+        send_briefing(token, str(chat_id))
+    elif text == '/status':
+        log = BASE_DIR / 'logs' / 'curator_launchd.log'
+        if log.exists():
+            lines = log.read_text().splitlines()
+            last_lines = '\n'.join(lines[-10:])
+            send_message(token, str(chat_id), f"📊 Last 10 log lines:\n<pre>{last_lines}</pre>", parse_mode="HTML")
+        else:
+            send_message(token, str(chat_id), "No log file found yet.")
+    elif text == '/run':
+        send_message(token, str(chat_id), "⏳ Running curator now, this takes a few minutes...")
+        result = subprocess.run(
+            [str(BASE_DIR / 'run_curator_cron.sh')],
+            capture_output=True,
+            cwd=BASE_DIR,
+            timeout=600
+        )
+        if result.returncode == 0:
+            send_message(token, str(chat_id), "✅ Curator run complete. Sending briefing...")
+            send_briefing(token, str(chat_id))
+        else:
+            send_message(token, str(chat_id), f"❌ Curator failed:\n{result.stderr.decode()[:300]}")
+
+def answer_callback(token, query_id, text, alert=False):
+    """Send answerCallbackQuery to Telegram"""
+    requests.post(
+        f"https://api.telegram.org/bot{token}/answerCallbackQuery",
+        json={"callback_query_id": query_id, "text": text, "show_alert": alert},
+        timeout=5
+    )
+
+def edit_message(token, chat_id, message_id, text):
+    """Edit an existing message"""
+    requests.post(
+        f"https://api.telegram.org/bot{token}/editMessageText",
+        json={
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True
+        },
+        timeout=5
+    )
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--send', action='store_true', help='Send briefing and exit (for cron/launchd)')
+    parser.add_argument('--webhook', action='store_true', help='Run webhook server on port 8444')
     args = parser.parse_args()
     
     if args.send:
         run_send_mode()
+    elif args.webhook:
+        run_webhook_mode()
     else:
         run_bot_mode()

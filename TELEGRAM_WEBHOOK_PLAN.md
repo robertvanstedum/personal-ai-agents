@@ -1,8 +1,26 @@
 # Telegram Webhook Architecture Plan
 
-**Status:** Design phase  
-**Priority:** Future enhancement (buttons disabled for now)  
-**Last Updated:** Feb 22, 2026
+**Status:** ✅ IMPLEMENTED - MacBook Development  
+**Priority:** Production-ready (working with temporary tunnel)  
+**Last Updated:** Feb 23, 2026
+
+---
+
+## Live Setup (MacBook Development)
+
+**Running services:**
+- ✅ Webhook server: `telegram_bot.py --webhook` on port 8444 (PID 79652)
+- ✅ Cloudflare Tunnel: `https://weeks-spa-equivalent-coalition.trycloudflare.com`
+- ✅ Telegram webhook registered and active
+
+**Test:**
+- Test article sent with Like/Dislike/Save buttons
+- Click a button in Telegram to verify webhook receives callback
+- Check webhook logs: `process poll mellow-daisy`
+
+**Temporary URL:** `https://weeks-spa-equivalent-coalition.trycloudflare.com`
+- Note: This URL changes each time tunnel restarts
+- For Mac Mini production, we'll use a named tunnel with stable URL
 
 ---
 
@@ -259,4 +277,39 @@ if __name__ == '__main__':
 
 ---
 
-**Next session:** Implement Phase 1 (MacBook development) when ready to re-enable buttons.
+## Quick Start (MacBook)
+
+**Terminal 1 - Start webhook server:**
+```bash
+cd ~/Projects/personal-ai-agents
+./venv/bin/python telegram_bot.py --webhook
+```
+
+**Terminal 2 - Start tunnel:**
+```bash
+cloudflared tunnel --url http://localhost:8444
+```
+
+**Register webhook URL:**
+```bash
+cd ~/Projects/personal-ai-agents
+./venv/bin/python -c "
+import keyring
+import requests
+
+token = keyring.get_password('telegram', 'bot_token')
+webhook_url = 'https://YOUR-TUNNEL-URL.trycloudflare.com/webhook'
+
+response = requests.post(
+    f'https://api.telegram.org/bot{token}/setWebhook',
+    json={'url': webhook_url, 'allowed_updates': ['callback_query', 'message']}
+)
+print(response.json())
+"
+```
+
+**Note:** Replace `YOUR-TUNNEL-URL` with the actual URL from the cloudflared output.
+
+---
+
+**Status:** Production-ready on MacBook. Next: Migrate to Mac Mini with named tunnel.
