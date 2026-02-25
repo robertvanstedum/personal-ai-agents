@@ -33,25 +33,44 @@ SHARED_NAV_HTML = """
 # Legacy feedback endpoints (converted from old HTTP server)
 # ─────────────────────────────────────────────────────────────────────────────
 
-@app.route('/feedback')
+@app.route('/feedback', methods=['GET', 'POST'])
 def feedback():
-    """Handle like/dislike/save feedback"""
-    action = request.args.get('action', '')
-    rank = request.args.get('rank', '')
+    """Handle like/dislike/save feedback (both old GET and new POST)"""
     
-    if not action or not rank:
-        return jsonify({'success': False, 'message': 'Missing action or rank'}), 400
+    # New POST endpoint with article data
+    if request.method == 'POST':
+        data = request.get_json()
+        action = data.get('action', '')
+        rank = data.get('rank', '')
+        article_data = data.get('article', {})
+        
+        if not action or not rank or not article_data:
+            return jsonify({'success': False, 'message': 'Missing action, rank, or article data'}), 400
+        
+        print(f"\n📥 Feedback received (POST): {action} for article #{rank}")
+        print(f"   Article: {article_data.get('title', 'Unknown')[:60]}...")
+        
+        result = record_feedback_with_article(action, rank, article_data)
+        return jsonify(result)
     
-    print(f"\n📥 Feedback received: {action} for article #{rank}")
-    
-    # For 'save', no prompt needed - just mark it
-    if action == 'save':
-        result = record_feedback(action, rank, "Saved from web UI")
+    # Legacy GET endpoint (keep for compatibility)
     else:
-        # For like/dislike, use default message
-        result = record_feedback(action, rank, f"{action}d from web UI - see article for details")
-    
-    return jsonify(result)
+        action = request.args.get('action', '')
+        rank = request.args.get('rank', '')
+        
+        if not action or not rank:
+            return jsonify({'success': False, 'message': 'Missing action or rank'}), 400
+        
+        print(f"\n📥 Feedback received (GET): {action} for article #{rank}")
+        
+        # For 'save', no prompt needed - just mark it
+        if action == 'save':
+            result = record_feedback(action, rank, "Saved from web UI")
+        else:
+            # For like/dislike, use default message
+            result = record_feedback(action, rank, f"{action}d from web UI - see article for details")
+        
+        return jsonify(result)
 
 
 @app.route('/deepdive')
@@ -230,7 +249,7 @@ def serve_archive(filename):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def record_feedback(action, rank, reason):
-    """Call curator_feedback.py to record feedback"""
+    """Call curator_feedback.py to record feedback (legacy GET endpoint)"""
     try:
         # Build command based on action
         if action == 'like':
@@ -268,6 +287,49 @@ def record_feedback(action, rank, reason):
             return {
                 'success': False,
                 'message': f'Error recording feedback: {error[:100]}'
+            }
+    
+    except subprocess.TimeoutExpired:
+        return {'success': False, 'message': 'Timeout waiting for feedback script'}
+    except Exception as e:
+        return {'success': False, 'message': f'Error: {str(e)}'}
+
+
+def record_feedback_with_article(action, rank, article_data):
+    """Call curator_feedback.py in workspace with full article metadata (new POST endpoint)"""
+    workspace = Path.home() / '.openclaw' / 'workspace'
+    feedback_script = workspace / 'curator_feedback.py'
+    
+    if not feedback_script.exists():
+        return {'success': False, 'message': f'curator_feedback.py not found at {feedback_script}'}
+    
+    # Prepare JSON payload with article data
+    payload = {
+        'article': article_data,
+        'your_words': f'{action}d from web UI'
+    }
+    
+    try:
+        result = subprocess.run(
+            ['python3', str(feedback_script), action, str(rank), '--channel', 'web_ui'],
+            input=json.dumps(payload).encode(),
+            capture_output=True,
+            cwd=workspace,
+            timeout=30
+        )
+        
+        if result.returncode == 0:
+            print(f"✅ Feedback recorded to workspace preferences")
+            return {
+                'success': True,
+                'message': f'Article #{rank} {action}d!'
+            }
+        else:
+            error = result.stderr.decode()
+            print(f"❌ Error: {error}")
+            return {
+                'success': False,
+                'message': f'Error: {error[:100]}'
             }
     
     except subprocess.TimeoutExpired:

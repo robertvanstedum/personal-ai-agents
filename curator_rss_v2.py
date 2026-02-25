@@ -1815,7 +1815,18 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
             except:
                 pass
         
-        html += f"""                <tr data-hash-id="{hash_id}">
+        # Escape article data for JSON embedding
+        import html as html_module
+        title_escaped = html_module.escape(title.replace("'", "\\'"))
+        url_escaped = html_module.escape(url)
+        source_escaped = html_module.escape(source.replace("'", "\\'"))
+        
+        html += f"""                <tr data-hash-id="{hash_id}" 
+                        data-rank="{rank}"
+                        data-title="{title_escaped}"
+                        data-url="{url_escaped}"
+                        data-source="{source_escaped}"
+                        data-category="{category}">
                     <td class="col-rank"><span class="rank-badge">{rank}</span></td>
                     <td class="col-category"><span class="cat-badge cat-{category.lower()}">{category.lower()}</span></td>
                     <td class="col-source"><span class="source-name">{source}</span></td>
@@ -1840,9 +1851,9 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
                             <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>"""
         else:
             html += f"""
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback('like', {rank}, '{hash_id}');">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback('dislike', {rank}, '{hash_id}');">👎</button>
-                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback('save', {rank}, '{hash_id}');">💾</button>"""
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', {rank});">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', {rank});">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', {rank});">💾</button>"""
         
         html += """
                         </div>
@@ -1856,17 +1867,38 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
 </main>
     
     <script>
-    function showFeedback(action, rank, hashId) {
-        console.log('showFeedback called:', action, rank, hashId);
+    function showFeedback(button, action, rank) {
+        console.log('showFeedback called:', action, rank);
+        
+        // Get article data from row data attributes
+        const row = button.closest('tr');
+        const articleData = {
+            id: row.dataset.hashId || `row-${rank}`,
+            title: row.dataset.title || 'Unknown',
+            link: row.dataset.url || '#',
+            source: row.dataset.source || 'Unknown',
+            category: row.dataset.category || 'other'
+        };
+        
+        console.log('Article data:', articleData);
         
         // Immediate visual feedback
-        const button = event.target;
-        const originalText = button.textContent;
-        button.style.opacity = '0.5';
+        button.style.opacity = '0.3';
+        button.style.cursor = 'not-allowed';
         button.disabled = true;
         
-        // Send to feedback server (with hash_id for deep dive)
-        fetch('http://localhost:8765/feedback?action=' + action + '&rank=' + rank + '&hash_id=' + hashId)
+        // Send to feedback server with full article data (POST)
+        fetch('http://localhost:8765/feedback', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: action,
+                rank: rank,
+                article: articleData
+            })
+        })
             .then(response => {
                 console.log('Response status:', response.status);
                 return response.json();
@@ -1874,21 +1906,28 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
             .then(data => {
                 console.log('Response data:', data);
                 
-                // Re-enable button
-                button.style.opacity = '1';
-                button.disabled = false;
-                
-                // Show toast notification
-                showToast(data.message || 'Article #' + rank + ' ' + action + 'd', 'success');
-                
-                // If liked or saved, add deep dive button
-                if (action === 'like' || action === 'save') {
-                    addDeepDiveButton(rank, hashId);
+                if (data.success) {
+                    // Permanent grayed-out state with checkmark - STAY DISABLED
+                    button.style.opacity = '0.4';
+                    button.innerHTML = button.textContent + ' ✓';
+                    button.style.color = '#10b981';
+                    button.disabled = true;  // Keep disabled permanently
+                    button.style.cursor = 'not-allowed';
+                    
+                    // Show toast notification
+                    showToast(data.message || 'Article #' + rank + ' ' + action + 'd', 'success');
+                } else {
+                    // Re-enable on error
+                    button.style.opacity = '1';
+                    button.style.cursor = 'pointer';
+                    button.disabled = false;
+                    showToast(data.message || 'Error saving feedback', 'error');
                 }
             })
             .catch(error => {
                 console.error('Feedback error:', error);
                 button.style.opacity = '1';
+                button.style.cursor = 'pointer';
                 button.disabled = false;
                 showToast('Server error - is curator_server.py running?', 'error');
             });
