@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Telegram Feedback Bot - MacBook/Polling Mode
+  
+  Starts telegram_bot.py on login to handle Like/Dislike/Save button callbacks
+  from the morning briefing sent to Telegram.
+  
+  MODE: Polling (polls Telegram API for updates)
+  
+  Mac Mini Production Migration:
+  - Replace with webhook mode (telegram_bot.py --webhook)
+  - Add stable Cloudflare tunnel URL (curator.rvsassociates.com)
+  - Update start_telegram_webhook.sh to launch cloudflared + webhook server
+  - See TELEGRAM_WEBHOOK_PLAN.md for architecture details
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.vanstedum.telegram-webhook</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/vanstedum/Projects/personal-ai-agents/start_telegram_webhook.sh</string>
+    </array>
+    
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <key>KeepAlive</key>
+    <true/>
+    
+    <key>StandardOutPath</key>
+    <string>/Users/vanstedum/Projects/personal-ai-agents/logs/telegram_bot.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/Users/vanstedum/Projects/personal-ai-agents/logs/telegram_bot_error.log</string>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/Users/vanstedum/Projects/personal-ai-agents/venv/bin</string>
+        <key>TELEGRAM_CHAT_ID</key>
+        <string>8379221702</string>
+    </dict>
+    
+    <key>WorkingDirectory</key>
+    <string>/Users/vanstedum/Projects/personal-ai-agents</string>
+</dict>
+</plist>
