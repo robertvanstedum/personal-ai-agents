@@ -11,6 +11,7 @@ Then open curator_latest.html or curator_library.html in browser
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import json
+import os
 import subprocess
 from pathlib import Path
 from datetime import datetime
@@ -115,7 +116,8 @@ def api_library():
     articles = {}  # keyed by article_id to deduplicate
 
     # ── 1. Load liked + saved from curator_preferences.json ──────────────────
-    prefs_path = BASE_DIR / 'curator_preferences.json'
+    workspace = Path.home() / '.openclaw' / 'workspace'
+    prefs_path = workspace / 'curator_preferences.json'
     if prefs_path.exists():
         prefs = json.loads(prefs_path.read_text())
         feedback_history = prefs.get('feedback_history', {})
@@ -147,7 +149,7 @@ def api_library():
                     }
 
     # ── 2. Load bookmarked from curator_history.json + enrich existing ────────
-    history_path = BASE_DIR / 'curator_history.json'
+    history_path = workspace / 'curator_history.json'
     if history_path.exists():
         history = json.loads(history_path.read_text())
 
@@ -314,7 +316,8 @@ def record_feedback_with_article(action, rank, article_data):
             ['python3', str(feedback_script), action, str(rank), '--channel', 'web_ui'],
             input=json.dumps(payload).encode(),
             capture_output=True,
-            cwd=workspace,
+            cwd=BASE_DIR,
+            env={**os.environ, 'PYTHONPATH': str(BASE_DIR)},
             timeout=30
         )
         
@@ -325,11 +328,14 @@ def record_feedback_with_article(action, rank, article_data):
                 'message': f'Article #{rank} {action}d!'
             }
         else:
-            error = result.stderr.decode()
-            print(f"❌ Error: {error}")
+            stdout = result.stdout.decode()
+            stderr = result.stderr.decode()
+            print(f"❌ Subprocess failed with return code {result.returncode}")
+            print(f"   stdout: {stdout}")
+            print(f"   stderr: {stderr}")
             return {
                 'success': False,
-                'message': f'Error: {error[:100]}'
+                'message': f'Error (code {result.returncode}): {stderr[:100] or stdout[:100] or "No output"}'
             }
     
     except subprocess.TimeoutExpired:

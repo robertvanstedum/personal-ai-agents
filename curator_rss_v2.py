@@ -1317,6 +1317,7 @@ def format_output(entries: List[Dict]) -> str:
         final = entry.get("final_score", entry["score"])
         
         output += f"#{i} [{entry['source']}] 🏷️  {category} ({method})\n"
+        output += f"   ID: {entry.get('hash_id', 'unknown')}\n"
         output += f"   {entry['title']}\n"
         output += f"   {entry['link']}\n"
         output += f"   Published: {pub_str}\n"
@@ -1916,6 +1917,12 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
                     
                     // Show toast notification
                     showToast(data.message || 'Article #' + rank + ' ' + action + 'd', 'success');
+                    
+                    // If liked or saved, add deep dive button
+                    if (action === 'like' || action === 'save') {
+                        const hashId = button.closest('tr').dataset.hashId;
+                        addDeepDiveButton(rank, hashId);
+                    }
                 } else {
                     // Re-enable on error
                     button.style.opacity = '1';
@@ -2436,6 +2443,11 @@ def main():
     """Run the curator and display results"""
     import sys
     import subprocess
+    from signal_store import get_session_id, log_article_scored
+    
+    # Initialize session ID for this run (all events will share this)
+    session_id = get_session_id()
+    print(f"📝 Session ID: {session_id}")
     
     # Parse command line args
     send_telegram = "--telegram" in sys.argv
@@ -2474,6 +2486,26 @@ def main():
         print(f"\n💥 Curation failed: {e}")
         print("\nTip: Run with --model=ollama to test everything except API")
         sys.exit(1)
+    
+    # Log scored articles to Signal Store (always, even in dry-run)
+    print(f"📝 Logging {len(top_articles)} articles to Signal Store...")
+    for rank, article in enumerate(top_articles, 1):
+        log_article_scored(
+            article_id=article.get("hash_id", f"article-{rank}"),
+            title=article["title"],
+            source=article["source"],
+            category=article.get("category", "other"),
+            score=article["score"],
+            model=model,
+            url=article.get("link"),
+            rank=rank,
+            metadata={
+                "method": article.get("method", "unknown"),
+                "final_score": article.get("final_score", article["score"]),
+                "interest_boosted": article.get("interest_boosted", False)
+            }
+        )
+    print(f"✅ Signal Store updated")
     
     # Save to history (with duplicate protection)
     if not dry_run:

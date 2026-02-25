@@ -1,0 +1,1687 @@
+Traceback (most recent call last):
+  File "/Users/vanstedum/Projects/personal-ai-agents/curator_server.py", line 11, in <module>
+    from flask import Flask, request, jsonify, send_from_directory
+ModuleNotFoundError: No module named 'flask'
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [22/Feb/2026 12:46:28] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [22/Feb/2026 12:46:28] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [22/Feb/2026 12:46:33] "GET /curator_library.html HTTP/1.1" 200 -
+127.0.0.1 - - [22/Feb/2026 12:46:33] "GET /curator_library.html HTTP/1.1" 200 -
+127.0.0.1 - - [22/Feb/2026 12:46:33] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [22/Feb/2026 12:46:34] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Feb/2026 13:14:34] "GET /curator_library.html HTTP/1.1" 200 -
+127.0.0.1 - - [22/Feb/2026 13:14:34] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [22/Feb/2026 13:14:35] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Feb/2026 13:17:15] "GET /curator_library.html HTTP/1.1" 200 -
+127.0.0.1 - - [22/Feb/2026 13:17:15] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [22/Feb/2026 13:17:26] "[33mGET /curator_briefing.html HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Feb/2026 13:42:11] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [22/Feb/2026 13:42:15] "GET /curator_library.html HTTP/1.1" 200 -
+127.0.0.1 - - [22/Feb/2026 13:42:15] "GET /api/library HTTP/1.1" 200 -
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [22/Feb/2026 13:53:36] "HEAD /curator_library.html HTTP/1.1" 200 -
+127.0.0.1 - - [22/Feb/2026 13:53:44] "GET /curator_library.html HTTP/1.1" 200 -
+127.0.0.1 - - [22/Feb/2026 13:53:44] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [22/Feb/2026 13:53:44] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Feb/2026 13:54:21] "[33mGET /curator_briefing.html HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Feb/2026 13:54:28] "[33mGET /curator_briefing.html HTTP/1.1[0m" 404 -
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [22/Feb/2026 13:55:11] "HEAD /curator_library.html HTTP/1.1" 200 -
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [22/Feb/2026 14:53:13] "HEAD /interests/2026/deep-dives/90610-futures-slide-as-iran-war-risks-add-to-growing-ai.html HTTP/1.1" 200 -
+127.0.0.1 - - [22/Feb/2026 14:53:42] "GET /interests/2026/deep-dives/fd0f0-china-s-role-in-global-innovation-is-changing.html HTTP/1.1" 200 -
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [23/Feb/2026 19:16:15] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 19:16:15] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 19:16:15] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [23/Feb/2026 20:13:40] "[33mGET / HTTP/1.1[0m" 404 -
+127.0.0.1 - - [23/Feb/2026 20:15:35] "[33mHEAD / HTTP/1.1[0m" 404 -
+127.0.0.1 - - [23/Feb/2026 20:15:35] "[33mGET / HTTP/1.1[0m" 404 -
+127.0.0.1 - - [23/Feb/2026 20:15:48] "HEAD /curator_latest.html HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 20:15:48] "GET /curator_latest.html HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 20:15:55] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 20:15:55] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 20:16:01] "GET /curator_briefing.html HTTP/1.1" 200 -
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [23/Feb/2026 20:46:41] "GET /curator_index.html HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 20:53:07] "GET /curator_index.html HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 20:53:07] "[36mGET /interests/2026/deep-dives/1332e-israeli-army-kills-2-palestinians-in-strikes-on-ga.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 20:53:13] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 20:53:17] "HEAD /curator_index.html HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 20:53:28] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 20:53:28] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 20:53:29] "GET /interests/2026/deep-dives/index.html HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 20:55:19] "GET /interests/2026/deep-dives/1332e-israeli-army-kills-2-palestinians-in-strikes-on-ga.html HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 21:01:39] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 21:01:45] "GET /interests/2026/deep-dives/1332e-israeli-army-kills-2-palestinians-in-strikes-on-ga.html HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 21:01:51] "[36mGET /interests/2026/deep-dives/index.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 21:02:00] "[36mGET /interests/2026/deep-dives/index.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 21:02:45] "GET /interests/2026/deep-dives/index.html HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 21:03:52] "GET /interests/2026/deep-dives/index.html HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 21:04:20] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 21:04:20] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 21:04:22] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 21:04:24] "[36mGET /interests/2026/deep-dives/index.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 21:04:27] "GET /interests/2026/deep-dives/8ab3d-flash-report-january-jobless-data-may-signal-impro.html HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 21:04:29] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 21:04:29] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 21:04:34] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 21:04:42] "[36mGET /interests/2026/deep-dives/index.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 21:04:46] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 21:04:46] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 21:04:52] "[36mGET /curator_index.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 21:06:36] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 21:06:36] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 21:06:39] "[36mGET /interests/2026/deep-dives/index.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 21:06:40] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 21:08:47] "GET /curator_index.html HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 21:11:19] "[33mGET /curator_archive/curator_2026-02-23-2108.html HTTP/1.1[0m" 404 -
+127.0.0.1 - - [23/Feb/2026 21:12:03] "[33mHEAD /curator_archive/curator_2026-02-23-2108.html HTTP/1.1[0m" 404 -
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [23/Feb/2026 21:57:44] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 21:57:48] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 21:57:48] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 21:57:50] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 21:57:59] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 22:09:37] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 22:09:37] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 22:09:39] "[36mGET /interests/2026/deep-dives/index.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 22:09:42] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 22:09:47] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 22:09:47] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 22:09:49] "[36mGET /interests/2026/deep-dives/index.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 22:09:51] "[36mGET /interests/2026/deep-dives/8ab3d-flash-report-january-jobless-data-may-signal-impro.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 22:09:56] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 22:09:56] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 22:09:58] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 22:10:04] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 22:10:04] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 22:10:05] "[36mGET /interests/2026/deep-dives/index.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 22:10:23] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [23/Feb/2026 22:10:23] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 22:10:27] "[36mGET /curator_index.html HTTP/1.1[0m" 304 -
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [24/Feb/2026 20:55:59] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [24/Feb/2026 20:58:28] "GET /curator_latest.html HTTP/1.1" 200 -
+127.0.0.1 - - [24/Feb/2026 20:58:28] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [24/Feb/2026 21:00:09] "GET /feedback?action=save&rank=9&hash_id=7f21a HTTP/1.1" 200 -
+127.0.0.1 - - [24/Feb/2026 21:01:23] "POST /feedback HTTP/1.1" 200 -
+127.0.0.1 - - [24/Feb/2026 21:02:37] "GET /feedback?action=save&rank=9&hash_id=7f21a HTTP/1.1" 200 -
+127.0.0.1 - - [24/Feb/2026 21:11:43] "GET /interests/2026/deep-dives/index.html HTTP/1.1" 200 -
+127.0.0.1 - - [24/Feb/2026 21:11:54] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [24/Feb/2026 21:12:05] "GET /curator_library.html HTTP/1.1" 200 -
+127.0.0.1 - - [24/Feb/2026 21:12:05] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [24/Feb/2026 21:14:13] "GET /deepdive?hash_id=7f21a&interest=I+want+to+come+back+and+understand+the+debt+changes+and+trends+%2B+projections.++This+treasure+report+is+a+good+data+source.++What+analysis+is+out+that+that+summarizes+this+for+me+and+also+compares+to+other+countries+trends.&focus= HTTP/1.1" 200 -
+127.0.0.1 - - [24/Feb/2026 21:14:15] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [24/Feb/2026 21:14:46] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [24/Feb/2026 21:14:48] "GET /interests/2026/deep-dives/index.html HTTP/1.1" 200 -
+127.0.0.1 - - [24/Feb/2026 21:14:54] "GET /interests/2026/deep-dives/7f21a-monthly-statement-of-the-public-debt-january-31-20.html HTTP/1.1" 200 -
+127.0.0.1 - - [24/Feb/2026 21:15:49] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [24/Feb/2026 21:15:49] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [24/Feb/2026 21:15:50] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [25/Feb/2026 08:43:40] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [25/Feb/2026 08:43:40] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [25/Feb/2026 11:07:13] "POST /feedback HTTP/1.1" 200 -
+127.0.0.1 - - [25/Feb/2026 11:07:20] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [25/Feb/2026 11:07:20] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [25/Feb/2026 11:07:26] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [25/Feb/2026 11:07:26] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [25/Feb/2026 11:07:33] "[36mGET /interests/2026/deep-dives/index.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [25/Feb/2026 11:07:41] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [25/Feb/2026 11:07:41] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [25/Feb/2026 11:07:42] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [25/Feb/2026 11:07:49] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [25/Feb/2026 11:07:49] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [25/Feb/2026 11:07:54] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [25/Feb/2026 11:08:01] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [25/Feb/2026 11:08:01] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [25/Feb/2026 11:08:06] "[36mGET /interests/2026/deep-dives/index.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [25/Feb/2026 12:10:37] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [25/Feb/2026 12:10:37] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [25/Feb/2026 12:10:37] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [25/Feb/2026 12:10:53] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [25/Feb/2026 12:10:56] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [25/Feb/2026 12:10:56] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [25/Feb/2026 12:11:00] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [25/Feb/2026 12:11:05] "[36mGET /curator_library.html HTTP/1.1[0m" 304 -
+127.0.0.1 - - [25/Feb/2026 12:11:05] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [25/Feb/2026 12:13:53] "GET /deepdive?hash_id=e3057&interest=I'm+interested+in+Ethiopia+back+to+college+when+I+took+a+class+just+on+that+and+that+it+was+never+colonized.++I've+not+been.++But+I+also+never+understood+the+conflict+with+Tigray.++In+any+case,+I+have+been+to+UAE+and+seen+the+Ethiopian+presence.++I'm+interested+in+how+UAE+is+using+this+area+for+leverage+and+also+how+China+factors+in,+since+they+invested+in+Ethiopia+too+and+probably+don't+like+UAE+and+new+Somolialand+either.&focus= HTTP/1.1" 200 -
+127.0.0.1 - - [25/Feb/2026 12:13:55] "GET /api/library HTTP/1.1" 200 -
+127.0.0.1 - - [25/Feb/2026 12:14:08] "GET /interests/2026/deep-dives/e3057-the-tigray-powder-keg-in-the-horn-of-africa.html HTTP/1.1" 200 -
+127.0.0.1 - - [25/Feb/2026 12:14:53] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [25/Feb/2026 12:15:39] "POST /feedback HTTP/1.1" 200 -
+127.0.0.1 - - [25/Feb/2026 12:15:49] "POST /feedback HTTP/1.1" 200 -
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Address already in use
+Port 8765 is in use by another program. Either identify and stop that program, or start the server with a different port.
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8765
+[33mPress CTRL+C to quit[0m

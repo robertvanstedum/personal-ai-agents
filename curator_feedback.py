@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from anthropic import Anthropic
 from dotenv import load_dotenv
+from signal_store import get_session_id, log_feedback
 
 # Load environment variables
 load_dotenv()
@@ -104,13 +105,18 @@ def parse_curator_output():
                     'category': category,
                     'title': None,
                     'url': None,
-                    'scores': None
+                    'scores': None,
+                    'hash_id': None
                 }
+        
+        # Extract hash_id
+        elif current_article and line.strip().startswith('ID:'):
+            articles[current_article]['hash_id'] = line.split('ID:')[1].strip()
         
         # Extract title (next non-empty line after rank)
         elif current_article and articles[current_article]['title'] is None:
             title = line.strip()
-            if title and not title.startswith('http') and not title.startswith('Published'):
+            if title and not title.startswith('http') and not title.startswith('Published') and not title.startswith('ID:'):
                 articles[current_article]['title'] = title
         
         # Extract URL
@@ -1058,8 +1064,16 @@ Return ONLY valid JSON, no explanation."""
             "signals": []
         }
 
-def record_feedback(rank, feedback_type, user_words, article):
-    """Record feedback and update learned patterns"""
+def record_feedback(rank, feedback_type, user_words, article, channel='cli'):
+    """Record feedback and update learned patterns
+    
+    Args:
+        rank: Article rank in briefing
+        feedback_type: liked, disliked, or saved
+        user_words: User's explanation
+        article: Article data dict
+        channel: Source of feedback (cli, web_ui, telegram)
+    """
     prefs = load_preferences()
     today = datetime.now().strftime("%Y-%m-%d")
     
@@ -1078,7 +1092,7 @@ def record_feedback(rank, feedback_type, user_words, article):
     # Create feedback entry
     feedback_entry = {
         'rank': rank,
-        'article_id': f"{article['source'].lower().replace(' ', '-')}-{today}-{rank}",
+        'article_id': article.get('hash_id', f"fallback-{article['source'].lower().replace(' ', '-')}-{today}-{rank}"),
         'url': article['url'],
         'title': article['title'],
         'source': article['source'],
@@ -1087,6 +1101,19 @@ def record_feedback(rank, feedback_type, user_words, article):
         'your_words': user_words,
         'extracted_signals': metadata
     }
+    
+    # Log to Signal Store
+    log_feedback(
+        article_id=feedback_entry['article_id'],
+        action=feedback_type,
+        channel=channel,
+        title=article['title'],
+        source=article['source'],
+        category=article['category'],
+        rank=rank,
+        reason=user_words,
+        metadata=metadata
+    )
     
     # Add to appropriate list
     prefs['feedback_history'][today][feedback_type].append(feedback_entry)
@@ -1186,10 +1213,17 @@ def show_recent_feedback():
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python curator_feedback.py <like|dislike|save|show|bookmark> [rank|reference]")
+        print("Usage: python curator_feedback.py <like|dislike|save|show|bookmark> [rank|reference] [--channel <cli|web_ui|telegram>]")
         sys.exit(1)
     
     command = sys.argv[1].lower()
+    
+    # Parse optional --channel flag
+    channel = 'cli'  # Default
+    if '--channel' in sys.argv:
+        channel_idx = sys.argv.index('--channel')
+        if channel_idx + 1 < len(sys.argv):
+            channel = sys.argv[channel_idx + 1]
     
     if command == 'show':
         show_recent_feedback()
@@ -1334,11 +1368,11 @@ def main():
             print("❌ No feedback provided. Cancelled.")
             sys.exit(0)
         
-        record_feedback(rank, f"{command}d", user_words, article)
+        record_feedback(rank, f"{command}d", user_words, article, channel=channel)
     
     elif command == 'save':
         reason = input("Why save this? (optional) ").strip() or "saved for later"
-        record_feedback(rank, 'saved', reason, article)
+        record_feedback(rank, 'saved', reason, article, channel=channel)
     
     else:
         print(f"❌ Unknown command: {command}")

@@ -1,0 +1,862 @@
+
+🧠 Starting RSS curation (mode: xai)...
+
+📡 Fetching Geopolitical Futures...
+   ✅ 5 entries from Geopolitical Futures
+📡 Fetching ZeroHedge...
+   ✅ 25 entries from ZeroHedge
+📡 Fetching The Big Picture...
+   ✅ 10 entries from The Big Picture
+📡 Fetching Fed On The Economy...
+   ✅ 50 entries from Fed On The Economy
+📡 Fetching Treasury MSPD...
+   ✅ 50 entries from Treasury MSPD
+📡 Fetching Al Jazeera...
+   ✅ 25 entries from Al Jazeera
+📡 Fetching ProPublica...
+   ✅ 20 entries from ProPublica
+📡 Fetching Antiwar.com...
+   ✅ 10 entries from Antiwar.com
+📡 Fetching Investing.com...
+   ✅ 10 entries from Investing.com
+📡 Fetching The Duran...
+   ✅ 35 entries from The Duran
+📡 Fetching O Globo...
+   ✅ 0 entries from O Globo
+📡 Fetching Deutsche Welle...
+   ✅ 50 entries from Deutsche Welle
+📡 Fetching Spiegel International...
+   ✅ 20 entries from Spiegel International
+📡 Fetching FAZ...
+   ✅ 50 entries from FAZ
+📡 Fetching Die Welt...
+   ✅ 30 entries from Die Welt
+
+📊 Total entries fetched: 390
+📌 Loaded 1 active interests from interests/ directory
+   geo_major: 1 flagged articles (+10 total boost)
+📡 Calling xAI Grok to score 390 articles...
+   Input: 24104 tokens, Output: 2460 tokens
+   Cost: $0.1574
+
+📊 Source distribution in top 20:
+   Fed On The Economy: 2 articles
+   Investing.com: 2 articles
+   The Duran: 2 articles
+   Deutsche Welle: 2 articles
+   Antiwar.com: 2 articles
+   Spiegel International: 2 articles
+   Geopolitical Futures: 1 articles
+   ZeroHedge: 1 articles
+   Al Jazeera: 1 articles
+   Treasury MSPD: 1 articles
+   FAZ: 1 articles
+   ProPublica: 1 articles
+   The Big Picture: 1 articles
+   Die Welt: 1 articles
+
+🏷️  Category distribution in top 20:
+   geo_major: 4 articles
+   geo_other: 4 articles
+   fiscal: 3 articles
+   monetary: 3 articles
+   other: 3 articles
+   technology: 3 articles
+💾 History updated: 20 articles saved
+
+================================================================================
+TOP 20 CURATED ARTICLES (Category + Diversity Weighted)
+================================================================================
+
+#1 [Geopolitical Futures] 🏷️  geo_major (xai)
+   Taiwan at the Center of a Fragile US-China Rapprochement
+   https://geopoliticalfutures.com/taiwan-at-the-center-of-a-fragile-us-china-rapprochement/
+   Published: 2026-02-20 11:00 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 19.0)
+   <p>On Monday, U.S. President Donald Trump said he was discussing the issue of arms sales to Taiwan with his Chinese counterpart, a very strategically ...
+
+#2 [ZeroHedge] 🏷️  geo_major (xai)
+   Trump Hikes Global Tariffs To 15%, Blasts "Ridiculous, Anti-American" SCOTUS Ruling
+   https://www.zerohedge.com/political/trump-hike-global-tariffs-15-blasts-ridiculous-anti-american-scotus-ruling
+   Published: 2026-02-21 23:15 UTC
+   Scores: 8.0/10 (raw: 8.0, final: 13.5)
+   <span class="field field--name-title field--type-string field--label-hidden">Trump Hikes Global Tariffs To 15%, Blasts "Ridiculous, Anti-American" SCO...
+
+#3 [Fed On The Economy] 🏷️  fiscal (xai)
+   A Look at Recent Developments in the Federal Fiscal Balance
+   https://www.stlouisfed.org/on-the-economy/2026/feb/look-recent-developments-federal-fiscal-balance
+   Published: 2026-02-05 16:00 UTC
+   Scores: 8.0/10 (raw: 8.0, final: 8.0)
+   A brief analysis of Treasury data shows a reduced primary deficit last year because of increased tariff revenue and flat government spending....
+
+#4 [Al Jazeera] 🏷️  geo_other (xai)
+   At least one killed in widescale Russian attacks on Ukraine’s energy sector
+   https://www.aljazeera.com/news/2026/2/22/at-least-one-killed-in-russian-widescale-attacks-on-ukraines-energy-sector?traffic_source=rss
+   Published: 2026-02-22 10:59 UTC
+   Scores: 8.0/10 (raw: 8.0, final: 8.0)
+   Main target was the energy sector, but residential buildings and a railway were also damaged, President Zelenskyy says....
+
+#5 [Investing.com] 🏷️  monetary (xai)
+   Technical strategist says S&P 500 "appears coiled for a significant move" soon
+   https://www.investing.com/news/stock-market-news/technical-strategist-says-sp-500-appears-coiled-for-a-significant-move-soon-4517588
+   Published: 2026-02-22 14:33 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 7.0)
+
+#6 [The Duran] 🏷️  other (xai)
+   Will War Begin Next Week?
+   https://theduran.com/will-war-begin-next-week/
+   Published: 2026-02-20 22:54 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 7.0)
+   <img alt="" class="webfeedsFeaturedVisual wp-post-image" height="352" src="https://i0.wp.com/theduran.com/wp-content/uploads/2026/02/castro2010.jpg?fi...
+
+#7 [Deutsche Welle] 🏷️  technology (xai)
+   US: Technical issues force NASA to postpone moon mission
+   https://www.dw.com/en/us-technical-issues-force-nasa-to-postpone-moon-mission/a-76075479?maca=en-rss-en-all-1573-xml-mrss
+   Published: 2026-02-21 20:32 UTC
+   Scores: 6.0/10 (raw: 6.0, final: 6.0)
+   The US space agency has said an issue with fuel supply is the culprit, though the source of the problem has not yet been found. The scheduled flyby is...
+
+#8 [Antiwar.com] 🏷️  geo_other (xai)
+   US Says 15,000 to 20,000 Escapees Remain at Large From Syrian ISIS Camp Exodus
+   https://news.antiwar.com/2026/02/20/us-says-15000-to-20000-escapees-remain-at-large-from-syrian-isis-camp-exodus/?utm_source=rss&utm_medium=rss&utm_campaign=us-says-15000-to-20000-escapees-remain-at-large-from-syrian-isis-camp-exodus
+   Published: 2026-02-21 03:45 UTC
+   Scores: 8.0/10 (raw: 8.0, final: 3.5)
+   This time last month, the Syrian military was sweeping through Kurdish territory in the country’s northeast Hasakeh Governorate, and having seized con...
+
+#9 [Treasury MSPD] 🏷️  fiscal (xai)
+   Monthly Statement of the Public Debt, January 31, 2026
+   https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding
+   Published: 2026-02-05 20:00 UTC
+   Scores: 8.0/10 (raw: 8.0, final: 3.5)
+   January 31, 2026-TABLE I -- SUMMARY OF TREASURY SECURITIES OUTSTANDING...
+
+#10 [FAZ] 🏷️  technology (xai)
+   Besser Schlafen: „Kohlenhydrate am Abend sind aus schlafmedizinischer Sicht sinnvoll“
+   https://www.faz.net/aktuell/stil/leib-seele/was-hilft-damit-wir-nachts-besser-schlafen-koennen-accg-110836974.html
+   Published: 2026-02-19 07:42 UTC
+   Scores: 6.0/10 (raw: 6.0, final: 1.5)
+   Viele Menschen schlafen schlecht. Liegt das an der Ernährung? Ein Mediziner erklärt, welche Rolle bestimmte Lebensmittel spielen, ob Schlaftees helfen...
+
+#11 [Spiegel International] 🏷️  other (xai)
+   U.S. Historian Robert Kagan: "We Are Watching a Country Fall Under Dictatorship Almost Without Resistance"
+   https://www.spiegel.de/international/world/u-s-historian-robert-kagan-we-are-watching-a-country-fall-under-dictatorship-almost-without-resistance-a-d262290b-cca0-4c2f-945d-2ef3b64c574f#ref=rss
+   Published: 2026-02-20 11:27 UTC
+   Scores: 6.0/10 (raw: 6.0, final: 1.5)
+   The Cold War? Child's play compared to what lies ahead, according to U.S. historian Robert Kagan. Trump, he says, is leading the world into the most d...
+
+#12 [ProPublica] 🏷️  geo_major (xai)
+   What Meetings Among Trump Lawyers Reveal About the FBI’s Seizure of Election Records in Georgia
+   https://www.propublica.org/article/thomas-albus-fulton-county-georgia-election-records
+   Published: 2026-02-13 16:50 UTC
+   Scores: 7.0/10 (raw: 7.0, final: -1.0)
+   <p>The post <a href="https://www.propublica.org/article/thomas-albus-fulton-county-georgia-election-records">What Meetings Among Trump Lawyers Reveal ...
+
+#13 [Deutsche Welle] 🏷️  monetary (xai)
+   Weaned off Putin's gas, Europe now addicted to US LNG
+   https://www.dw.com/en/weaned-off-putin-s-gas-europe-now-addicted-to-us-lng/a-75911713?maca=en-rss-en-all-1573-xml-mrss
+   Published: 2026-02-20 11:22 UTC
+   Scores: 7.0/10 (raw: 7.0, final: -6.5)
+   The EU is set to cut off Russian gas supplies in 2027. However, its promise to diversify and transition to renewables is under threat as LNG shipped f...
+
+#14 [The Big Picture] 🏷️  fiscal (xai)
+   Winners & Losers of SCOTUS Decision Striking Down Tariffs
+   https://ritholtz.com/2026/02/winners-losers-scotus-ieepa/
+   Published: 2026-02-20 17:02 UTC
+   Scores: 7.0/10 (raw: 7.0, final: -11.0)
+   <p>&#160; &#160; SCOTUS:  Article I, Section 8, of the Constitution specifies that “The Congress shall have Power To lay and collect Taxes, Duties, Im...
+
+#15 [Die Welt] 🏷️  other (xai)
+   Fünf Gegentore beenden Herthas Aufstiegstraum, Dresden punktet in Hannover
+   https://www.welt.de/sport/fussball/article699b0efecc6a6db1d3adcfd3/zweite-liga-fuenf-gegentore-beenden-herthas-aufstiegstraum-dresden-punktet-in-hannover.html
+   Published: 2026-02-22 14:59 UTC
+   Scores: 4.0/10 (raw: 4.0, final: -14.0)
+   Im Aufstiegsrennen der 2. Liga hat Hannover 96 einen herben Dämpfer erlitten. Die Niedersachsen verpassten gegen Dresden den Sieg und verloren auch no...
+
+#16 [Spiegel International] 🏷️  geo_other (xai)
+   Nord Stream: How Early Did the CIA Know about the Pipeline Attack?
+   https://www.spiegel.de/international/world/pipeline-explosion-in-the-baltic-sea-how-early-did-the-cia-know-about-the-nord-stream-attack-a-3191daf5-bb02-4395-b08b-3cb7acce557b#ref=rss
+   Published: 2026-02-19 14:04 UTC
+   Scores: 8.0/10 (raw: 8.0, final: -19.0)
+   In 2022, a Ukrainian commando blew up the Nord Stream natural gas pipeline. DER SPIEGEL has learned that the CIA may have spoken to the saboteurs duri...
+
+#17 [Fed On The Economy] 🏷️  monetary (xai)
+   The Shifting U.S. Import Landscape: Recent Changes in Tariffs and Trade
+   https://www.stlouisfed.org/on-the-economy/2026/jan/shifting-us-import-landscape-recent-changes-tariffs-trade
+   Published: 2026-01-15 16:09 UTC
+   Scores: 7.0/10 (raw: 7.0, final: -20.0)
+   This analysis examines the changes in effective tariff rates and import levels for major U.S. trade partners and types of goods since early 2025....
+
+#18 [The Duran] 🏷️  technology (xai)
+   Chinese Spring Festival Gala Becomes Super Bowl-like Stage for Humanoid Robots
+   https://theduran.com/chinese-spring-festival-gala-becomes-super-bowl-like-stage-for-humanoid-robots/
+   Published: 2026-02-17 19:58 UTC
+   Scores: 6.0/10 (raw: 6.0, final: -21.0)
+   <img alt="" class="webfeedsFeaturedVisual wp-post-image" height="371" src="https://i0.wp.com/theduran.com/wp-content/uploads/2026/02/Chinese-Robots.jp...
+
+#19 [Investing.com] 🏷️  geo_major (xai)
+   US trade chief says no countries plan to exit tariff deals
+   https://www.investing.com/news/economy-news/us-trade-chief-says-no-countries-plan-to-exit-tariff-deals-4517587
+   Published: 2026-02-22 14:24 UTC
+   Scores: 8.0/10 (raw: 8.0, final: -31.5)
+
+#20 [Antiwar.com] 🏷️  geo_other (xai)
+   Report: Starmer Blocking Trump From Using UK Bases To Attack Iran
+   https://news.antiwar.com/2026/02/19/report-starmer-blocking-trump-from-using-uk-bases-to-attack-iran/?utm_source=rss&utm_medium=rss&utm_campaign=report-starmer-blocking-trump-from-using-uk-bases-to-attack-iran
+   Published: 2026-02-19 23:44 UTC
+   Scores: 8.0/10 (raw: 8.0, final: -41.5)
+   British Prime Minister Keir Starmer is blocking President Trump from using British Royal Air Force (RAF) bases to launch an attack on Iran, The Telegr...
+
+
+💾 Results saved to curator_output.txt
+📁 Archive saved to curator_archive/curator_2026-02-22-0913.html
+🔖 Latest briefing: curator_latest.html
+📑 Index page updated: curator_index.html
+📱 Telegram message saved to telegram_message.txt
+📱 Sent Telegram message part 1/2
+⚠️  Failed to send Telegram message: 400 Client Error: Bad Request for url: https://api.telegram.org/bot7986520136:AAGpsENloCF5khnowS5Y2xNFAf7MsfrtwH4/sendMessage
+   Message saved to telegram_message.txt
+✅ Curator briefing generated successfully at Sun Feb 22 09:13:54 CST 2026
+📱 Message sent to Telegram automatically
+
+🧠 Starting RSS curation (mode: xai)...
+
+📡 Fetching Geopolitical Futures...
+   ✅ 5 entries from Geopolitical Futures
+📡 Fetching ZeroHedge...
+   ✅ 25 entries from ZeroHedge
+📡 Fetching The Big Picture...
+   ✅ 10 entries from The Big Picture
+📡 Fetching Fed On The Economy...
+   ✅ 50 entries from Fed On The Economy
+📡 Fetching Treasury MSPD...
+   ✅ 50 entries from Treasury MSPD
+📡 Fetching Al Jazeera...
+   ✅ 25 entries from Al Jazeera
+📡 Fetching ProPublica...
+   ✅ 20 entries from ProPublica
+📡 Fetching Antiwar.com...
+   ✅ 10 entries from Antiwar.com
+📡 Fetching Investing.com...
+   ✅ 10 entries from Investing.com
+📡 Fetching The Duran...
+   ✅ 35 entries from The Duran
+📡 Fetching O Globo...
+   ✅ 0 entries from O Globo
+📡 Fetching Deutsche Welle...
+   ✅ 50 entries from Deutsche Welle
+📡 Fetching Spiegel International...
+   ✅ 20 entries from Spiegel International
+📡 Fetching FAZ...
+   ✅ 50 entries from FAZ
+📡 Fetching Die Welt...
+   ✅ 30 entries from Die Welt
+
+📊 Total entries fetched: 390
+📌 Loaded 1 active interests from interests/ directory
+   geo_major: 1 flagged articles (+10 total boost)
+📡 Calling xAI Grok to score 390 articles...
+   Input: 24354 tokens, Output: 2451 tokens
+   Cost: $0.1585
+
+📊 Source distribution in top 20:
+   Investing.com: 2 articles
+   Fed On The Economy: 2 articles
+   The Duran: 2 articles
+   Deutsche Welle: 2 articles
+   Antiwar.com: 2 articles
+   FAZ: 2 articles
+   Geopolitical Futures: 1 articles
+   ZeroHedge: 1 articles
+   Al Jazeera: 1 articles
+   The Big Picture: 1 articles
+   ProPublica: 1 articles
+   Spiegel International: 1 articles
+   Treasury MSPD: 1 articles
+   Die Welt: 1 articles
+
+🏷️  Category distribution in top 20:
+   geo_major: 4 articles
+   monetary: 4 articles
+   geo_other: 3 articles
+   fiscal: 3 articles
+   technology: 3 articles
+   other: 3 articles
+💾 History updated: 20 articles saved
+
+================================================================================
+TOP 20 CURATED ARTICLES (Category + Diversity Weighted)
+================================================================================
+
+#1 [Geopolitical Futures] 🏷️  geo_major (xai)
+   Daily Memo: US Preparations for Iran Strike Continue Alongside Negotiations
+   https://geopoliticalfutures.com/daily-memo-us-preparations-for-iran-strike-continue-alongside-negotiations/
+   Published: 2026-02-23 15:22 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 19.0)
+   <p>Strike prep. As a security and nuclear agreement with Iran remains elusive, the United States has deployed significantly more military aircraft at ...
+
+#2 [ZeroHedge] 🏷️  geo_major (xai)
+   US Begins Evacuating Some Personnel From Beirut Embassy As Iran War Looms
+   https://www.zerohedge.com/geopolitical/us-begins-evacuating-some-personnel-beirut-embassy-iran-war-looms
+   Published: 2026-02-23 23:00 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 14.5)
+   <span class="field field--name-title field--type-string field--label-hidden">US Begins Evacuating Some Personnel From Beirut Embassy As Iran War Looms...
+
+#3 [Al Jazeera] 🏷️  geo_other (xai)
+   Putin’s strategy is that Ukraine will fall before he does: Ex-FM Kuleba
+   https://www.aljazeera.com/news/2026/2/23/slim-chance-of-ceasefire-ukraines-ex-fm-reflects-on-four-years-of-war?traffic_source=rss
+   Published: 2026-02-23 16:50 UTC
+   Scores: 8.0/10 (raw: 8.0, final: 8.0)
+   Dmytro Kuleba talks to Al Jazeera as Ukraine marks the fourth anniversary of war with Russia....
+
+#4 [The Big Picture] 🏷️  fiscal (xai)
+   Winners & Losers of SCOTUS Decision Striking Down Tariffs
+   https://ritholtz.com/2026/02/winners-losers-scotus-ieepa/
+   Published: 2026-02-20 17:02 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 7.0)
+   <p>&#160; &#160; SCOTUS:  Article I, Section 8, of the Constitution specifies that “The Congress shall have Power To lay and collect Taxes, Duties, Im...
+
+#5 [Investing.com] 🏷️  monetary (xai)
+   US led January yen rate checks, eyed joint intervention with Japan, Nikkei reports
+   https://www.investing.com/news/forex-news/us-took-initiative-in-january-yen-rate-checks-nikkei-reports-4520293
+   Published: 2026-02-24 00:54 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 7.0)
+
+#6 [Fed On The Economy] 🏷️  technology (xai)
+   Tracking AI’s Contribution to GDP Growth
+   https://www.stlouisfed.org/on-the-economy/2026/jan/tracking-ai-contribution-gdp-growth
+   Published: 2026-01-12 10:30 UTC
+   Scores: 6.0/10 (raw: 6.0, final: 6.0)
+   This analysis suggests recent investments in AI-related categories have contributed significantly to the real U.S. economic growth in the first nine m...
+
+#7 [ProPublica] 🏷️  other (xai)
+   South Carolina Hospitals Aren’t Required to Disclose Measles-Related Admissions. That Leaves Doctors in the Dark.
+   https://www.propublica.org/article/south-carolina-measles-hospital-admissions
+   Published: 2026-02-20 20:15 UTC
+   Scores: 4.0/10 (raw: 4.0, final: 4.0)
+   <p>The post <a href="https://www.propublica.org/article/south-carolina-measles-hospital-admissions">South Carolina Hospitals Aren’t Required to Disclo...
+
+#8 [Spiegel International] 🏷️  geo_other (xai)
+   Syria One Year After the Overthrow: The Enigma of Damascus
+   https://www.spiegel.de/international/world/syria-one-year-after-the-overthrow-the-enigma-of-damascus-a-2a23d177-ce16-4511-abc5-87270566163e#ref=rss
+   Published: 2026-01-05 16:34 UTC
+   Scores: 8.0/10 (raw: 8.0, final: 3.5)
+   Twenty years ago, Ahmed al-Sharaa was laying bombs to target Americans. Today, he is received in the White House. But where does the former terrorist ...
+
+#9 [The Duran] 🏷️  monetary (xai)
+   BRICS Ditches Currency Plan for Better Payment System
+   https://theduran.com/brics-ditches-currency-plan-for-better-payment-system/
+   Published: 2026-02-22 23:32 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 2.5)
+   <img alt="" class="webfeedsFeaturedVisual wp-post-image" height="372" src="https://i0.wp.com/theduran.com/wp-content/uploads/2026/02/maxresdefault-125...
+
+#10 [Deutsche Welle] 🏷️  technology (xai)
+   China boosts profitable renewables as Trump clings to coal
+   https://www.dw.com/en/china-boosts-profitable-renewables-as-trump-clings-to-coal/a-76061444?maca=en-rss-en-all-1573-xml-mrss
+   Published: 2026-02-23 13:01 UTC
+   Scores: 6.0/10 (raw: 6.0, final: 1.5)
+   The Trump administration has rolled back environmental protections and blocked green energy development, China is forging ahead....
+
+#11 [Treasury MSPD] 🏷️  fiscal (xai)
+   Monthly Statement of the Public Debt, January 31, 2026
+   https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding
+   Published: 2026-02-05 20:00 UTC
+   Scores: 6.0/10 (raw: 6.0, final: 1.5)
+   January 31, 2026-TABLE I -- SUMMARY OF TREASURY SECURITIES OUTSTANDING...
+
+#12 [Antiwar.com] 🏷️  geo_major (xai)
+   Report: Joint Chiefs Chairman Warns Trump of Significant Risks if US Attacks Iran
+   https://news.antiwar.com/2026/02/23/report-joint-chiefs-chairman-warns-trump-of-significant-risks-if-us-attacks-iran/?utm_source=rss&utm_medium=rss&utm_campaign=report-joint-chiefs-chairman-warns-trump-of-significant-risks-if-us-attacks-iran
+   Published: 2026-02-23 20:03 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 1.0)
+   Updated on February 23, 2026, at 4:52 pm EST Chairman of the Joint Chiefs of Staff Gen. Dan Caine, the highest-ranking US military officer, has warned...
+
+#13 [FAZ] 🏷️  other (xai)
+   Liveblog USA unter Trump: US-Generalstabschef sieht offenbar Risiken bei Militäreinsatz in Iran
+   https://www.faz.net/aktuell/politik/usa-unter-trump/liveblog-usa-unter-trump-us-generalstabschef-sieht-risiken-bei-militaereinsatz-in-iran-faz-19444916.html
+   Published: 2026-02-23 22:35 UTC
+   Scores: 4.0/10 (raw: 4.0, final: -0.5)
+   Liveticker zur US-Politik unter Donald Trump aktuell: Aktuelle News & Nachrichten von heute ► Jetzt lesen im Liveticker der FAZ...
+
+#14 [Die Welt] 🏷️  other (xai)
+   EU scheitert an Orbán-Blockade – Keine neue Sanktionen und Hilfen zum Jahrestag des Ukraine-Kriegs
+   https://www.welt.de/politik/ausland/article699cf1e2ee35d0f0647c5450/bitterer-rueckschlag-eu-scheitert-an-orban-blockade-keine-neue-sanktionen-und-hilfen-zum-jahrestag-des-ukraine-kriegs.html
+   Published: 2026-02-24 00:58 UTC
+   Scores: 4.0/10 (raw: 4.0, final: -14.0)
+   Die EU erlebt zum Jahrestag der russischen Invasion in die Ukraine ein Debakel. Können Ursula von der Leyen und andere Spitzenpolitiker in Kiew Schade...
+
+#15 [Antiwar.com] 🏷️  geo_other (xai)
+   US Military Blows Up Another Small Boat in the Caribbean Sea, Killing Three
+   https://news.antiwar.com/2026/02/23/us-military-blows-up-another-small-boat-in-the-caribbean-sea-killing-three/?utm_source=rss&utm_medium=rss&utm_campaign=us-military-blows-up-another-small-boat-in-the-caribbean-sea-killing-three
+   Published: 2026-02-23 21:34 UTC
+   Scores: 7.0/10 (raw: 7.0, final: -20.0)
+   US Southern Command announced on Monday that its forces blew up yet another boat it accused of running drugs, killing three people. The command said t...
+
+#16 [Fed On The Economy] 🏷️  fiscal (xai)
+   Flash Report: January Jobless Data May Signal Improving Labor Market
+   https://www.stlouisfed.org/on-the-economy/2026/feb/flash-report-january-jobless-data-may-signal-improving-labor-market
+   Published: 2026-02-11 21:20 UTC
+   Scores: 7.0/10 (raw: 7.0, final: -20.0)
+   An analysis breaks down how changes in people moving into and out of unemployment and the labor force affected January’s jobless rate, which fell to 4...
+
+#17 [Deutsche Welle] 🏷️  monetary (xai)
+   Trump tariffs struck down: What's his plan now?
+   https://www.dw.com/en/trump-tariffs-struck-down-what-s-his-plan-now/a-76060070?maca=en-rss-en-all-1573-xml-mrss
+   Published: 2026-02-20 15:53 UTC
+   Scores: 7.0/10 (raw: 7.0, final: -20.0)
+   The US Supreme Court has ruled that most of the president's tariffs are unconstitutional because of how he implemented them. But the administration is...
+
+#18 [Investing.com] 🏷️  technology (xai)
+   Exclusive-China’s DeepSeek trained AI model on Nvidia’s best chip despite US ban, official says
+   https://www.investing.com/news/stock-market-news/exclusivechinas-deepseek-trained-ai-model-on-nvidias-best-chip-despite-us-ban-official-says-4520307
+   Published: 2026-02-24 01:00 UTC
+   Scores: 6.0/10 (raw: 6.0, final: -21.0)
+
+#19 [FAZ] 🏷️  geo_major (xai)
+   Forsa-Umfrage: Die Parallelwelt der AfD-Anhänger
+   https://www.faz.net/aktuell/rhein-main/frankfurt/umfrage-zur-kommunalwahl-in-frankfurt-die-parallelwelt-der-afd-waehler-200558444.html
+   Published: 2026-02-23 19:20 UTC
+   Scores: 9.0/10 (raw: 9.0, final: -30.5)
+   Die Forsa-Umfrage zur Kommunalwahl in Frankfurt zeigt: AfD-Wähler leben in einem eigenen Kosmos. Sie informieren sich anders – und sie blicken anders ...
+
+#20 [The Duran] 🏷️  monetary (xai)
+   Supreme Court Declares Trump Tariffs Unconstitutional
+   https://theduran.com/supreme-court-declares-trump-tariffs-unconstitutional/
+   Published: 2026-02-21 10:22 UTC
+   Scores: 7.0/10 (raw: 7.0, final: -42.5)
+   <img alt="" class="webfeedsFeaturedVisual wp-post-image" height="372" src="https://i0.wp.com/theduran.com/wp-content/uploads/2026/02/maxresdefault-116...
+
+
+💾 Results saved to curator_output.txt
+📁 Archive saved to curator_archive/curator_2026-02-23-1914.html
+🔖 Latest briefing: curator_latest.html
+📑 Index page updated: curator_index.html
+✅ Sent 10 articles to Telegram
+✅ Curator briefing generated and sent successfully at Mon Feb 23 19:14:33 CST 2026
+
+🧠 Starting RSS curation (mode: xai)...
+
+📡 Fetching Geopolitical Futures...
+   ✅ 5 entries from Geopolitical Futures
+📡 Fetching ZeroHedge...
+   ✅ 25 entries from ZeroHedge
+📡 Fetching The Big Picture...
+   ✅ 10 entries from The Big Picture
+📡 Fetching Fed On The Economy...
+   ✅ 50 entries from Fed On The Economy
+📡 Fetching Treasury MSPD...
+   ✅ 50 entries from Treasury MSPD
+📡 Fetching Al Jazeera...
+   ✅ 25 entries from Al Jazeera
+📡 Fetching ProPublica...
+   ✅ 20 entries from ProPublica
+📡 Fetching Antiwar.com...
+   ✅ 10 entries from Antiwar.com
+📡 Fetching Investing.com...
+   ✅ 10 entries from Investing.com
+📡 Fetching The Duran...
+   ✅ 35 entries from The Duran
+📡 Fetching O Globo...
+   ✅ 0 entries from O Globo
+📡 Fetching Deutsche Welle...
+   ✅ 50 entries from Deutsche Welle
+📡 Fetching Spiegel International...
+   ❌ Error fetching Spiegel International: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+📡 Fetching FAZ...
+   ✅ 50 entries from FAZ
+📡 Fetching Die Welt...
+   ✅ 30 entries from Die Welt
+
+📊 Total entries fetched: 370
+📌 Loaded 1 active interests from interests/ directory
+   geo_major: 1 flagged articles (+10 total boost)
+📡 Calling xAI Grok to score 370 articles...
+   Input: 23134 tokens, Output: 2308 tokens
+   Cost: $0.1503
+
+📊 Source distribution in top 20:
+   ZeroHedge: 2 articles
+   The Big Picture: 2 articles
+   The Duran: 2 articles
+   Antiwar.com: 2 articles
+   Investing.com: 2 articles
+   Deutsche Welle: 2 articles
+   Die Welt: 2 articles
+   Geopolitical Futures: 1 articles
+   Al Jazeera: 1 articles
+   Fed On The Economy: 1 articles
+   ProPublica: 1 articles
+   FAZ: 1 articles
+   Treasury MSPD: 1 articles
+
+🏷️  Category distribution in top 20:
+   geo_major: 4 articles
+   geo_other: 4 articles
+   fiscal: 3 articles
+   technology: 3 articles
+   monetary: 3 articles
+   other: 3 articles
+💾 History updated: 20 articles saved
+
+================================================================================
+TOP 20 CURATED ARTICLES (Category + Diversity Weighted)
+================================================================================
+
+#1 [Geopolitical Futures] 🏷️  geo_major (xai)
+   Trump’s Ultimatum to Iran
+   https://geopoliticalfutures.com/trumps-ultimatum-to-iran/
+   Published: 2026-02-24 11:00 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 19.0)
+   <p>War is looming between the United States and Iran at a time when the regime in Tehran is facing its most serious challenges since the 1979 revoluti...
+
+#2 [ZeroHedge] 🏷️  geo_major (xai)
+   US Begins Evacuating Some Personnel From Beirut Embassy As Iran War Looms
+   https://www.zerohedge.com/geopolitical/us-begins-evacuating-some-personnel-beirut-embassy-iran-war-looms
+   Published: 2026-02-23 23:00 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 14.5)
+   <span class="field field--name-title field--type-string field--label-hidden">US Begins Evacuating Some Personnel From Beirut Embassy As Iran War Looms...
+
+#3 [Al Jazeera] 🏷️  geo_other (xai)
+   Israeli forces fired over 900 bullets to kill Gaza medics in 2025: Report
+   https://www.aljazeera.com/features/2026/2/24/israeli-forces-fired-over-900-bullets-to-kill-gaza-medics-in-2025-report?traffic_source=rss
+   Published: 2026-02-24 12:52 UTC
+   Scores: 8.0/10 (raw: 8.0, final: 8.0)
+   Investigation reveals Israeli soldiers fired over 900 bullets at aid workers before executing survivors in Gaza....
+
+#4 [The Big Picture] 🏷️  fiscal (xai)
+   Part II: IEEPA Tariff Ruling’s Losers
+   https://ritholtz.com/2026/02/part-ii-ieepa-tariff-rulings-losers/
+   Published: 2026-02-23 17:17 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 7.0)
+   <p>&#160; &#160; This is Part II; Part I was published here Friday &#160; &#160; Soon after the Supreme Court dropped its IEEPA decision Friday mornin...
+
+#5 [Fed On The Economy] 🏷️  technology (xai)
+   Tracking AI’s Contribution to GDP Growth
+   https://www.stlouisfed.org/on-the-economy/2026/jan/tracking-ai-contribution-gdp-growth
+   Published: 2026-01-12 10:30 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 7.0)
+   This analysis suggests recent investments in AI-related categories have contributed significantly to the real U.S. economic growth in the first nine m...
+
+#6 [The Duran] 🏷️  monetary (xai)
+   BRICS Ditches Currency Plan for Better Payment System
+   https://theduran.com/brics-ditches-currency-plan-for-better-payment-system/
+   Published: 2026-02-22 23:32 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 7.0)
+   <img alt="" class="webfeedsFeaturedVisual wp-post-image" height="372" src="https://i0.wp.com/theduran.com/wp-content/uploads/2026/02/maxresdefault-125...
+
+#7 [ProPublica] 🏷️  other (xai)
+   Amid Mass ICE Arrests, Trump Pardon Recipient Juan Orlando Hernández Given Special Treatment
+   https://www.propublica.org/article/trump-ice-pardon-juan-orlando-hernandez-honduras-prison-special-treatment
+   Published: 2026-02-18 10:30 UTC
+   Scores: 4.0/10 (raw: 4.0, final: 4.0)
+   <p>The post <a href="https://www.propublica.org/article/trump-ice-pardon-juan-orlando-hernandez-honduras-prison-special-treatment">Amid Mass ICE Arres...
+
+#8 [FAZ] 🏷️  monetary (xai)
+   Geldanlage: Die zehn Lieblings-ETF der Vermögensverwalter
+   https://www.faz.net/aktuell/finanzen/pro-finanzen/auf-diese-etf-setzen-vermoegensverwalter-msci-world-nur-auf-platz-vier-110525965.html
+   Published: 2025-06-09 14:14 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 2.5)
+   Auch unabhängige Vermögensverwalter setzen vermehrt auf ETF statt auf klassische Investmentfonds.  Was ihre Favoriten sind – und warum der MSCI World ...
+
+#9 [Treasury MSPD] 🏷️  fiscal (xai)
+   Monthly Statement of the Public Debt, January 31, 2026
+   https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding
+   Published: 2026-02-05 20:00 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 2.5)
+   January 31, 2026-TABLE I -- SUMMARY OF TREASURY SECURITIES OUTSTANDING...
+
+#10 [Antiwar.com] 🏷️  geo_other (xai)
+   US Military Blows Up Another Small Boat in the Caribbean Sea, Killing Three
+   https://news.antiwar.com/2026/02/23/us-military-blows-up-another-small-boat-in-the-caribbean-sea-killing-three/?utm_source=rss&utm_medium=rss&utm_campaign=us-military-blows-up-another-small-boat-in-the-caribbean-sea-killing-three
+   Published: 2026-02-23 21:34 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 2.5)
+   US Southern Command announced on Monday that its forces blew up yet another boat it accused of running drugs, killing three people. The command said t...
+
+#11 [Investing.com] 🏷️  technology (xai)
+   Intuit partners with Anthropic to bring custom AI agents to businesses, shares up
+   https://www.investing.com/news/stock-market-news/intuit-partners-with-anthropic-to-bring-custom-ai-agents-to-businesses-shares-up-4521361
+   Published: 2026-02-24 13:14 UTC
+   Scores: 6.0/10 (raw: 6.0, final: 1.5)
+
+#12 [Deutsche Welle] 🏷️  geo_major (xai)
+   China shock: Will Merz take on Germany's top rival?
+   https://www.dw.com/en/china-shock-will-merz-take-on-germany-s-top-rival/a-75925263?maca=en-rss-en-all-1573-xml-mrss
+   Published: 2026-02-24 09:40 UTC
+   Scores: 8.0/10 (raw: 8.0, final: 0.0)
+   Chancellor Friedrich Merz is scrambling to defend German industry from the economic upheaval caused by intense rivalry from China. Momentum is buildin...
+
+#13 [Die Welt] 🏷️  other (xai)
+   Die Hamburger Hochbahn wird 48 Stunden lang bestreikt
+   https://www.welt.de/regionales/hamburg/article699da5b976d16623d4e8b1f6/verdi-die-hamburger-hochbahn-wird-48-stunden-lang-bestreikt.html
+   Published: 2026-02-24 13:26 UTC
+   Scores: 4.0/10 (raw: 4.0, final: -0.5)
+   Von Freitag 3 Uhr bis Sonntag 3 Uhr sollen die Beschäftigten der Hamburger Hochbahn nicht arbeiten –  so will es die Gewerkschaft Verdi, die im Tarifk...
+
+#14 [Die Welt] 🏷️  fiscal (xai)
+   E10 für die Gasheizung – Kommt statt der Wärmepumpen-Pflicht die Grüngas-Quote?
+   https://www.welt.de/wirtschaft/plus699d541c7859a5f5c2f117ee/gruengas-statt-waermepumpe-das-heikle-dilemma-beim-neuen-heizungsgesetz.html
+   Published: 2026-02-24 12:22 UTC
+   Scores: 7.0/10 (raw: 7.0, final: -20.0)
+   In dieser Woche will die Bundesregierung die Eckpunkte für ein neues Heizungsgesetz vorlegen. Die De-facto-Pflicht zur Wärmepumpe könnte durch eine Gr...
+
+#15 [Deutsche Welle] 🏷️  geo_other (xai)
+   US strikes suspected drug boat in Caribbean, killing 3
+   https://www.dw.com/en/us-strikes-suspected-drug-boat-in-caribbean-killing-3/a-76097212?maca=en-rss-en-all-1573-xml-mrss
+   Published: 2026-02-23 20:12 UTC
+   Scores: 7.0/10 (raw: 7.0, final: -20.0)
+   The Trump administration argues that the boat strikes are important to curb the flow of illicit narcotics. Critics say the strikes violate internation...
+
+#16 [ZeroHedge] 🏷️  technology (xai)
+   AMD Shares Soar After Meta Chip Deal Worth More Than $100 Billion
+   https://www.zerohedge.com/ai/amd-shares-soar-after-meta-chip-deal-worth-more-100-billion
+   Published: 2026-02-24 12:45 UTC
+   Scores: 7.0/10 (raw: 7.0, final: -20.0)
+   <span class="field field--name-title field--type-string field--label-hidden">AMD Shares Soar After Meta Chip Deal Worth More Than $100 Billion</span> ...
+
+#17 [Investing.com] 🏷️  monetary (xai)
+   Bitcoin Depot introduces ID check for every crypto ATM transaction
+   https://www.investing.com/news/company-news/bitcoin-depot-introduces-id-check-for-every-crypto-atm-transaction-93CH-4521396
+   Published: 2026-02-24 13:12 UTC
+   Scores: 6.0/10 (raw: 6.0, final: -21.0)
+
+#18 [The Big Picture] 🏷️  other (xai)
+   10 Tuesday AM Reads
+   https://ritholtz.com/2026/02/10-tuesday-am-reads-464/
+   Published: 2026-02-24 11:30 UTC
+   Scores: 5.0/10 (raw: 5.0, final: -22.0)
+   <p>My Two-for-Tuesday morning train WFH reads: • A Yale Professor’s Investment Formula Says You Need More Stocks. See How It Works. James Choi&#8217;s...
+
+#19 [Antiwar.com] 🏷️  geo_major (xai)
+   Report: Joint Chiefs Chairman Warns Trump of Significant Risks if US Attacks Iran
+   https://news.antiwar.com/2026/02/23/report-joint-chiefs-chairman-warns-trump-of-significant-risks-if-us-attacks-iran/?utm_source=rss&utm_medium=rss&utm_campaign=report-joint-chiefs-chairman-warns-trump-of-significant-risks-if-us-attacks-iran
+   Published: 2026-02-23 20:03 UTC
+   Scores: 9.0/10 (raw: 9.0, final: -30.5)
+   Updated on February 23, 2026, at 4:52 pm EST Chairman of the Joint Chiefs of Staff Gen. Dan Caine, the highest-ranking US military officer, has warned...
+
+#20 [The Duran] 🏷️  geo_other (xai)
+   Saudi Arabia picks Syria as the new transit state for the East-to-Mediterranean Data Corridor
+   https://theduran.com/saudi-arabia-picks-syria-as-the-new-transit-state-for-the-east-to-mediterranean-data-corridor/
+   Published: 2026-02-22 14:50 UTC
+   Scores: 7.0/10 (raw: 7.0, final: -42.5)
+   Steven Sahiounie, journalist and political commentator Saudi Arabia has planned to designate Syria as the primary transit country for the East-to-Medi...
+
+
+💾 Results saved to curator_output.txt
+📁 Archive saved to curator_archive/curator_2026-02-24-0912.html
+🔖 Latest briefing: curator_latest.html
+📑 Index page updated: curator_index.html
+✅ Sent 10 articles to Telegram
+✅ Curator briefing generated and sent successfully at Tue Feb 24 09:13:03 CST 2026
+
+🧠 Starting RSS curation (mode: xai)...
+
+📡 Fetching Geopolitical Futures...
+   ✅ 5 entries from Geopolitical Futures
+📡 Fetching ZeroHedge...
+   ✅ 25 entries from ZeroHedge
+📡 Fetching The Big Picture...
+   ✅ 10 entries from The Big Picture
+📡 Fetching Fed On The Economy...
+   ✅ 50 entries from Fed On The Economy
+📡 Fetching Treasury MSPD...
+   ✅ 50 entries from Treasury MSPD
+📡 Fetching Al Jazeera...
+   ✅ 25 entries from Al Jazeera
+📡 Fetching ProPublica...
+   ✅ 20 entries from ProPublica
+📡 Fetching Antiwar.com...
+   ✅ 10 entries from Antiwar.com
+📡 Fetching Investing.com...
+   ✅ 10 entries from Investing.com
+📡 Fetching The Duran...
+   ✅ 35 entries from The Duran
+📡 Fetching O Globo...
+   ✅ 0 entries from O Globo
+📡 Fetching Deutsche Welle...
+   ✅ 50 entries from Deutsche Welle
+📡 Fetching Spiegel International...
+   ✅ 20 entries from Spiegel International
+📡 Fetching FAZ...
+   ✅ 50 entries from FAZ
+📡 Fetching Die Welt...
+   ✅ 30 entries from Die Welt
+
+📊 Total entries fetched: 390
+📌 Loaded 1 active interests from interests/ directory
+   geo_major: 1 flagged articles (+10 total boost)
+📡 Calling xAI Grok to score 390 articles...
+⚠️  xAI API error: Error code: 403 - {'code': 'The caller does not have permission to execute the specified operation', 'error': 'The API key xai-...eoLr is disabled and cannot be used to perform requests. To enable the API key, go to https://console.x.ai/team/7d2374b8-e3d2-4e93-856f-c05d45f2f780/api-keys.'}
+   Falling back to mechanical scoring...
+
+📊 Source distribution in top 20:
+   ZeroHedge: 2 articles
+   The Big Picture: 2 articles
+   Fed On The Economy: 2 articles
+   Al Jazeera: 2 articles
+   Deutsche Welle: 2 articles
+   Die Welt: 2 articles
+   Geopolitical Futures: 1 articles
+   Investing.com: 1 articles
+   FAZ: 1 articles
+   Antiwar.com: 1 articles
+   Treasury MSPD: 1 articles
+   The Duran: 1 articles
+   ProPublica: 1 articles
+   Spiegel International: 1 articles
+
+🏷️  Category distribution in top 20:
+   geo_major: 5 articles
+   other: 5 articles
+   fiscal: 4 articles
+   geo_other: 4 articles
+   monetary: 2 articles
+💾 History updated: 20 articles saved
+
+================================================================================
+TOP 20 CURATED ARTICLES (Category + Diversity Weighted)
+================================================================================
+
+#1 [ZeroHedge] 🏷️  geo_major (mechanical)
+   Market Bets Soar That Fed Will Cut Rates To 2% In 2027
+   https://www.zerohedge.com/markets/market-bets-soar-fed-will-cut-rates-2-2027
+   Published: 2026-02-25 11:55 UTC
+   Scores: 8.8/10 (raw: 175.4, final: 18.8)
+   <span class="field field--name-title field--type-string field--label-hidden">Market Bets Soar That Fed Will Cut Rates To 2% In 2027</span>            ...
+
+#2 [Geopolitical Futures] 🏷️  geo_major (mechanical)
+   The Tigray Powder Keg in the Horn of Africa
+   https://geopoliticalfutures.com/the-tigray-powder-keg-in-the-horn-of-africa/
+   Published: 2026-02-25 11:00 UTC
+   Scores: 7.6/10 (raw: 152.7, final: 13.1)
+   <p>Ethiopia and Eritrea are once again on the verge of conflict, just a few years after Ethiopia endured a devastating civil war in its northern Tigra...
+
+#3 [The Big Picture] 🏷️  fiscal (mechanical)
+   10 Wednesday AM Reads
+   https://ritholtz.com/2026/02/10-wednesday-am-reads-364/
+   Published: 2026-02-25 11:30 UTC
+   Scores: 7.2/10 (raw: 143.2, final: 7.2)
+   <p>My mid-week morning train WFH reads: • US Economy Fact Sheet: State of the Union 2026: USAFacts&#8217; data-driven snapshot of where the economy ac...
+
+#4 [Fed On The Economy] 🏷️  other (mechanical)
+   Tracking Banking Access Using the Bank On National Data Hub
+   https://www.stlouisfed.org/on-the-economy/2026/feb/tracking-banking-access-using-bank-on-national-data-hub
+   Published: 2026-02-24 15:00 UTC
+   Scores: 5.4/10 (raw: 108.9, final: 5.4)
+   Bank On account openings surpassed 4.8 million in 2024—a 20% increase from 2023—according to data reported by financial institutions to our BOND Hub....
+
+#5 [Al Jazeera] 🏷️  geo_other (mechanical)
+   Netanyahu greets Indian PM Modi as he lands in Israel
+   https://www.aljazeera.com/video/newsfeed/2026/2/25/netanyahu-greets-indian-pm-modi-as-he-lands-in-israel?traffic_source=rss
+   Published: 2026-02-25 12:49 UTC
+   Scores: 5.0/10 (raw: 99.8, final: 5.0)
+   India’s Prime Minister Narendra Modi was greeted by Benjamin Netanyahu in Israel....
+
+#6 [Deutsche Welle] 🏷️  monetary (mechanical)
+   Winter Olympics closing ceremony draws curtain on Games
+   https://www.dw.com/en/winter-olympics-closing-ceremony-draws-curtain-on-games/live-76079783?maca=en-rss-en-all-1573-xml-mrss
+   Published: 2026-02-22 21:29 UTC
+   Scores: 3.9/10 (raw: 78.5, final: 3.9)
+   A distinctly Italian mix of opera, dance and DJs was mixed with a few last gold medals as Italy passed the Winter Olympic flame to France. Here's how ...
+
+#7 [Investing.com] 🏷️  other (mechanical)
+   Cantor Fitzgerald reiterates Supernus stock Overweight on supply gains
+   https://www.investing.com/news/analyst-ratings/cantor-fitzgerald-reiterates-supernus-stock-overweight-on-supply-gains-93CH-4524039
+   Published: 2026-02-25 12:50 UTC
+   Scores: 5.2/10 (raw: 104.9, final: 0.7)
+
+#8 [Die Welt] 🏷️  geo_other (mechanical)
+   Kulturstaatsminister Weimer will Berlinale-Chefin nach Eklat bei Preisverleihung ablösen
+   https://www.welt.de/kultur/article699eeaf5f323ffab6238dd33/filmfestival-kulturstaatsminister-weimer-will-berlinale-chefin-nach-eklat-bei-preisverleihung-abloesen.html
+   Published: 2026-02-25 12:42 UTC
+   Scores: 5.0/10 (raw: 99.8, final: 0.5)
+   Kulturstaatsminister Weimer will Berlinale-Chefin Tuttle nach dem Eklat um israelfeindliche Äußerungen bei der Preisverleihung abberufen. Am Donnersta...
+
+#9 [FAZ] 🏷️  monetary (mechanical)
+   Zwischen Tränen und Badehosen: Olympische Momente, die nicht jeder sah
+   https://www.faz.net/aktuell/sport/olympische-winterspiele/olympia-2026-momente-die-bei-den-winterspielen-nicht-jeder-sah-110841880.html
+   Published: 2026-02-22 19:17 UTC
+   Scores: 3.9/10 (raw: 77.5, final: -0.6)
+   Lindsey Vonns Sturz, die Maske von Wladyslaw Heraskewytsch, sechs Goldmedaillen für Johannes Hoesflot Klaebo: alles oft gezeigt. Zeit also für Momente...
+
+#10 [Antiwar.com] 🏷️  geo_major (mechanical)
+   After Four Years of War, Zelensky Insists Victory Requires Ukraine Reclaiming All Territory Captured by Russia
+   https://news.antiwar.com/2026/02/23/after-four-years-of-war-zelensky-insists-victory-requires-ukraine-reclaiming-all-territory-captured-by-russia/?utm_source=rss&utm_medium=rss&utm_campaign=after-four-years-of-war-zelensky-insists-victory-requires-ukraine-reclaiming-all-territory-captured-by-russia
+   Published: 2026-02-23 23:59 UTC
+   Scores: 5.0/10 (raw: 99.5, final: -3.0)
+   Tuesday marks four years since Russia first launched its invasion of Ukraine, and, despite President Trump promising to end the war quickly, there&#82...
+
+#11 [Treasury MSPD] 🏷️  fiscal (mechanical)
+   Monthly Statement of the Public Debt, January 31, 2026
+   https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding
+   Published: 2026-02-05 20:00 UTC
+   Scores: 0.7/10 (raw: 13.0, final: -3.9)
+   January 31, 2026-TABLE I -- SUMMARY OF TREASURY SECURITIES OUTSTANDING...
+
+#12 [The Duran] 🏷️  geo_other (mechanical)
+   Iran-US row; All military options bad for Trump. Diplomacy best option
+   https://theduran.com/iran-us-row-all-military-options-bad-for-trump-diplomacy-best-option/
+   Published: 2026-02-25 10:21 UTC
+   Scores: 4.9/10 (raw: 98.8, final: -13.1)
+   <img alt="" class="webfeedsFeaturedVisual wp-post-image" height="372" src="https://i0.wp.com/theduran.com/wp-content/uploads/2026/02/maxresdefault-137...
+
+#13 [ProPublica] 🏷️  other (mechanical)
+   Trump Administration Moves to Allow Intelligence Agencies Easier Access to Law Enforcement Files
+   https://www.propublica.org/article/trump-cia-law-enforcement-records-privacy-intelligence-community
+   Published: 2026-02-25 10:00 UTC
+   Scores: 4.9/10 (raw: 98.7, final: -13.1)
+   <p>The post <a href="https://www.propublica.org/article/trump-cia-law-enforcement-records-privacy-intelligence-community">Trump Administration Moves t...
+
+#14 [Al Jazeera] 🏷️  fiscal (mechanical)
+   Bodo/Glimt knock out Inter Milan, continue fairytale Champions League run
+   https://www.aljazeera.com/sports/2026/2/25/bodo-glimt-knock-out-inter-milan-continue-fairytale-champions-league?traffic_source=rss
+   Published: 2026-02-25 08:19 UTC
+   Scores: 4.9/10 (raw: 98.0, final: -22.1)
+   The Norwegian team of no stars with a tiny budget have moved onto the last 16 of the world&#039;s biggest club competition....
+
+#15 [Spiegel International] 🏷️  geo_major (mechanical)
+   U.S. Historian Robert Kagan: "We Are Watching a Country Fall Under Dictatorship Almost Without Resistance"
+   https://www.spiegel.de/international/world/u-s-historian-robert-kagan-we-are-watching-a-country-fall-under-dictatorship-almost-without-resistance-a-d262290b-cca0-4c2f-945d-2ef3b64c574f#ref=rss
+   Published: 2026-02-20 11:27 UTC
+   Scores: 2.5/10 (raw: 49.3, final: -28.0)
+   The Cold War? Child's play compared to what lies ahead, according to U.S. historian Robert Kagan. Trump, he says, is leading the world into the most d...
+
+#16 [The Big Picture] 🏷️  other (mechanical)
+   10 Tuesday AM Reads
+   https://ritholtz.com/2026/02/10-tuesday-am-reads-464/
+   Published: 2026-02-24 11:30 UTC
+   Scores: 5.7/10 (raw: 113.2, final: -43.8)
+   <p>My Two-for-Tuesday morning train WFH reads: • A Yale Professor’s Investment Formula Says You Need More Stocks. See How It Works. James Choi&#8217;s...
+
+#17 [Deutsche Welle] 🏷️  geo_other (mechanical)
+   Journalist deaths reach new high in 2025 — CPJ
+   https://www.dw.com/en/journalist-deaths-reach-new-high-in-2025-cpj/a-76113744?maca=en-rss-en-all-1573-xml-mrss
+   Published: 2026-02-25 10:06 UTC
+   Scores: 4.9/10 (raw: 98.7, final: -44.6)
+   A record number of journalists and media workers were killed in 2025 for a second year in a row, the press freedom organization said. It blamed Israel...
+
+#18 [Fed On The Economy] 🏷️  fiscal (mechanical)
+   Inflation and the Accuracy of Public Debt Forecasts
+   https://www.stlouisfed.org/on-the-economy/2026/feb/inflation-accuracy-public-debt-forecasts
+   Published: 2026-02-17 14:15 UTC
+   Scores: 1.8/10 (raw: 36.5, final: -47.7)
+   An analysis of public debt projections by the CBO examines how forecasting divergences can differ in a high-inflation versus a low-inflation environme...
+
+#19 [ZeroHedge] 🏷️  geo_major (mechanical)
+   Trump Talks Economy, Immigration, Taxes, And AI In State Of The Union Address
+   https://www.zerohedge.com/political/5-things-watch-trumps-state-union-address-tonight
+   Published: 2026-02-25 01:45 UTC
+   Scores: 8.0/10 (raw: 159.8, final: -63.0)
+   <span class="field field--name-title field--type-string field--label-hidden">Trump Talks Economy, Immigration, Taxes, And AI In State Of The Union Add...
+
+#20 [Die Welt] 🏷️  other (mechanical)
+   „Unmoralische Zahlungen“ – Rummenigge prangert eskalierenden Transfermarkt an
+   https://www.welt.de/sport/fussball/bundesliga/fc-bayern-muenchen/article699ee0c11d5ca1372db10f09/fc-bayern-unmoralische-zahlungen-rummenigge-prangert-eskalierenden-transfermarkt-an.html
+   Published: 2026-02-25 12:56 UTC
+   Scores: 5.0/10 (raw: 99.9, final: -76.0)
+   Matthias Sammer wünscht sich die Abschaffung von Beratern, Uli Hoeneß kündigt eine härtere Gangart gegen sie an. Nun stimmt auch Karl-Heinz Rummenigge...
+
+
+💾 Results saved to curator_output.txt
+📁 Archive saved to curator_archive/curator_2026-02-25-0711.html
+🔖 Latest briefing: curator_latest.html
+📑 Index page updated: curator_index.html
+❌ ERROR: Failed to send Telegram briefing

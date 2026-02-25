@@ -1,0 +1,47 @@
+Tue Feb 24 19:26:42 CST 2026: Starting cloudflared tunnel...
+2026-02-25T01:26:42Z INF Thank you for trying Cloudflare Tunnel. Doing so, without a Cloudflare account, is a quick way to experiment and try it out. However, be aware that these account-less Tunnels have no uptime guarantee, are subject to the Cloudflare Online Services Terms of Use (https://www.cloudflare.com/website-terms/), and Cloudflare reserves the right to investigate your use of Tunnels for violations of such terms. If you intend to use Tunnels in production you should use a pre-created named tunnel by following: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps
+2026-02-25T01:26:42Z INF Requesting new quick Tunnel on trycloudflare.com...
+2026-02-25T01:26:45Z INF +--------------------------------------------------------------------------------------------+
+2026-02-25T01:26:45Z INF |  Your quick Tunnel has been created! Visit it at (it may take some time to be reachable):  |
+2026-02-25T01:26:45Z INF |  https://massive-comment-mounted-biggest.trycloudflare.com                                 |
+2026-02-25T01:26:45Z INF +--------------------------------------------------------------------------------------------+
+2026-02-25T01:26:45Z INF Cannot determine default configuration path. No file [config.yml config.yaml] in [~/.cloudflared ~/.cloudflare-warp ~/cloudflare-warp /etc/cloudflared /usr/local/etc/cloudflared]
+2026-02-25T01:26:45Z INF Version 2026.2.0 (Checksum 659e90c91014a0017ec933e4a5c924e5ed1c77e3033bf768c47509c2120e598d)
+2026-02-25T01:26:45Z INF GOOS: darwin, GOVersion: go1.25.7, GoArch: arm64
+2026-02-25T01:26:45Z INF Settings: map[ha-connections:1 protocol:quic url:http://localhost:8444]
+2026-02-25T01:26:45Z INF cloudflared will not automatically update if installed by a package manager.
+2026-02-25T01:26:45Z INF Generated Connector ID: 2478e20a-dc84-4ccc-8bc9-b3e2fd7ca306
+2026-02-25T01:26:45Z INF Initial protocol quic
+2026-02-25T01:26:45Z INF ICMP proxy will use 192.168.12.112 as source for IPv4
+2026-02-25T01:26:45Z INF ICMP proxy will use ::1 in zone lo0 as source for IPv6
+2026-02-25T01:26:45Z INF Created ICMP proxy listening on 192.168.12.112:0
+2026-02-25T01:26:45Z INF Created ICMP proxy listening on [::1]:0
+2026-02-25T01:26:46Z INF ICMP proxy will use 192.168.12.112 as source for IPv4
+2026-02-25T01:26:46Z INF ICMP proxy will use ::1 in zone lo0 as source for IPv6
+2026-02-25T01:26:46Z INF Starting metrics server on 127.0.0.1:20241/metrics
+2026-02-25T01:26:46Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveP256] connIndex=0 event=0 ip=198.41.200.23
+2026-02-25T01:26:46Z INF Registered tunnel connection connIndex=0 connection=325f1573-082d-4df2-a5b3-48c1855527a0 event=0 ip=198.41.200.23 location=ord11 protocol=quic
+Tue Feb 24 19:26:47 CST 2026: WARNING - Could not detect tunnel URL, checking cloudflared logs...
+Tue Feb 24 19:26:47 CST 2026: Tunnel active at https://massive-comment-mounted-biggest.trycloudflare.com
+Tue Feb 24 19:26:48 CST 2026: Telegram webhook registration: {"ok":false,"error_code":400,"description":"Bad Request: bad webhook: Failed to resolve host: Name or service not known"}
+Tue Feb 24 19:26:48 CST 2026: Starting webhook server on port 8444...
+🌐 Starting webhook server on http://localhost:8444
+📡 Waiting for Telegram updates...
+ * Serving Flask app 'telegram_bot'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8444
+ * Running on http://192.168.12.112:8444
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [24/Feb/2026 19:27:16] "HEAD /health HTTP/1.1" 200 -
+127.0.0.1 - - [24/Feb/2026 19:27:27] "GET /health HTTP/1.1" 200 -
+2026-02-25T01:28:38Z INF Initiating graceful shutdown due to signal terminated ...
+2026-02-25T01:28:38Z ERR failed to run the datagram handler error="context canceled" connIndex=0 event=0 ip=198.41.200.23
+2026-02-25T01:28:38Z ERR failed to serve tunnel connection error="accept stream listener encountered a failure while serving" connIndex=0 event=0 ip=198.41.200.23
+2026-02-25T01:28:38Z ERR Serve tunnel error error="accept stream listener encountered a failure while serving" connIndex=0 event=0 ip=198.41.200.23
+2026-02-25T01:28:38Z INF Retrying connection in up to 1s connIndex=0 event=0 ip=198.41.200.23
+2026-02-25T01:28:38Z ERR Connection terminated connIndex=0
+2026-02-25T01:28:38Z ERR no more connections active and exiting
+2026-02-25T01:28:38Z INF Tunnel server stopped
+2026-02-25T01:28:38Z INF Metrics server stopped
