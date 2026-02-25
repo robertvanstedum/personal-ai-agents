@@ -157,6 +157,40 @@ def parse_curator_output(path):
 
 # ─── Feedback ─────────────────────────────────────────────────────────────────
 
+def parse_article_from_message(message_text, rank):
+    """Extract article metadata from Telegram message text"""
+    import re
+    
+    lines = message_text.split('\n')
+    
+    # Line 0: #N • CATEGORY • Source
+    header = lines[0] if lines else ""
+    category_match = re.search(r'• ([A-Z]+) •', header)
+    source_match = re.search(r'• ([^•]+)$', header)
+    
+    category = category_match.group(1).lower() if category_match else "other"
+    source = source_match.group(1).strip() if source_match else "Unknown"
+    
+    # Line 2: Title (bold in HTML)
+    title = re.sub(r'<[^>]+>', '', lines[2]) if len(lines) > 2 else "Unknown"
+    
+    # Line 4: URL in anchor tag
+    url = "unknown"
+    for line in lines:
+        if 'href=' in line:
+            url_match = re.search(r"href='([^']+)'", line)
+            if url_match:
+                url = url_match.group(1)
+                break
+    
+    return {
+        'id': f'telegram-{rank}',
+        'title': title,
+        'link': url,
+        'source': source,
+        'category': category
+    }
+
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle Like/Dislike/Save button presses"""
     query = update.callback_query
@@ -175,7 +209,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     processed_callbacks.add(callback_id)
     await query.answer(f"⏳ Recording {action}...")
     
-    result = record_feedback(action, rank)
+    # Parse article data from message text
+    article_data = parse_article_from_message(query.message.text, rank)
+    result = record_feedback(action, rank, article_data)
     
     if result['success']:
         original = query.message.text
@@ -188,17 +224,26 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await query.answer(f"❌ {result['message']}", show_alert=True)
 
-def record_feedback(action, rank):
-    """Call curator_feedback.py"""
-    venv_python = BASE_DIR / 'venv' / 'bin' / 'python'
-    python = str(venv_python) if venv_python.exists() else 'python'
+def record_feedback(action, rank, article_data):
+    """Call curator_feedback.py in workspace with article data"""
+    workspace = Path.home() / '.openclaw' / 'workspace'
+    feedback_script = workspace / 'curator_feedback.py'
+    
+    if not feedback_script.exists():
+        return {'success': False, 'message': f'curator_feedback.py not found at {feedback_script}'}
+    
+    # Prepare JSON payload with article data
+    payload = {
+        'article': article_data,
+        'your_words': f'{action}d from Telegram'
+    }
     
     try:
         result = subprocess.run(
-            [python, 'curator_feedback.py', action, rank],
-            input=f"{action}d from Telegram".encode(),
+            ['python3', str(feedback_script), action, str(rank), '--channel', 'telegram'],
+            input=json.dumps(payload).encode(),
             capture_output=True,
-            cwd=BASE_DIR,
+            cwd=workspace,
             timeout=30
         )
         if result.returncode == 0:
@@ -339,7 +384,9 @@ def handle_webhook_callback(callback_query, token):
     processed_callbacks.add(callback_id)
     answer_callback(token, query_id, f"⏳ Recording {action}...")
     
-    result = record_feedback(action, rank)
+    # Parse article data from message text
+    article_data = parse_article_from_message(message['text'], rank)
+    result = record_feedback(action, rank, article_data)
     
     if result['success']:
         original = message['text']
