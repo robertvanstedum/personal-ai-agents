@@ -1088,7 +1088,11 @@ def record_feedback(rank, feedback_type, user_words, article, channel='cli'):
     # Extract metadata using Claude
     print("🧠 Analyzing your feedback...")
     metadata = extract_metadata(article, user_words, feedback_type)
-    
+
+    # Inject source into metadata so update_learned_patterns can track it
+    if article.get('source'):
+        metadata['source'] = article['source']
+
     # Create feedback entry
     feedback_entry = {
         'rank': rank,
@@ -1134,23 +1138,36 @@ def record_feedback(rank, feedback_type, user_words, article, channel='cli'):
         print(f"   Themes: {', '.join(metadata['themes'])}")
 
 def update_learned_patterns(prefs, metadata, feedback_type):
-    """Update aggregate patterns based on new feedback"""
+    """Update aggregate patterns based on new feedback.
+
+    Weights (confirmed 2026-02-26):
+      liked   = +2  (strong quality signal: 'this was genuinely good')
+      saved   = +1  (weak/uncertain signal: 'interesting, want to revisit')
+      disliked = -1 (clear negative)
+    Save is closer to a bookmark than an endorsement — like is the real curation signal.
+    """
     patterns = prefs['learned_patterns']
-    weight = 1 if feedback_type == 'liked' else -1
-    
+    weight_map = {'liked': 2, 'saved': 1, 'disliked': -1}
+    weight = weight_map.get(feedback_type, 1)
+
     # Update content types
     for ct in metadata.get('content_type', []):
         patterns['preferred_content_types'][ct] = patterns['preferred_content_types'].get(ct, 0) + weight
-    
+
     # Update themes
     for theme in metadata.get('themes', []):
         patterns['preferred_themes'][theme] = patterns['preferred_themes'].get(theme, 0) + weight
-    
-    # Update avoid patterns if disliked
+
+    # Update sources
+    source = metadata.get('source')
+    if source:
+        patterns['preferred_sources'][source] = patterns['preferred_sources'].get(source, 0) + weight
+
+    # Update avoid patterns if disliked (format/quality signals)
     if feedback_type == 'disliked':
         for signal in metadata.get('signals', []):
             patterns['avoid_patterns'][signal] = patterns['avoid_patterns'].get(signal, 0) + 1
-    
+
     # Update metadata
     patterns['last_updated'] = datetime.now().isoformat()
     patterns['sample_size'] = patterns.get('sample_size', 0) + 1

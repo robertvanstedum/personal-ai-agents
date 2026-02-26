@@ -910,8 +910,15 @@ To test with mechanical mode instead:
             raise ValueError("xAI API key not found")
     
     client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
-    
-    # Build prompt with all articles (same format as Haiku)
+
+    # Load learned user preferences (empty string if no data yet)
+    user_profile = load_user_profile()
+    if user_profile:
+        print(f"🧠 User profile loaded ({len(user_profile)} chars) — personalizing scores")
+    else:
+        print("   No user profile yet — using static scoring")
+
+    # Build prompt with all articles
     prompt = """You are a geopolitics & finance curator. For each article below, assign:
 1. Category (ONE of: geo_major, geo_other, monetary, fiscal, technology, other)
 2. Score (0-10): relevance for a geopolitics/finance professional
@@ -930,7 +937,7 @@ SCORE GUIDANCE:
 5-6: Relevant but not urgent, decent background
 3-4: Tangential interest, minor relevance
 0-2: Skip (noise, spam, off-topic, pure entertainment)
-
+""" + user_profile + """
 KEY DISTINCTION (technology vs geopolitics):
 - If discussing DEPLOYED systems, active operations, current conflicts → geo category
 - If discussing R&D, manufacturing capacity, future capabilities → technology
@@ -1094,6 +1101,82 @@ def apply_interest_boost(entry: Dict, active_interests: Dict) -> int:
             total_modifier += interest['modifier']
     
     return total_modifier
+
+
+def load_user_profile(min_weight: int = 2) -> str:
+    """
+    Build a user-preferences prompt section from learned_patterns in curator_preferences.json.
+
+    Returns an empty string if:
+      - The file is missing or unreadable (graceful fallback)
+      - sample_size < 3 (too few data points to trust yet)
+      - No signals meet the min_weight threshold
+
+    min_weight: minimum absolute score before a signal is included (filters noise).
+    """
+    from pathlib import Path
+
+    prefs_path = Path.home() / '.openclaw' / 'workspace' / 'curator_preferences.json'
+
+    try:
+        with open(prefs_path) as f:
+            prefs = json.load(f)
+    except Exception:
+        return ""
+
+    lp = prefs.get('learned_patterns', {})
+    sample_size = lp.get('sample_size', 0)
+
+    if sample_size < 3:
+        return ""  # Not enough data yet
+
+    sections = []
+
+    # ── Themes (most reliable signal from Claude metadata extraction) ──
+    themes = {k: v for k, v in lp.get('preferred_themes', {}).items() if abs(v) >= min_weight}
+    if themes:
+        pos = sorted([(k, v) for k, v in themes.items() if v > 0], key=lambda x: -x[1])
+        neg = sorted([(k, v) for k, v in themes.items() if v < 0], key=lambda x: x[1])
+        if pos:
+            sections.append("Strong interest in themes: " + ", ".join(k for k, _ in pos[:5]))
+        if neg:
+            sections.append("Low interest in themes: " + ", ".join(k for k, _ in neg[:3]))
+
+    # ── Sources ──
+    sources = {k: v for k, v in lp.get('preferred_sources', {}).items() if abs(v) >= min_weight}
+    if sources:
+        pos = sorted([(k, v) for k, v in sources.items() if v > 0], key=lambda x: -x[1])
+        neg = sorted([(k, v) for k, v in sources.items() if v < 0], key=lambda x: x[1])
+        if pos:
+            sections.append("Preferred sources: " + ", ".join(k for k, _ in pos[:5]))
+        if neg:
+            sections.append("Penalize sources: " + ", ".join(k for k, _ in neg[:3]))
+
+    # ── Content types ('descriptive' excluded — known co-tag artifact, not a standalone signal) ──
+    CO_TAG_EXCLUDE = {'descriptive'}
+    content = {k: v for k, v in lp.get('preferred_content_types', {}).items()
+               if abs(v) >= min_weight and k not in CO_TAG_EXCLUDE}
+    if content:
+        pos = sorted([(k, v) for k, v in content.items() if v > 0], key=lambda x: -x[1])
+        neg = sorted([(k, v) for k, v in content.items() if v < 0], key=lambda x: x[1])
+        if pos:
+            sections.append("Preferred content style: " + ", ".join(k for k, _ in pos[:4]))
+        if neg:
+            sections.append("Penalize content style: " + ", ".join(k for k, _ in neg[:3]))
+
+    # ── Avoid patterns (extracted from disliked articles) ──
+    avoid = sorted(lp.get('avoid_patterns', {}).items(), key=lambda x: -x[1])
+    top_avoid = [k for k, v in avoid[:5] if v >= 1]
+    if top_avoid:
+        sections.append("Avoid signals: " + ", ".join(top_avoid))
+
+    if not sections:
+        return ""
+
+    profile = f"\nPERSONALIZATION (from {sample_size} user interactions — adjust base score by +1 to +2 for strong matches, -1 to -2 for avoids):\n"
+    profile += "\n".join(f"- {s}" for s in sections)
+    profile += "\n"
+    return profile
 
 
 def load_priorities():
@@ -1529,6 +1612,10 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
             --accent-dim: rgba(139,94,42,0.08);
             --accent-glow: rgba(139,94,42,0.18);
             --shadow: rgba(42,36,24,0.08);
+            --geo: #7a3d0a;
+            --fiscal: #1a4a7a;
+            --monetary: #4a2a7a;
+            --other: #4a4035;
         }}
 
         *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
@@ -2019,16 +2106,27 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
                 console.log('Response data:', data);
                 
                 if (data.success) {
-                    // Permanent grayed-out state with checkmark - STAY DISABLED
-                    button.style.opacity = '0.4';
-                    button.innerHTML = button.textContent + ' ✓';
-                    button.style.color = '#10b981';
-                    button.disabled = true;  // Keep disabled permanently
-                    button.style.cursor = 'not-allowed';
-                    
+                    // Lock ALL three buttons in this row - can't change mind after submitting
+                    const row = button.closest('tr');
+                    const allBtns = row.querySelectorAll('.action-btn');
+                    allBtns.forEach(function(btn) {
+                        btn.disabled = true;
+                        btn.style.cursor = 'not-allowed';
+                        if (btn === button) {
+                            // Activated button: colored checkmark, full opacity
+                            btn.innerHTML = btn.textContent + ' ✓';
+                            btn.style.opacity = '1';
+                            btn.style.fontWeight = '700';
+                            btn.style.boxShadow = '0 0 0 2px currentColor';
+                        } else {
+                            // Sibling buttons: faded out so you can see which was chosen
+                            btn.style.opacity = '0.2';
+                        }
+                    });
+
                     // Show toast notification
                     showToast(data.message || 'Article #' + rank + ' ' + action + 'd', 'success');
-                    
+
                     // If liked or saved, add deep dive button
                     if (action === 'like' || action === 'save') {
                         const hashId = button.closest('tr').dataset.hashId;
