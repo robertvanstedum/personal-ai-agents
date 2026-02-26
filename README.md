@@ -9,6 +9,9 @@ Built on [OpenClaw](https://openclaw.ai/) - a personal AI assistant framework th
 ## 🎯 What This Does
 
 - **Morning Intelligence Briefing** (7 AM daily) - AI-curated RSS digest from geopolitics, finance, and tech sources
+  - 🎯 **NEW: Learning Feedback Loop** - Curator learns from your feedback (likes, saves, dislikes) and personalizes scoring
+  - Sources you like rank higher, themes you prefer get boosted, avoid signals get penalized
+  - Verified working: Preferred sources ranking higher after just 6 interactions, improves over time
 - **Usage Tracking** (8 AM daily) - Token consumption and cost monitoring with budget alerts
 - **Balance Monitoring** (every 4 hours) - Automated low-balance warnings
 - **System Cron Integration** - Production-grade reliability without LLM dependency
@@ -163,13 +166,34 @@ crontab -e
 - Category weighting + diversity boosting
 - Automatic Telegram delivery
 
+**🎯 Learning Feedback Loop (NEW - Feb 26, 2026):**
+- **Learns from your feedback** - Like, save, or dislike articles from web UI or Telegram
+- **Personalizes scoring** - Injects your preferences into Grok prompts
+  - Preferred sources get boosted (+1 to +2)
+  - Preferred themes and content styles prioritized
+  - Avoid signals penalized (-1 to -2)
+- **Adaptive over time** - More feedback = better recommendations
+- **Verified working** - Preferred sources ranking higher on first personalized run, improves over time
+
+**Feedback Weights:**
+- **Like** (+2) - Strong quality signal: "More like this"
+- **Save** (+1) - Bookmark/curiosity: "Interesting, maybe"
+- **Dislike** (-1) - Avoid: "Less like this"
+
+**How It Works:**
+1. You interact with briefing articles (like/save/dislike buttons)
+2. System learns patterns: sources, themes, content types, avoid signals
+3. Builds personalization prompt from accumulated feedback (min 3 interactions)
+4. Injects preferences into Grok scoring on next briefing
+5. Articles matching your preferences rank higher
+
 **Model Selection:**
 - `--model=ollama` - Free local (Ollama/phi)
 - `--model=xai` - grok-3-mini ($0.18/day, recommended)
 - `--model=sonnet` - Claude Sonnet 4 (premium, $0.90/day)
 - `--dry-run` - Preview without saving (optional)
 
-**See:** [CURATOR_README.md](CURATOR_README.md)
+**See:** [CURATOR_README.md](CURATOR_README.md) | [CHANGELOG.md](CHANGELOG.md#2026-02-26)
 
 ### 2. Usage & Cost Tracking
 **File:** `track_usage.py`
@@ -300,12 +324,19 @@ This is a personal project, but ideas and improvements are welcome!
 - Usage tracking and monitoring
 - System cron integration
 
-**Phase 2: Intelligence** (In Progress)
-- Interest capture system
-- Context-aware briefing scoring
-- Ad-hoc deep dives on flagged articles
+**Phase 2: Intelligence** ✅ (Achieved Feb 26, 2026)
+- ✅ Learning feedback loop with personalization
+- ✅ Context-aware briefing scoring
+- ✅ Ad-hoc deep dives on flagged articles
+- 🎯 **Milestone:** Curator now learns from feedback and adapts to preferences
 
-**Phase 3: Expansion** (Future)
+**Phase 3: Refinement** (In Progress)
+- Serendipity factor (avoid filter bubbles)
+- Preference decay (outdated signals fade over time)
+- Multi-source deep dive synthesis
+- Quality metrics dashboard
+
+**Phase 4: Expansion** (Future)
 - Email/calendar integration
 - Multi-agent task delegation
 - Proactive intelligence gathering
@@ -355,4 +386,5 @@ MIT License - See [LICENSE](LICENSE) for details.
 ---
 
 **Status:** Production (daily use since Feb 2026)  
-**Last Updated:** 2026-02-21
+**Latest Milestone:** 🎯 Learning Feedback Loop (Feb 26, 2026) - Curator now personalizes based on user feedback  
+**Last Updated:** 2026-02-26

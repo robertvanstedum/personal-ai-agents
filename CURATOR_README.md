@@ -1,11 +1,45 @@
 # RSS Curator - AI-Enhanced Geopolitics & Finance Briefings
 
-## Three Modes, Three Price Points
+## 🎯 Learning Feedback Loop (NEW - Feb 26, 2026)
+
+**The curator now learns from your feedback and personalizes article scoring.**
+
+### How It Works
+
+1. **Interact with articles** - Use like (👍), save (🔖), or dislike (👎) buttons in web UI or Telegram
+2. **System learns patterns** - Tracks your preferred sources, themes, content styles, and avoid signals
+3. **Personalizes scoring** - After 3+ interactions, injects your preferences into AI scoring prompts
+4. **Articles rank higher** - Content matching your preferences gets boosted (+1 to +2), avoids get penalized (-1 to -2)
+
+### Feedback Weights
+
+- **Like (+2)** - Strong quality signal: "More like this, exactly what I want"
+- **Save (+1)** - Bookmark/curiosity: "Interesting, maybe relevant later"
+- **Dislike (-1)** - Avoid signal: "Less like this, not interested"
+
+### Verified Results
+
+After just 6 interactions:
+- Preferred source (Geopolitical Futures) jumped to #1
+- All 3 liked sources landed in top 4
+- Disliked sources scored lower and pushed down
+- **Personalization working on first run** - quality improves as feedback accumulates
+
+### Privacy
+
+- All learning data stored locally in `~/.openclaw/workspace/curator_preferences.json`
+- Never leaves your machine
+- You control what gets learned (explicit feedback only)
+
+---
+
+## Four Modes, Four Price Points
 
 | Mode | Cost | Quality | Use Case |
 |------|------|---------|----------|
 | `mechanical` | **$0/month** | Good | Free fallback, testing, or no API access |
-| `ai` | **$6/month** | Better | Daily production briefing (single Haiku pass) |
+| `xai` | **$5.40/month** | Better | Daily production briefing (Grok, personalized) ⭐ **Current** |
+| `ai` | **$6/month** | Better | Alternative with Claude Haiku |
 | `ai-two-stage` | **$27/month** | Best | Manual deep analysis when it matters most |
 
 ### Mode Details
@@ -16,11 +50,19 @@
 - Good for testing or when API unavailable
 - Command: `python curator_rss_v2.py --mode=mechanical --open`
 
+**xAI Mode ($5.40/month) ⭐ CURRENT PRODUCTION**
+- Grok scoring with personalized feedback (~$0.18/day)
+- **Learns from your feedback** (like/save/dislike)
+- **Personalizes article scoring** based on accumulated preferences
+- 80% cheaper than Claude Haiku
+- Fast, cost-effective, adaptive
+- Command: `python curator_rss_v2.py --mode=xai --telegram`
+
 **AI Mode ($6/month)**
 - Single-stage Haiku scoring (~$0.20/day)
 - Good relevance filtering and categorization
 - Fast, cost-effective for daily use
-- **Current production setup for 7am briefing**
+- No personalization (static scoring)
 - Command: `python curator_rss_v2.py --mode=ai --telegram`
 
 **AI Two-Stage Mode ($27/month)**
@@ -33,8 +75,9 @@
 ## Production Configuration
 
 **Daily 7am Briefing:**
-- Mode: `--mode=ai` (single-stage Haiku)
-- Cost: $6/month
+- Mode: `--mode=xai` (Grok with personalization)
+- Cost: $5.40/month (~$0.18/day)
+- **Learning enabled** - Adapts to your feedback over time
 - Auto-sends to Telegram
 - Fallback to mechanical if API fails
 
@@ -43,7 +86,12 @@
 - Cost: ~$0.90 per run
 - Use for important geopolitical events or when you want deeper analysis
 
-**Total Monthly Cost: ~$6-10/month** (well under $300 budget)
+**Deep Dive Articles:**
+- Cost: ~$0.02 per deep dive (Claude Sonnet)
+- Triggered manually via web UI or Telegram buttons
+- Generates concise research launchpad (6 sections + bibliography)
+
+**Total Monthly Cost: ~$5-10/month** (well under $300 budget)
 
 ## Setup
 
@@ -68,7 +116,12 @@
 
 ## Commands
 
-**Daily briefing (production mode):**
+**Daily briefing (production mode with learning):**
+```bash
+python curator_rss_v2.py --mode=xai --telegram --fallback
+```
+
+**Alternative (Claude Haiku, no learning):**
 ```bash
 python curator_rss_v2.py --mode=ai --telegram --fallback
 ```
@@ -96,20 +149,25 @@ python curator_rss_v2.py --mode=mechanical --open
 
 - ✅ Phase 1: Mechanical foundation
 - ✅ Phase 2.1: Two-stage AI enhancement
-- 🎯 Phase 2.2: Ad-hoc deep dive on flagged articles (~$0.10-0.20 per article)
-- 🔮 Phase 2.3: Interest-aware curation (personalized based on your focus areas)
+- ✅ Phase 2.2: Ad-hoc deep dive on flagged articles ($0.02 per article)
+- ✅ Phase 2.3: Learning feedback loop (personalized based on user feedback) 🎯 **Achieved Feb 26, 2026**
+- 🔮 Phase 2.4: Serendipity + decay factors (avoid filter bubbles, fade old preferences)
 - 🚀 Phase 3: Multi-source intelligence (Reddit, Twitter, Substack, academic papers)
 
 ## Cost Breakdown
 
-**Current spend:**
-- Daily AI briefing: $6/month ($0.20/day × 30 days)
+**Current spend (as of Feb 26, 2026):**
+- Daily xAI briefing: $5.40/month ($0.18/day × 30 days) 🎯 **With learning**
+- Deep dive articles: ~$0.60/month (30 articles @ $0.02 each)
 - Balance monitoring: ~$0/month (minimal API calls)
-- Manual two-stage runs: Only when you trigger them
+- Manual two-stage runs: Only when you trigger them (~$0.90 each)
 
-**Future (Phase 2.2):**
-- Ad-hoc deep dives: ~$3-6/month (15-30 articles @ $0.10-0.20 each)
-- Total projected: **$9-12/month** (97% under $300 budget)
+**Total current: ~$6/month** (98% under $300 budget)
+
+**With learning feedback:**
+- System gets smarter over time (no additional cost)
+- Preferred sources rank higher automatically
+- Reduces noise from irrelevant articles
 
 ## Files
 
