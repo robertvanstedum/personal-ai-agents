@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="curator-model" content="ollama/phi">
     <meta name="curator-mode" content="dry-run">
-    <meta name="curator-timestamp" content="2026-02-25 13:04:04">
+    <meta name="curator-timestamp" content="2026-02-25 20:48:32">
     <meta name="curator-articles" content="20">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
@@ -353,6 +353,65 @@
             background: rgba(26,92,138,0.15);
             transform: scale(1.05);
         }
+        
+        /* Priority Quick-Add */
+        .priority-quick-add {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px auto;
+            max-width: 1200px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+        
+        .priority-quick-add input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 14px;
+        }
+        
+        .priority-quick-add input[type="number"] {
+            flex: 0 0 80px;
+        }
+        
+        .priority-quick-add input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent-dim);
+        }
+        
+        .priority-quick-add button {
+            flex: 0 0 auto;
+            padding: 8px 16px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .priority-quick-add button:hover {
+            background: #6d4a1f;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px var(--shadow);
+        }
+        
+        .priority-quick-add button:active {
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body data-run-mode="dry-run">
@@ -367,6 +426,14 @@
     <a href="interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
   </nav>
 </header>
+
+<div class="priority-quick-add">
+  <input type="text" id="priorityLabel" placeholder="Priority label (e.g., Tigray Conflict)" />
+  <input type="text" id="priorityKeywords" placeholder="Keywords (comma-separated)" />
+  <input type="number" id="priorityBoost" value="2.0" min="0" max="3.0" step="0.5" />
+  <input type="number" id="priorityDays" placeholder="Days (optional)" min="1" max="30" />
+  <button id="addPriorityBtn" onclick="addPriority()">🎯 Add Priority</button>
+</div>
 
 <main>
     <div class="briefing-table">
@@ -383,10 +450,10 @@
                 </tr>
             </thead>
             <tbody>
-                <tr data-hash-id="694dc" 
+                <tr data-hash-id="d144f" 
                         data-rank="1"
-                        data-title="Futures Rise Ahead Of Critical Nvidia Earnings"
-                        data-url="https://www.zerohedge.com/markets/futures-rise-ahead-critical-nvidia-earnings"
+                        data-title="\&#x27;The Mirage\&#x27; Of Manufactured Calm And The Disconnect Between Markets And Reality"
+                        data-url="https://www.zerohedge.com/markets/mirage-manufactured-calm-and-disconnect-between-markets-and-reality"
                         data-source="ZeroHedge"
                         data-category="geo_major">
                     <td class="col-rank"><span class="rank-badge">1</span></td>
@@ -394,13 +461,13 @@
                     <td class="col-source"><span class="source-name">ZeroHedge</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.zerohedge.com/markets/futures-rise-ahead-critical-nvidia-earnings" target="_blank">Futures Rise Ahead Of Critical Nvidia Earnings</a>
+                            <a href="https://www.zerohedge.com/markets/mirage-manufactured-calm-and-disconnect-between-markets-and-reality" target="_blank">'The Mirage' Of Manufactured Calm And The Disconnect Between Markets And Reality</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">20.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:100%"></div></div>
+                        <div class="score-val">19.2</div>
+                        <div class="score-bar"><div class="score-fill" style="width:96%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -426,8 +493,8 @@
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">13.4</div>
-                        <div class="score-bar"><div class="score-fill" style="width:67%"></div></div>
+                        <div class="score-val">13.2</div>
+                        <div class="score-bar"><div class="score-fill" style="width:66%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -453,8 +520,8 @@
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">7.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:35%"></div></div>
+                        <div class="score-val">6.8</div>
+                        <div class="score-bar"><div class="score-fill" style="width:34%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -464,23 +531,50 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="95aa3" 
+                <tr data-hash-id="58ba2" 
                         data-rank="4"
-                        data-title="Tracking Banking Access Using the Bank On National Data Hub"
-                        data-url="https://www.stlouisfed.org/on-the-economy/2026/feb/tracking-banking-access-using-bank-on-national-data-hub"
-                        data-source="Fed On The Economy"
-                        data-category="other">
+                        data-title="Gold ticks up on softer dollar, markets eye US-Iran nuclear talks"
+                        data-url="https://www.investing.com/news/commodities-news/gold-ticks-up-on-softer-dollar-markets-eye-usiran-nuclear-talks-4526429"
+                        data-source="Investing.com"
+                        data-category="geo_other">
                     <td class="col-rank"><span class="rank-badge">4</span></td>
-                    <td class="col-category"><span class="cat-badge cat-other">other</span></td>
-                    <td class="col-source"><span class="source-name">Fed On The Economy</span></td>
+                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
+                    <td class="col-source"><span class="source-name">Investing.com</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/tracking-banking-access-using-bank-on-national-data-hub" target="_blank">Tracking Banking Access Using the Bank On National Data Hub</a>
+                            <a href="https://www.investing.com/news/commodities-news/gold-ticks-up-on-softer-dollar-markets-eye-usiran-nuclear-talks-4526429" target="_blank">Gold ticks up on softer dollar, markets eye US-Iran nuclear talks</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">5.3</div>
+                        <div class="score-val">5.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:27%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
+                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
+                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="41d71" 
+                        data-rank="5"
+                        data-title="US judge rules Trump policy of ‘third country’ deportations unlawful"
+                        data-url="https://www.aljazeera.com/news/2026/2/25/us-judge-rules-trump-policy-of-third-country-deportations-unlawful?traffic_source=rss"
+                        data-source="Al Jazeera"
+                        data-category="other">
+                    <td class="col-rank"><span class="rank-badge">5</span></td>
+                    <td class="col-category"><span class="cat-badge cat-other">other</span></td>
+                    <td class="col-source"><span class="source-name">Al Jazeera</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://www.aljazeera.com/news/2026/2/25/us-judge-rules-trump-policy-of-third-country-deportations-unlawful?traffic_source=rss" target="_blank">US judge rules Trump policy of ‘third country’ deportations unlawful</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">5.2</div>
                         <div class="score-bar"><div class="score-fill" style="width:26%"></div></div>
                     </td>
                     <td class="col-actions">
@@ -491,51 +585,24 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="df538" 
-                        data-rank="5"
-                        data-title="Modi: India stands with Israel \&#x27;with full conviction\&#x27;"
-                        data-url="https://www.dw.com/en/modi-india-stands-with-israel-with-full-conviction/a-76121546?maca=en-rss-en-all-1573-xml-mrss"
-                        data-source="Deutsche Welle"
-                        data-category="geo_other">
-                    <td class="col-rank"><span class="rank-badge">5</span></td>
-                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
-                    <td class="col-source"><span class="source-name">Deutsche Welle</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://www.dw.com/en/modi-india-stands-with-israel-with-full-conviction/a-76121546?maca=en-rss-en-all-1573-xml-mrss" target="_blank">Modi: India stands with Israel 'with full conviction'</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">5.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:25%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
-                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
-                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="928ff" 
+                <tr data-hash-id="d2766" 
                         data-rank="6"
-                        data-title="Zwischen Tränen und Badehosen: Olympische Momente, die nicht jeder sah"
-                        data-url="https://www.faz.net/aktuell/sport/olympische-winterspiele/olympia-2026-momente-die-bei-den-winterspielen-nicht-jeder-sah-110841880.html"
-                        data-source="FAZ"
+                        data-title="Winter Olympics closing ceremony draws curtain on Games"
+                        data-url="https://www.dw.com/en/winter-olympics-closing-ceremony-draws-curtain-on-games/live-76079783?maca=en-rss-en-all-1573-xml-mrss"
+                        data-source="Deutsche Welle"
                         data-category="monetary">
                     <td class="col-rank"><span class="rank-badge">6</span></td>
                     <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
-                    <td class="col-source"><span class="source-name">FAZ</span></td>
+                    <td class="col-source"><span class="source-name">Deutsche Welle</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.faz.net/aktuell/sport/olympische-winterspiele/olympia-2026-momente-die-bei-den-winterspielen-nicht-jeder-sah-110841880.html" target="_blank">Zwischen Tränen und Badehosen: Olympische Momente, die nicht jeder sah</a>
+                            <a href="https://www.dw.com/en/winter-olympics-closing-ceremony-draws-curtain-on-games/live-76079783?maca=en-rss-en-all-1573-xml-mrss" target="_blank">Winter Olympics closing ceremony draws curtain on Games</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">3.8</div>
-                        <div class="score-bar"><div class="score-fill" style="width:19%"></div></div>
+                        <div class="score-val">3.6</div>
+                        <div class="score-bar"><div class="score-fill" style="width:18%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -545,24 +612,24 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="9ba2e" 
+                <tr data-hash-id="98fa6" 
                         data-rank="7"
-                        data-title="US Treasury chief says FedEx should say how consumers will get tariff rebates"
-                        data-url="https://www.investing.com/news/stock-market-news/us-treasury-chief-says-fedex-should-say-how-consumers-will-get-tariff-rebates-4525413"
-                        data-source="Investing.com"
-                        data-category="fiscal">
+                        data-title="US Imposes New Iran Sanctions Ahead of Geneva Talks"
+                        data-url="https://news.antiwar.com/2026/02/25/us-imposes-new-iran-sanctions-ahead-of-geneva-talks/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=us-imposes-new-iran-sanctions-ahead-of-geneva-talks"
+                        data-source="Antiwar.com"
+                        data-category="geo_other">
                     <td class="col-rank"><span class="rank-badge">7</span></td>
-                    <td class="col-category"><span class="cat-badge cat-fiscal">fiscal</span></td>
-                    <td class="col-source"><span class="source-name">Investing.com</span></td>
+                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
+                    <td class="col-source"><span class="source-name">Antiwar.com</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.investing.com/news/stock-market-news/us-treasury-chief-says-fedex-should-say-how-consumers-will-get-tariff-rebates-4525413" target="_blank">US Treasury chief says FedEx should say how consumers will get tariff rebates</a>
+                            <a href="https://news.antiwar.com/2026/02/25/us-imposes-new-iran-sanctions-ahead-of-geneva-talks/?utm_source=rss&utm_medium=rss&utm_campaign=us-imposes-new-iran-sanctions-ahead-of-geneva-talks" target="_blank">US Imposes New Iran Sanctions Ahead of Geneva Talks</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">1.2</div>
-                        <div class="score-bar"><div class="score-fill" style="width:6%"></div></div>
+                        <div class="score-val">0.9</div>
+                        <div class="score-bar"><div class="score-fill" style="width:5%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -572,51 +639,24 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="84707" 
+                <tr data-hash-id="95aa3" 
                         data-rank="8"
-                        data-title="Democrats Demand Answers for Federal Prison Staffing Shortage After Corrections Officers Flee for ICE Jobs"
-                        data-url="https://www.propublica.org/article/bop-prison-staffing-shortages-ice-democrats-william-marshall"
-                        data-source="ProPublica"
+                        data-title="Tracking Banking Access Using the Bank On National Data Hub"
+                        data-url="https://www.stlouisfed.org/on-the-economy/2026/feb/tracking-banking-access-using-bank-on-national-data-hub"
+                        data-source="Fed On The Economy"
                         data-category="other">
                     <td class="col-rank"><span class="rank-badge">8</span></td>
                     <td class="col-category"><span class="cat-badge cat-other">other</span></td>
-                    <td class="col-source"><span class="source-name">ProPublica</span></td>
+                    <td class="col-source"><span class="source-name">Fed On The Economy</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.propublica.org/article/bop-prison-staffing-shortages-ice-democrats-william-marshall" target="_blank">Democrats Demand Answers for Federal Prison Staffing Shortage After Corrections Officers Flee for ICE Jobs</a>
+                            <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/tracking-banking-access-using-bank-on-national-data-hub" target="_blank">Tracking Banking Access Using the Bank On National Data Hub</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">0.7</div>
-                        <div class="score-bar"><div class="score-fill" style="width:4%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
-                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
-                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="dcf22" 
-                        data-rank="9"
-                        data-title="US consular services in illegal Israeli settlement in West Bank condemned"
-                        data-url="https://www.aljazeera.com/news/2026/2/25/pa-and-hamas-condemn-us-consular-settlement-announcment?traffic_source=rss"
-                        data-source="Al Jazeera"
-                        data-category="geo_other">
-                    <td class="col-rank"><span class="rank-badge">9</span></td>
-                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
-                    <td class="col-source"><span class="source-name">Al Jazeera</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://www.aljazeera.com/news/2026/2/25/pa-and-hamas-condemn-us-consular-settlement-announcment?traffic_source=rss" target="_blank">US consular services in illegal Israeli settlement in West Bank condemned</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">0.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:2%"></div></div>
+                        <div class="score-val">0.6</div>
+                        <div class="score-bar"><div class="score-fill" style="width:3%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -627,12 +667,12 @@
                     </td>
                 </tr>
                 <tr data-hash-id="d3299" 
-                        data-rank="10"
+                        data-rank="9"
                         data-title="„Die Idee, dass China auf Russland einwirkt, war schon in der letzten Regierung naiv“"
                         data-url="https://www.welt.de/videos/video699f358e457c5afd864e9229/sicherheitsexperte-nico-lange-die-idee-dass-china-auf-russland-einwirkt-war-schon-in-der-letzten-regierung-naiv.html"
                         data-source="Die Welt"
                         data-category="geo_major">
-                    <td class="col-rank"><span class="rank-badge">10</span></td>
+                    <td class="col-rank"><span class="rank-badge">9</span></td>
                     <td class="col-category"><span class="cat-badge cat-geo_major">geo_major</span></td>
                     <td class="col-source"><span class="source-name">Die Welt</span></td>
                     <td class="col-title">
@@ -642,7 +682,7 @@
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-2.5</div>
+                        <div class="score-val">-2.7</div>
                         <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
@@ -653,10 +693,37 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="f2b1d" 
+                <tr data-hash-id="7f21a" 
+                        data-rank="10"
+                        data-title="Monthly Statement of the Public Debt, January 31, 2026"
+                        data-url="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding"
+                        data-source="Treasury MSPD"
+                        data-category="fiscal">
+                    <td class="col-rank"><span class="rank-badge">10</span></td>
+                    <td class="col-category"><span class="cat-badge cat-fiscal">fiscal</span></td>
+                    <td class="col-source"><span class="source-name">Treasury MSPD</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding" target="_blank">Monthly Statement of the Public Debt, January 31, 2026</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">-3.9</div>
+                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
+                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
+                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="8724d" 
                         data-rank="11"
-                        data-title="&quot;Enough Is Enough&quot;: David Tepper Slams Whirlpool For Value Destruction In &quot;Scathing&quot; Letter"
-                        data-url="https://www.zerohedge.com/markets/enough-enough-david-tepper-slams-whirlpool-value-destruction-scathing-letter"
+                        data-title="Goldman\&#x27;s Top DEI Exec Out Days After Bank Scraps Woke Board Policy"
+                        data-url="https://www.zerohedge.com/political/goldmans-top-dei-exec-out-days-after-bank-scraps-woke-board-policy"
                         data-source="ZeroHedge"
                         data-category="monetary">
                     <td class="col-rank"><span class="rank-badge">11</span></td>
@@ -664,12 +731,12 @@
                     <td class="col-source"><span class="source-name">ZeroHedge</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.zerohedge.com/markets/enough-enough-david-tepper-slams-whirlpool-value-destruction-scathing-letter" target="_blank">"Enough Is Enough": David Tepper Slams Whirlpool For Value Destruction In "Scathing" Letter</a>
+                            <a href="https://www.zerohedge.com/political/goldmans-top-dei-exec-out-days-after-bank-scraps-woke-board-policy" target="_blank">Goldman's Top DEI Exec Out Days After Bank Scraps Woke Board Policy</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-7.0</div>
+                        <div class="score-val">-7.1</div>
                         <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
@@ -680,23 +747,23 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="ba40f" 
+                <tr data-hash-id="84707" 
                         data-rank="12"
-                        data-title="Syria Confirms ‘Mass Escape’ Since They Took Over ISIS Camps from Kurds"
-                        data-url="https://news.antiwar.com/2026/02/25/syria-confirms-mass-escape-since-they-took-over-isis-camps-from-kurds/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=syria-confirms-mass-escape-since-they-took-over-isis-camps-from-kurds"
-                        data-source="Antiwar.com"
+                        data-title="Democrats Demand Answers for Federal Prison Staffing Shortage After Corrections Officers Flee for ICE Jobs"
+                        data-url="https://www.propublica.org/article/bop-prison-staffing-shortages-ice-democrats-william-marshall"
+                        data-source="ProPublica"
                         data-category="other">
                     <td class="col-rank"><span class="rank-badge">12</span></td>
                     <td class="col-category"><span class="cat-badge cat-other">other</span></td>
-                    <td class="col-source"><span class="source-name">Antiwar.com</span></td>
+                    <td class="col-source"><span class="source-name">ProPublica</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://news.antiwar.com/2026/02/25/syria-confirms-mass-escape-since-they-took-over-isis-camps-from-kurds/?utm_source=rss&utm_medium=rss&utm_campaign=syria-confirms-mass-escape-since-they-took-over-isis-camps-from-kurds" target="_blank">Syria Confirms ‘Mass Escape’ Since They Took Over ISIS Camps from Kurds</a>
+                            <a href="https://www.propublica.org/article/bop-prison-staffing-shortages-ice-democrats-william-marshall" target="_blank">Democrats Demand Answers for Federal Prison Staffing Shortage After Corrections Officers Flee for ICE Jobs</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-13.0</div>
+                        <div class="score-val">-12.9</div>
                         <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
@@ -723,7 +790,7 @@
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-13.2</div>
+                        <div class="score-val">-13.3</div>
                         <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
@@ -734,50 +801,23 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="7f21a" 
+                <tr data-hash-id="3add2" 
                         data-rank="14"
-                        data-title="Monthly Statement of the Public Debt, January 31, 2026"
-                        data-url="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding"
-                        data-source="Treasury MSPD"
+                        data-title="University cuts \&#x27;damaging Berlin\&#x27;s cultural standing\&#x27;"
+                        data-url="https://www.dw.com/en/university-cuts-damaging-berlin-s-cultural-standing/a-76103173?maca=en-rss-en-all-1573-xml-mrss"
+                        data-source="Deutsche Welle"
                         data-category="fiscal">
                     <td class="col-rank"><span class="rank-badge">14</span></td>
                     <td class="col-category"><span class="cat-badge cat-fiscal">fiscal</span></td>
-                    <td class="col-source"><span class="source-name">Treasury MSPD</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding" target="_blank">Monthly Statement of the Public Debt, January 31, 2026</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">-17.4</div>
-                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
-                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
-                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="d2766" 
-                        data-rank="15"
-                        data-title="Winter Olympics closing ceremony draws curtain on Games"
-                        data-url="https://www.dw.com/en/winter-olympics-closing-ceremony-draws-curtain-on-games/live-76079783?maca=en-rss-en-all-1573-xml-mrss"
-                        data-source="Deutsche Welle"
-                        data-category="monetary">
-                    <td class="col-rank"><span class="rank-badge">15</span></td>
-                    <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
                     <td class="col-source"><span class="source-name">Deutsche Welle</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.dw.com/en/winter-olympics-closing-ceremony-draws-curtain-on-games/live-76079783?maca=en-rss-en-all-1573-xml-mrss" target="_blank">Winter Olympics closing ceremony draws curtain on Games</a>
+                            <a href="https://www.dw.com/en/university-cuts-damaging-berlin-s-cultural-standing/a-76103173?maca=en-rss-en-all-1573-xml-mrss" target="_blank">University cuts 'damaging Berlin's cultural standing'</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-23.2</div>
+                        <div class="score-val">-22.8</div>
                         <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
@@ -788,23 +828,50 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="4a1a0" 
-                        data-rank="16"
-                        data-title="Portrait of a City after Four Years of War: The Courage of Kyiv"
-                        data-url="https://www.spiegel.de/international/europe/portrait-of-a-city-after-four-years-of-war-the-courage-of-kyiv-a-4799038a-63eb-44e3-9177-73704fd85106#ref=rss"
-                        data-source="Spiegel International"
+                <tr data-hash-id="64074" 
+                        data-rank="15"
+                        data-title="Vier Jahre Krieg: Langzeitinflation"
+                        data-url="https://www.faz.net/aktuell/finanzen/pro-finanzen/langzeitinflation-110843161.html"
+                        data-source="FAZ"
                         data-category="geo_major">
-                    <td class="col-rank"><span class="rank-badge">16</span></td>
+                    <td class="col-rank"><span class="rank-badge">15</span></td>
                     <td class="col-category"><span class="cat-badge cat-geo_major">geo_major</span></td>
+                    <td class="col-source"><span class="source-name">FAZ</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://www.faz.net/aktuell/finanzen/pro-finanzen/langzeitinflation-110843161.html" target="_blank">Vier Jahre Krieg: Langzeitinflation</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">-25.3</div>
+                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
+                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
+                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="a0c26" 
+                        data-rank="16"
+                        data-title="Gisèle Pelicot After the Rape Trial: &quot;I Now Allow Myself to Be Happy Again&quot;"
+                        data-url="https://www.spiegel.de/international/europe/gisele-pelicot-after-the-rape-trial-i-now-allow-myself-to-be-happy-again-a-3d0a230e-585e-4c23-a55d-5e7c07036cd6#ref=rss"
+                        data-source="Spiegel International"
+                        data-category="other">
+                    <td class="col-rank"><span class="rank-badge">16</span></td>
+                    <td class="col-category"><span class="cat-badge cat-other">other</span></td>
                     <td class="col-source"><span class="source-name">Spiegel International</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.spiegel.de/international/europe/portrait-of-a-city-after-four-years-of-war-the-courage-of-kyiv-a-4799038a-63eb-44e3-9177-73704fd85106#ref=rss" target="_blank">Portrait of a City after Four Years of War: The Courage of Kyiv</a>
+                            <a href="https://www.spiegel.de/international/europe/gisele-pelicot-after-the-rape-trial-i-now-allow-myself-to-be-happy-again-a-3d0a230e-585e-4c23-a55d-5e7c07036cd6#ref=rss" target="_blank">Gisèle Pelicot After the Rape Trial: "I Now Allow Myself to Be Happy Again"</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-25.6</div>
+                        <div class="score-val">-40.2</div>
                         <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
@@ -815,18 +882,18 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="df6da" 
+                <tr data-hash-id="1ef8d" 
                         data-rank="17"
-                        data-title="10 Tuesday AM Reads"
-                        data-url="https://ritholtz.com/2026/02/10-tuesday-am-reads-464/"
-                        data-source="The Big Picture"
-                        data-category="other">
+                        data-title="Iran, US set to hold talks as Trump threatens force, imposes sanctions"
+                        data-url="https://www.aljazeera.com/news/2026/2/26/iran-us-set-to-hold-talks-as-trump-threatens-force-imposes-sanctions?traffic_source=rss"
+                        data-source="Al Jazeera"
+                        data-category="geo_other">
                     <td class="col-rank"><span class="rank-badge">17</span></td>
-                    <td class="col-category"><span class="cat-badge cat-other">other</span></td>
-                    <td class="col-source"><span class="source-name">The Big Picture</span></td>
+                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
+                    <td class="col-source"><span class="source-name">Al Jazeera</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://ritholtz.com/2026/02/10-tuesday-am-reads-464/" target="_blank">10 Tuesday AM Reads</a>
+                            <a href="https://www.aljazeera.com/news/2026/2/26/iran-us-set-to-hold-talks-as-trump-threatens-force-imposes-sanctions?traffic_source=rss" target="_blank">Iran, US set to hold talks as Trump threatens force, imposes sanctions</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
@@ -842,23 +909,23 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="b148b" 
+                <tr data-hash-id="13b3a" 
                         data-rank="18"
-                        data-title="Iran rejects ‘fictional narratives’ of power grab after protest killings"
-                        data-url="https://www.aljazeera.com/news/2026/2/25/iran-rejects-fictional-narratives-power-grab-after-protest-killings?traffic_source=rss"
-                        data-source="Al Jazeera"
-                        data-category="geo_other">
+                        data-title="A Look at Recent Developments in the Federal Fiscal Balance"
+                        data-url="https://www.stlouisfed.org/on-the-economy/2026/feb/look-recent-developments-federal-fiscal-balance"
+                        data-source="Fed On The Economy"
+                        data-category="fiscal">
                     <td class="col-rank"><span class="rank-badge">18</span></td>
-                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
-                    <td class="col-source"><span class="source-name">Al Jazeera</span></td>
+                    <td class="col-category"><span class="cat-badge cat-fiscal">fiscal</span></td>
+                    <td class="col-source"><span class="source-name">Fed On The Economy</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.aljazeera.com/news/2026/2/25/iran-rejects-fictional-narratives-power-grab-after-protest-killings?traffic_source=rss" target="_blank">Iran rejects ‘fictional narratives’ of power grab after protest killings</a>
+                            <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/look-recent-developments-federal-fiscal-balance" target="_blank">A Look at Recent Developments in the Federal Fiscal Balance</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-44.5</div>
+                        <div class="score-val">-48.0</div>
                         <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
@@ -869,23 +936,23 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="95c35" 
+                <tr data-hash-id="52beb" 
                         data-rank="19"
-                        data-title="Inflation and the Accuracy of Public Debt Forecasts"
-                        data-url="https://www.stlouisfed.org/on-the-economy/2026/feb/inflation-accuracy-public-debt-forecasts"
-                        data-source="Fed On The Economy"
-                        data-category="fiscal">
+                        data-title="CME Halts All Metals, NatGas Markets Due To &quot;Technical Issues&quot;"
+                        data-url="https://www.zerohedge.com/markets/cme-halts-all-metals-natgas-markets-due-technical-issues"
+                        data-source="ZeroHedge"
+                        data-category="monetary">
                     <td class="col-rank"><span class="rank-badge">19</span></td>
-                    <td class="col-category"><span class="cat-badge cat-fiscal">fiscal</span></td>
-                    <td class="col-source"><span class="source-name">Fed On The Economy</span></td>
+                    <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
+                    <td class="col-source"><span class="source-name">ZeroHedge</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/inflation-accuracy-public-debt-forecasts" target="_blank">Inflation and the Accuracy of Public Debt Forecasts</a>
+                            <a href="https://www.zerohedge.com/markets/cme-halts-all-metals-natgas-markets-due-technical-issues" target="_blank">CME Halts All Metals, NatGas Markets Due To "Technical Issues"</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-47.8</div>
+                        <div class="score-val">-48.4</div>
                         <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
@@ -912,7 +979,7 @@
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-63.5</div>
+                        <div class="score-val">-63.8</div>
                         <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
@@ -978,6 +1045,12 @@
                     
                     // Show toast notification
                     showToast(data.message || 'Article #' + rank + ' ' + action + 'd', 'success');
+                    
+                    // If liked or saved, add deep dive button
+                    if (action === 'like' || action === 'save') {
+                        const hashId = button.closest('tr').dataset.hashId;
+                        addDeepDiveButton(rank, hashId);
+                    }
                 } else {
                     // Re-enable on error
                     button.style.opacity = '1';
@@ -1162,6 +1235,67 @@
                 break;
             }
         }
+    }
+    
+    function addPriority() {
+        const label = document.getElementById('priorityLabel').value.trim();
+        const keywords = document.getElementById('priorityKeywords').value.trim();
+        const boost = parseFloat(document.getElementById('priorityBoost').value);
+        const days = document.getElementById('priorityDays').value;
+        
+        if (!label) {
+            showToast('Please enter a priority label', 'error');
+            return;
+        }
+        
+        if (!keywords) {
+            showToast('Please enter at least one keyword', 'error');
+            return;
+        }
+        
+        const payload = {
+            label: label,
+            keywords: keywords,
+            boost: boost
+        };
+        
+        if (days) {
+            payload.expires_days = parseInt(days);
+        }
+        
+        // Disable button during request
+        const btn = document.getElementById('addPriorityBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Adding...';
+        
+        fetch('http://localhost:8765/api/priority', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message, 'success');
+                // Clear inputs
+                document.getElementById('priorityLabel').value = '';
+                document.getElementById('priorityKeywords').value = '';
+                document.getElementById('priorityBoost').value = '2.0';
+                document.getElementById('priorityDays').value = '';
+            } else {
+                showToast(data.message || 'Error adding priority', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error adding priority:', error);
+            showToast('Server error - is curator_server.py running?', 'error');
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.textContent = '🎯 Add Priority';
+        });
     }
     </script>
     <style>

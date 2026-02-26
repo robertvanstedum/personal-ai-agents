@@ -227,6 +227,39 @@ def log_priority_expired(
     append_event("priority_expired", data)
 
 
+def log_priority_match(
+    priority_id: str,
+    priority_label: str,
+    article_id: str,
+    article_title: str,
+    boost: float,
+    metadata: Optional[Dict[str, Any]] = None
+) -> None:
+    """
+    Log when an article matches a priority and receives a boost.
+    
+    Args:
+        priority_id: Priority identifier (e.g., "p_001")
+        priority_label: Human-readable priority label
+        article_id: Article hash ID
+        article_title: Article title
+        boost: Boost applied to article
+        metadata: Additional context (optional)
+    """
+    data = {
+        "priority_id": priority_id,
+        "priority_label": priority_label,
+        "article_id": article_id,
+        "article_title": article_title,
+        "boost": boost,
+    }
+    
+    if metadata:
+        data["metadata"] = metadata
+    
+    append_event("priority_match", data)
+
+
 def read_events(
     event_type: Optional[str] = None,
     since: Optional[str] = None,

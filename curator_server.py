@@ -14,7 +14,7 @@ import json
 import os
 import subprocess
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 
 BASE_DIR = Path(__file__).parent
@@ -209,6 +209,105 @@ def api_library():
         'articles':     result,
         'count':        len(result),
         'generated_at': datetime.now().isoformat(),
+    })
+
+
+@app.route('/api/priority', methods=['POST'])
+def api_add_priority():
+    """
+    Add a new priority to priorities.json.
+    
+    Expects JSON:
+    {
+      "label": "Tigray Conflict",
+      "keywords": ["Tigray", "Ethiopia"],
+      "boost": 2.0,
+      "expires_days": 3  // optional, days from now
+    }
+    """
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'success': False, 'message': 'No data provided'}), 400
+    
+    label = data.get('label', '').strip()
+    keywords_raw = data.get('keywords', '')
+    boost = data.get('boost', 2.0)
+    expires_days = data.get('expires_days')
+    
+    if not label:
+        return jsonify({'success': False, 'message': 'Label is required'}), 400
+    
+    # Parse keywords (comma-separated string or list)
+    if isinstance(keywords_raw, str):
+        keywords = [k.strip() for k in keywords_raw.split(',') if k.strip()]
+    else:
+        keywords = keywords_raw
+    
+    if not keywords:
+        return jsonify({'success': False, 'message': 'At least one keyword is required'}), 400
+    
+    # Load existing priorities
+    workspace = Path.home() / '.openclaw' / 'workspace'
+    priorities_file = workspace / 'priorities.json'
+    
+    if priorities_file.exists():
+        with open(priorities_file, 'r') as f:
+            priorities_data = json.load(f)
+    else:
+        priorities_data = {'version': 1, 'priorities': []}
+    
+    # Generate ID
+    existing_ids = [p['id'] for p in priorities_data['priorities']]
+    max_num = 0
+    for pid in existing_ids:
+        if pid.startswith('p_'):
+            try:
+                num = int(pid.split('_')[1])
+                max_num = max(max_num, num)
+            except:
+                pass
+    new_id = f"p_{max_num + 1:03d}"
+    
+    # Calculate expiry
+    expires_at = None
+    if expires_days:
+        expiry_date = datetime.now() + timedelta(days=int(expires_days))
+        expires_at = expiry_date.isoformat() + 'Z'
+    
+    # Create priority
+    new_priority = {
+        'id': new_id,
+        'label': label,
+        'keywords': keywords,
+        'boost': float(boost),
+        'created_at': datetime.now().isoformat() + 'Z',
+        'expires_at': expires_at,
+        'active': True,
+        'match_count': 0
+    }
+    
+    # Add and save
+    priorities_data['priorities'].append(new_priority)
+    
+    with open(priorities_file, 'w') as f:
+        json.dump(priorities_data, f, indent=2)
+    
+    print(f"✅ Added priority: {label} (ID: {new_id}, boost: {boost:+.1f})")
+    
+    # Log to Signal Store
+    from signal_store import log_priority_added
+    log_priority_added(
+        concern=label,
+        boost=float(boost),
+        expires=expires_at.split('T')[0] if expires_at else None,
+        metadata={'id': new_id, 'keywords': keywords}
+    )
+    
+    return jsonify({
+        'success': True,
+        'message': f'Priority "{label}" added',
+        'priority': new_priority
     })
 
 

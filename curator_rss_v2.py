@@ -1096,6 +1096,99 @@ def apply_interest_boost(entry: Dict, active_interests: Dict) -> int:
     return total_modifier
 
 
+def load_priorities():
+    """
+    Load active (non-expired) priorities from workspace priorities.json.
+    Returns list of active priority dicts.
+    """
+    from pathlib import Path
+    from datetime import datetime
+    import json
+    
+    priorities_file = Path.home() / ".openclaw" / "workspace" / "priorities.json"
+    
+    if not priorities_file.exists():
+        return []
+    
+    try:
+        with open(priorities_file, 'r') as f:
+            data = json.load(f)
+        
+        priorities = data.get('priorities', [])
+        active_priorities = []
+        now = datetime.now()
+        
+        for priority in priorities:
+            # Skip if not active
+            if not priority.get('active', True):
+                continue
+            
+            # Skip if expired
+            expires_at = priority.get('expires_at')
+            if expires_at:
+                try:
+                    expiry = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+                    if expiry < now:
+                        continue
+                except:
+                    pass
+            
+            active_priorities.append(priority)
+        
+        return active_priorities
+    
+    except Exception as e:
+        print(f"⚠️  Error loading priorities: {e}")
+        return []
+
+
+def apply_priorities_boost(entry: Dict, priorities: List[Dict]) -> float:
+    """
+    Apply score boost based on active priorities.
+    Matches article title/summary against priority keywords (case-insensitive).
+    Returns total boost (capped at +3.0).
+    """
+    if not priorities:
+        return 0.0
+    
+    total_boost = 0.0
+    matched_priorities = []
+    
+    # Get searchable text
+    title = entry.get('title', '').lower()
+    summary = entry.get('summary', '').lower()
+    searchable = f"{title} {summary}"
+    
+    for priority in priorities:
+        keywords = priority.get('keywords', [])
+        boost = priority.get('boost', 0.0)
+        priority_id = priority.get('id', 'unknown')
+        
+        # Check if any keyword matches
+        matched = False
+        for keyword in keywords:
+            if keyword.lower() in searchable:
+                matched = True
+                break
+        
+        if matched:
+            total_boost += boost
+            matched_priorities.append({
+                'priority_id': priority_id,
+                'label': priority.get('label', 'Unknown'),
+                'boost': boost
+            })
+    
+    # Cap at +3.0
+    total_boost = min(total_boost, 3.0)
+    
+    # Store matched priorities in entry for logging
+    if matched_priorities:
+        entry['matched_priorities'] = matched_priorities
+    
+    return total_boost
+
+
 def save_to_history(entries: List[Dict], output_dir: str = "."):
     """Save articles to history index and cache (with duplicate protection)"""
     from pathlib import Path
@@ -1211,6 +1304,16 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
         for category, interests in active_interests.items():
             print(f"   {category}: {len(interests)} flagged articles ({sum(i['modifier'] for i in interests):+d} total boost)")
     
+    # Load active priorities for score boosting
+    active_priorities = load_priorities()
+    if active_priorities:
+        print(f"🎯 Loaded {len(active_priorities)} active priorities from workspace")
+        for priority in active_priorities:
+            label = priority.get('label', 'Unknown')
+            boost = priority.get('boost', 0.0)
+            keywords = priority.get('keywords', [])
+            print(f"   {label}: {boost:+.1f} boost (keywords: {', '.join(keywords[:3])}{'...' if len(keywords) > 3 else ''})")
+    
     # Score all entries using selected mode
     if mode == 'ai-two-stage':
         # TWO-STAGE: Haiku pre-filter → Sonnet ranking
@@ -1274,10 +1377,17 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
             
             # Apply interest-based boosting
             interest_boost = apply_interest_boost(entry, active_interests)
-            entry["final_score"] = entry["score"] - source_penalty - category_penalty + interest_boost
+            
+            # Apply priorities-based boosting
+            priorities_boost = apply_priorities_boost(entry, active_priorities)
+            
+            entry["final_score"] = entry["score"] - source_penalty - category_penalty + interest_boost + priorities_boost
             if interest_boost != 0:
                 entry["interest_boosted"] = True
                 entry["interest_modifier"] = interest_boost
+            if priorities_boost > 0:
+                entry["priorities_boosted"] = True
+                entry["priorities_modifier"] = priorities_boost
         
         # Pick the highest-scoring candidate
         candidates.sort(key=lambda x: x["final_score"], reverse=True)
@@ -1747,6 +1857,65 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
             background: rgba(26,92,138,0.15);
             transform: scale(1.05);
         }}
+        
+        /* Priority Quick-Add */
+        .priority-quick-add {{
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px auto;
+            max-width: 1200px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            box-shadow: 0 2px 8px var(--shadow);
+        }}
+        
+        .priority-quick-add input {{
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 14px;
+        }}
+        
+        .priority-quick-add input[type="number"] {{
+            flex: 0 0 80px;
+        }}
+        
+        .priority-quick-add input:focus {{
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent-dim);
+        }}
+        
+        .priority-quick-add button {{
+            flex: 0 0 auto;
+            padding: 8px 16px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }}
+        
+        .priority-quick-add button:hover {{
+            background: #6d4a1f;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px var(--shadow);
+        }}
+        
+        .priority-quick-add button:active {{
+            transform: translateY(0);
+        }}
     </style>
 </head>
 <body data-run-mode="{run_mode}">
@@ -1761,6 +1930,14 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
     <a href="interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
   </nav>
 </header>
+
+<div class="priority-quick-add">
+  <input type="text" id="priorityLabel" placeholder="Priority label (e.g., Tigray Conflict)" />
+  <input type="text" id="priorityKeywords" placeholder="Keywords (comma-separated)" />
+  <input type="number" id="priorityBoost" value="2.0" min="0" max="3.0" step="0.5" />
+  <input type="number" id="priorityDays" placeholder="Days (optional)" min="1" max="30" />
+  <button id="addPriorityBtn" onclick="addPriority()">🎯 Add Priority</button>
+</div>
 
 <main>
     <div class="briefing-table">
@@ -2108,6 +2285,67 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
             }
         }
     }
+    
+    function addPriority() {
+        const label = document.getElementById('priorityLabel').value.trim();
+        const keywords = document.getElementById('priorityKeywords').value.trim();
+        const boost = parseFloat(document.getElementById('priorityBoost').value);
+        const days = document.getElementById('priorityDays').value;
+        
+        if (!label) {
+            showToast('Please enter a priority label', 'error');
+            return;
+        }
+        
+        if (!keywords) {
+            showToast('Please enter at least one keyword', 'error');
+            return;
+        }
+        
+        const payload = {
+            label: label,
+            keywords: keywords,
+            boost: boost
+        };
+        
+        if (days) {
+            payload.expires_days = parseInt(days);
+        }
+        
+        // Disable button during request
+        const btn = document.getElementById('addPriorityBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Adding...';
+        
+        fetch('http://localhost:8765/api/priority', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message, 'success');
+                // Clear inputs
+                document.getElementById('priorityLabel').value = '';
+                document.getElementById('priorityKeywords').value = '';
+                document.getElementById('priorityBoost').value = '2.0';
+                document.getElementById('priorityDays').value = '';
+            } else {
+                showToast(data.message || 'Error adding priority', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error adding priority:', error);
+            showToast('Server error - is curator_server.py running?', 'error');
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.textContent = '🎯 Add Priority';
+        });
+    }
     </script>
     <style>
     @keyframes fadeIn {
@@ -2443,7 +2681,7 @@ def main():
     """Run the curator and display results"""
     import sys
     import subprocess
-    from signal_store import get_session_id, log_article_scored
+    from signal_store import get_session_id, log_article_scored, log_priority_match
     
     # Initialize session ID for this run (all events will share this)
     session_id = get_session_id()
@@ -2489,6 +2727,7 @@ def main():
     
     # Log scored articles to Signal Store (always, even in dry-run)
     print(f"📝 Logging {len(top_articles)} articles to Signal Store...")
+    priority_matches_count = 0
     for rank, article in enumerate(top_articles, 1):
         log_article_scored(
             article_id=article.get("hash_id", f"article-{rank}"),
@@ -2502,10 +2741,29 @@ def main():
             metadata={
                 "method": article.get("method", "unknown"),
                 "final_score": article.get("final_score", article["score"]),
-                "interest_boosted": article.get("interest_boosted", False)
+                "interest_boosted": article.get("interest_boosted", False),
+                "priorities_boosted": article.get("priorities_boosted", False),
+                "priorities_modifier": article.get("priorities_modifier", 0.0)
             }
         )
-    print(f"✅ Signal Store updated")
+        
+        # Log priority matches
+        matched_priorities = article.get("matched_priorities", [])
+        for match in matched_priorities:
+            log_priority_match(
+                priority_id=match["priority_id"],
+                priority_label=match["label"],
+                article_id=article.get("hash_id", f"article-{rank}"),
+                article_title=article["title"],
+                boost=match["boost"],
+                metadata={"rank": rank, "article_score": article["score"]}
+            )
+            priority_matches_count += 1
+    
+    if priority_matches_count > 0:
+        print(f"✅ Signal Store updated ({priority_matches_count} priority matches logged)")
+    else:
+        print(f"✅ Signal Store updated")
     
     # Save to history (with duplicate protection)
     if not dry_run:

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+    <title>Daily Memo: Starlink Disruption in South China Sea, Russia’s Footprint in Africa - Deep Dive</title>
+    <style>
+        :root {
+            --bg: #f5f0e8;
+            --bg-texture: #ede8df;
+            --surface: #faf7f2;
+            --surface2: #f0ebe0;
+            --border: #ddd6c8;
+            --border2: #c8bfaf;
+            --text: #2a2418;
+            --text-muted: #6b5f4e;
+            --text-dim: #9e9080;
+            --accent: #8b5e2a;
+            --accent-dim: rgba(139,94,42,0.08);
+            --accent-glow: rgba(139,94,42,0.18);
+            --shadow: rgba(42,36,24,0.08);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Source Sans 3', sans-serif;
+            background: var(--bg);
+            background-image:
+                radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
+            color: var(--text);
+            min-height: 100vh;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        /* ── Header ── */
+        header {
+            border-bottom: 1px solid var(--border);
+            padding: 0 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 60px;
+            position: sticky;
+            top: 0;
+            background: rgba(245,240,232,0.94);
+            backdrop-filter: blur(12px);
+            z-index: 100;
+            box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+        }
+
+        .logo {
+            font-family: 'Playfair Display', serif;
+            font-size: 20px;
+            color: var(--accent);
+            letter-spacing: -0.02em;
+            text-decoration: none;
+        }
+
+        .logo-sub {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .header-nav {
+            display: flex;
+            gap: 4px;
+        }
+
+        .nav-link {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            letter-spacing: 0.05em;
+            transition: all 0.15s;
+            border: 1px solid transparent;
+        }
+
+        .nav-link:hover {
+            color: var(--text);
+            background: var(--surface2);
+        }
+
+        .nav-link.active {
+            color: var(--accent);
+            background: var(--accent-dim);
+            border-color: rgba(139,94,42,0.2);
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 32px;
+            background: var(--surface);
+            border-radius: 12px;
+            box-shadow: 0 2px 12px var(--shadow);
+        }
+        h1 {
+            font-family: 'Playfair Display', serif;
+            color: var(--text);
+            font-size: 2em;
+            font-weight: 400;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 12px;
+            margin-bottom: 24px;
+            letter-spacing: -0.02em;
+        }
+        .meta {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+            font-size: 0.95em;
+        }
+        .meta strong {
+            color: #2c3e50;
+        }
+        .interest-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 12px 15px;
+            margin: 15px 0;
+            font-size: 0.9em;
+        }
+        .interest-box h2 {
+            margin-top: 0;
+            margin-bottom: 8px;
+            color: #856404;
+            font-size: 1.1em;
+        }
+        .interest-box p {
+            margin: 6px 0;
+        }
+        .analysis {
+            margin-top: 30px;
+        }
+        .analysis h2 {
+            color: #2c3e50;
+            font-size: 1.4em;
+            margin-top: 30px;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 8px;
+        }
+        .analysis h3 {
+            color: #34495e;
+            font-size: 1.15em;
+            margin-top: 20px;
+        }
+        .bibliography {
+            background: #f8f9fa;
+            border-left: 4px solid #6c757d;
+            padding: 20px;
+            margin: 30px 0;
+            border-radius: 4px;
+        }
+        .bibliography h2 {
+            margin-top: 0;
+            color: #495057;
+            font-size: 1.3em;
+        }
+        .bibliography ul {
+            margin-top: 15px;
+            list-style-type: none;
+            padding-left: 0;
+        }
+        .bibliography li {
+            margin-bottom: 15px;
+            line-height: 1.6;
+            padding-left: 20px;
+            text-indent: -20px;
+        }
+        .bibliography a {
+            color: #0066cc;
+            word-break: break-all;
+        }
+        .bibliography code {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ecf0f1;
+            font-size: 0.9em;
+            color: #7f8c8d;
+            text-align: center;
+        }
+        a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <a href="../../../" class="logo">📚 Curator</a>
+    <span class="logo-sub">Deep Dive</span>
+  </div>
+  <nav class="header-nav">
+    <a href="../../../" class="nav-link">Daily</a>
+    <a href="../../../curator_library.html" class="nav-link">Library</a>
+    <a href="../../../interests/2026/deep-dives/index.html" class="nav-link active">Deep Dives</a>
+  </nav>
+</header>
+<div style="padding: 32px;">
+    <div class="container">
+        
+        <h1>Daily Memo: Starlink Disruption in South China Sea, Russia’s Footprint in Africa</h1>
+        
+        <div class="meta">
+            <strong>Source:</strong> Geopolitical Futures<br>
+            <strong>URL:</strong> <a href="https://geopoliticalfutures.com/daily-memo-starlink-disruption-in-south-china-sea-russias-footprint-in-africa/" target="_blank">https://geopoliticalfutures.com/daily-memo-starlink-disruption-in-south-china-sea-russias-footprint-in-africa/</a><br>
+            <strong>Date:</strong> 2026-02-25<br>
+            <strong>Hash ID:</strong> f0564
+        </div>
+        
+        <div class="interest-box">
+            <h2>Your Interest</h2>
+            <p>I just read headline, but blocking starlink and later in-space attacks on satellite will be an issue.  I'm sure China does not want Ukraine type communications in the Philippens or South china see.</p>
+        </div>
+        
+        <div class="analysis">
+            <h2>Deep Dive Analysis</h2>
+<h2>1. Why This Matters</h2>
+<p>China's alleged Starlink jamming near Scarborough Shoal represents a tactical escalation in the South China Sea territorial dispute and validates concerns about space-based communications as critical military infrastructure. This incident demonstrates that satellite internet systems like Starlink—which proved decisive in Ukraine's resistance—are vulnerable to electronic warfare and will become primary targets in future conflicts. The Philippines' reliance on commercial satellite systems for maritime operations exposes the fragility of modern military communications in contested regions.</p>
+<h2>2. Core Argument</h2>
+<p>China is actively testing and deploying electronic warfare capabilities to neutralize commercial satellite communications that could enable adversaries to coordinate resistance operations similar to Ukraine's model. The timing—during Philippine Coast Guard patrols protecting fishing vessels—suggests intentional signaling that China can deny communications in disputed waters regardless of technological advantages Western-aligned nations possess.</p>
+<h2>3. Contrarian Take</h2>
+<ul><li>Technical disruption could be atmospheric interference, equipment malfunction, or non-intentional signal congestion rather than deliberate Chinese jamming</li>
+<li>Starlink's equatorial coverage limitations and known service gaps in the South China Sea region may explain outages without requiring electronic warfare explanation</li>
+<h2>4. Connections</h2>
+<p>This connects to broader patterns: Russia's GPS jamming in Eastern Europe and the Black Sea, growing anti-satellite (ASAT) weapons development by China/Russia/India, and the militarization of commercial space infrastructure. The Philippines recently strengthened defense ties with the US, making communications infrastructure a strategic vulnerability China would naturally target.</p>
+<h2>5. Key Data</h2>
+<li>Location: Scarborough Shoal (disputed feature 120 nautical miles from Philippines)</li>
+<li>Assets deployed: 4 Philippine patrol vessels, 1 aircraft</li>
+<li>Date: February 24, 2026 (Monday patrol operations)</li>
+<li>Service affected: Starlink satellite internet</li>
+<h2>6. Next Questions</h2>
+<li>What specific jamming frequencies and techniques would be required to disrupt Starlink's Ku/Ka-band communications?</li>
+<li>Does the Philippines have documented evidence (spectrum analysis, signal logs) proving intentional jamming versus service disruption?</li>
+<li>How does Starlink's anti-jamming capability compare to military SATCOM systems, and what are its technical vulnerabilities?</li>
+<li>What are China's known electronic warfare capabilities in the South China Sea, particularly around Scarborough Shoal and nearby installations?</li>
+<h2>7. Sources & Further Reading</h2>
+<li>SpaceX/Starlink. "Starlink Network Statistics and Coverage Maps." SpaceX Technical Documentation, 2024-2026. https://www.starlink.com/map</li>
+<li>Todd, Brian, and Browne, Ryan. "Electromagnetic Warfare in Modern Conflict: GPS and SATCOM Jamming Capabilities." Center for Strategic and International Studies, 2024. https://www.csis.org/programs/strategic-technologies-program</li>
+<li>U.S. Department of Defense. "Military and Security Developments Involving the People's Republic of China: Annual Report to Congress." Office of the Secretary of Defense, 2025. https://media.defense.gov/</li>
+<li>Philippine Coast Guard. Official Statements and Press Releases on South China Sea Operations, February 2026. https://coastguard.gov.ph/ </li>
+<li>Insinna, Valerie. "Anti-Satellite Weapons and Space Domain Awareness." Defense News and Breaking Defense, 2023-2025. https://www.defensenews.com/space/</li>
+<li>Buchanan, Ben, and Brose, Christian. "The New Space Race: Military Implications of Commercial Satellite Constellations." Foreign Affairs, Vol. 102, 2024.</li>
+<li>Asia Maritime Transparency Initiative. "Scarborough Shoal: Features and Military Activity Tracker." Center for Strategic and International Studies. https://amti.csis.org/island-tracker/</li>
+<li>Union of Concerned Scientists. "UCS Satellite Database." Updated quarterly, 2024-2026. https://www.ucsusa.org/resources/satellite-database</li></ul>
+        </div>
+        
+        <div class="footer">
+            Generated by Claude Sonnet<br>
+            634 input + 894 output tokens • $0.0153
+        </div>
+    </div>
+</div>
+</body>
+</html>
