@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="curator-model" content="ollama/phi">
     <meta name="curator-mode" content="dry-run">
-    <meta name="curator-timestamp" content="2026-02-25 20:48:32">
+    <meta name="curator-timestamp" content="2026-02-25 21:09:43">
     <meta name="curator-articles" content="20">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
@@ -353,65 +353,6 @@
             background: rgba(26,92,138,0.15);
             transform: scale(1.05);
         }
-        
-        /* Priority Quick-Add */
-        .priority-quick-add {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 16px;
-            margin: 16px auto;
-            max-width: 1200px;
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            box-shadow: 0 2px 8px var(--shadow);
-        }
-        
-        .priority-quick-add input {
-            flex: 1;
-            padding: 8px 12px;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            background: var(--bg);
-            color: var(--text);
-            font-family: 'Source Sans 3', sans-serif;
-            font-size: 14px;
-        }
-        
-        .priority-quick-add input[type="number"] {
-            flex: 0 0 80px;
-        }
-        
-        .priority-quick-add input:focus {
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 2px var(--accent-dim);
-        }
-        
-        .priority-quick-add button {
-            flex: 0 0 auto;
-            padding: 8px 16px;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-family: 'Source Sans 3', sans-serif;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        
-        .priority-quick-add button:hover {
-            background: #6d4a1f;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px var(--shadow);
-        }
-        
-        .priority-quick-add button:active {
-            transform: translateY(0);
-        }
     </style>
 </head>
 <body data-run-mode="dry-run">
@@ -423,17 +364,10 @@
   <nav class="header-nav">
     <a href="/" class="nav-link active">Daily</a>
     <a href="curator_library.html" class="nav-link">Library</a>
+    <a href="curator_priorities.html" class="nav-link">🎯 Priorities</a>
     <a href="interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
   </nav>
 </header>
-
-<div class="priority-quick-add">
-  <input type="text" id="priorityLabel" placeholder="Priority label (e.g., Tigray Conflict)" />
-  <input type="text" id="priorityKeywords" placeholder="Keywords (comma-separated)" />
-  <input type="number" id="priorityBoost" value="2.0" min="0" max="3.0" step="0.5" />
-  <input type="number" id="priorityDays" placeholder="Days (optional)" min="1" max="30" />
-  <button id="addPriorityBtn" onclick="addPriority()">🎯 Add Priority</button>
-</div>
 
 <main>
     <div class="briefing-table">
@@ -477,10 +411,10 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="f0564" 
+                <tr data-hash-id="e3057" 
                         data-rank="2"
-                        data-title="Daily Memo: Starlink Disruption in South China Sea, Russia’s Footprint in Africa"
-                        data-url="https://geopoliticalfutures.com/daily-memo-starlink-disruption-in-south-china-sea-russias-footprint-in-africa/"
+                        data-title="The Tigray Powder Keg in the Horn of Africa"
+                        data-url="https://geopoliticalfutures.com/the-tigray-powder-keg-in-the-horn-of-africa/"
                         data-source="Geopolitical Futures"
                         data-category="geo_major">
                     <td class="col-rank"><span class="rank-badge">2</span></td>
@@ -488,13 +422,13 @@
                     <td class="col-source"><span class="source-name">Geopolitical Futures</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://geopoliticalfutures.com/daily-memo-starlink-disruption-in-south-china-sea-russias-footprint-in-africa/" target="_blank">Daily Memo: Starlink Disruption in South China Sea, Russia’s Footprint in Africa</a>
+                            <a href="https://geopoliticalfutures.com/the-tigray-powder-keg-in-the-horn-of-africa/" target="_blank">The Tigray Powder Keg in the Horn of Africa</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">13.2</div>
-                        <div class="score-bar"><div class="score-fill" style="width:66%"></div></div>
+                        <div class="score-val">14.7</div>
+                        <div class="score-bar"><div class="score-fill" style="width:74%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -531,18 +465,18 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="58ba2" 
+                <tr data-hash-id="1ef8d" 
                         data-rank="4"
-                        data-title="Gold ticks up on softer dollar, markets eye US-Iran nuclear talks"
-                        data-url="https://www.investing.com/news/commodities-news/gold-ticks-up-on-softer-dollar-markets-eye-usiran-nuclear-talks-4526429"
-                        data-source="Investing.com"
+                        data-title="Iran, US set to hold talks as Trump threatens force, imposes sanctions"
+                        data-url="https://www.aljazeera.com/news/2026/2/26/iran-us-set-to-hold-talks-as-trump-threatens-force-imposes-sanctions?traffic_source=rss"
+                        data-source="Al Jazeera"
                         data-category="geo_other">
                     <td class="col-rank"><span class="rank-badge">4</span></td>
                     <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
-                    <td class="col-source"><span class="source-name">Investing.com</span></td>
+                    <td class="col-source"><span class="source-name">Al Jazeera</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.investing.com/news/commodities-news/gold-ticks-up-on-softer-dollar-markets-eye-usiran-nuclear-talks-4526429" target="_blank">Gold ticks up on softer dollar, markets eye US-Iran nuclear talks</a>
+                            <a href="https://www.aljazeera.com/news/2026/2/26/iran-us-set-to-hold-talks-as-trump-threatens-force-imposes-sanctions?traffic_source=rss" target="_blank">Iran, US set to hold talks as Trump threatens force, imposes sanctions</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
@@ -558,23 +492,23 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="41d71" 
+                <tr data-hash-id="c499f" 
                         data-rank="5"
-                        data-title="US judge rules Trump policy of ‘third country’ deportations unlawful"
-                        data-url="https://www.aljazeera.com/news/2026/2/25/us-judge-rules-trump-policy-of-third-country-deportations-unlawful?traffic_source=rss"
-                        data-source="Al Jazeera"
+                        data-title="Cuba Says It Killed Four People Who Opened Fire From a US-Registered Speed Boat"
+                        data-url="https://news.antiwar.com/2026/02/25/cuba-says-it-killed-four-people-who-opened-fire-from-a-us-registered-speed-boat/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=cuba-says-it-killed-four-people-who-opened-fire-from-a-us-registered-speed-boat"
+                        data-source="Antiwar.com"
                         data-category="other">
                     <td class="col-rank"><span class="rank-badge">5</span></td>
                     <td class="col-category"><span class="cat-badge cat-other">other</span></td>
-                    <td class="col-source"><span class="source-name">Al Jazeera</span></td>
+                    <td class="col-source"><span class="source-name">Antiwar.com</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.aljazeera.com/news/2026/2/25/us-judge-rules-trump-policy-of-third-country-deportations-unlawful?traffic_source=rss" target="_blank">US judge rules Trump policy of ‘third country’ deportations unlawful</a>
+                            <a href="https://news.antiwar.com/2026/02/25/cuba-says-it-killed-four-people-who-opened-fire-from-a-us-registered-speed-boat/?utm_source=rss&utm_medium=rss&utm_campaign=cuba-says-it-killed-four-people-who-opened-fire-from-a-us-registered-speed-boat" target="_blank">Cuba Says It Killed Four People Who Opened Fire From a US-Registered Speed Boat</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">5.2</div>
+                        <div class="score-val">5.1</div>
                         <div class="score-bar"><div class="score-fill" style="width:26%"></div></div>
                     </td>
                     <td class="col-actions">
@@ -612,40 +546,13 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="98fa6" 
-                        data-rank="7"
-                        data-title="US Imposes New Iran Sanctions Ahead of Geneva Talks"
-                        data-url="https://news.antiwar.com/2026/02/25/us-imposes-new-iran-sanctions-ahead-of-geneva-talks/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=us-imposes-new-iran-sanctions-ahead-of-geneva-talks"
-                        data-source="Antiwar.com"
-                        data-category="geo_other">
-                    <td class="col-rank"><span class="rank-badge">7</span></td>
-                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
-                    <td class="col-source"><span class="source-name">Antiwar.com</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://news.antiwar.com/2026/02/25/us-imposes-new-iran-sanctions-ahead-of-geneva-talks/?utm_source=rss&utm_medium=rss&utm_campaign=us-imposes-new-iran-sanctions-ahead-of-geneva-talks" target="_blank">US Imposes New Iran Sanctions Ahead of Geneva Talks</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">0.9</div>
-                        <div class="score-bar"><div class="score-fill" style="width:5%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
-                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
-                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
-                        </div>
-                    </td>
-                </tr>
                 <tr data-hash-id="95aa3" 
-                        data-rank="8"
+                        data-rank="7"
                         data-title="Tracking Banking Access Using the Bank On National Data Hub"
                         data-url="https://www.stlouisfed.org/on-the-economy/2026/feb/tracking-banking-access-using-bank-on-national-data-hub"
                         data-source="Fed On The Economy"
                         data-category="other">
-                    <td class="col-rank"><span class="rank-badge">8</span></td>
+                    <td class="col-rank"><span class="rank-badge">7</span></td>
                     <td class="col-category"><span class="cat-badge cat-other">other</span></td>
                     <td class="col-source"><span class="source-name">Fed On The Economy</span></td>
                     <td class="col-title">
@@ -657,6 +564,33 @@
                     <td class="col-score">
                         <div class="score-val">0.6</div>
                         <div class="score-bar"><div class="score-fill" style="width:3%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
+                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
+                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="5cc81" 
+                        data-rank="8"
+                        data-title="Iran-US row; All military options bad for Trump. Diplomacy best option"
+                        data-url="https://theduran.com/iran-us-row-all-military-options-bad-for-trump-diplomacy-best-option/"
+                        data-source="The Duran"
+                        data-category="geo_other">
+                    <td class="col-rank"><span class="rank-badge">8</span></td>
+                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
+                    <td class="col-source"><span class="source-name">The Duran</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://theduran.com/iran-us-row-all-military-options-bad-for-trump-diplomacy-best-option/" target="_blank">Iran-US row; All military options bad for Trump. Diplomacy best option</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">0.2</div>
+                        <div class="score-bar"><div class="score-fill" style="width:1%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -774,23 +708,23 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="5cc81" 
+                <tr data-hash-id="e175f" 
                         data-rank="13"
-                        data-title="Iran-US row; All military options bad for Trump. Diplomacy best option"
-                        data-url="https://theduran.com/iran-us-row-all-military-options-bad-for-trump-diplomacy-best-option/"
-                        data-source="The Duran"
+                        data-title="Israel\&#x27;s Guantanamo: Israeli Treatment of Palestinian Prisons in the Spotlight"
+                        data-url="https://www.spiegel.de/international/world/israels-guantanamo-israeli-treatment-of-palestinian-prisons-in-the-spotlight-a-427ae2c3-0584-4609-8eb2-e9b45a09c032#ref=rss"
+                        data-source="Spiegel International"
                         data-category="geo_other">
                     <td class="col-rank"><span class="rank-badge">13</span></td>
                     <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
-                    <td class="col-source"><span class="source-name">The Duran</span></td>
+                    <td class="col-source"><span class="source-name">Spiegel International</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://theduran.com/iran-us-row-all-military-options-bad-for-trump-diplomacy-best-option/" target="_blank">Iran-US row; All military options bad for Trump. Diplomacy best option</a>
+                            <a href="https://www.spiegel.de/international/world/israels-guantanamo-israeli-treatment-of-palestinian-prisons-in-the-spotlight-a-427ae2c3-0584-4609-8eb2-e9b45a09c032#ref=rss" target="_blank">Israel's Guantanamo: Israeli Treatment of Palestinian Prisons in the Spotlight</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-13.3</div>
+                        <div class="score-val">-18.0</div>
                         <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
@@ -855,23 +789,23 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="a0c26" 
+                <tr data-hash-id="5edd3" 
                         data-rank="16"
-                        data-title="Gisèle Pelicot After the Rape Trial: &quot;I Now Allow Myself to Be Happy Again&quot;"
-                        data-url="https://www.spiegel.de/international/europe/gisele-pelicot-after-the-rape-trial-i-now-allow-myself-to-be-happy-again-a-3d0a230e-585e-4c23-a55d-5e7c07036cd6#ref=rss"
-                        data-source="Spiegel International"
+                        data-title="Olin Corp VP Carter Deon sells $154k in shares"
+                        data-url="https://www.investing.com/news/insider-trading-news/olin-corp-vp-carter-deon-sells-154k-in-shares-93CH-4526446"
+                        data-source="Investing.com"
                         data-category="other">
                     <td class="col-rank"><span class="rank-badge">16</span></td>
                     <td class="col-category"><span class="cat-badge cat-other">other</span></td>
-                    <td class="col-source"><span class="source-name">Spiegel International</span></td>
+                    <td class="col-source"><span class="source-name">Investing.com</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.spiegel.de/international/europe/gisele-pelicot-after-the-rape-trial-i-now-allow-myself-to-be-happy-again-a-3d0a230e-585e-4c23-a55d-5e7c07036cd6#ref=rss" target="_blank">Gisèle Pelicot After the Rape Trial: "I Now Allow Myself to Be Happy Again"</a>
+                            <a href="https://www.investing.com/news/insider-trading-news/olin-corp-vp-carter-deon-sells-154k-in-shares-93CH-4526446" target="_blank">Olin Corp VP Carter Deon sells $154k in shares</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-40.2</div>
+                        <div class="score-val">-35.5</div>
                         <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
@@ -882,23 +816,23 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="1ef8d" 
+                <tr data-hash-id="98fa6" 
                         data-rank="17"
-                        data-title="Iran, US set to hold talks as Trump threatens force, imposes sanctions"
-                        data-url="https://www.aljazeera.com/news/2026/2/26/iran-us-set-to-hold-talks-as-trump-threatens-force-imposes-sanctions?traffic_source=rss"
-                        data-source="Al Jazeera"
+                        data-title="US Imposes New Iran Sanctions Ahead of Geneva Talks"
+                        data-url="https://news.antiwar.com/2026/02/25/us-imposes-new-iran-sanctions-ahead-of-geneva-talks/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=us-imposes-new-iran-sanctions-ahead-of-geneva-talks"
+                        data-source="Antiwar.com"
                         data-category="geo_other">
                     <td class="col-rank"><span class="rank-badge">17</span></td>
                     <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
-                    <td class="col-source"><span class="source-name">Al Jazeera</span></td>
+                    <td class="col-source"><span class="source-name">Antiwar.com</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.aljazeera.com/news/2026/2/26/iran-us-set-to-hold-talks-as-trump-threatens-force-imposes-sanctions?traffic_source=rss" target="_blank">Iran, US set to hold talks as Trump threatens force, imposes sanctions</a>
+                            <a href="https://news.antiwar.com/2026/02/25/us-imposes-new-iran-sanctions-ahead-of-geneva-talks/?utm_source=rss&utm_medium=rss&utm_campaign=us-imposes-new-iran-sanctions-ahead-of-geneva-talks" target="_blank">US Imposes New Iran Sanctions Ahead of Geneva Talks</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-44.0</div>
+                        <div class="score-val">-44.1</div>
                         <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
@@ -963,10 +897,10 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="e3057" 
+                <tr data-hash-id="f0564" 
                         data-rank="20"
-                        data-title="The Tigray Powder Keg in the Horn of Africa"
-                        data-url="https://geopoliticalfutures.com/the-tigray-powder-keg-in-the-horn-of-africa/"
+                        data-title="Daily Memo: Starlink Disruption in South China Sea, Russia’s Footprint in Africa"
+                        data-url="https://geopoliticalfutures.com/daily-memo-starlink-disruption-in-south-china-sea-russias-footprint-in-africa/"
                         data-source="Geopolitical Futures"
                         data-category="geo_major">
                     <td class="col-rank"><span class="rank-badge">20</span></td>
@@ -974,12 +908,12 @@
                     <td class="col-source"><span class="source-name">Geopolitical Futures</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://geopoliticalfutures.com/the-tigray-powder-keg-in-the-horn-of-africa/" target="_blank">The Tigray Powder Keg in the Horn of Africa</a>
+                            <a href="https://geopoliticalfutures.com/daily-memo-starlink-disruption-in-south-china-sea-russias-footprint-in-africa/" target="_blank">Daily Memo: Starlink Disruption in South China Sea, Russia’s Footprint in Africa</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-63.8</div>
+                        <div class="score-val">-63.3</div>
                         <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
@@ -1235,67 +1169,6 @@
                 break;
             }
         }
-    }
-    
-    function addPriority() {
-        const label = document.getElementById('priorityLabel').value.trim();
-        const keywords = document.getElementById('priorityKeywords').value.trim();
-        const boost = parseFloat(document.getElementById('priorityBoost').value);
-        const days = document.getElementById('priorityDays').value;
-        
-        if (!label) {
-            showToast('Please enter a priority label', 'error');
-            return;
-        }
-        
-        if (!keywords) {
-            showToast('Please enter at least one keyword', 'error');
-            return;
-        }
-        
-        const payload = {
-            label: label,
-            keywords: keywords,
-            boost: boost
-        };
-        
-        if (days) {
-            payload.expires_days = parseInt(days);
-        }
-        
-        // Disable button during request
-        const btn = document.getElementById('addPriorityBtn');
-        btn.disabled = true;
-        btn.textContent = '⏳ Adding...';
-        
-        fetch('http://localhost:8765/api/priority', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showToast(data.message, 'success');
-                // Clear inputs
-                document.getElementById('priorityLabel').value = '';
-                document.getElementById('priorityKeywords').value = '';
-                document.getElementById('priorityBoost').value = '2.0';
-                document.getElementById('priorityDays').value = '';
-            } else {
-                showToast(data.message || 'Error adding priority', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error adding priority:', error);
-            showToast('Server error - is curator_server.py running?', 'error');
-        })
-        .finally(() => {
-            btn.disabled = false;
-            btn.textContent = '🎯 Add Priority';
-        });
     }
     </script>
     <style>

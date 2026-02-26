@@ -1857,65 +1857,6 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
             background: rgba(26,92,138,0.15);
             transform: scale(1.05);
         }}
-        
-        /* Priority Quick-Add */
-        .priority-quick-add {{
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 16px;
-            margin: 16px auto;
-            max-width: 1200px;
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            box-shadow: 0 2px 8px var(--shadow);
-        }}
-        
-        .priority-quick-add input {{
-            flex: 1;
-            padding: 8px 12px;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            background: var(--bg);
-            color: var(--text);
-            font-family: 'Source Sans 3', sans-serif;
-            font-size: 14px;
-        }}
-        
-        .priority-quick-add input[type="number"] {{
-            flex: 0 0 80px;
-        }}
-        
-        .priority-quick-add input:focus {{
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 2px var(--accent-dim);
-        }}
-        
-        .priority-quick-add button {{
-            flex: 0 0 auto;
-            padding: 8px 16px;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-family: 'Source Sans 3', sans-serif;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }}
-        
-        .priority-quick-add button:hover {{
-            background: #6d4a1f;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px var(--shadow);
-        }}
-        
-        .priority-quick-add button:active {{
-            transform: translateY(0);
-        }}
     </style>
 </head>
 <body data-run-mode="{run_mode}">
@@ -1927,17 +1868,10 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
   <nav class="header-nav">
     <a href="/" class="nav-link active">Daily</a>
     <a href="curator_library.html" class="nav-link">Library</a>
+    <a href="curator_priorities.html" class="nav-link">🎯 Priorities</a>
     <a href="interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
   </nav>
 </header>
-
-<div class="priority-quick-add">
-  <input type="text" id="priorityLabel" placeholder="Priority label (e.g., Tigray Conflict)" />
-  <input type="text" id="priorityKeywords" placeholder="Keywords (comma-separated)" />
-  <input type="number" id="priorityBoost" value="2.0" min="0" max="3.0" step="0.5" />
-  <input type="number" id="priorityDays" placeholder="Days (optional)" min="1" max="30" />
-  <button id="addPriorityBtn" onclick="addPriority()">🎯 Add Priority</button>
-</div>
 
 <main>
     <div class="briefing-table">
@@ -2284,67 +2218,6 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
                 break;
             }
         }
-    }
-    
-    function addPriority() {
-        const label = document.getElementById('priorityLabel').value.trim();
-        const keywords = document.getElementById('priorityKeywords').value.trim();
-        const boost = parseFloat(document.getElementById('priorityBoost').value);
-        const days = document.getElementById('priorityDays').value;
-        
-        if (!label) {
-            showToast('Please enter a priority label', 'error');
-            return;
-        }
-        
-        if (!keywords) {
-            showToast('Please enter at least one keyword', 'error');
-            return;
-        }
-        
-        const payload = {
-            label: label,
-            keywords: keywords,
-            boost: boost
-        };
-        
-        if (days) {
-            payload.expires_days = parseInt(days);
-        }
-        
-        // Disable button during request
-        const btn = document.getElementById('addPriorityBtn');
-        btn.disabled = true;
-        btn.textContent = '⏳ Adding...';
-        
-        fetch('http://localhost:8765/api/priority', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showToast(data.message, 'success');
-                // Clear inputs
-                document.getElementById('priorityLabel').value = '';
-                document.getElementById('priorityKeywords').value = '';
-                document.getElementById('priorityBoost').value = '2.0';
-                document.getElementById('priorityDays').value = '';
-            } else {
-                showToast(data.message || 'Error adding priority', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error adding priority:', error);
-            showToast('Server error - is curator_server.py running?', 'error');
-        })
-        .finally(() => {
-            btn.disabled = false;
-            btn.textContent = '🎯 Add Priority';
-        });
     }
     </script>
     <style>
