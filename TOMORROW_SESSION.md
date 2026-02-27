@@ -1,45 +1,39 @@
-# Next Session — Phase 2B
+# Next Session — Phase 2B remainder + Phase 3A start
 
-## Session Prompt
+## Phase 2B Status (completed Feb 27 by OpenClaw)
 
-> "Let's wire up Phase 2B — ratings into scoring, serendipity reserve, then temporal decay.
-> Read TOMORROW_SESSION.md and CURATOR_FEEDBACK_DESIGN.md first. Work in that order."
+✅ **Task 1: Ratings → Scoring** — `load_user_profile()` was already implemented and working. 13 feedback interactions actively personalizing Grok. Strong signals: The Duran (11 likes), institutional_debates, monetary_policy, analytical style.
+
+✅ **Task 2: Serendipity Reserve** — Wired. `serendipity_reserve: 0.20` in `curator_preferences.json`. 80% personalized / 20% discovery. Tested: 4/20 articles selected as serendipity picks from 374 candidates. Commit: `90cc3d0`.
+
+⏸️ **Task 3: Temporal Decay** — Correctly deferred. At 13 interactions, decay would over-penalize early signal. Revisit at 30-50 interactions. Design is in `CURATOR_FEEDBACK_DESIGN.md`.
+
+---
+
+## Next Session Prompt
+
+> "Phase 2B is done except temporal decay (deferred — only 13 interactions). Read TOMORROW_SESSION.md first. Start with temporal decay gate check, then move to Phase 3A: OAuth 1.0a setup for X integration."
 
 ---
 
 ## Task Order
 
-### 1. Ratings → Scoring *(do first — most impactful)*
+### 1. Temporal Decay gate check *(5 min)*
 
-Deep dive ratings in `interests/ratings.json` boost/suppress future article scores.
+Check current interaction count in `curator_preferences.json` → `learned_patterns.sample_size`.
+- If < 30: skip, note count, move on
+- If ≥ 30: wire `decay_factor = 0.85/week` into `load_user_profile()` per `CURATOR_FEEDBACK_DESIGN.md`
 
-- Same pattern as `load_user_profile()` — read ratings, inject into Grok prompt
-- Rating scale: 1 (useless) → 4 (excellent/contrarian depth)
-- Map to score modifier: rating 4 → boost related themes/sources; rating 1-2 → suppress
-- `ratings` array is currently empty — wire the logic, test with a dummy entry first
-- Verify with a live dry-run after wiring
+### 2. Phase 3A — OAuth 1.0a setup for X *(longest lead-time item)*
 
-### 2. Serendipity Reserve *(before temporal decay — safer on small dataset)*
+Auth setup independently of adapter code. See `ROADMAP_X_INTEGRATION.md` in `rvs-openclaw-agent`.
 
-Wire `serendipity_reserve = 0.20` into `score_entries_xai()`.
+- OAuth 1.0a first — bookmarks endpoint requires user context auth, not Bearer token
+- Store credentials in macOS keychain (same pattern as other API keys)
+- Verify auth works before writing any fetch logic
+- Do NOT start `x_adapter.py` until auth is confirmed working
 
-- 20% of final article slots bypass personalization scoring entirely
-- Domain scope = RSS feed universe for now, no additional filtering
-- Selected randomly from the non-top-80% pool (not from already-top-ranked articles)
-- Creates `curation_settings.json` if it doesn't exist
-- Verify with dry-run after wiring
-
-### 3. Temporal Decay *(last — needs signal volume to absorb safely)*
-
-Wire `decay_factor = 0.85/week` into `load_user_profile()`.
-
-- Apply to `learned_patterns` weights before building the profile string
-- Weight = raw_weight × (0.85 ^ weeks_since_last_interaction)
-- Timestamp source: `last_updated` field in `curator_preferences.json`
-- Hold until ~30-50 interactions; currently at ~6 — wire it but keep an eye on signal erosion
-- Verify with dry-run after wiring
-
-**Verify after each task — dry-run between each one, not just at the end.**
+**Verify after each task.**
 
 ---
 
