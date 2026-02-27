@@ -31,3 +31,6 @@ curator_briefing_table.html
 html_button_snippet.html
 test_feedback.sh
 scripts/test_cron.sh
+
+# Voice notes (personal thought capture)
+VOICE_NOTES.md
