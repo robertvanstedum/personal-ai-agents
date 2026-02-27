@@ -7,6 +7,10 @@ Usage:
     python curator_feedback.py dislike 8
     python curator_feedback.py save 5
     python curator_feedback.py show         # Show recent feedback
+    
+Non-interactive (for automation):
+    python curator_feedback.py like 3 --channel telegram --text "Good article"
+    python curator_feedback.py save 5 --text "Read later"
 """
 
 import json
@@ -1231,7 +1235,7 @@ def show_recent_feedback():
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python curator_feedback.py <like|dislike|save|show|bookmark> [rank|reference] [--channel <cli|web_ui|telegram>]")
+        print("Usage: python curator_feedback.py <like|dislike|save|show|bookmark> [rank|reference] [--channel <cli|web_ui|telegram>] [--text \"feedback text\"]")
         sys.exit(1)
     
     command = sys.argv[1].lower()
@@ -1242,6 +1246,13 @@ def main():
         channel_idx = sys.argv.index('--channel')
         if channel_idx + 1 < len(sys.argv):
             channel = sys.argv[channel_idx + 1]
+    
+    # Parse optional --text flag (for non-interactive feedback)
+    feedback_text = None
+    if '--text' in sys.argv:
+        text_idx = sys.argv.index('--text')
+        if text_idx + 1 < len(sys.argv):
+            feedback_text = sys.argv[text_idx + 1]
     
     if command == 'show':
         show_recent_feedback()
@@ -1379,17 +1390,23 @@ def main():
     
     # Get user feedback
     if command in ['like', 'dislike']:
-        prompt = "What did you like about it? " if command == 'like' else "What didn't work for you? "
-        user_words = input(prompt).strip()
-        
-        if not user_words:
-            print("❌ No feedback provided. Cancelled.")
-            sys.exit(0)
+        if feedback_text:
+            user_words = feedback_text
+        else:
+            prompt = "What did you like about it? " if command == 'like' else "What didn't work for you? "
+            user_words = input(prompt).strip()
+            
+            if not user_words:
+                print("❌ No feedback provided. Cancelled.")
+                sys.exit(0)
         
         record_feedback(rank, f"{command}d", user_words, article, channel=channel)
     
     elif command == 'save':
-        reason = input("Why save this? (optional) ").strip() or "saved for later"
+        if feedback_text:
+            reason = feedback_text
+        else:
+            reason = input("Why save this? (optional) ").strip() or "saved for later"
         record_feedback(rank, 'saved', reason, article, channel=channel)
     
     else:
