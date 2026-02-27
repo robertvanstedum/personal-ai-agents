@@ -136,12 +136,17 @@ else
     exit 1
 fi
 
-# ── Lockfile: signals OpenClaw to pause polling ───────────────────────────────
-# OpenClaw checks for ~/.webhook_active before each poll cycle.
-# If present → skip polling (webhook handles messages).
-# Removed in cleanup → OpenClaw auto-resumes on stack shutdown.
+# ── Lockfile + OpenClaw pause ─────────────────────────────────────────────────
+# Write lockfile so OpenClaw's per-cycle check can detect webhook is active.
+# Also explicitly disable OpenClaw Telegram channel so there's no race.
+# Both are reversed atomically in cleanup().
 echo "webhook_active since $(date -u +%Y-%m-%dT%H:%M:%SZ) pid=$WEBHOOK_PID" > "$LOCKFILE"
-echo "▶ Lockfile written: $LOCKFILE (OpenClaw polling paused)"
+echo "▶ Lockfile written: $LOCKFILE"
+if command -v openclaw &>/dev/null; then
+    openclaw config patch --set channels.telegram.enabled=false 2>/dev/null \
+        && echo "▶ OpenClaw Telegram polling paused" \
+        || echo "  ⚠️  openclaw config patch failed — pause manually if needed"
+fi
 
 # ── Status ─────────────────────────────────────────────────────────────────────
 echo ""
@@ -163,10 +168,15 @@ cleanup() {
     echo ""
     echo "▶ Shutting down..."
 
-    # Remove lockfile — OpenClaw resumes polling automatically
+    # Remove lockfile and re-enable OpenClaw Telegram polling
     if [ -f "$LOCKFILE" ]; then
         rm -f "$LOCKFILE"
-        echo "  ✅ Lockfile removed (OpenClaw polling resumed)"
+        echo "  ✅ Lockfile removed"
+    fi
+    if command -v openclaw &>/dev/null; then
+        openclaw config patch --set channels.telegram.enabled=true 2>/dev/null \
+            && echo "  ✅ OpenClaw Telegram polling re-enabled" \
+            || echo "  ⚠️  openclaw config patch failed — re-enable manually"
     fi
 
     # Deregister webhook so polling-based tools work again
