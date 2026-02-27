@@ -2653,17 +2653,13 @@ def main():
     import sys
     import subprocess
     from signal_store import get_session_id, log_article_scored, log_priority_match
-    
-    # Initialize session ID for this run (all events will share this)
-    session_id = get_session_id()
-    print(f"📝 Session ID: {session_id}")
-    
-    # Parse command line args
+
+    # Parse command line args first (dry_run needed before session init)
     send_telegram = "--telegram" in sys.argv
     auto_open = "--open" in sys.argv
     fallback_on_error = "--fallback" in sys.argv
     dry_run = "--dry-run" in sys.argv
-    
+
     # Model selection (default: xai)
     # --model=[ollama|xai|sonnet] controls which LLM is used
     model = 'xai'
@@ -2671,7 +2667,7 @@ def main():
         if arg.startswith('--model='):
             model = arg.split('=')[1]
             break
-    
+
     # Map model names to internal modes
     mode_map = {
         'ollama': 'mechanical',  # Free local Ollama/phi
@@ -2679,13 +2675,20 @@ def main():
         'sonnet': 'anthropic'    # Anthropic Sonnet (premium)
     }
     mode = mode_map.get(model, 'xai')  # Fallback to xai if unknown
-    
-    # Dry run banner
+
+    # Session ID (in-memory only; no I/O until log calls below)
+    session_id = get_session_id()
+    run_id = 'r_' + session_id[:7]
+
+    # Banner
     if dry_run:
         print("="*60)
-        print("🧪 DRY RUN MODE - No archive or history will be saved")
+        print(f"🧪 DRY RUN MODE  [{run_id}]")
+        print("   No archive, history, or Signal Store writes.")
         print("="*60)
         print()
+    else:
+        print(f"🚀 Production run  [{run_id}]")
     
     # Run curation
     try:
@@ -2696,45 +2699,49 @@ def main():
         print("\nTip: Run with --model=ollama to test everything except API")
         sys.exit(1)
     
-    # Log scored articles to Signal Store (always, even in dry-run)
-    print(f"📝 Logging {len(top_articles)} articles to Signal Store...")
-    priority_matches_count = 0
-    for rank, article in enumerate(top_articles, 1):
-        log_article_scored(
-            article_id=article.get("hash_id", f"article-{rank}"),
-            title=article["title"],
-            source=article["source"],
-            category=article.get("category", "other"),
-            score=article["score"],
-            model=model,
-            url=article.get("link"),
-            rank=rank,
-            metadata={
-                "method": article.get("method", "unknown"),
-                "final_score": article.get("final_score", article["score"]),
-                "interest_boosted": article.get("interest_boosted", False),
-                "priorities_boosted": article.get("priorities_boosted", False),
-                "priorities_modifier": article.get("priorities_modifier", 0.0)
-            }
-        )
-        
-        # Log priority matches
-        matched_priorities = article.get("matched_priorities", [])
-        for match in matched_priorities:
-            log_priority_match(
-                priority_id=match["priority_id"],
-                priority_label=match["label"],
+    # Log scored articles to Signal Store (production only)
+    if not dry_run:
+        print(f"📝 Logging {len(top_articles)} articles to Signal Store...")
+        priority_matches_count = 0
+        for rank, article in enumerate(top_articles, 1):
+            log_article_scored(
                 article_id=article.get("hash_id", f"article-{rank}"),
-                article_title=article["title"],
-                boost=match["boost"],
-                metadata={"rank": rank, "article_score": article["score"]}
+                title=article["title"],
+                source=article["source"],
+                category=article.get("category", "other"),
+                score=article["score"],
+                model=model,
+                url=article.get("link"),
+                rank=rank,
+                metadata={
+                    "run_id": run_id,
+                    "method": article.get("method", "unknown"),
+                    "final_score": article.get("final_score", article["score"]),
+                    "interest_boosted": article.get("interest_boosted", False),
+                    "priorities_boosted": article.get("priorities_boosted", False),
+                    "priorities_modifier": article.get("priorities_modifier", 0.0)
+                }
             )
-            priority_matches_count += 1
-    
-    if priority_matches_count > 0:
-        print(f"✅ Signal Store updated ({priority_matches_count} priority matches logged)")
+
+            # Log priority matches
+            matched_priorities = article.get("matched_priorities", [])
+            for match in matched_priorities:
+                log_priority_match(
+                    priority_id=match["priority_id"],
+                    priority_label=match["label"],
+                    article_id=article.get("hash_id", f"article-{rank}"),
+                    article_title=article["title"],
+                    boost=match["boost"],
+                    metadata={"run_id": run_id, "rank": rank, "article_score": article["score"]}
+                )
+                priority_matches_count += 1
+
+        if priority_matches_count > 0:
+            print(f"✅ Signal Store updated ({priority_matches_count} priority matches logged)")
+        else:
+            print(f"✅ Signal Store updated")
     else:
-        print(f"✅ Signal Store updated")
+        print(f"🧪 Signal Store writes suppressed (dry run)")
     
     # Save to history (with duplicate protection)
     if not dry_run:
@@ -2746,11 +2753,17 @@ def main():
     output = format_output(top_articles)
     print(output)
     
-    # Save to file
-    output_file = "curator_output.txt"
-    with open(output_file, "w") as f:
-        f.write(output)
-    print(f"💾 Results saved to {output_file}")
+    # Save text output (production → curator_output.txt, dry run → curator_preview.txt)
+    if not dry_run:
+        output_file = "curator_output.txt"
+        with open(output_file, "w") as f:
+            f.write(output)
+        print(f"💾 Results saved to {output_file}")
+    else:
+        output_file = "curator_preview.txt"
+        with open(output_file, "w") as f:
+            f.write(output)
+        print(f"🧪 Preview text saved to {output_file}")
     
     # HTML generation
     run_mode = "dry-run" if dry_run else "production"
