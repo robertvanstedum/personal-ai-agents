@@ -62,6 +62,7 @@ import feedparser
 import requests
 from datetime import datetime, timezone
 from typing import List, Dict, Tuple
+from pathlib import Path
 import time
 import os
 import json
@@ -1436,13 +1437,31 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
             entry["raw_score"] = result['raw_score']
             entry["method"] = result['method']
     
+    # Load serendipity reserve setting
+    serendipity_reserve = 0.20  # Default
+    try:
+        prefs_path = Path.home() / '.openclaw' / 'workspace' / 'curator_preferences.json'
+        with open(prefs_path) as f:
+            prefs = json.load(f)
+            serendipity_reserve = prefs.get('curation_settings', {}).get('serendipity_reserve', 0.20)
+    except Exception:
+        pass  # Use default if file not found
+    
+    # Calculate split between personalized and serendipity articles
+    serendipity_count = int(top_n * serendipity_reserve)
+    personalized_count = top_n - serendipity_count
+    
+    if serendipity_count > 0:
+        print(f"\n🎲 Serendipity reserve: {serendipity_count}/{top_n} articles ({int(serendipity_reserve*100)}%) from outside learned patterns")
+    
     # Apply diversity-aware selection
     selected = []
     source_counts = {}
     category_counts = {}  # NEW: Track category distribution
     candidates = all_entries.copy()
     
-    while len(selected) < top_n and candidates:
+    # PHASE 1: Select personalized articles (with interest/priority boosts)
+    while len(selected) < personalized_count and candidates:
         # Recalculate final scores based on current distribution
         for entry in candidates:
             source = entry["source"]
@@ -1483,6 +1502,43 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
         
         source_counts[source] = source_counts.get(source, 0) + 1
         category_counts[category] = category_counts.get(category, 0) + 1
+    
+    # PHASE 2: Select serendipity articles (NO interest/priority boosts, only base score + diversity)
+    if serendipity_count > 0 and candidates:
+        print(f"   Selecting {serendipity_count} serendipity articles from {len(candidates)} remaining candidates...")
+        serendipity_selected = []
+        
+        while len(serendipity_selected) < serendipity_count and candidates:
+            # Recalculate scores WITHOUT personalization boosts
+            for entry in candidates:
+                source = entry["source"]
+                category = entry.get("category", "other")
+                
+                source_count = source_counts.get(source, 0)
+                category_count = category_counts.get(category, 0)
+                
+                source_penalty = (source_count ** 2) * 30 * diversity_weight
+                category_penalty = (category_count ** 2) * 15 * diversity_weight
+                
+                # Serendipity score = base score + diversity penalties ONLY (no boosts)
+                entry["final_score"] = entry["score"] - source_penalty - category_penalty
+                entry["serendipity_pick"] = True
+            
+            # Pick highest base-scoring candidate
+            candidates.sort(key=lambda x: x["final_score"], reverse=True)
+            best = candidates.pop(0)
+            
+            serendipity_selected.append(best)
+            
+            source = best["source"]
+            category = best.get("category", "other")
+            
+            source_counts[source] = source_counts.get(source, 0) + 1
+            category_counts[category] = category_counts.get(category, 0) + 1
+        
+        # Merge serendipity articles into main selection
+        selected.extend(serendipity_selected)
+        print(f"   ✅ Added {len(serendipity_selected)} serendipity articles")
     
     # Report distributions
     print("\n📊 Source distribution in top 20:")
