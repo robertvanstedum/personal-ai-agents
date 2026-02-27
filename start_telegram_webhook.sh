@@ -143,9 +143,10 @@ fi
 echo "webhook_active since $(date -u +%Y-%m-%dT%H:%M:%SZ) pid=$WEBHOOK_PID" > "$LOCKFILE"
 echo "▶ Lockfile written: $LOCKFILE"
 if command -v openclaw &>/dev/null; then
-    openclaw config patch --set channels.telegram.enabled=false 2>/dev/null \
-        && echo "▶ OpenClaw Telegram polling paused" \
-        || echo "  ⚠️  openclaw config patch failed — pause manually if needed"
+    openclaw config set channels.telegram.enabled false 2>/dev/null \
+        && openclaw daemon restart 2>/dev/null \
+        && echo "▶ OpenClaw Telegram polling paused (gateway restarted)" \
+        || echo "  ⚠️  openclaw config set failed — disable manually"
 fi
 
 # ── Status ─────────────────────────────────────────────────────────────────────
@@ -174,9 +175,10 @@ cleanup() {
         echo "  ✅ Lockfile removed"
     fi
     if command -v openclaw &>/dev/null; then
-        openclaw config patch --set channels.telegram.enabled=true 2>/dev/null \
-            && echo "  ✅ OpenClaw Telegram polling re-enabled" \
-            || echo "  ⚠️  openclaw config patch failed — re-enable manually"
+        openclaw config set channels.telegram.enabled true 2>/dev/null \
+            && openclaw daemon restart 2>/dev/null \
+            && echo "  ✅ OpenClaw Telegram polling re-enabled (gateway restarted)" \
+            || echo "  ⚠️  openclaw config set failed — re-enable manually"
     fi
 
     # Deregister webhook so polling-based tools work again
