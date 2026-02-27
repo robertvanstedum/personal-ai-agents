@@ -1,26 +1,75 @@
 # Telegram Webhook Architecture Plan
 
-**Status:** ✅ IMPLEMENTED - MacBook Development  
-**Priority:** Production-ready (working with temporary tunnel)  
-**Last Updated:** Feb 23, 2026
+**Status:** ✅ MacBook dev — temporary tunnel, auto-registers on each start
+**Priority:** Working. Named tunnel required before Mac Mini production.
+**Last Updated:** Feb 27, 2026
 
 ---
 
-## Live Setup (MacBook Development)
+## Quick Start (MacBook)
 
-**Running services:**
-- ✅ Webhook server: `telegram_bot.py --webhook` on port 8444 (PID 79652)
-- ✅ Cloudflare Tunnel: `https://weeks-spa-equivalent-coalition.trycloudflare.com`
-- ✅ Telegram webhook registered and active
+```bash
+cd ~/Projects/personal-ai-agents
+./start_telegram_webhook.sh
+```
 
-**Test:**
-- Test article sent with Like/Dislike/Save buttons
-- Click a button in Telegram to verify webhook receives callback
-- Check webhook logs: `process poll mellow-daisy`
+`start_telegram_webhook.sh` does everything automatically:
+1. Starts `telegram_bot.py --webhook` on localhost:8444
+2. Starts a temporary Cloudflare tunnel (`trycloudflare.com`)
+3. Waits for the URL, then registers it with Telegram (with secret token)
+4. Deregisters cleanly on Ctrl+C
 
-**Temporary URL:** `https://weeks-spa-equivalent-coalition.trycloudflare.com`
-- Note: This URL changes each time tunnel restarts
-- For Mac Mini production, we'll use a named tunnel with stable URL
+**Tunnel mode:** Temporary (URL changes on each restart — re-registration is automatic)
+
+---
+
+## ⚠️ Mac Mini Migration: Named Tunnel
+
+When moving to Mac Mini production, switch from the temporary tunnel to a named
+tunnel so the webhook URL is stable (no re-registration required on restart).
+
+**Steps (one-time setup on Mac Mini):**
+
+```bash
+# 1. Authenticate with Cloudflare (opens browser)
+cloudflared login
+
+# 2. Create a named tunnel
+cloudflared tunnel create curator-bot
+
+# 3. Route a subdomain (requires a domain on Cloudflare)
+#    If no domain, use the assigned *.cfargotunnel.com URL instead
+cloudflared tunnel route dns curator-bot curator-bot.<your-domain>
+
+# 4. Create config
+cat > ~/.cloudflared/config.yml <<EOF
+tunnel: curator-bot
+credentials-file: ~/.cloudflared/<tunnel-uuid>.json
+ingress:
+  - hostname: curator-bot.<your-domain>
+    service: http://localhost:8444
+  - service: http_status:404
+EOF
+
+# 5. Update start_telegram_webhook.sh:
+#    - Replace the cloudflared quick-tunnel command with:
+#        cloudflared tunnel run curator-bot
+#    - Remove the "Wait for URL" loop (URL is now stable)
+#    - Remove the Telegram re-registration block (URL doesn't change)
+#    - Register once manually:
+python3 -c "
+import keyring, requests
+token = keyring.get_password('telegram', 'bot_token')
+secret = keyring.get_password('telegram', 'webhook_secret')
+r = requests.post(f'https://api.telegram.org/bot{token}/setWebhook',
+    json={'url': 'https://curator-bot.<your-domain>/webhook',
+          'allowed_updates': ['callback_query','message'],
+          'secret_token': secret})
+print(r.json())
+"
+```
+
+**No code changes to `telegram_bot.py`** — webhook server is environment-agnostic.
 
 ---
 

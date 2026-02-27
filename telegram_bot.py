@@ -321,35 +321,56 @@ def run_bot_mode():
     print("✅ Listening for callbacks and commands...")
     app.run_polling()
 
+def get_webhook_secret():
+    """Get webhook secret token from keyring (set at registration time)."""
+    try:
+        return keyring.get_password('telegram', 'webhook_secret')
+    except Exception:
+        return None
+
+
 def run_webhook_mode():
     """Run Flask webhook server on localhost:8444"""
     from flask import Flask, request, jsonify
-    
+
     token = get_token()
     if not token:
         print("❌ No Telegram token found")
         return
-    
+
+    webhook_secret = get_webhook_secret()
+    if webhook_secret:
+        print("🔒 Webhook secret validation enabled")
+    else:
+        print("⚠️  No webhook secret found — requests will not be validated")
+
     app = Flask(__name__)
-    
+
     @app.route('/webhook', methods=['POST'])
     def webhook():
         """Handle incoming webhook updates from Telegram"""
+        # Validate secret token if one is configured
+        if webhook_secret:
+            incoming = request.headers.get('X-Telegram-Bot-Api-Secret-Token', '')
+            if incoming != webhook_secret:
+                print(f"⚠️  Rejected webhook request with bad secret")
+                return jsonify({'error': 'Unauthorized'}), 403
+
         try:
             update_json = request.get_json()
-            
+
             # Handle callback_query (button presses)
             if 'callback_query' in update_json:
                 handle_webhook_callback(update_json['callback_query'], token)
                 return jsonify({'ok': True})
-            
+
             # Handle commands (future)
             if 'message' in update_json:
                 msg = update_json['message']
                 if 'text' in msg and msg['text'].startswith('/'):
                     handle_webhook_command(msg, token)
                 return jsonify({'ok': True})
-            
+
             return jsonify({'ok': True})
         except Exception as e:
             print(f"❌ Webhook error: {e}")
