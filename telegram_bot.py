@@ -583,7 +583,12 @@ def run_webhook_mode():
             if 'message' in update_json:
                 msg = update_json['message']
                 if 'voice' in msg:
-                    handle_voice_message(msg, token)
+                    # Thread voice handling — Whisper can take 10-30s, must return 200 fast
+                    threading.Thread(
+                        target=handle_voice_message,
+                        args=(msg, token),
+                        daemon=True
+                    ).start()
                 elif 'text' in msg and msg['text'].startswith('/'):
                     handle_webhook_command(msg, token)
                 return jsonify({'ok': True})
