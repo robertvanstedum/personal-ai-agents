@@ -9,17 +9,32 @@ Handles:
 """
 
 import os
+import io
+import re
 import json
+import threading
 import subprocess
 import keyring
 import requests
 import argparse
 from pathlib import Path
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 BASE_DIR = Path(__file__).parent
 processed_callbacks = set()
+
+# ─── Voice command patterns ───────────────────────────────────────────────────
+VOICE_COMMAND_PATTERNS = [
+    (re.compile(r'resend (report|briefing)', re.I),                'resend_briefing', None),
+    (re.compile(r'(check services|are services running|service status)', re.I), 'check_services', None),
+    (re.compile(r'(run the briefing|run daily|run curator)', re.I),'run_curator',    None),
+    (re.compile(r'dry run', re.I),                                 'dry_run',         None),
+    (re.compile(r'investigate[:\s]+(.+)',         re.I),           'investigate',     1),
+    (re.compile(r'add to roadmap[:\s]+(.+)',      re.I),           'add_roadmap',     1),
+    (re.compile(r'delete from roadmap[:\s]+(.+)', re.I),           'delete_roadmap',  1),
+]
 
 # ─── Token helpers ────────────────────────────────────────────────────────────
 
@@ -306,6 +321,168 @@ async def cmd_briefing(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = get_chat_id() or str(update.message.chat_id)
     send_briefing(token, chat_id)
 
+# ─── Voice notes ──────────────────────────────────────────────────────────────
+
+def get_openai_key():
+    try:
+        key = keyring.get_password("openai", "api_key")
+        if key:
+            return key
+    except Exception:
+        pass
+    return os.environ.get('OPENAI_API_KEY')
+
+def get_telegram_file_bytes(file_id, token):
+    """Download a file from Telegram by file_id, return raw bytes."""
+    r = requests.get(
+        f"https://api.telegram.org/bot{token}/getFile",
+        params={"file_id": file_id}, timeout=10
+    )
+    file_path = r.json()["result"]["file_path"]
+    r2 = requests.get(
+        f"https://api.telegram.org/file/bot{token}/{file_path}", timeout=30
+    )
+    return r2.content
+
+def transcribe_voice(audio_bytes):
+    """Send audio bytes to Whisper, return transcription string."""
+    from openai import OpenAI
+    key = get_openai_key()
+    if not key:
+        raise ValueError("No OpenAI API key found in keychain (openai/api_key) or OPENAI_API_KEY env")
+    client = OpenAI(api_key=key)
+    audio_io = io.BytesIO(audio_bytes)
+    audio_io.name = "voice.ogg"
+    transcript = client.audio.transcriptions.create(model="whisper-1", file=audio_io)
+    return transcript.text.strip()
+
+def classify_voice(text):
+    """Pattern-match transcription against known commands.
+    Returns (command_name, args) or (None, None) for capture mode."""
+    for pattern, command, arg_group in VOICE_COMMAND_PATTERNS:
+        m = pattern.search(text)
+        if m:
+            args = m.group(arg_group).strip() if arg_group else None
+            return command, args
+    return None, None
+
+def log_voice_note(transcription, tag=None):
+    """Append transcription to VOICE_NOTES.md (append-only, never overwrites)."""
+    notes_file = BASE_DIR / 'VOICE_NOTES.md'
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+    prefix = f"[{tag}] " if tag else ""
+    entry = f"\n## {timestamp}\n{prefix}{transcription}\n"
+    with open(notes_file, 'a') as f:
+        f.write(entry)
+
+def execute_voice_command(command, args, chat_id, token):
+    """Execute a recognised voice command and reply via Telegram."""
+
+    if command == 'resend_briefing':
+        send_message(token, chat_id, "📨 Resending today's briefing...")
+        send_briefing(token, chat_id)
+
+    elif command == 'check_services':
+        jobs = ['com.vanstedum.curator', 'ai.openclaw.gateway']
+        lines = []
+        for job in jobs:
+            r = subprocess.run(['launchctl', 'list', job], capture_output=True)
+            if r.returncode == 0:
+                out = r.stdout.decode().strip()
+                pid = out.split('\t')[0] if '\t' in out else '?'
+                lines.append(f"✅ {job}  (PID {pid})")
+            else:
+                lines.append(f"❌ {job} — not loaded")
+        send_message(token, chat_id, "📊 Service status:\n" + "\n".join(lines))
+
+    elif command == 'run_curator':
+        send_message(token, chat_id, "⏳ Running curator — this takes a few minutes...")
+        def _run():
+            r = subprocess.run(
+                [str(BASE_DIR / 'run_curator_cron.sh')],
+                capture_output=True, cwd=BASE_DIR, timeout=600
+            )
+            if r.returncode == 0:
+                send_message(token, chat_id, "✅ Curator run complete. Sending briefing...")
+                send_briefing(token, chat_id)
+            else:
+                send_message(token, chat_id, f"❌ Curator failed:\n{r.stderr.decode()[:300]}")
+        threading.Thread(target=_run, daemon=True).start()
+
+    elif command == 'dry_run':
+        send_message(token, chat_id, "🧪 Running dry run — no writes, preview only...")
+        def _dry():
+            subprocess.run(
+                ['python', 'curator_rss_v2.py', '--dry-run'],
+                capture_output=True, cwd=BASE_DIR, timeout=300
+            )
+            preview = BASE_DIR / 'curator_preview.txt'
+            if preview.exists():
+                lines = preview.read_text().splitlines()
+                snippet = '\n'.join(lines[:30])
+                send_message(token, chat_id,
+                    f"🧪 Dry run preview (first 30 lines):\n<pre>{snippet}</pre>")
+            else:
+                send_message(token, chat_id, "🧪 Dry run complete — no preview file found.")
+        threading.Thread(target=_dry, daemon=True).start()
+
+    elif command == 'add_roadmap':
+        roadmap = BASE_DIR / 'PROJECT_ROADMAP.md'
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+        entry = f"\n### Voice-added {timestamp}\n- {args}\n"
+        with open(roadmap, 'a') as f:
+            f.write(entry)
+        send_message(token, chat_id, f"📋 Added to roadmap:\n{args}")
+
+    elif command == 'delete_roadmap':
+        # Spec: flag for review, do not delete silently
+        roadmap = BASE_DIR / 'PROJECT_ROADMAP.md'
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+        flag = f"\n### ⚠️ Voice delete request {timestamp}\n- FLAG FOR REMOVAL: {args}\n"
+        with open(roadmap, 'a') as f:
+            f.write(flag)
+        send_message(token, chat_id,
+            f"⚠️ Flagged for removal — review PROJECT_ROADMAP.md to confirm:\n{args}")
+
+    elif command == 'investigate':
+        # Log the request — OpenClaw handles investigations
+        log_voice_note(f"Investigate: {args}", tag="INVESTIGATE REQUEST")
+        send_message(token, chat_id,
+            f"🔍 Investigation request logged: {args}\n"
+            f"Tell OpenClaw directly to begin now if you want immediate results.")
+
+def handle_voice_message(message, token):
+    """Transcribe voice, echo back, classify as command or capture, act/log."""
+    chat_id = str(message['chat']['id'])
+    voice = message['voice']
+    file_id = voice['file_id']
+    duration = voice.get('duration', 0)
+
+    # Transcribe
+    try:
+        audio_bytes = get_telegram_file_bytes(file_id, token)
+        transcription = transcribe_voice(audio_bytes)
+    except Exception as e:
+        send_message(token, chat_id, f"❌ Transcription failed: {e}")
+        return
+
+    # Always echo back first
+    send_message(token, chat_id, f'🎙️ I heard: "{transcription}"')
+
+    if duration < 3:
+        send_message(token, chat_id,
+            "⚠️ Short note logged — double-check it made sense.")
+
+    # Classify: command or capture
+    command, args = classify_voice(transcription)
+
+    if command is None:
+        log_voice_note(transcription)
+        send_message(token, chat_id, "📝 Noted.")
+    else:
+        execute_voice_command(command, args, chat_id, token)
+
+
 # ─── Entry points ─────────────────────────────────────────────────────────────
 
 def run_send_mode():
@@ -381,10 +558,11 @@ def run_webhook_mode():
                 handle_webhook_callback(update_json['callback_query'], token)
                 return jsonify({'ok': True})
 
-            # Handle commands (future)
             if 'message' in update_json:
                 msg = update_json['message']
-                if 'text' in msg and msg['text'].startswith('/'):
+                if 'voice' in msg:
+                    handle_voice_message(msg, token)
+                elif 'text' in msg and msg['text'].startswith('/'):
                     handle_webhook_command(msg, token)
                 return jsonify({'ok': True})
 
