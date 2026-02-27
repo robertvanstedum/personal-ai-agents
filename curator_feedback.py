@@ -1392,7 +1392,11 @@ def main():
     if command in ['like', 'dislike']:
         if feedback_text:
             user_words = feedback_text
+        elif not sys.stdin.isatty():
+            # Non-interactive mode without --text: use default message
+            user_words = f"{command.capitalize()}d via {channel}"
         else:
+            # Interactive mode: prompt user
             prompt = "What did you like about it? " if command == 'like' else "What didn't work for you? "
             user_words = input(prompt).strip()
             
@@ -1405,7 +1409,11 @@ def main():
     elif command == 'save':
         if feedback_text:
             reason = feedback_text
+        elif not sys.stdin.isatty():
+            # Non-interactive mode without --text: use default message
+            reason = f"Saved via {channel}"
         else:
+            # Interactive mode: prompt user
             reason = input("Why save this? (optional) ").strip() or "saved for later"
         record_feedback(rank, 'saved', reason, article, channel=channel)
     
