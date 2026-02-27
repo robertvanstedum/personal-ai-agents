@@ -591,6 +591,12 @@ def run_webhook_mode():
                     ).start()
                 elif 'text' in msg and msg['text'].startswith('/'):
                     handle_webhook_command(msg, token)
+                elif 'text' in msg:
+                    # Plain text — acknowledge so user knows the pipeline is working
+                    chat_id = str(msg['chat']['id'])
+                    send_message(token, chat_id,
+                        f"✅ Got it. Commands: /status /run /briefing\n"
+                        f"Or send a voice note to run curator commands.")
                 return jsonify({'ok': True})
 
             return jsonify({'ok': True})
