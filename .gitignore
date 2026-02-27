@@ -34,3 +34,15 @@ scripts/test_cron.sh
 
 # Voice notes (personal thought capture)
 VOICE_NOTES.md
+
+# Logs (generated, not source)
+logs/
+
+# Claude Code session data
+.claude/
+
+# OpenClaw sync notes (transient handoff files)
+.SYNC_NOTE.md
+
+# Private planning docs (live in rvs-openclaw-agent)
+ROADMAP_X_INTEGRATION.md
