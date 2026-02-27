@@ -27,6 +27,7 @@ SHARED_NAV_HTML = """
     <a href="/" class="nav-link {briefing_active}">Daily</a>
     <a href="/curator_library.html" class="nav-link {library_active}">Library</a>
     <a href="/interests/2026/deep-dives/index.html" class="nav-link {deepdives_active}">Deep Dives</a>
+    <a href="/curator_priorities.html" class="nav-link {priorities_active}">Priorities</a>
   </nav>
 """
 
@@ -311,6 +312,125 @@ def api_add_priority():
     })
 
 
+@app.route('/api/priorities', methods=['GET'])
+def api_list_priorities():
+    """List all priorities from priorities.json with computed expiry fields."""
+    workspace = Path.home() / '.openclaw' / 'workspace'
+    priorities_file = workspace / 'priorities.json'
+
+    if not priorities_file.exists():
+        return jsonify({'priorities': [], 'count': 0, 'active_count': 0})
+
+    with open(priorities_file, 'r') as f:
+        priorities_data = json.load(f)
+
+    priorities = priorities_data.get('priorities', [])
+    now = datetime.now()
+
+    for p in priorities:
+        if p.get('expires_at'):
+            try:
+                exp = datetime.fromisoformat(p['expires_at'].rstrip('Z'))
+                p['expired'] = exp < now
+                delta = exp - now
+                p['days_remaining'] = delta.days
+            except Exception:
+                p['expired'] = False
+                p['days_remaining'] = None
+        else:
+            p['expired'] = False
+            p['days_remaining'] = None
+
+    active_count = sum(
+        1 for p in priorities
+        if p.get('active') and not p.get('expired')
+    )
+
+    return jsonify({
+        'priorities': priorities,
+        'count': len(priorities),
+        'active_count': active_count,
+    })
+
+
+@app.route('/api/priority/<string:priority_id>', methods=['DELETE'])
+def api_delete_priority(priority_id):
+    """Delete a priority by ID."""
+    workspace = Path.home() / '.openclaw' / 'workspace'
+    priorities_file = workspace / 'priorities.json'
+
+    if not priorities_file.exists():
+        return jsonify({'success': False, 'message': 'priorities.json not found'}), 404
+
+    with open(priorities_file, 'r') as f:
+        priorities_data = json.load(f)
+
+    original = priorities_data['priorities']
+    filtered = [p for p in original if p['id'] != priority_id]
+
+    if len(filtered) == len(original):
+        return jsonify({'success': False, 'message': f'Priority {priority_id} not found'}), 404
+
+    priorities_data['priorities'] = filtered
+
+    with open(priorities_file, 'w') as f:
+        json.dump(priorities_data, f, indent=2)
+
+    print(f"🗑️  Deleted priority: {priority_id}")
+    return jsonify({'success': True, 'message': f'Priority {priority_id} deleted'})
+
+
+@app.route('/api/priority/<string:priority_id>', methods=['PATCH'])
+def api_edit_priority(priority_id):
+    """
+    Edit or extend a priority.
+    Accepts JSON fields: label, keywords (list or comma string),
+    boost (float), active (bool), expires_days (int — sets expiry from now).
+    """
+    data = request.get_json()
+    workspace = Path.home() / '.openclaw' / 'workspace'
+    priorities_file = workspace / 'priorities.json'
+
+    if not priorities_file.exists():
+        return jsonify({'success': False, 'message': 'priorities.json not found'}), 404
+
+    with open(priorities_file, 'r') as f:
+        priorities_data = json.load(f)
+
+    target = next(
+        (p for p in priorities_data['priorities'] if p['id'] == priority_id),
+        None
+    )
+    if not target:
+        return jsonify({'success': False, 'message': f'Priority {priority_id} not found'}), 404
+
+    if 'label' in data:
+        target['label'] = data['label'].strip()
+    if 'keywords' in data:
+        kw = data['keywords']
+        if isinstance(kw, str):
+            target['keywords'] = [k.strip() for k in kw.split(',') if k.strip()]
+        else:
+            target['keywords'] = kw
+    if 'boost' in data:
+        target['boost'] = float(data['boost'])
+    if 'active' in data:
+        target['active'] = bool(data['active'])
+    if 'expires_days' in data:
+        expiry_date = datetime.now() + timedelta(days=int(data['expires_days']))
+        target['expires_at'] = expiry_date.isoformat() + 'Z'
+
+    with open(priorities_file, 'w') as f:
+        json.dump(priorities_data, f, indent=2)
+
+    print(f"✏️  Updated priority: {priority_id}")
+    return jsonify({
+        'success': True,
+        'message': f'Priority {priority_id} updated',
+        'priority': target
+    })
+
+
 @app.route('/')
 def index():
     """Root URL redirects to latest briefing"""
@@ -319,6 +439,10 @@ def index():
 @app.route('/curator_library.html')
 def library_page():
     return send_from_directory(BASE_DIR, 'curator_library.html')
+
+@app.route('/curator_priorities.html')
+def priorities_page():
+    return send_from_directory(BASE_DIR, 'curator_priorities.html')
 
 @app.route('/curator_briefing.html')
 def briefing_page():

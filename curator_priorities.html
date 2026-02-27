@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Signal Priorities — Curator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f0e8;
+    --bg-texture: #ede8df;
+    --surface: #faf7f2;
+    --surface2: #f0ebe0;
+    --border: #ddd6c8;
+    --border2: #c8bfaf;
+    --text: #2a2418;
+    --text-muted: #6b5f4e;
+    --text-dim: #9e9080;
+    --accent: #8b5e2a;
+    --accent-dim: rgba(139,94,42,0.08);
+    --accent-glow: rgba(139,94,42,0.18);
+    --danger: #b03030;
+    --danger-dim: rgba(176,48,48,0.08);
+    --danger-border: rgba(176,48,48,0.25);
+    --ok: #2e7d52;
+    --ok-dim: rgba(46,125,82,0.08);
+    --ok-border: rgba(46,125,82,0.25);
+    --warn: #8b6e1a;
+    --warn-dim: rgba(139,110,26,0.08);
+    --warn-border: rgba(139,110,26,0.25);
+    --shadow: rgba(42,36,24,0.08);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Source Sans 3', sans-serif;
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    position: sticky;
+    top: 0;
+    background: rgba(245,240,232,0.94);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+    box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
+  }
+
+  .header-left {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+
+  .logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+    text-decoration: none;
+  }
+
+  .logo-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .header-nav {
+    display: flex;
+    gap: 4px;
+  }
+
+  .nav-link {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    letter-spacing: 0.05em;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+  }
+
+  .nav-link:hover { color: var(--text); background: var(--surface2); }
+  .nav-link.active {
+    color: var(--accent);
+    background: var(--accent-dim);
+    border-color: rgba(139,94,42,0.2);
+  }
+
+  /* ── Main layout ── */
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 32px 32px 80px;
+  }
+
+  /* ── Page title ── */
+  .page-header {
+    margin-bottom: 28px;
+  }
+
+  .page-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 6px;
+  }
+
+  .page-title em { color: var(--accent); font-style: italic; }
+
+  .page-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Stats bar ── */
+  .stats-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+
+  .stat-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    box-shadow: 0 1px 3px var(--shadow);
+  }
+
+  .stat-pill strong {
+    font-size: 18px;
+    font-family: 'Playfair Display', serif;
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+
+  .stat-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ── Add Priority panel ── */
+  .add-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 28px;
+    box-shadow: 0 1px 4px var(--shadow);
+    overflow: hidden;
+  }
+
+  .add-panel-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+    transition: background 0.15s;
+  }
+
+  .add-panel-toggle:hover { background: var(--accent-dim); }
+
+  .add-panel-toggle .toggle-icon {
+    font-size: 16px;
+    transition: transform 0.2s;
+    color: var(--text-dim);
+  }
+
+  .add-panel-toggle.open .toggle-icon { transform: rotate(45deg); }
+
+  .add-form {
+    display: none;
+    padding: 0 20px 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .add-form.visible { display: block; }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 16px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .form-group.full { grid-column: 1 / -1; }
+
+  .form-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .form-input {
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .form-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  .form-hint {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-style: italic;
+  }
+
+  .expiry-options {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .expiry-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border2);
+    background: var(--bg);
+    color: var(--text-muted);
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: all 0.15s;
+  }
+
+  .expiry-btn:hover { background: var(--surface2); color: var(--text); }
+  .expiry-btn.selected {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .form-actions {
+    margin-top: 16px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .btn-primary {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    padding: 9px 20px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-ghost {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    padding: 9px 16px;
+    background: none;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-ghost:hover { background: var(--surface2); color: var(--text); }
+
+  .form-status {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--ok);
+    letter-spacing: 0.04em;
+    display: none;
+  }
+
+  .form-status.error { color: var(--danger); }
+  .form-status.visible { display: block; }
+
+  /* ── Priority list ── */
+  .list-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .list-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .priority-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* ── Priority card ── */
+  .priority-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 4px var(--shadow);
+    transition: box-shadow 0.15s;
+    position: relative;
+  }
+
+  .priority-card:hover { box-shadow: 0 2px 10px var(--shadow); }
+
+  .priority-card.expired {
+    opacity: 0.65;
+    border-style: dashed;
+  }
+
+  .priority-card.inactive {
+    opacity: 0.55;
+  }
+
+  .card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .card-label-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .card-label {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+
+  .boost-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: 1px solid rgba(139,94,42,0.2);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+
+  .status-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .status-badge.active {
+    background: var(--ok-dim);
+    color: var(--ok);
+    border: 1px solid var(--ok-border);
+  }
+
+  .status-badge.expired {
+    background: var(--danger-dim);
+    color: var(--danger);
+    border: 1px solid var(--danger-border);
+  }
+
+  .status-badge.inactive {
+    background: var(--surface2);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+  }
+
+  .keywords-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .keyword-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 3px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+  }
+
+  .card-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+
+  .card-meta span { display: flex; align-items: center; gap: 4px; }
+
+  .expiry-warn { color: var(--warn); }
+  .expiry-ok   { color: var(--ok); }
+  .expiry-dead { color: var(--danger); }
+
+  /* ── Card actions ── */
+  .card-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .action-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    padding: 5px 12px;
+    border-radius: 5px;
+    border: 1px solid var(--border2);
+    background: var(--bg);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .action-btn:hover { background: var(--surface2); color: var(--text); }
+
+  .action-btn.extend {
+    border-color: var(--ok-border);
+    color: var(--ok);
+    background: var(--ok-dim);
+  }
+  .action-btn.extend:hover { opacity: 0.8; }
+
+  .action-btn.delete {
+    border-color: var(--danger-border);
+    color: var(--danger);
+    background: var(--danger-dim);
+  }
+  .action-btn.delete:hover { opacity: 0.8; }
+
+  .action-btn.toggle-active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  /* ── Edit inline form ── */
+  .edit-form {
+    display: none;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  .edit-form.visible { display: block; }
+
+  .edit-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .edit-row { display: flex; flex-direction: column; gap: 4px; }
+  .edit-row.full { grid-column: 1 / -1; }
+
+  .edit-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .edit-input {
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 5px;
+    padding: 6px 10px;
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .edit-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-dim);
+  }
+
+  .edit-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  /* ── Empty state ── */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-dim);
+  }
+
+  .empty-icon {
+    font-size: 36px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+  }
+
+  .empty-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  .empty-sub {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  /* ── Loading ── */
+  .loading {
+    text-align: center;
+    padding: 40px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--text);
+    color: #fff;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    padding: 10px 18px;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.25s ease;
+    pointer-events: none;
+    z-index: 200;
+  }
+
+  .toast.show {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  .toast.ok  { background: var(--ok); }
+  .toast.err { background: var(--danger); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <a href="/" class="logo">Curator</a>
+    <span class="logo-sub">Priorities</span>
+  </div>
+  <nav class="header-nav">
+    <a href="/" class="nav-link">Daily</a>
+    <a href="/curator_library.html" class="nav-link">Library</a>
+    <a href="/interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
+    <a href="/curator_priorities.html" class="nav-link active">Priorities</a>
+  </nav>
+</header>
+
+<main>
+  <div class="page-header">
+    <h1 class="page-title">Signal <em>Priorities</em></h1>
+    <p class="page-meta" id="pageMeta">Loading…</p>
+  </div>
+
+  <div class="stats-bar" id="statsBar">
+    <div class="stat-pill">
+      <div class="stat-dot" style="background: var(--ok);"></div>
+      <strong id="statActive">—</strong> active
+    </div>
+    <div class="stat-pill">
+      <div class="stat-dot" style="background: var(--danger);"></div>
+      <strong id="statExpired">—</strong> expired
+    </div>
+    <div class="stat-pill">
+      <div class="stat-dot" style="background: var(--text-dim);"></div>
+      <strong id="statTotal">—</strong> total
+    </div>
+  </div>
+
+  <!-- Add Priority panel -->
+  <div class="add-panel">
+    <button class="add-panel-toggle" id="addToggle" onclick="toggleAddForm()">
+      <span>+ ADD NEW PRIORITY</span>
+      <span class="toggle-icon">+</span>
+    </button>
+    <div class="add-form" id="addForm">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label" for="inputLabel">Label</label>
+          <input class="form-input" id="inputLabel" type="text" placeholder="e.g. Tigray Conflict" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="inputBoost">Boost</label>
+          <input class="form-input" id="inputBoost" type="number" step="0.5" min="1" max="10" value="2.0">
+        </div>
+        <div class="form-group full">
+          <label class="form-label" for="inputKeywords">Keywords <span class="form-hint">(comma-separated)</span></label>
+          <input class="form-input" id="inputKeywords" type="text" placeholder="Tigray, Ethiopia, TPLF" autocomplete="off">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Expires in</label>
+          <div class="expiry-options" id="expiryOptions">
+            <button class="expiry-btn" data-days="1" onclick="selectExpiry(this)">1d</button>
+            <button class="expiry-btn selected" data-days="3" onclick="selectExpiry(this)">3d</button>
+            <button class="expiry-btn" data-days="7" onclick="selectExpiry(this)">7d</button>
+            <button class="expiry-btn" data-days="14" onclick="selectExpiry(this)">14d</button>
+            <button class="expiry-btn" data-days="30" onclick="selectExpiry(this)">30d</button>
+            <button class="expiry-btn" data-days="" onclick="selectExpiry(this)">No expiry</button>
+          </div>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-primary" id="addSubmitBtn" onclick="submitAdd()">Add Priority</button>
+        <button class="btn-ghost" onclick="resetAddForm()">Clear</button>
+        <span class="form-status" id="formStatus"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Priority list -->
+  <div class="list-header">
+    <span class="list-title">All Priorities</span>
+  </div>
+
+  <div class="priority-list" id="priorityList">
+    <div class="loading">Loading priorities…</div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const API = '';  // same origin
+
+  // ── Expiry selector ─────────────────────────────────────────
+  let selectedExpiryDays = 3;
+
+  function selectExpiry(btn) {
+    document.querySelectorAll('#expiryOptions .expiry-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedExpiryDays = btn.dataset.days === '' ? null : parseInt(btn.dataset.days);
+  }
+
+  // ── Toggle add form ─────────────────────────────────────────
+  function toggleAddForm() {
+    const form = document.getElementById('addForm');
+    const toggle = document.getElementById('addToggle');
+    const open = form.classList.toggle('visible');
+    toggle.classList.toggle('open', open);
+  }
+
+  function resetAddForm() {
+    document.getElementById('inputLabel').value = '';
+    document.getElementById('inputKeywords').value = '';
+    document.getElementById('inputBoost').value = '2.0';
+    document.querySelectorAll('#expiryOptions .expiry-btn').forEach(b => {
+      b.classList.toggle('selected', b.dataset.days === '3');
+    });
+    selectedExpiryDays = 3;
+    hideFormStatus();
+  }
+
+  // ── Toast ───────────────────────────────────────────────────
+  function showToast(msg, type = 'ok') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast ${type} show`;
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => { t.classList.remove('show'); }, 3000);
+  }
+
+  // ── Form status ─────────────────────────────────────────────
+  function showFormStatus(msg, isError = false) {
+    const s = document.getElementById('formStatus');
+    s.textContent = msg;
+    s.className = `form-status visible${isError ? ' error' : ''}`;
+  }
+
+  function hideFormStatus() {
+    document.getElementById('formStatus').className = 'form-status';
+  }
+
+  // ── Relative expiry display ─────────────────────────────────
+  function expiryDisplay(p) {
+    if (!p.expires_at) return { text: 'No expiry', cls: '' };
+    const days = p.days_remaining;
+    if (p.expired) return { text: `Expired ${Math.abs(days)}d ago`, cls: 'expiry-dead' };
+    if (days === 0) return { text: 'Expires today', cls: 'expiry-warn' };
+    if (days <= 2)  return { text: `Expires in ${days}d`, cls: 'expiry-warn' };
+    return { text: `Expires in ${days}d`, cls: 'expiry-ok' };
+  }
+
+  // ── Render list ─────────────────────────────────────────────
+  function renderList(priorities) {
+    const list = document.getElementById('priorityList');
+
+    if (!priorities.length) {
+      list.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🎯</div>
+          <div class="empty-title">No priorities yet</div>
+          <div class="empty-sub">Add a priority above to boost keywords in article scoring.</div>
+        </div>`;
+      return;
+    }
+
+    list.innerHTML = priorities.map(p => {
+      const exp = expiryDisplay(p);
+      const isActive = p.active && !p.expired;
+      const statusLabel = p.expired ? 'expired' : (p.active ? 'active' : 'inactive');
+
+      const boostStr = `+${p.boost.toFixed(1)}x`;
+
+      const keywords = (p.keywords || [])
+        .map(k => `<span class="keyword-tag">${escHtml(k)}</span>`)
+        .join('');
+
+      const createdDate = p.created_at
+        ? new Date(p.created_at).toLocaleDateString('en-GB', {day:'numeric', month:'short'})
+        : '—';
+
+      const toggleLabel = p.active ? 'Deactivate' : 'Activate';
+
+      return `
+        <div class="priority-card ${p.expired ? 'expired' : ''} ${!p.active ? 'inactive' : ''}" id="card-${p.id}">
+          <div class="card-top">
+            <div class="card-label-row">
+              <span class="card-label">${escHtml(p.label)}</span>
+              <span class="boost-badge">${boostStr}</span>
+              <span class="status-badge ${statusLabel}">${statusLabel}</span>
+            </div>
+          </div>
+          <div class="keywords-row">${keywords}</div>
+          <div class="card-meta">
+            <span>Matches: <strong>${p.match_count ?? 0}</strong></span>
+            <span>Created: ${createdDate}</span>
+            <span class="${exp.cls}">${exp.text}</span>
+          </div>
+          <div class="card-actions">
+            <button class="action-btn extend" onclick="extendPriority('${p.id}', 3)">+3d</button>
+            <button class="action-btn extend" onclick="extendPriority('${p.id}', 7)">+7d</button>
+            <button class="action-btn toggle-active" onclick="toggleActive('${p.id}', ${!p.active})">${toggleLabel}</button>
+            <button class="action-btn" onclick="showEditForm('${p.id}')">Edit</button>
+            <button class="action-btn delete" onclick="deletePriority('${p.id}', '${escHtml(p.label).replace(/'/g,"\\'")}')">Delete</button>
+          </div>
+          <div class="edit-form" id="edit-${p.id}">
+            <div class="edit-grid">
+              <div class="edit-row">
+                <span class="edit-label">Label</span>
+                <input class="edit-input" id="edit-label-${p.id}" value="${escAttr(p.label)}">
+              </div>
+              <div class="edit-row">
+                <span class="edit-label">Boost</span>
+                <input class="edit-input" id="edit-boost-${p.id}" type="number" step="0.5" min="1" max="10" value="${p.boost}">
+              </div>
+              <div class="edit-row full">
+                <span class="edit-label">Keywords (comma-separated)</span>
+                <input class="edit-input" id="edit-kw-${p.id}" value="${escAttr((p.keywords||[]).join(', '))}">
+              </div>
+            </div>
+            <div class="edit-actions">
+              <button class="btn-primary" onclick="saveEdit('${p.id}')">Save</button>
+              <button class="btn-ghost" onclick="hideEditForm('${p.id}')">Cancel</button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // ── Load priorities ─────────────────────────────────────────
+  async function loadPriorities() {
+    try {
+      const res = await fetch('/api/priorities');
+      const data = await res.json();
+      const priorities = data.priorities || [];
+
+      // Update stats
+      const total   = data.count || 0;
+      const active  = data.active_count || 0;
+      const expired = priorities.filter(p => p.expired).length;
+
+      document.getElementById('statTotal').textContent   = total;
+      document.getElementById('statActive').textContent  = active;
+      document.getElementById('statExpired').textContent = expired;
+      document.getElementById('pageMeta').textContent =
+        `${active} active · ${total} total · last refreshed ${new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'})}`;
+
+      renderList(priorities);
+    } catch (err) {
+      document.getElementById('priorityList').innerHTML =
+        `<div class="empty-state"><div class="empty-title">Could not load priorities</div><div class="empty-sub">${err.message}</div></div>`;
+    }
+  }
+
+  // ── Add priority ────────────────────────────────────────────
+  async function submitAdd() {
+    const label    = document.getElementById('inputLabel').value.trim();
+    const keywords = document.getElementById('inputKeywords').value.trim();
+    const boost    = parseFloat(document.getElementById('inputBoost').value) || 2.0;
+
+    if (!label)    { showFormStatus('Label is required.', true); return; }
+    if (!keywords) { showFormStatus('At least one keyword is required.', true); return; }
+
+    const btn = document.getElementById('addSubmitBtn');
+    btn.disabled = true;
+    showFormStatus('Adding…');
+
+    const body = { label, keywords, boost };
+    if (selectedExpiryDays) body.expires_days = selectedExpiryDays;
+
+    try {
+      const res  = await fetch('/api/priority', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Priority "${label}" added`);
+        resetAddForm();
+        toggleAddForm();
+        await loadPriorities();
+      } else {
+        showFormStatus(data.message || 'Error adding priority.', true);
+      }
+    } catch (err) {
+      showFormStatus('Network error: ' + err.message, true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ── Delete priority ─────────────────────────────────────────
+  async function deletePriority(id, label) {
+    if (!confirm(`Delete priority "${label}"?`)) return;
+    try {
+      const res  = await fetch(`/api/priority/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Deleted "${label}"`, 'ok');
+        await loadPriorities();
+      } else {
+        showToast(data.message || 'Delete failed', 'err');
+      }
+    } catch (err) {
+      showToast('Network error', 'err');
+    }
+  }
+
+  // ── Extend priority ─────────────────────────────────────────
+  async function extendPriority(id, days) {
+    try {
+      const res  = await fetch(`/api/priority/${id}`, {
+        method: 'PATCH',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ expires_days: days })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Extended by ${days}d`, 'ok');
+        await loadPriorities();
+      } else {
+        showToast(data.message || 'Extend failed', 'err');
+      }
+    } catch (err) {
+      showToast('Network error', 'err');
+    }
+  }
+
+  // ── Toggle active ────────────────────────────────────────────
+  async function toggleActive(id, newActive) {
+    try {
+      const res  = await fetch(`/api/priority/${id}`, {
+        method: 'PATCH',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ active: newActive })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(newActive ? 'Activated' : 'Deactivated', 'ok');
+        await loadPriorities();
+      } else {
+        showToast(data.message || 'Toggle failed', 'err');
+      }
+    } catch (err) {
+      showToast('Network error', 'err');
+    }
+  }
+
+  // ── Edit form helpers ────────────────────────────────────────
+  function showEditForm(id) {
+    document.getElementById(`edit-${id}`).classList.add('visible');
+  }
+
+  function hideEditForm(id) {
+    document.getElementById(`edit-${id}`).classList.remove('visible');
+  }
+
+  async function saveEdit(id) {
+    const label    = document.getElementById(`edit-label-${id}`).value.trim();
+    const boost    = parseFloat(document.getElementById(`edit-boost-${id}`).value) || 2.0;
+    const keywords = document.getElementById(`edit-kw-${id}`).value.trim();
+
+    if (!label || !keywords) {
+      showToast('Label and keywords required', 'err');
+      return;
+    }
+
+    try {
+      const res  = await fetch(`/api/priority/${id}`, {
+        method: 'PATCH',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ label, boost, keywords })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Priority updated', 'ok');
+        await loadPriorities();
+      } else {
+        showToast(data.message || 'Save failed', 'err');
+      }
+    } catch (err) {
+      showToast('Network error', 'err');
+    }
+  }
+
+  // ── Utils ────────────────────────────────────────────────────
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function escAttr(str) {
+    return String(str).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // ── Keyboard shortcuts ───────────────────────────────────────
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      // Close add form if open
+      const form = document.getElementById('addForm');
+      if (form.classList.contains('visible')) toggleAddForm();
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      const form = document.getElementById('addForm');
+      if (form.classList.contains('visible')) submitAdd();
+    }
+  });
+
+  // ── Init ─────────────────────────────────────────────────────
+  loadPriorities();
+</script>
+</body>
+</html>
