@@ -45,6 +45,19 @@ Wire `decay_factor = 0.85/week` into `load_user_profile()`.
 
 ## If Time Allows
 
-Start Phase 3A OAuth 1.0a setup for X integration.
+**Quick win first (~20 min): Telegram session commands**
+
+Add `/reset` and `/status` commands — solves the $0.52/message session bloat problem immediately.
+
+- `/reset` → sends "compact and reset session" to OpenClaw polling path; on webhook path, session is already stateless so reply "Session is stateless in webhook mode."
+- `/status` → enhanced: show token count estimate + cost/msg alongside existing log lines. Target output: `Session: ~23k tokens | ~$0.12/msg | Last run: 07:02`
+- Also add voice equivalents: "reset session" and "session status" to `VOICE_COMMAND_PATTERNS`
+
+**Deeper fix (later session): Option B — TELEGRAM_CONTEXT.md**
+
+Stateless Telegram sessions by design. Each command reads a small context file, executes, closes. Session never bloats because it never persists. Makes `/reset` unnecessary long-term.
+
+**Then: Phase 3A OAuth 1.0a setup for X integration**
+
 Getting auth working is the longest lead-time item and can be done independently of adapter code.
 See `ROADMAP_X_INTEGRATION.md` (in `rvs-openclaw-agent`) — "OAuth 1.0a first" note at bottom.

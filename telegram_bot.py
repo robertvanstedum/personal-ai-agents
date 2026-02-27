@@ -31,6 +31,8 @@ VOICE_COMMAND_PATTERNS = [
     (re.compile(r'(check services|are services running|service status)', re.I), 'check_services', None),
     (re.compile(r'(run the briefing|run daily|run curator)', re.I),'run_curator',    None),
     (re.compile(r'dry run', re.I),                                 'dry_run',         None),
+    (re.compile(r'(reset session|compact session)', re.I),         'reset_session',   None),
+    (re.compile(r'(session status|token count|how much is this costing)', re.I), 'session_status', None),
     (re.compile(r'investigate[:\s]+(.+)',         re.I),           'investigate',     1),
     (re.compile(r'add to roadmap[:\s]+(.+)',      re.I),           'add_roadmap',     1),
     (re.compile(r'delete from roadmap[:\s]+(.+)', re.I),           'delete_roadmap',  1),
@@ -444,6 +446,26 @@ def execute_voice_command(command, args, chat_id, token):
         send_message(token, chat_id,
             f"⚠️ Flagged for removal — review PROJECT_ROADMAP.md to confirm:\n{args}")
 
+    elif command == 'reset_session':
+        # Webhook path is stateless — no session to reset
+        send_message(token, chat_id,
+            "♻️ Webhook mode is stateless — no session context accumulates here.\n"
+            "If OpenClaw's polling session is bloated, send 'reset session' directly to OpenClaw.")
+
+    elif command == 'session_status':
+        log = BASE_DIR / 'logs' / 'curator_launchd.log'
+        last_run = "unknown"
+        if log.exists():
+            lines = log.read_text().splitlines()
+            for line in reversed(lines):
+                if line.strip():
+                    last_run = line.strip()[-60:]
+                    break
+        send_message(token, chat_id,
+            f"📊 Webhook mode — sessions don't accumulate cost here.\n"
+            f"Last curator run: {last_run}\n"
+            f"For OpenClaw session cost, ask OpenClaw directly: 'session status'")
+
     elif command == 'investigate':
         # Log the request — OpenClaw handles investigations
         log_voice_note(f"Investigate: {args}", tag="INVESTIGATE REQUEST")
@@ -621,14 +643,23 @@ def handle_webhook_command(message, token):
     
     if text == '/briefing':
         send_briefing(token, str(chat_id))
+    elif text == '/reset':
+        send_message(token, str(chat_id),
+            "♻️ Webhook mode is stateless — no session to reset here.\n"
+            "Send 'reset session' to OpenClaw in Telegram to compact its polling session.")
     elif text == '/status':
         log = BASE_DIR / 'logs' / 'curator_launchd.log'
         if log.exists():
-            lines = log.read_text().splitlines()
-            last_lines = '\n'.join(lines[-10:])
-            send_message(token, str(chat_id), f"📊 Last 10 log lines:\n<pre>{last_lines}</pre>", parse_mode="HTML")
+            lines = [l for l in log.read_text().splitlines() if l.strip()]
+            last_run = lines[-1][-80:] if lines else "no entries yet"
+            last_lines = '\n'.join(lines[-5:])
+            send_message(token, str(chat_id),
+                f"📊 Status\n"
+                f"Mode: webhook (stateless — no session cost)\n"
+                f"Last run: {last_run}\n\n"
+                f"<pre>{last_lines}</pre>", parse_mode="HTML")
         else:
-            send_message(token, str(chat_id), "No log file found yet.")
+            send_message(token, str(chat_id), "📊 Webhook mode active. No curator log yet.")
     elif text == '/run':
         send_message(token, str(chat_id), "⏳ Running curator now, this takes a few minutes...")
         result = subprocess.run(
