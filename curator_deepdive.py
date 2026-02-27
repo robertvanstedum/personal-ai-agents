@@ -64,6 +64,64 @@ def fetch_article_content(url: str) -> str:
     print(f"   Will use article title + summary for now")
     return ""
 
+def load_dive_ratings(max_examples: int = 3) -> str:
+    """
+    Read interests/ratings.json and build a quality guidance block.
+
+    Returns empty string if:
+    - File missing or unreadable
+    - Fewer than 2 ratings (not enough signal yet)
+
+    max_examples: how many entries to show per tier (high / low)
+    """
+    ratings_path = Path(__file__).parent / 'interests' / 'ratings.json'
+
+    try:
+        with open(ratings_path) as f:
+            data = json.load(f)
+    except Exception:
+        return ""
+
+    ratings = data.get('ratings', [])
+
+    if len(ratings) < 2:
+        return ""  # Not enough signal yet
+
+    high = [r for r in ratings if r.get('stars', 0) >= 3]
+    low  = [r for r in ratings if 1 <= r.get('stars', 0) <= 2]
+
+    if not high and not low:
+        return ""
+
+    sections = []
+
+    if high:
+        sections.append("High-rated dives (3-4★) — what worked:")
+        for r in high[-max_examples:]:
+            line = f"  • {r.get('article_title', 'Unknown')[:60]}"
+            if r.get('user_comment'):
+                line += f" → \"{r['user_comment']}\""
+            if r.get('ai_themes'):
+                line += f" [{', '.join(r['ai_themes'])}]"
+            sections.append(line)
+
+    if low:
+        sections.append("Low-rated dives (1-2★) — what didn't work:")
+        for r in low[-max_examples:]:
+            line = f"  • {r.get('article_title', 'Unknown')[:60]}"
+            if r.get('user_comment'):
+                line += f" → \"{r['user_comment']}\""
+            if r.get('ai_themes'):
+                line += f" [{', '.join(r['ai_themes'])}]"
+            sections.append(line)
+
+    block  = f"\nPAST DEEP DIVE QUALITY REFERENCE (from {len(ratings)} rated dives):\n"
+    block += "\n".join(sections)
+    block += "\nApply these as quality benchmarks — replicate what worked, avoid what didn't.\n"
+
+    return block
+
+
 def build_deepdive_prompt(article_data: Dict, full_content: str = "") -> str:
     """
     Build Sonnet prompt for deep analysis
@@ -81,6 +139,8 @@ def build_deepdive_prompt(article_data: Dict, full_content: str = "") -> str:
     summary = article_data.get('summary', '')
     category = article_data.get('category', 'other')
     
+    ratings_guidance = load_dive_ratings()
+
     prompt = f"""You are a geopolitics & finance analyst doing DEEP ANALYSIS on a flagged article.
 
 ARTICLE METADATA:
@@ -91,7 +151,7 @@ URL: {url}
 
 SUMMARY/EXCERPT:
 {summary[:1000]}
-
+{ratings_guidance}
 YOUR TASK:
 Provide a comprehensive analysis covering:
 
