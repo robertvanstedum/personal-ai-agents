@@ -24,7 +24,8 @@ load_dotenv()
 
 # File paths
 CURATOR_OUTPUT = Path(__file__).parent / "curator_output.txt"
-PREFERENCES_FILE = Path(__file__).parent / "curator_preferences.json"
+# Canonical preferences location — shared with curator_rss_v2.py (scoring) and OpenClaw
+PREFERENCES_FILE = Path.home() / ".openclaw" / "workspace" / "curator_preferences.json"
 
 def get_anthropic_api_key():
     """Get Anthropic API key from keychain, env, or .env file"""
