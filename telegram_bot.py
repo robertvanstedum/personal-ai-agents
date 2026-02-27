@@ -97,45 +97,62 @@ def send_briefing(token, chat_id):
 def parse_curator_output(path):
     """
     Parse curator_output.txt into list of article dicts.
-    Format:
+    Current format:
     #N [Source] 🏷️  category (model)
+       ID: xxxxx
        Title
-       URL
+       https://...
        Published: ...
        Scores: X/10 (raw: X, final: X)
        snippet...
     """
     import re
-    
+
     articles = []
     content = path.read_text()
-    
+
     # Split on article markers (#1, #2, etc.)
     sections = re.split(r'\n#(\d+) ', content)
-    
+
     for i in range(1, len(sections), 2):
         num = sections[i]
         article_text = sections[i+1]
-        
-        lines = article_text.strip().split('\n')
-        if len(lines) < 4:
+
+        lines = [l.strip() for l in article_text.strip().split('\n')]
+        if len(lines) < 3:
             continue
-        
+
         # Parse header line: [Source] 🏷️  category (model)
         header = lines[0]
         source_match = re.search(r'\[(.*?)\]', header)
         category_match = re.search(r'🏷️\s+(\w+)', header)
-        
+
         source = source_match.group(1) if source_match else "Unknown"
         category = category_match.group(1) if category_match else "other"
-        
-        # Parse title (line 1, indented)
-        title = lines[1].strip()
-        
-        # Parse URL (line 2)
-        url = lines[2].strip()
-        
-        # Parse score (line 4 usually)
+
+        # Find URL by pattern (robust against added/removed lines above it)
+        url = "unknown"
+        for line in lines[1:]:
+            if line.startswith('http://') or line.startswith('https://'):
+                url = line
+                break
+
+        # Find title: first non-empty line that isn't the ID, a URL, Published, or Scores
+        title = "Unknown"
+        for line in lines[1:]:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith('ID:'):
+                continue
+            if stripped.startswith('http://') or stripped.startswith('https://'):
+                continue
+            if stripped.startswith('Published:') or stripped.startswith('Scores:'):
+                continue
+            title = stripped
+            break
+
+        # Parse score
         score = "?"
         for line in lines:
             if 'Scores:' in line:
@@ -143,7 +160,7 @@ def parse_curator_output(path):
                 if score_match:
                     score = score_match.group(1)
                 break
-        
+
         articles.append({
             'num': num,
             'title': title,
@@ -152,7 +169,7 @@ def parse_curator_output(path):
             'category': category,
             'score': score
         })
-    
+
     return articles
 
 # ─── Feedback ─────────────────────────────────────────────────────────────────
