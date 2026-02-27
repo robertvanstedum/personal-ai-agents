@@ -19,6 +19,7 @@ PROJECT_DIR="$HOME/Projects/personal-ai-agents"
 LOG_DIR="$PROJECT_DIR/logs"
 WEBHOOK_PORT=8444
 TUNNEL_URL="https://nonconstricted-endodermal-karin.ngrok-free.dev"
+LOCKFILE="$HOME/.webhook_active"
 
 mkdir -p "$LOG_DIR"
 cd "$PROJECT_DIR" || exit 1
@@ -135,6 +136,13 @@ else
     exit 1
 fi
 
+# ── Lockfile: signals OpenClaw to pause polling ───────────────────────────────
+# OpenClaw checks for ~/.webhook_active before each poll cycle.
+# If present → skip polling (webhook handles messages).
+# Removed in cleanup → OpenClaw auto-resumes on stack shutdown.
+echo "webhook_active since $(date -u +%Y-%m-%dT%H:%M:%SZ) pid=$WEBHOOK_PID" > "$LOCKFILE"
+echo "▶ Lockfile written: $LOCKFILE (OpenClaw polling paused)"
+
 # ── Status ─────────────────────────────────────────────────────────────────────
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -154,6 +162,12 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 cleanup() {
     echo ""
     echo "▶ Shutting down..."
+
+    # Remove lockfile — OpenClaw resumes polling automatically
+    if [ -f "$LOCKFILE" ]; then
+        rm -f "$LOCKFILE"
+        echo "  ✅ Lockfile removed (OpenClaw polling resumed)"
+    fi
 
     # Deregister webhook so polling-based tools work again
     python3 - <<PYEOF
