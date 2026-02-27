@@ -1,23 +1,16 @@
 #!/bin/bash
 # start_telegram_webhook.sh
-# Starts the full webhook stack: webhook server + Cloudflare tunnel + Telegram registration
+# Starts the full webhook stack: webhook server + ngrok tunnel + Telegram registration
 #
 # ─── TUNNEL MODE ───────────────────────────────────────────────────────────────
-# CURRENT:    Temporary tunnel (cloudflared quick tunnel)
-#             - No Cloudflare account needed
-#             - URL is random and changes on each restart
-#             - Webhook auto-re-registers on every start (URL change is invisible)
-#             - Good for MacBook development
+# CURRENT:    ngrok static domain (free tier)
+#             - Stable URL — never changes between restarts
+#             - No re-registration needed after first run
+#             - Auth: ngrok config add-authtoken <token>  (one-time setup)
+#             - Domain: nonconstricted-endodermal-karin.ngrok-free.dev
 #
-# TODO (Mac Mini production): Switch to named tunnel for a stable URL
-#   1. Run: cloudflared login            (browser auth, creates ~/.cloudflared/cert.pem)
-#   2. Run: cloudflared tunnel create curator-bot
-#   3. Run: cloudflared tunnel route dns curator-bot <your-domain>
-#   4. Create ~/.cloudflared/config.yml pointing to localhost:8444
-#   5. Change the tunnel command below to:
-#        cloudflared tunnel run curator-bot
-#      (remove the URL extraction + re-registration block — URL is stable)
-#   See: TELEGRAM_WEBHOOK_PLAN.md > "Mac Mini Migration"
+# Mac Mini migration: install ngrok, run `ngrok config add-authtoken <token>`
+#   Same script, zero code changes.
 # ───────────────────────────────────────────────────────────────────────────────
 
 set -e
@@ -25,6 +18,7 @@ set -e
 PROJECT_DIR="$HOME/Projects/personal-ai-agents"
 LOG_DIR="$PROJECT_DIR/logs"
 WEBHOOK_PORT=8444
+TUNNEL_URL="https://nonconstricted-endodermal-karin.ngrok-free.dev"
 
 mkdir -p "$LOG_DIR"
 cd "$PROJECT_DIR" || exit 1
@@ -37,6 +31,18 @@ source venv/bin/activate
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🤖 Telegram Webhook Stack"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# ── Pre-flight: clear any orphaned processes ──────────────────────────────────
+if lsof -ti:$WEBHOOK_PORT > /dev/null 2>&1; then
+    echo "⚠️  Port $WEBHOOK_PORT in use — killing orphaned process..."
+    lsof -ti:$WEBHOOK_PORT | xargs kill -9 2>/dev/null
+    sleep 1
+fi
+if pgrep -f ngrok > /dev/null 2>&1; then
+    echo "⚠️  ngrok already running — killing orphaned tunnel..."
+    pkill -f ngrok 2>/dev/null
+    sleep 1
+fi
 
 # ── Step 1: Start webhook server ───────────────────────────────────────────────
 echo "▶ Starting webhook server on port $WEBHOOK_PORT..."
@@ -52,47 +58,34 @@ if ! kill -0 $WEBHOOK_PID 2>/dev/null; then
     exit 1
 fi
 
-# Verify server is accepting connections
 if curl -sf "http://localhost:$WEBHOOK_PORT/health" > /dev/null 2>&1; then
     echo "  ✅ Server healthy"
 else
     echo "  ⚠️  Server may still be starting up"
 fi
 
-# ── Step 2: Start temporary Cloudflare tunnel ─────────────────────────────────
-echo "▶ Starting Cloudflare tunnel..."
-TUNNEL_LOG="$LOG_DIR/cloudflared.log"
+# ── Step 2: Start ngrok tunnel ────────────────────────────────────────────────
+echo "▶ Starting ngrok tunnel ($TUNNEL_URL)..."
+TUNNEL_LOG="$LOG_DIR/ngrok.log"
 
-cloudflared tunnel --url "http://localhost:$WEBHOOK_PORT" \
-    --logfile "$TUNNEL_LOG" \
-    --no-autoupdate \
-    2>> "$LOG_DIR/cloudflared_err.log" &
+ngrok http "$WEBHOOK_PORT" \
+    --domain="nonconstricted-endodermal-karin.ngrok-free.dev" \
+    --log=stdout \
+    --log-format=json \
+    >> "$TUNNEL_LOG" 2>&1 &
 TUNNEL_PID=$!
 echo "  Tunnel PID: $TUNNEL_PID"
 
-# Wait for trycloudflare.com URL to appear in the log
-TUNNEL_URL=""
-echo "  Waiting for tunnel URL"
-for i in $(seq 1 30); do
-    sleep 1
-    printf "."
-    TUNNEL_URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' "$TUNNEL_LOG" 2>/dev/null | head -1)
-    if [ -n "$TUNNEL_URL" ]; then
-        echo ""
-        break
-    fi
-done
+# Wait for ngrok to establish
+sleep 4
 
-if [ -z "$TUNNEL_URL" ]; then
-    echo ""
-    echo "❌ Could not get tunnel URL after 30s."
-    echo "   Check: $TUNNEL_LOG"
-    echo "   Check: $LOG_DIR/cloudflared_err.log"
-    kill $WEBHOOK_PID $TUNNEL_PID 2>/dev/null
+if ! kill -0 $TUNNEL_PID 2>/dev/null; then
+    echo "❌ ngrok failed to start. Check $TUNNEL_LOG"
+    kill $WEBHOOK_PID 2>/dev/null
     exit 1
 fi
 
-echo "  ✅ Tunnel URL: $TUNNEL_URL"
+echo "  ✅ Tunnel running: $TUNNEL_URL"
 
 # ── Step 3: Register webhook with Telegram ────────────────────────────────────
 WEBHOOK_FULL_URL="${TUNNEL_URL}/webhook"
@@ -106,7 +99,6 @@ if not token:
     print('ERROR: No bot token in keyring')
     sys.exit(1)
 
-# Get existing secret or generate a new one
 secret = keyring.get_password('telegram', 'webhook_secret')
 if not secret:
     secret = _secrets.token_hex(32)
@@ -147,13 +139,13 @@ fi
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "✅ Stack running"
-echo "   Webhook server : PID $WEBHOOK_PID  (localhost:$WEBHOOK_PORT)"
-echo "   Cloudflare tunnel: PID $TUNNEL_PID  ($TUNNEL_URL)"
-echo "   Telegram webhook : $WEBHOOK_FULL_URL"
+echo "   Webhook server: PID $WEBHOOK_PID  (localhost:$WEBHOOK_PORT)"
+echo "   ngrok tunnel  : PID $TUNNEL_PID  ($TUNNEL_URL)"
+echo "   Telegram webhook: $WEBHOOK_FULL_URL"
 echo ""
 echo "   Logs:"
-echo "     Bot : $LOG_DIR/telegram_bot.log"
-echo "     Tunnel: $TUNNEL_LOG"
+echo "     Bot  : $LOG_DIR/telegram_bot.log"
+echo "     ngrok: $TUNNEL_LOG"
 echo ""
 echo "   Press Ctrl+C to stop and deregister."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
