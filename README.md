@@ -120,12 +120,12 @@ python show_profile.py
 
   SOURCES
   -------
-  ████████████████  +17  X/@elonmusk
-  ██████████████░░  +16  X/@MarioNawfal
-  █████████████░░░  +14  X/@nntaleb
-  ████████████░░░░  +12  X/@LukeGromen
-  ███████████░░░░░  +11  The Duran
-  ███████████░░░░░  +11  X/@ThomasSowell
+  ████████████████  +17  X/@[geopolitics_account]
+  ██████████████░░  +16  X/@[geopolitics_account]
+  █████████████░░░  +14  X/@[macro_economist]
+  ████████████░░░░  +12  X/@[macro_economist]
+  ███████████░░░░░  +11  [independent_media]
+  ███████████░░░░░  +11  X/@[economic_historian]
 
   THEMES
   ------
