@@ -20,6 +20,21 @@ curator_archive/
 curator_preferences.json
 curator_errors.log
 
+# Personal learning signals and cost data
+signal_store.jsonl
+signal_store.jsonl.bak
+curator_costs.json
+
+# Generated UI output files
+curator_library.html
+curator_preview.html
+curator_preview_recovered.html
+curator_priorities.html
+server.log
+
+# Personal deep dive content (generated, private)
+interests/
+
 # Deep dive system (generated content)
 curator_cache/
 curator_history.json
@@ -50,3 +65,4 @@ ROADMAP_X_INTEGRATION.md
 # Raw unblurred screenshots (use docs/screenshots/ for blurred versions)
 Screenshot*.jpg
 Screenshot*.png
+curator_preview.txt
