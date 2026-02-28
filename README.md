@@ -1,390 +1,268 @@
-# Personal AI Agents
+# Personal AI Briefing System
 
-**Production-grade AI automation system** for daily intelligence briefings, cost monitoring, and personalized task automation.
+**A local, privately controlled AI that maintains your memory and intent — and reaches out flexibly to LLMs.**
 
-Built on [OpenClaw](https://openclaw.ai/) - a personal AI assistant framework that runs locally and connects to your preferred messaging channels.
+Reads 400+ articles/day. Curates the top 20. Learns from everything you've ever saved. Runs at 7 AM.
 
----
-
-## 🎯 What This Does
-
-- **Morning Intelligence Briefing** (7 AM daily) - AI-curated RSS digest from geopolitics, finance, and tech sources
-  - 🎯 **NEW: Learning Feedback Loop** - Curator learns from your feedback (likes, saves, dislikes) and personalizes scoring
-  - Sources you like rank higher, themes you prefer get boosted, avoid signals get penalized
-  - Verified working: Preferred sources ranking higher after just 6 interactions, improves over time
-- **Usage Tracking** (8 AM daily) - Token consumption and cost monitoring with budget alerts
-- **Balance Monitoring** (every 4 hours) - Automated low-balance warnings
-- **System Cron Integration** - Production-grade reliability without LLM dependency
-
-**Philosophy:** Scripts contain the intelligence; execution should be fast, reliable, and deterministic.
+> Production system, daily use since Feb 2026. Built iteratively — see [roadmap](#roadmap) for the full sequence.
 
 ---
 
-## 📁 Repository Structure
+## Core Concept
 
-### Public Repository (this repo)
-**Contains:**
-- Working automation scripts (curator, usage tracker)
-- Production cron wrapper (`scripts/cron_wrapper.sh`)
-- Strategy documents (architecture, roadmaps, analysis)
-- Setup documentation
+Most AI tools put your memory in the cloud and make you dependent on a single provider. This system inverts that:
 
-**Purpose:** Showcase technical work, share automation patterns, enable replication
+- **Local stack:** Preferences, learned signals, and history live on your machine (flat files today, Postgres/Neo4j ready)
+- **Private by design:** Nothing about your reading habits, saved articles, or preferences leaves your machine unless you choose
+- **LLM-flexible:** Ollama (local, free), Claude Haiku, grok-3-mini, Claude Sonnet — swap models without breaking personalization
+- **Standalone:** Runs without OpenClaw. OpenClaw adds Telegram delivery and a conversational interface, but the curator pipeline runs independently
 
-### Private Workspace (separate repo)
-**Contains:**
-- Agent personality configuration (SOUL.md, AGENTS.md, USER.md)
-- Personal memory and context (MEMORY.md, daily logs)
-- Private notes and brainstorming
-- Environment-specific secrets (API keys via keyring)
-
-**Why separate?** Personal knowledge graph and agent personality are private; automation code and strategy are shareable.
+The LLMs are interchangeable workers. Your memory and preferences stay home.
 
 ---
 
-## 🏗️ Architecture
+## Build History
+
+**January 2026 — Foundation**
+
+Inspired by Foundation Capital's writing on context graphs, the goal from day one was a local, privately controlled system — not another cloud-dependent AI tool. Started with:
+- **Context graph architecture:** Neo4j for relationship mapping, PostgreSQL for structured storage (DB integration ready; flat files used in practice)
+- RSS ingestion from a curated source list → scored and ranked locally
+- **Mechanical mode:** keyword/rule-based scoring, zero LLM dependency — still a supported mode today
+- Local Ollama integration (Gemma 3) for free, fully offline scoring
+- Command-line reports: run `python curator_rss_v2.py` and get a ranked briefing
+- Two use cases in scope: geopolitics/investing intelligence + career research
+
+**OpenClaw integration (late January / early February)**
+
+When OpenClaw launched (early adopter — spent a weekend installing and debugging it), added it as an optional delivery and interface layer. The personal-ai-agent pipeline was preserved standalone; OpenClaw adds Telegram delivery and a conversational interface but is not required.
+
+**February 2026 — Intelligence Layer**
+
+With the local foundation solid, built the AI layer on top:
+- Replaced keyword scoring with two-stage AI scoring (Haiku pre-filter → grok-3-mini final ranking)
+- Built the learning feedback loop: Like/Dislike/Save → updates local learned profile → influences tomorrow's run
+- Bootstrapped 415 learning signals from 398 hand-saved X bookmarks (cold start solved in one session)
+- Optimized cost from $100+/month → $35–45/month through model selection and batching
+- Unified cost tracking across chat and curator runs
+
+---
+
+## What It Does
+
+Every morning at 7 AM:
+
+1. Fetches ~400 articles from 10+ RSS feeds (geopolitics, finance, institutional sources)
+2. Pre-filters with Haiku (400 → ~50 candidates, cheap pass)
+3. Scores candidates with grok-3-mini using your injected learned profile
+4. Picks the top 20 most relevant articles for you specifically
+5. Delivers a formatted briefing to Telegram with like/dislike/save buttons
+6. Uses your reactions to score tomorrow's briefing better
+
+Can also run in **mechanical mode** (no LLM, keyword scoring only) for zero-cost fallback or offline use.
+
+---
+
+## Screenshots
+
+**Morning Briefing** — ranked top 20, scored and categorized, with like/dislike/save actions
+
+![Morning Briefing](docs/screenshots/morning-briefing.png)
+
+**Reading Library** — everything you've ever liked or saved, searchable and filterable
+
+![Reading Library](docs/screenshots/reading-library.png)
+
+**Deep Dive Archive** — AI analysis on flagged articles, by date
+
+![Deep Dives](docs/screenshots/deep-dives.png)
+
+**Signal Priorities** — short-term focus injections that boost scoring for a set window
+
+![Priorities](docs/screenshots/priorities.png)
+
+---
+
+## How the Learning Loop Works
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    System Cron                          │
-│         (Reliable, no LLM dependency)                   │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-         ┌───────────────────────┐
-         │   cron_wrapper.sh     │
-         │  (captures output)    │
-         └───────────┬───────────┘
-                     │
-        ┌────────────┴────────────┐
-        ▼                         ▼
-┌──────────────┐          ┌──────────────┐
-│ Your Scripts │          │  OpenClaw    │
-│ (intelligent │  ──────► │  Messaging   │
-│  output)     │          │     API      │
-└──────────────┘          └──────┬───────┘
-                                 │
-                                 ▼
-                          ┌──────────────┐
-                          │   Telegram   │
-                          │  (delivery)  │
-                          └──────────────┘
+Daily Briefing (7 AM)
+      ↓
+You react on Telegram (👍 Like · 👎 Dislike · 🔖 Save)
+      ↓
+curator_feedback.py records the signal locally
+      ↓
+Tomorrow's scorer gets: "prefer The Duran, institutional_debates, monetary_policy"
+      ↓
+Better briefing
 ```
 
-**Key Design Decision:** Scripts generate formatted output; wrapper simply delivers it. No agent interpretation = 100% reliability.
+**Model-agnostic by design:** The user profile is injected at the dispatcher level, not inside any model's prompt. When xAI goes down and Haiku takes over, it runs with the same learned profile. Swap models — preferences persist.
+
+**Bootstrapped cold start:** Rather than waiting months for enough feedback, 398 hand-saved X bookmarks were ingested as `Save` signals. The learning loop went from 17 signals to **415 scored signals in one session**.
 
 ---
 
-## 🚀 Quick Start
-
-### Prerequisites
-
-1. **OpenClaw installed and configured**
-   ```bash
-   npm install -g openclaw@latest
-   openclaw onboard
-   ```
-
-2. **Messaging channel connected** (Telegram, WhatsApp, etc.)
-   - Follow OpenClaw wizard to pair your channel
-   - Get your chat ID
-
-3. **Python 3.9+** with venv support
-
----
-
-### Installation
+## What It Has Learned
 
 ```bash
-# Clone this repository
+python show_profile.py
+```
+
+```
+========================================================
+  CURATOR LEARNED PROFILE
+========================================================
+  Interactions : 415 scored signals from 406 feedback events
+  Last updated : 2026-02-28
+  Feedback     : 8 liked  |  1 disliked  |  397 saved
+========================================================
+
+  SOURCES
+  -------
+  ████████████████  +17  X/@elonmusk
+  ██████████████░░  +16  X/@MarioNawfal
+  █████████████░░░  +14  X/@nntaleb
+  ████████████░░░░  +12  X/@LukeGromen
+  ███████████░░░░░  +11  The Duran
+  ███████████░░░░░  +11  X/@ThomasSowell
+
+  THEMES
+  ------
+  ████████████████  +17  institutional_debates
+  ████████████████  +17  market_analysis
+  █████████░░░░░░░  +8   monetary_policy
+  ███████░░░░░░░░░  +6   geopolitical_analysis
+
+  AVOID PATTERNS
+  --------------
+  ▪▪▪  (3x)  ceremonial_reporting
+  ▪    (1x)  event_coverage_not_analysis
+```
+
+Learned from actual reading behavior — nothing hard-coded. The system knows to up-rank institutional critique, monetary theory, and geopolitical analysis. It knows to skip ceremonial news coverage.
+
+---
+
+## Architecture
+
+```
+RSS Feeds (10+ sources, ~400 articles)
+          ↓
+  curator_rss_v2.py
+          ↓
+  [mechanical mode: keyword scoring, no LLM]
+          ↓  OR
+  Stage 1: Haiku pre-filter (400 → ~50, cheap pass)
+          ↓
+  Stage 2: grok-3-mini scorer + injected user profile
+          ↓  [fallback: Haiku with same user profile]
+  Top 20 ranked articles
+          ↓
+  Telegram delivery (7 AM via launchd)   OR   stdout/file
+          ↓
+  User reacts (Like / Dislike / Save)
+          ↓
+  curator_feedback.py → updates local curator_preferences.json
+          ↓
+  Tomorrow's run loads updated profile → repeat
+```
+
+**Key files:**
+
+| File | Purpose |
+|---|---|
+| `curator_rss_v2.py` | Main pipeline: fetch, score, deliver |
+| `curator_feedback.py` | Process reactions → update local learned profile |
+| `show_profile.py` | Human-readable view of what the system has learned |
+| `cost_report.py` | Unified cost tracking (chat + curator runs) |
+| `x_bootstrap.py` | One-time ingestion of X bookmarks as learning signals |
+| `x_auth.py` | X API OAuth credential management |
+
+---
+
+## Cost Story
+
+**January:** Mechanical mode + Ollama — free.
+
+**Early February:** Switched to Claude Sonnet for all AI scoring: $100+/month.
+
+**Current:**
+- Haiku for bulk pre-filtering (cheap, fast)
+- grok-3-mini for final ranking (good quality, low cost)
+- Profile injection makes cheap models smarter — no need for expensive models
+
+Result: **~$0.15–0.30/day** ($35–45/month) for 400+ articles daily.
+
+Tracked in `curator_costs.json` (one record per API call, Postgres-ready schema):
+
+```bash
+python cost_report.py          # today's breakdown
+python cost_report.py week     # last 7 days, day by day
+python cost_report.py month    # this calendar month
+python cost_report.py year     # this calendar year, month by month
+```
+
+---
+
+## How to Run
+
+**Prerequisites:** Python 3.9+, API keys in macOS keyring
+
+```bash
+# Clone and install
 git clone https://github.com/robertvanstedum/personal-ai-agents.git
 cd personal-ai-agents
-
-# Set up Python virtual environment
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# Configure credentials (see CREDENTIALS_SETUP.md)
-python setup_credentials.py
+# Mechanical mode — no LLM required
+python curator_rss_v2.py --mode=mechanical
 
-# Test the wrapper
-./scripts/cron_wrapper.sh ./track_usage_wrapper.sh YOUR_CHAT_ID
+# AI mode (dry-run first)
+python curator_rss_v2.py --mode=ai --dry-run
+
+# See what the system has learned
+python show_profile.py
+
+# Check costs
+python cost_report.py
 ```
 
-### Set Up Workspace (First Time)
+**Credentials:** All API keys stored in macOS keyring, never in files. See `CREDENTIALS_SETUP.md`.
 
-**Create your private workspace:**
+**OpenClaw (optional):** Adds Telegram delivery and conversational interface. The curator runs standalone without it.
 
-```bash
-cd ~/.openclaw/workspace
-
-# Create agent personality files
-# See templates in docs/workspace-templates/
-touch SOUL.md      # Who your agent is
-touch USER.md      # About you
-touch AGENTS.md    # Agent guidelines
-touch MEMORY.md    # Long-term memory
-mkdir memory       # Daily logs (YYYY-MM-DD.md)
-```
-
-**Template examples:**
-- See `docs/workspace-templates/` for starter templates
-- Customize SOUL.md to define your agent's personality
-- Update USER.md with your timezone, preferences, goals
-
-**Security:**
-- Keep workspace in a PRIVATE git repository
-- Use `.gitignore` to exclude API keys (already configured in OpenClaw)
-- Store credentials in system keyring (not git)
+**Scheduling:** launchd plist triggers at 2–3 AM (fetch/score), delivers at 7 AM.
 
 ---
 
-### Install Cron Jobs
+## Roadmap
 
-```bash
-# Edit crontab
-crontab -e
+**v0.9 (current — Feb 2026):**
+Full learning loop across all scoring paths, X bookmark bootstrap, cost tracking, Telegram feedback delivery, model-agnostic profile injection.
 
-# Add jobs (adjust paths and chat ID)
-0 7 * * * /path/to/personal-ai-agents/scripts/cron_wrapper.sh /path/to/personal-ai-agents/run_curator_cron.sh YOUR_CHAT_ID
-0 8 * * * /path/to/personal-ai-agents/scripts/cron_wrapper.sh /path/to/personal-ai-agents/track_usage_wrapper.sh YOUR_CHAT_ID
-0 */4 * * * /path/to/personal-ai-agents/scripts/cron_wrapper.sh /path/to/.openclaw/workspace/scripts/check_balance_alert.sh YOUR_CHAT_ID
-```
+**v1.0 (active development):**
+- Phase 3C: t.co URL enrichment — follow tweet links to surface trusted domains
+- Phase 3D: Source discovery — auto-add new RSS feeds from discovered domains
+- Phase 4: Wider sources — Substack, academic (BIS, Fed, arXiv), Reddit
+- Phase 5: Synthesis — pattern detection, contradiction highlighting, proactive research
+- Postgres migration — `curator_costs.json` already row-structured, `COPY` ready
 
-**Full setup guide:** See [CRON-SETUP.md](CRON-SETUP.md)
-
----
-
-## 📊 Features
-
-### 1. AI-Powered RSS Curator
-**File:** `curator_rss_v2.py`
-
-- Fetches from geopolitics, finance, tech, and treasury sources
-- AI scoring with grok-3-mini (~$0.18/day)
-- Category weighting + diversity boosting
-- Automatic Telegram delivery
-
-**🎯 Learning Feedback Loop (NEW - Feb 26, 2026):**
-- **Learns from your feedback** - Like, save, or dislike articles from web UI or Telegram
-- **Personalizes scoring** - Injects your preferences into Grok prompts
-  - Preferred sources get boosted (+1 to +2)
-  - Preferred themes and content styles prioritized
-  - Avoid signals penalized (-1 to -2)
-- **Adaptive over time** - More feedback = better recommendations
-- **Verified working** - Preferred sources ranking higher on first personalized run, improves over time
-
-**Feedback Weights:**
-- **Like** (+2) - Strong quality signal: "More like this"
-- **Save** (+1) - Bookmark/curiosity: "Interesting, maybe"
-- **Dislike** (-1) - Avoid: "Less like this"
-
-**How It Works:**
-1. You interact with briefing articles (like/save/dislike buttons)
-2. System learns patterns: sources, themes, content types, avoid signals
-3. Builds personalization prompt from accumulated feedback (min 3 interactions)
-4. Injects preferences into Grok scoring on next briefing
-5. Articles matching your preferences rank higher
-
-**Model Selection:**
-- `--model=ollama` - Free local (Ollama/phi)
-- `--model=xai` - grok-3-mini ($0.18/day, recommended)
-- `--model=sonnet` - Claude Sonnet 4 (premium, $0.90/day)
-- `--dry-run` - Preview without saving (optional)
-
-**See:** [CURATOR_README.md](CURATOR_README.md) | [CHANGELOG.md](CHANGELOG.md#2026-02-26)
-
-### 2. Usage & Cost Tracking
-**File:** `track_usage.py`
-
-- Parses Anthropic API usage from gateway logs
-- Daily/weekly/monthly token and cost summaries
-- Formatted Markdown for messaging
-- Budget projection calculations
-
-### 3. Balance Monitoring
-**File:** `check_balance_alert.py`
-
-- Checks Anthropic account balance via API
-- Three alert levels (warning, critical, severe)
-- Silent when balance is OK
-- Automatic notifications
-
-### 4. Production Cron Wrapper
-**File:** `scripts/cron_wrapper.sh`
-
-- Runs any script via system cron
-- Captures stdout/stderr
-- Delivers to messaging channel via OpenClaw
-- Error handling and logging
-- **Zero LLM dependency** = reliable execution
+Active development continues after v0.9 launch.
 
 ---
 
-## 📚 Documentation
+## Technical Notes
 
-### Architecture & Design
-- [ARCHITECTURE.md](ARCHITECTURE.md) - System design and technical decisions
-- [PROJECT_ROADMAP.md](PROJECT_ROADMAP.md) - Development phases and milestones
-- [PRODUCTION_SECURITY.md](PRODUCTION_SECURITY.md) - Security best practices
-- [CRON-SETUP.md](CRON-SETUP.md) - System cron installation guide
-
-### Feature Documentation
-- [CURATOR_ROADMAP.md](CURATOR_ROADMAP.md) - RSS curator feature evolution
-- [CURATOR_ENHANCEMENT_ANALYSIS.md](CURATOR_ENHANCEMENT_ANALYSIS.md) - AI curation cost/benefit analysis
-- [INTEREST_CAPTURE_README.md](INTEREST_CAPTURE_README.md) - Deep dive analysis system
-- [AI_TOOLS_EVALUATION.md](AI_TOOLS_EVALUATION.md) - Tool selection rationale
-
-### Learning & Methodology
-- [📖 Case Study: Human-AI Co-Building](docs/CASE-STUDY-DEEP-DIVE-FEATURE.md) - **How we built the deep dive feature through collaborative exploration** (3-hour session, Feb 16 2026)
-  - Methodology: Learning-focused development vs "vibe coding"
-  - Technical learning moments (client pattern, abstractions, dependencies)
-  - Emergent discoveries (natural language interface)
-  - Lessons for humans and AI agents working together
+- **Anti-echo-chamber:** 20% serendipity reserve surfaces articles outside learned patterns
+- **Decay gate:** Signals older than 30 days get half-weight — prevents preference lock-in
+- **Signal normalization:** X bookmarks weighted to avoid volume bias vs. direct feedback
+- **Model-agnostic design:** Profile injection at dispatcher level — model swaps don't break personalization
+- **Local-first:** All learned state is flat files on your machine, structured for easy DB migration
 
 ---
 
-## 🔐 Security
-
-**What's in git:**
-- ✅ Code and scripts
-- ✅ Documentation
-- ✅ Configuration templates
-- ❌ API keys (use system keyring)
-- ❌ Personal memory/logs (separate private repo)
-- ❌ Credentials or tokens
-
-**Credential Management:**
-- Use Python `keyring` for API keys
-- Environment variables for non-sensitive config
-- `.gitignore` excludes secrets by default
-- See [CREDENTIALS_SETUP.md](CREDENTIALS_SETUP.md)
-
----
-
-## 🎓 Learning from This Project
-
-**Key Lessons:**
-
-1. **Batch Aggressively** - 1000-item batches beat 100-item for cost/speed
-2. **Put Intelligence in Scripts** - Don't force agent mediation where it's not needed
-3. **Use Cheaper Models for Mechanical Tasks** - Haiku for filtering, Sonnet for quality
-4. **System Cron > Agent Cron** - For production reliability on scheduled tasks
-5. **Separate Public and Private** - Code is shareable, personal context is not
-
-**Mistakes and Fixes:**
-- Initial OpenClaw cron design caused LLM timeout failures → migrated to system cron
-- See [MEMORY.md](docs/lessons-learned.md) for detailed postmortems
-
----
-
-## 🛠️ Customization
-
-### Add Your Own Sources
-Edit `curator_rss_v2.py`:
-```python
-FEEDS = {
-    'your_source': {
-        'url': 'https://example.com/rss',
-        'categories': ['geo_major', 'technology']
-    }
-}
-```
-
-### Adjust Scoring Categories
-Modify `CATEGORY_SCORES` in `curator_rss_v2.py` to match your interests.
-
-### Create New Automation
-1. Write script with formatted output
-2. Test standalone: `bash your_script.sh`
-3. Test with wrapper: `./scripts/cron_wrapper.sh your_script.sh CHAT_ID`
-4. Add to crontab
-
----
-
-## 🤝 Contributing
-
-This is a personal project, but ideas and improvements are welcome!
-
-**If you build something similar:**
-- Share your automation patterns
-- Document what worked/what didn't
-- File OpenClaw feature requests for missing pieces
-
-**Related OpenClaw Feature Request:**
-- [#18160: Direct Exec Mode for Cron Jobs](https://github.com/openclaw/openclaw/issues/18160)
-
----
-
-## 📈 Roadmap
-
-**Phase 1: Foundation** ✅
-- RSS curator with AI scoring
-- Usage tracking and monitoring
-- System cron integration
-
-**Phase 2: Intelligence** ✅ (Achieved Feb 26, 2026)
-- ✅ Learning feedback loop with personalization
-- ✅ Context-aware briefing scoring
-- ✅ Ad-hoc deep dives on flagged articles
-- 🎯 **Milestone:** Curator now learns from feedback and adapts to preferences
-
-**Phase 3: Refinement** (In Progress)
-- Serendipity factor (avoid filter bubbles)
-- Preference decay (outdated signals fade over time)
-- Multi-source deep dive synthesis
-- Quality metrics dashboard
-
-**Phase 4: Expansion** (Future)
-- Email/calendar integration
-- Multi-agent task delegation
-- Proactive intelligence gathering
-
-See [PROJECT_ROADMAP.md](PROJECT_ROADMAP.md) for details.
-
----
-
-## 💡 Philosophy
-
-**"Faster, Cheaper, Better - All Three Simultaneously"**
-
-This project proves you don't have to pick two. With the right architecture:
-- AI makes it smarter than keyword filters
-- Batching + model selection keeps costs low ($6-27/month)
-- System cron + no-LLM execution makes it reliable
-
-**Personal AI should be:**
-- 🏃 Fast enough to use daily
-- 💰 Cheap enough to run constantly  
-- 🎯 Smart enough to save time
-- 🔒 Private enough to trust
-- 🔧 Hackable enough to customize
-
----
-
-## 📞 Contact
-
-**Author:** Robert van Stedum  
-**Repository:** [personal-ai-agents](https://github.com/robertvanstedum/personal-ai-agents)  
-**Built with:** [OpenClaw](https://openclaw.ai/)
-
----
-
-## 📄 License
-
-MIT License - See [LICENSE](LICENSE) for details.
-
----
-
-## 🙏 Acknowledgments
-
-- **OpenClaw Team** - For building an extensible personal AI framework
-- **Anthropic** - Claude models power the curation intelligence
-- **Community** - For inspiration and feature requests
-
----
-
-**Status:** Production (daily use since Feb 2026)  
-**Latest Milestone:** 🎯 Learning Feedback Loop (Feb 26, 2026) - Curator now personalizes based on user feedback  
-**Last Updated:** 2026-02-26
+**Status:** Production (daily use since Feb 9, 2026)
+**Current milestone:** v0.9-beta — learning loop complete across all scoring paths
+**Author:** Robert van Stedum

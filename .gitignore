@@ -46,3 +46,7 @@ logs/
 
 # Private planning docs (live in rvs-openclaw-agent)
 ROADMAP_X_INTEGRATION.md
+
+# Raw unblurred screenshots (use docs/screenshots/ for blurred versions)
+Screenshot*.jpg
+Screenshot*.png
