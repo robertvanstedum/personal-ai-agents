@@ -108,6 +108,55 @@ Day 3 Overnight:
 
 ---
 
+## Phase 3A: X Integration (COMPLETE - 2026-02-28)
+
+**X Bookmark Bootstrap**
+- 398 hand-saved X bookmarks ingested as "Save" signals
+- OAuth 2.0 PKCE flow implemented and stored in keychain
+- Learning loop seeded: 9 signals -> 407 signals in one session
+- Files: `x_auth.py`, `x_bootstrap.py`, `x_oauth2_authorize.py`
+
+---
+
+## Phase 3B: X Adapter — t.co URL Enrichment (NEXT)
+
+**Goal:** Turn source trust scores into content ecosystem scores
+
+**Current:** `X/@nntaleb = +14` (knows you trust the curator)
+**After:** `X/@nntaleb -> FT/BIS/project-syndicate = +N` (knows what they point you toward)
+
+**Implementation (`x_adapter.py`):**
+1. Extract t.co URLs from tweet text using regex
+2. Follow redirects to final destination URL (requests with allow_redirects)
+3. Parse domain + fetch article title from `<title>` tag
+4. Normalize to article schema: source = final domain, curator = X/@account
+5. Feed both source signals into scorer: curator signal + content signal
+
+**Payoff:** Profile learns both who you trust AND the content ecosystem they curate. Dramatically richer personalization.
+
+---
+
+## Phase 3C: Wider Web Sources
+
+**Goal:** Expand beyond RSS + X to sources that matter in your ecosystem
+
+### Priority Sources
+1. **Substacks** — Doomberg, Zoltan Pozsar, Lyric Hughes Hale, other macro writers. RSS available for most.
+2. **Reddit** — r/geopolitics, r/economics, r/MacroEconomics. Filter by top/hot, min upvote threshold.
+3. **YouTube transcripts** — Channels like Real Vision, Macrovoices. Transcribe via Whisper, score like articles.
+4. **Government/institutional** — BIS working papers, Fed speeches, IMF reports. High signal-to-noise.
+
+### Architecture
+Same pipeline as RSS and X — each source gets a thin adapter that normalizes to the article schema. No changes to scoring, personalization, or briefing generation.
+
+### Noise management
+- Substacks: RSS quality, low noise — add directly
+- Reddit: Haiku pre-filter essential before scoring
+- YouTube: Transcript quality varies — add engagement floor
+- Government: Low volume, high quality — minimal filtering needed
+
+---
+
 ## Phase 3: Proactive Insights
 
 **Goal:** Curator doesn't just filter—it synthesizes

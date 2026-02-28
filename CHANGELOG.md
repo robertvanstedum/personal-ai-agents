@@ -1,6 +1,39 @@
 # Changelog
 
-## 2026-02-26 - 🎯 Milestone: Learning Feedback Loop Achieved
+## 2026-02-28 - Major Milestone: Bootstrap Complete — 398 X Bookmarks Seeding the Learning Loop
+
+### What Was Built
+
+**X Bookmark Ingestion (x_bootstrap.py)**
+The learning loop went from 9 feedback events to 407 in a single session. 398 hand-saved X bookmarks — years of curation — ingested as explicit "Save" signals. The system now knows your preferred sources before you've given it a single piece of feedback through the daily briefing.
+
+**OAuth 2.0 PKCE Flow (x_oauth2_authorize.py)**
+Full browser-based authorization against X API v2. One-time setup stores access token in macOS keychain. Reusable for any future X API calls.
+
+**Top sources the system now knows about:**
+- X/@elonmusk (+17), X/@MarioNawfal (+16), X/@nntaleb (+14), X/@LukeGromen (+12)
+- The Duran (+11), X/@ThomasSowell (+11), X/@BoringBiz_ (+10), X/@WallStreetApes (+9)
+- Geopolitical Futures (+6), X/@zerohedge (+5), X/@AndrewYNg (+5), X/@dailystoic (+5)
+
+**Supporting files created:**
+- `x_auth.py` — shared OAuth credential loader (1.0a + 2.0)
+- `x_bookmarks_test.py` — verified API access before bootstrap
+- `store_x_keys.py` / `store_x_oauth2.py` — one-time credential setup helpers
+
+### The Shift
+
+Before tonight: 9 signals, system barely knew your preferences.
+After tonight: 407 signals, system knows the macro/geopolitics/philosophy ecosystem you actually read.
+
+Tomorrow's 7 AM briefing will be the first one that runs against a meaningfully trained profile.
+
+### Next Evolution
+
+**t.co URL enrichment** — currently we capture `X/@nntaleb = +14`. The next step is following the t.co redirect inside each tweet to extract the destination domain and article title. That turns source trust scores into content ecosystem scores: `X/@nntaleb -> FT/BIS/project-syndicate`. The system learns both who you trust and what they point you toward. This is when the profile becomes genuinely powerful.
+
+---
+
+## 2026-02-26 - Milestone: Learning Feedback Loop Achieved
 
 ### Major Achievement
 
