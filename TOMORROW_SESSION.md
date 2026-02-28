@@ -12,37 +12,38 @@
 
 ## Next Session Prompt
 
-> "Read TOMORROW_SESSION.md. Start with the Telegram architecture decision (Option A vs B — see NOTEBOOK.md). Once decided, implement and verify end-to-end. Then temporal decay gate check, then Phase 3A OAuth 1.0a for X."
+> "Read TOMORROW_SESSION.md and docs/FEATURE_TELEGRAM_ARCHITECTURE.md. Start with Phase 1 of the Telegram architecture spec — feedback bot webhook only, second bot token for OpenClaw. Then temporal decay gate check, then Phase 3A OAuth 1.0a for X."
 
 ---
 
 ## Task Order
 
-### 0. Telegram Architecture Decision *(15 min, decide before coding)*
+### 0. Telegram Architecture — implement the spec *(Phase 1 only this session)*
 
-OpenClaw correctly diagnosed this as an architecture problem, not a bug fix.
-Full analysis in `rvs-openclaw-agent/NOTEBOOK.md` → "Telegram Architecture Decision".
+**Full spec:** `docs/FEATURE_TELEGRAM_ARCHITECTURE.md` — read this before writing any code.
 
-**Option A — Single webhook, Flask handles everything:**
-- Flask webhook active permanently (`allowed_updates: ['callback_query', 'message']`)
-- Flask dispatches: callbacks → feedback, text commands → handle, voice → Whisper
-- OpenClaw text commands come through webhook (Flask → OpenClaw agent via API?)
-- Pro: one handler, no token conflict. Con: Flask must handle OpenClaw's conversational commands.
+**The design (OpenClaw spec):**
+- `telegram_feedback_bot.py` → buttons ONLY, webhook mode, always-on via launchd
+- OpenClaw Telegram channel → text + voice commands (Telegram transcribes voice → text automatically for Premium users, no Whisper needed)
+- Outbound briefings → direct API call from `curator_rss_v2.py`, no OpenClaw involved
+- `TELEGRAM_CONTEXT.md` → OpenClaw reads 50-line context file instead of full session history
 
-**Option B — Two bot tokens:**
-- Original token → Flask webhook, `allowed_updates: ['callback_query']` only (feedback buttons)
-- New token → OpenClaw Telegram channel (text commands, conversational)
-- Create second bot via BotFather, assign to OpenClaw config
-- Pro: clean separation. Con: two bots in Telegram, user must know which to use.
+**⚠️ One gap in the spec to resolve first:**
+OpenClaw's Option A says "webhook for feedback bot, OpenClaw polls for text — no conflict". This is WRONG if both use the same bot token — Telegram returns 409 for `getUpdates` when any webhook is active.
+**Actual fix:** Two bot tokens (Option B in the spec). Create a second bot via BotFather for OpenClaw. 5 minutes of setup, eliminates the conflict permanently.
 
-**Recommended: Option B.** Clean, no conflicts, each tool owns its interface. Voice deferred until text is solid.
+**Phase 1 tasks (from spec):**
+1. Fix `telegram_feedback_bot.py` — callback_query ONLY, webhook mode, strip text/voice handlers
+2. Fix `CURATOR_CALLBACKS.md` path lookup (search `rvs-openclaw-agent/` first)
+3. Verify buttons work cleanly end-to-end
+4. Create second bot token for OpenClaw (resolves the token conflict)
 
 **Current working state (don't break):**
 - Flask webhook receives all message types ✅
 - `/status`, `/run`, `/briefing` commands work ✅
 - Like/Dislike/Save callbacks work ✅
 - `start_telegram_webhook.sh` toggles OpenClaw on/off via `openclaw config set` ✅
-- Voice threading fix committed (`5a2e974`) — untested but correct ✅
+- Voice threading fix committed (`5a2e974`) — superseded by Telegram native transcription approach
 
 ### 1. Temporal Decay gate check *(5 min)*
 
