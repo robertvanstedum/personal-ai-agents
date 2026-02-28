@@ -458,6 +458,13 @@ To test with mechanical mode instead:
             raise ValueError("Anthropic API key not found")
     
     client = Anthropic(api_key=api_key)
+
+    # Load learned user preferences (empty string if no data yet)
+    user_profile = load_user_profile()
+    if user_profile:
+        print(f"🧠 User profile loaded ({len(user_profile)} chars) — personalizing scores")
+    else:
+        print("   No user profile yet — using static scoring")
     
     # Build prompt with all articles
     prompt = """You are a geopolitics & finance curator. For each article below, assign:
@@ -478,7 +485,7 @@ SCORE GUIDANCE:
 5-6: Relevant but not urgent, decent background
 3-4: Tangential interest, minor relevance
 0-2: Skip (noise, spam, off-topic, pure entertainment)
-
+""" + user_profile + """
 KEY DISTINCTION (technology vs geopolitics):
 - If discussing DEPLOYED systems, active operations, current conflicts → geo category
 - If discussing R&D, manufacturing capacity, future capabilities → technology
@@ -2728,7 +2735,7 @@ def main():
     mode_map = {
         'ollama': 'mechanical',  # Free local Ollama/phi
         'xai': 'xai',            # grok-3-mini ($0.18/day)
-        'sonnet': 'anthropic'    # Anthropic Sonnet (premium)
+        'sonnet': 'ai'           # Anthropic Haiku (single-stage)
     }
     mode = mode_map.get(model, 'xai')  # Fallback to xai if unknown
 
