@@ -5,7 +5,7 @@
 ### What Was Built
 
 **X Bookmark Ingestion (x_bootstrap.py)**
-The learning loop went from 9 feedback events to 407 in a single session. 398 hand-saved X bookmarks — years of curation — ingested as explicit "Save" signals. The system now knows your preferred sources before you've given it a single piece of feedback through the daily briefing.
+The learning loop went from 9 feedback events to 415 scored signals (458 total feedback events) in a single session. 398 hand-saved X bookmarks — years of curation — ingested as explicit "Save" signals. The system now knows your preferred sources before you've given it a single piece of feedback through the daily briefing.
 
 **OAuth 2.0 PKCE Flow (x_oauth2_authorize.py)**
 Full browser-based authorization against X API v2. One-time setup stores access token in macOS keychain. Reusable for any future X API calls.
@@ -23,13 +23,48 @@ Full browser-based authorization against X API v2. One-time setup stores access 
 ### The Shift
 
 Before tonight: 9 signals, system barely knew your preferences.
-After tonight: 407 signals, system knows the macro/geopolitics/philosophy ecosystem you actually read.
+After tonight: 415 scored signals (458 feedback events), system knows the macro/geopolitics/philosophy ecosystem you actually read.
 
 Tomorrow's 7 AM briefing will be the first one that runs against a meaningfully trained profile.
 
 ### Next Evolution
 
 **t.co URL enrichment** — currently we capture `X/@nntaleb = +14`. The next step is following the t.co redirect inside each tweet to extract the destination domain and article title. That turns source trust scores into content ecosystem scores: `X/@nntaleb -> FT/BIS/project-syndicate`. The system learns both who you trust and what they point you toward. This is when the profile becomes genuinely powerful.
+
+---
+
+## 2026-02-28 - Scoring Architecture Fix & Telegram Stability
+
+### Model-Agnostic Profile Injection
+
+**Bug Fixed:** `load_user_profile()` was only injected into the xAI scoring path. When xAI was down, the Haiku fallback ran completely blind to learned preferences.
+
+**Fix:** Profile injection moved to the scorer dispatcher level — above any model-specific function.
+
+```python
+# Before: profile injected inside score_entries_xai() only
+# After: profile loaded at dispatcher, passed into whichever scorer runs
+user_profile = load_user_profile()
+entries = score_entries(entries, user_profile)  # model-agnostic
+```
+
+**Impact:** Haiku fallback now runs with the full learned profile. Any future model swap inherits personalization automatically. No more blind scoring when xAI is unavailable.
+
+**Files Modified:**
+- `curator_rss_v2.py` — dispatcher refactor
+
+---
+
+### Telegram Stability (OpenClaw 2026.2.26)
+
+Applied OpenClaw update resolving several issues affecting the curator's Telegram delivery:
+
+- **DM Allowlist Inheritance (#27936)** — Fixed silent message drops after bot restarts. Root cause of earlier delivery failures.
+- **Inline Button Callbacks in Groups (#27343)** — Like/Dislike/Save buttons now more reliable in group context.
+- **sendChatAction Rate Limiting (#27415)** — Prevents infinite retry loops on typing indicator failures; protects against bot account suspension.
+- **Native Commands Degradation (#27512)** — Graceful handling of `BOT_COMMANDS_TOO_MUCH` errors; no more crash-loops on startup.
+
+**Status:** 7 AM briefing confirmed back on schedule.
 
 ---
 
