@@ -69,6 +69,29 @@ import json
 import hashlib
 from dotenv import load_dotenv
 
+# ---------------------------------------------------------------------------
+# Cost logger — persists per-run API costs for cost_report.py
+# ---------------------------------------------------------------------------
+_COST_LOG = Path(__file__).parent / 'curator_costs.json'
+
+def log_curator_cost(model: str, use_type: str, input_tokens: int, output_tokens: int, cost_usd: float):
+    """Append one cost record to the curator cost log."""
+    try:
+        _COST_LOG.parent.mkdir(parents=True, exist_ok=True)
+        data = json.loads(_COST_LOG.read_text()) if _COST_LOG.exists() else {"runs": []}
+        data["runs"].append({
+            "date":          datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+            "timestamp":     datetime.now(timezone.utc).isoformat(),
+            "model":         model,
+            "use_type":      use_type,
+            "input_tokens":  input_tokens,
+            "output_tokens": output_tokens,
+            "cost_usd":      round(cost_usd, 6),
+        })
+        _COST_LOG.write_text(json.dumps(data, indent=2))
+    except Exception as e:
+        print(f"   [cost_log] Warning: could not write cost record: {e}")
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -547,6 +570,7 @@ ARTICLES:
         # Haiku pricing: $0.80/MTok input, $4.00/MTok output (as of Dec 2024)
         cost = (input_tokens / 1_000_000 * 0.80) + (output_tokens / 1_000_000 * 4.00)
         print(f"   💰 Haiku cost: ${cost:.4f} ({input_tokens:,} in + {output_tokens:,} out tokens)")
+        log_curator_cost('claude-haiku', 'curator', input_tokens, output_tokens, cost)
         
         return results
         
@@ -741,7 +765,7 @@ ARTICLES:
         
         print(f"   ✅ Stage 1 complete: {len(filtered)} candidates selected")
         print(f"   💰 Stage 1 cost: ${cost:.4f} ({input_tokens:,} in + {output_tokens:,} out)")
-        
+        log_curator_cost('claude-haiku', 'curator-prefilter', input_tokens, output_tokens, cost)
         return filtered
         
     except Exception as e:
@@ -859,7 +883,7 @@ ARTICLES:
         
         print(f"   ✅ Stage 2 complete: {len([e for e in entries if e.get('method') == 'sonnet-ranking'])} articles ranked")
         print(f"   💰 Stage 2 cost: ${cost:.4f} ({input_tokens:,} in + {output_tokens:,} out)")
-        
+        log_curator_cost('claude-sonnet', 'curator-ranking', input_tokens, output_tokens, cost)
         return entries
         
     except Exception as e:
@@ -964,6 +988,7 @@ ARTICLES:
         print(f"   Input: {usage.prompt_tokens} tokens, Output: {usage.completion_tokens} tokens")
         cost = usage.prompt_tokens * 5 / 1_000_000 + usage.completion_tokens * 15 / 1_000_000
         print(f"   Cost: ${cost:.4f}")
+        log_curator_cost('xai-grok-3-mini', 'curator', usage.prompt_tokens, usage.completion_tokens, cost)
         
     except Exception as e:
         error_msg = f"""
