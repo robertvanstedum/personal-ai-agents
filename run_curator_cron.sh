@@ -1,6 +1,6 @@
 #!/bin/bash
 # Curator cron job - generates briefing + sends to Telegram automatically
-# Mode: Single-stage AI (Haiku) ~$0.20/day = $6/month
+# Model: xAI Grok (--model=xai) ~$0.15/day — fallback to mechanical if API down
 # To be called by launchd at 7am daily
 
 PROJECT_DIR="$HOME/Projects/personal-ai-agents"
@@ -9,7 +9,7 @@ cd "$PROJECT_DIR" || exit 1
 
 # Activate virtual environment and run curator
 source venv/bin/activate
-python curator_rss_v2.py --mode=ai --fallback
+python curator_rss_v2.py --model=xai --fallback
 
 # Send briefing via unified Telegram bot
 export TELEGRAM_CHAT_ID="8379221702"

@@ -367,4 +367,52 @@ Demonstrates AI-human strategic collaboration to future employers, investors, or
 
 ---
 
-_Last updated: 2026-02-11 by Mini-moi_
+---
+
+## 🧹 v1.0 Refactoring Milestone
+
+> **When to do this:** Once the curator pipeline is stable and running cleanly for a sustained period — the system feels like v1.0, not a work in progress.
+
+**Philosophy:** Build first, clean up once it works. This milestone is intentionally deferred — don't refactor while still iterating on core features.
+
+### What to Delete (legacy/superseded files)
+- `curator_rss.py` → replaced by `curator_rss_v2.py`
+- `deep_dive.py` → replaced by `curator_deepdive.py`
+- `telegram_feedback_bot.py` → merged into `telegram_bot.py`
+- `send_briefing_telegram.py` → inlined into `curator_rss_v2.py`
+- `search_duckduckgo.py` → superseded by RSS feeds
+- `main.py` + `add_decision_trace.py` → Neo4j POC, never integrated
+- All `test_*.py` / `test_*.sh` → not part of production pipeline
+- One-time setup scripts: `setup_keys.py`, `store_api_key.py`, `store_telegram_token.py`
+
+### What to Evaluate (keep or retire)
+- `curator_server.py` — Flask UI has no active launchd job; retire if not hosting the web dashboard
+- All `.html` output files — generated artifacts, not source code; add to `.gitignore`
+- `curator_briefing_old.html`, `curator_preview_recovered.html` — legacy snapshots
+
+### Core Backend to Keep (the real system)
+```
+curator_rss_v2.py       # fetch, score, generate briefing
+curator_feedback.py     # learn from Telegram reactions
+telegram_bot.py         # receive button callbacks + voice
+signal_store.py         # learning event log
+curator_deepdive.py     # deep analysis on flagged articles
+curator_utils.py        # validation utilities
+credential_manager.py   # key management
+run_curator_cron.sh     # launchd entry point
+```
+
+### Git Cleanup Steps
+1. Delete legacy files (listed above)
+2. `git add -A && git commit -m "chore: v1.0 refactor — remove legacy and superseded files"`
+3. Update `.gitignore` to exclude generated HTML artifacts
+4. Tag the clean state: `git tag v1.0-clean`
+
+### OpenClaw Config Cleanup
+- Review `~/.openclaw/workspace/` — archive stale planning docs to `workspace/archive/`
+- Trim `MEMORY.md` (currently 35K chars, truncating at 20K limit)
+- Consolidate overlapping roadmap files (CURATOR_ROADMAP, PROJECT_ROADMAP, CURATOR_UX_BACKLOG)
+
+---
+
+_Last updated: 2026-02-27 by Mini-moi_

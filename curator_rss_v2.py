@@ -406,7 +406,7 @@ def log_error(error_type: str, error_msg: str, context: str = ""):
     except Exception as e:
         print(f"⚠️  Could not write to log file: {e}")
 
-def score_entries_haiku(entries: List[Dict], fallback_on_error: bool = False) -> List[Dict]:
+def score_entries_haiku(entries: List[Dict], fallback_on_error: bool = False, user_profile: str = "") -> List[Dict]:
     """
     Score all entries using Haiku LLM (batch processing)
     
@@ -459,13 +459,6 @@ To test with mechanical mode instead:
     
     client = Anthropic(api_key=api_key)
 
-    # Load learned user preferences (empty string if no data yet)
-    user_profile = load_user_profile()
-    if user_profile:
-        print(f"🧠 User profile loaded ({len(user_profile)} chars) — personalizing scores")
-    else:
-        print("   No user profile yet — using static scoring")
-    
     # Build prompt with all articles
     prompt = """You are a geopolitics & finance curator. For each article below, assign:
 1. Category (ONE of: geo_major, geo_other, monetary, fiscal, technology, other)
@@ -641,7 +634,7 @@ To enable automatic fallback (for cron jobs):
         else:
             raise RuntimeError(f"Haiku API failed: {error_type}: {error_msg}")
 
-def score_entries_haiku_prefilter(entries: List[Dict], top_n: int = 50, fallback_on_error: bool = False) -> List[Dict]:
+def score_entries_haiku_prefilter(entries: List[Dict], top_n: int = 50, fallback_on_error: bool = False, user_profile: str = "") -> List[Dict]:
     """
     STAGE 1: Haiku Pre-Filter (150 → 50)
     Fast relevance check + basic categorization
@@ -660,7 +653,7 @@ def score_entries_haiku_prefilter(entries: List[Dict], top_n: int = 50, fallback
             raise ValueError("Anthropic API key not found")
     
     client = Anthropic(api_key=api_key)
-    
+
     # Build simple relevance filter prompt
     prompt = """You are a geopolitics & finance curator doing a QUICK RELEVANCE FILTER.
 
@@ -681,7 +674,7 @@ SCORING (KEEP IT SIMPLE):
 5-7: Probably relevant, needs closer look
 3-4: Marginal relevance
 0-2: Off-topic noise (entertainment, sports, local news)
-
+""" + user_profile + """
 OUTPUT FORMAT (one line per article):
 <index>|<category>|<score>
 
@@ -759,7 +752,7 @@ ARTICLES:
         else:
             raise
 
-def score_entries_sonnet_ranking(entries: List[Dict], fallback_on_error: bool = False) -> List[Dict]:
+def score_entries_sonnet_ranking(entries: List[Dict], fallback_on_error: bool = False, user_profile: str = "") -> List[Dict]:
     """
     STAGE 2: Sonnet Final Ranking (50 → 20)
     Deep quality analysis + challenge-factor scoring
@@ -808,7 +801,7 @@ For each article, give a SINGLE score (0-10) based on:
 - "Why Fed's rate policy may backfire given fiscal dominance" (challenge) → 8
 - "China economy slowing" (consensus) → 5
 - "China's regional bank crisis: hidden stress test for Xi's power" (contrarian depth) → 9
-
+""" + user_profile + """
 OUTPUT FORMAT (one line per article):
 <index>|<score>
 
@@ -878,7 +871,7 @@ ARTICLES:
             raise
 
 
-def score_entries_xai(entries: List[Dict], fallback_on_error: bool = False) -> List[Dict]:
+def score_entries_xai(entries: List[Dict], fallback_on_error: bool = False, user_profile: str = "") -> List[Dict]:
     """
     Score all entries using xAI Grok (batch processing)
     
@@ -918,13 +911,6 @@ To test with mechanical mode instead:
             raise ValueError("xAI API key not found")
     
     client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
-
-    # Load learned user preferences (empty string if no data yet)
-    user_profile = load_user_profile()
-    if user_profile:
-        print(f"🧠 User profile loaded ({len(user_profile)} chars) — personalizing scores")
-    else:
-        print("   No user profile yet — using static scoring")
 
     # Build prompt with all articles
     prompt = """You are a geopolitics & finance curator. For each article below, assign:
@@ -1134,6 +1120,27 @@ def load_user_profile(min_weight: int = 2) -> str:
 
     lp = prefs.get('learned_patterns', {})
     sample_size = lp.get('sample_size', 0)
+
+    # Decay gate: raise the signal threshold as data gets stale.
+    # Old feedback shouldn't lock in forever — weak signals fade first.
+    # Formula: > 30 days → min_weight 3, > 60 days → min_weight 4
+    last_updated_str = lp.get('last_updated', '')
+    if last_updated_str:
+        try:
+            from datetime import datetime, timezone
+            last_updated = datetime.fromisoformat(last_updated_str)
+            if last_updated.tzinfo is None:
+                last_updated = last_updated.replace(tzinfo=timezone.utc)
+            days_stale = (datetime.now(timezone.utc) - last_updated).days
+            if days_stale > 60:
+                min_weight = max(min_weight, 4)
+                print(f"   ⏳ Feedback is {days_stale}d old — decay gate active (min_weight={min_weight})")
+            elif days_stale > 30:
+                min_weight = max(min_weight, 3)
+                print(f"   ⏳ Feedback is {days_stale}d old — decay gate active (min_weight={min_weight})")
+        except Exception:
+            pass  # Bad timestamp — continue with default min_weight
+
 
     if sample_size < 3:
         return ""  # Not enough data yet
@@ -1405,6 +1412,14 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
             keywords = priority.get('keywords', [])
             print(f"   {label}: {boost:+.1f} boost (keywords: {', '.join(keywords[:3])}{'...' if len(keywords) > 3 else ''})")
     
+    # Load user profile once here — passed to all scorers regardless of model.
+    # The profile is a dispatcher concern, not a model concern.
+    user_profile = load_user_profile()
+    if user_profile:
+        print(f"🧠 User profile loaded ({len(user_profile)} chars) — personalizing scores")
+    else:
+        print("   No user profile yet — using static scoring")
+
     # Score all entries using selected mode
     if mode == 'ai-two-stage':
         # TWO-STAGE: Haiku pre-filter → Sonnet ranking
@@ -1412,16 +1427,16 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
         print(f"   Stage 1: Haiku filters {len(all_entries)} → 50 candidates")
         print(f"   Stage 2: Sonnet ranks 50 → top {top_n}")
         print()
-        
+
         # Stage 1: Haiku pre-filter (150 → 50)
-        candidates = score_entries_haiku_prefilter(all_entries, top_n=50, fallback_on_error=fallback_on_error)
-        
+        candidates = score_entries_haiku_prefilter(all_entries, top_n=50, fallback_on_error=fallback_on_error, user_profile=user_profile)
+
         # Stage 2: Sonnet ranking (50 → scored)
-        all_entries = score_entries_sonnet_ranking(candidates, fallback_on_error=fallback_on_error)
-        
+        all_entries = score_entries_sonnet_ranking(candidates, fallback_on_error=fallback_on_error, user_profile=user_profile)
+
     elif mode == 'ai':
         # Single-stage Haiku scoring (original implementation)
-        results = score_entries_haiku(all_entries, fallback_on_error=fallback_on_error)
+        results = score_entries_haiku(all_entries, fallback_on_error=fallback_on_error, user_profile=user_profile)
         for i, entry in enumerate(all_entries):
             entry["score"] = results[i]['score']
             entry["category"] = results[i]['category']
@@ -1429,7 +1444,7 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
             entry["raw_score"] = results[i].get('raw_score', entry["score"])  # AI doesn't have raw_score
     elif mode == 'xai':
         # Single-stage xAI Grok scoring
-        results = score_entries_xai(all_entries, fallback_on_error=fallback_on_error)
+        results = score_entries_xai(all_entries, fallback_on_error=fallback_on_error, user_profile=user_profile)
         for i, entry in enumerate(all_entries):
             entry["score"] = results[i]['score']
             entry["category"] = results[i]['category']
@@ -2731,13 +2746,14 @@ def main():
             model = arg.split('=')[1]
             break
 
-    # Map model names to internal modes
+    # Map --model= flag to internal scoring mode
     mode_map = {
-        'ollama': 'mechanical',  # Free local Ollama/phi
-        'xai': 'xai',            # grok-3-mini ($0.18/day)
-        'sonnet': 'ai'           # Anthropic Haiku (single-stage)
+        'ollama': 'mechanical',   # Free local, keyword-based
+        'xai':    'xai',          # xAI Grok (~$0.15/day) — production default
+        'haiku':  'ai',           # Anthropic Haiku (~$0.20/day) — single-stage
+        'sonnet': 'ai-two-stage', # Anthropic Haiku pre-filter + Sonnet ranking (~$0.90/day)
     }
-    mode = mode_map.get(model, 'xai')  # Fallback to xai if unknown
+    mode = mode_map.get(model, 'xai')  # Default: xai
 
     # Session ID (in-memory only; no I/O until log calls below)
     session_id = get_session_id()
