@@ -14,7 +14,7 @@ Most AI tools put your memory in the cloud and make you dependent on a single pr
 
 - **Local stack:** Preferences, learned signals, and history live on your machine (flat files today, Postgres/Neo4j ready)
 - **Private by design:** Nothing about your reading habits, saved articles, or preferences leaves your machine unless you choose
-- **LLM-flexible:** Ollama (local, free), Claude Haiku, grok-3-mini, Claude Sonnet — swap models without breaking personalization
+- **LLM-flexible:** Claude Haiku, grok-3-mini, Claude Sonnet — swap models without breaking personalization. Local Ollama support planned ([#1](https://github.com/robertvanstedum/personal-ai-agents/issues/1))
 - **Standalone:** Runs without OpenClaw. OpenClaw adds Telegram delivery and a conversational interface, but the curator pipeline runs independently
 
 The LLMs are interchangeable workers. Your memory and preferences stay home.
@@ -29,7 +29,7 @@ Inspired by Foundation Capital's writing on context graphs, the goal from day on
 - **Context graph architecture:** Neo4j for relationship mapping, PostgreSQL for structured storage (DB integration ready; flat files used in practice)
 - RSS ingestion from a curated source list → scored and ranked locally
 - **Mechanical mode:** keyword/rule-based scoring, zero LLM dependency — still a supported mode today
-- Local Ollama integration (Gemma 3) for free, fully offline scoring
+- Local Ollama integration (Gemma 3) originally built; `--model=ollama` currently falls back to keyword scoring — restore tracked in [#1](https://github.com/robertvanstedum/personal-ai-agents/issues/1)
 - Command-line reports: run `python curator_rss_v2.py` and get a ranked briefing
 - Two use cases in scope: geopolitics/investing intelligence + career research
 
@@ -183,7 +183,7 @@ RSS Feeds (10+ sources, ~400 articles)
 
 ## Cost Story
 
-**January:** Mechanical mode + Ollama — free.
+**January:** Mechanical mode (keyword scoring) + Ollama local LLM — free. Ollama path has since regressed; tracked in [#1](https://github.com/robertvanstedum/personal-ai-agents/issues/1).
 
 **Early February:** Switched to Claude Sonnet for all AI scoring: $100+/month.
 
@@ -216,8 +216,8 @@ cd personal-ai-agents
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# Mechanical mode — no LLM required
-python curator_rss_v2.py --mode=mechanical
+# Keyword scoring mode — no LLM, no API key required (see issue #1 for Ollama restore)
+python curator_rss_v2.py --model=ollama
 
 # AI mode (dry-run first)
 python curator_rss_v2.py --mode=ai --dry-run
