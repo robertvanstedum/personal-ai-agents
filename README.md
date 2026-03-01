@@ -201,7 +201,7 @@ RSS Feeds (10+ sources, ~400 articles)
           ↓
   curator_rss_v2.py
           ↓
-  [mechanical mode: keyword scoring, no LLM]
+  [mechanical mode: keyword scoring, Ollama local LLM — no external dependency]
           ↓  OR
   Stage 1: Haiku pre-filter (400 → ~50, cheap pass)
           ↓
@@ -218,6 +218,19 @@ RSS Feeds (10+ sources, ~400 articles)
   Tomorrow's run loads updated profile → repeat
 ```
 
+**Model roles:**
+
+| Model | Role | Cost profile |
+|---|---|---|
+| Ollama (local) | Mechanical mode scoring | Free, no external calls |
+| Claude Haiku | Bulk pre-filter, fallback scorer | Low cost, high volume |
+| xAI grok-3-mini | Final daily ranking | Balanced quality/cost |
+| Claude Sonnet | Deep Dives, OpenClaw conversational layer | Higher capability, used selectively |
+
+All swappable. Profile injection at dispatcher level means switching models doesn't affect personalization.
+
+---
+
 **Key files:**
 
 | File | Purpose |
@@ -233,21 +246,22 @@ RSS Feeds (10+ sources, ~400 articles)
 
 ## Cost Story
 
-**January:** Mechanical mode (keyword scoring) + Ollama local LLM — free. Ollama path has since regressed; tracked in [#1](https://github.com/robertvanstedum/personal-ai-agents/issues/1).
+Two categories of cost, both tracked:
 
-**Early February:** Switched to Claude Sonnet for all AI scoring: $100+/month.
+**Operational costs** — daily curator runs (Haiku pre-filter + grok-3-mini scoring):
 
-**Current:**
-- Haiku for bulk pre-filtering (cheap, fast)
-- grok-3-mini for final ranking (good quality, low cost)
-- Profile injection makes cheap models smarter — no need for expensive models
+| Period | Approach | Monthly Cost |
+|---|---|---|
+| January | Mechanical mode + Ollama | Free |
+| Early February | Claude Sonnet for all scoring | $100+/month |
+| Current | Haiku pre-filter + grok-3-mini final | $35–45/month |
 
-Result: **~$0.15–0.30/day** ($35–45/month) for 400+ articles daily.
+**Build costs** — design, strategy, and debugging sessions. Originally running Claude Sonnet via API for all development conversations. Migrated to Claude Code (runs on Pro subscription), which eliminated per-token build costs for implementation work. Both categories tracked separately in `daily_usage.json`.
 
-Tracked in `curator_costs.json` (one record per API call, Postgres-ready schema):
+The insight: profile injection makes cheaper models smarter. Most of the cost reduction came not from switching models but from injecting context that let lower-cost models perform at the level previously requiring expensive ones.
 
 ```bash
-python cost_report.py          # today's breakdown
+python cost_report.py          # today's breakdown by category
 python cost_report.py week     # last 7 days, day by day
 python cost_report.py month    # this calendar month
 python cost_report.py year     # this calendar year, month by month
