@@ -41,6 +41,11 @@ curator_history.json
 
 # X Adapter — processed tweet ID cache (local state, not source)
 x_adapter_cache.json
+x_import_archive_cache.json
+
+# X data archive (personal bookmark data — never commit)
+bookmarks.js
+bookmarks.*.js
 curator_latest_with_buttons.html
 
 # Temporary/test files
