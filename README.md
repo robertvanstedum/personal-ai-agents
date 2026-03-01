@@ -1,122 +1,50 @@
 # Personal AI Briefing System
 
-### *Mini-moi — not a general intelligence, but a specific one. Yours.*
+**A local, privately controlled AI that maintains your memory and intent — and reaches out flexibly to LLMs.**
 
-A personal intelligence system. The first domain: the intersection of finance and geopolitics. Health, language learning, and others to follow.
+Reads 400+ articles/day. Curates the top 20. Learns from everything you've ever saved. Runs at 7 AM.
 
-Learns from your history and preferences, with deliberate friction built in. The goal isn't a curated feed — it's better thinking.
-
-> Production system, daily use since Feb 2026. Designed to expand across domains — see [Roadmap](#roadmap).
+> Production system, daily use since Feb 2026. Built iteratively — see [roadmap](#roadmap) for the full sequence.
 
 ---
 
-## What This Is Really About
+## Core Concept
 
-The cloud LLMs have the world's knowledge. That problem is largely solved.
+Most AI tools put your memory in the cloud and make you dependent on a single provider. This system inverts that:
 
-The hard part — the part that actually matters for real decisions — is acting in your specific situation. Your history. Your goals. Your risk tolerance. Your team's context and motivation.
+- **Local stack:** Preferences, learned signals, and history live on your machine (flat files today, Postgres/Neo4j ready)
+- **Private by design:** Nothing about your reading habits, saved articles, or preferences leaves your machine unless you choose
+- **LLM-flexible:** Claude Haiku, grok-3-mini, Claude Sonnet — swap models without breaking personalization. Local Ollama support planned ([#1](https://github.com/robertvanstedum/personal-ai-agents/issues/1))
+- **Standalone:** Runs without OpenClaw. OpenClaw adds Telegram delivery and a conversational interface, but the curator pipeline runs independently
 
-General intelligence is widely available now. Specific intelligence, the kind that knows you and acts for you, isn't.
-
-That's what this builds toward.
-
-I started with myself: a daily briefing on geopolitics and finance, shaped by how I actually think, learning from what I actually read and save.
-
-But the vision is bigger. If I had a team at work — people and agents together — I'd want this same local context and motivation at the center of it. Not a generic assistant that knows everything about the world but nothing about us. A specific capability, grounded in our history, our goals, our way of making decisions under uncertainty.
-
-That's what *Mini-moi* means. Not a mini version of a large language model. A system that carries your particular point of view and acts on your behalf — in your real world, for you, now.
-
-The cloud LLMs are tools this system reaches out to when it needs them. Your memory, your preferences, your reasoning — those stay with you. The agents are your team members, not the cloud's.
-
----
-
-## Why I Built This
-
-The best way to understand something is to build it.
-
-I've believed for a while that the future of AI isn't just larger models with more world knowledge — it's systems that carry specific context: your history, your goals, your way of reasoning through uncertainty.
-
-The cloud LLMs are remarkable, but they don't know you. They can't act for you in any meaningful sense without that layer.
-
-I wanted to build that layer. Not as a prototype or a tutorial exercise, but as something I actually use and depend on every day.
-
-Geopolitics and finance were the natural first domain — areas I follow closely, where I have a real point of view that a generic feed can't capture.
-
-The approach — local context, model-agnostic, flat files structured for future migration — was designed to scale beyond one person and one domain. Health, language learning, team environments at work. The architecture anticipates that.
-
-The first domain just had to be one I cared enough about to build it right.
+The LLMs are interchangeable workers. Your memory and preferences stay home.
 
 ---
 
 ## Build History
 
-### January 2026 — Architecture Before Code
+**January 2026 — Foundation**
 
-The system was designed before it was built. The decisions that matter most were made here:
+Inspired by Foundation Capital's writing on context graphs, the goal from day one was a local, privately controlled system — not another cloud-dependent AI tool. Started with:
+- **Context graph architecture:** Neo4j for relationship mapping, PostgreSQL for structured storage (DB integration ready; flat files used in practice)
+- RSS ingestion from a curated source list → scored and ranked locally
+- **Mechanical mode:** keyword/rule-based scoring, zero LLM dependency — still a supported mode today
+- Local Ollama integration (Gemma 3) originally built; `--model=ollama` currently falls back to keyword scoring — restore tracked in [#1](https://github.com/robertvanstedum/personal-ai-agents/issues/1)
+- Command-line reports: run `python curator_rss_v2.py` and get a ranked briefing
+- Two use cases in scope: geopolitics/investing intelligence + career research
 
-**Local-first data layer:**
-- Flat files first (JSON), schema designed to be Postgres-ready — one `COPY` command when volume demands migration, not a rewrite
-- Context graph design (Neo4j) for relationship mapping: *why did I save this? what connects these ideas?*
-- All learned state portable by design — move machines, switch cloud providers, go offline — preferences travel with you
+**OpenClaw integration (late January / early February)**
 
-**Model-agnostic from day one:**
-- User profile injection happens at the dispatcher level, not inside any model's prompt
-- Swap xAI for Haiku for Ollama — personalization persists
-- Mechanical mode (keyword scoring, zero LLM) built first — the system works without any AI at all
+When OpenClaw launched (early adopter — spent a weekend installing and debugging it), added it as an optional delivery and interface layer. The personal-ai-agent pipeline was preserved standalone; OpenClaw adds Telegram delivery and a conversational interface but is not required.
 
-**Scoring pipeline designed to expand across domains:**
-- Geopolitics/investing intelligence (daily briefing — first domain in production)
-- Health, language learning, and team/professional contexts planned
+**February 2026 — Intelligence Layer**
 
-The system ran standalone from the start. No cloud dependencies required.
-
----
-
-### Late January / Early February 2026 — OpenClaw Integration
-
-When OpenClaw launched I was an early adopter — spent a weekend getting it running. It became clear it could handle Telegram delivery and conversational interface cleanly.
-
-But the integration was designed as an **optional layer**, not a dependency.
-
-**What OpenClaw adds:**
-- Telegram delivery at 7 AM
-- Conversational interface: "Explain this article" or "Why did you rank this #1?"
-- Feedback buttons (👍 Like · 👎 Dislike · 🔖 Save) in the briefing message
-- Voice note capture for quick thoughts while away from the desk
-
-**What stays standalone:**
-- The entire curator pipeline (`curator_rss_v2.py`, `curator_feedback.py`, `show_profile.py`)
-- All learned preferences and history (local files)
-- Scheduling (launchd — not dependent on OpenClaw uptime)
-
-You can run the curator without OpenClaw. You can run OpenClaw without the curator. Integrated, but independent.
-
----
-
-### February 2026 — Intelligence Layer
-
-With the local foundation solid, the AI layer was built on top:
-
-**Two-stage scoring:**
-- Replaced keyword scoring with Haiku pre-filter (400 → ~50 candidates, cheap fast pass) → grok-3-mini final ranking with injected user profile
-- When xAI goes down, Haiku fallback runs with the **same learned profile** — no degradation in personalization
-
-**Learning loop closed:**
-- Like/Dislike/Save → `curator_feedback.py` → updates local `learned_patterns` → influences tomorrow's scoring
-- Signal weighting: Like = +2, Save = +1, Dislike = -1
-- Decay factor: signals older than 30 days get half-weight — prevents preference lock-in
-- Serendipity reserve: 20% of briefing comes from outside learned patterns — prevents filter bubble
-
-**Cold start solved with X bookmark ingestion:**
-- Built X OAuth 2.0 PKCE flow from scratch
-- Ingested 398 hand-saved X bookmarks as learning signals in one session
-- Profile jumped from 17 signals → **415 scored signals**
-- System went from "barely knows you" to "knows your macro/geopolitics ecosystem" overnight
-
-**Cost optimization:**
-- Started: Claude Sonnet for all scoring → $100+/month
-- Current: Haiku pre-filter + grok-3-mini final ranking → **$35–45/month**
-- Profile injection makes cheap models smarter — expensive models not required at scale
+With the local foundation solid, built the AI layer on top:
+- Replaced keyword scoring with two-stage AI scoring (Haiku pre-filter → grok-3-mini final ranking)
+- Built the learning feedback loop: Like/Dislike/Save → updates local learned profile → influences tomorrow's run
+- Bootstrapped 415 learning signals from 398 hand-saved X bookmarks (cold start solved in one session)
+- Optimized cost from $100+/month → $35–45/month through model selection and batching
+- Unified cost tracking across chat and curator runs
 
 ---
 
@@ -127,7 +55,7 @@ Every morning at 7 AM:
 1. Fetches ~400 articles from 10+ RSS feeds (geopolitics, finance, institutional sources)
 2. Pre-filters with Haiku (400 → ~50 candidates, cheap pass)
 3. Scores candidates with grok-3-mini using your injected learned profile
-4. Picks the top 20 most relevant articles *for you specifically*
+4. Picks the top 20 most relevant articles for you specifically
 5. Delivers a formatted briefing to Telegram with like/dislike/save buttons
 6. Uses your reactions to score tomorrow's briefing better
 
@@ -169,9 +97,9 @@ Tomorrow's scorer gets: "prefer The Duran, institutional_debates, monetary_polic
 Better briefing
 ```
 
-**Model-agnostic by design:** The user profile is injected at the dispatcher level, not inside any model's prompt. Swap models — preferences persist.
+**Model-agnostic by design:** The user profile is injected at the dispatcher level, not inside any model's prompt. When xAI goes down and Haiku takes over, it runs with the same learned profile. Swap models — preferences persist.
 
-**Bootstrapped cold start:** Rather than waiting months for enough feedback, 398 hand-saved X bookmarks were ingested as `Save` signals in one session. The learning loop went from 17 signals to **415 scored signals** overnight.
+**Bootstrapped cold start:** Rather than waiting months for enough feedback, 398 hand-saved X bookmarks were ingested as `Save` signals. The learning loop went from 17 signals to **415 scored signals in one session**.
 
 ---
 
@@ -212,7 +140,7 @@ python show_profile.py
   ▪    (1x)  event_coverage_not_analysis
 ```
 
-Learned from actual reading behavior — nothing hard-coded.
+Learned from actual reading behavior — nothing hard-coded. The system knows to up-rank institutional critique, monetary theory, and geopolitical analysis. It knows to skip ceremonial news coverage.
 
 ---
 
@@ -223,7 +151,7 @@ RSS Feeds (10+ sources, ~400 articles)
           ↓
   curator_rss_v2.py
           ↓
-  [mechanical mode: keyword scoring, zero LLM dependency]
+  [mechanical mode: keyword scoring, no LLM]
           ↓  OR
   Stage 1: Haiku pre-filter (400 → ~50, cheap pass)
           ↓
@@ -255,13 +183,16 @@ RSS Feeds (10+ sources, ~400 articles)
 
 ## Cost Story
 
-| Period | Approach | Monthly Cost |
-|---|---|---|
-| January | Mechanical mode + Ollama | Free |
-| Early February | Claude Sonnet for all scoring | $100+/month |
-| Current | Haiku pre-filter + grok-3-mini final | $35–45/month |
+**January:** Mechanical mode (keyword scoring) + Ollama local LLM — free. Ollama path has since regressed; tracked in [#1](https://github.com/robertvanstedum/personal-ai-agents/issues/1).
 
-Profile injection makes cheap models smarter — no need for expensive models at scale.
+**Early February:** Switched to Claude Sonnet for all AI scoring: $100+/month.
+
+**Current:**
+- Haiku for bulk pre-filtering (cheap, fast)
+- grok-3-mini for final ranking (good quality, low cost)
+- Profile injection makes cheap models smarter — no need for expensive models
+
+Result: **~$0.15–0.30/day** ($35–45/month) for 400+ articles daily.
 
 Tracked in `curator_costs.json` (one record per API call, Postgres-ready schema):
 
@@ -285,8 +216,8 @@ cd personal-ai-agents
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# Mechanical mode — no LLM required
-python curator_rss_v2.py --mode=mechanical
+# Keyword scoring mode — no LLM, no API key required (see issue #1 for Ollama restore)
+python curator_rss_v2.py --model=ollama
 
 # AI mode (dry-run first)
 python curator_rss_v2.py --mode=ai --dry-run
@@ -311,10 +242,10 @@ python cost_report.py
 Built through structured human-AI collaboration:
 
 - **Multi-agent coordination:** Human architect bridges between specialized AI agents (Claude Code for implementation, OpenClaw assistant for planning/memory)
-- **"Build little, test little":** Formalized testing checklist catches bugs before production
-- **Process discipline:** Roadmap + memory + testing checklist ensures zero regressions across 7 feature phases
+- **Incremental testing:** Formalized checklist (imports → usage → dry-run → integration) catches bugs before production
+- **Zero regressions:** 7 major feature phases shipped (Feb-Mar 2026) with no production outages
 
-**Example:** Phase 3C test sequence caught a string mismatch bug before it reached the preferences file — preventing a silent scoring system failure.
+**Example:** During Phase 3C development, the test sequence caught a string mismatch bug before it reached the preferences file — preventing a silent scoring system failure.
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed workflow and testing protocol.
 
@@ -322,17 +253,15 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed workflow and testing protocol.
 
 ## Roadmap
 
-**v0.9 — current (Feb 2026)**
+**v0.9 (current — Feb 2026):**
+Full learning loop across all scoring paths, X bookmark bootstrap, cost tracking, Telegram feedback delivery, model-agnostic profile injection.
 
-Full learning loop across all scoring paths. X bookmark bootstrap (415 signals). Cost tracking. Telegram feedback delivery. Model-agnostic profile injection.
-
-**v1.0 — active development**
-
+**v1.0 (active development):**
 - Phase 3C: Domain-scoped content signals — X bookmark folders map to knowledge domains (Finance/Geo, Health, Tech, etc.)
 - Phase 3D: User-driven domain tagging — tag articles across domains from web UI and Telegram
 - Phase 4: Wider sources — Substack, academic (BIS, Fed, arXiv), Reddit
 - Phase 5: Synthesis — pattern detection, contradiction highlighting, proactive research
-- Postgres migration — `curator_costs.json` already row-structured, one `COPY` command away
+- Postgres migration — `curator_costs.json` already row-structured, `COPY` ready
 
 Active development continues after v0.9 launch.
 
@@ -345,10 +274,9 @@ Active development continues after v0.9 launch.
 - **Signal normalization:** X bookmarks weighted to avoid volume bias vs. direct feedback
 - **Model-agnostic design:** Profile injection at dispatcher level — model swaps don't break personalization
 - **Local-first:** All learned state is flat files on your machine, structured for easy DB migration
-- **Postgres-ready schema:** `curator_costs.json` is one `COPY` command away from production DB
 
 ---
 
-**Status:** Production — daily use since Feb 9, 2026  
-**Current milestone:** v0.9-beta — learning loop complete across all scoring paths  
+**Status:** Production (daily use since Feb 9, 2026)
+**Current milestone:** v0.9-beta — learning loop complete across all scoring paths
 **Author:** Robert van Stedum
