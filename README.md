@@ -237,6 +237,20 @@ python cost_report.py
 
 ---
 
+## Development Process
+
+Built through structured human-AI collaboration:
+
+- **Multi-agent coordination:** Human architect bridges between specialized AI agents (Claude Code for implementation, OpenClaw assistant for planning/memory)
+- **Incremental testing:** Formalized checklist (imports → usage → dry-run → integration) catches bugs before production
+- **Zero regressions:** 7 major feature phases shipped (Feb-Mar 2026) with no production outages
+
+**Example:** During Phase 3C development, the test sequence caught a string mismatch bug before it reached the preferences file — preventing a silent scoring system failure.
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed workflow and testing protocol.
+
+---
+
 ## Roadmap
 
 **v0.9 (current — Feb 2026):**
