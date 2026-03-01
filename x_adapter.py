@@ -61,6 +61,7 @@ from urllib.parse import urlparse
 
 from x_auth import get_x_client
 from x_oauth2_authorize import get_valid_token
+from curator_config import ACTIVE_DOMAIN, KNOWN_FOLDERS as _CONFIG_FOLDERS
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 PREFS_PATH = Path.home() / '.openclaw' / 'workspace' / 'curator_preferences.json'
@@ -342,14 +343,9 @@ def load_bootstrap_tweet_ids() -> tuple[list[str], dict[str, str]]:
 
 # ── Archive loader ──────────────────────────────────────────────────────────
 
-# Known folder ID → name mapping (discovered via --list-folders API call)
-KNOWN_FOLDERS = {
-    '1926124453714387081': 'Finance and geopolitics',
-    '1881118951536538102': 'Learning 2025',
-    '1926123095779078526': 'Life and health',
-    '1967313159158640645': 'Tech',
-    '1992980059464876233': 'Modular Construction',
-}
+# Folder ID → canonical domain name — imported from curator_config.py
+# Edit KNOWN_FOLDERS there; this alias keeps the rest of the file unchanged.
+KNOWN_FOLDERS = _CONFIG_FOLDERS
 
 
 def load_archive_tweet_ids(archive_path: str, folder_filter: str | None = None) -> tuple[list[str], dict]:
@@ -491,26 +487,31 @@ def print_summary(
 
 # ── Preferences update ─────────────────────────────────────────────────────
 
-def update_preferences(domain_scores: Counter):
+def update_preferences(domain_scores: Counter, domain_label: str = ACTIVE_DOMAIN):
     """
-    Merge domain_scores into learned_patterns['domain_signals'].
+    Merge domain_scores into learned_patterns['domain_signals'][domain_label].
+
+    Nested structure (one bucket per knowledge domain):
+      domain_signals["Finance and Geopolitics"]["ft.com"] = 14
 
     domain_signals is separate from preferred_sources:
       - preferred_sources: manually trained (likes/saves in curator briefing)
       - domain_signals:    inferred automatically from X bookmark link ecosystems
 
     Scores are additive across runs so new bookmarks accumulate over time.
+    domain_label defaults to ACTIVE_DOMAIN from curator_config.py.
     """
-    prefs = json.loads(PREFS_PATH.read_text())
-    lp    = prefs.setdefault('learned_patterns', {})
+    prefs       = json.loads(PREFS_PATH.read_text())
+    lp          = prefs.setdefault('learned_patterns', {})
+    all_signals = lp.setdefault('domain_signals', {})
+    existing    = all_signals.setdefault(domain_label, {})
 
-    existing = lp.get('domain_signals', {})
     for domain, score in domain_scores.items():
         existing[domain] = existing.get(domain, 0) + score
 
-    lp['domain_signals'] = existing
+    lp['domain_signals'] = all_signals
     PREFS_PATH.write_text(json.dumps(prefs, indent=2))
-    print(f"\n✅ Updated domain_signals ({len(domain_scores)} domains) in learned_patterns.")
+    print(f"\n✅ Updated domain_signals['{domain_label}'] ({len(domain_scores)} domains).")
 
 
 # ── Main ───────────────────────────────────────────────────────────────────
@@ -606,7 +607,7 @@ def main():
             print("\n🧪 Dry run complete — learned_patterns NOT updated.")
             print("   Run without --dry-run to write domain_signals.")
         else:
-            update_preferences(domain_scores)
+            update_preferences(domain_scores, ACTIVE_DOMAIN)   # bootstrap = mixed, label as active
             cached_ids = processed_ids | set(new_ids)
             cache[cache_key] = sorted(cached_ids)
             save_cache(cache)
@@ -663,7 +664,9 @@ def main():
             print("\n🧪 Dry run complete — learned_patterns NOT updated.")
             print("   Run without --dry-run to write domain_signals.")
         else:
-            update_preferences(domain_scores)
+            # folder_name maps to canonical domain via KNOWN_FOLDERS, else ACTIVE_DOMAIN
+            archive_domain = KNOWN_FOLDERS.get('', folder_name or ACTIVE_DOMAIN)
+            update_preferences(domain_scores, folder_name or ACTIVE_DOMAIN)
             cached_ids = processed_ids | set(new_ids)
             cache[cache_key] = sorted(cached_ids)
             save_cache(cache)
@@ -715,7 +718,12 @@ def main():
         print("\n🧪 Dry run complete — learned_patterns NOT updated.")
         print("   Run without --dry-run to write domain_signals.")
     else:
-        update_preferences(domain_scores)
+        # Map X folder name → canonical domain, fallback to ACTIVE_DOMAIN
+        folder_domain = next(
+            (canon for fid, canon in KNOWN_FOLDERS.items() if fid == folder_id),
+            ACTIVE_DOMAIN
+        )
+        update_preferences(domain_scores, folder_domain)
         cached_ids = processed_ids | set(new_ids)
         cache[folder_id] = sorted(cached_ids)
         save_cache(cache)

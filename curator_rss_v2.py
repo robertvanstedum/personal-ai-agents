@@ -68,6 +68,7 @@ import os
 import json
 import hashlib
 from dotenv import load_dotenv
+from curator_config import ACTIVE_DOMAIN
 
 # ---------------------------------------------------------------------------
 # Cost logger — persists per-run API costs for cost_report.py
@@ -1193,11 +1194,14 @@ def load_user_profile(min_weight: int = 2) -> str:
             sections.append("Penalize sources: " + ", ".join(k for k, _ in neg[:3]))
 
     # ── Domain signals (inferred from X bookmark link ecosystems — Phase 3C) ──
-    domain_signals = lp.get('domain_signals', {})
-    top_domains = [(d, s) for d, s in sorted(domain_signals.items(), key=lambda x: -x[1]) if s >= 2][:8]
+    # Reads only signals for ACTIVE_DOMAIN — keeps briefing focused on one topic cluster.
+    # domain_signals structure: { "Finance and Geopolitics": { "ft.com": 14, ... }, ... }
+    all_domain_signals = lp.get('domain_signals', {})
+    active_signals     = all_domain_signals.get(ACTIVE_DOMAIN, {})
+    top_domains = [(d, s) for d, s in sorted(active_signals.items(), key=lambda x: -x[1]) if s >= 2][:8]
     if top_domains:
         domains_str = ', '.join(f"{d}(+{s})" for d, s in top_domains)
-        sections.append(f"Content domains from trusted X curators: {domains_str}")
+        sections.append(f"Content domains from trusted X curators [{ACTIVE_DOMAIN}]: {domains_str}")
 
     # ── Content types ('descriptive' excluded — known co-tag artifact, not a standalone signal) ──
     CO_TAG_EXCLUDE = {'descriptive'}
