@@ -45,7 +45,7 @@ An AI-powered system that learns what you care about and delivers a curated brie
 - Like/save/dislike signals from Telegram and web UI
 - Structured preference files influence article scoring
 - Source tracking and ranking verified working
-- `--dry-run` and `--model` flags implemented
+- \`--dry-run\` and \`--model\` flags implemented
 - Timestamp-based archive naming
 - Deep dive rating system (1-4 stars + comments)
 
@@ -54,7 +54,7 @@ An AI-powered system that learns what you care about and delivers a curated brie
 ### Phase 2B: Scoring Architecture Fix (Feb 28, 2026)
 
 ✅ Model-agnostic profile injection
-- **Bug fixed:** `load_user_profile()` was only injected into xAI scoring path, not fallback
+- **Bug fixed:** \`load_user_profile()\` was only injected into xAI scoring path, not fallback
 - **Fix:** Profile injection moved to scorer dispatcher level — model-independent
 - When xAI is down, Haiku fallback now runs with full learned profile
 - Applies to any future model swap — not Haiku-specific
@@ -67,7 +67,7 @@ An AI-powered system that learns what you care about and delivers a curated brie
 - OAuth 2.0 PKCE flow implemented and stored in keychain
 - 398 hand-saved X bookmarks ingested as "Save" signals
 - Profile jumped: 17 signals → 415 scored signals in one session
-- Files: `x_auth.py`, `x_bootstrap.py`, `x_oauth2_authorize.py`, `show_profile.py`
+- Files: \`x_auth.py\`, \`x_bootstrap.py\`, \`x_oauth2_authorize.py\`, \`show_profile.py\`
 
 **Key insight:** X bookmarks are *discovery signals*, not social content. When @nntaleb bookmarks a BIS working paper, the signal is "Robert values BIS macro research" — not just "Robert likes Taleb." The destination content matters more than the tweet wrapper.
 
@@ -85,21 +85,73 @@ An AI-powered system that learns what you care about and delivers a curated brie
 
 ---
 
-## Active: Phase 3C — X Adapter / t.co URL Enrichment (NEXT)
+## Active: Phase 3C — Domain-Scoped Content Signals (In Progress - Mar 1, 2026)
 
-**Goal:** Turn source trust scores into content ecosystem scores
+**Goal:** Extract content domain signals from X bookmarks, scoped by knowledge domain
 
-**Current:** `X/@nntaleb = +14` (knows you trust the curator)  
-**After:** `X/@nntaleb → FT/BIS/project-syndicate = +N` (knows what they point you toward)
+**Architecture:**
+- **Shared config:** \`curator_config.py\` — single source of truth for domain names
+- **Archive import:** \`x_import_archive.py\` — one-time load from Twitter archive
+- **Incremental updates:** \`x_adapter.py\` — weekly/monthly API pulls for new bookmarks
+- **Nested storage:** \`domain_signals[domain][url]\` in \`curator_preferences.json\`
 
-**Implementation (`x_adapter.py`):**
-1. Extract t.co URLs from tweet text using regex
-2. Follow redirects to final destination URL (`requests` with `allow_redirects`)
-3. Parse domain + fetch article title from `<title>` tag
-4. Normalize to article schema: `source` = final domain, `curator` = X/@account
-5. Feed both signals into scorer: curator trust + content domain signal
+**Implementation (Phase 3C-alpha - Mar 1-4, 2026):**
+1. Create \`curator_config.py\` with canonical domain names + \`ACTIVE_DOMAIN\`
+2. Build \`x_import_archive.py\` to parse Twitter archive \`bookmarks.js\`
+3. Map X folders → domains via \`KNOWN_FOLDERS\` (user-provided folder IDs)
+4. Fetch tweet entities via Twitter API (batch 100), extract domains from \`expanded_url\`
+5. Write to \`domain_signals["Finance and Geopolitics"][domain]\` (domain-scoped)
+6. Update \`curator_rss_v2.py\` to read \`domain_signals[ACTIVE_DOMAIN]\` only
+7. Test Tuesday (Mar 4) with real archive data
 
-**Payoff:** Profile learns both who you trust AND the content ecosystem they curate. Many X bookmarks already point to arXiv, BIS, FT, SSRN — this surfaces that automatically.
+**Current State (Mar 1):**
+- ✅ Config created, imports working
+- ✅ Archive parser skeleton complete
+- ✅ Curator reads domain-scoped signals
+- ⏳ Awaiting Tuesday archive import for full test
+
+**Payoff:** 
+- Profile learns content ecosystem (ft.com, arxiv.org, bis.org) from trusted curators
+- Clean separation for future multi-domain curation
+- 398 historical bookmarks become domain-scoped training data
+
+---
+
+## Phase 3D: User-Driven Domain Tagging (Future)
+
+**Goal:** Capture user feedback when articles fit multiple domains
+
+**Use Case:**
+ZeroHedge publishes geopolitics AND health/science articles. User saves an article in Finance briefing but tags it "Also: Health and Science." Future health articles from ZeroHedge get boosted in Health curator.
+
+**Features:**
+- Tag button in web UI: \`[🏷️ Tag Domain ▼] → Health | Tech | Language\`
+- Telegram inline buttons: \`🏷️ Also: Health | Tech | Language\`
+- Store multi-domain signals in feedback_history
+
+**Feedback storage schema:**
+\`\`\`json
+"feedback_history": {
+  "article_hash_xyz": {
+    "action": "save",
+    "primary_domain": "Finance and Geopolitics",
+    "also_relevant_for": ["Health and Science"],
+    "tagged_by": "user",
+    "tag_source": "web_ui",
+    "timestamp": "2026-03-01T15:26:00Z"
+  }
+}
+\`\`\`
+
+**Why \`tagged_by\` + \`tag_source\` fields matter:**
+When you eventually build a domain classifier, you'll want to distinguish explicit user tags from inferred tags. Keeps training data clean.
+
+**Implementation phases:**
+- **Phase 3D-alpha:** UI button + storage (30 min) — build when touching web UI for multi-domain
+- **Phase 3D-beta:** Domain affinity scoring (90 min) — \`source_domain_affinity\` in learned_patterns
+- **Phase 5 integration:** Content-based routing when multi-domain launches
+
+**Deferred until:** After Phase 3C archive import working, before launching domain 2
 
 ---
 
