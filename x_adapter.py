@@ -2,31 +2,55 @@
 """
 x_adapter.py — Phase 3C: X Adapter / t.co URL Enrichment
 
-Two modes for fetching bookmark URL entities:
+Three modes for fetching bookmark URL entities:
 
 1. --from-bootstrap  (default / recommended)
    Loads the 398 tweet IDs stored by x_bootstrap.py, batch-fetches their
    URL entities, and builds a domain_signals map from all historical bookmarks.
    This is the richest signal — covers the full curator ecosystem.
 
-2. --folder=<name>
-   Fetches from a specific X bookmark folder (newer feature; folders tend to
-   be smaller since they capture only recently-organized bookmarks).
+2. --from-archive=<path>
+   Parses the X data archive bookmarks.js (from x.com/settings/download_your_data).
+   The archive has ALL historical bookmarks with folder IDs — no API limits.
+   Optionally filter to one folder with --folder=<name>.
+
+   Archive format:
+     window.YTD.bookmarks.part0 = [{
+       "bookmarkId": "...",
+       "tweetId": "1234567890",
+       "addedAt": "2024-01-15T...",
+       "bookmarkCollectionId": "1926124453714387081"   ← folder ID (if in a folder)
+     }, ...]
+
+   Known folder IDs (from API discovery):
+     Finance and geopolitics  → 1926124453714387081
+     Learning 2025            → 1881118951536538102
+     Life and health          → 1926123095779078526
+     Tech                     → 1967313159158640645
+     Modular Construction     → 1992980059464876233
+
+3. --folder=<name>
+   Fetches from X bookmark folder API (limited to 20 tweets, no pagination).
+   Useful for quick checks on recent additions only.
    Use --list-folders first to see available folder names.
 
 Both modes update learned_patterns['domain_signals'] in curator_preferences.json.
 Scores are curator-trust weighted (more saves from a curator → higher domain weight).
 
 Usage:
-    python x_adapter.py --from-bootstrap              # Enrich from all 398 stored bookmarks
+    python x_adapter.py --from-bootstrap              # All 398 stored bookmarks (default)
     python x_adapter.py --from-bootstrap --dry-run    # Preview, no writes
     python x_adapter.py --from-bootstrap --verbose    # Show per-curator breakdown
     python x_adapter.py --from-bootstrap --full       # Re-fetch all (ignore cache)
-    python x_adapter.py --list-folders                # See available bookmark folders
-    python x_adapter.py --folder="Finance and geopolitics" --dry-run
+    python x_adapter.py --from-archive=data/bookmarks.js               # All archive bookmarks
+    python x_adapter.py --from-archive=data/bookmarks.js --folder="Finance and geopolitics"
+    python x_adapter.py --from-archive=data/bookmarks.js --dry-run --verbose
+    python x_adapter.py --list-folders                # See available bookmark folders (API)
+    python x_adapter.py --folder="Finance and geopolitics" --dry-run   # Folder API (20 max)
 """
 
 import json
+import re
 import sys
 import time
 import requests
@@ -316,6 +340,100 @@ def load_bootstrap_tweet_ids() -> tuple[list[str], dict[str, str]]:
     return tweet_ids, id_to_curator
 
 
+# ── Archive loader ──────────────────────────────────────────────────────────
+
+# Known folder ID → name mapping (discovered via --list-folders API call)
+KNOWN_FOLDERS = {
+    '1926124453714387081': 'Finance and geopolitics',
+    '1881118951536538102': 'Learning 2025',
+    '1926123095779078526': 'Life and health',
+    '1967313159158640645': 'Tech',
+    '1992980059464876233': 'Modular Construction',
+}
+
+
+def load_archive_tweet_ids(archive_path: str, folder_filter: str | None = None) -> tuple[list[str], dict]:
+    """
+    Parse X data archive bookmarks.js and return tweet IDs.
+
+    The archive file format is JavaScript, not pure JSON:
+      window.YTD.bookmarks.part0 = [{...}, ...];
+
+    Each bookmark entry may contain:
+      {
+        "bookmarkId": "...",
+        "tweetId": "1234567890",
+        "addedAt": "2024-01-15T12:00:00.000Z",
+        "bookmarkCollectionId": "1926124453714387081"   ← folder (optional)
+      }
+
+    Args:
+      archive_path:   path to bookmarks.js from the X data archive
+      folder_filter:  if given, only include bookmarks from this folder name
+                      (matched against KNOWN_FOLDERS; ignores unrecognized IDs)
+
+    Returns:
+      tweet_ids     (list[str]): tweet IDs to fetch entities for
+      folder_counts (dict): folder_name → count of bookmarks found there
+    """
+    path = Path(archive_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Archive file not found: {archive_path}")
+
+    raw = path.read_text(encoding='utf-8')
+
+    # Strip JS wrapper: "window.YTD.bookmarks.part0 = [...];"
+    # Handle multi-part archives: part0, part1, etc.
+    match = re.search(r'window\.YTD\.bookmarks\.part\d+\s*=\s*(\[.*\])\s*;?\s*$', raw, re.DOTALL)
+    if not match:
+        raise ValueError(
+            f"Could not parse {archive_path}.\n"
+            "Expected format: window.YTD.bookmarks.part0 = [{...}, ...];\n"
+            "Make sure you're pointing to bookmarks.js from the X data archive."
+        )
+
+    entries = json.loads(match.group(1))
+
+    # Build reverse map: folder name (lowercase) → folder ID
+    folder_name_to_id = {name.lower(): fid for fid, name in KNOWN_FOLDERS.items()}
+
+    # Resolve filter to a collection ID
+    filter_collection_id = None
+    if folder_filter:
+        filter_collection_id = folder_name_to_id.get(folder_filter.lower())
+        if not filter_collection_id:
+            # Allow passing folder ID directly
+            if folder_filter in KNOWN_FOLDERS:
+                filter_collection_id = folder_filter
+            else:
+                print(f"  ⚠️  Unknown folder '{folder_filter}'. Known folders:")
+                for fid, fname in KNOWN_FOLDERS.items():
+                    print(f"     {fname} ({fid})")
+                print("  Proceeding with all bookmarks — add folder ID to KNOWN_FOLDERS if needed.")
+
+    tweet_ids     = []
+    folder_counts = {}
+
+    for entry in entries:
+        tweet_id     = entry.get('tweetId', '')
+        collection   = entry.get('bookmarkCollectionId', '')    # empty string if unfiled
+
+        if not tweet_id:
+            continue
+
+        # Track folder distribution
+        folder_label = KNOWN_FOLDERS.get(collection, 'Unfiled' if not collection else f'Unknown ({collection})')
+        folder_counts[folder_label] = folder_counts.get(folder_label, 0) + 1
+
+        # Apply folder filter if specified
+        if filter_collection_id and collection != filter_collection_id:
+            continue
+
+        tweet_ids.append(tweet_id)
+
+    return tweet_ids, folder_counts
+
+
 # ── Cache ──────────────────────────────────────────────────────────────────
 
 def load_cache() -> dict:
@@ -404,15 +522,17 @@ def main():
     list_folders    = '--list-folders'   in sys.argv
     from_bootstrap  = '--from-bootstrap' in sys.argv
 
-    # Parse --folder=<name>
-    folder_name = None
+    # Parse --folder=<name> and --from-archive=<path>
+    folder_name  = None
+    archive_path = None
     for arg in sys.argv:
         if arg.startswith('--folder='):
             folder_name = arg.split('=', 1)[1]
-            break
+        elif arg.startswith('--from-archive='):
+            archive_path = arg.split('=', 1)[1]
 
     # Default to --from-bootstrap when no mode is specified
-    if not list_folders and not folder_name:
+    if not list_folders and not folder_name and not archive_path:
         from_bootstrap = True
 
     if dry_run:
@@ -493,7 +613,64 @@ def main():
             print(f"   Cache updated ({len(cached_ids)} processed IDs).")
         return
 
-    # ── --folder=<name> mode ───────────────────────────────────────────────
+    # ── --from-archive=<path> mode ─────────────────────────────────────────
+    if archive_path:
+        label = f"Archive: {Path(archive_path).name}"
+        if folder_name:
+            label += f"  [filter: {folder_name}]"
+
+        print(f"\nParsing X data archive: {archive_path}")
+        try:
+            all_ids, folder_counts = load_archive_tweet_ids(archive_path, folder_filter=folder_name)
+        except (FileNotFoundError, ValueError) as e:
+            print(f"❌ {e}")
+            sys.exit(1)
+
+        print(f"\n  Bookmark distribution in archive:")
+        for fname, count in sorted(folder_counts.items(), key=lambda x: -x[1]):
+            marker = ' ◀' if folder_name and fname.lower() == folder_name.lower() else ''
+            print(f"    {fname:<35} {count:>4}{marker}")
+
+        print(f"\n  Total tweet IDs to process: {len(all_ids)}")
+
+        if not all_ids:
+            if folder_name:
+                print(f"❌ No bookmarks found in folder '{folder_name}'.")
+                print(f"   Check the folder name matches exactly (case-insensitive).")
+            else:
+                print("❌ No bookmarks found in archive.")
+            sys.exit(1)
+
+        cache_key     = f'archive_{folder_name or "all"}'
+        cache         = {} if full else load_cache()
+        processed_ids = set(cache.get(cache_key, []))
+
+        new_ids = [tid for tid in all_ids if tid not in processed_ids]
+        if not new_ids and not full:
+            print("✅ All archive bookmarks already processed. Use --full to re-run.")
+            sys.exit(0)
+        if processed_ids and not full:
+            print(f"  {len(processed_ids)} already cached. Fetching {len(new_ids)} new.")
+
+        print(f"\nFetching tweet details and URL entities for {len(new_ids)} tweets...")
+        tweets, authors = fetch_tweet_details(new_ids)
+        print(f"  Received details for {len(tweets)} tweets.")
+
+        domain_scores, curator_domain_details, stats = build_domain_scores(tweets, authors)
+        print_summary(label, domain_scores, curator_domain_details, stats, verbose=verbose)
+
+        if dry_run:
+            print("\n🧪 Dry run complete — learned_patterns NOT updated.")
+            print("   Run without --dry-run to write domain_signals.")
+        else:
+            update_preferences(domain_scores)
+            cached_ids = processed_ids | set(new_ids)
+            cache[cache_key] = sorted(cached_ids)
+            save_cache(cache)
+            print(f"   Cache updated ({len(cached_ids)} processed IDs).")
+        return
+
+    # ── --folder=<name> mode (API, 20 results max) ─────────────────────────
     print(f"\nLooking up folder: '{folder_name}'...")
     folders = fetch_bookmark_folders(user_id, token)
     match   = next(
