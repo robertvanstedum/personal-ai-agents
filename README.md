@@ -172,12 +172,12 @@ python show_profile.py
 
   SOURCES
   -------
-  ████████████████  +17  X/@elonmusk
-  ██████████████░░  +16  X/@MarioNawfal
-  █████████████░░░  +14  X/@nntaleb
-  ████████████░░░░  +12  X/@LukeGromen
-  ███████████░░░░░  +11  The Duran
-  ███████████░░░░░  +11  X/@ThomasSowell
+  ████████████████  +17  X/@[geopolitics_account]
+  ██████████████░░  +16  X/@[geopolitics_account]
+  █████████████░░░  +14  X/@[macro_economist]
+  ████████████░░░░  +12  X/@[macro_economist]
+  ███████████░░░░░  +11  [independent_media]
+  ███████████░░░░░  +11  X/@[economic_historian]
 
   THEMES
   ------
@@ -308,9 +308,9 @@ Full learning loop across all scoring paths. X bookmark bootstrap (415 signals).
 
 **v1.0 — active development**
 
-- Phase 3C: t.co URL enrichment — follow tweet links to surface trusted domains
-- Phase 3D: Source discovery — auto-add RSS feeds from discovered domains
-- Phase 4: Wider sources — Substack, academic (BIS, Fed, arXiv)
+- Phase 3C: Domain-scoped content signals — X bookmark folders map to knowledge domains (Finance/Geo, Health, Tech, etc.)
+- Phase 3D: User-driven domain tagging — tag articles across domains from web UI and Telegram
+- Phase 4: Wider sources — Substack, academic (BIS, Fed, arXiv), Reddit
 - Phase 5: Synthesis — pattern detection, contradiction highlighting, proactive research
 - Postgres migration — `curator_costs.json` already row-structured, one `COPY` command away
 
