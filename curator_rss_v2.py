@@ -1192,6 +1192,13 @@ def load_user_profile(min_weight: int = 2) -> str:
         if neg:
             sections.append("Penalize sources: " + ", ".join(k for k, _ in neg[:3]))
 
+    # ── Domain signals (inferred from X bookmark link ecosystems — Phase 3C) ──
+    domain_signals = lp.get('domain_signals', {})
+    top_domains = [(d, s) for d, s in sorted(domain_signals.items(), key=lambda x: -x[1]) if s >= 2][:8]
+    if top_domains:
+        domains_str = ', '.join(f"{d}(+{s})" for d, s in top_domains)
+        sections.append(f"Content domains from trusted X curators: {domains_str}")
+
     # ── Content types ('descriptive' excluded — known co-tag artifact, not a standalone signal) ──
     CO_TAG_EXCLUDE = {'descriptive'}
     content = {k: v for k, v in lp.get('preferred_content_types', {}).items()

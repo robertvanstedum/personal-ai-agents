@@ -43,7 +43,7 @@ def fetch_all_bookmarks(client):
         page += 1
         kwargs = dict(
             max_results=100,
-            tweet_fields=['text', 'author_id', 'created_at'],
+            tweet_fields=['text', 'author_id', 'created_at', 'entities'],
             expansions=['author_id'],
             user_fields=['username'],
         )
