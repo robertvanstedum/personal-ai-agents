@@ -1,23 +1,39 @@
 # Personal AI Briefing System
+### *Mini-moi — not a general intelligence, but a specific one. Yours.*
 
-**A local, privately controlled AI that maintains your memory and intent — and reaches out flexibly to LLMs.**
+A personal intelligence system. The first domain: the intersection of finance and geopolitics. Health, language learning, and others to follow.
 
-Reads 400+ articles/day. Curates the top 20. Learns from everything you've ever saved. Runs at 7 AM.
+Learns from your history and preferences, with deliberate friction built in. The goal isn't a curated feed — it's better thinking.
 
-> Production system, daily use since Feb 2026. Built iteratively — see [roadmap](#roadmap) for the full sequence.
+> Production system, daily use since Feb 2026. Designed to expand across domains — see [Roadmap](#roadmap).
 
 ---
 
-## Core Concept
+## What This Is Really About
 
-Most AI tools put your memory in the cloud and make you dependent on a single provider. This system inverts that:
+The cloud LLMs have the world's knowledge. That problem is largely solved.
 
-- **Local stack:** Preferences, learned signals, and history live on your machine (flat files today, Postgres/Neo4j ready)
-- **Private by design:** Nothing about your reading habits, saved articles, or preferences leaves your machine unless you choose
-- **LLM-flexible:** Claude Haiku, grok-3-mini, Claude Sonnet — swap models without breaking personalization. Local Ollama support planned ([#1](https://github.com/robertvanstedum/personal-ai-agents/issues/1))
-- **Standalone:** Runs without OpenClaw. OpenClaw adds Telegram delivery and a conversational interface, but the curator pipeline runs independently
+The hard part — the part that actually matters for real decisions — is acting in your specific situation. Your history. Your goals. Your risk tolerance. Your team's context and motivation. General intelligence is widely available now. Specific intelligence, the kind that knows you and acts for you, isn't.
 
-The LLMs are interchangeable workers. Your memory and preferences stay home.
+That's what this builds toward.
+
+I started with myself: a daily briefing on geopolitics and finance, shaped by how I actually think, learning from what I actually read and save. But the vision is bigger. If I had a team at work — people and agents together — I'd want this same local context and motivation at the center of it. Not a generic assistant that knows everything about the world but nothing about us. A specific capability, grounded in our history, our goals, our way of making decisions under uncertainty.
+
+That's what *Mini-moi* means. Not a mini version of a large language model. A system that carries your particular point of view and acts on your behalf — in your real world, for you, now.
+
+The cloud LLMs are tools this system reaches out to when it needs them. Your memory, your preferences, your reasoning — those stay with you. The agents are your team members, not the cloud's.
+
+---
+
+## Why I Built This
+
+The best way to understand something is to build it.
+
+I've believed for a while that the future of AI isn't just larger models with more world knowledge — it's systems that carry specific context: your history, your goals, your way of reasoning through uncertainty. The cloud LLMs are remarkable, but they don't know you. They can't act for you in any meaningful sense without that layer.
+
+I wanted to build that layer. Not as a prototype or a tutorial exercise, but as something I actually use and depend on every day. Geopolitics and finance were the natural first domain — areas I follow closely, where I have a real point of view that a generic feed can't capture.
+
+The approach — local context, model-agnostic, flat files structured for future migration — was designed to scale beyond one person and one domain. Health, language learning, team environments at work. The architecture anticipates that. The first domain just had to be one I cared enough about to build it right.
 
 ---
 
