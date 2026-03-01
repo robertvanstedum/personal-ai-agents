@@ -130,12 +130,25 @@ def api_library():
                     if not article_id:
                         continue
 
-                    # Extract your words as the note
-                    note = item.get('your_words', '')
+                    # Use article_id directly as hash_id if it's a valid 5-char hex hash
+                    # (curator pipeline stores articles as <hash>.json in curator_cache/)
+                    import re as _re
+                    hash_id_direct = article_id if _re.match(r'^[0-9a-f]{5}$', str(article_id)) else None
+
+                    # Extract your_words — may be raw JSON wrapper, extract inner note
+                    note_raw = item.get('your_words', '') or ''
+                    if isinstance(note_raw, str) and note_raw.startswith('{'):
+                        try:
+                            note_data = json.loads(note_raw)
+                            note = note_data.get('your_words', '') or note_data.get('note', '') or ''
+                        except Exception:
+                            note = note_raw
+                    else:
+                        note = note_raw
 
                     articles[article_id] = {
                         'article_id':  article_id,
-                        'hash_id':     None,           # filled below if matched
+                        'hash_id':     hash_id_direct,  # set directly from article_id
                         'type':        feedback_type,
                         'date':        item.get('timestamp', date_str)[:10],
                         'timestamp':   item.get('timestamp', ''),
