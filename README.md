@@ -135,6 +135,26 @@ Can also run in **mechanical mode** (no LLM, keyword scoring only) for zero-cost
 
 ---
 
+## Screenshots
+
+**Morning Briefing** — ranked top 20, scored and categorized, with like/dislike/save actions
+
+![Morning Briefing](docs/screenshots/morning-briefing.png)
+
+**Reading Library** — everything you've ever liked or saved, searchable and filterable
+
+![Reading Library](docs/screenshots/reading-library.png)
+
+**Deep Dive Archive** — AI analysis on flagged articles, by date
+
+![Deep Dives](docs/screenshots/deep-dives.png)
+
+**Signal Priorities** — short-term focus injections that boost scoring for a set window
+
+![Priorities](docs/screenshots/priorities.png)
+
+---
+
 ## How the Learning Loop Works
 
 ```
