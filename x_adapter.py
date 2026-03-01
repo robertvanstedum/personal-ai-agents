@@ -664,9 +664,16 @@ def main():
             print("\n🧪 Dry run complete — learned_patterns NOT updated.")
             print("   Run without --dry-run to write domain_signals.")
         else:
-            # folder_name maps to canonical domain via KNOWN_FOLDERS, else ACTIVE_DOMAIN
-            archive_domain = KNOWN_FOLDERS.get('', folder_name or ACTIVE_DOMAIN)
-            update_preferences(domain_scores, folder_name or ACTIVE_DOMAIN)
+            # Resolve X folder name → canonical domain name via KNOWN_FOLDERS reverse lookup
+            # e.g. "Finance and geopolitics" (X) → "Finance and Geopolitics" (canonical)
+            canon_domain = ACTIVE_DOMAIN
+            if folder_name:
+                canon_domain = next(
+                    (canon for canon in KNOWN_FOLDERS.values()
+                     if canon.lower() == folder_name.lower()),
+                    ACTIVE_DOMAIN
+                )
+            update_preferences(domain_scores, canon_domain)
             cached_ids = processed_ids | set(new_ids)
             cache[cache_key] = sorted(cached_ids)
             save_cache(cache)
