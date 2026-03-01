@@ -39,15 +39,21 @@ The approach — local context, model-agnostic, flat files structured for future
 
 ## Build History
 
-**January 2026 — Foundation**
+### January 2026 — Architecture Before Code
 
-Inspired by Foundation Capital's writing on context graphs, the goal from day one was a local, privately controlled system — not another cloud-dependent AI tool. Started with:
-- **Context graph architecture:** Neo4j for relationship mapping, PostgreSQL for structured storage (DB integration ready; flat files used in practice)
-- RSS ingestion from a curated source list → scored and ranked locally
-- **Mechanical mode:** keyword/rule-based scoring, zero LLM dependency — still a supported mode today
-- Local Ollama integration (Gemma 3) originally built; `--model=ollama` currently falls back to keyword scoring — restore tracked in [#1](https://github.com/robertvanstedum/personal-ai-agents/issues/1)
-- Command-line reports: run `python curator_rss_v2.py` and get a ranked briefing
-- Two use cases in scope: geopolitics/investing intelligence + career research
+The system was designed before it was built. Key decisions made here:
+
+**Local-first data layer:**
+- Flat files first (JSON), schema designed to be Postgres-ready — one `COPY` command when volume demands migration, not a rewrite
+- Context graph design (Neo4j) for relationship mapping: *why did I save this? what connects these ideas?*
+- All learned state portable by design — move machines, switch providers, go offline — preferences travel with you
+
+**Model-agnostic from day one:**
+- User profile injection at the dispatcher level, not inside any model's prompt
+- Mechanical mode built first — the system runs on local Ollama with no external API dependency
+- Swap any model at any layer without touching personalization logic
+
+The system ran standalone from the start. No cloud dependencies required.
 
 **OpenClaw integration (late January / early February)**
 
@@ -66,16 +72,25 @@ With the local foundation solid, built the AI layer on top:
 
 ## What It Does
 
-Every morning at 7 AM:
+This is not a smarter news feed. The daily briefing is the front door. Behind it:
 
-1. Fetches ~400 articles from 10+ RSS feeds (geopolitics, finance, institutional sources)
-2. Pre-filters with Haiku (400 → ~50 candidates, cheap pass)
-3. Scores candidates with grok-3-mini using your injected learned profile
-4. Picks the top 20 most relevant articles for you specifically
-5. Delivers a formatted briefing to Telegram with like/dislike/save buttons
-6. Uses your reactions to score tomorrow's briefing better
+**Daily Briefing**
 
-Can also run in **mechanical mode** (no LLM, keyword scoring only) for zero-cost fallback or offline use.
+Every morning, the system fetches hundreds of articles from RSS feeds across geopolitics, finance, and institutional sources. A two-stage scoring pipeline — cheap pre-filter, then a final ranking model with your injected learned profile — surfaces the top 20 most relevant articles for you specifically. Delivered to Telegram at 7 AM with like/dislike/save buttons. Your reactions feed tomorrow's scoring.
+
+**Deep Dives**
+
+When an article or topic warrants more than a headline, Deep Dive produces a structured brief using a higher-capability model: analysis, counter-arguments, and a bibliography of references for further reading. The archive grows daily — a personal research library of topics you decided were worth understanding deeply.
+
+**Signal Priorities**
+
+You inject current focus areas directly — a conflict escalating, a policy shift, an earnings season — with keywords and a time-bounded expiry. The system boosts those signals for that window, then returns to baseline. The world changes. Your attention shifts. This is the mechanism for keeping the system aligned with where you actually are, not where you were three months ago.
+
+**Reading Library**
+
+Every saved article is stored, searchable, and categorized. A personal knowledge base that accumulates alongside the daily work.
+
+**This is not YouTube.** YouTube optimizes for your attention. This system optimizes for your thinking. You inject direction. It surfaces material. You decide what goes deeper.
 
 ---
 
@@ -99,18 +114,37 @@ Can also run in **mechanical mode** (no LLM, keyword scoring only) for zero-cost
 
 ---
 
+## Interface
+
+The system has two production interfaces designed for different contexts:
+
+**Web Portal** — full-featured local interface for browsing, research, and curation. Four views:
+- **Daily** — ranked briefing with article scores and feedback controls
+- **Reading Library** — searchable archive of all saved articles, filterable by category, type, and date
+- **Deep Dives** — archive of structured research briefs with analysis, counter-arguments, and references
+- **Signal Priorities** — inject and manage time-bounded focus areas with keyword boosting
+
+**Telegram** — mobile interface for daily delivery and on-the-go feedback. Briefing arrives at 7 AM with inline like/dislike/save buttons. Voice notes supported for quick capture.
+
+Both interfaces write to the same local data layer. Feedback from either surface influences tomorrow's scoring.
+
+---
+
 ## How the Learning Loop Works
 
 ```
 Daily Briefing (7 AM)
       ↓
 You react on Telegram (👍 Like · 👎 Dislike · 🔖 Save)
+  or inject a Signal Priority ("Tigray Conflict +2.0x, expires in 3 days")
       ↓
-curator_feedback.py records the signal locally
+curator_feedback.py records signals locally
       ↓
-Tomorrow's scorer gets: "prefer The Duran, institutional_debates, monetary_policy"
+Tomorrow's scorer gets your updated profile:
+  "prefer institutional_debates, monetary_policy / avoid ceremonial_reporting"
+  + active priority boosts applied
       ↓
-Better briefing
+Better briefing — shaped by your reasoning, not an algorithm's engagement model
 ```
 
 **Model-agnostic by design:** The user profile is injected at the dispatcher level, not inside any model's prompt. When xAI goes down and Haiku takes over, it runs with the same learned profile. Swap models — preferences persist.
