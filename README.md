@@ -212,6 +212,7 @@ RSS Feeds (10+ sources, ~400 articles)
   Telegram delivery (7 AM via launchd)   OR   stdout/file
           ↓
   User reacts (Like / Dislike / Save)
+  [or flags for Deep Dive → deep_dive.py → higher-capability model → brief + counter-arguments + bibliography]
           ↓
   curator_feedback.py → updates local curator_preferences.json
           ↓
@@ -318,7 +319,7 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed workflow and testing protocol.
 ## Roadmap
 
 **v0.9 (current — Feb 2026):**
-Full learning loop across all scoring paths, X bookmark bootstrap, cost tracking, Telegram feedback delivery, model-agnostic profile injection.
+Full learning loop across all scoring paths. X bookmark bootstrap (415 signals). Deep Dives. Signal Priorities. Reading Library. Cost tracking across operational and build categories. Model-agnostic profile injection.
 
 **v1.0 (active development):**
 - Phase 3C: Domain-scoped content signals — X bookmark folders map to knowledge domains (Finance/Geo, Health, Tech, etc.)
