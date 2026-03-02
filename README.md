@@ -6,6 +6,7 @@ A personal intelligence system. The first domain: the intersection of finance an
 Learns from your history and preferences, with deliberate friction built in. The goal isn't a curated feed — it's better thinking.
 
 > Production system, daily use since Feb 2026. Designed to expand across domains — see [Roadmap](#roadmap).
+> Three model tiers in production: Haiku for bulk filtering, grok-3-mini for daily ranking, Sonnet for Deep Dives and development reasoning.
 
 ---
 
