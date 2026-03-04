@@ -2,13 +2,206 @@
 """
 curator_utils.py - Utility functions for curator system
 
-Includes validation, diagnostics, and helper functions.
+Includes validation, diagnostics, URL enrichment, media download,
+and LLM text analysis helpers.
 """
 
 import json
+import logging
+import os
+import re
+import requests
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 from collections import defaultdict
+from urllib.parse import urlparse
+
+try:
+    from bs4 import BeautifulSoup
+    _BS4_AVAILABLE = True
+except ImportError:
+    _BS4_AVAILABLE = False
+
+log = logging.getLogger(__name__)
+
+
+# ── URL Enrichment ────────────────────────────────────────────────────────────
+
+def extract_tco_urls(text: str) -> List[str]:
+    """Extract all t.co URLs from tweet text."""
+    return re.findall(r'https://t\.co/[A-Za-z0-9]+', text)
+
+
+def follow_redirect(tco_url: str, timeout: int = 5) -> str:
+    """Follow t.co redirect chain to final destination URL. Raises on failure."""
+    resp = requests.head(
+        tco_url,
+        allow_redirects=True,
+        timeout=timeout,
+        headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'},
+    )
+    return resp.url
+
+
+def fetch_url_metadata(url: str, timeout: int = 10) -> Dict[str, str]:
+    """
+    Fetch og:title and og:description from a destination URL.
+    Returns {'title': ..., 'preview': ...}. Never raises — empty strings on failure.
+    """
+    if not _BS4_AVAILABLE:
+        log.warning('beautifulsoup4 not installed — skipping metadata fetch')
+        return {'title': '', 'preview': ''}
+    try:
+        resp = requests.get(
+            url,
+            timeout=timeout,
+            allow_redirects=True,
+            headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'},
+        )
+        soup = BeautifulSoup(resp.content, 'html.parser')
+
+        og_title = soup.find('meta', property='og:title')
+        if og_title and og_title.get('content'):
+            title = og_title['content']
+        else:
+            tag = soup.find('title')
+            title = tag.string if tag else ''
+
+        og_desc = soup.find('meta', property='og:description')
+        preview = og_desc['content'] if og_desc and og_desc.get('content') else ''
+
+        return {'title': str(title or '')[:200], 'preview': str(preview or '')[:500]}
+    except Exception as e:
+        log.warning(f'fetch_url_metadata failed for {url}: {e}')
+        return {'title': '', 'preview': ''}
+
+
+def extract_domain(url: str) -> str:
+    """Return clean domain from URL, e.g. 'https://www.ft.com/...' → 'ft.com'."""
+    try:
+        domain = urlparse(url).netloc.lower()
+        if domain.startswith('www.'):
+            domain = domain[4:]
+        return domain
+    except Exception:
+        return ''
+
+
+def classify_source_type(url: str) -> str:
+    """
+    Classify URL into a source type based on domain/path patterns.
+    Returns: academic_paper | pdf_document | news_article | video | substack | web_article
+    """
+    domain = extract_domain(url)
+    url_lower = url.lower()
+
+    if any(x in domain for x in [
+        'ssrn.com', 'arxiv.org', 'nber.org', 'bis.org',
+        'brookings.edu', 'imf.org', 'worldbank.org',
+        'federalreserve.gov', 'ecb.europa.eu', 'stlouisfed.org',
+    ]):
+        return 'academic_paper'
+
+    if url_lower.endswith('.pdf') or '/pdf/' in url_lower:
+        return 'pdf_document'
+
+    if any(x in domain for x in [
+        'ft.com', 'wsj.com', 'bloomberg.com', 'reuters.com',
+        'economist.com', 'nytimes.com', 'theguardian.com',
+        'washingtonpost.com', 'politico.com', 'foreignaffairs.com',
+        'foreignpolicy.com', 'theatlantic.com', 'zerohedge.com',
+        'marketwatch.com', 'barrons.com',
+    ]):
+        return 'news_article'
+
+    if 'youtube.com' in domain or 'youtu.be' in domain:
+        return 'video'
+
+    if 'substack.com' in domain or domain.endswith('.substack.com'):
+        return 'substack'
+
+    return 'web_article'
+
+
+# ── Media Download ────────────────────────────────────────────────────────────
+
+# Domains that host tweet media — images are downloadable directly
+_TWITTER_MEDIA_DOMAINS = {'pbs.twimg.com', 'ton.twimg.com'}
+
+
+def download_image(source_url: str, local_path: str, timeout: int = 15) -> bool:
+    """
+    Download an image from source_url to local_path.
+    Creates parent directories as needed.
+    Returns True on success, False on failure (never raises).
+    """
+    try:
+        Path(local_path).parent.mkdir(parents=True, exist_ok=True)
+        resp = requests.get(
+            source_url,
+            timeout=timeout,
+            headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'},
+            stream=True,
+        )
+        resp.raise_for_status()
+        with open(local_path, 'wb') as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                f.write(chunk)
+        return True
+    except Exception as e:
+        log.warning(f'download_image failed for {source_url}: {e}')
+        return False
+
+
+# ── LLM Text Analysis ─────────────────────────────────────────────────────────
+
+_ANALYSIS_PROMPT = """\
+You are extracting structured signals from a bookmarked tweet.
+
+Tweet by {source}:
+{tweet_text}
+
+Return a JSON object with these fields:
+- topics: list of 3-5 specific topic tags (e.g. "treasury_bonds", "dollar_strength", "labor_market", "ai_regulation")
+- entities: list of named entities mentioned (institutions, assets, people, policies)
+- signal_type: one of: macro_chart_commentary | market_analysis | geopolitical | academic_reference | opinion | news_summary | tech_announcement | other
+
+Return only valid JSON, no explanation."""
+
+
+def analyze_text_haiku(tweet_text: str, source: str) -> Optional[Dict]:
+    """
+    Send tweet text to Claude Haiku for topic/entity extraction.
+    Returns dict with {topics, entities, signal_type} or None on failure.
+    """
+    try:
+        import keyring
+        from anthropic import Anthropic
+
+        api_key = keyring.get_password('anthropic', 'api_key') or os.getenv('ANTHROPIC_API_KEY')
+        if not api_key:
+            log.warning('No Anthropic API key — skipping text analysis')
+            return None
+
+        client = Anthropic(api_key=api_key)
+        prompt = _ANALYSIS_PROMPT.format(source=source, tweet_text=tweet_text)
+
+        msg = client.messages.create(
+            model='claude-haiku-4-5-20251001',
+            max_tokens=256,
+            messages=[{'role': 'user', 'content': prompt}],
+        )
+
+        raw = msg.content[0].text.strip()
+        # Strip markdown code fences if present
+        if raw.startswith('```'):
+            raw = re.sub(r'^```[a-z]*\n?', '', raw)
+            raw = re.sub(r'\n?```$', '', raw)
+        return json.loads(raw)
+
+    except Exception as e:
+        log.warning(f'analyze_text_haiku failed: {e}')
+        return None
 
 
 def validate_signal_store_correlation(n: int = 10, signal_store_path: str = None) -> bool:

@@ -1,0 +1,655 @@
+[
+  {
+    "tweet_id": "2028885617229132276",
+    "source": "X/@HungaryBased",
+    "url": "https://x.com/HungaryBased/status/2028885617229132276",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:49:58",
+    "metadata": {
+      "tweet_text": "\ud83d\udea8BREAKING:  \n\n\ud83c\uddee\ud83c\uddf9 Giorgia Meloni REVEALS that Japan will now be a Special Strategic Partner.  \n\n\"I am committed to strengthening relations with Sanae Takaich's Japan. Elevating it to the level of special strategic partnership.\" https://t.co/I8TyM7yIp5",
+      "linked_content": null,
+      "media": [
+        {
+          "media_key": "13_2028862553292484608",
+          "type": "video",
+          "source_url": "https://pbs.twimg.com/amplify_video_thumb/2028862553292484608/img/8z0DypfEPDThDmRO.jpg",
+          "local_path": "/Users/vanstedum/Projects/personal-ai-agents/.claude/worktrees/jovial-shtern/curator_media/2028885617229132276_0.jpg",
+          "alt_text": null,
+          "downloaded_at": "2026-03-04T05:49:59",
+          "chart_analysis": null
+        }
+      ],
+      "text_analysis": {
+        "topics": [
+          "italy_japan_relations",
+          "strategic_partnership",
+          "geopolitical_alignment",
+          "diplomatic_strategy"
+        ],
+        "entities": [
+          "Giorgia Meloni",
+          "Sanae Takaichi",
+          "Italy",
+          "Japan"
+        ],
+        "signal_type": "geopolitical",
+        "analyzed_at": "2026-03-04T05:50:00",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2028347364386426904",
+    "source": "X/@pmarca",
+    "url": "https://x.com/pmarca/status/2028347364386426904",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:00",
+    "metadata": {
+      "tweet_text": "\ud83d\udc40 https://t.co/PK4wUdDiXi",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": {
+        "topics": [],
+        "entities": [],
+        "signal_type": "other",
+        "analyzed_at": "2026-03-04T05:50:00",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "1637602424377552899",
+    "source": "X/@JDVance",
+    "url": "https://x.com/JDVance/status/1637602424377552899",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:00",
+    "metadata": {
+      "tweet_text": "Twenty years ago we invaded Iraq. The war killed many innocent Iraqis and Americans. It destroyed the oldest Christian populations in the world. It cost over $1 trillion, and turned Iraq into a satellite of Iran. It was an unforced disaster, and I pray that we learn its lessons.",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": {
+        "topics": [
+          "iraq_war",
+          "military_spending",
+          "us_foreign_policy",
+          "middle_east_geopolitics",
+          "christian_populations"
+        ],
+        "entities": [
+          "Iraq",
+          "Iran",
+          "United States",
+          "J.D. Vance"
+        ],
+        "signal_type": "opinion",
+        "analyzed_at": "2026-03-04T05:50:02",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2027699741128020231",
+    "source": "X/@Eng_china5",
+    "url": "https://x.com/Eng_china5/status/2027699741128020231",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:02",
+    "metadata": {
+      "tweet_text": "CHINA:\n\n\"The US is a war addict. Throughout its over 240-year history, it has been at war for all but 16 years.\n\nThe US has 800 overseas military bases in over 80 countries and regions.\n\nThe US is the main cause of international disorder, global turbulence, and regional https://t.co/0iwS8mqds0",
+      "linked_content": null,
+      "media": [
+        {
+          "media_key": "13_2027699254328799232",
+          "type": "video",
+          "source_url": "https://pbs.twimg.com/amplify_video_thumb/2027699254328799232/img/4LMHXBXL7akS-ag-.jpg",
+          "local_path": "/Users/vanstedum/Projects/personal-ai-agents/.claude/worktrees/jovial-shtern/curator_media/2027699741128020231_0.jpg",
+          "alt_text": null,
+          "downloaded_at": "2026-03-04T05:50:02",
+          "chart_analysis": null
+        }
+      ],
+      "text_analysis": {
+        "topics": [
+          "us_foreign_policy",
+          "military_bases",
+          "geopolitical_tensions",
+          "international_relations"
+        ],
+        "entities": [
+          "United States",
+          "China"
+        ],
+        "signal_type": "geopolitical",
+        "analyzed_at": "2026-03-04T05:50:02",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2027109375765356723",
+    "source": "X/@trq212",
+    "url": "https://x.com/trq212/status/2027109375765356723",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:02",
+    "metadata": {
+      "tweet_text": "We've rolled out a new auto-memory feature.\n\nClaude now remembers what it learns across sessions \u2014 your project context, debugging patterns, preferred approaches \u2014 and recalls it later without you having to write anything down. https://t.co/c7PyGaukNQ",
+      "linked_content": null,
+      "media": [
+        {
+          "media_key": "13_2027109158986870784",
+          "type": "video",
+          "source_url": "https://pbs.twimg.com/amplify_video_thumb/2027109158986870784/img/GF-CcuF6JUdnJBT9.jpg",
+          "local_path": "/Users/vanstedum/Projects/personal-ai-agents/.claude/worktrees/jovial-shtern/curator_media/2027109375765356723_0.jpg",
+          "alt_text": null,
+          "downloaded_at": "2026-03-04T05:50:03",
+          "chart_analysis": null
+        }
+      ],
+      "text_analysis": {
+        "topics": [
+          "ai_memory_systems",
+          "claude_features",
+          "user_experience_enhancement",
+          "ai_personalization"
+        ],
+        "entities": [
+          "Claude",
+          "X/@trq212"
+        ],
+        "signal_type": "tech_announcement",
+        "analyzed_at": "2026-03-04T05:50:04",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2026752089473314975",
+    "source": "X/@ihtesham2005",
+    "url": "https://x.com/ihtesham2005/status/2026752089473314975",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:04",
+    "metadata": {
+      "tweet_text": "\ud83d\udea8 Anthropic just open-sourced the exact Skills library their own engineers use internally.\n\nStop building Claude workflows from scratch.\n\nThese are plug-and-play components that work across Claude Code, API, SDK, and VS Code copy once, deploy everywhere.\n\nWhat's inside:\n\n\u2192 https://t.co/MIwBIWvkgP",
+      "linked_content": null,
+      "media": [
+        {
+          "media_key": "3_2026752021903089664",
+          "type": "photo",
+          "source_url": "https://pbs.twimg.com/media/HCB4OclWoAAG98y.jpg",
+          "local_path": "/Users/vanstedum/Projects/personal-ai-agents/.claude/worktrees/jovial-shtern/curator_media/2026752089473314975_0.jpg",
+          "alt_text": null,
+          "downloaded_at": "2026-03-04T05:50:04",
+          "chart_analysis": null
+        }
+      ],
+      "text_analysis": {
+        "topics": [
+          "open_source_tools",
+          "anthropic_claude",
+          "ai_development_frameworks",
+          "developer_productivity",
+          "code_automation"
+        ],
+        "entities": [
+          "Anthropic",
+          "Claude",
+          "Claude Code",
+          "VS Code"
+        ],
+        "signal_type": "tech_announcement",
+        "analyzed_at": "2026-03-04T05:50:05",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2026697023970267505",
+    "source": "X/@VigilantFox",
+    "url": "https://x.com/VigilantFox/status/2026697023970267505",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:05",
+    "metadata": {
+      "tweet_text": "RFK Jr. just revived an inconvenient history lesson about Democrats and illegal immigration.\n\n\u201cI grew up in a Democratic Party that WANTED closed borders. It was the Republicans that wanted open borders because the big corporations wanted cheap labor.\u201d\n\n\u201cOpen borders\u2026 raises the https://t.co/L52kALWaGa",
+      "linked_content": null,
+      "media": [
+        {
+          "media_key": "13_2026696947529117696",
+          "type": "video",
+          "source_url": "https://pbs.twimg.com/amplify_video_thumb/2026696947529117696/img/rpId2O9ZCjeyw6a1.jpg",
+          "local_path": "/Users/vanstedum/Projects/personal-ai-agents/.claude/worktrees/jovial-shtern/curator_media/2026697023970267505_0.jpg",
+          "alt_text": null,
+          "downloaded_at": "2026-03-04T05:50:05",
+          "chart_analysis": null
+        }
+      ],
+      "text_analysis": {
+        "topics": [
+          "immigration_policy",
+          "labor_market",
+          "political_history",
+          "wage_dynamics"
+        ],
+        "entities": [
+          "RFK Jr.",
+          "Democratic Party",
+          "Republican Party"
+        ],
+        "signal_type": "opinion",
+        "analyzed_at": "2026-03-04T05:50:06",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2026539901924291041",
+    "source": "X/@elonmusk",
+    "url": "https://x.com/elonmusk/status/2026539901924291041",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:06",
+    "metadata": {
+      "tweet_text": "Cool https://t.co/lvePEPvvmo",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": {
+        "topics": [],
+        "entities": [],
+        "signal_type": "other",
+        "analyzed_at": "2026-03-04T05:50:07",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2025712204851605604",
+    "source": "X/@ThomasSowell",
+    "url": "https://x.com/ThomasSowell/status/2025712204851605604",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:07",
+    "metadata": {
+      "tweet_text": "\u201cIf there is no equality of outcomes among people born to the same parents and raised under the same roof, why should equality of outcomes be expected\u2014or assumed\u2014when conditions are not nearly so comparable?\u201d\n\n\u2014 Thomas Sowell",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": {
+        "topics": [
+          "income_inequality",
+          "economic_outcomes",
+          "social_policy",
+          "equality_debate"
+        ],
+        "entities": [
+          "Thomas Sowell"
+        ],
+        "signal_type": "opinion",
+        "analyzed_at": "2026-03-04T05:50:08",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2025653614430023864",
+    "source": "X/@Citrini7",
+    "url": "https://x.com/Citrini7/status/2025653614430023864",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:08",
+    "metadata": {
+      "tweet_text": "JUNE 2028. \n\nThe S&amp;P is down 38% from its highs. Unemployment just printed 10.2%. Private credit is unraveling. Prime mortgages are cracking. AI didn\u2019t disappoint. It exceeded every expectation.\n\nWhat happened?\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\n\nhttps://t.co/JzzwCrbJgS",
+      "linked_content": {
+        "destination_url": "https://www.citriniresearch.com/p/2028gic",
+        "domain": "citriniresearch.com",
+        "source_type": "web_article",
+        "title": "THE 2028 GLOBAL INTELLIGENCE CRISIS",
+        "content_preview": "A Thought Exercise in Financial History, from the Future",
+        "enriched_at": "2026-03-04T05:50:09",
+        "enrichment_failed": false
+      },
+      "media": [],
+      "text_analysis": {
+        "topics": [
+          "stock_market_correction",
+          "unemployment",
+          "private_credit",
+          "mortgage_market",
+          "ai_impact"
+        ],
+        "entities": [
+          "S&P 500",
+          "AI"
+        ],
+        "signal_type": "market_analysis",
+        "analyzed_at": "2026-03-04T05:50:10",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2025723043499118859",
+    "source": "X/@Sorenthek",
+    "url": "https://x.com/Sorenthek/status/2025723043499118859",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:10",
+    "metadata": {
+      "tweet_text": "A piece worth reading https://t.co/4l2SNZ7tGu",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": {
+        "topics": [],
+        "entities": [],
+        "signal_type": "other",
+        "analyzed_at": "2026-03-04T05:50:10",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2025533176467321283",
+    "source": "X/@heynavtoor",
+    "url": "https://x.com/heynavtoor/status/2025533176467321283",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:10",
+    "metadata": {
+      "tweet_text": "Repo Link: https://t.co/TbOtm5LgTv",
+      "linked_content": {
+        "destination_url": "http://github.com/koala73/worldmonitor",
+        "domain": "github.com",
+        "source_type": "web_article",
+        "title": "GitHub - koala73/worldmonitor: Real-time global intelligence dashboard \u2014 AI-powered news aggregation, geopolitical monitoring, and infrastructure tracking in a unified situational awareness interface",
+        "content_preview": "Real-time global intelligence dashboard \u2014 AI-powered news aggregation, geopolitical monitoring, and infrastructure tracking in a unified situational awareness interface - koala73/worldmonitor",
+        "enriched_at": "2026-03-04T05:50:12",
+        "enrichment_failed": false
+      },
+      "media": [],
+      "text_analysis": {
+        "topics": [
+          "software_development",
+          "open_source",
+          "code_repository"
+        ],
+        "entities": [
+          "GitHub"
+        ],
+        "signal_type": "tech_announcement",
+        "analyzed_at": "2026-03-04T05:50:13",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2025329419041341629",
+    "source": "X/@KobeissiLetter",
+    "url": "https://x.com/KobeissiLetter/status/2025329419041341629",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:13",
+    "metadata": {
+      "tweet_text": "The US labor market needs far fewer jobs to prevent unemployment from rising:\n\nThe breakeven rate of household employment growth is down to just ~50,000 per month.\n\nThis is the number of jobs needed to keep the unemployment rate stable.\n\nThis marks a -75% to -80% decline from https://t.co/YMZ2nKdXtn",
+      "linked_content": null,
+      "media": [
+        {
+          "media_key": "3_2025250223975534593",
+          "type": "photo",
+          "source_url": "https://pbs.twimg.com/media/HBsiWTVXkAE5Ge7.jpg",
+          "local_path": "/Users/vanstedum/Projects/personal-ai-agents/.claude/worktrees/jovial-shtern/curator_media/2025329419041341629_0.jpg",
+          "alt_text": null,
+          "downloaded_at": "2026-03-04T05:50:13",
+          "chart_analysis": null
+        }
+      ],
+      "text_analysis": {
+        "topics": [
+          "labor_market",
+          "unemployment",
+          "job_growth",
+          "economic_indicators"
+        ],
+        "entities": [
+          "US labor market",
+          "unemployment rate"
+        ],
+        "signal_type": "macro_chart_commentary",
+        "analyzed_at": "2026-03-04T05:50:14",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2024937960572104707",
+    "source": "X/@claudeai",
+    "url": "https://x.com/claudeai/status/2024937960572104707",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:14",
+    "metadata": {
+      "tweet_text": "Claude Code on desktop can now preview your running apps, review your code, and handle CI failures and PRs in the background.\n\nHere\u2019s what's new: https://t.co/A2FdH045Tt",
+      "linked_content": null,
+      "media": [
+        {
+          "media_key": "13_2024935522305765376",
+          "type": "video",
+          "source_url": "https://pbs.twimg.com/media/HBoKy76XUAAhXsA.jpg",
+          "local_path": "/Users/vanstedum/Projects/personal-ai-agents/.claude/worktrees/jovial-shtern/curator_media/2024937960572104707_0.jpg",
+          "alt_text": null,
+          "downloaded_at": "2026-03-04T05:50:14",
+          "chart_analysis": null
+        }
+      ],
+      "text_analysis": {
+        "topics": [
+          "ai_development",
+          "code_generation",
+          "developer_tools",
+          "software_deployment"
+        ],
+        "entities": [
+          "Claude",
+          "Anthropic"
+        ],
+        "signal_type": "tech_announcement",
+        "analyzed_at": "2026-03-04T05:50:15",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2025054118868324547",
+    "source": "X/@MarioNawfal",
+    "url": "https://x.com/MarioNawfal/status/2025054118868324547",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:15",
+    "metadata": {
+      "tweet_text": "Luke Igle &amp; Riley Walz built Jmail (a Gmail-style interface for Epstein's emails), plus JeffTube (videos), JFlights (flight logs), and Jamazon (Amazon orders) turning a chaotic data dump into something anyone can scroll through on their phone.\n\nThey started after the House https://t.co/869ijnCqug https://t.co/YSNzl8Q9HS",
+      "linked_content": null,
+      "media": [
+        {
+          "media_key": "13_2025004364125843456",
+          "type": "video",
+          "source_url": "https://pbs.twimg.com/amplify_video_thumb/2025004364125843456/img/YsYpSajjtpl3HyHG.jpg",
+          "local_path": "/Users/vanstedum/Projects/personal-ai-agents/.claude/worktrees/jovial-shtern/curator_media/2025054118868324547_0.jpg",
+          "alt_text": null,
+          "downloaded_at": "2026-03-04T05:50:15",
+          "chart_analysis": null
+        }
+      ],
+      "text_analysis": {
+        "topics": [
+          "data_transparency",
+          "public_records",
+          "web_development",
+          "information_accessibility"
+        ],
+        "entities": [
+          "Luke Igle",
+          "Riley Walz",
+          "Jmail",
+          "JeffTube",
+          "JFlights",
+          "Jamazon",
+          "Epstein"
+        ],
+        "signal_type": "news_summary",
+        "analyzed_at": "2026-03-04T05:50:16",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2024690618623197545",
+    "source": "X/@WallStreetApes",
+    "url": "https://x.com/WallStreetApes/status/2024690618623197545",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:16",
+    "metadata": {
+      "tweet_text": "NEW \u203c\ufe0f FDA Commissioner Marty Makary announces he would like the FDA to make essentially all prescriptions \u201cover the counter\u201d and no longer require a prescription in America\n\n\u201cIn my opinion, everything should be over the counter, not requiring a prescription, unless it's unsafe, https://t.co/dPm9YLPt9l",
+      "linked_content": null,
+      "media": [
+        {
+          "media_key": "13_2024690545789132800",
+          "type": "video",
+          "source_url": "https://pbs.twimg.com/amplify_video_thumb/2024690545789132800/img/wj-97nyYzIY2BZSE.jpg",
+          "local_path": "/Users/vanstedum/Projects/personal-ai-agents/.claude/worktrees/jovial-shtern/curator_media/2024690618623197545_0.jpg",
+          "alt_text": null,
+          "downloaded_at": "2026-03-04T05:50:17",
+          "chart_analysis": null
+        }
+      ],
+      "text_analysis": {
+        "topics": [
+          "healthcare_regulation",
+          "fda_policy",
+          "prescription_drugs",
+          "pharmaceutical_regulation",
+          "healthcare_reform"
+        ],
+        "entities": [
+          "FDA",
+          "Marty Makary",
+          "FDA Commissioner"
+        ],
+        "signal_type": "news_summary",
+        "analyzed_at": "2026-03-04T05:50:17",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2023912070672966008",
+    "source": "X/@nntaleb",
+    "url": "https://x.com/nntaleb/status/2023912070672966008",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:17",
+    "metadata": {
+      "tweet_text": "It is even more mind-blowing that, in finance, we tried and FAILED to make it work 30 years ago --in the mid-1990s there were ~$299 or $399 neural net packages for @WolframResearch's  Mathematica that just do this algorithm. https://t.co/Ji2Htz9xzb",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": {
+        "topics": [
+          "neural_networks",
+          "machine_learning_history",
+          "quantitative_finance",
+          "algorithmic_trading",
+          "ai_limitations"
+        ],
+        "entities": [
+          "Nassim Taleb",
+          "Wolfram Research",
+          "Mathematica"
+        ],
+        "signal_type": "opinion",
+        "analyzed_at": "2026-03-04T05:50:18",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2023413339146059991",
+    "source": "X/@zerohedge",
+    "url": "https://x.com/zerohedge/status/2023413339146059991",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:18",
+    "metadata": {
+      "tweet_text": "Goldman's Gold Guru Sees \"Significant Upside Risk\" To $5400 Forecast https://t.co/fTleUPaXSU",
+      "linked_content": {
+        "destination_url": "https://www.zerohedge.com/precious-metals/goldmans-gold-guru-sees-significant-upside-risk-5400-forecast",
+        "domain": "zerohedge.com",
+        "source_type": "news_article",
+        "title": "Goldman's Gold Guru Sees \"Significant Upside Risk\" To $5400 Forecast<!-- --> | ZeroHedge",
+        "content_preview": "",
+        "enriched_at": "2026-03-04T05:50:19",
+        "enrichment_failed": false
+      },
+      "media": [],
+      "text_analysis": {
+        "topics": [
+          "gold_prices",
+          "price_forecasts",
+          "precious_metals",
+          "investment_outlook"
+        ],
+        "entities": [
+          "Goldman Sachs",
+          "Gold",
+          "$5400"
+        ],
+        "signal_type": "market_analysis",
+        "analyzed_at": "2026-03-04T05:50:20",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2023425014071242852",
+    "source": "X/@LukeGromen",
+    "url": "https://x.com/LukeGromen/status/2023425014071242852",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:20",
+    "metadata": {
+      "tweet_text": "One of a number of potentially important macro divergences that occurred in 2H25 is shown below.\n\nFor the prior 10+ years, foreign Central Banks sold USTs when the USD rose and bought USTs when the USD fell.\n\nIn 2H25, foreign CB\u2019s sold USTs despite the weaker USD\ud83d\udc47 https://t.co/sz7KNig4e5",
+      "linked_content": null,
+      "media": [
+        {
+          "media_key": "3_2023425006730878976",
+          "type": "photo",
+          "source_url": "https://pbs.twimg.com/media/HBSmUrPWIAAKljC.jpg",
+          "local_path": "/Users/vanstedum/Projects/personal-ai-agents/.claude/worktrees/jovial-shtern/curator_media/2023425014071242852_0.jpg",
+          "alt_text": null,
+          "downloaded_at": "2026-03-04T05:50:20",
+          "chart_analysis": null
+        }
+      ],
+      "text_analysis": {
+        "topics": [
+          "treasury_bonds",
+          "currency_markets",
+          "central_bank_policy",
+          "macro_divergences",
+          "usd_strength"
+        ],
+        "entities": [
+          "Foreign Central Banks",
+          "USTs (US Treasuries)",
+          "USD (US Dollar)"
+        ],
+        "signal_type": "macro_chart_commentary",
+        "analyzed_at": "2026-03-04T05:50:23",
+        "backend": "haiku"
+      }
+    }
+  },
+  {
+    "tweet_id": "2023033922133881000",
+    "source": "X/@elonmusk",
+    "url": "https://x.com/elonmusk/status/2023033922133881000",
+    "action": "save",
+    "fetched_at": "2026-03-04T05:50:23",
+    "metadata": {
+      "tweet_text": "@TheAliceSmith Exactly",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": {
+        "topics": [],
+        "entities": [
+          "TheAliceSmith"
+        ],
+        "signal_type": "other",
+        "analyzed_at": "2026-03-04T05:50:23",
+        "backend": "haiku"
+      }
+    }
+  }
+]

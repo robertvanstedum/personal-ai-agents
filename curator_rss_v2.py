@@ -1203,6 +1203,42 @@ def load_user_profile(min_weight: int = 2) -> str:
         domains_str = ', '.join(f"{d}(+{s})" for d, s in top_domains)
         sections.append(f"Content domains from trusted X curators [{ACTIVE_DOMAIN}]: {domains_str}")
 
+    # ── Content domains (from feedback likes/saves on briefing articles — Phase 3C) ──
+    # Format: { "ft.com": {"like": 2, "save": 3, "dislike": 0}, ... }
+    # Separate from domain_signals (which comes from X bookmark ecosystems).
+    cd = lp.get('content_domains', {})
+    if cd:
+        def cd_score(d): return d.get('like', 0) * 2 + d.get('save', 0) - d.get('dislike', 0) * 2
+        pos_cd = sorted([(k, cd_score(v)) for k, v in cd.items() if cd_score(v) > 0], key=lambda x: -x[1])[:8]
+        neg_cd = sorted([(k, cd_score(v)) for k, v in cd.items() if cd_score(v) < 0], key=lambda x: x[1])[:3]
+        if pos_cd:
+            sections.append("Preferred content domains: " + ", ".join(
+                f"{k}(+{s})" for k, s in pos_cd
+            ))
+        if neg_cd:
+            sections.append("Penalize content domains: " + ", ".join(k for k, _ in neg_cd))
+
+    # ── Source types (academic_paper, news_article, substack, etc. — Phase 3C) ──
+    st = lp.get('source_types', {})
+    if st:
+        def st_score(d): return d.get('like', 0) * 2 + d.get('save', 0) - d.get('dislike', 0) * 2
+        pos_st = sorted([(k, st_score(v)) for k, v in st.items() if st_score(v) > 0], key=lambda x: -x[1])[:5]
+        if pos_st:
+            sections.append("Preferred source types: " + ", ".join(
+                f"{k}(+{s})" for k, s in pos_st
+            ))
+
+    # ── Content topics (from Haiku text analysis of saved tweets — Phase 3C) ──
+    # Lower threshold than min_weight — topics start at save=1, build over time.
+    ct = lp.get('content_topics', {})
+    if ct:
+        def ct_score(d): return d.get('like', 0) * 2 + d.get('save', 0) - d.get('dislike', 0) * 2
+        top_ct = sorted([(k, ct_score(v)) for k, v in ct.items() if ct_score(v) >= 2], key=lambda x: -x[1])[:10]
+        if top_ct:
+            sections.append("Content topics from saved posts: " + ", ".join(
+                f"{k}(+{s})" for k, s in top_ct
+            ))
+
     # ── Content types ('descriptive' excluded — known co-tag artifact, not a standalone signal) ──
     CO_TAG_EXCLUDE = {'descriptive'}
     content = {k: v for k, v in lp.get('preferred_content_types', {}).items()

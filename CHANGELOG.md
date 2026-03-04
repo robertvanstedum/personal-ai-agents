@@ -1,5 +1,110 @@
 # Changelog
 
+## 2026-03-03 - Milestone: Phase 3C Complete — Content Ecosystem Enrichment
+
+### What Was Built
+
+**Bookmark Enrichment Pipeline (`enrich_signals.py`)**
+The learning loop now understands *what* you value, not just *who* you trust. When you save a tweet with an article link, the enrichment pipeline follows the URL, fetches the destination article metadata, downloads any attached chart images, and extracts topics from the tweet text using Claude Haiku. The result: 66 content topics, 3 destination domains, and 2 source type signals added to the profile from just 20 bookmarks.
+
+**URL and Domain Intelligence**
+Three new persistent stores capture knowledge that accumulates across all future runs:
+- `curator_signals.json` — enriched signal per bookmark (article metadata, media paths, text analysis)
+- `curator_url_cache.json` — destination URL cache; prevents duplicate fetches, graph edges for future Neo4j migration
+- `curator_domain_registry.json` — domain-level registry growing across all imports
+
+**Media Download**
+Chart and photo images attached to analyst tweets (LukeGromen macro charts, KobeissiLetter labor data, etc.) downloaded locally to `curator_media/`. Images indexed with `chart_analysis: null` — the gate for a future vision model pass. When image analysis runs (Phase 3D), tweet text travels with each image for context.
+
+**Profile Enrichment**
+`load_user_profile()` in `curator_rss_v2.py` now injects three new sections into the scorer prompt:
+- Preferred content domains (weighted by like/save/dislike)
+- Preferred source types (substack / news_article / web_article / pdf / etc.)
+- Content topics from saved posts (extracted by Haiku)
+
+**Feedback Loop Extended (`curator_feedback.py`)**
+When a user likes or saves an article through Telegram, `update_learned_patterns()` now extracts the domain and source type from the article URL and writes them to `content_domains` and `source_types` in `learned_patterns` — closing the loop between article feedback and content ecosystem knowledge.
+
+**Swappable Analysis Backend**
+`ENRICHMENT_BACKEND = 'haiku'` in `curator_config.py`. Swap to `ollama` or `xai` without touching the pipeline. Current cost: ~$0.001 for 20 tweets.
+
+**A/B Test Infrastructure (`scripts/generate_test_report.py`)**
+Standardized report generator produces two outputs from a single JSON results file:
+- `docs/test-reports/YYYY-MM-DD-{phase}-ab-test.md` — full detail, private
+- `docs/portfolio/{phase}-results.md` — sanitized for public portfolio (account names and article titles replaced with category labels)
+HTML output opt-in via `--html` flag.
+
+---
+
+### The Shift
+
+Before Phase 3C: the system knew *who* you trust — account-level trust scores from 398 bookmarks and 13 feedback events.
+
+After Phase 3C: the system knows *what* you value — `citriniresearch.com`, `zerohedge.com`, `labor_market`, `us_foreign_policy`, `macro_divergence`. The profile grew 41% (581 → 822 chars) from 20 bookmarks alone.
+
+---
+
+### A/B Test Results
+
+Controlled test: same 390-article pool, same Grok scoring model, same cost ($0.16). Only variable: profile injected into scorer.
+
+| Metric | Baseline | Enriched |
+|--------|----------|----------|
+| Profile size | 581 chars | 822 chars (+41%) |
+| Content domains | 0 | 3 |
+| Source types | 0 | 2 |
+| Content topics | 0 | 66 |
+| New articles in top 10 | — | 5 |
+| Al Jazeera "Oil on Fire" | #3 | #20 (−17) |
+| Investing.com "Oil Shock" | #9 | #6 (+3) |
+
+Key finding: content topics (66 extracted) drove most movement. Domain and source type signals need higher volume to differentiate. Full 398-tweet archive run expected to substantially expand both.
+
+Full report: `docs/test-reports/2026-03-03-phase3c-ab-test.md`
+Portfolio version: `docs/portfolio/phase3c-results.md`
+
+---
+
+### Files Modified / Created
+
+| File | Type | Change |
+|------|------|--------|
+| `curator_utils.py` | Modified | +7 utility functions: `extract_domain`, `classify_source_type`, `fetch_url_metadata`, `follow_redirect`, `extract_tco_urls`, `download_image`, `analyze_text_haiku` |
+| `enrich_signals.py` | New | Standalone enrichment pipeline — safe to re-run, skips already-enriched |
+| `curator_feedback.py` | Modified | `update_learned_patterns()` now tracks `content_domains` and `source_types` |
+| `curator_rss_v2.py` | Modified | `load_user_profile()` injects domain, source type, and topic preferences |
+| `curator_config.py` | Modified | Added `ENRICHMENT_BACKEND = 'haiku'` |
+| `curator_signals.json` | New | 20 enriched signals (first run) |
+| `curator_url_cache.json` | New | 3 destination URLs cached |
+| `curator_domain_registry.json` | New | 3 domains registered |
+| `curator_media/` | New | 10 downloaded chart/photo images |
+| `scripts/generate_test_report.py` | New | A/B test report generator (MD default, HTML opt-in) |
+| `docs/test-reports/` | New | Private full-detail reports |
+| `docs/portfolio/` | New | Sanitized public portfolio reports |
+
+---
+
+### Design Decisions Worth Preserving
+
+**Image analysis deferred, not skipped.** Images download now. `chart_analysis: null` is the gate — when Phase 3D vision pass runs, tweet text always travels with each image. Never analyze an image without its tweet.
+
+**No t.co redirect-following needed.** X Bookmark API returns `expanded_url` already resolved in tweet entities. The redirect-following utilities in `curator_utils.py` exist for archive import paths where only raw text is available.
+
+**20-tweet scope by design.** Bootstrap scope is intentional — prove the pipeline end-to-end tonight, expand after the X archive arrives (full 398-tweet geopolitics-filtered run pending xAI delivery).
+
+**Content topics > domains at small sample sizes.** 66 topics from 20 tweets created real scoring movement. 3 domains did not. This is expected and correct — domain trust signal needs volume.
+
+---
+
+### Next Evolution (Phase 3D)
+
+- **Full 398-tweet archive run** — `python3 enrich_signals.py --limit=398 --full` after archive arrives; will add ~200–400 topics and fix AI/tech skew from the 20-tweet bootstrap
+- **Image analysis** — install `moondream` or use Haiku vision; gate is already in place (`chart_analysis: null`)
+- **Second A/B test** — compare 20-tweet bootstrap vs 398-tweet full run
+- **Incremental X pull scheduling** — launchd job to enrich new bookmarks nightly
+
+---
+
 ## 2026-02-28 - Major Milestone: Bootstrap Complete — 398 X Bookmarks Seeding the Learning Loop
 
 ### What Was Built

@@ -1096,9 +1096,11 @@ def record_feedback(rank, feedback_type, user_words, article, channel='cli'):
     print("🧠 Analyzing your feedback...")
     metadata = extract_metadata(article, user_words, feedback_type)
 
-    # Inject source into metadata so update_learned_patterns can track it
+    # Inject source and URL into metadata so update_learned_patterns can track them
     if article.get('source'):
         metadata['source'] = article['source']
+    if article.get('url'):
+        metadata['url'] = article['url']
 
     # Create feedback entry
     feedback_entry = {
@@ -1174,6 +1176,25 @@ def update_learned_patterns(prefs, metadata, feedback_type):
     if feedback_type == 'disliked':
         for signal in metadata.get('signals', []):
             patterns['avoid_patterns'][signal] = patterns['avoid_patterns'].get(signal, 0) + 1
+
+    # Update content domains and source types from article URL
+    url = metadata.get('url', '')
+    if url:
+        try:
+            from curator_utils import extract_domain, classify_source_type
+            domain      = extract_domain(url)
+            source_type = classify_source_type(url)
+            action_key  = {'liked': 'like', 'saved': 'save', 'disliked': 'dislike'}.get(feedback_type, 'save')
+            if domain:
+                cd = patterns.setdefault('content_domains', {})
+                cd.setdefault(domain, {'like': 0, 'save': 0, 'dislike': 0})
+                cd[domain][action_key] = cd[domain].get(action_key, 0) + 1
+            if source_type:
+                st = patterns.setdefault('source_types', {})
+                st.setdefault(source_type, {'like': 0, 'save': 0, 'dislike': 0})
+                st[source_type][action_key] = st[source_type].get(action_key, 0) + 1
+        except Exception:
+            pass
 
     # Update metadata
     patterns['last_updated'] = datetime.now().isoformat()

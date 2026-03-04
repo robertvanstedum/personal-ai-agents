@@ -1,0 +1,20 @@
+{
+  "citriniresearch.com": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-04",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "github.com": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-04",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "zerohedge.com": {
+    "source_type": "news_article",
+    "first_seen": "2026-03-04",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  }
+}

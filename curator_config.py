@@ -47,3 +47,10 @@ KNOWN_FOLDERS = {
     '1967313159158640645': 'Tech and AI',               # X folder: "Tech"
     '1992980059464876233': 'Career and Commercial',     # X folder: "Modular Construction"
 }
+
+# ── Enrichment backend ────────────────────────────────────────────────────
+# Controls which LLM is used for tweet text analysis in enrich_signals.py.
+# Swap to 'ollama' when costs warrant, or 'xai' as an alternative.
+# 'haiku' = claude-haiku-4-5-20251001 (~$0.01 for 398 tweets)
+
+ENRICHMENT_BACKEND = 'haiku'

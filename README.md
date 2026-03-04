@@ -323,8 +323,8 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed workflow and testing protocol.
 Full learning loop across all scoring paths. X bookmark bootstrap (415 signals). Deep Dives. Signal Priorities. Reading Library. Cost tracking across operational and build categories. Model-agnostic profile injection.
 
 **v1.0 (active development):**
-- Phase 3C: Domain-scoped content signals — X bookmark folders map to knowledge domains (Finance/Geo, Health, Tech, etc.)
-- Phase 3D: User-driven domain tagging — tag articles across domains from web UI and Telegram
+- ✅ Phase 3C (Mar 2026): Content ecosystem enrichment — X bookmark pipeline extracts destination domains, source types, and 66 content topics via Haiku. Profile +41%. A/B test confirmed scoring impact. See `docs/test-reports/`.
+- Phase 3D: Image analysis — chart images from analyst tweets run through vision model (gate in place: `chart_analysis: null`); full 398-tweet archive enrichment run
 - Phase 4: Wider sources — Substack, academic (BIS, Fed, arXiv), Reddit
 - Phase 5: Synthesis — pattern detection, contradiction highlighting, proactive research
 - Postgres migration — `curator_costs.json` already row-structured, `COPY` ready

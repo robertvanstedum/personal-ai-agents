@@ -1,0 +1,59 @@
+{
+  "phase": "phase3c",
+  "date": "2026-03-03",
+  "title": "Phase 3C: Bookmark Enrichment A/B Test",
+  "description": "Added content_domains, source_types, and content_topics from 20-tweet X bookmark enrichment pipeline.",
+  "profile": {
+    "baseline_size": 581,
+    "enriched_size": 822,
+    "baseline_metrics": {
+      "content_domains": 0,
+      "source_types": 0,
+      "content_topics": 0
+    },
+    "enriched_metrics": {
+      "content_domains": 3,
+      "source_types": 2,
+      "content_topics": 66
+    }
+  },
+  "rankings": [
+    {"rank_baseline": 1,  "rank_enriched": 1,  "delta": 0,   "title_baseline": "GF: Iran Goals",              "title_enriched": "GF: Iran Goals",              "source_baseline": "geopoliticscentral.com", "source_enriched": "geopoliticscentral.com", "score_baseline": 21.0, "score_enriched": 21.0, "category": "geopolitics",    "comment": "Priority boost dominates"},
+    {"rank_baseline": 2,  "rank_enriched": 2,  "delta": 0,   "title_baseline": "ZH: Israel Nuclear Lab",       "title_enriched": "ZH: Asian Refiners Crude",    "source_baseline": "zerohedge.com",          "source_enriched": "zerohedge.com",          "score_baseline": 10.0, "score_enriched": 11.0, "category": "market",         "comment": "Different ZH article surfaced"},
+    {"rank_baseline": 3,  "rank_enriched": 3,  "delta": 0,   "title_baseline": "AJ: Oil on Fire",              "title_enriched": "AJ: Russia/China Diplomatic", "source_baseline": "aljazeera.com",          "source_enriched": "aljazeera.com",          "score_baseline": 10.0, "score_enriched": 10.0, "category": "geopolitics",    "comment": "Geopolitical focus shift"},
+    {"rank_baseline": 4,  "rank_enriched": 4,  "delta": 0,   "title_baseline": "GF: Iran Goals Podcast",       "title_enriched": "Fed: Dual Mandate",           "source_baseline": "geopoliticscentral.com", "source_enriched": "federalreserve.gov",     "score_baseline": 7.5,  "score_enriched": 8.0,  "category": "monetary",       "comment": "Labor market topic boost"},
+    {"rank_baseline": 5,  "rank_enriched": 5,  "delta": 0,   "title_baseline": "Fed: Dual Mandate",            "title_enriched": "GF: Iran Goals Podcast",      "source_baseline": "federalreserve.gov",     "source_enriched": "geopoliticscentral.com", "score_baseline": 7.0,  "score_enriched": 7.5,  "category": "monetary",       "comment": "Minor reshuffle"},
+    {"rank_baseline": 6,  "rank_enriched": 6,  "delta": 0,   "title_baseline": "DW: Russia Nuclear",           "title_enriched": "Investing: Oil Shock",        "source_baseline": "dw.com",                 "source_enriched": "investing.com",          "score_baseline": 6.0,  "score_enriched": 6.0,  "category": "market",         "comment": "Market analysis surfaced (+3 from #9)"},
+    {"rank_baseline": 7,  "rank_enriched": 7,  "delta": 0,   "title_baseline": "Antiwar: Iran Boots",          "title_enriched": "DW: Pentagon/Anthropic",      "source_baseline": "antiwar.com",            "source_enriched": "dw.com",                 "score_baseline": 5.5,  "score_enriched": 6.0,  "category": "technology",     "comment": "AI/tech story enters top 10"},
+    {"rank_baseline": 8,  "rank_enriched": 8,  "delta": 0,   "title_baseline": "FAZ: Apple Notebook",          "title_enriched": "Antiwar: Iran Boots",         "source_baseline": "faz.net",                "source_enriched": "antiwar.com",            "score_baseline": 5.0,  "score_enriched": 5.5,  "category": "geopolitics",    "comment": "Stable position"},
+    {"rank_baseline": 9,  "rank_enriched": 9,  "delta": 0,   "title_baseline": "Investing: Oil Shock",         "title_enriched": "FAZ: Iran Gas Price",         "source_baseline": "investing.com",          "source_enriched": "faz.net",                "score_baseline": 3.5,  "score_enriched": 3.5,  "category": "market",         "comment": "Energy economics shift (+4)"},
+    {"rank_baseline": 10, "rank_enriched": 10, "delta": 0,   "title_baseline": "The Duran: Trump Doomed",      "title_enriched": "Die Welt: Iran Succession",   "source_baseline": "theduran.com",           "source_enriched": "welt.de",                "score_baseline": 0.5,  "score_enriched": 1.5,  "category": "geopolitics",    "comment": "Succession analysis surfaced (+4)"},
+    {"rank_baseline": 11, "rank_enriched": 11, "delta": 0,   "title_baseline": "Treasury MSPD",                "title_enriched": "Treasury MSPD",              "source_baseline": "treasury.gov",           "source_enriched": "treasury.gov",           "score_baseline": 0.5,  "score_enriched": 0.5,  "category": "fiscal",         "comment": "Data source stable"},
+    {"rank_baseline": 12, "rank_enriched": 12, "delta": 0,   "title_baseline": "Spiegel: Palestinian Prisons", "title_enriched": "Fed: AI GDP Tracking",        "source_baseline": "spiegel.de",             "source_enriched": "federalreserve.gov",     "score_baseline": -8.0, "score_enriched": -6.5, "category": "technology",     "comment": "Tech/economic analysis surfaced"},
+    {"rank_baseline": 13, "rank_enriched": 13, "delta": 0,   "title_baseline": "FAZ: iPhone 17e",              "title_enriched": "The Duran: Trump Doomed",     "source_baseline": "faz.net",                "source_enriched": "theduran.com",           "score_baseline": -8.5, "score_enriched": -8.0, "category": "commentary",     "comment": "Duran down from #10"},
+    {"rank_baseline": 20, "rank_enriched": 20, "delta": -17, "title_baseline": "Antiwar: Iran Death Toll",     "title_enriched": "AJ: Oil on Fire",            "source_baseline": "antiwar.com",            "source_enriched": "aljazeera.com",          "score_baseline": -42.5,"score_enriched": -41.5,"category": "regional-media",  "comment": "AJ dropped 17 positions from #3"}
+  ],
+  "observations": {
+    "winners": [
+      "Investing.com 'Oil Shock' (#9 → #6, +3) — market analysis got boost from commodity topics",
+      "FAZ 'Iran Gas Price' (not ranked → #9, +4) — energy economics newly surfaced",
+      "Die Welt 'Iran Succession' (#14 → #10, +4) — deeper geopolitical analysis valued"
+    ],
+    "losers": [
+      "Al Jazeera 'Oil on Fire' (#3 → #20, -17) — existing avoid patterns reinforced by content topic matching",
+      "The Duran 'Trump Doomed' (#10 → #13, -3) — commentary source downranked",
+      "Spiegel 'Palestinian Prisons' (#12 → #18, -6) — lower priority vs analysis-heavy pieces"
+    ],
+    "new_top10": [
+      "ZH: Asian Refiners Crude (#2) — commodity/energy market analysis",
+      "AJ: Russia/China Diplomatic (#3) — geopolitical alignment story",
+      "DW: Pentagon/Anthropic AI (#7) — tech/policy story (AI topics in learned set)"
+    ]
+  },
+  "cost": {
+    "baseline_usd": 0.16,
+    "enriched_usd": 0.16,
+    "enrichment_overhead_usd": 0.001
+  },
+  "methodology": "Run A: generated briefing with baseline profile (no enrichment). Merged Phase 3C branch. Ran enrich_signals.py on 20 most recent X bookmarks. Run B: generated briefing with enriched profile. Same 390-article pool, same Grok scoring model, same cost. Only variable: user profile injected into scorer prompt."
+}

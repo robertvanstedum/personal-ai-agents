@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phase 3C: Bookmark Enrichment A/B Test</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 960px; margin: 40px auto; padding: 0 20px;
+            background: #0d1117; color: #c9d1d9; line-height: 1.6; }
+    h1 { color: #58a6ff; border-bottom: 1px solid #30363d; padding-bottom: 12px; }
+    h2 { color: #79c0ff; margin-top: 32px; }
+    h3 { color: #d2a8ff; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9em; }
+    th { background: #161b22; color: #58a6ff; padding: 8px 12px; text-align: left;
+          border: 1px solid #30363d; }
+    td { padding: 8px 12px; border: 1px solid #21262d; }
+    tr:nth-child(even) { background: #161b22; }
+    .winner { color: #3fb950; }
+    .loser  { color: #f85149; }
+    .new    { color: #d2a8ff; }
+    .same   { color: #8b949e; }
+    .meta   { color: #8b949e; font-size: 0.85em; margin-bottom: 24px; }
+    code    { background: #161b22; padding: 2px 6px; border-radius: 4px;
+               color: #79c0ff; font-size: 0.9em; }
+    pre     { background: #161b22; padding: 16px; border-radius: 6px;
+               overflow-x: auto; color: #c9d1d9; font-size: 0.85em;
+               border: 1px solid #30363d; }
+    .badge  { display: inline-block; padding: 2px 8px; border-radius: 12px;
+               font-size: 0.8em; font-weight: 600; }
+    .badge-green  { background: #1f4a1f; color: #3fb950; }
+    .badge-red    { background: #4a1f1f; color: #f85149; }
+    .badge-blue   { background: #1f2d4a; color: #58a6ff; }
+    .badge-purple { background: #2d1f4a; color: #d2a8ff; }
+  </style>
+</head>
+<body>
+  <h1>Phase 3C: Bookmark Enrichment A/B Test</h1>
+  <p class="meta"><strong>Date:</strong> 2026-03-03 &nbsp;|&nbsp; Added content_domains, source_types, and content_topics from 20-tweet X bookmark enrichment pipeline.</p>
+
+  
+<h2>Profile Growth</h2>
+<table>
+  <tr><th>Metric</th><th>Baseline</th><th>Enriched</th><th>Change</th></tr>
+  <tr><td><strong>Profile prompt size</strong></td><td>581 chars</td>
+      <td>822 chars</td>
+      <td><strong><span class="winner">+41%</span></strong></td></tr>
+  <tr><td>content_domains</td><td>0</td><td>3</td><td><span class="winner">+3</span></td></tr><tr><td>content_topics</td><td>0</td><td>66</td><td><span class="winner">+66</span></td></tr><tr><td>source_types</td><td>0</td><td>2</td><td><span class="winner">+2</span></td></tr>
+</table>
+
+<h2>Rankings Comparison (Top 20)</h2>
+
+<table>
+  <tr><th>Rank A</th><th>Rank B</th><th>Δ</th>
+      <th>Article A</th><th>Score A</th><th>Article B</th><th>Score B</th><th>Comment</th></tr>
+  <tr><td>#1</td><td>#1</td><td><span class="badge badge-blue">same</span></td><td>GF: Iran Goals</td><td>21.0</td><td>GF: Iran Goals</td><td>21.0</td><td>Priority boost dominates</td></tr><tr><td>#2</td><td>#2</td><td><span class="badge badge-blue">same</span></td><td>ZH: Israel Nuclear Lab</td><td>10.0</td><td>ZH: Asian Refiners Crude</td><td>11.0</td><td>Different ZH article surfaced</td></tr><tr><td>#3</td><td>#3</td><td><span class="badge badge-blue">same</span></td><td>AJ: Oil on Fire</td><td>10.0</td><td>AJ: Russia/China Diplomatic</td><td>10.0</td><td>Geopolitical focus shift</td></tr><tr><td>#4</td><td>#4</td><td><span class="badge badge-blue">same</span></td><td>GF: Iran Goals Podcast</td><td>7.5</td><td>Fed: Dual Mandate</td><td>8.0</td><td>Labor market topic boost</td></tr><tr><td>#5</td><td>#5</td><td><span class="badge badge-blue">same</span></td><td>Fed: Dual Mandate</td><td>7.0</td><td>GF: Iran Goals Podcast</td><td>7.5</td><td>Minor reshuffle</td></tr><tr><td>#6</td><td>#6</td><td><span class="badge badge-blue">same</span></td><td>DW: Russia Nuclear</td><td>6.0</td><td>Investing: Oil Shock</td><td>6.0</td><td>Market analysis surfaced (+3 from #9)</td></tr><tr><td>#7</td><td>#7</td><td><span class="badge badge-blue">same</span></td><td>Antiwar: Iran Boots</td><td>5.5</td><td>DW: Pentagon/Anthropic</td><td>6.0</td><td>AI/tech story enters top 10</td></tr><tr><td>#8</td><td>#8</td><td><span class="badge badge-blue">same</span></td><td>FAZ: Apple Notebook</td><td>5.0</td><td>Antiwar: Iran Boots</td><td>5.5</td><td>Stable position</td></tr><tr><td>#9</td><td>#9</td><td><span class="badge badge-blue">same</span></td><td>Investing: Oil Shock</td><td>3.5</td><td>FAZ: Iran Gas Price</td><td>3.5</td><td>Energy economics shift (+4)</td></tr><tr><td>#10</td><td>#10</td><td><span class="badge badge-blue">same</span></td><td>The Duran: Trump Doomed</td><td>0.5</td><td>Die Welt: Iran Succession</td><td>1.5</td><td>Succession analysis surfaced (+4)</td></tr><tr><td>#11</td><td>#11</td><td><span class="badge badge-blue">same</span></td><td>Treasury MSPD</td><td>0.5</td><td>Treasury MSPD</td><td>0.5</td><td>Data source stable</td></tr><tr><td>#12</td><td>#12</td><td><span class="badge badge-blue">same</span></td><td>Spiegel: Palestinian Prisons</td><td>-8.0</td><td>Fed: AI GDP Tracking</td><td>-6.5</td><td>Tech/economic analysis surfaced</td></tr><tr><td>#13</td><td>#13</td><td><span class="badge badge-blue">same</span></td><td>FAZ: iPhone 17e</td><td>-8.5</td><td>The Duran: Trump Doomed</td><td>-8.0</td><td>Duran down from #10</td></tr><tr><td>#20</td><td>#20</td><td><span class="badge badge-red">-17</span></td><td>Antiwar: Iran Death Toll</td><td>-42.5</td><td>AJ: Oil on Fire</td><td>-41.5</td><td>AJ dropped 17 positions from #3</td></tr>
+</table>
+<h2>Key Observations</h2><h3>📈 Winners</h3><ul><li class="winner">Investing.com 'Oil Shock' (#9 → #6, +3) — market analysis got boost from commodity topics</li><li class="winner">FAZ 'Iran Gas Price' (not ranked → #9, +4) — energy economics newly surfaced</li><li class="winner">Die Welt 'Iran Succession' (#14 → #10, +4) — deeper geopolitical analysis valued</li></ul><h3>📉 Losers</h3><ul><li class="loser">Al Jazeera 'Oil on Fire' (#3 → #20, -17) — existing avoid patterns reinforced by content topic matching</li><li class="loser">The Duran 'Trump Doomed' (#10 → #13, -3) — commentary source downranked</li><li class="loser">Spiegel 'Palestinian Prisons' (#12 → #18, -6) — lower priority vs analysis-heavy pieces</li></ul><h3>🆕 New Top-10 Entries</h3><ul><li class="new">ZH: Asian Refiners Crude (#2) — commodity/energy market analysis</li><li class="new">AJ: Russia/China Diplomatic (#3) — geopolitical alignment story</li><li class="new">DW: Pentagon/Anthropic AI (#7) — tech/policy story (AI topics in learned set)</li></ul>
+<h2>Cost</h2>
+<table>
+  <tr><th>Component</th><th>Cost</th></tr>
+  <tr><td>Baseline run</td><td>$0.16</td></tr>
+  <tr><td>Enriched run</td><td>$0.16</td></tr>
+  <tr><td>Enrichment overhead</td><td>$0.001</td></tr>
+</table>
+<h2>Methodology</h2><p>Run A: generated briefing with baseline profile (no enrichment). Merged Phase 3C branch. Ran enrich_signals.py on 20 most recent X bookmarks. Run B: generated briefing with enriched profile. Same 390-article pool, same Grok scoring model, same cost. Only variable: user profile injected into scorer prompt.</p>
+
+</body>
+</html>

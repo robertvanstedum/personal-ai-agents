@@ -1,0 +1,41 @@
+{
+  "https://www.citriniresearch.com/p/2028gic": {
+    "domain": "citriniresearch.com",
+    "source_type": "web_article",
+    "title": "THE 2028 GLOBAL INTELLIGENCE CRISIS",
+    "content_preview": "A Thought Exercise in Financial History, from the Future",
+    "first_seen": "2026-03-04T05:50:09",
+    "enriched_at": "2026-03-04T05:50:09",
+    "referenced_by_tweets": [
+      "2025653614430023864"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "http://github.com/koala73/worldmonitor": {
+    "domain": "github.com",
+    "source_type": "web_article",
+    "title": "GitHub - koala73/worldmonitor: Real-time global intelligence dashboard \u2014 AI-powered news aggregation, geopolitical monitoring, and infrastructure tracking in a unified situational awareness interface",
+    "content_preview": "Real-time global intelligence dashboard \u2014 AI-powered news aggregation, geopolitical monitoring, and infrastructure tracking in a unified situational awareness interface - koala73/worldmonitor",
+    "first_seen": "2026-03-04T05:50:12",
+    "enriched_at": "2026-03-04T05:50:12",
+    "referenced_by_tweets": [
+      "2025533176467321283"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://www.zerohedge.com/precious-metals/goldmans-gold-guru-sees-significant-upside-risk-5400-forecast": {
+    "domain": "zerohedge.com",
+    "source_type": "news_article",
+    "title": "Goldman's Gold Guru Sees \"Significant Upside Risk\" To $5400 Forecast<!-- --> | ZeroHedge",
+    "content_preview": "",
+    "first_seen": "2026-03-04T05:50:19",
+    "enriched_at": "2026-03-04T05:50:19",
+    "referenced_by_tweets": [
+      "2023413339146059991"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  }
+}
