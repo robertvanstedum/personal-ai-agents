@@ -8,12 +8,138 @@
   "github.com": {
     "source_type": "web_article",
     "first_seen": "2026-03-04",
-    "times_referenced": 1,
+    "times_referenced": 2,
     "confirmed_trusted": false
   },
   "zerohedge.com": {
     "source_type": "news_article",
     "first_seen": "2026-03-04",
+    "times_referenced": 4,
+    "confirmed_trusted": false
+  },
+  "myrmikan.com": {
+    "source_type": "pdf_document",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "peterturchin.com": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "thoughtforms.life": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "notthebee.com": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 2,
+    "confirmed_trusted": false
+  },
+  "original.antiwar.com": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "notboring.co": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "necsi.edu": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "substack.com": {
+    "source_type": "substack",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "responsiblestatecraft.org": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "compactmag.com": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "go.hubermanlab.com": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "thespectator.com": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "nationalreview.com": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "city-journal.org": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "metabolicmind.org": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "bbc.com": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "deeplearning.ai": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 2,
+    "confirmed_trusted": false
+  },
+  "thelancet.com": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "wolfram-media.com": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "opensourceprojects.dev": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
+    "times_referenced": 1,
+    "confirmed_trusted": false
+  },
+  "ap4libertyshop.com": {
+    "source_type": "web_article",
+    "first_seen": "2026-03-05",
     "times_referenced": 1,
     "confirmed_trusted": false
   }

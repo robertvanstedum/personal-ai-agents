@@ -37,5 +37,344 @@
     ],
     "led_to_deep_dive": false,
     "enrichment_failed": false
+  },
+  "https://www.myrmikan.com/pub/Myrmikan_Research_2026_02_09.pdf": {
+    "domain": "myrmikan.com",
+    "source_type": "pdf_document",
+    "title": "",
+    "content_preview": "",
+    "first_seen": "2026-03-05T06:07:35",
+    "enriched_at": "2026-03-05T06:07:35",
+    "referenced_by_tweets": [
+      "2020850168233705538"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": true
+  },
+  "https://peterturchin.com/donald-trump-as-an-elite-aspirant/": {
+    "domain": "peterturchin.com",
+    "source_type": "web_article",
+    "title": "Donald Trump as an Elite Aspirant",
+    "content_preview": "Yesterday Ned Resnikoff published an article What Ancient History Has To Say About Near-Future Doom, based on interviewing me last week. It\u2019s very well done, but several things I said didn\u2019t make i\u2026",
+    "first_seen": "2026-03-05T06:07:42",
+    "enriched_at": "2026-03-05T06:07:42",
+    "referenced_by_tweets": [
+      "2018999360831311966"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://thoughtforms.life/a-talk-on-evolution-from-the-perspective-of-diverse-intelligence-implemented-in-morphogenesis/": {
+    "domain": "thoughtforms.life",
+    "source_type": "web_article",
+    "title": "Forms of life, forms of mind | Dr. Michael Levin | A talk on evolution, from the perspective of diverse intelligence implemented in morphogenesis",
+    "content_preview": "A few comments, a video, and a slide deck related to a recent talk on evolution I gave, from the perspective of diverse intelligence",
+    "first_seen": "2026-03-05T06:08:05",
+    "enriched_at": "2026-03-05T06:08:05",
+    "referenced_by_tweets": [
+      "2015215883233226775"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://notthebee.com/article/good-news-scientists-discover-a-way-to-regrow-cartilage-and-stop-arthritis": {
+    "domain": "notthebee.com",
+    "source_type": "web_article",
+    "title": "Good News: Scientists discover a way to regrow cartilage, stop arthritis",
+    "content_preview": "The $65 billion per year global arthritis industry is in for quite a scare as scientists at Stanford just announced they figured out how to regrow healthy, functioning cartilage and maybe end arthritis forever.",
+    "first_seen": "2026-03-05T06:08:13",
+    "enriched_at": "2026-03-05T06:08:13",
+    "referenced_by_tweets": [
+      "2014827986097209390"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://original.antiwar.com/john-mearsheimer/2026/01/20/the-tag-team-fails-in-iran/": {
+    "domain": "original.antiwar.com",
+    "source_type": "web_article",
+    "title": "The Tag Team Fails in Iran - Antiwar.com",
+    "content_preview": "Reprinted from John's Substack: The mainstream media in the West is committed to portraying the protests in Iran as strictly an internal affair. The people of Iran, so the argument goes, spontaneously rose up against their government because they were in desperate straits due to their leaders\u2019 corruption and mismanagement\u2026",
+    "first_seen": "2026-03-05T06:08:32",
+    "enriched_at": "2026-03-05T06:08:32",
+    "referenced_by_tweets": [
+      "2013966269796565237"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://www.notboring.co/p/robot-steps": {
+    "domain": "notboring.co",
+    "source_type": "web_article",
+    "title": "Many Small Steps for Robots, One Giant Leap for Mankind",
+    "content_preview": "A Co-Written Essay with Evan Beard",
+    "first_seen": "2026-03-05T06:08:37",
+    "enriched_at": "2026-03-05T06:08:37",
+    "referenced_by_tweets": [
+      "2012557939123327448"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://necsi.edu/quantum-mechanics-overview": {
+    "domain": "necsi.edu",
+    "source_type": "web_article",
+    "title": "Quantum Mechanics Overview: Limits, Foundations, and New Directions \u2014 New England Complex Systems Institute",
+    "content_preview": "An overview of conceptual challenges in quantum mechanics and emerging physical frameworks that aim to explain spin, measurement, and wavefunctions.",
+    "first_seen": "2026-03-05T06:08:47",
+    "enriched_at": "2026-03-05T06:08:47",
+    "referenced_by_tweets": [
+      "2012156056357708269"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://substack.com/home/post/p-184509827": {
+    "domain": "substack.com",
+    "source_type": "substack",
+    "title": "Democracy\u2019s Edge: Elite Overproduction",
+    "content_preview": "Part 1: Why do democracies fail even when they appear wealthy, educated, and stable?",
+    "first_seen": "2026-03-05T06:08:55",
+    "enriched_at": "2026-03-05T06:08:55",
+    "referenced_by_tweets": [
+      "2011765194494734620"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://responsiblestatecraft.org/ukraine-nato-sloat/": {
+    "domain": "responsiblestatecraft.org",
+    "source_type": "web_article",
+    "title": "Pranked Biden official exposes lie that Ukraine war was inevitable",
+    "content_preview": "She isn't the first to admit \u2014 after the fact \u2014 that taking NATO off the table to avoid Russian invasion was considered, and dismissed",
+    "first_seen": "2026-03-05T06:10:22",
+    "enriched_at": "2026-03-05T06:10:22",
+    "referenced_by_tweets": [
+      "2002171679137501498"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://www.zerohedge.com/personal-finance/dumber-sicker-poorer": {
+    "domain": "zerohedge.com",
+    "source_type": "news_article",
+    "title": "Dumber, Sicker, & Poorer<!-- --> | ZeroHedge",
+    "content_preview": "",
+    "first_seen": "2026-03-05T06:10:24",
+    "enriched_at": "2026-03-05T06:10:24",
+    "referenced_by_tweets": [
+      "2002189739613388939"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://notthebee.com/article/fulton-county-georgia-admits-they-illegally-certified-315000-ballots-in-2020-election": {
+    "domain": "notthebee.com",
+    "source_type": "web_article",
+    "title": "Fulton County admits it illegally certified 315,000 ballots in 2020 election",
+    "content_preview": "Color me surprised.",
+    "first_seen": "2026-03-05T06:10:30",
+    "enriched_at": "2026-03-05T06:10:30",
+    "referenced_by_tweets": [
+      "2002033681557258295"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://www.compactmag.com/article/the-lost-generation/": {
+    "domain": "compactmag.com",
+    "source_type": "web_article",
+    "title": "The Lost Generation",
+    "content_preview": "For fifteen years I\u2019ve scalped tickets to pay the bills. But in January 2016 I almost managed a real career.",
+    "first_seen": "2026-03-05T06:10:35",
+    "enriched_at": "2026-03-05T06:10:35",
+    "referenced_by_tweets": [
+      "2000932789055619501"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://go.hubermanlab.com/rEYekuL": {
+    "domain": "go.hubermanlab.com",
+    "source_type": "web_article",
+    "title": "Essentials: The Science of Making & Breaking Habits",
+    "content_preview": "Learn how to build lasting habits and break unwanted ones using daily rhythms, 21-day cycles, and science-based tools in this Huberman Lab Essentials episode.",
+    "first_seen": "2026-03-05T06:11:05",
+    "enriched_at": "2026-03-05T06:11:05",
+    "referenced_by_tweets": [
+      "1996566900638445732"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://thespectator.com/topic/climate-politics-come-down-to-earth/": {
+    "domain": "thespectator.com",
+    "source_type": "web_article",
+    "title": "The end of the climate cult",
+    "content_preview": "It has been a long, lucrative ride",
+    "first_seen": "2026-03-05T06:11:10",
+    "enriched_at": "2026-03-05T06:11:10",
+    "referenced_by_tweets": [
+      "1996607030610841816"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://www.nationalreview.com/corner/we-intended-the-strike-to-be-lethal-is-not-a-defense/": {
+    "domain": "nationalreview.com",
+    "source_type": "web_article",
+    "title": "\u2018We Intended the Strike to Be Lethal\u2019 Is Not a Defense | National Review",
+    "content_preview": "The laws of war, incorporated in the federal war crimes statute, prohibit the killing of people who have been rendered hors de combat.",
+    "first_seen": "2026-03-05T06:11:17",
+    "enriched_at": "2026-03-05T06:11:17",
+    "referenced_by_tweets": [
+      "1995196741650370812"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://www.city-journal.org/article/city-journal-daily-newsletter-nov-20-2025": {
+    "domain": "city-journal.org",
+    "source_type": "web_article",
+    "title": "How Minnesota\u2019s Welfare Funds Ended Up in the Hands of a Terror Group",
+    "content_preview": "Today, we\u2019re looking at Minnesota\u2019s Somali fraud rings, presidential authority to withhold funds, the case against a 50-year mortgage, and the Trump administration\u2019s homelessness policy shift.",
+    "first_seen": "2026-03-05T06:11:23",
+    "enriched_at": "2026-03-05T06:11:23",
+    "referenced_by_tweets": [
+      "1993003902304964703"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "http://www.metabolicmind.org": {
+    "domain": "metabolicmind.org",
+    "source_type": "web_article",
+    "title": "Home | Metabolic Mind",
+    "content_preview": "Pioneering a new era in mental health with the groundbreaking science of metabolic psychiatry.",
+    "first_seen": "2026-03-05T06:11:26",
+    "enriched_at": "2026-03-05T06:11:26",
+    "referenced_by_tweets": [
+      "1991970351388217529"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://www.zerohedge.com/political/convenience-culture-crisis-how-second-wave-feminism-helped-make-america-sick": {
+    "domain": "zerohedge.com",
+    "source_type": "news_article",
+    "title": "The Convenience Culture Crisis: How Second-Wave Feminism Helped Make America Sick<!-- --> | ZeroHedge",
+    "content_preview": "",
+    "first_seen": "2026-03-05T06:11:36",
+    "enriched_at": "2026-03-05T06:11:36",
+    "referenced_by_tweets": [
+      "1990273728798769522"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://www.zerohedge.com/geopolitical/deep-fourth-turning-darkest-hours-are-dawn": {
+    "domain": "zerohedge.com",
+    "source_type": "news_article",
+    "title": "Deep In The Fourth Turning: The Darkest Hours Are Before The Dawn<!-- --> | ZeroHedge",
+    "content_preview": "",
+    "first_seen": "2026-03-05T06:11:42",
+    "enriched_at": "2026-03-05T06:11:42",
+    "referenced_by_tweets": [
+      "1989550219667669433"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://www.bbc.com/news/articles/cjekdqj7529o": {
+    "domain": "bbc.com",
+    "source_type": "web_article",
+    "title": "Just Stop Oil activists cleared over Stonehenge protest",
+    "content_preview": "The trio are cleared of all charges after citing human rights law in their defence.",
+    "first_seen": "2026-03-05T06:11:55",
+    "enriched_at": "2026-03-05T06:11:55",
+    "referenced_by_tweets": [
+      "1984620723487281488"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "http://DeepLearning.AI": {
+    "domain": "deeplearning.ai",
+    "source_type": "web_article",
+    "title": "Home",
+    "content_preview": "DeepLearning.AI | Andrew Ng | Join over 7 million people learning how to use and build AI through our online courses. Earn certifications, level up your skills, and stay ahead of the industry.",
+    "first_seen": "2026-03-05T06:12:04",
+    "enriched_at": "2026-03-05T06:12:04",
+    "referenced_by_tweets": [
+      "1983946706564563171",
+      "1983585327525822471"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(24)02251-7/fulltext": {
+    "domain": "thelancet.com",
+    "source_type": "web_article",
+    "title": "Just a moment...",
+    "content_preview": "",
+    "first_seen": "2026-03-05T06:12:34",
+    "enriched_at": "2026-03-05T06:12:34",
+    "referenced_by_tweets": [
+      "1975558561796165878"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://www.wolfram-media.com/products/introduction-to-calculus": {
+    "domain": "wolfram-media.com",
+    "source_type": "web_article",
+    "title": "Introduction to Calculus--Wolfram Media",
+    "content_preview": "Easy-to-follow ebook introduction to the fundamental concepts of calculus and applications. Plus, instructional videos. Functions and limits, differential & integral calculus, differential equations, prep for AP Calculus AB course.",
+    "first_seen": "2026-03-05T06:13:37",
+    "enriched_at": "2026-03-05T06:13:37",
+    "referenced_by_tweets": [
+      "1961073902299320365"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://github.com/google/langextract": {
+    "domain": "github.com",
+    "source_type": "web_article",
+    "title": "GitHub - google/langextract: A Python library for extracting structured information from unstructured text using LLMs with precise source grounding and interactive visualization.",
+    "content_preview": "A Python library for extracting structured information from unstructured text using LLMs with precise source grounding and interactive visualization. - google/langextract",
+    "first_seen": "2026-03-05T06:13:43",
+    "enriched_at": "2026-03-05T06:13:43",
+    "referenced_by_tweets": [
+      "1959436837136503153"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://www.opensourceprojects.dev/post/1949668684781548029": {
+    "domain": "opensourceprojects.dev",
+    "source_type": "web_article",
+    "title": "An Open-Source Visual Vibecoding Editor. Visually build, style, and edit your Re...",
+    "content_preview": "An Open-Source Visual Vibecoding Editor. Visually build, style, and edit your React App with AI",
+    "first_seen": "2026-03-05T06:14:32",
+    "enriched_at": "2026-03-05T06:14:32",
+    "referenced_by_tweets": [
+      "1949669441664426373"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
+  },
+  "https://ap4libertyshop.com/collections/javier-milei-collection?_pos=1&_psq=Mile&_ss=e&_v=1.0": {
+    "domain": "ap4libertyshop.com",
+    "source_type": "web_article",
+    "title": "Javier Milei Merch - AFUERA Shirts & Chainsaw Gear | 4LibertyShop",
+    "content_preview": "Official Javier Milei merchandise celebrating Argentina's libertarian president. Chainsaw imagery, AFUERA apparel, and freedom gear. Support the liberty revolution!",
+    "first_seen": "2026-03-05T06:14:51",
+    "enriched_at": "2026-03-05T06:14:51",
+    "referenced_by_tweets": [
+      "1941957185610609105"
+    ],
+    "led_to_deep_dive": false,
+    "enrichment_failed": false
   }
 }
