@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-03-04 - Phase 3C.5: Signal Folder Tagging + Bug Fixes
+
+### Signal Folder Tagging
+- **`fetch_folder_mapping()`** — fetches all X Premium bookmark folders via API, builds `{tweet_id: folder_name}` map in 6 API calls
+- **`folder` field** added to signal schema (top-level); `null` for unorganized bookmarks
+- **`backfill_folder_tags()`** + `--tag-folders` CLI flag — backfilled 63 of 398 existing signals with native X folder names; 335 remain `null` pending LLM classification pass
+- **Auto-tagging** — every `enrich_signals.py` run now fetches folder mapping at start; new signals tagged on arrival
+- Folder breakdown: Finance and geopolitics (18), Learning 2025 (20), Life and health (20), Tech (3), Modular Construction (2)
+
+### Bug Fixes
+- **Feedback buttons** (`curator_server.py`) — `record_feedback_with_article()` was calling `curator_feedback.py` with bare `python3` (system Python, no `anthropic` module). Fixed to resolve `venv/bin/python3` first, matching pattern used by deepdive path. Commit `570e516`.
+- **`curator_media/` gitignored** — 276 images (32MB) removed from git tracking; added to `.gitignore`
+- **Personal data removed** from `~/.openclaw/workspace` git history — `curator_preferences.json`, `priorities.json`, usage logs now gitignored; `.example` template files added
+
+### Enrichment
+- **Pagination** added to `fetch_bookmarks()` — fetches all ~400 bookmarks via `next_token` loop; `--all` flag (up to 400); X archive no longer needed
+- Full 398-tweet enrichment run complete: 1,190 content topics, 23 domains, 3 source types in `learned_patterns`
+
+### Pending
+- LLM folder classification for 335 unorganized signals (`folder: null`) — Haiku pass, ~$0.02, deferred to next session
+- Phase 3D image analysis (`chart_analysis: null` gate in place)
+- Second A/B test: 20-tweet profile vs 398-tweet full profile
+
+---
+
 ## 2026-03-03 - Milestone: Phase 3C Complete — Content Ecosystem Enrichment
 
 ### What Was Built
