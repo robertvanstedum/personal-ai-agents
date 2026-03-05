@@ -13,12 +13,14 @@ media images, analyzes tweet text with Haiku, and writes:
 Safe to re-run: already-enriched signals are skipped.
 
 Usage:
-    python enrich_signals.py --dry-run          # preview, no writes
-    python enrich_signals.py --limit=20         # default: 20 most recent bookmarks
-    python enrich_signals.py --limit=100        # larger batch
-    python enrich_signals.py --skip-analysis    # skip Haiku text analysis
-    python enrich_signals.py --skip-media       # skip image downloads
-    python enrich_signals.py --full             # re-enrich all (ignore existing)
+    python enrich_signals.py --dry-run                         # preview, no writes
+    python enrich_signals.py --limit=20                        # default: 20 most recent bookmarks
+    python enrich_signals.py --limit=100                       # larger batch
+    python enrich_signals.py --all                             # all bookmarks (paginated, up to 400)
+    python enrich_signals.py --folder "Finance and geopolitics" # folder-only (Premium feature)
+    python enrich_signals.py --skip-analysis                   # skip Haiku text analysis
+    python enrich_signals.py --skip-media                      # skip image downloads
+    python enrich_signals.py --full                            # re-enrich all (ignore existing)
 """
 
 import argparse
@@ -29,6 +31,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import requests
 import tweepy
 
 from curator_utils import (
@@ -132,14 +135,62 @@ def fetch_bookmarks(limit: int) -> tuple[list, dict, dict]:
     return tweets[:limit], authors, media
 
 
+# ── X API: folder mapping (Premium) ──────────────────────────────────────────
+
+def fetch_folder_mapping() -> dict[str, str]:
+    """
+    Build a {tweet_id: folder_name} map across ALL bookmark folders.
+
+    X folder API returns up to 20 tweet IDs per folder — no pagination.
+    One API call per folder (typically 5–10 folders).
+
+    Returns:
+        mapping — {tweet_id: folder_name}  (65 entries across 5 folders in practice)
+    """
+    token = get_valid_token()
+    headers = {'Authorization': f'Bearer {token}'}
+
+    # Authenticated user ID
+    me = requests.get('https://api.twitter.com/2/users/me', headers=headers, timeout=10)
+    me.raise_for_status()
+    user_id = me.json()['data']['id']
+
+    # List all folders
+    folders_resp = requests.get(
+        f'https://api.twitter.com/2/users/{user_id}/bookmarks/folders',
+        headers=headers, timeout=10
+    )
+    folders_resp.raise_for_status()
+    folders = folders_resp.json().get('data', [])
+    log.info(f'Found {len(folders)} bookmark folders')
+
+    mapping: dict[str, str] = {}
+    for f in folders:
+        ids_resp = requests.get(
+            f'https://api.twitter.com/2/users/{user_id}/bookmarks/folders/{f["id"]}',
+            headers=headers, timeout=10
+        )
+        ids_resp.raise_for_status()
+        ids = [t['id'] for t in (ids_resp.json().get('data') or [])]
+        for tid in ids:
+            mapping[tid] = f['name']
+        log.info(f'  "{f["name"]}": {len(ids)} tweets')
+
+    log.info(f'Folder mapping: {len(mapping)} total tagged tweet IDs')
+    return mapping
+
+
 # ── Signal building ───────────────────────────────────────────────────────────
 
 def build_signal(tweet, authors: dict, media_map: dict,
                  url_cache: dict, domain_registry: dict,
-                 dry_run: bool, skip_analysis: bool, skip_media: bool) -> dict:
+                 dry_run: bool, skip_analysis: bool, skip_media: bool,
+                 folder: str | None = None) -> dict:
     """
     Build one enriched signal from a tweet object.
     Mutates url_cache and domain_registry in place.
+
+    folder — bookmark folder name if this tweet was filed into one, else None.
     """
     tweet_id  = str(tweet.id)
     username  = authors.get(str(tweet.author_id), str(tweet.author_id))
@@ -151,6 +202,7 @@ def build_signal(tweet, authors: dict, media_map: dict,
         'source':     source,
         'url':        f'https://x.com/{username}/status/{tweet_id}',
         'action':     'save',
+        'folder':     folder,
         'fetched_at': now_iso(),
         'metadata': {
             'tweet_text':    tweet_text,
@@ -320,6 +372,64 @@ def update_learned_patterns(signals: list):
     log.info(f'learned_patterns updated: {len(domains)} domains, {len(types)} source types, {len(topics)} topics')
 
 
+# ── Folder tag backfill ───────────────────────────────────────────────────────
+
+def backfill_folder_tags(dry_run: bool = False):
+    """
+    Fetch the current folder mapping and stamp a `folder` field onto every
+    existing signal in curator_signals.json.
+
+    Signals already in a folder get their folder name; all others get null.
+    Signals that already have a non-null folder field are left unchanged
+    (so manual overrides survive a re-run).
+    """
+    if not SIGNALS_FILE.exists():
+        log.warning('No signals file found — nothing to backfill')
+        return
+
+    print(f'\n{"="*56}')
+    print('Backfilling folder tags into existing signals...')
+    print(f'{"="*56}\n')
+
+    folder_map = fetch_folder_mapping()
+
+    signals = json.loads(SIGNALS_FILE.read_text())
+    tagged = 0
+    already_set = 0
+    untagged = 0
+
+    for sig in signals:
+        tid = sig.get('tweet_id', '')
+        if sig.get('folder') is not None:
+            already_set += 1
+            continue
+        folder_name = folder_map.get(tid)
+        sig['folder'] = folder_name
+        if folder_name:
+            tagged += 1
+        else:
+            untagged += 1
+
+    if not dry_run:
+        SIGNALS_FILE.write_text(json.dumps(signals, indent=2))
+
+    print(f'Backfill complete:')
+    print(f'  Tagged with folder:  {tagged}')
+    print(f'  No folder (null):    {untagged}')
+    print(f'  Already had folder:  {already_set}')
+    if dry_run:
+        print('  (dry run — nothing written)')
+
+    # Show folder breakdown
+    from collections import Counter
+    counts = Counter(s.get('folder') for s in signals)
+    print(f'\nFolder breakdown:')
+    for name, count in sorted(counts.items(), key=lambda x: -(x[1])):
+        label = name or '(unorganized)'
+        print(f'  {label:<30} {count}')
+    print()
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def enrich_signals(limit: int = 20, dry_run: bool = False,
@@ -335,10 +445,18 @@ def enrich_signals(limit: int = 20, dry_run: bool = False,
 
     # Load existing data
     existing_signals: list = json.loads(SIGNALS_FILE.read_text()) if SIGNALS_FILE.exists() else []
-    url_cache:     dict = json.loads(URL_CACHE_FILE.read_text())     if URL_CACHE_FILE.exists()     else {}
-    domain_registry: dict = json.loads(DOMAIN_REGISTRY_FILE.read_text()) if DOMAIN_REGISTRY_FILE.exists() else {}
+    url_cache:        dict = json.loads(URL_CACHE_FILE.read_text())        if URL_CACHE_FILE.exists()        else {}
+    domain_registry:  dict = json.loads(DOMAIN_REGISTRY_FILE.read_text()) if DOMAIN_REGISTRY_FILE.exists() else {}
 
     existing_ids = {s['tweet_id'] for s in existing_signals} if not full else set()
+
+    # Fetch folder mapping so new signals get tagged on arrival
+    print('Fetching bookmark folder mapping...')
+    try:
+        folder_map = fetch_folder_mapping()
+    except Exception as e:
+        log.warning(f'Could not fetch folder mapping: {e} — signals will have folder=null')
+        folder_map = {}
 
     # Fetch from X
     tweets, authors, media_map = fetch_bookmarks(limit)
@@ -357,12 +475,15 @@ def enrich_signals(limit: int = 20, dry_run: bool = False,
             skipped += 1
             continue
 
-        print(f'[{i:2d}] @{username:<20} enriching...')
+        folder = folder_map.get(tweet_id)
+        folder_label = f' [{folder}]' if folder else ''
+        print(f'[{i:2d}] @{username:<20} enriching...{folder_label}')
 
         signal = build_signal(
             tweet, authors, media_map,
             url_cache, domain_registry,
             dry_run, skip_analysis, skip_media,
+            folder=folder,
         )
 
         lc = signal['metadata'].get('linked_content')
@@ -405,18 +526,21 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Enrich X bookmarks with URL metadata and text analysis')
     parser.add_argument('--limit',         type=int, default=20,  help='Number of bookmarks to fetch (default 20)')
     parser.add_argument('--all',           action='store_true',   help='Fetch all bookmarks (up to 400, paginated)')
+    parser.add_argument('--tag-folders',   action='store_true',   help='Backfill folder tags on existing signals (no re-enrichment)')
     parser.add_argument('--dry-run',       action='store_true',   help='Preview only — write nothing')
     parser.add_argument('--skip-analysis', action='store_true',   help='Skip Haiku text analysis')
     parser.add_argument('--skip-media',    action='store_true',   help='Skip image downloads')
     parser.add_argument('--full',          action='store_true',   help='Re-enrich all (ignore existing signals)')
     args = parser.parse_args()
 
-    limit = 400 if args.all else args.limit
-
-    enrich_signals(
-        limit=limit,
-        dry_run=args.dry_run,
-        skip_analysis=args.skip_analysis,
-        skip_media=args.skip_media,
-        full=args.full,
-    )
+    if args.tag_folders:
+        backfill_folder_tags(dry_run=args.dry_run)
+    else:
+        limit = 400 if args.all else args.limit
+        enrich_signals(
+            limit=limit,
+            dry_run=args.dry_run,
+            skip_analysis=args.skip_analysis,
+            skip_media=args.skip_media,
+            full=args.full,
+        )
