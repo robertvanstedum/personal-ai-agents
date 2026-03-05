@@ -77,38 +77,59 @@ def today_iso() -> str:
 
 def fetch_bookmarks(limit: int) -> tuple[list, dict, dict]:
     """
-    Fetch `limit` most recent bookmarks via the X bookmarks API.
+    Fetch up to `limit` bookmarks via the X bookmarks API, paginating as needed.
+    X API max is 100 per request — fetches multiple pages for limits > 100.
 
     Returns:
-        tweets   — list of tweet objects
+        tweets   — list of tweet objects (up to limit)
         authors  — {author_id: username}
         media    — {media_key: {type, url, alt_text}}
     """
     token  = get_valid_token()
     client = tweepy.Client(bearer_token=token)
 
-    resp = client.get_bookmarks(
-        max_results=min(limit, 100),
-        tweet_fields=['text', 'author_id', 'created_at', 'entities', 'attachments'],
-        expansions=['author_id', 'attachments.media_keys'],
-        user_fields=['username'],
-        media_fields=['type', 'url', 'preview_image_url', 'alt_text'],
-    )
-
+    tweets  = []
     authors = {}
     media   = {}
+    next_token = None
+    page = 0
 
-    if resp.includes:
-        for u in (resp.includes.get('users') or []):
-            authors[str(u.id)] = u.username
-        for m in (resp.includes.get('media') or []):
-            media[m.media_key] = {
-                'type':    m.type,
-                'url':     getattr(m, 'url', None) or getattr(m, 'preview_image_url', None),
-                'alt_text': getattr(m, 'alt_text', None),
-            }
+    while len(tweets) < limit:
+        page += 1
+        batch_size = min(100, limit - len(tweets))  # X API max is 100 per call
+        log.info(f'Fetching page {page} ({batch_size} bookmarks)...')
 
-    return list(resp.data or []), authors, media
+        resp = client.get_bookmarks(
+            max_results=batch_size,
+            pagination_token=next_token,
+            tweet_fields=['text', 'author_id', 'created_at', 'entities', 'attachments'],
+            expansions=['author_id', 'attachments.media_keys'],
+            user_fields=['username'],
+            media_fields=['type', 'url', 'preview_image_url', 'alt_text'],
+        )
+
+        if not resp.data:
+            break  # No more bookmarks
+
+        tweets.extend(resp.data)
+
+        if resp.includes:
+            for u in (resp.includes.get('users') or []):
+                authors[str(u.id)] = u.username
+            for m in (resp.includes.get('media') or []):
+                media[m.media_key] = {
+                    'type':    m.type,
+                    'url':     getattr(m, 'url', None) or getattr(m, 'preview_image_url', None),
+                    'alt_text': getattr(m, 'alt_text', None),
+                }
+
+        # Check for next page
+        next_token = resp.meta.get('next_token') if resp.meta else None
+        if not next_token:
+            break  # Reached end of bookmarks
+
+    log.info(f'Fetched {len(tweets)} bookmarks across {page} page(s)')
+    return tweets[:limit], authors, media
 
 
 # ── Signal building ───────────────────────────────────────────────────────────
@@ -308,7 +329,8 @@ def enrich_signals(limit: int = 20, dry_run: bool = False,
     print(f'\n{"="*56}')
     if dry_run:
         print('DRY RUN — no files will be written')
-    print(f'Fetching {limit} bookmarks from X API...')
+    pages = (limit + 99) // 100
+    print(f'Fetching up to {limit} bookmarks (~{pages} API page{"s" if pages > 1 else ""})...')
     print(f'{"="*56}\n')
 
     # Load existing data
@@ -382,14 +404,17 @@ def enrich_signals(limit: int = 20, dry_run: bool = False,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Enrich X bookmarks with URL metadata and text analysis')
     parser.add_argument('--limit',         type=int, default=20,  help='Number of bookmarks to fetch (default 20)')
+    parser.add_argument('--all',           action='store_true',   help='Fetch all bookmarks (up to 400, paginated)')
     parser.add_argument('--dry-run',       action='store_true',   help='Preview only — write nothing')
     parser.add_argument('--skip-analysis', action='store_true',   help='Skip Haiku text analysis')
     parser.add_argument('--skip-media',    action='store_true',   help='Skip image downloads')
     parser.add_argument('--full',          action='store_true',   help='Re-enrich all (ignore existing signals)')
     args = parser.parse_args()
 
+    limit = 400 if args.all else args.limit
+
     enrich_signals(
-        limit=args.limit,
+        limit=limit,
         dry_run=args.dry_run,
         skip_analysis=args.skip_analysis,
         skip_media=args.skip_media,
