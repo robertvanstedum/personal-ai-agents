@@ -548,8 +548,12 @@ def record_feedback_with_article(action, rank, article_data):
     }
     
     try:
+        # Use venv Python so workspace curator_feedback.py has access to anthropic + other deps
+        venv_python = BASE_DIR / 'venv' / 'bin' / 'python3'
+        python_cmd = str(venv_python) if venv_python.exists() else 'python3'
+
         result = subprocess.run(
-            ['python3', str(feedback_script), action, str(rank), '--channel', 'web_ui'],
+            [python_cmd, str(feedback_script), action, str(rank), '--channel', 'web_ui'],
             input=json.dumps(payload).encode(),
             capture_output=True,
             cwd=BASE_DIR,
