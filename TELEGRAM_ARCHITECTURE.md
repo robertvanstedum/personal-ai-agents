@@ -62,12 +62,15 @@ Already running. No changes needed.
 
 ✅ Created 2026-03-05 via @BotFather.
 
-**Token:** stored in macOS keychain — add via:
-```bash
-security add-generic-password -s "telegram_openclaw" -a "bot_token" -w "YOUR_TOKEN"
+**Token:** stored in macOS keychain:
+- Service: `telegram`
+- Account: `polling_bot_token`
+
+```python
+keyring.get_password("telegram", "polling_bot_token")
 ```
 
-**OpenClaw config:** Set the token in OpenClaw's Telegram provider settings (OpenClaw workspace, not this repo). OpenClaw reads it from keychain or its own config store.
+**OpenClaw config:** Point OpenClaw's Telegram provider at `keyring("telegram", "polling_bot_token")`. This key is separate from `rvsopenbot`'s `bot_token` — no collision.
 
 ---
 
