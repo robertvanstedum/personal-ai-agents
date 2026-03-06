@@ -40,8 +40,7 @@ Fix applied:
 1. `launchctl unload ~/Library/LaunchAgents/com.vanstedum.telegram-webhook.plist`
 2. Killed stray PIDs (47314, 47321)
 3. `com.user.telegram-feedback-bot` (PID 46966) now sole owner of `rvsopenbot` token
-
-The webhook plist file remains on disk but is unloaded. Do not reload it.
+4. Renamed plist to `com.vanstedum.telegram-webhook.plist.disabled` — `.disabled` extension prevents accidental reload via `launchctl load`
 
 ---
 
@@ -71,6 +70,8 @@ keyring.get_password("telegram", "polling_bot_token")
 ```
 
 **OpenClaw config:** Point OpenClaw's Telegram provider at `keyring("telegram", "polling_bot_token")`. This key is separate from `rvsopenbot`'s `bot_token` — no collision.
+
+**Note — keyring naming:** The `telegram` service name is consistent between both tokens (`bot_token` and `polling_bot_token`), but the broader keyring layout (across xAI, OpenAI, etc.) uses inconsistent service names. Worth a standardization pass at some point — one clear pattern across all credentials (e.g. `app_name/credential_type`).
 
 ---
 
