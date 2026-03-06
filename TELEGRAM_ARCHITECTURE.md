@@ -16,7 +16,7 @@ rvsopenbot  (existing token, keychain: telegram/bot_token)
   → Sends: morning briefing, deep dive results
   → Runs via: com.user.telegram-feedback-bot (launchd, always-on)
 
-openclaw_bot  (new token, set in OpenClaw config)
+minimoi_cmd_bot  (new token, set in OpenClaw config)
   → OpenClaw gateway owns this exclusively
   → Handles: text commands, voice notes, conversational queries
   → Reads: TELEGRAM_CONTEXT.md for session context
@@ -58,17 +58,16 @@ Already running. No changes needed.
 
 ---
 
-## Setup: openclaw_bot (OpenClaw gateway)
+## Setup: minimoi_cmd_bot (OpenClaw gateway)
 
-Create once via @BotFather, then give OpenClaw the token.
+✅ Created 2026-03-05 via @BotFather.
 
-**@BotFather steps:**
-1. Message @BotFather → `/newbot`
-2. Name: `OpenClaw` (or `OpenClaw Robert` — must be unique)
-3. Username: `openclaw_rvs_bot` (or similar, must end in `bot`)
-4. Copy the token → paste into OpenClaw Telegram provider config
+**Token:** stored in macOS keychain — add via:
+```bash
+security add-generic-password -s "telegram_openclaw" -a "bot_token" -w "YOUR_TOKEN"
+```
 
-**OpenClaw config:** Set the new token wherever OpenClaw stores its Telegram provider token (OpenClaw workspace settings, not this repo).
+**OpenClaw config:** Set the token in OpenClaw's Telegram provider settings (OpenClaw workspace, not this repo). OpenClaw reads it from keychain or its own config store.
 
 ---
 
@@ -79,7 +78,7 @@ Create once via @BotFather, then give OpenClaw the token.
 □ launchctl list | grep telegram  →  only com.user.telegram-feedback-bot loaded
 □ Send /status to rvsopenbot  →  responds with last 10 log lines
 □ Click Like on a briefing article  →  curator_preferences.json timestamp updates
-□ Send text message to openclaw_bot  →  OpenClaw responds
+□ Send text message to @minimoi_cmd_bot  →  OpenClaw responds
 ```
 
 ---
