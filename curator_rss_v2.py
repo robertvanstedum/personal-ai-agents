@@ -896,13 +896,15 @@ ARTICLES:
             raise
 
 
-def score_entries_xai(entries: List[Dict], fallback_on_error: bool = False, user_profile: str = "") -> List[Dict]:
+def score_entries_xai(entries: List[Dict], fallback_on_error: bool = False, user_profile: str = "", model: str = "grok-3-mini", temperature: float = 0.0) -> List[Dict]:
     """
     Score all entries using xAI Grok (batch processing)
     
     Args:
         entries: List of article entries
         fallback_on_error: If True, silently fall back to mechanical on API errors
+        user_profile: User preference profile text
+        model: xAI model to use (grok-3-mini or grok-4-1-fast-reasoning)
     
     Returns list of dicts with 'score', 'category', 'method' = 'xai'
     """
@@ -937,14 +939,26 @@ To test with mechanical mode instead:
     
     client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
 
-    # Build prompt with all articles
-    prompt = """You are a geopolitics & finance curator. For each article below, assign:
-1. Category (ONE of: geo_major, geo_other, monetary, fiscal, technology, other)
-2. Score (0-10): relevance for a geopolitics/finance professional
+    # Build prompt with Grok's optimized instructions
+    override_rules = """You are a sharp, personalized intelligence analyst scoring articles for relevance to the user's interests: finance, geopolitics, risk signals, uncertainty, contrarian views, high-signal sources, commodity/supply-chain dynamics, and intersections that reveal fragility or tail risks.
+
+GROUND TRUTH RULES — PRIORITIZE THESE OVER ANY INDEPENDENT JUDGMENT:
+
+- The USER PROFILE below is absolute ground truth. Source preferences, boosts, and avoids OVERRIDE your own content evaluation.
+- If a source or content type appears in the user's boost list or has positive history, score it UP significantly — even if it seems generic, broad, aggregate, or tangential on surface.
+- The user deliberately reinforces these; treat them as trusted/high-value.
+- Do NOT downrank or dismiss based on "generic form", "aggregate style", or categorical judgment if profile signals support relevance.
+- Explicit domain rule: Commodity/supply-chain disruptions, dependencies (e.g., Brazil soy → China), environmental intersections (e.g., deforestation links), or trade rerouting = high-priority geopolitical/finance risk signals. Weight these UP when they align with profile topics.
+- Use your reasoning to uncover nuanced alignments, hidden implications, contrarian angles, or overlooked risks/opportunities WITHIN the profile's priorities — not to override the profile.
+- For borderline cases, err toward higher relevance if profile or domain rules apply.
+- Score on the usual scale, applying overrides.
+
+USER PROFILE (ground truth):
+""" + user_profile + """
 
 CATEGORIES:
 - geo_major: US, China, Russia, Europe, Japan, Korea (deployed/operational context)
-- geo_other: Middle East, Africa, Latin America, South/Southeast Asia
+- geo_other: Middle East, Africa, Latin America, South/Southeast Asia  
 - monetary: Gold, Bitcoin, currencies, commodities, exchange rates
 - fiscal: Government debt, spending, budgets, deficits
 - technology: R&D, manufacturing, dual-use DEVELOPMENT (not yet deployed)
@@ -956,10 +970,6 @@ SCORE GUIDANCE:
 5-6: Relevant but not urgent, decent background
 3-4: Tangential interest, minor relevance
 0-2: Skip (noise, spam, off-topic, pure entertainment)
-""" + user_profile + """
-KEY DISTINCTION (technology vs geopolitics):
-- If discussing DEPLOYED systems, active operations, current conflicts → geo category
-- If discussing R&D, manufacturing capacity, future capabilities → technology
 
 OUTPUT FORMAT (one line per article, no explanation):
 <article_index>|<category>|<score>
@@ -967,6 +977,7 @@ OUTPUT FORMAT (one line per article, no explanation):
 ARTICLES:
 """
     
+    prompt = override_rules
     for i, entry in enumerate(entries):
         summary = entry.get('summary', '')[:200].replace('\n', ' ')
         source = entry.get('source', 'Unknown')
@@ -974,14 +985,14 @@ ARTICLES:
     
     prompt += "\nOUTPUT (one line per article):\n"
     
-    print(f"📡 Calling xAI Grok to score {len(entries)} articles...")
+    print(f"📡 Calling xAI {model} to score {len(entries)} articles...")
     
     try:
         response = client.chat.completions.create(
-            model="grok-3-mini",
+            model=model,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=4096,
-            temperature=0
+            temperature=temperature
         )
         
         content = response.choices[0].message.content
@@ -989,7 +1000,7 @@ ARTICLES:
         print(f"   Input: {usage.prompt_tokens} tokens, Output: {usage.completion_tokens} tokens")
         cost = usage.prompt_tokens * 5 / 1_000_000 + usage.completion_tokens * 15 / 1_000_000
         print(f"   Cost: ${cost:.4f}")
-        log_curator_cost('xai-grok-3-mini', 'curator', usage.prompt_tokens, usage.completion_tokens, cost)
+        log_curator_cost(f'xai-{model}', 'curator', usage.prompt_tokens, usage.completion_tokens, cost)
         
     except Exception as e:
         error_msg = f"""
@@ -1431,8 +1442,8 @@ def save_to_history(entries: List[Dict], output_dir: str = "."):
     print(f"💾 History updated: {len(entries)} articles saved")
 
 
-def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanical', 
-           fallback_on_error: bool = False) -> List[Dict]:
+def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanical',
+           fallback_on_error: bool = False, xai_model: str = 'grok-3-mini', temperature: float = 0.0) -> List[Dict]:
     """
     Fetch all feeds, score, rank, return top N
     
@@ -1441,6 +1452,7 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
         diversity_weight: How much to penalize source over-representation (0-1)
         mode: 'mechanical', 'ai', 'ai-two-stage', 'xai', or 'hybrid'
         fallback_on_error: Auto-fallback to mechanical if API fails
+        xai_model: Which xAI model to use ('grok-3-mini' or 'grok-4-1-fast-reasoning')
     
     MODES:
     - mechanical: Fast, free, keyword-based
@@ -1515,8 +1527,8 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
             entry["method"] = results[i]['method']
             entry["raw_score"] = results[i].get('raw_score', entry["score"])  # AI doesn't have raw_score
     elif mode == 'xai':
-        # Single-stage xAI Grok scoring
-        results = score_entries_xai(all_entries, fallback_on_error=fallback_on_error, user_profile=user_profile)
+        # Single-stage xAI Grok scoring (grok-3-mini or grok-4-1-fast-reasoning)
+        results = score_entries_xai(all_entries, fallback_on_error=fallback_on_error, user_profile=user_profile, model=xai_model, temperature=temperature)
         for i, entry in enumerate(all_entries):
             entry["score"] = results[i]['score']
             entry["category"] = results[i]['category']
@@ -2821,11 +2833,25 @@ def main():
     # Map --model= flag to internal scoring mode
     mode_map = {
         'ollama': 'mechanical',   # Free local, keyword-based
-        'xai':    'xai',          # xAI Grok (~$0.15/day) — production default
+        'xai':    'xai',          # xAI Grok-3-mini (~$0.15/day) — production default
+        'grok-4-1': 'xai',        # xAI Grok-4-1-fast-reasoning (NEW - faster, better reasoning)
         'haiku':  'ai',           # Anthropic Haiku (~$0.20/day) — single-stage
         'sonnet': 'ai-two-stage', # Anthropic Haiku pre-filter + Sonnet ranking (~$0.90/day)
     }
     mode = mode_map.get(model, 'xai')  # Default: xai
+    
+    # For grok-4-1, we need to track which xAI model variant to use
+    xai_model_variant = 'grok-3-mini'  # default
+    if model == 'grok-4-1':
+        xai_model_variant = 'grok-4-1-fast-reasoning'
+
+    # Temperature setting (default: 0 for deterministic production runs)
+    # Use --temperature=0.7 for signal-not-noise balance
+    temperature = 0.0
+    for arg in sys.argv:
+        if arg.startswith('--temperature='):
+            temperature = float(arg.split('=')[1])
+            break
 
     # Session ID (in-memory only; no I/O until log calls below)
     session_id = get_session_id()
@@ -2843,7 +2869,7 @@ def main():
     
     # Run curation
     try:
-        top_articles = curate(top_n=20, mode=mode, fallback_on_error=fallback_on_error)
+        top_articles = curate(top_n=20, mode=mode, fallback_on_error=fallback_on_error, xai_model=xai_model_variant, temperature=temperature)
     except (ValueError, RuntimeError) as e:
         # API error with no fallback - exit with error
         print(f"\n💥 Curation failed: {e}")
