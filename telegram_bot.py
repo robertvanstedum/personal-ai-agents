@@ -8,6 +8,7 @@ Handles:
 - Accepting commands: /run, /status, /briefing
 """
 
+from html import escape
 import os
 import io
 import re
@@ -313,7 +314,7 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if log.exists():
         lines = log.read_text().splitlines()
         last_lines = '\n'.join(lines[-10:])
-        await update.message.reply_text(f"📊 Last 10 log lines:\n<pre>{last_lines}</pre>", parse_mode="HTML")
+        await update.message.reply_text(f"📊 Last 10 log lines:\n<pre>{escape(last_lines)}</pre>", parse_mode="HTML")
     else:
         await update.message.reply_text("No log file found yet.")
 
@@ -668,7 +669,7 @@ def handle_webhook_command(message, token):
                 f"📊 Status\n"
                 f"Mode: webhook (stateless — no session cost)\n"
                 f"Last run: {last_run}\n\n"
-                f"<pre>{last_lines}</pre>", parse_mode="HTML")
+                f"<pre>{escape(last_lines)}</pre>", parse_mode="HTML")
         else:
             send_message(token, str(chat_id), "📊 Webhook mode active. No curator log yet.")
     elif text == '/run':
