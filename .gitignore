@@ -77,3 +77,6 @@ curator_preview.txt
 
 # Downloaded media — large binaries, personal reading signals
 curator_media/
+
+# New domains working docs — private until prototype ready
+_NewDomains/
