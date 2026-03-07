@@ -80,3 +80,13 @@ curator_media/
 
 # New domains working docs — private until prototype ready
 _NewDomains/
+
+# Finance domain — private data
+domains/finance/statements/
+domains/finance/reports/
+
+# Language learning — private data
+domains/language_learning/languages/
+domains/language_learning/*/sessions/
+domains/language_learning/*/exercises/
+domains/language_learning/*/vocabulary/
