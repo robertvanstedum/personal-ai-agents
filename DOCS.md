@@ -26,9 +26,9 @@
 | CHANGELOG.md | Change log | Both | 0 | — | Append-only. Also exists in OC workspace |
 | CURATOR_ROADMAP.md | What's built / active / next | Both | 0 | — | Phase tracking. Most current roadmap doc |
 | DEVELOPMENT.md | How we build | Both | 0 | — | Team roles, testing checklist, workflow |
-| TELEGRAM_ARCHITECTURE.md | Two-bot setup | Both | 1 | 2026-03-08 | Validated 2026-03-05. Operationally critical |
-| BACKLOG.md | Small fixes and improvements | Both | 0 | — | Planned — not yet created |
-| DOCS.md | File registry | Both | 1 | 2026-03-08 | This file |
+| TELEGRAM_ARCHITECTURE.md | Two-bot setup | Both | 2 | 2026-03-08 | Validated 2026-03-05. Operationally critical. Companion to docs/FEATURE_TELEGRAM_ARCHITECTURE.md |
+| DOCS.md | File registry | Both | 1 | 2026-03-08 | This file. Audit against all .md files in repo |
+| BACKLOG.md | Small fixes and improvements | Both | 0 | — | Planned — not yet created. Consider consolidating FEATURE_DELETE_DEEP_DIVES.md and CURATOR_UX_BACKLOG.md here |
 | README.md | Public project overview | Other | 1 | 2026-03-08 | Portfolio / GitHub facing. Protected |
 | README_v2 March 3.md | Draft README | Other | 0 | — | Uncommitted draft at root. Review for merge or delete |
 | ENGINEERING.md | Engineering philosophy | Both | 0 | — | OC workspace only (not in repo). Reference when onboarding or refocusing |
@@ -120,6 +120,8 @@
 | TEMPLATE.md | Interest capture template | Other | 0 | — | Gitignored. Template for new entries |
 | 2026-02-13-thoughts.md | Freeform thoughts | Other | 0 | — | Gitignored. Personal notes |
 | 2026-02-16-flagged.md | Flagged articles | Other | 0 | — | Gitignored. Generated content |
+| deep-dives/*.md | Deep dive articles | Generated | 3+ | 2026-03-08 | 3 recent deep dives from Feb 16 curations |
+| 2026/deep-dives/*.md | Deep dive articles | Generated | 10+ | 2026-03-08 | 15+ deep dives from Mar briefings. Auto-generated from curation scoring |
 
 ---
 
@@ -127,32 +129,22 @@
 
 | File | Domain | Agent | Times Accessed | Last Used | Notes |
 |------|--------|-------|---------------|-----------|-------|
-| SOUL.md | Identity / values | OpenClaw | 0 | — | Core identity. Read frequently |
-| USER.md | User profile | OpenClaw | 0 | — | Robert's context and preferences |
-| MEMORY.md | Operational memory | OpenClaw | 0 | — | Running memory across sessions |
-| NOTEBOOK.md | Structured conclusions | OpenClaw | 0 | — | Decisions and design conclusions |
-| WHITEBOARD.md | Brainstorming | OpenClaw | 0 | — | Exploratory thinking, not binding |
-| SCRATCH.md | Disposable notes | OpenClaw | 0 | — | Temporary. Can be cleared |
-| CHANGELOG.md | Change log | OpenClaw | 0 | — | Session-by-session record. Also in repo root |
-| VISION.md | Project vision | OpenClaw | 0 | — | Long-range vision doc |
-| CURRENT_WORK.md | Active session work | OpenClaw | 0 | — | What's in flight right now |
-| TOMORROW_SESSION.md | Next session prep | OpenClaw | 0 | — | Handoff notes for next session |
-| TONIGHT_SESSION_CHECKLIST.md | Session checklist | OpenClaw | 0 | — | One-off checklist. Historical |
-| DEPLOYMENT.md | Deployment notes | OpenClaw | 0 | — | Deployment reference |
-| OFFLINE.md | Offline mode notes | OpenClaw | 0 | — | Review: current or historical? |
-| BACKUP_PLAN.md | Backup planning | OpenClaw | 0 | — | Review: implemented? |
-| DOCS_TO_UPDATE.md | Docs update tracking | OpenClaw | 0 | — | Tracking doc for docs that need updates |
-| README_REVISION_DRAFT.md | README revision draft | OpenClaw | 0 | — | Draft revision. Coordinate with README_v2 March 3.md in repo |
-| PHASE_3C_SPEC.md | Phase 3C spec | OpenClaw | 0 | — | Phase 3C complete. Historical |
-| PHASE_3C_AB_TEST_RESULTS.md | Phase 3C test results | OpenClaw | 0 | — | Phase 3C complete. Historical |
-| SESSION_1_FINAL_SUMMARY.md | Session 1 summary | OpenClaw | 0 | — | Historical session record |
-| STAGE_1_DECISIONS.md | Stage 1 decisions | OpenClaw | 0 | — | Historical. Stage 1 complete |
-| STAGE_1_ID_CORRELATION_FIX.md | Stage 1 bug fix | OpenClaw | 0 | — | Historical. Bug fixed |
-| STAGE_1_NEXT_SESSION.md | Stage 1 next session | OpenClaw | 0 | — | Historical. Stage 1 complete |
-| STAGE_1_PROGRESS.md | Stage 1 progress | OpenClaw | 0 | — | Historical. Stage 1 complete |
-| STAGE_1_SAVE_BUG_FIX.md | Stage 1 save bug | OpenClaw | 0 | — | Historical. Bug fixed |
-| WEEKEND_PLAN_BETA.md | Weekend plan beta | OpenClaw | 0 | — | Historical sprint plan |
-| VOICE_NOTES_SPEC.md | Voice notes spec | OpenClaw | 0 | — | Feature spec. Review: built? |
+| SOUL.md | Identity / values | OpenClaw | 3+ | 2026-03-07 | Core identity. Read every session |
+| USER.md | User profile | OpenClaw | 3+ | 2026-03-07 | Robert's context and preferences. Read every session |
+| MEMORY.md | Operational memory | OpenClaw | 5+ | 2026-03-08 | Running memory across sessions. Updated daily |
+| WHITEBOARD.md | Brainstorming | OpenClaw | 3 | 2026-03-07 | Exploratory thinking. Now ideas-only with governance rule |
+| PROJECT_STATE.md | Build authorization | OpenClaw | 2 | 2026-03-07 | Master orientation. Read first (in workspace, separate from repo) |
+| AGENTS.md | OpenClaw agent template | OpenClaw | 2+ | 2026-03-07 | Workspace setup guide for this instance |
+| HEARTBEAT.md | System heartbeat | OpenClaw | 1 | 2026-03-08 | Empty. Can populate with daily checks or remove |
+| IDENTITY.md | Identity notes | OpenClaw | 1 | 2026-03-07 | 3 lines. Consider folding into SOUL.md or keeping separate |
+| TOOLS.md | Tool inventory | OpenClaw | 1 | 2026-03-07 | Mostly empty. Populate with camera names, SSH hosts, etc. |
+| finance/ | Finance domain folder | OpenClaw | 1 | 2026-03-07 | New private domain (gitignored in repo). .gitignore + README created. Design phase |
+| memory/ | Daily memory logs | OpenClaw | 3+ | 2026-03-08 | Session continuity. Contains 2026-03-01.md through 2026-03-07.md |
+| CHANGELOG.md | Change log | OpenClaw | 1 | 2026-03-07 | Session-by-session record. Also in repo root. Consider which is authoritative |
+| TONIGHT_SESSION_CHECKLIST.md | Session checklist | OpenClaw | 0 | — | One-off checklist. Historical. Can archive |
+| PHASE_3C_SPEC.md | Phase 3C spec | OpenClaw | 0 | — | Phase 3C complete. Historical. Archive if not needed |
+| VOICE_NOTES_SPEC.md | Voice notes spec | OpenClaw | 0 | — | Feature spec. Review: built? Historical artifact |
+| WEEKEND_PLAN_BETA.md | Weekend plan beta | OpenClaw | 0 | — | Historical sprint plan. Can archive |
 
 ---
 
@@ -167,4 +159,25 @@
 
 ---
 
-*Schema version 1.1 — created 2026-03-08, updated 2026-03-08*
+*Schema version 1.2 — created 2026-03-08, updated 2026-03-08 (evening)*
+
+---
+
+## Summary of Changes (Mar 8 Evening Update)
+
+**Added rows:**
+- TELEGRAM_ARCHITECTURE.md companion note (repo root)
+- Deep-dives tracking (interests/deep-dives and interests/2026/deep-dives)
+- OpenClaw workspace files with accurate access counts
+
+**Corrected:**
+- TELEGRAM_ARCHITECTURE.md: updated access counts, added companion reference
+- Project_STATE.md: now tracked separately in workspace (different from repo)
+- finance/ domain: new folder in workspace, gitignored in repo
+- memory/ folder: daily session logs tracked
+
+**Status notes:**
+- Many historical/obsolete files marked for archival review
+- Two CHANGELOG.md files (workspace + repo) — clarify which is primary
+- Some workspace files marked empty or minimal — consider consolidation
+- Deep-dives auto-generated from curation, no manual tracking needed (for info only)
