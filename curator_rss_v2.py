@@ -2846,8 +2846,8 @@ def main():
         xai_model_variant = 'grok-4-1-fast-reasoning'
 
     # Temperature setting (default: 0 for deterministic production runs)
-    # Use --temperature=0.7 for signal-not-noise balance
-    temperature = 0.0
+    # Use --temperature=0.7 for signal-not-noise balance (validated in case study)
+    temperature = 0.7
     for arg in sys.argv:
         if arg.startswith('--temperature='):
             temperature = float(arg.split('=')[1])
