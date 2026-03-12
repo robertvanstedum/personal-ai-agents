@@ -38,6 +38,7 @@ from curator_utils import (
     extract_domain,
     classify_source_type,
     fetch_url_metadata,
+    fetch_destination_text,
     download_image,
     analyze_text_haiku,
 )
@@ -430,6 +431,107 @@ def backfill_folder_tags(dry_run: bool = False):
     print()
 
 
+# ── Destination text batch enrichment ────────────────────────────────────────
+
+def enrich_destination_texts(dry_run: bool = False, limit: int | None = None,
+                              force: bool = False):
+    """
+    Batch-enrich destination_text for existing signals that have linked_content.
+
+    For each eligible signal, calls fetch_destination_text() and writes:
+        linked_content['destination_text']        — article body or tweet fallback
+        linked_content['destination_text_source'] — 'fetched' | 'tweet_fallback'
+        linked_content['destination_text_error']  — error string or null
+        linked_content['destination_text_at']     — ISO timestamp
+
+    Signals without linked_content (tweet-only, no external URL) are skipped.
+    Signals where enrichment_failed=True are skipped (no URL to fetch).
+    Already-enriched signals are skipped unless --force.
+
+    Safe to re-run: idempotent by default.
+    """
+    if not SIGNALS_FILE.exists():
+        log.warning(f'No signals file found: {SIGNALS_FILE}')
+        return
+
+    signals = json.loads(SIGNALS_FILE.read_text())
+
+    # Build candidate list: has linked_content, not failed, not already done (unless force)
+    candidates = []
+    for i, sig in enumerate(signals):
+        lc = sig.get('metadata', {}).get('linked_content')
+        if not lc:
+            continue  # tweet-only signal, no external URL
+        if lc.get('enrichment_failed'):
+            continue  # URL was already known bad at enrichment time
+        if not force and 'destination_text' in lc:
+            continue  # already done
+        candidates.append((i, sig))
+
+    if limit:
+        candidates = candidates[:limit]
+
+    total = len(candidates)
+    print(f'\n{"="*56}')
+    print('Phase 3C.6 — Destination text enrichment')
+    if dry_run:
+        print('DRY RUN — no files will be written')
+    print(f'Eligible signals: {total}  (of {len(signals)} total)')
+    print(f'{"="*56}\n')
+
+    if total == 0:
+        print('Nothing to enrich — all eligible signals already have destination_text.')
+        print('Use --force to re-enrich.\n')
+        return
+
+    fetched_count  = 0
+    fallback_count = 0
+
+    for n, (idx, sig) in enumerate(candidates, 1):
+        lc         = sig['metadata']['linked_content']
+        url        = lc.get('destination_url', '')
+        tweet_text = sig['metadata'].get('tweet_text', '')
+        domain     = lc.get('domain', url[:40])
+
+        print(f'[{n:3d}/{total}] {domain:<35} ', end='', flush=True)
+
+        if dry_run:
+            print('(dry run — skip)')
+            continue
+
+        result = fetch_destination_text(url, tweet_text)
+
+        # Write result fields back into linked_content
+        lc['destination_text']        = result['text']
+        lc['destination_text_source'] = result['source']
+        lc['destination_text_error']  = result['error']
+        lc['destination_text_at']     = now_iso()
+
+        if result['source'] == 'fetched':
+            fetched_count += 1
+            print(f"✓ fetched  ({result['char_count']:4d} chars)")
+        else:
+            fallback_count += 1
+            short_err = (result['error'] or '')[:60]
+            print(f"↩ fallback  {short_err}")
+
+        time.sleep(CRAWL_DELAY)
+
+    if not dry_run:
+        SIGNALS_FILE.write_text(json.dumps(signals, indent=2))
+
+    print(f'\n{"="*56}')
+    print(f'Destination text enrichment complete')
+    if not dry_run:
+        print(f'  Fetched (real article text): {fetched_count}')
+        print(f'  Fallback (tweet text used):  {fallback_count}')
+        print(f'  Total processed:             {fetched_count + fallback_count}')
+        print(f'  Written to: {SIGNALS_FILE}')
+    else:
+        print(f'  Dry run — {total} signals would be processed')
+    print(f'{"="*56}\n')
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def enrich_signals(limit: int = 20, dry_run: bool = False,
@@ -527,6 +629,8 @@ if __name__ == '__main__':
     parser.add_argument('--limit',         type=int, default=20,  help='Number of bookmarks to fetch (default 20)')
     parser.add_argument('--all',           action='store_true',   help='Fetch all bookmarks (up to 400, paginated)')
     parser.add_argument('--tag-folders',   action='store_true',   help='Backfill folder tags on existing signals (no re-enrichment)')
+    parser.add_argument('--enrich-text',   action='store_true',   help='Batch-fetch destination body text for existing signals')
+    parser.add_argument('--force',         action='store_true',   help='Re-enrich even if destination_text already exists (use with --enrich-text)')
     parser.add_argument('--dry-run',       action='store_true',   help='Preview only — write nothing')
     parser.add_argument('--skip-analysis', action='store_true',   help='Skip Haiku text analysis')
     parser.add_argument('--skip-media',    action='store_true',   help='Skip image downloads')
@@ -535,6 +639,13 @@ if __name__ == '__main__':
 
     if args.tag_folders:
         backfill_folder_tags(dry_run=args.dry_run)
+    elif args.enrich_text:
+        limit = None if args.all else args.limit
+        enrich_destination_texts(
+            dry_run=args.dry_run,
+            limit=limit,
+            force=args.force,
+        )
     else:
         limit = 400 if args.all else args.limit
         enrich_signals(

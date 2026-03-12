@@ -76,6 +76,71 @@ def fetch_url_metadata(url: str, timeout: int = 10) -> Dict[str, str]:
         return {'title': '', 'preview': ''}
 
 
+def fetch_destination_text(url: str, tweet_text: str, timeout: int = 15) -> dict:
+    """
+    Fetch readable article body from a destination URL using <p> tag extraction.
+
+    Falls back to tweet_text on any failure:
+    - HTTP error (4xx, 5xx), timeout, connection error
+    - Extracted body too short (likely paywall or JS-rendered page)
+
+    Returns:
+        {
+            'text':       str,        # article body or tweet_text fallback
+            'source':     str,        # 'fetched' | 'tweet_fallback'
+            'char_count': int,
+            'error':      str | None, # None on success, error message on fallback
+        }
+    """
+    if not _BS4_AVAILABLE:
+        log.warning('beautifulsoup4 not installed — using tweet fallback')
+        return {'text': tweet_text, 'source': 'tweet_fallback',
+                'char_count': len(tweet_text), 'error': 'bs4 not available'}
+    try:
+        resp = requests.get(
+            url,
+            timeout=timeout,
+            allow_redirects=True,
+            headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'},
+        )
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.content, 'html.parser')
+
+        # Strip boilerplate before extracting paragraphs
+        for tag in soup(['nav', 'header', 'footer', 'script', 'style', 'aside']):
+            tag.decompose()
+
+        # Collect meaningful paragraph text (skip very short snippets)
+        paragraphs = [
+            p.get_text(separator=' ', strip=True)
+            for p in soup.find_all('p')
+            if len(p.get_text(strip=True)) > 40
+        ]
+        body_text = ' '.join(paragraphs)[:2000]  # cap for scoring context
+
+        if len(body_text) < 100:
+            error = f'Body too short ({len(body_text)} chars) — likely paywall or JS-rendered'
+            log.warning(f'fetch_destination_text: {error} — {url}')
+            return {'text': tweet_text, 'source': 'tweet_fallback',
+                    'char_count': len(tweet_text), 'error': error}
+
+        return {'text': body_text, 'source': 'fetched',
+                'char_count': len(body_text), 'error': None}
+
+    except requests.exceptions.Timeout:
+        err = f'Timeout after {timeout}s'
+    except requests.exceptions.ConnectionError as e:
+        err = f'Connection error: {e}'
+    except requests.exceptions.HTTPError as e:
+        err = f'HTTP {e.response.status_code}'
+    except Exception as e:
+        err = f'Unexpected: {e}'
+
+    log.warning(f'fetch_destination_text failed for {url}: {err} — using tweet fallback')
+    return {'text': tweet_text, 'source': 'tweet_fallback',
+            'char_count': len(tweet_text), 'error': err}
+
+
 def extract_domain(url: str) -> str:
     """Return clean domain from URL, e.g. 'https://www.ft.com/...' → 'ft.com'."""
     try:
