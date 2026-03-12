@@ -1,6 +1,9 @@
 #!/bin/bash
 # Curator cron job - generates briefing + sends to Telegram automatically
-# Model: xAI Grok (--model=xai) ~$0.15/day — fallback to mechanical if API down
+# Model: xAI Grok (--model=xai) ~$0.30/day — fallback to mechanical if API down
+# Cost baseline updated 2026-03-12: X bookmark pool (332 articles) merged in Phase 3C.6,
+# pool size ~390 → ~722, cost doubled from ~$0.18. Evaluate Haiku pre-filter after
+# one week of X article performance data (see Issue #4 / Phase 3C.6 notes).
 # To be called by launchd at 7am daily
 
 PROJECT_DIR="$HOME/Projects/personal-ai-agents"
