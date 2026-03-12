@@ -1,5 +1,51 @@
 # Changelog
 
+## 2026-03-12 - Phase 3C.6: X Bookmark Articles as First-Class Scored Content
+
+Closes Issue #4. Four commits: `0d011b0`, `9430b74`, `9a5753e`, `cc96c9e`
+
+**Status:** Built and tested locally. Not pushed to GitHub — pending first production run validation (tomorrow 7 AM briefing).
+
+### What Was Built
+
+**Piece 1 — `fetch_destination_text()` in `curator_utils.py`** (`0d011b0`)
+Fetches readable body text from destination URLs via `requests.get()` + BeautifulSoup `<p>` extraction, capped at 2000 chars. Fallback: any failure (paywall, 404, timeout) → use tweet text, log it, set `destination_text_source: "tweet_fallback"`, continue. Never blocks the daily run.
+- New field: `destination_text` — extracted body text (or tweet text fallback)
+- New field: `destination_text_source` — `"fetched"` or `"tweet_fallback"`
+- New field: `destination_text_error` — logged failure reason when fallback triggered
+- New flag: `--enrich-text` in `enrich_signals.py` — batch backfill all 398 existing signals
+
+**Piece 2 — `x_to_article.py` Signal Normalizer** (`9430b74`)
+New file. Reads enriched signals from `curator_signals.json`, normalizes each to RSS article schema for scoring:
+```json
+{"title": "tweet_text[:80]", "summary": "destination_text", "url": "destination_url",
+ "source": "X/@username", "content_type": "x_bookmark", ...}
+```
+
+**Piece 3 — `curator_rss_v2.py` `curate()` merge** (`9a5753e`)
+X bookmark articles merged into the candidate pool before scoring. Dedup by URL against `curator_url_cache.json` — if RSS already pulled the same article, X version is dropped. No separate pipeline; X articles score alongside RSS with the same model and full user profile injected.
+
+**Ops — Cost baseline updated** (`cc96c9e`)
+`$0.30/day` cost baseline updated in cron script to reflect expanded article pool.
+
+### What to Watch (Tomorrow's Briefing)
+- X bookmark articles appearing in top 20 — look for `X/@username` source labels
+- Whether X articles feel relevant or like noise — gut reaction matters
+- Any delivery errors on first run with larger pool
+
+### One-Week Checkpoint
+- Is X adding signal quality to the top 20?
+- Actual cost vs $0.30/day baseline
+- If cost high + quality low: add Haiku pre-filter at that point, not before
+
+### Remaining Phase 3C Items
+- `fix show_profile.py` — Phase 3C fields not yet displayed
+- Second A/B test — now has real before/after data to compare
+- Haiku folder classification — 335 `null` signals, ~$0.02
+- Source registry and expansion — next week
+
+---
+
 ## 2026-03-04 - Phase 3C.5: Signal Folder Tagging + Bug Fixes
 
 ### Signal Folder Tagging
