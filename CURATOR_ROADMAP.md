@@ -85,6 +85,24 @@ An AI-powered system that learns what you care about and delivers a curated brie
 
 ---
 
+## ✅ Phase 3C — Domain-Scoped Content Signals (Complete - Mar 12, 2026)
+
+**Phase 3C.6 post-validation finding (Mar 12):**
+Architecture correct and working. X bookmark content entering the daily scoring pool produces low rankings against current RSS news — expected behavior, not a bug. Historical archive signals (398 bookmarks) are months/years old and compete poorly against today's news on recency.
+
+**Key distinction locked in:**
+- **Cold start (done, one-time):** 398 historical bookmarks → profile signals. Correct role.
+- **Ongoing content discovery (next build — Phase 3C.7):** Incremental X bookmark pull — fetch all bookmarks saved since last pull date, enrich with destination text, enter scoring pool as daily candidates. New saves = fresh content that competes.
+
+**Phase 3C.7 — Incremental X Bookmark Pull (Next Task, after GitHub push)**
+- Fetch bookmarks saved since `last_pull_date` (stored in config or state file)
+- Enrich with `fetch_destination_text()` (Piece 1 infrastructure already exists)
+- Enter scoring pool as daily candidates via `x_to_article.py` (Piece 2 already exists)
+- Update `last_pull_date` on success
+- This is the correct ongoing flow — new saves compete as fresh content, archive stays as profile signal only
+
+---
+
 ## Active: Phase 3C — Domain-Scoped Content Signals (In Progress - Mar 1, 2026)
 
 **Goal:** Extract content domain signals from X bookmarks, scoped by knowledge domain
