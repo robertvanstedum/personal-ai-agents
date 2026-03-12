@@ -1345,10 +1345,16 @@ def apply_priorities_boost(entry: Dict, priorities: List[Dict]) -> float:
         boost = priority.get('boost', 0.0)
         priority_id = priority.get('id', 'unknown')
         
-        # Check if any keyword matches
+        # Check if any keyword matches (verbatim first, then token-level for multi-word phrases)
         matched = False
         for keyword in keywords:
-            if keyword.lower() in searchable:
+            kw_lower = keyword.lower()
+            if kw_lower in searchable:
+                matched = True
+                break
+            # For multi-word keywords, split into tokens and match any significant token (4+ chars)
+            tokens = [t for t in kw_lower.split() if len(t) >= 4]
+            if tokens and any(token in searchable for token in tokens):
                 matched = True
                 break
         

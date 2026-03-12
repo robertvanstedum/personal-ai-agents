@@ -9,7 +9,7 @@ cd "$PROJECT_DIR" || exit 1
 
 # Activate virtual environment and run curator
 source venv/bin/activate
-python curator_rss_v2.py --model=xai --fallback
+python curator_rss_v2.py --model=xai --fallback --temperature=1.0
 
 # Send briefing via unified Telegram bot
 export TELEGRAM_CHAT_ID="8379221702"

@@ -339,6 +339,7 @@ def api_list_priorities():
 
     priorities = priorities_data.get('priorities', [])
     now = datetime.now()
+    file_updated = False
 
     for p in priorities:
         if p.get('expires_at'):
@@ -347,12 +348,28 @@ def api_list_priorities():
                 p['expired'] = exp < now
                 delta = exp - now
                 p['days_remaining'] = delta.days
+                # Auto-deactivate expired priorities so active flag stays accurate
+                if p['expired'] and p.get('active'):
+                    p['active'] = False
+                    file_updated = True
             except Exception:
                 p['expired'] = False
                 p['days_remaining'] = None
         else:
             p['expired'] = False
             p['days_remaining'] = None
+
+    # Save back if any priorities were deactivated (strip computed fields before writing)
+    if file_updated:
+        save_priorities = [
+            {k: v for k, v in p.items() if k not in ('expired', 'days_remaining')}
+            for p in priorities
+        ]
+        priorities_data['priorities'] = save_priorities
+        with open(priorities_file, 'w') as f:
+            json.dump(priorities_data, f, indent=2)
+        deactivated = sum(1 for p in priorities if p.get('expired'))
+        print(f"🧹 Deactivated {deactivated} expired priorities")
 
     active_count = sum(
         1 for p in priorities
