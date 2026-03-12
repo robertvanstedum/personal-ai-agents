@@ -1482,8 +1482,15 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
         time.sleep(0.5)
     
     print(f"\n📊 Total entries fetched: {len(all_entries)}")
-    
-    
+
+    # Merge X bookmark articles into candidate pool (Phase 3C.6)
+    # Dedup by hash_id (MD5 of URL) — RSS articles take precedence on collision
+    from x_to_article import load_x_bookmark_articles
+    seen_hashes = {e['hash_id'] for e in all_entries if e.get('hash_id')}
+    x_articles  = [a for a in load_x_bookmark_articles() if a['hash_id'] not in seen_hashes]
+    all_entries.extend(x_articles)
+    print(f"📎 X bookmarks merged: {len(x_articles)} articles (332 signals → {len(x_articles)} after dedup)")
+
     # Load active interests for score boosting
     active_interests = load_active_interests()
     if active_interests:
