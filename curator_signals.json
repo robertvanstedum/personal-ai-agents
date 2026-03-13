@@ -308,7 +308,11 @@
         "title": "THE 2028 GLOBAL INTELLIGENCE CRISIS",
         "content_preview": "A Thought Exercise in Financial History, from the Future",
         "enriched_at": "2026-03-04T05:50:09",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "What if our AI bullishness continues to be right...and what if that\u2019s actually bearish? What follows is a scenario, not a prediction. This isn\u2019t bear porn or AI doomer fan-fiction. The sole intent of this piece is modeling a scenario that\u2019s been relatively underexplored. Our friend Alap Shah posed the question, and together we brainstormed the answer. We wrote this part, and he\u2019s written two others you can find here . Hopefully, reading this leaves you more prepared for potential left tail risks as AI makes the economy increasingly weird. This is the CitriniResearch Macro Memo from June 2028, detailing the progression and fallout of the Global Intelligence Crisis. The unemployment rate printed 10.2% this morning, a 0.3% upside surprise. The market sold off 2% on the number, bringing the cumulative drawdown in the S&P to 38% from its October 2026 highs. Traders have grown numb. Six months ago, a print like this would have triggered a circuit breaker. Two years. That\u2019s all it took to get from \u201ccontained\u201d and \u201csector-specific\u201d to an economy that no longer resembles the one any of us grew up in. This quarter\u2019s macro memo is our attempt to reconstruct the sequence - a post-mortem on the pre-crisis economy. The euphoria was palpable. By October 2026, the S&P 500 flirted with 8000, the Nasdaq broke above 30k. The initial wave of layoffs due to human obsolescence began in early 2026, and they did exactly what layoffs are supposed to. Margins expanded, earnings beat, stocks rallied. Record-setting corporate profits were funneled right back into AI compute. The headline numbers were still great. Nominal GDP repeatedly printed mid-to-high single-digit annualized growth. Productivity was booming. Real output per hour rose at rates not seen since the 1950s, driven by AI agents that don\u2019t sleep, take sick days or require health insurance. The owners of compute saw their wealth explode as labor costs vanished. Meanwhile, real wage growth collapsed. Despite the administration\u2019s rep",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:06:53"
       },
       "media": [],
       "text_analysis": {
@@ -365,7 +369,11 @@
         "title": "GitHub - koala73/worldmonitor: Real-time global intelligence dashboard \u2014 AI-powered news aggregation, geopolitical monitoring, and infrastructure tracking in a unified situational awareness interface",
         "content_preview": "Real-time global intelligence dashboard \u2014 AI-powered news aggregation, geopolitical monitoring, and infrastructure tracking in a unified situational awareness interface - koala73/worldmonitor",
         "enriched_at": "2026-03-04T05:50:12",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "Real-time global intelligence dashboard \u2014 AI-powered news aggregation, geopolitical monitoring, and infrastructure tracking in a unified situational awareness interface. All five variants run from a single codebase \u2014 switch between them with one click via the header bar. AI Summarization \u2014 4-tier provider chain (Ollama \u2192 Groq \u2192 OpenRouter \u2192 browser T5) with headline deduplication, variant-aware prompting, and Redis caching (24h TTL). Details \u2192 AI Deduction \u2014 interactive geopolitical forecasting grounded in 15 most recent headlines, cached 1 hour by query hash. Details \u2192 Headline Memory \u2014 opt-in ONNX-powered RAG system storing 5,000 headline vectors in IndexedDB for semantic search. Details \u2192 Threat Classification \u2014 three-stage pipeline: instant keyword \u2192 browser ML \u2192 batched LLM, each improving confidence. Details \u2192 Browser-Side ML \u2014 Transformers.js runs NER, sentiment, and embeddings entirely in the browser via Web Workers. Details \u2192 Country Instability Index \u2014 0\u2013100 score from baseline risk (40%), unrest (20%), security (20%), and information velocity (20%), with conflict-zone floors and travel advisory boosts. Details \u2192 Hotspot Escalation \u2014 blends news (35%), CII (25%), geo-convergence (25%), and military (15%) with 48-hour trend regression. Details \u2192 Strategic Theater Posture \u2014 9 operational theaters assessed for NORMAL \u2192 ELEVATED \u2192 CRITICAL based on aircraft, strike capability, naval presence, and regional CII. Details \u2192 Geographic Convergence \u2014 1\u00b0\u00d71\u00b0 spatial binning detects 3+ event types co-occurring within 24 hours. Details \u2192 Trending Keywords \u2014 2-hour rolling window vs 7-day baseline flags surging terms with CVE/APT extraction. Details \u2192 435+ RSS feeds with 4-tier source credibility, server-side aggregation, and per-feed circuit breakers. Details \u2192 Military tracking \u2014 ADS-B flights, AIS vessels, USNI fleet reports, Wingbits aircraft enrichment. Details \u2192 Telegram OSINT \u2014 26 channels via MTProto with dedup and topic classification. Details \u2192 OREF rocket aler",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:06:55"
       },
       "media": [],
       "text_analysis": {
@@ -588,7 +596,11 @@
         "title": "Goldman's Gold Guru Sees \"Significant Upside Risk\" To $5400 Forecast<!-- --> | ZeroHedge",
         "content_preview": "",
         "enriched_at": "2026-03-04T05:50:19",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "Gold surged significantly in 2025 and into 2026, driven by competition for limited physical bullion between central banks (especially emerging markets diversifying reserves) and private investors. \"We've seen actually an acceleration in the gold value in 2025... private investors join central banks in competing for the same limited gold bullion .\" Make sure to read our \"How To [Read/Tip Off] Zero Hedge Without Attracting The\n                      Interest Of [Human Resources/The Treasury/Black\n                      Helicopters]\" Guide It would be very wise of you to study our privacy policy and our (non)policy on conflicts / full disclosure . Here's our Cookie Policy .",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:06:56"
       },
       "media": [],
       "text_analysis": {
@@ -1553,7 +1565,11 @@
         "title": "Donald Trump as an Elite Aspirant",
         "content_preview": "Yesterday Ned Resnikoff published an article What Ancient History Has To Say About Near-Future Doom, based on interviewing me last week. It\u2019s very well done, but several things I said didn\u2019t make i\u2026",
         "enriched_at": "2026-03-05T06:07:42",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "Yesterday Ned Resnikoff published an article What Ancient History Has To Say About Near-Future Doom , based on interviewing me last week. It\u2019s very well done, but several things I said didn\u2019t make it into his text, and I thought I would expand on them in my blog. All of this is based on the structural-demographic (SD) theory, which is the best currently available theory to understand why complex societies, including our own, experience periodic waves of social and political instability. For those readers encountering this theory for the first time, check Popular Posts and Series page , on which several blog series explaining the SD theory are collected. According to the SD theory, instability waves are caused by several interacting forces, of which the two most important are \u201cpopular immiseration\u201d and \u201celite overproduction.\u201d The 2016 presidential elections in the US serve as a perfect illustration of how it works. Let\u2019s look specifically at Donald Trump\u2019s campaign. \u201cElite aspirants\u201d in SD theory are politically ambitious individuals who aim to become part of the ruling class. There is nothing wrong with that, except under the conditions of elite overproduction, when there are too many elite aspirants vying for a fixed number of power positions. One important source of elite aspirants in the US ( the second one I covered elsewhere ) are people who have acquired a lot of wealth and now aim to convert a portion of it into power and prestige associated with high political office, such as US president, senator, or governor of an important state. The problem is that between 1983 and 2007 the number of American \u2018decamillionaires\u2019 (individuals with personal wealth exceeding $10 million) increased from 60 thousand to 460 thousand, and the numbers of \u201ccentimillionaires\u201d and billionaires grew similarly. Not every decamillionaire (and above) wants to run for office. Still, there are now seven or eight times as many politically ambitious decamillionaires, as there were 30 years ",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:06:57"
       },
       "media": [],
       "text_analysis": {
@@ -2295,7 +2311,11 @@
         "title": "Forms of life, forms of mind | Dr. Michael Levin | A talk on evolution, from the perspective of diverse intelligence implemented in morphogenesis",
         "content_preview": "A few comments, a video, and a slide deck related to a recent talk on evolution I gave, from the perspective of diverse intelligence",
         "enriched_at": "2026-03-05T06:08:05",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "I recently gave a talk at an Oxford conference on evolution, pulling together some of my ideas and our recent work into a comprehensive picture of how diverse intelligence and evolutionary processes might work together.  There were four main claims: 1) The Genotype -> Phenotype conversion process is intelligent . Mutation operates on genes, while selection operates over form and function of bodies; it is essential to understand the mapping between them (developmental and regenerative processes). Morphogenesis is a problem-solving, creative, improvisational process, not a mechanical (albeit complex) one. This part of the talk briefly warmed up the idea of intelligence at unfamiliar scales and substrates, and then went over our work on the dynamic interpretation of genetic memories in morphogenesis as intelligence of the cellular collective. This is connected to the idea of DNA as prompts, rather than determinants, and the autopoiesis of functional anatomy as an active sense-making process in the contexts of embryogenesis, regeneration, cancer suppression, etc. (in other words, strong symmetries with issues in cognitive science). You can see the details in these papers: paper1 , paper2 , paper3 (free preprint versions). 2) Running even conventional evolutionary processes over a multiscale, agential material (i.e., living matter) has some remarkable consequences for the rate and capabilities of evolution (and that\u2019s even before positing non-random mutations or extending it toward Richard Watson\u2019s Natural Induction ideas). Evolution works faster, and differently than it would over a passive substrate, and favors the production of problem-solving agents that exploit plasticity of interpretation of their genomic hardware as memory engrams . You can see the details in these papers: paper1 , paper2 . 3) I then talked about:  a) the question of where the properties of novel beings come from (ones that have neither been engineered nor selected for), teasing the connection to ",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:06:58"
       },
       "media": [],
       "text_analysis": {
@@ -2513,7 +2533,11 @@
         "title": "Good News: Scientists discover a way to regrow cartilage, stop arthritis",
         "content_preview": "The $65 billion per year global arthritis industry is in for quite a scare as scientists at Stanford just announced they figured out how to regrow healthy, functioning cartilage and maybe end arthritis forever.",
         "enriched_at": "2026-03-05T06:08:13",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "The $65 billion per year global arthritis industry is in for quite a scare as scientists at Stanford just announced they figured out how to regrow healthy, functioning cartilage and maybe end arthritis forever. Subscribe to Not the Bee to unlock full access to all of our content, plus comments and our fully-featured social platform.",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:33"
       },
       "media": [],
       "text_analysis": {
@@ -2850,7 +2874,11 @@
         "title": "The Tag Team Fails in Iran - Antiwar.com",
         "content_preview": "Reprinted from John's Substack: The mainstream media in the West is committed to portraying the protests in Iran as strictly an internal affair. The people of Iran, so the argument goes, spontaneously rose up against their government because they were in desperate straits due to their leaders\u2019 corruption and mismanagement\u2026",
         "enriched_at": "2026-03-05T06:08:32",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "by John Mearsheimer | Jan 21, 2026 | 0 comments The mainstream media in the West is committed to portraying the protests in Iran as strictly an internal affair. The people of Iran, so the argument goes, spontaneously rose up against their government because they were in desperate straits due to their leaders\u2019 corruption and mismanagement of the economy, as well as their oppressive policies. Virtually all the protestors in this story were peaceful, but their protests were met with government violence. Outside forces had little to do with causing the protests. This interpretation of what happened in Iran is wrong and contradicted by an abundance of evidence. None of this is to deny that there were many peaceful protestors who had legitimate grievances against the government, but that is only part of the story. If fact, what happened in Iran is an attempt by the Israeli & American tag team to overthrow the government in Tehran and break apart Iran, much the way the US, Turkey, and Israel fractured Syria. The playbook in Iran is one we have seen before. It has four elements. First , the US has long been working to wreck the Iranian economy with sanctions. Indeed, President Trump redoubled those efforts after moving into the White House last January (2025). His aim was to bring \u201cmaximum pressure\u201d to bear on Iran\u2019s economy and he did just that. There is no question that Iran\u2019s leaders mismanaged their economy in certain ways, but Western sanctions did far more damage than government ineptitude. The ultimate goal of the sanctions, of course, is to inflict so much pain and punishment on the Iranian people that they rise up and overthrow their government. Second , the tag team went to work in late December 2025 to foment and support violent protests that would precipitate a violent government response, which would hopefully set off a spiral of violence that the government could not control. To be more specific, there is clear evidence that Mossad agents were on the ground in",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:35"
       },
       "media": [],
       "text_analysis": {
@@ -2959,7 +2987,11 @@
         "title": "Many Small Steps for Robots, One Giant Leap for Mankind",
         "content_preview": "A Co-Written Essay with Evan Beard",
         "enriched_at": "2026-03-05T06:08:37",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "Welcome to the 1,179 newly Not Boring people who have joined us our last essay ! Join 256,826 smart, curious folks by subscribing here: Happy Thursday! I am thrilled to bring you not boring world\u2019s first co-written essay (cossay? need something here) with my friend Evan Beard , the co-founder and CEO of Standard Bots . Evan is the perfect person to kick this off. I have known Evan for ~20 years, which is crazy. We went to Duke together, worked at the one legitimate startup on campus together (which still exists !), and even won a Lehman Brothers Case Competition together (which won us the opportunity to interview at the investment bank right before it went under). After school, Evan went right into tech. He was in an early YC cohort, back when those were small. He started a company with Ashton Kutcher. I was interested in tech from the outside and always loved talking to Evan, so we\u2019d catch up at reunions and then go our separate ways. In September 2023, a mutual acquaintance emailed me saying \u201cthere\u2019s a company you should have on your radar, Standard Bots ,\u201d and I looked it up, and lo and behold, it was founded by Evan Beard! Since reconnecting, Evan has become one of a small handful of people I ask dumb robot questions to. He\u2019s testified in front of Congress on robotics. Last year he spoke at Nvidia\u2019s GTC on the main stage. He was even featured doing robotic data collection in A24\u2019s movie Babygirl alongside Nicole Kidman! Evan knows robots. And the questions are very dumb! Robotics as a category has scared me. As valuations have soared, I\u2019ve mostly avoided writing about or investing in robots, because I haven\u2019t felt confident enough that I know what I\u2019m talking about to take a stand. Which is the whole point of these co-written essays! Evan has dedicated his career to a specific belief about how to build a robotics company. He\u2019s making a different bet than the more hyped companies in the space 1 , one that is like a Russian Doll with a supermodel in the middle - n",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:36"
       },
       "media": [],
       "text_analysis": {
@@ -3205,7 +3237,11 @@
         "title": "Quantum Mechanics Overview: Limits, Foundations, and New Directions \u2014 New England Complex Systems Institute",
         "content_preview": "An overview of conceptual challenges in quantum mechanics and emerging physical frameworks that aim to explain spin, measurement, and wavefunctions.",
         "enriched_at": "2026-03-05T06:08:47",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "This page introduces the motivation and conceptual challenges that lead to the oscillatory spacetime framework. Quantum mechanics is the theory that describes how the smallest particles in nature move and interact, and how\u2014together\u2014they build the world around us. For more than a century, it has worked extraordinarily well. But it has also been deeply puzzling. Traditionally, quantum mechanics treats particles as tiny points in space. To explain their strange behavior, physicists also introduce a wave\u2014a mathematical object that spreads out like a ripple on water and tells us the probabilities of what we might observe. The particle acts like a point when we measure it, but like a wave when it moves. This wave\u2013particle duality has always seemed paradoxical, even though physicists have learned how to calculate with it very successfully. A new idea suggests a different way to look at this picture. What if the particle itself is not just a point? Instead of a structureless dot, imagine that each particle has a tiny internal rotation , something like a clock or gyroscope. This internal motion is extremely fast and persistent, so the particle can move through space without losing consistency. The particle is still localized\u2014it still hits detectors like a point\u2014but it carries an internal rhythm with it wherever it goes. In this view, the wave is no longer a mysterious extra object added on top of the particle. The wave is simply a way of keeping track of the particle\u2019s internal motion as it moves and interacts. Features like probability, interference, and spin arise naturally from how this internal \u201cclock\u201d evolves, and is disturbed when the particle interacts with its surroundings. Surprisingly, starting from this idea\u2014replacing a point particle with a particle that has internal rotation\u2014leads directly to the central mathematical structure of quantum mechanics, including the famous Dirac equation, without adding extra assumptions. By putting structure inside the particle ins",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:37"
       },
       "media": [],
       "text_analysis": {
@@ -3361,7 +3397,11 @@
         "title": "Democracy\u2019s Edge: Elite Overproduction",
         "content_preview": "Part 1: Why do democracies fail even when they appear wealthy, educated, and stable?",
         "enriched_at": "2026-03-05T06:08:55",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "This essay is part of an ongoing series examining the structural failure modes outlined in Democracy\u2019s Edge . Each installment is designed to stand on its own. The arguments in this series are influenced by systems theory, which treats societies as complex, dynamic systems rather than collections of isolated actors. This lens foregrounds material constraints and structural limits (economic, demographic, and energetic) that shape what is possible, regardless of ideology. This does not eliminate the role of morality. It simply clarifies that moral choices occur inside strong structural incentives and constraints that mainstream commentary often ignores. Even when constraints are understood, effective response requires more than awareness or technical competence. It depends on whether societies can still understand reality, coordinate around shared narratives, and maintain meaningful discipline as conditions change. When these capacities degrade, even capable actors lose the ability to respond coherently to pressure. To get the most out of what follows, resist the temptation to isolate a single variable and treat it as the whole story. The point is the interaction of forces. For further reading on meta-rational sense-making beyond reductionism, see: David Chapman Please subscribe to be notified of future updates in this series. In a recent essay , I argued that modern democracies are drifting beyond their safe operating limits. This is not a sudden collapse but a gradual hollowing out: legitimacy erodes as multiple structural stresses interact and intensify each other. This does not make the collapse of democracy inevitable, but it does require that leaders and citizens do a better job of understanding and addressing the underlying forces at work. This first deep dive in Democracy\u2019s Edge explains the mechanisms, not the politics. Future essays in the series will address the rest of the eight distinct failure modes for democracy I have previously identified. None of the",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:39"
       },
       "media": [],
       "text_analysis": {
@@ -6159,7 +6199,11 @@
         "title": "Pranked Biden official exposes lie that Ukraine war was inevitable",
         "content_preview": "She isn't the first to admit \u2014 after the fact \u2014 that taking NATO off the table to avoid Russian invasion was considered, and dismissed",
         "enriched_at": "2026-03-05T06:10:22",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "She isn't the first to admit \u2014 after the fact \u2014 that taking NATO off the table to avoid Russian invasion was considered, and dismissed When it comes to the Ukraine war , there have long been two realities. One is propagated by former Biden administration officials in speeches and media interviews, in which Russian President Vladimir Putin\u2019s illegal invasion had nothing to do with NATO\u2019s U.S.-led expansion into the now shattered country, there was nothing that could have been done to prevent what was an inevitable imperialist land-grab, and that negotiations once the war started to try to end the killing were not only impossible, but morally wrong. Then there is the other, polar opposite reality that occasionally slips through when officials think few people are listening, and which was recently summed up by former Special Assistant to the President and Senior Director for Europe at the National Security Council Amanda Sloat, in an interview with Russian pranksters whom she believed were aides to Ukrainian President Volodymyr Zelensky. \u201cWe had some conversations even before the war started about, what if Ukraine comes out and just says to Russia , \u2018Fine, you know, we won\u2019t go into NATO, you know, if that stops the war, if that stops the invasion\u2019 \u2014 which at that point it may well have done,\u201d Sloat told the pranksters. \u201cThere is certainly a question, three years on now, you know, would that have been better to do before the war started, would that have been better to do in Istanbul talks ? It certainly would have prevented the destruction and loss of life.\u201d When asked moments later if Ukraine and its Western partners could have avoided the whole war and if they had \u201cmade a mistake somewhere,\u201d Sloat again suggested, unprompted, that addressing Russian concerns around NATO\u2019s expansion into Ukraine may have been the way to prevent the war. \u201cIf you wanna do an alternative version of history, you know, one option would have just been for Ukraine to say in January 2022, \u2018Fi",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:40"
       },
       "media": [],
       "text_analysis": {
@@ -6198,7 +6242,11 @@
         "title": "Dumber, Sicker, & Poorer<!-- --> | ZeroHedge",
         "content_preview": "",
         "enriched_at": "2026-03-05T06:10:24",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "The chart below\u00a0is a fascinating snapshot of the last 75 years in the demise of the American empire . As The Burning Platform's Jim Quinn explains in his no-nonsense manner , there are currently 164 million people employed in America. About 34 million of those are employed part-time. When you understand the working age population is 275 million and your friendly number fudgers at the BLS declare 103 million of them NOT IN THE LABOR FORCE, and hysterically declaring only 7.8 million Americans are unemployed, you understand what a fraudulent economy we have. The reported 4.6% unemployment rate is complete and utter bullshit. In reality, it is north of 20%. The percentage of total jobs in the Education and Health Services sector has grown from 4.8% in 1950 to 17.8% today . Wow!! We must be the smartest, healthiest nation on earth. Not quite. With 28 million teachers, doctors, nurses, and mostly administrators (aka overhead), our education system matriculates millions of barely functional idiots into society every year. Meanwhile, as a country, we are sickly, fat, lazy, dependent upon Big Pharma drugs, and spend more on healthcare than any country on earth. To quote the immortal Dean Wormer,\u00a0\u00a0\u201c Fat, drunk, and stupid is no way to go through life, son.\u201d Proof we have become a non-productive, debt dependent, government dependent, shadow of our former industrial powerhouse is the decline in the percentage of manufacturing jobs from 30.2% in 1950 to 8.0% today. We borrow and consume, when we used to invest and build. Trump can threaten, tariff the world, and make bullshit announcements about manufacturing jobs coming back, but they are not coming back. Any new manufacturing plants will be operated by robotics. Even though the percentage of government employees (aka parasites) has remained relatively steady since 1950, we are stuck with 24 million blood suckers who contribute nothing to the country\u2019s productivity. The average working schmuck has to pay outrageously high taxe",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:41"
       },
       "media": [],
       "text_analysis": {
@@ -6308,7 +6356,11 @@
         "title": "Fulton County admits it illegally certified 315,000 ballots in 2020 election",
         "content_preview": "Color me surprised.",
         "enriched_at": "2026-03-05T06:10:30",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "While it usually takes about six months for conspiracy theories to come true, this one took five whole years. FYI, this is Fulton County, Georgia's largest county by population. Remember when the pipes burst in Atlanta? Subscribe to Not the Bee to unlock full access to all of our content, plus comments and our fully-featured social platform.",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:42"
       },
       "media": [],
       "text_analysis": {
@@ -6442,7 +6494,11 @@
         "title": "The Lost Generation",
         "content_preview": "For fifteen years I\u2019ve scalped tickets to pay the bills. But in January 2016 I almost managed a real career.",
         "enriched_at": "2026-03-05T06:10:35",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "For fifteen years I\u2019ve scalped tickets to pay the bills. But in January 2016 I almost managed a real career. I was thirty-one, I\u2019d been in Los Angeles for five years writing scripts. There had been minor successes, a couple of small projects optioned, and I\u2019d recently started writing with my best friend. We were writing constantly, making each other better, building momentum. Success felt close. Back then it always did. We\u2019d written a pilot script that a veteran showrunner had agreed, in a very theoretical, very Hollywood sort of way, to \u201ccome on\u201d to. That project had fizzled, so we were surprised when an executive emailed us out of the blue to meet. The showrunner explained he\u2019d submitted us for an upcoming writer\u2019s room he was going to run\u2014the exec had loved our pilot and wanted to hire us. This was it, the moment our careers were supposed to take off. We\u2019d put in our time\u2014I\u2019d been tutoring SATs and reselling tickets to make ends meet while I wrote\u2014and five years seemed par for the course, based on the slightly older guys we knew who\u2019d made it. But of course, by 2016, we were already too late. The showrunner emailed us back apologetically. \u201cI had initially thought I might be able to bring you guys on,\u201d he wrote, \u201cbut in the end it wasn\u2019t possible.\u201d We met with the executive anyway\u2014a Gen-X white guy\u2014who told us how much he loved our pilot. But the writers room was small, he explained apologetically, and the higher-level writers were all white men. They couldn\u2019t have an all-white-male room. Maybe, if the show got another season, they\u2019d be able to bring us on. The doors seemed to close everywhere and all at once. In 2011, the year I moved to Los Angeles, white men were 48 percent of lower-level TV writers; by 2024, they accounted for just 11.9 percent. The Atlantic \u2019s editorial staff went from 53 percent male and 89 percent white in 2013 to 36 percent male and 66 percent white in 2024 . White men fell from 39 percent of tenure-track positions in the humanities at Har",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:43"
       },
       "media": [],
       "text_analysis": {
@@ -7354,7 +7410,11 @@
         "title": "Essentials: The Science of Making & Breaking Habits",
         "content_preview": "Learn how to build lasting habits and break unwanted ones using daily rhythms, 21-day cycles, and science-based tools in this Huberman Lab Essentials episode.",
         "enriched_at": "2026-03-05T06:11:05",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "Get the zero-cost Daily Blueprint: Andrew\u2019s protocols to maximize your productivity, physical and mental health Sign up to receive a copy of my Daily Blueprint, where I break down my daily routine and share the tools and protocols I rely on to stay focused, healthy and productive \u2014 so you can maximize your own physical and mental health. In this \u2060 Huberman Lab Essentials\u2060 episode, I explain how to create lasting habits and break unwanted ones. I explain two habit-building systems: one aligned with daily rhythms and another based on a 21-day cycle of forming and reinforcing habits. I also discuss why habit formation differs between individuals and how certain \"linchpin\" habits can make other behaviors easier to adopt. Finally, I share practical tools\u2014including visualization, task bracketing, and methods for rewiring bad habits\u2014to support lasting behavioral change. This transcript is currently under human review and may contain errors. The fully reviewed version will be posted as soon as it is available. Become a Huberman Lab Premium member to access full episode transcripts &\u00a0more Members also get to submit questions for AMA episodes, plus access to exclusive bonus content. A significant portion of proceeds are donated to fund human scientific research. Huberman Lab Essentials are short episodes focused on essential science and protocol takeaways from past full-length Huberman Lab episodes. You'll also get Andrew's exclusive Daily Blueprint. In it, Andrew shares his daily routine. He also shares practical tools and protocols that you can use to stay productive and maximize your health. Essentials: Benefits of Sauna & Deliberate Heat Exposure Avoiding, Treating & Curing Cancer With the Immune System | Dr. Alex Marson Essentials: The Biology of Taste Perception & Sugar Craving | Dr. Charles Zuker Unlearn Negative Thoughts & Behaviors Patterns | Dr. Alok Kanojia Get the zero-cost Daily Blueprint: Andrew\u2019s protocols to maximize your productivity, physical and mental heal",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:45"
       },
       "media": [],
       "text_analysis": {
@@ -7467,7 +7527,11 @@
         "title": "The end of the climate cult",
         "content_preview": "It has been a long, lucrative ride",
         "enriched_at": "2026-03-05T06:11:10",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "Finally, thankfully, the global warming craze is dying out. To paraphrase Monty Python , the climate parrot may still be nailed to its perch at the recent COP summit in Bel\u00e9m, Brazil \u2013 or at Harvard and on CNN \u2013 but elsewhere it\u2019s dead. It\u2019s gone to meet its maker, kicked the bucket, shuffled off this mortal coil, run down the curtain and joined the choir invisible. By failing to pledge a cut in fossil fuels, COP achieved less than nothing, the venue caught fire, the air-conditioning malfunctioned \u2013 and delegates were told on arrival not to flush toilet paper. Bill Gates\u2019s recent apologia, in which he conceded that global warming \u201cwill not lead to humanity\u2019s demise,\u201d after he closed the policy and advocacy office of his climate philanthropy group is just the latest nail in the coffin. In October, the Net Zero Banking Alliance shut down after JPMorgan Chase, Citigroup, Bank of America, Morgan Stanley, Wells Fargo and Goldman Sachs led a stampede of other banks out the door. Shell and BP have returned to being oil companies, to the delight of their shareholders. Ford is about to cease production of electric pickups that nobody wants. Hundreds of other companies are dropping their climate targets. Australia has backed out of hosting next year\u2019s climate conference. According to analysis by the Washington Post , it is not just Republicans who have given up on climate change: the Democratic party has stopped talking about it, hardly mentioning it during Kamala Harris\u2019s campaign for president last year. The topic has dropped to the bottom half of a table of 23 concerns among Swedish youths. Even the European Parliament has voted to exempt many companies from reporting rules that require them to state how they are helping fight climate change. It has been a long, lucrative ride. Predicting the eco-apocalypse has always been a profitable business, spawning subsidies, salaries, consulting fees, air miles, best-sellers and research grants. Different themes took turns as the sc",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:47"
       },
       "media": [],
       "text_analysis": {
@@ -7632,7 +7696,11 @@
         "title": "\u2018We Intended the Strike to Be Lethal\u2019 Is Not a Defense | National Review",
         "content_preview": "The laws of war, incorporated in the federal war crimes statute, prohibit the killing of people who have been rendered hors de combat.",
         "enriched_at": "2026-03-05T06:11:17",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "\u201cIt is not permitted, under the laws and customs of honorable warfare, to order that no quarter be given \u2014 to apply lethal force to those who surrender or who are injured, shipwrecked, or otherwise unable to fight.\n https://t.co/1KXAyPpgT9",
+        "destination_text_source": "tweet_fallback",
+        "destination_text_error": "Body too short (0 chars) \u2014 likely paywall or JS-rendered",
+        "destination_text_at": "2026-03-12T14:10:48"
       },
       "media": [],
       "text_analysis": {
@@ -7801,7 +7869,11 @@
         "title": "How Minnesota\u2019s Welfare Funds Ended Up in the Hands of a Terror Group",
         "content_preview": "Today, we\u2019re looking at Minnesota\u2019s Somali fraud rings, presidential authority to withhold funds, the case against a 50-year mortgage, and the Trump administration\u2019s homelessness policy shift.",
         "enriched_at": "2026-03-05T06:11:23",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "Forwarded this email? Sign up for free to have it sent directly to your inbox. Today, we\u2019re looking at Minnesota\u2019s Somali fraud rings, presidential authority to withhold funds, the case against a 50-year mortgage, and the Trump administration\u2019s homelessness policy shift. Don\u2019t forget to write to us at editors@city-journal.org with questions or comments. That\u2019s what a source told Ryan Thorpe and Christopher Rufo. Al-Shabaab, of course, is a Somalia-based terror group. Welfare fraud in Minnesota is widespread, and millions of dollars of stolen funds have been sent back to Somalia, where they wind up in the group\u2019s hands. Minnesota\u2019s Medicaid Housing Stabilization Services (HSS) program offers just one example of how rampant welfare fraud is in the state. Launched in 2020 with an estimated annual cost of $2.6 million, HSS was intended to help seniors, the disabled, and the mentally ill find housing. But costs quickly spiraled out of control. The following year, the program paid out more than $21 million in claims, and during the first six months of 2025, payouts already totaled $61 million. On August 1, the state moved to scrap the program, and in September, then-acting U.S. Attorney for the District of Minnesota Joe Thompson announced criminal indictments against eight individuals, six of whom were members of the Somali community. \u201cAccording to multiple law-enforcement sources,\u201d Thorpe and Rufo write, \u201cMinnesota\u2019s Somali community has sent untold millions through a network of \u2018hawalas,\u2019 informal clan-based money-traders, that have wound up in the coffers of Al-Shabaab.\u201d Read about the fraud rings and more from their investigation here . Congress holds the power of the purse, but does that mean that presidents have to spend all the money legislators appropriate? The question has become a contentious one in Washington, D.C., with President Trump\u2019s critics arguing that he does, and the Trump administration pointing to precedent and Supreme Court rulings saying otherwise.",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:49"
       },
       "media": [],
       "text_analysis": {
@@ -7866,7 +7938,11 @@
         "title": "Home | Metabolic Mind",
         "content_preview": "Pioneering a new era in mental health with the groundbreaking science of metabolic psychiatry.",
         "enriched_at": "2026-03-05T06:11:26",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "Get the latest on metabolic psychiatry. Subscribe. The groundbreaking science of metabolic psychiatry is redefining mental health care by integrating the vital link between energy metabolism and brain function. Metabolic Mind is a nonprofit working to amplify the field\u2019s scientific advances, clinical wisdom, and personal stories to foster knowledge, community, and inspiration in the fight against mental illness. Metabolic Psychiatry: A Paradigm Shift in Treating Mental Illness First Ever Peer-Reviewed Expert Consensus on Ketogenic Therapy for Serious Mental Illness Mental health experts reached consensus on 33 evidence-based statements defining what ketogenic metabolic therapy is, who it may be appropriate for, how it should be monitored, and best practices for its clinical use. Depression, OCD, Trichotillomania, & PTSD Bipolar Disorder Type 1, ADHD, ASD Level 1 Anxiety, depression, Autism, and anorexia Asperger\u2019s, psoriasis, and psoriatic arthritis Bipolar 1 with moderate psychotic features Major depressive disorder and mild cognitive impairment Major depression, treatment resistant depression, generalized anxiety, panic disorder, cPTSD, auADHD, bulimia, POTS, hEDS, MCAS Unknown neurological condition and hallucinations If we hadn\u2019t come to understand that our son\u2019s \u2018mental illness\u2019 was caused by problems in brain metabolism that were reversible, he\u2019d still be suffering.\u201d Decades of scientific evidence suggest that mental illness is rooted in systemic metabolic dysfunction affecting the brain. Ketogenic therapy and other metabolic strategies are emerging as promising new treatments for psychiatric disorders. Individuals and families are finding hope and inspiration in the promise of improving metabolism to optimize mental health. We\u2019ve gathered tools, insights, and stories from others to help you get started. Our founders personally understand the challenges of a mental health crisis as well as the life-restoring impact of successful interventions. They are dedicat",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:51"
       },
       "media": [],
       "text_analysis": {
@@ -8169,7 +8245,11 @@
         "title": "The Convenience Culture Crisis: How Second-Wave Feminism Helped Make America Sick<!-- --> | ZeroHedge",
         "content_preview": "",
         "enriched_at": "2026-03-05T06:11:36",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "Authored by Mollie Engelhart via The Epoch Times (emphasis ours), There is a version of my life that could have existed, and for a long time it looked like the path I was on. I was a successful restaurateur, financially independent, living a neat and polished life that most people would label as accomplishment. I could have stayed that woman. A single woman with a couple of well-trained pets, a beautiful home in a gated golf-course community, and a thriving business. No obligations, no interruptions, and no sticky hands tugging my shirt while I tried to answer an email. Society would have applauded that version of me and called it freedom. The irony is that during that time, I was feeding thousands of people from-scratch food . I knew the value of real ingredients and traditional cooking techniques, yet I did not fully understand the deeper meaning of nourishment. Not just physical nourishment, but the cultural and generational work that happens when families cook and eat together. The work that forms identity . Today my life looks very different. I have four children and a farm , and nothing about our life is quiet or controlled. Just yesterday my 10-year-old stood next to me making jam from blueberries and blackberries, and then we bottled homemade barbecue sauce. The younger kids ran barefoot around us, coming in and out of the kitchen like little barn swallows, leaving laughter, questions, and a trail of crumbs behind. It was chaotic, imperfect, and slow. Yet in the middle of the noise, I could feel something ancient. Something right. Moments like that used to be normal. Today they are the exception, and that realization has been stirring something in me. It raises a difficult question that many people avoid because the answer is uncomfortable. What changed? How did feeding our families become optional, inconvenient, or even burdensome? How did basic human skills become rare? The more I look back, the more I land on a conclusion that people do not like to talk a",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:52"
       },
       "media": [],
       "text_analysis": {
@@ -8352,7 +8432,11 @@
         "title": "Deep In The Fourth Turning: The Darkest Hours Are Before The Dawn<!-- --> | ZeroHedge",
         "content_preview": "",
         "enriched_at": "2026-03-05T06:11:42",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "I first thought to write this as a multi-part series, but I finally decided to group everything together as it wouldn\u2019t do justice to this article. There\u2019s a lot to unpack when discussing the ongoing societal changes, and I feel I barely touched on anything but the essence of that. Even then, standing at more than 6000 words, and spending nearly 10 full waking days refining it, the scope of what we\u2019re witnessing feels almost too vast to capture in any single piece. The Fourth Turning doesn\u2019t reveal itself gradually\u2014it crashes over you all at once when you finally start to see the pattern. Writing this piece felt like trying to grab sand in my hands; every attempt to contain one aspect of the transformation led to three more slipping through my fingers. What you\u2019ll read here is my best effort to trace the contours of something far larger than any individual could possibly comprehend. The same boiling water that softens the potato hardens the egg. We\u2019re all in the same boiling water now \u2014the Fourth Turning\u2019s Crisis that began with Lehman Brothers\u2019 collapse in 2008\u2014but whether we emerge hardened or dissolved depends entirely on what we\u2019re made of. We\u2019re now deep in the Fourth Turning, the winter of this historical cycle, and if you think the past few years have been chaotic? History doesn\u2019t move in straight lines. It breathes, it pulses, it turns through seasons as predictable as winter following autumn. William Strauss and Neil Howe discovered this pattern in 1997. Like clockwork, every 80 years or so - a human lifetime, America faces an existential crisis that threatens to tear apart everything we thought permanent. We\u2019ve been through this three times before, and we\u2019re going through it again right now. Strauss and Howe predicted in 1997 that around 2005, some spark would ignite a Crisis mood. They suggested it might be \u201cas ominous as a financial crash, as ordinary as a national election, or as trivial as a Tea Party\u201d. They nailed it. The 2008 financial crisis wasn\u2019t ",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:53"
       },
       "media": [],
       "text_analysis": {
@@ -8763,7 +8847,11 @@
         "title": "Just Stop Oil activists cleared over Stonehenge protest",
         "content_preview": "The trio are cleared of all charges after citing human rights law in their defence.",
         "enriched_at": "2026-03-05T06:11:55",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "Three Just Stop Oil activists who sprayed Stonehenge with orange powder have been cleared of causing a public nuisance. Rajan Naidu, 74, Oxford University student Niamh Lynch, 23, and Luke Watson, 36, were acquitted following a 10-day trial at Salisbury Crown Court . They had denied all charges of damaging an ancient protected monument and causing a public nuisance, after targeting Stonehenge as part of an ongoing fossil fuel protest by the direct action group. The trio accepted taking part in the protest and cited in their defence \"reasonable excuse\" and their rights under Articles 10 and 11 of the European Convention on Human Rights to freedom of speech and freedom to protest. Mr Naidu from Birmingham, Ms Lynch from Bedford and Mr Watson from Essex, had been accused of using two colour blasters filled with cornflour, talc and an orange dye to spray the monument in a protest on 19 June 2024 . The court was told the trio targeted Stonehenge the day before last year's summer solstice where around 15,000 people were due to gather and celebrate. Mr Watson had bought the equipment used in the attack and had borrowed his grandmother's petrol car to drive the co-accused to Stonehenge that morning. After the attack, both Mr Naidu and Ms Lynch sat in silence in front of the stones, where they were then arrested by police. The powder was promptly cleaned from the stones at a cost of \u00a3620. The defendants argued that it was a \"peaceful protest\", that the rights of others were not \"greatly interfered with\", that care had been taken in choosing the type of powder to use. There was no lasting damage to the stones and they argued that protesting about fossil fuels was a legitimate cause. Simon Jones prosecuting alleged the protest, which was filmed by other Just Stop Oil supporters, had been \"carefully planned\" and it was \"an act of blatant and clear vandalism\". Giving his legal directions to the jury, Judge Paul Dugdale said they had to determine whether a conviction would be a \"",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:54"
       },
       "media": [],
       "text_analysis": {
@@ -9021,7 +9109,11 @@
         "title": "Home",
         "content_preview": "DeepLearning.AI | Andrew Ng | Join over 7 million people learning how to use and build AI through our online courses. Earn certifications, level up your skills, and stay ahead of the industry.",
         "enriched_at": "2026-03-05T06:12:04",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "Get the latest AI news, courses, events, and insights from Andrew Ng and other AI leaders. Join over 7 million people learning how to use and build AI Build a foundation of machine learning and AI skills, and understand how to apply them in the real world. A practical roadmap to building your career in AI from AI pioneer Andrew Ng An introductory book about developing ML algorithms. A Complete Guide to Natural Language Processing A comprehensive guide covering all you need to know about NLP.",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:55"
       },
       "media": [],
       "text_analysis": {
@@ -9094,7 +9186,11 @@
         "title": "Home",
         "content_preview": "DeepLearning.AI | Andrew Ng | Join over 7 million people learning how to use and build AI through our online courses. Earn certifications, level up your skills, and stay ahead of the industry.",
         "enriched_at": "2026-03-05T06:12:04",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "Get the latest AI news, courses, events, and insights from Andrew Ng and other AI leaders. Join over 7 million people learning how to use and build AI Build a foundation of machine learning and AI skills, and understand how to apply them in the real world. A practical roadmap to building your career in AI from AI pioneer Andrew Ng An introductory book about developing ML algorithms. A Complete Guide to Natural Language Processing A comprehensive guide covering all you need to know about NLP.",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:56"
       },
       "media": [
         {
@@ -9799,7 +9895,11 @@
         "title": "Just a moment...",
         "content_preview": "",
         "enriched_at": "2026-03-05T06:12:34",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "Satellites show global fire is down, but climate alarmists pivot to more people killed\n\nBut almost all people killed by fire die from its air pollution, not the actual fire\n\nAs the world burns less, fire kills less\n\nStudy: https://t.co/pAnhA8VDQO\n\n(Remember, these deaths are https://t.co/LmY9ZBdb4W https://t.co/n3xabTtQpG",
+        "destination_text_source": "tweet_fallback",
+        "destination_text_error": "HTTP 403",
+        "destination_text_at": "2026-03-12T14:10:57"
       },
       "media": [
         {
@@ -11592,7 +11692,11 @@
         "title": "Introduction to Calculus--Wolfram Media",
         "content_preview": "Easy-to-follow ebook introduction to the fundamental concepts of calculus and applications. Plus, instructional videos. Functions and limits, differential & integral calculus, differential equations, prep for AP Calculus AB course.",
         "enriched_at": "2026-03-05T06:13:37",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "This ebook provides a comprehensive introduction to fundamental concepts in calculus and their applications, covering all of Calculus 1 and some of Calculus 2. The book starts with functions and limits, followed by differential calculus, and then moves on to integral calculus and a brief discussion of differential equations. It ends with the complete solution for a sample exam based on the AP Calculus AB course. Videos for the topics covered in the ebook, along with practice problems, exercises and quizzes, are available in the interactive Wolfram U course Introduction to Calculus. April 22, 2024 Publication Publicity and Interviews: publishing@wolfram.com Translation Rights Requests: info@dropcap.com Trim Size: 7\" x 10\" Non-Fiction John Michael Clark is a mathematics PhD student at the University of Texas at Austin. He received his BSc in mathematics from the California Institute of Technology in 2016 and later his MSc from Oklahoma State University in 2020. Devendra Kapadia is  the Manager of Mathematical Computation at Wolfram. He has a BSc and an MSc in mathematics from the University of Mumbai, an MSc by Research in mathematics from the University of Oxford and a PhD in mathematics from the University of Pittsburgh.  He is actively involved in algorithm development for Wolfram Language and  in developing online mathematics courses for Wolfram U.",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:58"
       },
       "media": [
         {
@@ -11747,7 +11851,11 @@
         "title": "GitHub - google/langextract: A Python library for extracting structured information from unstructured text using LLMs with precise source grounding and interactive visualization.",
         "content_preview": "A Python library for extracting structured information from unstructured text using LLMs with precise source grounding and interactive visualization. - google/langextract",
         "enriched_at": "2026-03-05T06:13:43",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "LangExtract is a Python library that uses LLMs to extract structured information from unstructured text documents based on user-defined instructions. It processes materials such as clinical notes or reports, identifying and organizing key details while ensuring the extracted data corresponds to the source text. Note: Using cloud-hosted models like Gemini requires an API key. See the API Key Setup section for instructions on how to get and configure your key. Extract structured information with just a few lines of code. First, create a prompt that clearly describes what you want to extract. Then, provide a high-quality example to guide the model. Note: Examples drive model behavior. Each extraction_text should ideally be verbatim from the example's text (no paraphrasing), listed in order of appearance. LangExtract raises Prompt alignment warnings by default if examples don't follow this pattern\u2014resolve these for best results. Provide your input text and the prompt materials to the lx.extract function. Model Selection : gemini-2.5-flash is the recommended default, offering an excellent balance of speed, cost, and quality. For highly complex tasks requiring deeper reasoning, gemini-2.5-pro may provide superior results. For large-scale or production use, a Tier 2 Gemini quota is suggested to increase throughput and avoid rate limits. See the rate-limit documentation for details. Model Lifecycle : Note that Gemini models have a lifecycle with defined retirement dates. Users should consult the official model version documentation to stay informed about the latest stable and legacy versions. The extractions can be saved to a .jsonl file, a popular format for working with language model data. LangExtract can then generate an interactive HTML visualization from this file to review the entities in context. This creates an animated and interactive HTML file: Note on LLM Knowledge Utilization: This example demonstrates extractions that stay close to the text evidence - extracti",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:10:59"
       },
       "media": [],
       "text_analysis": {
@@ -13227,7 +13335,11 @@
         "title": "An Open-Source Visual Vibecoding Editor. Visually build, style, and edit your Re...",
         "content_preview": "An Open-Source Visual Vibecoding Editor. Visually build, style, and edit your React App with AI",
         "enriched_at": "2026-03-05T06:14:32",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "Ever wished you could tweak your React components visually\u2014without digging through endless lines of CSS or props? Meet Onlook , an open-source editor that blends design intuition with code. It\u2019s like giving your cursor superpowers for styling and layout, with AI nudges to keep things moving fast. Onlook is a visual editor for React apps that lets you: It\u2019s built for developers who want to iterate visually but still own their codebase. Onlook isn\u2019t a replacement for your IDE\u2014it\u2019s a turbo button for prototyping and styling. If you\u2019ve ever lost an hour adjusting padding values manually, this might save your sanity. Worth a spin for React devs who miss the immediacy of tools like Figma but need code-first control. P.S. Found this via @githubprojects . Let us know if you build something cool with it! Subscribe to our newsletter to get the latest updates on open-source projects. Help us showcase more incredible open-source projects by sponsoring a featured spot. Your project could be the next big discovery for thousands of developers.",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:11:01"
       },
       "media": [],
       "text_analysis": {
@@ -13777,7 +13889,11 @@
         "title": "Javier Milei Merch - AFUERA Shirts & Chainsaw Gear | 4LibertyShop",
         "content_preview": "Official Javier Milei merchandise celebrating Argentina's libertarian president. Chainsaw imagery, AFUERA apparel, and freedom gear. Support the liberty revolution!",
         "enriched_at": "2026-03-05T06:14:51",
-        "enrichment_failed": false
+        "enrichment_failed": false,
+        "destination_text": "Founding Flavors Coffee Is consistently our best selling collection for a reason! Our customers keep coming back because we are ultra-premium. Buy Our Newest Children's Book! Spanish Language Version available Celebrate the libertarian revolution with our Javier Milei Freedom Collection ! Argentina's chainsaw-wielding president shocked the world with his unapologetic defense of free markets, individual liberty, and Austrian economics. Now you can support the movement with our exclusive Milei merchandise. From \"\u00a1AFUERA!\" apparel and chainsaw-themed accessories to samurai-inspired designs and \"Less Marx More Milei\" gear, this collection embodies the revolutionary spirit of economic freedom. Whether you're a libertarian, Austrian economics enthusiast, or simply inspired by Milei's fight against socialism, this collection has something for every freedom warrior. Join the liberty revolution! Shop the complete Javier Milei collection and show your support for free markets and individual freedom. Viva La Libertad Carajo! To serve customers the most fun, engaging, and spirited liberty themed products on the market! 4Libertyshop.com is the property of Stonegait Pictures, LLC. Registered to do business in the state of Missouri. Minuteman\u2019s Morning Call Instant Coffee is quick, smooth, and tastes better than most instant coffee. 5 stars!! Martha I love to savor your evey flavor on the weekends. As I retreat for a treat of Martha's Mint. The mornings are blissful innocent and Just ever so sweet but  as the day goes on  and as the sun slips below the horizon I tend to slip in some amaretto and who knows what or how the evening goes.  But one thing I do know Martha our endeavors are quite relished. Everyone compliments your captivating aromas.   Im very pleased to know that you will be soon offered not only seasonal but now a staple and a great tribute to the 4liberty shop  Thanks AP , and thanks Brad for reaching out This is a very cute and comfortable hoodie!  I had some questi",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-12T14:11:03"
       },
       "media": [
         {
@@ -13903,6 +14019,420 @@
         "analyzed_at": "2026-03-05T06:14:57",
         "backend": "haiku"
       }
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2031846392545865745",
+    "source": "X/@andrewchen",
+    "url": "https://x.com/andrewchen/status/2031846392545865745",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:49:11",
+    "metadata": {
+      "tweet_text": "reading the replies -- a lotta folks hate this prediction!\n\nA lot of folks can't imagine programming the logic/variables/inputs without the spreadsheet grid paradigm\n\nmy primary counterpoint:\n- much complaining is from people trained on keyboard shortcuts in Windows Excel on",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2031532980032909640",
+    "source": "X/@andrewchen",
+    "url": "https://x.com/andrewchen/status/2031532980032909640",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:49:11",
+    "metadata": {
+      "tweet_text": "prediction re the end of spreadsheets\n\nAI code gen means that anything that is currently modeled as a spreadsheet is better modeled in code. You get all the advantages of software - libraries, open source, AI, all the complexity and expressiveness.\n\nthink about what spreadsheets",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2031009355307401673",
+    "source": "X/@investmattallen",
+    "url": "https://x.com/investmattallen/status/2031009355307401673",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:49:11",
+    "metadata": {
+      "tweet_text": "In 1975, the Shah of Iran discusses oil: https://t.co/zd69KjoIrg",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2031368748834165194",
+    "source": "X/@ZeekArkham",
+    "url": "https://x.com/ZeekArkham/status/2031368748834165194",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:49:11",
+    "metadata": {
+      "tweet_text": "Dear Chuck Schumer,\n\nHi. Black dude here. I can trace my family ancestry to slavery. I even know where they were slaves. My mom experienced Jim Crow. I think I\u2019ve watched every episode of \u201cEyes On the Prize\u201d when I was younger.\n\nWith that said\u2026\n\nCan you directly explain to me https://t.co/pir9AJaznT",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2031062081710236084",
+    "source": "X/@lennysan",
+    "url": "https://x.com/lennysan/status/2031062081710236084",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:49:11",
+    "metadata": {
+      "tweet_text": "My biggest takeaways from @qasar:\n\n1. The real AI revolution over the next 5 to 10 years will happen in the physical world, not in software. While everyone obsesses over ChatGPT, Claude and coding agents, the real impact will come from autonomous vehicles, mining robots, and https://t.co/RtTC4UrIG2",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2031116702646432056",
+    "source": "X/@pmarca",
+    "url": "https://x.com/pmarca/status/2031116702646432056",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "Alpha! https://t.co/QL8Irgp4Hf",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2030750186239393961",
+    "source": "X/@davidasinclair",
+    "url": "https://x.com/davidasinclair/status/2030750186239393961",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "Osteoarthritis &amp; back pain affects millions of people. Instead of managing symptoms, imagine rebuilding joints by making them young\n\nNew study shows the reprogramming gene combo OSK regrows joints in mice &amp; effect depends on TET2 so it's epigenetic...\ud83e\uddf5 https://t.co/AlOIwcEXEQ",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2030742366592663936",
+    "source": "X/@OilHeadlineNews",
+    "url": "https://x.com/OilHeadlineNews/status/2030742366592663936",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "CME increases margin requirements on oil and oil products, decreases margin requirements on gold and silver.",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2030657227002958114",
+    "source": "X/@ggreenwald",
+    "url": "https://x.com/ggreenwald/status/2030657227002958114",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "Sim, eu tamb\u00e9m diria que, devido ao contrato obsceno para pagar R$ 129 milh\u00f5es \u00e0 esposa de Moraes (a Pel\u00e9 dos advogados), \"a suspeita que surge \u00e9 a de que Moraes [agiu] em defesa...do Master.\"\n\nE \"suspeita\" \u00e9 o termo mais generoso e cauteloso poss\u00edvel para descrever a verdade. https://t.co/GWTNeMFzlj",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2030679094623707600",
+    "source": "X/@naval",
+    "url": "https://x.com/naval/status/2030679094623707600",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "Software will proliferate just as videos, music,  writing did. \n\nThe market structure will shift from a \u201cfat middle\u201d to mega-aggregators and a long tail.\n\nIt\u2019ll be a slower process due to network effects, but many traditional vendor lock-ins will get eaten by AI.",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2030388393121644623",
+    "source": "X/@PeterDiamandis",
+    "url": "https://x.com/PeterDiamandis/status/2030388393121644623",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "Accenture is linking employee promotions to the use of AI tools. However, this isn't just happening at Accenture, it's becoming an industry-wide trend.",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2030484965285355745",
+    "source": "X/@fugusakate",
+    "url": "https://x.com/fugusakate/status/2030484965285355745",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "Cowork\u306e\u672c\u8cea\u3001\u6b63\u76f4\u3053\u3053\u3060\u3068\u601d\u3046\u3002\n\nAI\u30c1\u30e3\u30c3\u30c8\u306e\u5ef6\u9577\u3058\u3083\u306a\u304f\u3001\u30c7\u30b9\u30af\u30c8\u30c3\u30d7\u3067\u4ed5\u4e8b\u3092\u6700\u5f8c\u307e\u3067\u56de\u3059\u5b9f\u52d9\u30a8\u30fc\u30b8\u30a7\u30f3\u30c8\u306b\u306a\u3063\u305f\u3053\u3068\u3002\n\n\u30fb\u8907\u6570\u30b9\u30c6\u30c3\u30d7\u3092\u307e\u3068\u3081\u3066\u5b9f\u884c\n\n\u30fb\u5b9a\u671f\u5b9f\u884c\u307e\u3067\u5165\u3063\u305f\n\n\u30fbCursor\u3084Claude Code\u306e\u601d\u60f3\u304c\u975e\u30a8\u30f3\u30b8\u30cb\u30a2\u306b\u3082\u964d\u308a\u3066\u304d\u305f\n\n#Claude #Cowork #AI\u30a8\u30fc\u30b8\u30a7\u30f3\u30c8 https://t.co/nQAqcc1UiF",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2030127200498864360",
+    "source": "X/@anasalhajji",
+    "url": "https://x.com/anasalhajji/status/2030127200498864360",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "\ud83d\uded1\u0645\u0627\u0630\u0627 \u064a\u0631\u064a\u062f \u0627\u0644\u0631\u0626\u064a\u0633 \u062a\u0631\u0645\u0628\u061f (\u0623\u062f\u0646\u0627\u0647 \u0628\u0646\u0627\u0621 \u0639\u0644\u0649 \u062a\u0635\u0631\u064a\u062d\u0627\u062a\u0647)\n\ud83d\udd30\u064a\u0631\u064a\u062f \u0623\u0646 \u064a\u0639\u064a\u062f \u0635\u0646\u0627\u0639\u0629 \u0627\u0644\u0631\u0642\u0627\u0626\u0642 \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a\u0629 \u0648\u0623\u0634\u0628\u0627\u0647 \u0627\u0644\u0645\u0648\u0635\u0644\u0627\u062a \u0644\u0644\u0648\u0644\u0627\u064a\u0627\u062a \u0627\u0644\u0645\u062a\u062d\u062f\u0629 \u0628\u062f\u0644\u0627 \u0645\u0646 \u0625\u0646\u062a\u0627\u062c\u0647\u0627 \u0641\u064a \u0622\u0633\u064a\u0627\n\ud83d\udd30 \u064a\u0631\u064a\u062f \u0623\u0646 \u064a\u0628\u064a\u0639 \u0645\u0646\u062a\u062c\u0627\u062a \u0632\u0631\u0627\u0639\u064a\u0629 \u0623\u0645\u064a\u0631\u0643\u064a\u0629 \u0644\u0644\u0647\u0646\u062f\u060c \u0648\u0647\u0645 \u0623\u0645\u0631 \u0631\u0641\u0636\u0647 \u0627\u0644\u0647\u0646\u0648\u062f \u062a\u0645\u0627\u0645. \n\ud83d\udd30 \u064a\u0631\u064a\u062f \u0623\u0646 \u062a\u0642\u0648\u0645 \u0627\u0644\u0634\u0631\u0643\u0627\u062a \u0627\u0644\u0622\u0633\u064a\u0648\u064a\u0629 \u0628\u062a\u0648\u0642\u064a\u0639 \u0639\u0642\u0648\u062f \u063a\u0627\u0632 \u0645\u0633\u0627\u0644 \u0637\u0648\u064a\u0644\u0629 https://t.co/SorkZPlBxR",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2030297593977487814",
+    "source": "X/@a16z",
+    "url": "https://x.com/a16z/status/2030297593977487814",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "Replit CEO Amjad Masad: Being 'terminally online' may be an advantage.\n\n\"If you want to work on a skill, it's going to be about idea generation.\"\n\n\"Because the cost of implementation of those ideas is going down rapidly. It's gonna go to zero at some point.\"\n\n\"So the bottleneck https://t.co/aiWPIdZecP",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2030297656476438885",
+    "source": "X/@LukeGromen",
+    "url": "https://x.com/LukeGromen/status/2030297656476438885",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "Events in the Strait of Hormuz are showing in real time that 150+ years of Mahan Doctrine (\"control naval choke points &amp; you control the world\") are ending as missiles, drones, &amp; AUV's turn naval choke points into naval kill zones.\n\nMassive implications for geopolitics &amp; macro.",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2030027482074648855",
+    "source": "X/@a16z",
+    "url": "https://x.com/a16z/status/2030027482074648855",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "Under Secretary of War for Research and Engineering Emil Michael on being the CTO of the Department of War, applying lessons from Silicon Valley at the Pentagon, and his \"holy cow\" moment with AI vendors.\n\n00:00 Silicon Valley to DC\n02:03 Why the DoW cannot operate at \"peacetime https://t.co/8BnP5yrdzI",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2029679074868879852",
+    "source": "X/@rohanpaul_ai",
+    "url": "https://x.com/rohanpaul_ai/status/2029679074868879852",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "Citadel Securities published this graph showing a strange phenomenon.\n\nJob postings for software engineers are actually seeing a massive spike.\n\nClassic example of the Jevons paradox. When AI makes coding cheaper, companies actually may need a lot more software engineers, not https://t.co/Ov4xmotDfc",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "1276205912013840384",
+    "source": "X/@MacroOps",
+    "url": "https://x.com/MacroOps/status/1276205912013840384",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "1/ Druckenmiller's first mentor, Speros Drelles, would often tell him that \"60 million Frenchman can't be wrong.\" \n\nHere's a thread on what that means and how to know when you should listen to or ignore the \"Frenchman\" (market)...",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2029950970407379393",
+    "source": "X/@ggreenwald",
+    "url": "https://x.com/ggreenwald/status/2029950970407379393",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "The evidence is becoming overwhelming, even dispositive, showing that it was a US airstrike -- quite possibly guided and governed by Anthropic's AI -- that blew up an Iranian school filled with school girls, liberating 150 of them (from life).\n\nhttps://t.co/K0gxybEZ5M",
+      "linked_content": {
+        "destination_url": "https://www.nytimes.com/2026/03/05/world/middleeast/iran-school-us-strikes-naval-base.html?unlocked_article_code=1.RFA.LYgI._qM-PGsIDaI2&smid=url-share",
+        "domain": "nytimes.com",
+        "source_type": "news_article",
+        "title": "nytimes.com",
+        "content_preview": "",
+        "enriched_at": "2026-03-13T01:53:43",
+        "enrichment_failed": false,
+        "destination_text": "The evidence is becoming overwhelming, even dispositive, showing that it was a US airstrike -- quite possibly guided and governed by Anthropic's AI -- that blew up an Iranian school filled with school girls, liberating 150 of them (from life).\n\nhttps://t.co/K0gxybEZ5M",
+        "destination_text_source": "tweet_fallback",
+        "destination_text_error": "HTTP 403",
+        "destination_text_at": "2026-03-13T01:53:43"
+      },
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2029984882860904790",
+    "source": "X/@ggreenwald",
+    "url": "https://x.com/ggreenwald/status/2029984882860904790",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "This is what US foreign policy has been about since the end of WW2: installing tyrannies and dictatorships or propping them as long as they're willing to serve Israel (and, theoretically, the US).\ud83d\udc47\n\nThat was what the Shah of Iran was installed to do, and so many other puppets. https://t.co/90ISrsqDvu",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2029954464082280550",
+    "source": "X/@ggreenwald",
+    "url": "https://x.com/ggreenwald/status/2029954464082280550",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "I realize most people are focused on the increasingly dangerous regional war started by Trump and Netanyahu -- as I am, which is why I'll report this only in a few days -- so for now, here's a decent English-language summary of the deep corruption:\n\nhttps://t.co/cG2eB6ZOqX",
+      "linked_content": {
+        "destination_url": "https://www.riotimesonline.com/banco-master-scandal-reaches-second-supreme-court-justice-moraes/",
+        "domain": "riotimesonline.com",
+        "source_type": "web_article",
+        "title": "Banco Master Scandal Reaches Second Supreme Court Justice Moraes",
+        "content_preview": "The Banco Master scandal has found a new center of gravity at Brazil's Supreme Court. Federal Police forensic analysis of Daniel Vorcaro's",
+        "enriched_at": "2026-03-13T01:53:44",
+        "enrichment_failed": false,
+        "destination_text": "The Banco Master scandal has found a new center of gravity at Brazil\u2019s Supreme Court . Federal Police forensic analysis of Daniel Vorcaro\u2019s seized iPhone has uncovered WhatsApp messages between the imprisoned banker and Justice Alexandre de Moraes sent on the morning of Vorcaro\u2019s first arrest in November 2025, according to reporting by journalist Malu Gaspar in O Globo. The content of the exchange raises questions about the nature of the relationship between one of Brazil\u2019s most powerful judges and the man now accused of orchestrating the country\u2019s largest financial fraud. At 7:19 a.m. on November 17, 2025 \u2014 the day police would arrest him at Guarulhos airport as he tried to board a private jet to Dubai \u2014 Vorcaro wrote to Moraes: \u201cI\u2019ve been scrambling to try to save things. Any news? Were you able to get information or block?\u201d Moraes responded quickly with three messages, but their content cannot be read. He used WhatsApp\u2019s single-view feature, which automatically deletes messages after the recipient opens them. The timing makes the exchange particularly sensitive. Police investigators established that Vorcaro already knew about the criminal inquiry into fraudulent credit portfolios sold to the state-owned Banco de Bras\u00edlia, having obtained confidential information by illegally accessing Federal Police and prosecution databases. On the same day he messaged Moraes, his lawyers filed an emergency petition at the 10th Federal Court in Bras\u00edlia at 3:47 p.m., attempting to block precautionary measures \u2014 eighteen minutes after Judge Ricardo Leite had already signed the arrest warrant under seal. At 5:24 p.m., the bank announced its sale to the Fictor group for R$3 billion, with unnamed Arab investors involved. By 10 p.m., Vorcaro was in police custody. The Central Bank liquidated the Master the following day. Moraes has categorically denied the communications, calling the reporting \u201ca lying fabrication intended to attack the Supreme Court.\u201d Vorcaro\u2019s defense declined to c",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-13T01:53:44"
+      },
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2029966020560171154",
+    "source": "X/@_AK7004_",
+    "url": "https://x.com/_AK7004_/status/2029966020560171154",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "@nntaleb Treacherous mountain terrian, four times the size of afghanistan, with a far larger and more sophisticated decentralized fighting force i don't know how they are going to change the regime without setting foot on the ground https://t.co/JJkHnm8fJ0",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2029860298581233712",
+    "source": "X/@Amena__Bakr",
+    "url": "https://x.com/Amena__Bakr/status/2029860298581233712",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "\"Qatar expects all Gulf energy producers to shut \u200bdown exports within weeks and drive \u200coil to $150 a barrel, the country's Energy Minister Saad al-Kaabi told the Financial Times in an \u200binterview published on Friday.\n\"Everybody that has \u200bnot called for force majeure we expect",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2029944471417139400",
+    "source": "X/@ggreenwald",
+    "url": "https://x.com/ggreenwald/status/2029944471417139400",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "I can't believe that Russia would aid and help a country that is at war with the US!\n\nThe US would never do that to Russia. Imagine us funding, arming and helping some other country target Russian troops and cities. \n\nWe'd never do that. So why are these monsters doing it to us? https://t.co/bGyRSNKb7I",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2029565947825020996",
+    "source": "X/@dhh",
+    "url": "https://x.com/dhh/status/2029565947825020996",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "Ruby on Rails is probably the most token-efficient way to write a real web app together with agents that doesn't immediately fall apart with security holes and unscalable decisions. https://t.co/ql3QEHz0PM https://t.co/xaLbu4gMTX",
+      "linked_content": {
+        "destination_url": "https://rubyonrails.org/",
+        "domain": "rubyonrails.org",
+        "source_type": "web_article",
+        "title": "Ruby on Rails: Accelerate your agents with convention over configuration",
+        "content_preview": "A full-stack web application framework written in Ruby, following the Model View Controller pattern, that includes everything you need to build modern database-backed web apps.",
+        "enriched_at": "2026-03-13T01:53:45",
+        "enrichment_failed": false,
+        "destination_text": "Listen to the latest episode of the 'On Rails' podcast, hosted by Robby Russell. These are just a few of the big names. There have been many hundreds of thousands of apps created with Rails since its inception. Rendering HTML templates, updating databases, sending and receiving emails, maintaining live pages via WebSockets, enqueuing jobs for asynchronous work, storing uploads in the cloud, providing solid security protections for common attacks. Rails does it all and so much more. Databases come to life with business logic encapsulated in rich objects. Modeling associations between tables, providing callbacks when saved, encrypting sensitive data seamlessly, and expressing SQL queries beautifully. Controllers expose the domain model to the web, process incoming parameters, set caching headers, and render templates, responding with either HTML or JSON. Templates can use the full versatility of Ruby, excessive code is extracted into helpers, and the domain model is used directly and interwoven with the HTML. Configure how URLs connect to the controllers using the routing domain language. Routes expose the bundle of actions that go together as a resource: index, show, new, create, edit, update, destroy. Rails has united and cultivated a strong tribe around a wide set of heretical thoughts about the nature of programming and programmers. Understanding these thoughts will help you understand the design of the framework. Learn what the frameworks can do and how they fit together. The latest releases and updates on development. Learn more about Hotwire \u2014 the default front-end framework for Rails Stay up to date with Rails on X , YouTube , This Week in Rails , or the On Rails podcast .",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-13T01:53:45"
+      },
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2029304578030670113",
+    "source": "X/@LukeGromen",
+    "url": "https://x.com/LukeGromen/status/2029304578030670113",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "@MartinSkold2 The UK did the hard work for us by getting into an expensive stupid war with an upstart manufacturing land power that was outproducing them &amp; building its own a Belt and Road from Baghdad to Berlin (the UK even turned down offers to invest in the Baghdad to Berlin Railway)",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2029303885505155571",
+    "source": "X/@ctindale",
+    "url": "https://x.com/ctindale/status/2029303885505155571",
+    "action": "save",
+    "fetched_at": "2026-03-13T01:53:39",
+    "metadata": {
+      "tweet_text": "https://t.co/zzSaHqNDOb",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
     },
     "folder": null
   }
