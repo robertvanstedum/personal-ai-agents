@@ -10,8 +10,15 @@ PROJECT_DIR="$HOME/Projects/personal-ai-agents"
 
 cd "$PROJECT_DIR" || exit 1
 
-# Activate virtual environment and run curator
+# Activate virtual environment
 source venv/bin/activate
+
+# Phase 3C.7: Pull new X bookmarks before curating.
+# Failure is isolated — log and continue, never block the briefing.
+echo "🔖 Pulling new X bookmarks..."
+python x_pull_incremental.py 2>&1 || echo "⚠️  x_pull_incremental.py failed — continuing with existing signals"
+
+# Generate briefing
 python curator_rss_v2.py --model=xai --fallback --temperature=1.0
 
 # Send briefing via unified Telegram bot
