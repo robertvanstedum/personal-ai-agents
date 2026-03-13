@@ -36,7 +36,7 @@ This prevents conflicts, duplicate work, and agents overwriting each other.
 
 ## Signal Store State (as of 2026-03-12)
 
-Ground truth for `domain_signals.json`. Do not modify historical signals.
+Ground truth for `curator_signals.json`. Do not modify historical signals.
 
 - **398 historical X bookmarks** imported via `x_bootstrap.py` (one-time cold start)
 - **Tweet-only signals** (no destination URL): `destination_text` intentionally absent — nothing to fetch, not a bug

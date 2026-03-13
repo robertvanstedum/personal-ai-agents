@@ -9,7 +9,7 @@
 
 ## Preconditions (do not modify, do not backfill)
 
-- 398 historical signals already in `domain_signals.json`
+- 398 historical signals already in `curator_signals.json`
 - Tweet-only signals (no destination URL): `destination_text` intentionally absent — nothing to fetch
 - URL signals (29): `destination_text` populated, `destination_text_source` set
 - Backfill complete. Treat existing signals as **read-only**.
@@ -35,11 +35,11 @@
 
 1. Load `x_pull_state.json`, read `last_pull_at`
 2. Call X Bookmarks API (`GET /2/users/:id/bookmarks`) — paginate through all results
-3. For each bookmark: check URL against existing `domain_signals.json` keys
+3. For each bookmark: check URL against existing `curator_signals.json` keys
    - URL exists → skip (covers all 398 historical + any prior incremental pulls)
    - URL new → enrich + add
 4. Optimization (not guaranteed): stop pagination early if `last_pull_at` is set AND bookmark `created_at` < `last_pull_at` — dedup is the safety net, not this check
-5. Write new signals to `domain_signals.json`
+5. Write new signals to `curator_signals.json`
 6. Update `x_pull_state.json` with `last_pull_at` = now, updated counts
 
 ### Enrichment
@@ -57,7 +57,7 @@ Fields per new signal: match existing 398 schema exactly. No new fields, no sche
 
 **`run_curator_cron.sh` update:**
 - Add `python x_pull_incremental.py` call **before** `curator_rss_v2.py`
-- New bookmarks land in `domain_signals.json` → Piece 2/3 pipeline picks them up automatically
+- New bookmarks land in `curator_signals.json` → Piece 2/3 pipeline picks them up automatically
 - Failure in pull → log + continue, **never block the briefing**
 
 ---
