@@ -1,0 +1,7 @@
+[
+  {"domain": "warontherocks.com", "trust": "trusted", "set_by": "explicit", "note": "Defense/security analysis"},
+  {"domain": "foreignaffairs.com", "trust": "trusted", "set_by": "explicit", "note": "Premier geopolitics journal"},
+  {"domain": "arxiv.org", "trust": "trusted", "set_by": "explicit", "note": "Academic preprints, q-fin"},
+  {"domain": "justsecurity.org", "trust": "trusted", "set_by": "explicit", "note": "National security / international law"},
+  {"domain": "cepr.org", "trust": "trusted", "set_by": "explicit", "note": "Economic policy research, VoxEU columns"}
+]

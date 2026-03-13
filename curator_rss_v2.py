@@ -118,6 +118,13 @@ FEEDS = {
     "Spiegel International": "https://www.spiegel.de/international/index.rss",  # English, partial paywall
     "FAZ": "https://www.faz.net/rss/aktuell/",  # German, partial paywall
     "Die Welt": "https://www.welt.de/feeds/latest.rss",  # German, partial paywall
+
+    # Institutional sources (Mar 13, 2026)
+    "War on the Rocks": "https://warontherocks.com/feed/",  # Defense/security analysis
+    "Foreign Affairs": "https://www.foreignaffairs.com/rss.xml",  # Premier geopolitics journal
+    "arXiv q-fin": "https://rss.arxiv.org/rss/q-fin",  # Academic preprints, capped at 15
+    "Just Security": "https://www.justsecurity.org/feed/",  # National security / international law
+    "CEPR VoxEU": "https://cepr.org/rss/vox-content",  # Economic policy research columns
 }
 
 # Keywords for scoring (legacy mechanical mode)
@@ -191,7 +198,11 @@ def fetch_feed(name: str, url: str) -> List[Dict]:
                 "published": pub_date,
                 "raw_entry": entry
             })
-        
+
+        # Cap high-volume feeds to prevent flooding the candidate pool
+        if name == "arXiv q-fin":
+            entries = entries[:15]
+
         print(f"   ✅ {len(entries)} entries from {name}")
         return entries
     
