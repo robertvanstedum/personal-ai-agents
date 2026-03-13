@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-03-12 - Phase 3C.7: Incremental X Bookmark Pull
+
+Commits: `4a77020` (x_pull_incremental.py), `f0dbe80` (cron integration)
+
+**Result:** 27 new signals ingested, 425 total in `curator_signals.json`, X article pool grew to 357 candidates. First production test: 7 AM briefing on 2026-03-13 — first run with RSS + enriched X bookmarks + incremental pull all live together.
+
+### What Was Built
+
+**`x_pull_incremental.py`** (`4a77020`)
+Fetches X bookmarks saved since `last_pull_at`, enriches each with `fetch_destination_text()` inline (not batch), deduplicates by URL against existing `curator_signals.json`. Skips all 398 historical signals automatically via URL dedup — no date-based logic needed. Writes new signals and updates `x_pull_state.json` atomically on success.
+
+**Cron integration** (`f0dbe80`)
+`run_curator_cron.sh` updated to call `x_pull_incremental.py` before `curator_rss_v2.py`. Failure in pull → log + continue, never blocks the briefing.
+
+### Design Decision: `--limit=N` does not advance `last_pull_at`
+Intentional. Test runs (`--limit=5`) must not poison the production early-stop marker. Production cron always runs without `--limit`, which is the only path that advances the timestamp.
+
+### What to Watch (Tomorrow's Briefing)
+- X articles from new bookmarks appearing alongside RSS — look for `X/@username` source labels
+- Whether incremental pull adds fresh signal quality vs. noise
+- `x_pull_state.json` timestamp advancing correctly after cron run
+
+---
+
 ## 2026-03-12 - Phase 3C.6: X Bookmark Articles as First-Class Scored Content
 
 Closes Issue #4. Four commits: `0d011b0`, `9430b74`, `9a5753e`, `cc96c9e`

@@ -94,12 +94,13 @@ Architecture correct and working. X bookmark content entering the daily scoring 
 - **Cold start (done, one-time):** 398 historical bookmarks → profile signals. Correct role.
 - **Ongoing content discovery (next build — Phase 3C.7):** Incremental X bookmark pull — fetch all bookmarks saved since last pull date, enrich with destination text, enter scoring pool as daily candidates. New saves = fresh content that competes.
 
-**Phase 3C.7 — Incremental X Bookmark Pull (Next Task, after GitHub push)**
-- Fetch bookmarks saved since `last_pull_date` (stored in config or state file)
-- Enrich with `fetch_destination_text()` (Piece 1 infrastructure already exists)
-- Enter scoring pool as daily candidates via `x_to_article.py` (Piece 2 already exists)
-- Update `last_pull_date` on success
-- This is the correct ongoing flow — new saves compete as fresh content, archive stays as profile signal only
+**Phase 3C.7 — Incremental X Bookmark Pull ✅ Complete (Mar 12, 2026)**
+- `x_pull_incremental.py` fetches bookmarks saved since `last_pull_at` (tracked in `x_pull_state.json`)
+- Enriches inline with `fetch_destination_text()`, deduplicates against `curator_signals.json`
+- 27 new signals on first run — 425 total, X article pool at 357
+- `--limit=N` intentionally does not advance `last_pull_at` (prevents test run poisoning)
+- Cron integration: runs before `curator_rss_v2.py`, failure never blocks briefing
+- First production test: 7 AM briefing 2026-03-13
 
 ---
 
