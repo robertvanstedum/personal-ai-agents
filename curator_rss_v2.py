@@ -1483,6 +1483,104 @@ def _domain_from_url(url: str) -> str:
         return ''
 
 
+# ── Web search enrichment helper (Workstream 2) ───────────────────────────────
+
+def _fetch_web_search_candidates(
+    seen_hashes: set,
+    priority_limit: int = 3,
+    results_per_priority: int = 5,
+    baseline_total: int = 5,
+) -> List[Dict]:
+    """
+    Fetch Brave web search candidates for the daily briefing pool.
+
+    Two query sources (priority queries first, baseline fills after):
+      1. Active priority keywords — up to priority_limit priorities,
+         results_per_priority results each (max 15 total)
+      2. Static baseline topics  — baseline_total results spread across
+         6 evergreen queries (max 5 total)
+
+    Results are domain-whitelist filtered and deduped against seen_hashes.
+    Each result tagged with source_type='web_search'.
+    seen_hashes is mutated in-place to prevent cross-source duplication.
+    """
+    # Lazy import avoids circular dependency:
+    # curator_priority_feed imports curator_rss_v2 at module level.
+    try:
+        from curator_priority_feed import brave_search, DOMAIN_WHITELIST
+    except ImportError:
+        print("⚠️  Web search: curator_priority_feed not available, skipping")
+        return []
+
+    BASELINE_TOPICS = [
+        'geopolitics', 'monetary policy', 'emerging markets',
+        'AI economy', 'energy markets', 'US foreign policy',
+    ]
+
+    candidates = []
+    seen_urls: set = set()
+
+    def _to_entry(r: dict, query_label: str):
+        url = r.get('url', '')
+        if not url:
+            return None
+        domain = _domain_from_url(url)
+        if domain not in DOMAIN_WHITELIST:
+            return None
+        h = hashlib.md5(url.encode()).hexdigest()[:5]
+        if h in seen_hashes or url in seen_urls:
+            return None
+        seen_urls.add(url)
+        return {
+            'hash_id':     h,
+            'source':      domain,
+            'source_type': 'web_search',
+            'title':       r.get('title', '').strip(),
+            'link':        url,
+            'summary':     r.get('description', '').strip(),
+            'published':   None,
+            'query_label': query_label,
+        }
+
+    # 1. Priority queries (load_priorities() already filters active + non-expired)
+    for priority in load_priorities()[:priority_limit]:
+        keywords = priority.get('keywords', [])
+        if not keywords:
+            continue
+        label = priority.get('label', priority.get('id', ''))
+        raw = brave_search(' '.join(keywords), count=results_per_priority * 2)
+        added = 0
+        for r in raw:
+            if added >= results_per_priority:
+                break
+            entry = _to_entry(r, f"priority:{label}")
+            if entry:
+                candidates.append(entry)
+                seen_hashes.add(entry['hash_id'])
+                added += 1
+        print(f"  🔍 Web [{label}]: {added} candidates")
+
+    # 2. Baseline topics (spread baseline_total across all topics)
+    per_topic = max(1, (baseline_total + len(BASELINE_TOPICS) - 1) // len(BASELINE_TOPICS))
+    baseline_added = 0
+    for topic in BASELINE_TOPICS:
+        if baseline_added >= baseline_total:
+            break
+        raw = brave_search(topic, count=per_topic * 2)
+        for r in raw:
+            if baseline_added >= baseline_total:
+                break
+            entry = _to_entry(r, f"baseline:{topic}")
+            if entry:
+                candidates.append(entry)
+                seen_hashes.add(entry['hash_id'])
+                baseline_added += 1
+    if baseline_added:
+        print(f"  🌐 Web baseline: {baseline_added} candidates")
+
+    return candidates
+
+
 def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanical',
            fallback_on_error: bool = False, xai_model: str = 'grok-3-mini', temperature: float = 0.0) -> List[Dict]:
     """
@@ -1525,6 +1623,16 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
     x_articles  = [a for a in load_x_bookmark_articles() if a['hash_id'] not in seen_hashes]
     all_entries.extend(x_articles)
     print(f"📎 X bookmarks merged: {len(x_articles)} articles (332 signals → {len(x_articles)} after dedup)")
+
+    # Web search enrichment — active priority keywords + static baseline topics
+    print(f"\n🔍 Web search enrichment:")
+    _ws_seen = {e['hash_id'] for e in all_entries if e.get('hash_id')}
+    web_candidates = _fetch_web_search_candidates(seen_hashes=_ws_seen)
+    if web_candidates:
+        all_entries.extend(web_candidates)
+        print(f"   Pool after web search: {len(all_entries)} candidates")
+    else:
+        print(f"   No web candidates added (Brave unavailable or all filtered)")
 
     # Apply source trust: load trust table and drop 'drop'-tier domains before scoring
     _source_trust = _load_source_trust()
