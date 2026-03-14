@@ -53,6 +53,12 @@ DOMAIN_WHITELIST = {
     'crimelab.uchicago.edu',                   # UChicago Crime Lab research
     'blockclubchicago.org',                    # Block Club Chicago local reporting
     'counciloncj.org',                         # Council on Criminal Justice
+    # Added — US domestic topics (2026-03-14)
+    'cbsnews.com', 'cnn.com', 'us.cnn.com',    # US nationals
+    'chicagotribune.com',                      # Chicago Tribune
+    'chicago.suntimes.com',                    # Chicago Sun-Times
+    'therealdeal.com',                         # Urban real estate / economic
+    'wirepoints.org',                          # Illinois policy analysis
 }
 
 # Haiku pre-filter: keep results scoring at or above this threshold
@@ -131,7 +137,7 @@ def brave_search(query: str, count: int = 20) -> list:
                 'Accept-Encoding': 'gzip',
                 'X-Subscription-Token': api_key,
             },
-            params={'q': query, 'count': count, 'search_lang': 'en'},
+            params={'q': query, 'count': count, 'search_lang': 'en', 'freshness': 'pw'},
             timeout=15,
         )
         resp.raise_for_status()
