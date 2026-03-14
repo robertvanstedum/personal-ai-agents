@@ -1012,26 +1012,27 @@
     const dateStr = a.fetched_at
       ? new Date(a.fetched_at).toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric'})
       : '—';
-    const pid   = escHtml(priorityId   || '');
-    const plabel = escAttr(priorityLabel || '');
     return `
-      <div class="feed-article">
+      <div class="feed-article"
+           data-url="${escAttr(a.url)}"
+           data-title="${escAttr(a.title)}"
+           data-source="${escAttr(a.source)}"
+           data-score="${score}"
+           data-priority-id="${escAttr(priorityId || '')}"
+           data-priority-label="${escAttr(priorityLabel || '')}">
         <span class="feed-score ${scoreClass}">${score.toFixed(1)}</span>
         <div class="feed-article-body">
-          <a class="feed-article-title" href="${escHtml(a.url)}" target="_blank" rel="noopener"
-             onclick="return openFeedArticle(event,'${escHtml(a.url)}')">${escHtml(a.title)}</a>
+          <a class="feed-article-title" href="${escAttr(a.url)}" target="_blank" rel="noopener"
+             onclick="return openFeedArticle(event)">${escHtml(a.title)}</a>
           <div class="feed-article-meta">
             <span class="feed-source">${escHtml(a.source)}</span>
             <span>${dateStr}</span>
           </div>
         </div>
         <div class="feed-action-buttons">
-          <button class="feed-action-btn feed-btn-like" title="Like"
-                  onclick="priorityFeedAction(this,'like','${escHtml(a.url)}','${escAttr(a.title)}','${escHtml(a.source)}',${score},'${pid}','${plabel}')">👍</button>
-          <button class="feed-action-btn feed-btn-dislike" title="Dislike"
-                  onclick="priorityFeedAction(this,'dislike','${escHtml(a.url)}','${escAttr(a.title)}','${escHtml(a.source)}',${score},'${pid}','${plabel}')">👎</button>
-          <button class="feed-action-btn feed-btn-save" title="Save to library"
-                  onclick="priorityFeedAction(this,'save','${escHtml(a.url)}','${escAttr(a.title)}','${escHtml(a.source)}',${score},'${pid}','${plabel}')">💾</button>
+          <button class="feed-action-btn feed-btn-like"    title="Like"            onclick="priorityFeedAction(this,'like')">👍</button>
+          <button class="feed-action-btn feed-btn-dislike" title="Dislike"         onclick="priorityFeedAction(this,'dislike')">👎</button>
+          <button class="feed-action-btn feed-btn-save"    title="Save to library" onclick="priorityFeedAction(this,'save')">💾</button>
         </div>
       </div>`;
   }
@@ -1219,9 +1220,10 @@
   }
 
   // ── Open article link with pre-flight URL check ─────────────
-  async function openFeedArticle(event, url) {
+  async function openFeedArticle(event) {
     event.preventDefault();
     const link = event.currentTarget;
+    const url = link.href;
     const origCursor = document.body.style.cursor;
     document.body.style.cursor = 'wait';
     link.style.opacity = '0.6';
@@ -1245,7 +1247,14 @@
   }
 
   // ── Save priority feed article to library ───────────────────
-  async function priorityFeedAction(btn, action, url, title, source, score, priorityId, priorityLabel) {
+  async function priorityFeedAction(btn, action) {
+    const article = btn.closest('.feed-article');
+    const url          = article.dataset.url;
+    const title        = article.dataset.title;
+    const source       = article.dataset.source;
+    const score        = parseFloat(article.dataset.score) || 0;
+    const priorityId   = article.dataset.priorityId;
+    const priorityLabel = article.dataset.priorityLabel;
     const group = btn.closest('.feed-action-buttons');
     const allBtns = group ? Array.from(group.querySelectorAll('.feed-action-btn')) : [btn];
     const orig = btn.textContent;
