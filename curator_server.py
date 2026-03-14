@@ -543,6 +543,61 @@ def api_priority_refresh(priority_id):
     })
 
 
+@app.route('/api/priority-feed/save', methods=['POST'])
+def api_priority_feed_save():
+    """Save a priority feed article to curator_preferences.json (no signal extraction)."""
+    import hashlib
+
+    data = request.get_json() or {}
+    url   = (data.get('url')   or '').strip()
+    title = (data.get('title') or '').strip()
+    source = (data.get('source') or '').strip()
+    score = data.get('score')
+    priority_id    = (data.get('priority_id')    or '').strip()
+    priority_label = (data.get('priority_label') or '').strip()
+
+    if not (url and title and source):
+        return jsonify({'success': False, 'message': 'Missing url, title, or source'}), 400
+
+    prefs_path = Path.home() / '.openclaw' / 'workspace' / 'curator_preferences.json'
+    if prefs_path.exists():
+        prefs = json.loads(prefs_path.read_text())
+    else:
+        prefs = {'version': '1.0', 'feedback_history': {}}
+
+    feedback_history = prefs.setdefault('feedback_history', {})
+
+    # Idempotency check — scan all dates for matching URL
+    for day_data in feedback_history.values():
+        for entry in day_data.get('saved', []):
+            if entry.get('url') == url:
+                return jsonify({'success': True, 'already_saved': True})
+
+    # Build article_id from priority_id + url hash
+    url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+    article_id = f'priority-{priority_id}-{url_hash}' if priority_id else f'priority-feed-{url_hash}'
+
+    today = datetime.now().strftime('%Y-%m-%d')
+    day_bucket = feedback_history.setdefault(today, {'liked': [], 'saved': []})
+    day_bucket.setdefault('saved', []).append({
+        'article_id':     article_id,
+        'url':            url,
+        'title':          title,
+        'source':         source,
+        'score':          float(score) if score is not None else None,
+        'category':       'priority_feed',
+        'timestamp':      datetime.now().isoformat(),
+        'your_words':     '',
+        'saved_from':     'priority_feed',
+        'priority_id':    priority_id,
+        'priority_label': priority_label,
+    })
+
+    prefs_path.write_text(json.dumps(prefs, indent=2))
+    print(f'🔖 Priority feed save: [{priority_id}] {title[:60]}')
+    return jsonify({'success': True, 'already_saved': False})
+
+
 @app.route('/')
 def index():
     """Root URL redirects to latest briefing"""

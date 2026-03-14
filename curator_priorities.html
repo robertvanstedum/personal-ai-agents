@@ -816,6 +816,26 @@
     padding: 10px 8px;
     font-style: italic;
   }
+
+  .feed-save-btn {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+    line-height: 1;
+  }
+  .feed-save-btn:hover { opacity: 1; }
+  .feed-save-btn.saved {
+    opacity: 1;
+    color: var(--ok);
+    cursor: default;
+  }
+  .feed-save-btn:disabled { cursor: default; }
 </style>
 </head>
 <body>
@@ -968,12 +988,14 @@
   }
 
   // ── Feed helpers ─────────────────────────────────────────────
-  function articleRowHtml(a) {
+  function articleRowHtml(a, priorityId, priorityLabel) {
     const score = parseFloat(a.score) || 0;
     const scoreClass = score >= 7 ? 'high' : score >= 4 ? 'mid' : '';
     const dateStr = a.fetched_at
       ? new Date(a.fetched_at).toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric'})
       : '—';
+    const pid   = escHtml(priorityId   || '');
+    const plabel = escAttr(priorityLabel || '');
     return `
       <div class="feed-article">
         <span class="feed-score ${scoreClass}">${score.toFixed(1)}</span>
@@ -984,6 +1006,8 @@
             <span>${dateStr}</span>
           </div>
         </div>
+        <button class="feed-save-btn" title="Save to library"
+                onclick="savePriorityArticle(this,'${escHtml(a.url)}','${escAttr(a.title)}','${escHtml(a.source)}',${score},'${pid}','${plabel}')">🔖</button>
       </div>`;
   }
 
@@ -1005,10 +1029,10 @@
     const VISIBLE = 3;
     const showCollapse = count > 10;
     const visible = showCollapse ? feed.slice(0, VISIBLE) : feed;
-    const hidden  = showCollapse ? feed.slice(VISIBLE) : [];
+    const hidden  = showCollapse ? feed.slice(VISIBLE)    : [];
 
     const collapseHtml = showCollapse ? `
-      <div id="feed-extra-${p.id}" style="display:none">${hidden.map(articleRowHtml).join('')}</div>
+      <div id="feed-extra-${p.id}" style="display:none">${hidden.map(a => articleRowHtml(a, p.id, p.label)).join('')}</div>
       <button class="feed-collapse-toggle" id="feed-toggle-${p.id}"
               onclick="toggleFeedCollapse('${p.id}', ${count})">Show all ${count} articles ▾</button>` : '';
 
@@ -1029,7 +1053,7 @@
             ${refreshBtn}
           </div>
         </div>
-        <div class="feed-list">${emptyHtml}${visible.map(articleRowHtml).join('')}</div>
+        <div class="feed-list">${emptyHtml}${visible.map(a => articleRowHtml(a, p.id, p.label)).join('')}</div>
         ${collapseHtml}
       </div>`;
   }
@@ -1166,6 +1190,33 @@
     } catch (err) {
       showToast('Network error', 'err');
       if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
+    }
+  }
+
+  // ── Save priority feed article to library ───────────────────
+  async function savePriorityArticle(btn, url, title, source, score, priorityId, priorityLabel) {
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+      const res = await fetch('/api/priority-feed/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url, title, source, score, priority_id: priorityId, priority_label: priorityLabel}),
+      });
+      const data = await res.json();
+      if (data.success) {
+        btn.textContent = '✓';
+        btn.classList.add('saved');
+        showToast(data.already_saved ? 'Already in library' : 'Saved to library', 'ok');
+      } else {
+        btn.disabled = false;
+        btn.textContent = '🔖';
+        showToast(data.message || 'Save failed', 'err');
+      }
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = '🔖';
+      showToast('Network error', 'err');
     }
   }
 
