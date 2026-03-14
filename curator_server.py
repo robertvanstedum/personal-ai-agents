@@ -598,6 +598,68 @@ def api_priority_feed_save():
     return jsonify({'success': True, 'already_saved': False})
 
 
+@app.route('/api/priority-feed/feedback', methods=['POST'])
+def api_priority_feed_feedback():
+    """Like, Dislike, or Save a priority feed article — lightweight write, no Haiku."""
+    import hashlib
+
+    data = request.get_json() or {}
+    action = (data.get('action') or '').strip().lower()
+    url    = (data.get('url')    or '').strip()
+    title  = (data.get('title')  or '').strip()
+    source = (data.get('source') or '').strip()
+    score  = data.get('score')
+    priority_id    = (data.get('priority_id')    or '').strip()
+    priority_label = (data.get('priority_label') or '').strip()
+
+    if action not in ('like', 'dislike', 'save'):
+        return jsonify({'success': False, 'message': 'action must be like, dislike, or save'}), 400
+    if not (url and title and source):
+        return jsonify({'success': False, 'message': 'Missing url, title, or source'}), 400
+
+    # Map action → storage key
+    storage_key = {'like': 'liked', 'dislike': 'disliked', 'save': 'saved'}[action]
+
+    prefs_path = Path.home() / '.openclaw' / 'workspace' / 'curator_preferences.json'
+    if prefs_path.exists():
+        prefs = json.loads(prefs_path.read_text())
+    else:
+        prefs = {'version': '1.0', 'feedback_history': {}}
+
+    feedback_history = prefs.setdefault('feedback_history', {})
+
+    # Idempotency — scan all dates for matching URL in this action's bucket
+    for day_data in feedback_history.values():
+        for entry in day_data.get(storage_key, []):
+            if entry.get('url') == url:
+                return jsonify({'success': True, 'already_saved': True, 'action': action})
+
+    # Build entry
+    url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+    article_id = f'priority-{priority_id}-{url_hash}' if priority_id else f'priority-feed-{url_hash}'
+
+    today = datetime.now().strftime('%Y-%m-%d')
+    day_bucket = feedback_history.setdefault(today, {'liked': [], 'saved': []})
+    day_bucket.setdefault(storage_key, []).append({
+        'article_id':     article_id,
+        'url':            url,
+        'title':          title,
+        'source':         source,
+        'score':          float(score) if score is not None else None,
+        'category':       'priority_feed',
+        'timestamp':      datetime.now().isoformat(),
+        'your_words':     '',
+        'saved_from':     'priority_feed',
+        'priority_id':    priority_id,
+        'priority_label': priority_label,
+    })
+
+    prefs_path.write_text(json.dumps(prefs, indent=2))
+    icons = {'like': '👍', 'dislike': '👎', 'save': '🔖'}
+    print(f'{icons[action]} Priority feed {action}: [{priority_id}] {title[:60]}')
+    return jsonify({'success': True, 'already_saved': False, 'action': action})
+
+
 @app.route('/')
 def index():
     """Root URL redirects to latest briefing"""

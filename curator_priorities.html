@@ -817,25 +817,43 @@
     font-style: italic;
   }
 
-  .feed-save-btn {
+  .feed-action-buttons {
+    display: flex;
+    gap: 4px;
     flex-shrink: 0;
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 13px;
-    padding: 2px 4px;
+    align-items: center;
+  }
+  .feed-action-btn {
+    padding: 3px 7px;
+    border: 1px solid transparent;
     border-radius: 4px;
-    opacity: 0.5;
-    transition: opacity 0.15s;
-    line-height: 1;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    transition: all 0.15s;
+    background: var(--surface2, #e8e3d8);
+    color: var(--text-muted, #888);
+    line-height: 1.4;
   }
-  .feed-save-btn:hover { opacity: 1; }
-  .feed-save-btn.saved {
-    opacity: 1;
-    color: var(--ok);
-    cursor: default;
+  .feed-btn-like {
+    background: rgba(46,125,82,0.08);
+    color: #2e7d52;
+    border-color: rgba(46,125,82,0.2);
   }
-  .feed-save-btn:disabled { cursor: default; }
+  .feed-btn-like:hover { background: rgba(46,125,82,0.15); transform: scale(1.05); }
+  .feed-btn-dislike {
+    background: rgba(180,60,60,0.08);
+    color: #b43c3c;
+    border-color: rgba(180,60,60,0.2);
+  }
+  .feed-btn-dislike:hover { background: rgba(180,60,60,0.15); transform: scale(1.05); }
+  .feed-btn-save {
+    background: rgba(26,92,138,0.08);
+    color: #1a5c8a;
+    border-color: rgba(26,92,138,0.2);
+  }
+  .feed-btn-save:hover { background: rgba(26,92,138,0.15); transform: scale(1.05); }
+  .feed-action-btn:disabled { cursor: default; transform: none; }
 </style>
 </head>
 <body>
@@ -1006,8 +1024,14 @@
             <span>${dateStr}</span>
           </div>
         </div>
-        <button class="feed-save-btn" title="Save to library"
-                onclick="savePriorityArticle(this,'${escHtml(a.url)}','${escAttr(a.title)}','${escHtml(a.source)}',${score},'${pid}','${plabel}')">🔖</button>
+        <div class="feed-action-buttons">
+          <button class="feed-action-btn feed-btn-like" title="Like"
+                  onclick="priorityFeedAction(this,'like','${escHtml(a.url)}','${escAttr(a.title)}','${escHtml(a.source)}',${score},'${pid}','${plabel}')">👍</button>
+          <button class="feed-action-btn feed-btn-dislike" title="Dislike"
+                  onclick="priorityFeedAction(this,'dislike','${escHtml(a.url)}','${escAttr(a.title)}','${escHtml(a.source)}',${score},'${pid}','${plabel}')">👎</button>
+          <button class="feed-action-btn feed-btn-save" title="Save to library"
+                  onclick="priorityFeedAction(this,'save','${escHtml(a.url)}','${escAttr(a.title)}','${escHtml(a.source)}',${score},'${pid}','${plabel}')">💾</button>
+        </div>
       </div>`;
   }
 
@@ -1194,28 +1218,39 @@
   }
 
   // ── Save priority feed article to library ───────────────────
-  async function savePriorityArticle(btn, url, title, source, score, priorityId, priorityLabel) {
-    btn.disabled = true;
+  async function priorityFeedAction(btn, action, url, title, source, score, priorityId, priorityLabel) {
+    const group = btn.closest('.feed-action-buttons');
+    const allBtns = group ? Array.from(group.querySelectorAll('.feed-action-btn')) : [btn];
+    const orig = btn.textContent;
+    allBtns.forEach(b => { b.disabled = true; });
     btn.textContent = '…';
     try {
-      const res = await fetch('/api/priority-feed/save', {
+      const res = await fetch('/api/priority-feed/feedback', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({url, title, source, score, priority_id: priorityId, priority_label: priorityLabel}),
+        body: JSON.stringify({action, url, title, source, score,
+                              priority_id: priorityId, priority_label: priorityLabel}),
       });
       const data = await res.json();
       if (data.success) {
-        btn.textContent = '✓';
-        btn.classList.add('saved');
-        showToast(data.already_saved ? 'Already in library' : 'Saved to library', 'ok');
+        btn.textContent = orig + ' ✓';
+        btn.style.opacity = '1';
+        btn.style.fontWeight = '700';
+        btn.style.boxShadow = '0 0 0 2px currentColor';
+        allBtns.forEach(b => { if (b !== btn) b.style.opacity = '0.2'; });
+        const msgs = {like: ['Liked', 'Already liked'],
+                      dislike: ['Disliked', 'Already disliked'],
+                      save: ['Saved to library', 'Already in library']};
+        const [fresh, dupe] = msgs[action] || ['Done', 'Already done'];
+        showToast(data.already_saved ? dupe : fresh, 'ok');
       } else {
-        btn.disabled = false;
-        btn.textContent = '🔖';
-        showToast(data.message || 'Save failed', 'err');
+        allBtns.forEach(b => { b.disabled = false; b.style.opacity = ''; });
+        btn.textContent = orig;
+        showToast(data.message || 'Action failed', 'err');
       }
     } catch (err) {
-      btn.disabled = false;
-      btn.textContent = '🔖';
+      allBtns.forEach(b => { b.disabled = false; b.style.opacity = ''; });
+      btn.textContent = orig;
       showToast('Network error', 'err');
     }
   }
