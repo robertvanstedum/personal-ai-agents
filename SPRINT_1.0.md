@@ -82,14 +82,15 @@ The daily brief is limited to sources defined at RSS setup. Relevant content fro
 
 **Institutional RSS feeds (immediate)**
 
-Low effort, high quality. These sources publish original research and data — not aggregated news. Add to the existing RSS pool:
+Low effort, high quality. These sources publish original research and data — not aggregated news. Added March 13, 2026:
 
-- BIS (Bank for International Settlements) — working papers, quarterly reviews
-- Federal Reserve — speeches, research, FOMC materials
-- ECB — publications, economic bulletins
-- NBER — working papers (economics, finance)
-- arXiv — quantitative finance, economics preprints
-- 2-3 additional geopolitics sources TBD during build
+- War on the Rocks — defense/security analysis
+- Foreign Affairs — premier geopolitics journal
+- arXiv q-fin — academic preprints (capped at 15)
+- Just Security — national security / international law
+- CEPR VoxEU — economic policy research columns
+
+Additional institutional sources (BIS, Fed, ECB, NBER) available to add later as needed — not in this sprint.
 
 **Web search candidates (topic-guided)**
 
