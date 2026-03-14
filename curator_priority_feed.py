@@ -166,6 +166,38 @@ def whitelist_filter(results: list) -> list:
     return kept
 
 
+def _log_probationary_domains(raw_results: list) -> None:
+    """
+    Auto-add any domain surfaced by Brave that isn't already in
+    curator_sources.json. Sets trust='probationary', set_by='auto'.
+    Idempotent — skips domains already in the file.
+    """
+    sources_path = Path(__file__).parent / 'curator_sources.json'
+    try:
+        existing = json.loads(sources_path.read_text()) if sources_path.exists() else []
+    except Exception:
+        existing = []
+    known_domains = {e['domain'] for e in existing}
+
+    new_entries = []
+    for r in raw_results:
+        domain = extract_domain(r.get('url', ''))
+        if domain and domain not in known_domains and domain not in DOMAIN_WHITELIST:
+            known_domains.add(domain)   # prevent dupes within this batch
+            new_entries.append({
+                'domain': domain,
+                'trust':  'probationary',
+                'set_by': 'auto',
+                'note':   f'auto-discovered via Brave {datetime.now().strftime("%Y-%m-%d")}',
+            })
+
+    if new_entries:
+        existing.extend(new_entries)
+        sources_path.write_text(json.dumps(existing, indent=2))
+        log.info(f'Logged {len(new_entries)} new probationary domain(s): '
+                 f'{[e["domain"] for e in new_entries]}')
+
+
 def results_to_entries(results: list) -> list:
     """
     Convert Brave result dicts to the entry format expected by
@@ -227,6 +259,9 @@ def run_priority(priority: dict, user_profile: str,
     if not raw:
         print("  → No results from Brave, skipping")
         return 0
+
+    # 1b. Log any unknown domains as probationary in curator_sources.json
+    _log_probationary_domains(raw)
 
     # 2. Domain whitelist filter
     whitelisted = whitelist_filter(raw)

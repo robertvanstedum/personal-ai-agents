@@ -1,7 +1,11 @@
 [
-  {"domain": "warontherocks.com", "trust": "trusted", "set_by": "explicit", "note": "Defense/security analysis"},
-  {"domain": "foreignaffairs.com", "trust": "trusted", "set_by": "explicit", "note": "Premier geopolitics journal"},
-  {"domain": "arxiv.org", "trust": "trusted", "set_by": "explicit", "note": "Academic preprints, q-fin"},
-  {"domain": "justsecurity.org", "trust": "trusted", "set_by": "explicit", "note": "National security / international law"},
-  {"domain": "cepr.org", "trust": "trusted", "set_by": "explicit", "note": "Economic policy research, VoxEU columns"}
+  {"domain": "warontherocks.com",  "trust": "trusted",  "set_by": "explicit", "note": "Defense/security analysis"},
+  {"domain": "foreignaffairs.com", "trust": "trusted",  "set_by": "explicit", "note": "Premier geopolitics journal"},
+  {"domain": "arxiv.org",          "trust": "trusted",  "set_by": "explicit", "note": "Academic preprints, q-fin"},
+  {"domain": "justsecurity.org",   "trust": "trusted",  "set_by": "explicit", "note": "National security / international law"},
+  {"domain": "cepr.org",           "trust": "trusted",  "set_by": "explicit", "note": "Economic policy research, VoxEU"},
+  {"domain": "crisisgroup.org",    "trust": "trusted",  "set_by": "explicit", "note": "Conflict analysis"},
+  {"domain": "investing.com",      "trust": "drop",     "set_by": "explicit", "note": "Aggregator noise"},
+  {"domain": "theduran.com",       "trust": "neutral",  "set_by": "explicit", "note": ""},
+  {"domain": "zerohedge.com",      "trust": "neutral",  "set_by": "explicit", "note": ""}
 ]

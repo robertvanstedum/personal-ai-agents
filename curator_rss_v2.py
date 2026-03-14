@@ -1459,6 +1459,30 @@ def save_to_history(entries: List[Dict], output_dir: str = "."):
     print(f"💾 History updated: {len(entries)} articles saved")
 
 
+# ── Source trust helpers (Workstream 1) ──────────────────────────────────────
+
+def _load_source_trust() -> dict:
+    """Load curator_sources.json → {domain: trust_tier} dict."""
+    path = Path(__file__).parent / 'curator_sources.json'
+    if not path.exists():
+        return {}
+    try:
+        entries = json.loads(path.read_text())
+        return {e['domain']: e['trust'] for e in entries if 'domain' in e and 'trust' in e}
+    except Exception:
+        return {}
+
+_TRUST_MULTIPLIERS = {'trusted': 1.5, 'neutral': 1.0, 'deprioritize': 0.5, 'probationary': 0.7}
+
+def _domain_from_url(url: str) -> str:
+    try:
+        from urllib.parse import urlparse
+        netloc = urlparse(url).netloc.lower()
+        return netloc[4:] if netloc.startswith('www.') else netloc
+    except Exception:
+        return ''
+
+
 def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanical',
            fallback_on_error: bool = False, xai_model: str = 'grok-3-mini', temperature: float = 0.0) -> List[Dict]:
     """
@@ -1501,6 +1525,18 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
     x_articles  = [a for a in load_x_bookmark_articles() if a['hash_id'] not in seen_hashes]
     all_entries.extend(x_articles)
     print(f"📎 X bookmarks merged: {len(x_articles)} articles (332 signals → {len(x_articles)} after dedup)")
+
+    # Apply source trust: load trust table and drop 'drop'-tier domains before scoring
+    _source_trust = _load_source_trust()
+    if _source_trust:
+        before_drop = len(all_entries)
+        all_entries = [
+            e for e in all_entries
+            if _source_trust.get(_domain_from_url(e.get('link', '')), 'neutral') != 'drop'
+        ]
+        dropped = before_drop - len(all_entries)
+        if dropped:
+            print(f"🚫 Source trust: dropped {dropped} entries (drop tier)")
 
     # Load active interests for score boosting
     active_interests = load_active_interests()
@@ -1566,7 +1602,22 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
             entry["category"] = result['category']
             entry["raw_score"] = result['raw_score']
             entry["method"] = result['method']
-    
+
+    # Apply source trust multipliers to scores (post-scoring, all modes)
+    if _source_trust:
+        boosted = 0
+        for entry in all_entries:
+            domain = _domain_from_url(entry.get('link', ''))
+            tier = _source_trust.get(domain, 'neutral')
+            multiplier = _TRUST_MULTIPLIERS.get(tier, 1.0)
+            if multiplier != 1.0:
+                entry['raw_score'] = entry.get('raw_score', entry['score'])
+                entry['score'] = round(entry['score'] * multiplier, 2)
+                entry['trust_tier'] = tier
+                boosted += 1
+        if boosted:
+            print(f"⚖️  Source trust: applied multipliers to {boosted} entries")
+
     # Load serendipity reserve setting
     serendipity_reserve = 0.20  # Default
     try:
