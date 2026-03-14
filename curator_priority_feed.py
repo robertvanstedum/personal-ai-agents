@@ -293,8 +293,8 @@ def run_priority(priority: dict, user_profile: str,
     # 7. Append to feed
     new_articles = entries_to_feed_articles(new_entries, fetched_at)
     priority.setdefault('feed', [])
-    # Prepend new articles (most recent first)
-    priority['feed'] = new_articles + priority['feed']
+    # Prepend new articles (most recent first), cap at 50 total
+    priority['feed'] = (new_articles + priority['feed'])[:50]
     priority['feed_last_updated'] = fetched_at
 
     return len(new_articles)

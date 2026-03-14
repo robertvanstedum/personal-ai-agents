@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup: Priority Feed — Curator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f0e8;
+    --bg-texture: #ede8df;
+    --surface: #faf7f2;
+    --surface2: #f0ebe0;
+    --border: #ddd6c8;
+    --border2: #c8bfaf;
+    --text: #2a2418;
+    --text-muted: #6b5f4e;
+    --text-dim: #9e9080;
+    --accent: #8b5e2a;
+    --accent-dim: rgba(139,94,42,0.08);
+    --accent-glow: rgba(139,94,42,0.18);
+    --danger: #b03030;
+    --danger-dim: rgba(176,48,48,0.08);
+    --danger-border: rgba(176,48,48,0.25);
+    --ok: #2e7d52;
+    --ok-dim: rgba(46,125,82,0.08);
+    --ok-border: rgba(46,125,82,0.25);
+    --warn: #8b6e1a;
+    --warn-dim: rgba(139,110,26,0.08);
+    --warn-border: rgba(139,110,26,0.25);
+    --shadow: rgba(42,36,24,0.08);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Source Sans 3', sans-serif;
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    position: sticky;
+    top: 0;
+    background: rgba(245,240,232,0.94);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+    box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
+  }
+
+  .header-left { display: flex; align-items: baseline; gap: 16px; }
+
+  .logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+    text-decoration: none;
+  }
+
+  .logo-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .header-nav { display: flex; gap: 4px; }
+
+  .nav-link {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    letter-spacing: 0.05em;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+  }
+
+  .nav-link:hover { color: var(--text); background: var(--surface2); }
+  .nav-link.active {
+    color: var(--accent);
+    background: var(--accent-dim);
+    border-color: rgba(139,94,42,0.2);
+  }
+
+  /* ── Main layout ── */
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 32px 32px 80px;
+  }
+
+  /* ── Mockup notice ── */
+  .mockup-notice {
+    background: var(--warn-dim);
+    border: 1px solid var(--warn-border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--warn);
+    letter-spacing: 0.04em;
+    margin-bottom: 28px;
+  }
+
+  /* ── Page title ── */
+  .page-header { margin-bottom: 28px; }
+
+  .page-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 6px;
+  }
+
+  .page-title em { color: var(--accent); font-style: italic; }
+
+  .page-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Priority card (existing) ── */
+  .priority-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 4px var(--shadow);
+    transition: box-shadow 0.15s;
+  }
+
+  .priority-card:hover { box-shadow: 0 2px 10px var(--shadow); }
+
+  .card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .card-label-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .card-label {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+
+  .boost-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: 1px solid rgba(139,94,42,0.2);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+
+  .status-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .status-badge.active {
+    background: var(--ok-dim);
+    color: var(--ok);
+    border: 1px solid var(--ok-border);
+  }
+
+  .keywords-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .keyword-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 3px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+  }
+
+  .card-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+
+  .card-meta span { display: flex; align-items: center; gap: 4px; }
+  .expiry-ok { color: var(--ok); }
+
+  /* ── Card actions (existing) ── */
+  .card-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .action-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    padding: 5px 12px;
+    border-radius: 5px;
+    border: 1px solid var(--border2);
+    background: var(--bg);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .action-btn:hover { background: var(--surface2); color: var(--text); }
+
+  .action-btn.extend {
+    border-color: var(--ok-border);
+    color: var(--ok);
+    background: var(--ok-dim);
+  }
+  .action-btn.extend:hover { opacity: 0.8; }
+
+  .action-btn.delete {
+    border-color: var(--danger-border);
+    color: var(--danger);
+    background: var(--danger-dim);
+  }
+  .action-btn.delete:hover { opacity: 0.8; }
+
+  .action-btn.toggle-active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  /* ── NEW: Priority feed section ── */
+  .feed-section {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  .feed-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    gap: 10px;
+  }
+
+  .feed-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .feed-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .feed-count {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 2px 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+  }
+
+  .feed-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .feed-updated {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+  }
+
+  .btn-refresh {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    padding: 4px 12px;
+    border-radius: 5px;
+    border: 1px solid rgba(139,94,42,0.3);
+    background: var(--accent-dim);
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn-refresh:hover { background: var(--accent-glow); }
+
+  .btn-refresh.spinning { opacity: 0.6; cursor: not-allowed; }
+
+  /* ── Feed article list ── */
+  .feed-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .feed-article {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    transition: background 0.12s;
+  }
+
+  .feed-article:hover { background: var(--surface2); }
+
+  .feed-score {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    min-width: 28px;
+    flex-shrink: 0;
+  }
+
+  .feed-score.high { color: var(--ok); }
+  .feed-score.mid  { color: var(--accent); }
+  .feed-score.low  { color: var(--text-dim); }
+
+  .feed-article-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .feed-article-title {
+    font-size: 13px;
+    color: var(--text);
+    text-decoration: none;
+    line-height: 1.35;
+    display: block;
+  }
+
+  .feed-article-title:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+
+  .feed-article-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.03em;
+    margin-top: 2px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .feed-source {
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  /* ── Collapse toggle (for >10 articles) ── */
+  .feed-collapse-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding: 6px;
+    width: 100%;
+    background: none;
+    border: 1px dashed var(--border2);
+    border-radius: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .feed-collapse-toggle:hover { background: var(--surface2); color: var(--text-muted); border-color: var(--border); }
+
+  /* ── Empty feed state ── */
+  .feed-empty {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+    padding: 12px 10px;
+    font-style: italic;
+  }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--text);
+    color: #fff;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    padding: 10px 18px;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.25s ease;
+    pointer-events: none;
+    z-index: 200;
+  }
+
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.ok   { background: var(--ok); }
+  .toast.err  { background: var(--danger); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <a href="#" class="logo">Curator</a>
+    <span class="logo-sub">Priorities — Feed Mockup</span>
+  </div>
+  <nav class="header-nav">
+    <a href="#" class="nav-link">Daily</a>
+    <a href="#" class="nav-link">Library</a>
+    <a href="#" class="nav-link">Deep Dives</a>
+    <a href="#" class="nav-link active">Priorities</a>
+  </nav>
+</header>
+
+<main>
+  <div class="mockup-notice">
+    MOCKUP — hardcoded dummy data. Step 4 design preview before touching production files.
+  </div>
+
+  <div class="page-header">
+    <h1 class="page-title">Signal <em>Priorities</em></h1>
+    <p class="page-meta">1 active · 1 total · last refreshed 14:02</p>
+  </div>
+
+  <!-- Priority card: enhanced with feed section -->
+  <div class="priority-card">
+
+    <!-- Existing card content ─────────────────────────────── -->
+    <div class="card-top">
+      <div class="card-label-row">
+        <span class="card-label">Chicago Crime &amp; Policing</span>
+        <span class="boost-badge">+2.0x</span>
+        <span class="status-badge active">active</span>
+      </div>
+    </div>
+
+    <div class="keywords-row">
+      <span class="keyword-tag">chicago</span>
+      <span class="keyword-tag">crime</span>
+      <span class="keyword-tag">policing</span>
+      <span class="keyword-tag">CPD</span>
+    </div>
+
+    <div class="card-meta">
+      <span>Matches: <strong>14</strong></span>
+      <span>Created: 13 Mar</span>
+      <span class="expiry-ok">Expires in 12d</span>
+    </div>
+
+    <div class="card-actions">
+      <button class="action-btn extend">+3d</button>
+      <button class="action-btn extend">+7d</button>
+      <button class="action-btn toggle-active">Deactivate</button>
+      <button class="action-btn">Edit</button>
+      <button class="action-btn delete">Delete</button>
+    </div>
+
+    <!-- NEW: Priority feed section ───────────────────────── -->
+    <div class="feed-section">
+      <div class="feed-header">
+        <div class="feed-header-left">
+          <span class="feed-title">Priority Feed</span>
+          <span class="feed-count">5 articles</span>
+        </div>
+        <div class="feed-header-right">
+          <span class="feed-updated">Updated 13 Mar 14:01</span>
+          <button class="btn-refresh" id="refreshBtn" onclick="simulateRefresh()">↻ Refresh</button>
+        </div>
+      </div>
+
+      <div class="feed-list" id="feedList">
+
+        <div class="feed-article">
+          <span class="feed-score high">7.4</span>
+          <div class="feed-article-body">
+            <a class="feed-article-title" href="#" target="_blank">
+              CPD Announces New Community Policing Strategy for South Side Districts
+            </a>
+            <div class="feed-article-meta">
+              <span class="feed-source">blockclubchicago.org</span>
+              <span>13 Mar 2026</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="feed-article">
+          <span class="feed-score mid">6.8</span>
+          <div class="feed-article-body">
+            <a class="feed-article-title" href="#" target="_blank">
+              Crime Lab Study Links Targeted Economic Investment to Violence Reduction in Three Neighborhoods
+            </a>
+            <div class="feed-article-meta">
+              <span class="feed-source">chicagobusiness.com</span>
+              <span>13 Mar 2026</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="feed-article">
+          <span class="feed-score mid">6.2</span>
+          <div class="feed-article-body">
+            <a class="feed-article-title" href="#" target="_blank">
+              Chicago's Homicide Rate Falls for Third Consecutive Year as City Credits New Patrol Model
+            </a>
+            <div class="feed-article-meta">
+              <span class="feed-source">wsj.com</span>
+              <span>12 Mar 2026</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="feed-article">
+          <span class="feed-score mid">5.9</span>
+          <div class="feed-article-body">
+            <a class="feed-article-title" href="#" target="_blank">
+              What Chicago's Policing Reforms Reveal About Urban Crime Policy Nationwide
+            </a>
+            <div class="feed-article-meta">
+              <span class="feed-source">washingtonpost.com</span>
+              <span>12 Mar 2026</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="feed-article">
+          <span class="feed-score low">5.1</span>
+          <div class="feed-article-body">
+            <a class="feed-article-title" href="#" target="_blank">
+              New Report: Arrest Trends in Major U.S. Cities, Q4 2025
+            </a>
+            <div class="feed-article-meta">
+              <span class="feed-source">counciloncj.org</span>
+              <span>11 Mar 2026</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <!-- end feed-list -->
+
+      <!-- Collapse toggle — shown only when article count > 10 -->
+      <!-- Hidden in this mockup (only 5 articles), shown here for reference with display:none -->
+      <button class="feed-collapse-toggle" id="collapseToggle" style="display:none" onclick="toggleCollapse()">
+        <span id="collapseLabel">Show all 12 articles ▾</span>
+      </button>
+
+    </div>
+    <!-- end feed-section -->
+
+  </div>
+  <!-- end priority-card -->
+
+  <!-- Second card: collapse demo (11 articles, collapsed) -->
+  <div class="priority-card" style="margin-top:12px">
+    <div class="card-top">
+      <div class="card-label-row">
+        <span class="card-label">Tigray Conflict</span>
+        <span class="boost-badge">+2.5x</span>
+        <span class="status-badge active">active</span>
+      </div>
+    </div>
+
+    <div class="keywords-row">
+      <span class="keyword-tag">Tigray</span>
+      <span class="keyword-tag">Ethiopia</span>
+      <span class="keyword-tag">TPLF</span>
+    </div>
+
+    <div class="card-meta">
+      <span>Matches: <strong>31</strong></span>
+      <span>Created: 6 Mar</span>
+      <span class="expiry-ok">Expires in 7d</span>
+    </div>
+
+    <div class="card-actions">
+      <button class="action-btn extend">+3d</button>
+      <button class="action-btn extend">+7d</button>
+      <button class="action-btn toggle-active">Deactivate</button>
+      <button class="action-btn">Edit</button>
+      <button class="action-btn delete">Delete</button>
+    </div>
+
+    <!-- Feed section — 11 articles, collapsed by default -->
+    <div class="feed-section">
+      <div class="feed-header">
+        <div class="feed-header-left">
+          <span class="feed-title">Priority Feed</span>
+          <span class="feed-count">11 articles</span>
+        </div>
+        <div class="feed-header-right">
+          <span class="feed-updated">Updated 13 Mar 14:01</span>
+          <button class="btn-refresh">↻ Refresh</button>
+        </div>
+      </div>
+
+      <div class="feed-list" id="feedList2">
+        <!-- Visible top 3 -->
+        <div class="feed-article">
+          <span class="feed-score high">8.1</span>
+          <div class="feed-article-body">
+            <a class="feed-article-title" href="#" target="_blank">
+              Tigray: Aid Access Blocked as Tensions Resurface Between Federal Forces and TPLF
+            </a>
+            <div class="feed-article-meta">
+              <span class="feed-source">crisisgroup.org</span>
+              <span>13 Mar 2026</span>
+            </div>
+          </div>
+        </div>
+        <div class="feed-article">
+          <span class="feed-score high">7.6</span>
+          <div class="feed-article-body">
+            <a class="feed-article-title" href="#" target="_blank">
+              Ethiopia's Peace Process at Risk as Tigray Ceasefire Shows New Cracks
+            </a>
+            <div class="feed-article-meta">
+              <span class="feed-source">reuters.com</span>
+              <span>13 Mar 2026</span>
+            </div>
+          </div>
+        </div>
+        <div class="feed-article">
+          <span class="feed-score mid">6.9</span>
+          <div class="feed-article-body">
+            <a class="feed-article-title" href="#" target="_blank">
+              UN Envoy Warns Horn of Africa Stability Hinges on Tigray Agreement
+            </a>
+            <div class="feed-article-meta">
+              <span class="feed-source">theguardian.com</span>
+              <span>12 Mar 2026</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hidden articles (collapsed) -->
+        <div id="collapseExtra2" style="display:none">
+          <div class="feed-article">
+            <span class="feed-score mid">6.4</span>
+            <div class="feed-article-body">
+              <a class="feed-article-title" href="#" target="_blank">ACLED Data: Violence Incidents in Tigray Region, February 2026</a>
+              <div class="feed-article-meta"><span class="feed-source">acleddata.com</span><span>12 Mar 2026</span></div>
+            </div>
+          </div>
+          <div class="feed-article">
+            <span class="feed-score mid">6.1</span>
+            <div class="feed-article-body">
+              <a class="feed-article-title" href="#" target="_blank">Western Donors Reassess Ethiopia Aid as Tigray Situation Deteriorates</a>
+              <div class="feed-article-meta"><span class="feed-source">ft.com</span><span>12 Mar 2026</span></div>
+            </div>
+          </div>
+          <div class="feed-article">
+            <span class="feed-score mid">5.8</span>
+            <div class="feed-article-body">
+              <a class="feed-article-title" href="#" target="_blank">Ethiopia's Abiy Ahmed Faces New Pressure as Tigray Talks Stall</a>
+              <div class="feed-article-meta"><span class="feed-source">foreignpolicy.com</span><span>11 Mar 2026</span></div>
+            </div>
+          </div>
+          <div class="feed-article">
+            <span class="feed-score mid">5.5</span>
+            <div class="feed-article-body">
+              <a class="feed-article-title" href="#" target="_blank">HRW Documents Continued Abuses in Tigray Despite Ceasefire Declaration</a>
+              <div class="feed-article-meta"><span class="feed-source">hrw.org</span><span>11 Mar 2026</span></div>
+            </div>
+          </div>
+          <div class="feed-article">
+            <span class="feed-score low">5.0</span>
+            <div class="feed-article-body">
+              <a class="feed-article-title" href="#" target="_blank">Regional Security Briefing: Horn of Africa — March 2026</a>
+              <div class="feed-article-meta"><span class="feed-source">chathamhouse.org</span><span>10 Mar 2026</span></div>
+            </div>
+          </div>
+          <div class="feed-article">
+            <span class="feed-score low">4.7</span>
+            <div class="feed-article-body">
+              <a class="feed-article-title" href="#" target="_blank">SIPRI Analysis: Arms Flows Into the Ethiopia Conflict Zone</a>
+              <div class="feed-article-meta"><span class="feed-source">sipri.org</span><span>10 Mar 2026</span></div>
+            </div>
+          </div>
+          <div class="feed-article">
+            <span class="feed-score low">4.3</span>
+            <div class="feed-article-body">
+              <a class="feed-article-title" href="#" target="_blank">CFR Backgrounder: Understanding the Tigray Conflict</a>
+              <div class="feed-article-meta"><span class="feed-source">cfr.org</span><span>9 Mar 2026</span></div>
+            </div>
+          </div>
+          <div class="feed-article">
+            <span class="feed-score low">4.0</span>
+            <div class="feed-article-body">
+              <a class="feed-article-title" href="#" target="_blank">A Timeline of the Tigray War and Ceasefire Negotiations</a>
+              <div class="feed-article-meta"><span class="feed-source">bbc.com</span><span>8 Mar 2026</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Collapse toggle — visible because 11 > 10 -->
+      <button class="feed-collapse-toggle" id="collapseToggle2" onclick="toggleCollapse2()">
+        <span id="collapseLabel2">Show all 11 articles ▾</span>
+      </button>
+    </div>
+  </div>
+  <!-- end second card -->
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── Refresh simulation ─────────────────────────────────────
+  function simulateRefresh() {
+    const btn = document.getElementById('refreshBtn');
+    btn.classList.add('spinning');
+    btn.textContent = '↻ Refreshing…';
+    setTimeout(() => {
+      btn.classList.remove('spinning');
+      btn.textContent = '↻ Refresh';
+      showToast('Feed refreshed — 2 new articles added', 'ok');
+    }, 1800);
+  }
+
+  // ── Collapse/expand (Tigray card) ──────────────────────────
+  let collapsed2 = true;
+
+  function toggleCollapse2() {
+    const extra = document.getElementById('collapseExtra2');
+    const label = document.getElementById('collapseLabel2');
+    collapsed2 = !collapsed2;
+    if (collapsed2) {
+      extra.style.display = 'none';
+      label.textContent = 'Show all 11 articles ▾';
+    } else {
+      extra.style.display = 'block';
+      label.textContent = 'Show less ▴';
+    }
+  }
+
+  // ── Toast ──────────────────────────────────────────────────
+  function showToast(msg, type = 'ok') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast ${type} show`;
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => { t.classList.remove('show'); }, 3000);
+  }
+</script>
+</body>
+</html>

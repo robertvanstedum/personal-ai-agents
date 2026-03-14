@@ -642,6 +642,180 @@
 
   .toast.ok  { background: var(--ok); }
   .toast.err { background: var(--danger); }
+
+  /* ── Priority feed section ── */
+  .feed-section {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  .feed-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .feed-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .feed-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .feed-count {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 2px 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+  }
+
+  .feed-paused {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--danger-dim);
+    color: var(--danger);
+    border: 1px solid var(--danger-border);
+    white-space: nowrap;
+  }
+
+  .feed-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .feed-updated {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+  }
+
+  .btn-refresh {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    padding: 4px 10px;
+    border-radius: 5px;
+    border: 1px solid rgba(139,94,42,0.3);
+    background: var(--accent-dim);
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn-refresh:hover { background: var(--accent-glow); }
+  .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .feed-list { display: flex; flex-direction: column; }
+
+  .feed-article {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 7px 8px;
+    border-radius: 5px;
+    transition: background 0.12s;
+  }
+
+  .feed-article:hover { background: var(--surface2); }
+
+  .feed-score {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    min-width: 28px;
+    flex-shrink: 0;
+  }
+
+  .feed-score.high { color: var(--ok); }
+  .feed-score.mid  { color: var(--accent); }
+
+  .feed-article-body { flex: 1; min-width: 0; }
+
+  .feed-article-title {
+    font-size: 13px;
+    color: var(--text);
+    text-decoration: none;
+    line-height: 1.35;
+    display: block;
+  }
+
+  .feed-article-title:hover {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .feed-article-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.03em;
+    margin-top: 2px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .feed-source { color: var(--text-muted); font-weight: 500; }
+
+  .feed-collapse-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 8px;
+    padding: 5px;
+    width: 100%;
+    background: none;
+    border: 1px dashed var(--border2);
+    border-radius: 5px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .feed-collapse-toggle:hover {
+    background: var(--surface2);
+    color: var(--text-muted);
+    border-color: var(--border);
+  }
+
+  .feed-empty {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+    padding: 10px 8px;
+    font-style: italic;
+  }
 </style>
 </head>
 <body>
@@ -793,6 +967,73 @@
     return { text: `Expires in ${days}d`, cls: 'expiry-ok' };
   }
 
+  // ── Feed helpers ─────────────────────────────────────────────
+  function articleRowHtml(a) {
+    const score = parseFloat(a.score) || 0;
+    const scoreClass = score >= 7 ? 'high' : score >= 4 ? 'mid' : '';
+    const dateStr = a.fetched_at
+      ? new Date(a.fetched_at).toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric'})
+      : '—';
+    return `
+      <div class="feed-article">
+        <span class="feed-score ${scoreClass}">${score.toFixed(1)}</span>
+        <div class="feed-article-body">
+          <a class="feed-article-title" href="${escHtml(a.url)}" target="_blank" rel="noopener">${escHtml(a.title)}</a>
+          <div class="feed-article-meta">
+            <span class="feed-source">${escHtml(a.source)}</span>
+            <span>${dateStr}</span>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function feedSectionHtml(p) {
+    const feed = p.feed || [];
+    const count = feed.length;
+    const isExpired = !!p.expired;
+    const lastUpdated = p.feed_last_updated
+      ? new Date(p.feed_last_updated).toLocaleString('en-GB', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})
+      : '—';
+
+    const pausedBadge = isExpired
+      ? '<span class="feed-paused">feed paused</span>'
+      : '';
+    const refreshBtn = !isExpired
+      ? `<button class="btn-refresh" id="refresh-${p.id}" onclick="refreshFeed('${p.id}')">↻ Refresh</button>`
+      : '';
+
+    const VISIBLE = 3;
+    const showCollapse = count > 10;
+    const visible = showCollapse ? feed.slice(0, VISIBLE) : feed;
+    const hidden  = showCollapse ? feed.slice(VISIBLE) : [];
+
+    const collapseHtml = showCollapse ? `
+      <div id="feed-extra-${p.id}" style="display:none">${hidden.map(articleRowHtml).join('')}</div>
+      <button class="feed-collapse-toggle" id="feed-toggle-${p.id}"
+              onclick="toggleFeedCollapse('${p.id}', ${count})">Show all ${count} articles ▾</button>` : '';
+
+    const emptyHtml = count === 0
+      ? '<div class="feed-empty">No articles yet — feed will populate on next run.</div>'
+      : '';
+
+    return `
+      <div class="feed-section">
+        <div class="feed-header">
+          <div class="feed-header-left">
+            <span class="feed-title">Priority Feed</span>
+            <span class="feed-count">${count} article${count !== 1 ? 's' : ''}</span>
+            ${pausedBadge}
+          </div>
+          <div class="feed-header-right">
+            <span class="feed-updated">Updated ${lastUpdated}</span>
+            ${refreshBtn}
+          </div>
+        </div>
+        <div class="feed-list">${emptyHtml}${visible.map(articleRowHtml).join('')}</div>
+        ${collapseHtml}
+      </div>`;
+  }
+
   // ── Render list ─────────────────────────────────────────────
   function renderList(priorities) {
     const list = document.getElementById('priorityList');
@@ -866,6 +1107,7 @@
               <button class="btn-ghost" onclick="hideEditForm('${p.id}')">Cancel</button>
             </div>
           </div>
+          ${feedSectionHtml(p)}
         </div>`;
     }).join('');
   }
@@ -892,6 +1134,38 @@
     } catch (err) {
       document.getElementById('priorityList').innerHTML =
         `<div class="empty-state"><div class="empty-title">Could not load priorities</div><div class="empty-sub">${err.message}</div></div>`;
+    }
+  }
+
+  // ── Feed collapse toggle ─────────────────────────────────────
+  function toggleFeedCollapse(id, total) {
+    const extra  = document.getElementById(`feed-extra-${id}`);
+    const toggle = document.getElementById(`feed-toggle-${id}`);
+    const isHidden = extra.style.display === 'none';
+    extra.style.display = isHidden ? 'block' : 'none';
+    toggle.textContent  = isHidden ? 'Show less ▴' : `Show all ${total} articles ▾`;
+  }
+
+  // ── Refresh priority feed ────────────────────────────────────
+  async function refreshFeed(id) {
+    const btn = document.getElementById(`refresh-${id}`);
+    if (btn) { btn.disabled = true; btn.textContent = '↻ Refreshing…'; }
+    try {
+      const res  = await fetch(`/api/priority/${id}/refresh`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        const msg = data.new_articles > 0
+          ? `${data.new_articles} new article${data.new_articles !== 1 ? 's' : ''} added`
+          : 'Feed up to date';
+        showToast(msg, 'ok');
+        await loadPriorities();
+      } else {
+        showToast(data.message || 'Refresh failed', 'err');
+        if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
+      }
+    } catch (err) {
+      showToast('Network error', 'err');
+      if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
     }
   }
 

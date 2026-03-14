@@ -461,6 +461,88 @@ def api_edit_priority(priority_id):
     })
 
 
+@app.route('/api/priority/<string:priority_id>/feed', methods=['GET'])
+def api_priority_feed(priority_id):
+    """Return the feed array for a specific priority."""
+    workspace = Path.home() / '.openclaw' / 'workspace'
+    priorities_file = workspace / 'priorities.json'
+
+    if not priorities_file.exists():
+        return jsonify({'success': False, 'message': 'priorities.json not found'}), 404
+
+    with open(priorities_file, 'r') as f:
+        priorities_data = json.load(f)
+
+    target = next(
+        (p for p in priorities_data['priorities'] if p['id'] == priority_id),
+        None
+    )
+    if not target:
+        return jsonify({'success': False, 'message': f'Priority {priority_id} not found'}), 404
+
+    return jsonify({
+        'priority_id': priority_id,
+        'feed': target.get('feed', []),
+        'feed_last_updated': target.get('feed_last_updated'),
+        'count': len(target.get('feed', [])),
+    })
+
+
+@app.route('/api/priority/<string:priority_id>/refresh', methods=['POST'])
+def api_priority_refresh(priority_id):
+    """Trigger an immediate web search run for a single priority."""
+    import curator_priority_feed as cpf
+    from datetime import timezone
+
+    workspace = Path.home() / '.openclaw' / 'workspace'
+    priorities_file = workspace / 'priorities.json'
+
+    if not priorities_file.exists():
+        return jsonify({'success': False, 'message': 'priorities.json not found'}), 404
+
+    with open(priorities_file, 'r') as f:
+        priorities_data = json.load(f)
+
+    priority = next(
+        (p for p in priorities_data['priorities'] if p['id'] == priority_id),
+        None
+    )
+    if not priority:
+        return jsonify({'success': False, 'message': f'Priority {priority_id} not found'}), 404
+
+    # Block refresh on expired priorities
+    if priority.get('expires_at'):
+        try:
+            exp = datetime.fromisoformat(priority['expires_at'].rstrip('Z'))
+            if exp < datetime.now():
+                return jsonify({'success': False, 'message': 'Priority is expired — feed paused'}), 400
+        except Exception:
+            pass
+
+    user_profile = cpf.load_user_profile()
+    fetched_at = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+    try:
+        added = cpf.run_priority(priority, user_profile, dry_run=False, fetched_at=fetched_at)
+    except Exception as e:
+        print(f'Priority refresh error for {priority_id}: {e}')
+        return jsonify({'success': False, 'message': f'Refresh failed: {e}'}), 500
+
+    if added > 0:
+        cpf.save_priorities([priority])
+
+    feed = priority.get('feed', [])
+    print(f'↻ Feed refresh: {priority_id} — {added} new articles')
+    return jsonify({
+        'success': True,
+        'priority_id': priority_id,
+        'new_articles': added,
+        'feed': feed,
+        'feed_last_updated': priority.get('feed_last_updated'),
+        'count': len(feed),
+    })
+
+
 @app.route('/')
 def index():
     """Root URL redirects to latest briefing"""
