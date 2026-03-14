@@ -1549,6 +1549,7 @@ def _fetch_web_search_candidates(
             continue
         label = priority.get('label', priority.get('id', ''))
         raw = brave_search(' '.join(keywords), count=results_per_priority * 2)
+        time.sleep(1)  # avoid Brave rate-limit between queries
         added = 0
         for r in raw:
             if added >= results_per_priority:
@@ -1567,6 +1568,7 @@ def _fetch_web_search_candidates(
         if baseline_added >= baseline_total:
             break
         raw = brave_search(topic, count=per_topic * 2)
+        time.sleep(1)  # avoid Brave rate-limit between queries
         for r in raw:
             if baseline_added >= baseline_total:
                 break
