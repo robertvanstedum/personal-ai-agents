@@ -150,7 +150,7 @@ def api_library():
                         'article_id':  article_id,
                         'hash_id':     hash_id_direct,  # set directly from article_id
                         'type':        feedback_type,
-                        'date':        item.get('timestamp', date_str)[:10],
+                        'date':        item.get('timestamp') or (date_str + 'T12:00:00'),
                         'timestamp':   item.get('timestamp', ''),
                         'title':       item.get('title', ''),
                         'url':         item.get('url', ''),
@@ -658,6 +658,31 @@ def api_priority_feed_feedback():
     icons = {'like': '👍', 'dislike': '👎', 'save': '🔖'}
     print(f'{icons[action]} Priority feed {action}: [{priority_id}] {title[:60]}')
     return jsonify({'success': True, 'already_saved': False, 'action': action})
+
+
+@app.route('/api/check-url')
+def api_check_url():
+    """Proxy-check an article URL before the browser opens it — catches 4xx/5xx and XML error pages."""
+    import urllib.request, urllib.error
+    url = request.args.get('url', '').strip()
+    if not url or not url.startswith('http'):
+        return jsonify({'ok': False, 'status': 0, 'error': 'Invalid URL'}), 400
+    try:
+        req = urllib.request.Request(url, method='HEAD', headers={
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        })
+        with urllib.request.urlopen(req, timeout=6) as r:
+            ct = r.headers.get('Content-Type', '')
+            # Flag XML content-type as bad (catches S3 error pages served as application/xml)
+            if 'xml' in ct and 'html' not in ct:
+                return jsonify({'ok': False, 'status': r.status,
+                                'error': f'Unexpected content type: {ct}'})
+            return jsonify({'ok': True, 'status': r.status})
+    except urllib.error.HTTPError as e:
+        return jsonify({'ok': False, 'status': e.code, 'error': e.reason})
+    except Exception as e:
+        return jsonify({'ok': False, 'status': 0, 'error': str(e)})
 
 
 @app.route('/')

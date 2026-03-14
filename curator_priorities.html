@@ -1018,7 +1018,8 @@
       <div class="feed-article">
         <span class="feed-score ${scoreClass}">${score.toFixed(1)}</span>
         <div class="feed-article-body">
-          <a class="feed-article-title" href="${escHtml(a.url)}" target="_blank" rel="noopener">${escHtml(a.title)}</a>
+          <a class="feed-article-title" href="${escHtml(a.url)}" target="_blank" rel="noopener"
+             onclick="return openFeedArticle(event,'${escHtml(a.url)}')">${escHtml(a.title)}</a>
           <div class="feed-article-meta">
             <span class="feed-source">${escHtml(a.source)}</span>
             <span>${dateStr}</span>
@@ -1215,6 +1216,32 @@
       showToast('Network error', 'err');
       if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
     }
+  }
+
+  // ── Open article link with pre-flight URL check ─────────────
+  async function openFeedArticle(event, url) {
+    event.preventDefault();
+    const link = event.currentTarget;
+    const origCursor = document.body.style.cursor;
+    document.body.style.cursor = 'wait';
+    link.style.opacity = '0.6';
+    try {
+      const res = await fetch('/api/check-url?url=' + encodeURIComponent(url));
+      const data = await res.json();
+      if (data.ok) {
+        window.open(url, '_blank', 'noopener');
+      } else {
+        const code = data.status ? ` (${data.status})` : '';
+        showToast('Article unavailable' + code, 'err');
+      }
+    } catch (_) {
+      // Can't reach our own server — open anyway (fail-open)
+      window.open(url, '_blank', 'noopener');
+    } finally {
+      document.body.style.cursor = origCursor;
+      link.style.opacity = '';
+    }
+    return false;
   }
 
   // ── Save priority feed article to library ───────────────────
