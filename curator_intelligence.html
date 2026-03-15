@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intelligence — Curator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5f0e8;
+  --bg-texture: #ede8df;
+  --surface: #faf7f2;
+  --surface2: #f0ebe0;
+  --border: #ddd6c8;
+  --border2: #c8bfaf;
+  --text: #2a2418;
+  --text-muted: #6b5f4e;
+  --text-dim: #9e9080;
+  --accent: #8b5e2a;
+  --accent-dim: rgba(139,94,42,0.08);
+  --accent-glow: rgba(139,94,42,0.18);
+  --danger: #b03030;
+  --danger-dim: rgba(176,48,48,0.08);
+  --danger-border: rgba(176,48,48,0.25);
+  --ok: #2e7d52;
+  --ok-dim: rgba(46,125,82,0.08);
+  --ok-border: rgba(46,125,82,0.25);
+  --warn: #8b6e1a;
+  --warn-dim: rgba(139,110,26,0.08);
+  --warn-border: rgba(139,110,26,0.25);
+  --shadow: rgba(42,36,24,0.08);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Source Sans 3', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* ── Header / Nav ── */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-left { display: flex; align-items: baseline; gap: 10px; }
+
+.logo {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  letter-spacing: -0.02em;
+}
+
+.logo-sub {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.header-nav { display: flex; gap: 4px; }
+
+.nav-link {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+
+.nav-link:hover { color: var(--text); background: var(--surface2); }
+.nav-link.active {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: rgba(139,94,42,0.2);
+}
+
+/* ── Main layout ── */
+main {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 36px 24px 80px;
+}
+
+.page-header { margin-bottom: 0; }
+
+.page-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 30px;
+  font-weight: 400;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.page-title em {
+  font-style: italic;
+  color: var(--accent);
+}
+
+.page-meta {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+  margin-top: 6px;
+}
+
+.date-nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 14px;
+  margin-bottom: 28px;
+}
+.date-nav-btn {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: opacity 0.15s;
+}
+.date-nav-btn:disabled { color: var(--text-dim); cursor: default; }
+.date-nav-btn:not(:disabled):hover { opacity: 0.7; }
+.date-nav-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+/* ── Section headers ── */
+.section-header {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  margin-top: 36px;
+}
+
+.section-header:first-of-type { margin-top: 0; }
+
+/* ── Weekly connection cards ── */
+.weekly-card {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 22px 24px;
+  box-shadow: 0 2px 8px var(--shadow);
+  margin-bottom: 18px;
+}
+
+.weekly-card + .weekly-card { margin-top: 0; }
+
+.connection-topic {
+  font-family: 'Playfair Display', serif;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+
+.connection-meta {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.domain-badge {
+  padding: 2px 8px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid rgba(139,94,42,0.2);
+  border-radius: 10px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.obs-body {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin-bottom: 18px;
+  border-left: 2px solid var(--border2);
+  padding-left: 14px;
+}
+
+.obs-body b, .obs-body strong { color: var(--text); font-weight: 600; }
+
+.obs-body em { color: var(--accent); font-style: italic; }
+
+.suggested-sources {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.02em;
+  margin-top: 8px;
+}
+
+.suggested-sources span { color: var(--text-muted); }
+
+/* ── Response form (weekly — full) ── */
+.response-form {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  margin-top: 4px;
+}
+
+.field-label {
+  display: block;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.position-field {
+  width: 100%;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 10px 12px;
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.55;
+  transition: border-color 0.15s;
+  outline: none;
+}
+
+.position-field::placeholder { color: var(--text-dim); }
+.position-field:focus { border-color: var(--accent); background: var(--surface); }
+
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.reaction-select {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  outline: none;
+}
+
+.reaction-select:focus { border-color: var(--accent); }
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.btn-save-response {
+  margin-top: 12px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 7px 18px;
+  border-radius: 5px;
+  border: 1px solid var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-save-response:hover { background: var(--accent-glow); }
+.btn-save-response:active { transform: scale(0.98); }
+
+/* ── Saved response (read-only display) ── */
+.response-saved {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+  margin-top: 4px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.reaction-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.reaction-badge.agree        { background: var(--ok-dim); color: var(--ok); border: 1px solid var(--ok-border); }
+.reaction-badge.disagree     { background: rgba(100,116,139,0.08); color: #64748b; border: 1px solid rgba(100,116,139,0.25); }
+.reaction-badge.already_tracking { background: var(--warn-dim); color: var(--warn); border: 1px solid var(--warn-border); }
+.reaction-badge.not_relevant { background: var(--surface2); color: var(--text-dim); border: 1px solid var(--border2); }
+.reaction-badge.want_more    { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(139,94,42,0.2); }
+.reaction-badge.note         { background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border2); }
+
+.response-position {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+.response-want-more {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  margin-top: 4px;
+}
+
+.edit-link {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  margin-top: 5px;
+  display: inline-block;
+}
+.edit-link:hover { color: var(--accent); }
+
+/* ── Daily observation cards ── */
+.daily-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 18px;
+  box-shadow: 0 1px 4px var(--shadow);
+  margin-bottom: 12px;
+}
+
+.obs-type-tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.obs-content {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+
+.obs-content b, .obs-content strong { color: var(--text); }
+
+/* ── Response form (daily — light) ── */
+.response-form-light {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.note-field {
+  flex: 1;
+  min-width: 160px;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  padding: 5px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.note-field::placeholder { color: var(--text-dim); }
+.note-field:focus { border-color: var(--accent); background: var(--surface); }
+
+.btn-save-sm {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 14px;
+  border-radius: 5px;
+  border: 1px solid var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.btn-save-sm:hover { background: var(--accent-glow); }
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--text);
+  color: #fff;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  padding: 10px 18px;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  transform: translateY(80px);
+  opacity: 0;
+  transition: all 0.25s ease;
+  pointer-events: none;
+  z-index: 200;
+}
+
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.ok   { background: var(--ok); }
+.toast.err  { background: var(--danger); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <a href="/" class="logo">Curator</a>
+    <span class="logo-sub">Intelligence</span>
+  </div>
+  <nav class="header-nav">
+    <a href="/" class="nav-link">Daily</a>
+    <a href="/curator_library.html" class="nav-link">Library</a>
+    <a href="/interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
+    <a href="/curator_priorities.html" class="nav-link">Priorities</a>
+    <a href="/curator_intelligence.html" class="nav-link active">Intelligence</a>
+  </nav>
+</header>
+
+<main>
+  <div class="page-header">
+    <h1 class="page-title">Intelligence <em>Responses</em></h1>
+    <p class="page-meta" id="pageMeta">Loading…</p>
+  </div>
+
+  <div class="date-nav">
+    <button class="date-nav-btn" id="btnPrev"
+      onclick="loadDate(offsetDate(_currentDate, -1))">← prev</button>
+    <span class="date-nav-label" id="dateLabel"></span>
+    <button class="date-nav-btn" id="btnToday"
+      onclick="loadDate('')">today →</button>
+  </div>
+
+  <!-- ── WEEKLY CONNECTIONS ── -->
+  <div class="section-header">Weekly Connections</div>
+  <div id="weeklySection"></div>
+
+  <!-- ── TODAY'S OBSERVATIONS ── -->
+  <div class="section-header">Today's Observations</div>
+  <div id="dailySection"></div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const REACTIONS = [
+  { value: '',                 label: '— reaction —' },
+  { value: 'agree',            label: 'Agree' },
+  { value: 'disagree',         label: 'Disagree' },
+  { value: 'already_tracking', label: 'Already tracking' },
+  { value: 'not_relevant',     label: 'Not relevant' },
+  { value: 'want_more',        label: 'Want more' },
+  { value: 'note',             label: 'Note' },
+];
+
+const OBS_TYPE_LABELS = {
+  topic_velocity:      'Momentum',
+  discovery_candidate: 'Sources',
+  blind_spot:          'Blind Spot',
+  source_anomaly:      'Source Anomaly',
+};
+
+const _savedMap = new Map(); // cardId → most-recent saved response (for edit pre-population)
+
+// ── API ───────────────────────────────────────────────────────────────────────
+
+async function postResponse(payload) {
+  const res = await fetch('/api/intelligence/respond', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (data.success) {
+    showToast('Response saved', 'ok');
+    return data.response;
+  } else {
+    showToast(data.message || 'Save failed', 'err');
+    return null;
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function reactionOptions(selected = '') {
+  return REACTIONS.map(r =>
+    `<option value="${r.value}" ${r.value === selected ? 'selected' : ''}>${r.label}</option>`
+  ).join('');
+}
+
+function mdToHtml(text) {
+  // Convert markdown bold/italic left in stored JSON to HTML
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/\*([^*\n]+?)\*/g, '<i>$1</i>');
+}
+
+function extractTopicFromBlock(html) {
+  const m = html.match(/<b>\d+\.\s+(.+?)<\/b>/);
+  return m ? m[1] : '';
+}
+
+function findSavedResponse(responses, obsRef, matchKey, matchValue) {
+  // Use last match so re-saves (edit) show the most recent entry on reload
+  return responses.slice().reverse().find(
+    r => r.observation_ref === obsRef && r[matchKey] === matchValue
+  ) || null;
+}
+
+function renderSavedResponse(r, cardId) {
+  return `
+    <div class="response-saved">
+      <div>
+        <span class="reaction-badge ${r.reaction}">${r.reaction.replace(/_/g, ' ')}</span>
+        ${r.want_more ? '<div class="response-want-more">★ want more</div>' : ''}
+      </div>
+      <div>
+        <div class="response-position">${r.position || '<em>No note</em>'}</div>
+        <a href="#" class="edit-link" onclick="editCard('${cardId}'); return false;">edit</a>
+      </div>
+    </div>`;
+}
+
+function editCard(id) {
+  const saved = _savedMap.get(id);
+  if (saved) {
+    const rxn  = document.getElementById(`rxn-${id}`);
+    if (rxn)  rxn.value = saved.reaction || '';
+    const note = document.getElementById(`note-${id}`);
+    if (note) note.value = saved.position || '';
+    const pos  = document.getElementById(`pos-${id}`);
+    if (pos)  pos.value = saved.position || '';
+    const wm   = document.getElementById(`wm-${id}`);
+    if (wm)   wm.checked = !!saved.want_more;
+  }
+  document.getElementById(`saved-${id}`).style.display = 'none';
+  document.getElementById(`form-${id}`).style.display  = '';
+}
+
+// ── Render — Weekly Connections ───────────────────────────────────────────────
+
+function renderWeeklySection(weekly, responses, weeklyRef) {
+  if (!weekly) {
+    return '<p style="color:var(--text-dim);font-family:\'DM Mono\',monospace;font-size:12px;padding:8px 0;">No weekly connections available yet.</p>';
+  }
+
+  const lateralObs = weekly.observations.filter(o => o.type === 'lateral_connections');
+  if (!lateralObs.length) {
+    return '<p style="color:var(--text-dim);font-family:\'DM Mono\',monospace;font-size:12px;padding:8px 0;">No connections in this week\'s run.</p>';
+  }
+
+  const blocks = lateralObs.flatMap(o =>
+    o.content.split(/(?=<b>\d+\.)/).filter(p => /<b>\d+\./.test(p))
+  );
+
+  const weeklyDate = (weekly.date || '').substring(5); // MM-DD
+
+  return blocks.map((block, i) => {
+    const connId = `weekly_${i}`;
+    const topic  = extractTopicFromBlock(block);
+    // Strip the leading <b>N. Title</b> line — render topic separately as the card heading
+    const bodyContent = mdToHtml(block.replace(/<b>\d+\.\s+.+?<\/b>\s*\n?/, '').trim());
+    const saved  = topic ? findSavedResponse(responses, weeklyRef, 'topic', topic) : null;
+    if (saved) _savedMap.set(connId, saved);
+
+    const formHtml = `
+      <div class="response-form" id="form-${connId}" ${saved ? 'style="display:none"' : ''}>
+        <label class="field-label">Your view</label>
+        <textarea class="position-field" id="pos-${connId}" rows="3"
+          placeholder="What do you think? Do you agree? What's your take on this angle?"></textarea>
+        <div class="form-row">
+          <select class="reaction-select" id="rxn-${connId}">
+            ${reactionOptions()}
+          </select>
+          <label class="checkbox-label">
+            <input type="checkbox" class="want-more-check" id="wm-${connId}"> Want more
+          </label>
+        </div>
+        <button class="btn-save-response"
+          onclick="saveWeekly('${connId}', this)">Save response</button>
+      </div>`;
+
+    const savedHtml = saved
+      ? `<div id="saved-${connId}">${renderSavedResponse(saved, connId)}</div>`
+      : `<div id="saved-${connId}" style="display:none"></div>`;
+
+    return `
+      <div class="weekly-card" id="card-${connId}" data-topic="${topic.replace(/"/g, '&quot;')}" data-ref="${weeklyRef}">
+        <div class="connection-topic">${topic}</div>
+        <div class="connection-meta"><span>Weekly · ${weeklyDate}</span></div>
+        <div class="obs-body">${bodyContent}</div>
+        ${formHtml}
+        ${savedHtml}
+      </div>`;
+  }).join('');
+}
+
+// ── Render — Daily Observations ───────────────────────────────────────────────
+
+function renderDailySection(daily, responses, dailyRef) {
+  if (!daily) {
+    return '<p style="color:var(--text-dim);font-family:\'DM Mono\',monospace;font-size:12px;padding:8px 0;">No observations for today yet.</p>';
+  }
+
+  const obs = daily.observations.filter(o => o.type !== 'lateral_connections');
+  if (!obs.length) {
+    return '<p style="color:var(--text-dim);font-family:\'DM Mono\',monospace;font-size:12px;padding:8px 0;">No observations in today\'s run.</p>';
+  }
+
+  return obs.map((o, i) => {
+    const obsId  = `daily_${i}`;
+    const label  = OBS_TYPE_LABELS[o.type] || o.type;
+    const saved  = findSavedResponse(responses, dailyRef, 'observation_type', o.type);
+    if (saved) _savedMap.set(obsId, saved);
+
+    const formHtml = `
+      <div class="response-form-light" id="form-${obsId}" ${saved ? 'style="display:none"' : ''}>
+        <select class="reaction-select" id="rxn-${obsId}">
+          ${reactionOptions()}
+        </select>
+        <input type="text" class="note-field" id="note-${obsId}" placeholder="Note (optional)">
+        <button class="btn-save-sm"
+          onclick="saveDaily('${obsId}', this)">Save</button>
+      </div>`;
+
+    const savedHtml = saved
+      ? `<div id="saved-${obsId}">${renderSavedResponse(saved, obsId)}</div>`
+      : `<div id="saved-${obsId}" style="display:none"></div>`;
+
+    return `
+      <div class="daily-card" id="card-${obsId}" data-type="${o.type}" data-ref="${dailyRef}">
+        <div class="obs-type-tag">${label}</div>
+        <div class="obs-content">${mdToHtml(o.content)}</div>
+        ${formHtml}
+        ${savedHtml}
+      </div>`;
+  }).join('');
+}
+
+// ── Save handlers ─────────────────────────────────────────────────────────────
+
+async function saveWeekly(connId, btn) {
+  const card     = document.getElementById(`card-${connId}`);
+  const topic    = card.dataset.topic;
+  const ref      = card.dataset.ref;
+  const position = document.getElementById(`pos-${connId}`).value.trim();
+  const reaction = document.getElementById(`rxn-${connId}`).value;
+  const wantMore = document.getElementById(`wm-${connId}`).checked;
+
+  if (!reaction) { showToast('Select a reaction first', 'err'); return; }
+
+  btn.disabled = true;
+  const result = await postResponse({
+    observation_type: 'lateral_connection',
+    observation_ref:  ref,
+    topic,
+    reaction,
+    position,
+    want_more: wantMore,
+  });
+  btn.disabled = false;
+
+  if (result) {
+    _savedMap.set(connId, result);
+    document.getElementById(`form-${connId}`).style.display  = 'none';
+    document.getElementById(`saved-${connId}`).innerHTML     = renderSavedResponse(result, connId);
+    document.getElementById(`saved-${connId}`).style.display = '';
+    _responseCount++;
+    updateMetaCount();
+  }
+}
+
+async function saveDaily(obsId, btn) {
+  const card     = document.getElementById(`card-${obsId}`);
+  const obsType  = card.dataset.type;
+  const ref      = card.dataset.ref;
+  const reaction = document.getElementById(`rxn-${obsId}`).value;
+  const noteEl   = document.getElementById(`note-${obsId}`);
+  const position = noteEl ? noteEl.value.trim() : '';
+
+  if (!reaction) { showToast('Select a reaction first', 'err'); return; }
+
+  btn.disabled = true;
+  const result = await postResponse({
+    observation_type: obsType,
+    observation_ref:  ref,
+    topic:            obsType,
+    reaction,
+    position,
+  });
+  btn.disabled = false;
+
+  if (result) {
+    _savedMap.set(obsId, result);
+    document.getElementById(`form-${obsId}`).style.display  = 'none';
+    document.getElementById(`saved-${obsId}`).innerHTML     = renderSavedResponse(result, obsId);
+    document.getElementById(`saved-${obsId}`).style.display = '';
+    _responseCount++;
+    updateMetaCount();
+  }
+}
+
+// ── Page meta + date nav ──────────────────────────────────────────────────────
+
+let _responseCount = 0;
+let _today = '';
+let _currentDate = '';  // YYYY-MM-DD of date currently being viewed
+
+function updateMetaCount() {
+  document.getElementById('pageMeta').textContent =
+    `${_today} · ${_responseCount} response${_responseCount !== 1 ? 's' : ''} saved`;
+}
+
+function offsetDate(dateStr, days) {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  return d.toISOString().substring(0, 10);
+}
+
+function updateDateNav(isToday, hasPrev) {
+  const d = new Date(_currentDate + 'T12:00:00');
+  const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  document.getElementById('dateLabel').textContent = isToday ? `${label} · today` : label;
+  document.getElementById('btnPrev').disabled  = !hasPrev;
+  document.getElementById('btnToday').disabled = !!isToday;
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+
+function showToast(msg, type = 'ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── Load date ─────────────────────────────────────────────────────────────────
+
+async function loadDate(dateStr) {
+  const url = dateStr ? `/api/intelligence/latest?date=${dateStr}` : '/api/intelligence/latest';
+  let data;
+  try {
+    data = await fetch(url).then(r => r.json());
+  } catch (e) {
+    document.getElementById('weeklySection').innerHTML =
+      '<p style="color:var(--text-dim)">Could not load intelligence data.</p>';
+    return;
+  }
+
+  _savedMap.clear();  // clear stale card data from previous date
+
+  const today_yyyymmdd = (data.today || '').replace(/-/g, '');
+  const dailyRef  = `intelligence_${today_yyyymmdd}.json`;
+  const weeklyRef = data.weekly
+    ? `intelligence_weekly_${(data.weekly.date || '').replace(/-/g, '')}.json`
+    : null;
+  const responses = data.responses || [];
+
+  _currentDate   = data.today || '';
+  _today         = data.today || '';
+  _responseCount = responses.length;
+  updateMetaCount();
+  updateDateNav(data.is_today, data.has_prev);
+
+  document.getElementById('weeklySection').innerHTML =
+    renderWeeklySection(data.weekly, responses, weeklyRef);
+  document.getElementById('dailySection').innerHTML =
+    renderDailySection(data.daily, responses, dailyRef);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadDate('');
+});
+</script>
+</body>
+</html>

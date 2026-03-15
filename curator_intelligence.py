@@ -41,6 +41,7 @@ SOURCES_PATH   = Path(__file__).parent / 'curator_sources.json'
 LATEST_PATH    = Path(__file__).parent / 'curator_latest.json'   # written by curator_rss_v2 (WS5 pre-condition)
 PREFS_PATH     = Path(__file__).parent / 'curator_preferences.json'
 OUTPUT_DIR     = Path.home() / '.openclaw' / 'workspace'
+RESPONSES_PATH = Path.home() / '.openclaw' / 'workspace' / 'intelligence_responses.json'
 
 HAIKU_MODEL    = "claude-haiku-4-5"
 SONNET_MODEL   = "claude-sonnet-4-5"   # confirmed from curator_rss_v2.py line 801
@@ -603,6 +604,50 @@ def format_telegram(observations: list, today_str: str) -> str:
 
 
 # ── Output storage ────────────────────────────────────────────────────────────
+
+def save_response(data: dict) -> dict:
+    """Append a response to intelligence_responses.json.
+
+    Auto-generates id (resp_NNN), date, timestamp, acted_on.
+    Returns the completed response dict.
+    """
+    if RESPONSES_PATH.exists():
+        store = json.loads(RESPONSES_PATH.read_text())
+    else:
+        store = {"responses": []}
+
+    existing = store.get("responses", [])
+    max_num = 0
+    for r in existing:
+        rid = r.get("id", "")
+        if rid.startswith("resp_"):
+            try:
+                max_num = max(max_num, int(rid.split("_")[1]))
+            except ValueError:
+                pass
+    new_id = f"resp_{max_num + 1:03d}"
+
+    response = {
+        "id":               new_id,
+        "date":             datetime.now().strftime("%Y-%m-%d"),
+        "observation_type": data.get("observation_type", "freeform"),
+        "observation_ref":  data.get("observation_ref"),
+        "topic":            data.get("topic", ""),
+        "domain":           data.get("domain", "other"),
+        "reaction":         data.get("reaction", "note"),
+        "position":         data.get("position", ""),
+        "confidence":       data.get("confidence", "medium"),
+        "want_more":        bool(data.get("want_more", False)),
+        "pending_action":   data.get("pending_action"),
+        "acted_on":         False,
+        "timestamp":        datetime.now().isoformat() + "Z",
+    }
+
+    existing.append(response)
+    store["responses"] = existing
+    RESPONSES_PATH.write_text(json.dumps(store, indent=2, ensure_ascii=False))
+    return response
+
 
 def save_output(observations: list, today_str: str, telegram_sent: bool,
                 weekly: bool = False) -> Path:

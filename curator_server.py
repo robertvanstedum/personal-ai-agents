@@ -685,6 +685,79 @@ def api_check_url():
         return jsonify({'ok': False, 'status': 0, 'error': str(e)})
 
 
+@app.route('/api/intelligence/latest', methods=['GET'])
+def api_intelligence_latest():
+    """Serve intelligence observations for a given date (defaults to today) + responses."""
+    workspace = Path.home() / '.openclaw' / 'workspace'
+
+    date_param = request.args.get('date', '').strip()
+    if date_param:
+        try:
+            req_date = datetime.strptime(date_param, '%Y-%m-%d')
+        except ValueError:
+            return jsonify({'error': 'Invalid date format'}), 400
+    else:
+        req_date = datetime.now()
+
+    date_str  = req_date.strftime('%Y%m%d')    # e.g. "20260315"
+    date_iso  = req_date.strftime('%Y-%m-%d')  # e.g. "2026-03-15"
+    today_str = datetime.now().strftime('%Y%m%d')
+
+    # Daily
+    daily_path = workspace / f'intelligence_{date_str}.json'
+    daily = json.loads(daily_path.read_text()) if daily_path.exists() else None
+
+    # Most recent weekly on or before requested date
+    weekly = None
+    for wf in sorted(workspace.glob('intelligence_weekly_*.json'), reverse=True):
+        wdate = wf.stem.replace('intelligence_weekly_', '')
+        if wdate <= date_str:
+            weekly = json.loads(wf.read_text())
+            break
+
+    # All responses
+    responses_path = workspace / 'intelligence_responses.json'
+    responses = json.loads(responses_path.read_text()) if responses_path.exists() else {"responses": []}
+
+    prev_date = (req_date - timedelta(days=1)).strftime('%Y%m%d')
+    has_prev  = (workspace / f'intelligence_{prev_date}.json').exists()
+
+    return jsonify({
+        'daily':     daily,
+        'weekly':    weekly,
+        'responses': responses.get('responses', []),
+        'today':     date_iso,
+        'is_today':  date_str == today_str,
+        'has_prev':  has_prev,
+    })
+
+
+@app.route('/api/intelligence/respond', methods=['POST'])
+def api_intelligence_respond():
+    """Capture a response to an intelligence observation."""
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'message': 'No data provided'}), 400
+
+    reaction = (data.get('reaction') or '').strip()
+    topic    = (data.get('topic')    or '').strip()
+
+    if not reaction:
+        return jsonify({'success': False, 'message': 'reaction is required'}), 400
+    valid_reactions = ('agree', 'disagree', 'already_tracking', 'not_relevant', 'want_more', 'note')
+    if reaction not in valid_reactions:
+        return jsonify({'success': False, 'message': f'Invalid reaction: {reaction}'}), 400
+
+    try:
+        from curator_intelligence import save_response
+        response = save_response(data)
+        print(f"💬 Intelligence response saved: {response['id']} [{reaction}] {topic[:60]}")
+        return jsonify({'success': True, 'response': response})
+    except Exception as e:
+        print(f'Intelligence respond error: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/')
 def index():
     """Root URL redirects to latest briefing"""
@@ -697,6 +770,10 @@ def library_page():
 @app.route('/curator_priorities.html')
 def priorities_page():
     return send_from_directory(BASE_DIR, 'curator_priorities.html')
+
+@app.route('/curator_intelligence.html')
+def intelligence_page():
+    return send_from_directory(BASE_DIR, 'curator_intelligence.html')
 
 @app.route('/curator_briefing.html')
 def briefing_page():
