@@ -39,7 +39,7 @@ from curator_utils import send_telegram_alert, extract_domain
 HISTORY_PATH   = Path(__file__).parent / 'curator_history.json'
 SOURCES_PATH   = Path(__file__).parent / 'curator_sources.json'
 LATEST_PATH    = Path(__file__).parent / 'curator_latest.json'   # written by curator_rss_v2 (WS5 pre-condition)
-PREFS_PATH     = Path.home() / '.openclaw' / 'workspace' / 'curator_preferences.json'
+PREFS_PATH     = Path(__file__).parent / 'curator_preferences.json'
 OUTPUT_DIR     = Path.home() / '.openclaw' / 'workspace'
 
 HAIKU_MODEL    = "claude-haiku-4-5"
