@@ -3186,6 +3186,15 @@ def main():
             print(f"⚠️  TELEGRAM_BOT_TOKEN not set, message saved to file only")
             print(f"   To enable auto-send: export TELEGRAM_BOT_TOKEN='your-token'")
     
+    # Write today's briefing pool for intelligence layer (WS5 Phase B)
+    if not dry_run:
+        try:
+            with open('curator_latest.json', 'w') as f:
+                json.dump(top_articles, f, indent=2, default=str)
+            print(f"💾 Wrote {len(top_articles)} articles to curator_latest.json")
+        except Exception as e:
+            print(f"⚠️  Could not write curator_latest.json: {e}")
+
     # Final dry run reminder
     if dry_run:
         print()
