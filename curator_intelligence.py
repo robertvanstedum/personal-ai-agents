@@ -575,13 +575,19 @@ in their history. Format using HTML bold tags for Telegram."""
 
 # ── Telegram delivery ─────────────────────────────────────────────────────────
 
+def _md_to_html(text: str) -> str:
+    """Convert markdown bold (**text**) to HTML bold (<b>text</b>) for Telegram HTML parse mode."""
+    import re
+    return re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
+
+
 def format_telegram(observations: list, today_str: str) -> str:
     """Format daily observations as an HTML Telegram message."""
     dt = datetime.strptime(today_str, "%Y-%m-%d")
     date_label = dt.strftime("%b %-d")  # e.g. "Mar 15"
     header = f'🧠 <b>Intelligence — {date_label}</b>'
 
-    body_lines = [obs["content"] for obs in observations]
+    body_lines = [_md_to_html(obs["content"]) for obs in observations]
 
     # Quiet day: obs1 failed/unavailable AND obs2 has nothing to report
     all_quiet = all(
@@ -701,7 +707,7 @@ def main():
     if is_sunday:
         try:
             weekly_obs = observe_lateral_connections(today_str)
-            weekly_msg = weekly_obs["content"]
+            weekly_msg = _md_to_html(weekly_obs["content"])
             print("\n" + "=" * 60)
             print("🔗 Weekly Telegram preview:")
             print(weekly_msg)
