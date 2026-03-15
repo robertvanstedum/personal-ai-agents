@@ -443,8 +443,9 @@ def observe_blind_spots(today_str: str):
         print(f"   Could not load curator_latest.json: {e}")
         return None
 
-    non_us = [e for e in pool if e.get("source", "") in NON_US_DOMAINS]
-    us     = [e for e in pool if e.get("source", "") in US_DOMAINS]
+    # Articles use 'link' (full URL) not 'source' (display name) — extract domain for classification
+    non_us = [e for e in pool if extract_domain(e.get("link", "")) in NON_US_DOMAINS]
+    us     = [e for e in pool if extract_domain(e.get("link", "")) in US_DOMAINS]
 
     print(f"   Pool: {len(pool)} articles — {len(non_us)} non-US, {len(us)} US")
 
