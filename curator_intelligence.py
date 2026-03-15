@@ -733,8 +733,7 @@ def main():
     # ── Send daily Telegram ────────────────────────────────────────────────────
 
     if args.telegram:
-        chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
-        telegram_sent = send_telegram_alert(telegram_msg, chat_id=chat_id or None)
+        telegram_sent = send_telegram_alert(telegram_msg)
 
     if output_path and telegram_sent:
         try:
@@ -756,8 +755,7 @@ def main():
             weekly_path = None
 
         if args.telegram:
-            chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
-            weekly_sent = send_telegram_alert(weekly_msg, chat_id=chat_id or None)
+            weekly_sent = send_telegram_alert(weekly_msg)
             if weekly_path and weekly_sent:
                 try:
                     payload = json.loads(weekly_path.read_text())

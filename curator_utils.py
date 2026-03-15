@@ -449,19 +449,37 @@ def get_telegram_token() -> str:
     return os.environ.get('TELEGRAM_BOT_TOKEN', '')
 
 
+def get_telegram_chat_id() -> str:
+    """
+    Get Telegram chat ID from (in priority order):
+    1. macOS Keychain (via keyring, service='telegram', account='chat_id')
+    2. Environment variable TELEGRAM_CHAT_ID
+
+    Returns empty string if not found.
+    """
+    try:
+        import keyring
+        chat_id = keyring.get_password("telegram", "chat_id")
+        if chat_id:
+            return chat_id
+    except Exception:
+        pass
+    return os.environ.get('TELEGRAM_CHAT_ID', '')
+
+
 def send_telegram_alert(message: str, chat_id: str = None) -> bool:
     """
     Send a message via Telegram (HTML parse_mode).
 
     Args:
         message:  Message text (HTML formatting supported)
-        chat_id:  Telegram chat ID (defaults to TELEGRAM_CHAT_ID env var)
+        chat_id:  Telegram chat ID (defaults to keychain → TELEGRAM_CHAT_ID env var)
 
     Returns:
         True if sent successfully, False otherwise
     """
     if chat_id is None:
-        chat_id = os.environ.get('TELEGRAM_CHAT_ID', '')
+        chat_id = get_telegram_chat_id()
     token = get_telegram_token()
     if not token:
         print("⚠️  No Telegram token found, skipping alert")
@@ -474,6 +492,10 @@ def send_telegram_alert(message: str, chat_id: str = None) -> bool:
             "parse_mode": "HTML",
         }
         response = requests.post(url, json=data, timeout=10)
+        if not response.ok:
+            print(f"⚠️  Telegram API error {response.status_code}: {response.json().get('description', response.text)}")
+            print(f"    Message preview (first 200 chars): {message[:200]!r}")
+            return False
         response.raise_for_status()
         print("✅ Telegram alert sent")
         return True
