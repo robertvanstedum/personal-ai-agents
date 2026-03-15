@@ -69,6 +69,7 @@ import json
 import hashlib
 from dotenv import load_dotenv
 from curator_config import ACTIVE_DOMAIN
+from curator_utils import get_telegram_token, send_telegram_alert
 
 # ---------------------------------------------------------------------------
 # Cost logger — persists per-run API costs for cost_report.py
@@ -357,65 +358,6 @@ def get_xai_api_key() -> str:
         return api_key
     
     return ""
-
-def get_telegram_token() -> str:
-    """
-    Get Telegram bot token from (in priority order):
-    1. macOS Keychain (via keyring)
-    2. Environment variable TELEGRAM_BOT_TOKEN
-    3. .env file
-    
-    Returns empty string if not found.
-    """
-    # Try keychain first (most secure)
-    try:
-        import keyring
-        token = keyring.get_password("telegram", "bot_token")
-        if token:
-            return token
-    except Exception as e:
-        pass  # Keychain not available or error
-    
-    # Try environment variable (from .env or shell)
-    token = os.environ.get('TELEGRAM_BOT_TOKEN')
-    if token:
-        return token
-    
-    return ""
-
-def send_telegram_alert(message: str, chat_id: str = None) -> bool:
-    """
-    Send error alert via Telegram
-    
-    Args:
-        message: Alert message to send
-        chat_id: Telegram chat ID (defaults to env var)
-    
-    Returns:
-        True if sent successfully, False otherwise
-    """
-    if chat_id is None:
-        chat_id = os.environ.get('TELEGRAM_CHAT_ID', 'YOUR_TELEGRAM_CHAT_ID')
-    
-    token = get_telegram_token()
-    if not token:
-        print("⚠️  No Telegram token found, skipping alert")
-        return False
-    
-    try:
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        data = {
-            "chat_id": chat_id,
-            "text": message,
-            "parse_mode": "HTML"
-        }
-        response = requests.post(url, json=data, timeout=10)
-        response.raise_for_status()
-        print("✅ Telegram alert sent")
-        return True
-    except Exception as e:
-        print(f"⚠️  Failed to send Telegram alert: {e}")
-        return False
 
 def log_error(error_type: str, error_msg: str, context: str = ""):
     """

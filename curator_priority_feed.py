@@ -166,11 +166,15 @@ def whitelist_filter(results: list) -> list:
     return kept
 
 
-def _log_probationary_domains(raw_results: list) -> None:
+def _log_probationary_domains(raw_results: list, query: str = "") -> None:
     """
     Auto-add any domain surfaced by Brave that isn't already in
     curator_sources.json. Sets trust='probationary', set_by='auto'.
     Idempotent — skips domains already in the file.
+
+    Args:
+        raw_results: Raw Brave search result dicts
+        query:       The search query that surfaced these results (stored for WS5 discovery)
     """
     sources_path = Path(__file__).parent / 'curator_sources.json'
     try:
@@ -180,15 +184,18 @@ def _log_probationary_domains(raw_results: list) -> None:
     known_domains = {e['domain'] for e in existing}
 
     new_entries = []
+    today = datetime.now().strftime("%Y-%m-%d")
     for r in raw_results:
         domain = extract_domain(r.get('url', ''))
         if domain and domain not in known_domains and domain not in DOMAIN_WHITELIST:
             known_domains.add(domain)   # prevent dupes within this batch
             new_entries.append({
-                'domain': domain,
-                'trust':  'probationary',
-                'set_by': 'auto',
-                'note':   f'auto-discovered via Brave {datetime.now().strftime("%Y-%m-%d")}',
+                'domain':     domain,
+                'trust':      'probationary',
+                'set_by':     'auto',
+                'note':       f'auto-discovered via Brave {today}',
+                'added_date': today,
+                'query':      query,
             })
 
     if new_entries:
@@ -261,7 +268,7 @@ def run_priority(priority: dict, user_profile: str,
         return 0
 
     # 1b. Log any unknown domains as probationary in curator_sources.json
-    _log_probationary_domains(raw)
+    _log_probationary_domains(raw, query=query)
 
     # 2. Domain whitelist filter
     whitelisted = whitelist_filter(raw)

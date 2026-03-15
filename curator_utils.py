@@ -429,6 +429,59 @@ def analyze_id_formats(ids: Set[str]) -> Dict[str, int]:
     return dict(formats)
 
 
+# ── Telegram helpers (Workstream 5 — shared by curator_rss_v2 and curator_intelligence) ──
+
+def get_telegram_token() -> str:
+    """
+    Get Telegram bot token from (in priority order):
+    1. macOS Keychain (via keyring)
+    2. Environment variable TELEGRAM_BOT_TOKEN
+
+    Returns empty string if not found.
+    """
+    try:
+        import keyring
+        token = keyring.get_password("telegram", "bot_token")
+        if token:
+            return token
+    except Exception:
+        pass
+    return os.environ.get('TELEGRAM_BOT_TOKEN', '')
+
+
+def send_telegram_alert(message: str, chat_id: str = None) -> bool:
+    """
+    Send a message via Telegram (HTML parse_mode).
+
+    Args:
+        message:  Message text (HTML formatting supported)
+        chat_id:  Telegram chat ID (defaults to TELEGRAM_CHAT_ID env var)
+
+    Returns:
+        True if sent successfully, False otherwise
+    """
+    if chat_id is None:
+        chat_id = os.environ.get('TELEGRAM_CHAT_ID', '')
+    token = get_telegram_token()
+    if not token:
+        print("⚠️  No Telegram token found, skipping alert")
+        return False
+    try:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        data = {
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": "HTML",
+        }
+        response = requests.post(url, json=data, timeout=10)
+        response.raise_for_status()
+        print("✅ Telegram alert sent")
+        return True
+    except Exception as e:
+        print(f"⚠️  Failed to send Telegram alert: {e}")
+        return False
+
+
 if __name__ == '__main__':
     # Self-test: run validation on current Signal Store
     print("🧪 Running Signal Store correlation validator...")

@@ -1,11 +1,120 @@
 [
-  {"domain": "warontherocks.com",  "trust": "trusted",  "set_by": "explicit", "note": "Defense/security analysis"},
-  {"domain": "foreignaffairs.com", "trust": "trusted",  "set_by": "explicit", "note": "Premier geopolitics journal"},
-  {"domain": "arxiv.org",          "trust": "trusted",  "set_by": "explicit", "note": "Academic preprints, q-fin"},
-  {"domain": "justsecurity.org",   "trust": "trusted",  "set_by": "explicit", "note": "National security / international law"},
-  {"domain": "cepr.org",           "trust": "trusted",  "set_by": "explicit", "note": "Economic policy research, VoxEU"},
-  {"domain": "crisisgroup.org",    "trust": "trusted",  "set_by": "explicit", "note": "Conflict analysis"},
-  {"domain": "investing.com",      "trust": "drop",     "set_by": "explicit", "note": "Aggregator noise"},
-  {"domain": "theduran.com",       "trust": "neutral",  "set_by": "explicit", "note": ""},
-  {"domain": "zerohedge.com",      "trust": "neutral",  "set_by": "explicit", "note": ""}
+  {
+    "domain": "warontherocks.com",
+    "trust": "trusted",
+    "set_by": "explicit",
+    "note": "Defense/security analysis"
+  },
+  {
+    "domain": "foreignaffairs.com",
+    "trust": "trusted",
+    "set_by": "explicit",
+    "note": "Premier geopolitics journal; paywalled — low scores reflect content access, not quality"
+  },
+  {
+    "domain": "arxiv.org",
+    "trust": "trusted",
+    "set_by": "explicit",
+    "note": "Academic preprints, q-fin"
+  },
+  {
+    "domain": "justsecurity.org",
+    "trust": "trusted",
+    "set_by": "explicit",
+    "note": "National security / international law"
+  },
+  {
+    "domain": "cepr.org",
+    "trust": "trusted",
+    "set_by": "explicit",
+    "note": "Economic policy research, VoxEU"
+  },
+  {
+    "domain": "crisisgroup.org",
+    "trust": "trusted",
+    "set_by": "explicit",
+    "note": "Conflict analysis"
+  },
+  {
+    "domain": "investing.com",
+    "trust": "drop",
+    "set_by": "explicit",
+    "note": "Aggregator noise"
+  },
+  {
+    "domain": "theduran.com",
+    "trust": "neutral",
+    "set_by": "explicit",
+    "note": ""
+  },
+  {
+    "domain": "zerohedge.com",
+    "trust": "neutral",
+    "set_by": "explicit",
+    "note": ""
+  },
+  {
+    "domain": "en.wikipedia.org",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-03-14",
+    "added_date": "2026-03-14",
+    "query": ""
+  },
+  {
+    "domain": "oreateai.com",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-03-14",
+    "added_date": "2026-03-14",
+    "query": ""
+  },
+  {
+    "domain": "theglobalstatistics.com",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-03-14",
+    "added_date": "2026-03-14",
+    "query": ""
+  },
+  {
+    "domain": "hoodline.com",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-03-14",
+    "added_date": "2026-03-14",
+    "query": ""
+  },
+  {
+    "domain": "fox32chicago.com",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-03-14",
+    "added_date": "2026-03-14",
+    "query": ""
+  },
+  {
+    "domain": "thecentersquare.com",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-03-14",
+    "added_date": "2026-03-14",
+    "query": ""
+  },
+  {
+    "domain": "yahoo.com",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-03-14",
+    "added_date": "2026-03-14",
+    "query": ""
+  },
+  {
+    "domain": "streetwisejournal.com",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-03-14",
+    "added_date": "2026-03-14",
+    "query": ""
+  }
 ]
