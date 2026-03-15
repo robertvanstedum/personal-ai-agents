@@ -654,3 +654,22 @@ Momentum: Iran/energy, tariffs, AI. Gap: crypto/detailed Fed policy. Sources: no
 ### Phase B: Remaining Observations
 Source anomalies (Haiku), US press blind spots (cross-source), weekly lateral connections (Sonnet).
 
+
+## 2026-03-15 — WS5 Phase B: Intelligence Layer Complete
+
+Commits: `846a0df` (feat), `23ff20d` (fix) — see `docs/BUILD_WS5_PhaseB_2026-03-15.md`
+
+**Result:** All five intelligence observations operational. Workstream 5 complete.
+
+### What Was Built
+- Pre-condition: `curator_rss_v2.py` writes `curator_latest.json` after each run (full scored pool for blind spot detection)
+- Obs 3: Source Anomalies — Haiku detects trusted source drift vs 30-day baseline, quiet path
+- Obs 4: US Press Blind Spots — Haiku surfaces non-US stories absent from US outlets, reads `curator_latest.json`, quiet path
+- Obs 5: Lateral Connections — Sonnet surfaces adjacent topics from reading history, Sunday only, separate Telegram message
+- Bug fix: Obs 4 domain classification — `source` field is display name, not domain; switched to `extract_domain(link)`. Before: 0 articles classified. After: 6 non-US + 7 US classified, Obs 4 fired (Minab classroom missile strike, Al Jazeera/DW only).
+
+### Open Items → Post-1.0
+- `curator_latest.json` writes top_articles, not full pre-scoring pool — revisit in 1.1
+- Lateral connections prompt tuning after a few weeks of Sunday runs
+- Source anomaly minimum threshold (5 articles) may need lowering for newer trusted sources
+
