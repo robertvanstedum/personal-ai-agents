@@ -1133,7 +1133,7 @@
           <div class="card-actions">
             <button class="action-btn extend" onclick="extendPriority('${p.id}', 3)">+3d</button>
             <button class="action-btn extend" onclick="extendPriority('${p.id}', 7)">+7d</button>
-            <button class="action-btn toggle-active" onclick="toggleActive('${p.id}', ${!p.active})">${toggleLabel}</button>
+            <button class="action-btn toggle-active" onclick="toggleActive('${p.id}', ${!p.active}, ${!!p.expired})">${toggleLabel}</button>
             <button class="action-btn" onclick="showEditForm('${p.id}')">Edit</button>
             <button class="action-btn delete" onclick="deletePriority('${p.id}', '${escHtml(p.label).replace(/'/g,"\\'")}')">Delete</button>
           </div>
@@ -1363,16 +1363,24 @@
   }
 
   // ── Toggle active ────────────────────────────────────────────
-  async function toggleActive(id, newActive) {
+  // isExpired: when reactivating an expired priority, auto-extend by 3d so
+  // the GET auto-deactivation (which fires on every /api/priorities load for
+  // expired+active entries) doesn't immediately undo the activation.
+  async function toggleActive(id, newActive, isExpired = false) {
+    const body = { active: newActive };
+    if (newActive && isExpired) {
+      body.expires_days = 3;   // auto-extend when reactivating expired priority
+    }
     try {
       const res  = await fetch(`/api/priority/${id}`, {
         method: 'PATCH',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ active: newActive })
+        body: JSON.stringify(body)
       });
       const data = await res.json();
       if (data.success) {
-        showToast(newActive ? 'Activated' : 'Deactivated', 'ok');
+        const msg = (newActive && isExpired) ? 'Activated (+3d extended)' : (newActive ? 'Activated' : 'Deactivated');
+        showToast(msg, 'ok');
         await loadPriorities();
       } else {
         showToast(data.message || 'Toggle failed', 'err');
