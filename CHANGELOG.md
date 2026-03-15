@@ -673,3 +673,25 @@ Commits: `846a0df` (feat), `23ff20d` (fix) — see `docs/BUILD_WS5_PhaseB_2026-0
 - Lateral connections prompt tuning after a few weeks of Sunday runs
 - Source anomaly minimum threshold (5 articles) may need lowering for newer trusted sources
 
+
+## 2026-03-15 — WS5 Phase C: Intelligence Response Capture
+
+Commits: see `docs/BUILD_WS5_PhaseC_2026-03-15.md`
+
+**Result:** `curator_intelligence.html` live — daily observations and weekly lateral connections displayed with response forms. Responses written to `intelligence_responses.json`. Feedback loop data layer complete for 1.0.
+
+### What Was Built
+- `intelligence_responses.json` created in `~/.openclaw/workspace/` (not committed — operational data)
+- `curator_intelligence.py`: `RESPONSES_PATH` constant + `save_response()` helper (auto-ID, timestamp, `acted_on: False`)
+- `curator_server.py`: `GET /api/intelligence/latest` + `POST /api/intelligence/respond`
+- `curator_intelligence.html`: full page — weekly lateral connections (full form: prominent position textarea + reaction + want more) and daily observations (light form: reaction + one-line note). `mdToHtml()` JS helper for markdown cleanup. `data-*` attributes for save handlers. Button disabled during async POST.
+
+### Design note
+Static mockup reviewed and iterated (3 passes) before API wiring — caught layout issues before backend work. Pattern worth repeating for new UI pages.
+
+### Open Items → 1.1
+- Step 5: Telegram reply detection + Haiku classification
+- Domain badge on weekly cards
+- Condensed/filter view
+- `acted_on` flag activation when `pending_action` executed
+
