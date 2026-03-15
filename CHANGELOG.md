@@ -624,3 +624,33 @@ python3 curator_rss_v2.py --mode=xai
 - ✅ Deep dive now reliably analyzes the correct article
 - ✅ Clean HTML output (no duplicate headings)
 - ✅ Robust to multiple curator runs per day
+
+## 2026-03-15 — WS5 Phase A: Intelligence Layer Foundation
+
+Commits: see `docs/BUILD_WS5_PHASE_A.md` for full record
+
+**Result:** `curator_intelligence.py` running in production. Daily 7:30 AM intelligence message confirmed delivered to Telegram on first run.
+
+### What Was Built
+
+**Pre-conditions:**
+- `send_telegram_alert()` moved from `curator_rss_v2.py` → `curator_utils.py` (shared helper, clean import path for all future scripts)
+- `_log_probationary_domains()` in `curator_priority_feed.py` fixed to write `added_date` + `query` fields; 8 existing probationary entries backfilled with `added_date: 2026-03-14`
+
+**`curator_intelligence.py`**
+New daily observation script. Two observations: Topic Velocity (Haiku infers topics from title corpus, compares today vs 30-day baseline) and Discovery Candidates (Haiku quality-rates new probationary domains from Brave). Output: Telegram message (5 lines max) + `intelligence_YYYYMMDD.json` in OpenClaw workspace.
+
+**`run_intelligence_cron.sh` + `com.vanstedum.curator-intelligence.plist`**
+Shell wrapper pattern matching existing curator cron jobs. Registered to `~/Library/LaunchAgents/`, fires 7:30 AM daily.
+
+### First Output (March 15)
+Momentum: Iran/energy, tariffs, AI. Gap: crypto/detailed Fed policy. Sources: none new (Brave rate limiting).
+
+### Open Items → Phase B
+- Brave `time.sleep(1)` delay fix
+- Gap detection: keyword-level → thesis-level matching
+- Treasury MSPD per-source cap (3x in top 20 today)
+
+### Phase B: Remaining Observations
+Source anomalies (Haiku), US press blind spots (cross-source), weekly lateral connections (Sonnet).
+
