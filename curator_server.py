@@ -28,6 +28,7 @@ SHARED_NAV_HTML = """
     <a href="/curator_library.html" class="nav-link {library_active}">Library</a>
     <a href="/interests/2026/deep-dives/index.html" class="nav-link {deepdives_active}">Deep Dives</a>
     <a href="/curator_priorities.html" class="nav-link {priorities_active}">Priorities</a>
+    <a href="/curator_intelligence.html" class="nav-link {intelligence_active}">AI Observations</a>
   </nav>
 """
 

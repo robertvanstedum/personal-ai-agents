@@ -2246,6 +2246,7 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
     <a href="curator_library.html" class="nav-link">Library</a>
     <a href="curator_priorities.html" class="nav-link">🎯 Priorities</a>
     <a href="interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
+    <a href="curator_intelligence.html" class="nav-link">AI Observations</a>
   </nav>
 </header>
 

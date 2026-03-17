@@ -638,6 +638,7 @@ def regenerate_deep_dives_index():
     <a href="../../../curator_library.html" class="nav-link">Library</a>
     <a href="../../../interests/2026/deep-dives/index.html" class="nav-link active">Deep Dives</a>
     <a href="../../../curator_priorities.html" class="nav-link">Priorities</a>
+    <a href="../../../curator_intelligence.html" class="nav-link">AI Observations</a>
   </nav>
 </header>
 
@@ -902,6 +903,7 @@ def generate_deep_dive_html(hash_id, article_data, initial_interest, dive_focus,
     <a href="../../../curator_library.html" class="nav-link">Library</a>
     <a href="../../../interests/2026/deep-dives/index.html" class="nav-link active">Deep Dives</a>
     <a href="../../../curator_priorities.html" class="nav-link">Priorities</a>
+    <a href="../../../curator_intelligence.html" class="nav-link">AI Observations</a>
   </nav>
 </header>
 <div style="padding: 32px;">
