@@ -979,7 +979,7 @@ def trigger_deepdive(hash_id, interest, focus=''):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
-    PORT = 8765
+    PORT = int(os.environ.get('PORT', 8765))
     
     print(f"""
 🌐 Curator Server Starting (Flask)...
