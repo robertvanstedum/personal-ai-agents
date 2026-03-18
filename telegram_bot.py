@@ -100,7 +100,7 @@ def send_briefing(token, chat_id):
         send_message(token, chat_id, "❌ curator_output.txt not found — has the curator run today?")
         return
     
-    send_message(token, chat_id, f"🧠 <b>Your Morning Briefing — {datetime.now().strftime('%b %d, %Y')}</b>\n\nTop curated articles:")
+    send_message(token, chat_id, "🧠 <b>Your Morning Briefing</b>\n\nTop curated articles:")
     
     # Parse curator_output.txt
     # Adjust this parsing to match your actual file format

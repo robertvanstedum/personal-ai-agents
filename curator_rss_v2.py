@@ -2239,7 +2239,7 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
 <header class="curator-header">
   <div class="header-left">
     <a href="/" class="logo">📚 Curator</a>
-    <span class="logo-sub">Morning Briefing — {date_str}</span>
+    <span class="logo-sub">Morning Briefing</span>
   </div>
   <nav class="header-nav">
     <a href="/" class="nav-link active">Daily</a>
