@@ -65,6 +65,7 @@ Nothing currently approved. See ROADMAP.md for candidates.
 ## Pending OpenClaw Tasks
 
 - [ ] Stale doc cleanup — root folder + docs/ (~25 old working docs to archive or delete)
+- [ ] `_NewDomains/PROJECT_STATE.md` — stale (Mar 7, v0.9-beta). Archive it or replace with a pointer to the root-level version.
 
 ---
 
