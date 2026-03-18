@@ -137,6 +137,16 @@ Execution feedback flows through one channel. Planning and instruction flows thr
 
 ---
 
+## Agent Layer
+
+Mini-moi was conceived as an agent platform from the start — the name is intentional. The current build layer uses OpenClaw for planning, memory, and conversational design, and Claude Code for implementation. Robert sits between them as the decision point.
+
+OpenClaw is a capable partner for back-and-forth design sessions and persistent memory across sessions. It is one option, not a dependency. The architecture is agent-agnostic — a different agent framework could be swapped in as the ecosystem evolves.
+
+As the platform matures, the agent layer shifts from build support toward runtime use: mobile command interface, session memory, operational monitoring.
+
+---
+
 ## Key Design Decisions
 
 **Model-agnostic dispatcher** — `curate(mode=...)` branches to the appropriate scorer. HTML and feedback systems never assume a specific model. All scorers return a normalized `{score, method}` result. Provider rotation is expected — the architecture doesn't lock to any one API.
