@@ -170,5 +170,17 @@ See [ROADMAP.md](ROADMAP.md) for what's next.
 
 ---
 
+## Screenshots
+
+| Daily Briefing | Signal Priorities |
+|---|---|
+| ![Daily Briefing](docs/screenshots/daily-briefing.png) | ![Signal Priorities](docs/screenshots/priorities.png) |
+
+| AI Observations | Deep Dives | Morning Briefing |
+|---|---|---|
+| ![AI Observations](docs/screenshots/ai-observations.png) | ![Deep Dives](docs/screenshots/deep-dives.png) | ![Morning Briefing](docs/screenshots/morning-briefing.png) |
+
+---
+
 **Status:** v1.0 feature complete — March 2026
 **Author:** Robert van Stedum
