@@ -55,13 +55,21 @@ def get_chat_id():
 
 # ─── Sending ──────────────────────────────────────────────────────────────────
 
-def send_message(token, chat_id, text, parse_mode="HTML"):
-    """Simple fire-and-forget message send"""
-    requests.post(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        json={"chat_id": chat_id, "text": text, "parse_mode": parse_mode, "disable_web_page_preview": True},
-        timeout=10
-    )
+def send_message(token, chat_id, text, parse_mode="HTML", retries=3):
+    """Simple fire-and-forget message send with retry on timeout"""
+    for attempt in range(1, retries + 1):
+        try:
+            requests.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": chat_id, "text": text, "parse_mode": parse_mode, "disable_web_page_preview": True},
+                timeout=30
+            )
+            return
+        except requests.exceptions.Timeout:
+            print(f"⚠️  send_message timeout (attempt {attempt}/{retries})")
+            if attempt == retries:
+                print("❌ send_message failed after all retries")
+                raise
 
 def send_article(token, chat_id, num, title, url, source, category, score):
     """Send one article with interactive buttons"""
@@ -80,17 +88,25 @@ def send_article(token, chat_id, num, title, url, source, category, score):
         ]]
     }
     
-    requests.post(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        json={
-            "chat_id": chat_id,
-            "text": message.strip(),
-            "parse_mode": "HTML",
-            "reply_markup": keyboard,
-            "disable_web_page_preview": True,
-        },
-        timeout=10
-    )
+    for attempt in range(1, 4):
+        try:
+            requests.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={
+                    "chat_id": chat_id,
+                    "text": message.strip(),
+                    "parse_mode": "HTML",
+                    "reply_markup": keyboard,
+                    "disable_web_page_preview": True,
+                },
+                timeout=30
+            )
+            return
+        except requests.exceptions.Timeout:
+            print(f"⚠️  send_article timeout (attempt {attempt}/3)")
+            if attempt == 3:
+                print(f"❌ send_article failed after all retries: #{num} {title[:40]}")
+                raise
 
 def send_briefing(token, chat_id):
     """Read curator_output.txt and send top articles"""
@@ -100,7 +116,9 @@ def send_briefing(token, chat_id):
         send_message(token, chat_id, "❌ curator_output.txt not found — has the curator run today?")
         return
     
-    send_message(token, chat_id, "🧠 <b>Your Morning Briefing</b>\n\nTop curated articles:")
+    from datetime import datetime
+    today_str = datetime.now().strftime("%A, %B %d, %Y")
+    send_message(token, chat_id, f"🧠 <b>Your Morning Briefing</b> — {today_str}\n\nTop curated articles:")
     
     # Parse curator_output.txt
     # Adjust this parsing to match your actual file format
