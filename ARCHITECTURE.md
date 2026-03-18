@@ -1,43 +1,44 @@
 # Architecture — Mini-moi
 
-A production AI agent for daily geopolitical and financial intelligence. Single-user, local-first, model-agnostic. Running since February 2026.
+A personal AI agent platform. The first domain — geopolitical and financial intelligence — is live and generating daily data. Additional domains follow the same pipeline pattern.
+
+Single-user, local-first, model-agnostic. Running since February 2026.
 
 ---
 
 ## Pipeline Overview
 
-Three scheduled jobs run daily via launchd:
+Three jobs run daily via launchd (hourly polling, 6AM–6PM, once-per-day idempotency):
 
-| Time | Job | Entry Point |
-|------|-----|-------------|
-| 07:00 | Morning briefing | `run_curator_cron.sh` → `curator_rss_v2.py` |
-| 07:30 | AI Observations | `run_intelligence_cron.sh` → `curator_intelligence.py` |
-| 14:00 | Priority feed | `run_priority_feed_cron.sh` → `curator_priority_feed.py` |
+| Job               | Entry Point                                                 |
+|-------------------|-------------------------------------------------------------|
+| Morning briefing  | `run_curator_cron.sh` → `curator_rss_v2.py`                |
+| AI Observations   | `run_intelligence_cron.sh` → `curator_intelligence.py`     |
+| Priority feed     | `run_priority_feed_cron.sh` → `curator_priority_feed.py`   |
 
 **Morning briefing flow:**
-1. Incremental X signal sync (`x_pull_incremental.py`) — fetches new bookmarks since `last_pull_at`; runs alongside briefing cron, failure is non-blocking
-2. `curator_rss_v2.py` — ingest RSS + X signals, score, generate HTML
+1. Incremental signal sync (`x_pull_incremental.py`) — fetches new bookmarks since `last_pull_at`; failure is non-blocking
+2. `curator_rss_v2.py` — ingest RSS + signals, score, generate HTML
 3. `telegram_bot.py --send` — deliver top 10 to mobile
 
 ---
 
 ## Model Stack
 
+Model selection is intentionally fluid. The table below reflects the current production configuration — models have rotated in and out during development and will continue to as the ecosystem evolves. OpenAI, Gemini, and others are candidates; the architecture doesn't prefer any provider.
+
 Each stage uses a swappable model selected at runtime via `--model=` flag.
 
-| Stage | Model | Notes |
-|-------|-------|-------|
-| Article scoring (production) | `grok-4.1` (xAI) | Single-stage, ~700 candidates, temperature=1.0 |
-| Article scoring (prior production) | `grok-3-mini` | Replaced March 2026 |
-| Article scoring (fallback) | `ollama/gemma3` | Local, mechanical keyword scoring, zero cost |
-| AI Observations (daily) | `claude-haiku-4-5` | Source anomalies, topic velocity |
-| AI Observations (weekly) | `claude-sonnet-4-5` | Lateral connections, Sunday runs |
-| Deep dives | `claude-sonnet-4-5` | On-demand, user-directed |
-| Priority feed pre-filter | `claude-haiku-4-5` | Gates Grok scoring (min_score=3.0) |
+| Stage                          | Current Model      | Notes                                          |
+|--------------------------------|--------------------|------------------------------------------------|
+| Article scoring (production)   | `grok-4-1` (xAI)   | Single-stage, ~700 candidates, temperature=0.7 |
+| Article scoring (fallback)     | `ollama/gemma3`    | Local, zero cost                               |
+| AI Observations (daily)        | `claude-haiku-4-5` | Source anomalies, topic velocity               |
+| AI Observations (weekly)       | `claude-sonnet-4-5`| Lateral connections, Sunday runs               |
+| Deep dives                     | `claude-sonnet-4-5`| On-demand, user-directed                       |
+| Priority feed pre-filter       | `claude-haiku-4-5` | Gates Grok scoring                             |
 
-User profile injection happens at the dispatcher level, not inside model prompts — any scorer (Grok, Haiku, local Ollama) inherits personalization automatically without changes to scorer logic.
-
-**Cost baseline:** ~$0.30/day at current pool size. A bulk pre-filter tier (Haiku) is implemented and ready to activate as the candidate pool grows.
+**Cost baseline:** ~$0.30/day at current pool size.
 
 ---
 
@@ -47,42 +48,53 @@ The 20-article daily output is split into two pools with distinct selection logi
 
 **Phase 1 — Personalized pool (default 16 articles)**
 
-Selection is iterative, not a simple sort. Each pass recalculates `final_score` for all remaining candidates:
+Selection is iterative, not a simple sort. Each pass recalculates `final_score` for all remaining candidates. The trust multiplier is applied to `base_score` in-place first; the additive and subtractive terms then apply on top:
 
 ```
-final_score = base_score
-            × source_trust_multiplier     # trusted=1.5, neutral=1.0, deprioritize=0.5, probationary=0.7
-            - source_penalty              # count² × 30 × diversity_weight
-            - category_penalty            # count² × 15 × diversity_weight
-            + interest_boost              # from flagged articles in active interests
-            + priorities_boost            # from active priority keywords (capped at +3.0)
+base_score × source_trust_multiplier     # trusted=1.5, neutral=1.0,
+                                         # deprioritize=0.5, probationary=0.7
+final_score = modified_base_score
+            - source_penalty             # count² × 30 × diversity_weight
+            - category_penalty           # count² × 15 × diversity_weight
+            + interest_boost
+            + priorities_boost           # capped at +3.0
 ```
 
-Penalties are quadratic — the second article from a source costs 4× the first, the third costs 9×. Source penalty (×30) is more aggressive than category penalty (×15): depth per topic is fine, outlet monopoly is not.
+Penalties are quadratic — the second article from a source costs 4× the first, the third costs 9×. Source penalty (×30) is more aggressive than category penalty (×15): depth per topic is acceptable, outlet monopoly is not.
 
 **Phase 2 — Serendipity pool (default 4 articles)**
 
-Drawn from candidates not selected in Phase 1. All personalization signals stripped — no interest boosts, no priority boosts, no profile injection. Selection by base score + diversity penalties only. Purpose: surfaces high-quality articles the model found interesting that the learned profile would have deprioritized. Tagged `serendipity_pick: true` in output.
+Drawn from candidates not selected in Phase 1. Interest boosts and priority boosts are stripped — no personalization signals. Selection by base score and diversity penalties only.
+
+The design intent is explicit: Phase 1 lets your preferences dominate. Phase 2 asks what a smart, disinterested reader would surface that your learned profile suppressed. The serendipity picks aren't random — they're still model-scored, still quality-filtered, still diversity-penalized. They just ignore what you've trained the system to like.
+
+This matters because 400 signals is not enough to know what you don't know you want. The personalization loop and the serendipity pool are intentionally in tension. One reinforces your profile. The other protects against it.
+
+Tagged `serendipity_pick: true` in output.
 
 ---
 
 ## Data Layer
 
-Flat JSON files, structured to match a future database schema. One migration command when the time comes — no rewrite required.
+Flat JSON files for now — a deliberate deferral, not an oversight.
 
-| File | Purpose |
-|------|---------|
-| `curator_latest.json` | Today's briefing (20 articles) |
-| `curator_history.json` | 30-day rolling archive, keyed by `hash_id` |
-| `curator_preferences.json` | User feedback history, learned patterns, serendipity config |
-| `curator_sources.json` | RSS source trust scores, probationary tracking |
-| `curator_signals.json` | X bookmark signals with enriched destination text |
-| `x_pull_state.json` | X pull tracker (`last_pull_at`) |
-| `priorities.json` | Active priority definitions + web search results |
-| `curator_costs.json` | Per-run cost log (model, tokens, USD) |
-| `curator_config.py` | Shared constants — domain names, file paths, active domain flag |
+The decision was to get daily operations running first. A database schema designed before real usage would have been wrong. Six weeks of production has generated the context needed to design it correctly: article history, user feedback patterns, signal enrichment, source trust evolution, cost tracking. The data is now growing daily and the migration is the next infrastructure decision.
 
-**Archive:** `curator_archive/curator_YYYY-MM-DD.html` — daily snapshots.
+Files are keyed and structured to match a relational schema. The migration path is clean when the time comes.
+
+| File                        | Purpose                                              |
+|-----------------------------|------------------------------------------------------|
+| `curator_latest.json`       | Today's briefing (20 articles)                       |
+| `curator_history.json`      | 30-day rolling archive, keyed by `hash_id`           |
+| `curator_preferences.json`  | User feedback, learned patterns, serendipity config  |
+| `curator_sources.json`      | RSS source trust scores, probationary tracking       |
+| `curator_signals.json`      | X bookmark signals with enriched destination text    |
+| `x_pull_state.json`         | X pull tracker (`last_pull_at`)                      |
+| `priorities.json`           | Active priority definitions + web search results     |
+| `curator_costs.json`        | Per-run cost log (model, tokens, USD)                |
+| `curator_config.py`         | Shared constants — domain names, file paths          |
+
+**Archive:** `curator_archive/` — daily HTML snapshots.
 
 ---
 
@@ -90,15 +102,17 @@ Flat JSON files, structured to match a future database schema. One migration com
 
 Flask server (`curator_server.py`, port 8765) serves five views:
 
-| Page | Route | Source |
-|------|-------|--------|
-| Daily Briefing | `/` | `curator_latest.html` |
-| Reading Library | `/curator_library.html` | `curator_preferences.json` + history |
-| Priorities | `/curator_priorities.html` | `priorities.json` |
-| Deep Dives | `/interests/2026/deep-dives/` | Markdown files |
-| AI Observations | `/curator_intelligence.html` | `intelligence_YYYYMMDD.json` |
+| Page            | Route                         | Source                               |
+|-----------------|-------------------------------|--------------------------------------|
+| Daily Briefing  | `/`                           | `curator_latest.html`                |
+| Reading Library | `/curator_library.html`       | `curator_preferences.json` + history |
+| Priorities      | `/curator_priorities.html`    | `priorities.json`                    |
+| Deep Dives      | `/interests/2026/deep-dives/` | Generated HTML files                 |
+| AI Observations | `/curator_intelligence.html`  | `intelligence_YYYYMMDD.json`         |
 
 Feedback (like/dislike/save, deep dive, notes) POSTs to `/feedback` and `/deepdive`.
+
+**Note:** Deep dive paths are year-scoped (`/interests/2026/`). Intentional — annual folders are natural boundaries. A new path is created each January.
 
 ---
 
@@ -110,31 +124,39 @@ Two bots, two distinct responsibilities — a deliberate architectural separatio
 - Delivers top 10 articles each morning with inline Like/Dislike/Save buttons
 - Callback handlers POST feedback to the Flask server
 - Commands: `/run`, `/status`, `/briefing`, `/dry-run`
-- Voice command support: voice messages are transcribed, pattern-matched against known commands, and executed
+- Voice messages are transcribed, pattern-matched against known commands, and executed
 
 **`minimoi`** (OpenClaw gateway) — the planning/command channel:
 - Natural language instructions, memory updates, cron scheduling
 - Cross-session coordination and agent orchestration
 - Separate bot token, separate chat ID, separate responsibilities
 
-Execution feedback (did you like this article?) flows through one channel. Planning and instruction (run the curator, change the model, set a reminder) flows through the other.
+Execution feedback flows through one channel. Planning and instruction flows through the other.
+
+**Messaging platform:** Telegram is the current choice — secure, bot API is clean, and free. There is no architectural preference for Telegram over WhatsApp, Signal, or any other platform. The integration is isolated to `telegram_bot.py` and swappable.
 
 ---
 
 ## Key Design Decisions
 
-**Model-agnostic dispatcher** — `curate(mode=...)` branches to the appropriate scorer. HTML and feedback systems never assume a specific model. All scorers return a normalized `{score, method}` result.
+**Model-agnostic dispatcher** — `curate(mode=...)` branches to the appropriate scorer. HTML and feedback systems never assume a specific model. All scorers return a normalized `{score, method}` result. Provider rotation is expected — the architecture doesn't lock to any one API.
 
-**Flat files as proto-database** — JSON files are keyed and structured to match a relational schema. Operational simplicity now, clean migration path later.
+**Platform over product** — geopolitics and finance is the first domain. The pipeline pattern (ingest → score → deliver → feedback) is designed to host additional domains without structural changes.
 
-**Dry-run mode** — full pipeline execution against `curator_preview.html` without writing to history or archive. Automatically uses the local model — zero API cost.
+**Run first, design later** — operational decisions (flat files, single user, local infra) were deliberate deferrals. Six weeks of daily production has generated the context to make the next infrastructure decisions correctly: database schema, multi-domain data separation, always-on hosting.
 
-**X bookmark integration** — `x_to_article.py` normalizes X signals to the RSS schema. Destination text fetched via BeautifulSoup (2000 char cap), tweet text as fallback. Merged into the main candidate pool after RSS ingestion.
+**Infrastructure migration path** — currently runs on a MacBook laptop. Hourly polling with idempotency (rather than fixed-time cron) was a conscious design choice: it works correctly on a laptop that sleeps and is equally correct on always-on infrastructure. Migration to Mac Mini or equivalent is a configuration change, not a rewrite.
 
-**Credentials** — macOS Keychain via `keyring`. API keys for xAI, Anthropic, Telegram, and Brave Search.
+**Content breadth as a direction** — a key evolution ahead is consuming broader and deeper sources. The ingestion layer is designed to absorb new RSS feeds, APIs, and signal types without changes to the scoring or delivery pipeline.
+
+**Signal sources** — RSS feeds are the primary input. Additional signal types are normalized to the same schema before scoring — the scorer sees one unified candidate pool regardless of source. New sources plug in at the ingestion layer.
+
+**Dry-run mode** — full pipeline execution without writing to history or archive. Output goes to `curator_preview.html`. Used for model changes, config tweaks, and testing.
+
+**Credentials** — macOS Keychain via `keyring`. No credentials in files or environment variables.
 
 ---
 
 ## Codebase Scale
 
-~15,000 lines of Python across 8 core modules. Primary: `curator_rss_v2.py` (3,019 lines, includes HTML generation), `telegram_bot.py` (~1,000 lines), `curator_server.py` (~900 lines), `curator_intelligence.py` (~600 lines).
+~15,000 lines of Python across 8 core modules. Primary: `curator_rss_v2.py` (~3,000 lines, includes HTML generation), `telegram_bot.py` (~1,000 lines), `curator_server.py` (~900 lines), `curator_intelligence.py` (~600 lines).
