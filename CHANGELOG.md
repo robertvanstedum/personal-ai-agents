@@ -1,5 +1,58 @@
 # Changelog
 
+## 2026-03-17 - v1.0.1: Pipeline Reliability + Ops Hardening
+
+**Summary:** Production stability pass — briefing no longer missed on Mac sleep, Telegram delivery hardened, grok-4-1 promoted to production, X OAuth re-established, log rotation configured, docs overhauled.
+
+### Cron / Launchd
+
+**Hourly polling with time gate + idempotency**
+- Replaced `StartCalendarInterval` (missed window on Mac sleep) with `StartInterval=3600` (hourly)
+- Time gate: cron scripts only execute between 06:00–18:00 — prevents runaway off-hours firing
+- Idempotency check: compares current date against last run date in state file — safe to fire hourly without duplicate briefings
+- Net result: briefing can no longer be missed by a sleeping Mac
+
+### Telegram
+
+**Timeout + retry**
+- Timeout raised from 10s → 30s
+- 3-attempt retry on failure
+
+**Error suppression**
+- `NetworkError` stack traces suppressed — was generating 30-line traces 1,100+ times, filling logs
+
+### Briefing
+
+**Date header**
+- Date added to HTML `logo-sub` span (e.g., `Monday, March 17, 2026`) — previously absent from the rendered page (date existed only in `<title>` tag)
+- Date added to Telegram morning header message
+
+**Model: grok-4-1 in production**
+- `run_curator_cron.sh` updated to `--model=grok-4-1 --temperature=0.7`
+- grok-4-1-fast-reasoning validated in A/B case study (Mar 6); now officially production
+
+### X OAuth
+
+**Re-authorized**
+- Token refresh failing with `invalid_request` (OAuth 2.0 callback URL mismatch + stale tokens)
+- Re-auth flow completed successfully; `x_pull_incremental.py` running again
+- 427 signals in pool and growing
+
+### Logs
+
+**newsyslog rotation**
+- Configured for all log files: 5MB max size, 5 archives retained per file
+- Prevents unbounded log growth from high-frequency Telegram polling
+
+### Docs
+
+- **OPERATIONS.md** — fully rewritten for current architecture (hourly cron, two-bot Telegram setup, model stack, idempotency, log rotation)
+- **ARCHITECTURE.md** — created; documents pipeline stages, serendipity algorithm, scoring formula, signal store, domain-scoped signal design
+- **ROADMAP.md** — created; captures upgrade path (grok-4-1 → grok-4.2, Haiku pre-filter re-enable, multi-domain future)
+- **README_v3.md** — drafted (pending review before replacing README.md)
+
+---
+
 ## 2026-03-12 - Phase 3C.7: Incremental X Bookmark Pull
 
 Commits: `4a77020` (x_pull_incremental.py), `f0dbe80` (cron integration)
