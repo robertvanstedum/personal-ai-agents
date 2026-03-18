@@ -140,8 +140,6 @@ Later in the day, **AI Observations** arrives: the system's own read on
 what it surfaced — what's surging, what's missing, where the story is.
 You respond. Those responses feed the learning loop.
 
-![Daily Briefing](docs/screenshots/daily-briefing.png)
-
 ### On Demand
 
 - **React & learn** — like, dislike, or save any article on either surface.
@@ -154,8 +152,6 @@ You respond. Those responses feed the learning loop.
   want explored — and the deep dive is shaped by that context, not generic.
 - **Signal Priorities** — inject a focus area directly into the scoring
   pipeline, with a boost level and expiry.
-
-![Signal Priorities](docs/screenshots/priorities.png)
 
 ---
 
