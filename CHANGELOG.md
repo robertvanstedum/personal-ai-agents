@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-03-18 - v1.0.2: Docs Overhaul + Pipeline Stable
+
+**Summary:** Documentation fully current with production reality. README replaced with v3 (mini-moi framing, screenshots gallery). ROADMAP and ARCHITECTURE updated. Pipeline healthy — all launchd jobs running, X OAuth active, grok-4-1 in production. Two bugs filed for next session.
+
+### Docs
+
+- **README.md** — replaced with v3 rewrite: mini-moi framing, screenshots gallery, clean narrative describing the actual production system
+- **ROADMAP.md** — fully rewritten: v1.0 feature list complete, near-term geopolitics items documented (broader sources, richer feedback, longitudinal tracking, infrastructure), language learning confirmed as next domain after infrastructure upgrades, platform section added
+- **ARCHITECTURE.md** — Agent Layer section added
+
+### Pipeline Status
+
+- X OAuth active — 427 signals in pool, `x_pull_incremental.py` healthy
+- Full pipeline ran: 20 articles, grok-4-1, Telegram delivered
+- All launchd jobs healthy (hourly, time-gated, idempotent)
+
+### Bugs Filed (not yet fixed)
+
+- **#8** — Telegram save callback silent when bot has NetworkError on startup: feedback records correctly but no confirmation sent to user
+- **#9** — UI date display inconsistency between Library and AI Observations headers
+
+---
+
 ## 2026-03-17 - v1.0.1: Pipeline Reliability + Ops Hardening
 
 **Summary:** Production stability pass — briefing no longer missed on Mac sleep, Telegram delivery hardened, grok-4-1 promoted to production, X OAuth re-established, log rotation configured, docs overhauled.
