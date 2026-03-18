@@ -22,6 +22,7 @@ from pathlib import Path
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
+from telegram.error import NetworkError, TimedOut
 
 BASE_DIR = Path(__file__).parent
 processed_callbacks = set()
@@ -552,7 +553,17 @@ def run_bot_mode():
     app.add_handler(CommandHandler("run", cmd_run))
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("briefing", cmd_briefing))
-    
+
+    async def error_handler(update, context):
+        """Suppress noisy network errors — log one line instead of full traceback."""
+        err = context.error
+        if isinstance(err, (NetworkError, TimedOut)):
+            print(f"⚠️  Network error (will retry): {err.__class__.__name__}: {err}")
+        else:
+            print(f"❌ Bot error: {err.__class__.__name__}: {err}")
+
+    app.add_error_handler(error_handler)
+
     print("✅ Listening for callbacks and commands...")
     app.run_polling()
 
