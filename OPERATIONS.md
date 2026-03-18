@@ -1,184 +1,67 @@
 # Operations Manual
 
-**Project:** Personal AI Agents (Curator RSS)  
-**Purpose:** Day-to-day operations, health checks, troubleshooting  
-**Last Updated:** Feb 21, 2026
+**Project:** Mini-moi — Personal AI Briefing Agent
+**Purpose:** Day-to-day operations, health checks, troubleshooting
+**Last Updated:** 2026-03-17
 
 ---
 
 ## Daily Health Check
 
-Run these three commands each morning to confirm everything is healthy:
+Three commands to confirm everything is healthy:
 
 ```bash
-# 1. Is the server running?
-launchctl list | grep curator
+# 1. Are all services running?
+launchctl list | grep com.vanstedum
 
-# 2. Did cron run this morning?
+# 2. Did today's briefing generate?
 ls -la ~/Projects/personal-ai-agents/curator_latest.html
 
 # 3. Any errors overnight?
-tail -20 ~/Projects/personal-ai-agents/logs/curator_server_stderr.log
+tail -20 ~/Projects/personal-ai-agents/logs/curator_launchd_error.log
 ```
 
 **What you should see:**
-1. `[PID]  0  com.user.curator-server` (non-zero PID = running)
-2. File timestamp from 7:00-7:15 AM today
-3. Empty or minor warnings only (no Python tracebacks)
+1. Three entries with non-zero PIDs: `com.vanstedum.curator`, `com.vanstedum.curator-intelligence`, `com.vanstedum.curator-priority-feed`
+2. File timestamp from 6–9 AM today
+3. Empty or minor warnings — no Python tracebacks
 
 ---
 
-## Daily Operations
+## Services Overview
 
-### Running the Curator Manually
+Mini-moi runs four background services via macOS launchd. All auto-start on login and auto-restart on crash.
 
-```bash
-cd ~/Projects/personal-ai-agents
-./run_curator_cron.sh
-```
+| Service | Label | What It Does |
+|---------|-------|-------------|
+| Briefing | `com.vanstedum.curator` | Daily briefing + Telegram |
+| AI Observations | `com.vanstedum.curator-intelligence` | Geopolitical intelligence layer |
+| Priority Feed | `com.vanstedum.curator-priority-feed` | Tracked topic search |
+| Web Server | `com.vanstedum.curator-server` *(if active)* | Deep dive buttons, feedback API |
 
-This runs the full pipeline:
-- Fetches RSS feeds (15 sources, ~390 articles)
-- Analyzes with xAI Grok (~$0.18)
-- Generates HTML briefing
-- Sends to Telegram automatically
-
-**Files generated:**
-- `curator_latest.html` - Current briefing (opens in browser)
-- `curator_archive/curator_YYYY-MM-DD.html` - Dated archive
-- `curator_output.txt` - Text summary
-- `telegram_message.txt` - Message sent to Telegram
-
-### Testing Changes (Dry Run)
-
-```bash
-cd ~/Projects/personal-ai-agents
-python curator_rss_v2.py --dry-run --mode=xai --open
-```
-
-Use `--dry-run` when testing:
-- Model changes
-- Configuration tweaks
-- Scoring logic
-
-**Dry run behavior:**
-- Runs full pipeline normally
-- Saves to `curator_preview.html` (not `curator_latest.html`)
-- Does NOT update archive or history
-- Safe for testing without polluting data
-
-### Checking What's Running
-
-```bash
-# Server status
-launchctl list | grep curator
-ps aux | grep curator_server.py | grep -v grep
-
-# Cron jobs (OpenClaw gateway cron)
-# (This runs through OpenClaw, not system cron)
-openclaw cron list
-```
-
-### Viewing Recent Briefings
-
-```bash
-# Open latest in browser
-open ~/Projects/personal-ai-agents/curator_latest.html
-
-# List recent archives
-ls -lt ~/Projects/personal-ai-agents/curator_archive/ | head -10
-```
+All three pipeline jobs run **hourly** via `StartInterval=3600` with:
+- A **time gate** (6 AM–6 PM only) so they don't fire at night
+- An **idempotency check** so they run once per day even if triggered multiple times
+- **Auto-retry on wake** — if the Mac slept through the morning, the job runs as soon as the machine is back online
 
 ---
 
-## Known Behaviors
+## Scheduled Jobs
 
-### Multiple Runs Same Day
+### 1. Daily Briefing (`com.vanstedum.curator`)
 
-**Archive behavior:** Running the curator multiple times on the same day **overwrites** the archive HTML file.
+**Script:** `run_curator_cron.sh`
+**Runs:** Hourly, 6 AM–6 PM, once per day
+**Model:** xAI grok-4-1, temperature 0.7, ~$0.30/day
 
-- First run (9:00 AM): Creates `curator_2026-02-21.html`
-- Second run (11:00 AM): **Overwrites** `curator_2026-02-21.html` (first version is lost)
+**What it does:**
+1. Pulls new X bookmarks (`x_pull_incremental.py`) — failure is isolated, never blocks the briefing
+2. Fetches RSS feeds (~390 articles) + X bookmark signals (~332 articles)
+3. Scores and ranks with grok-4-1
+4. Generates `curator_latest.html` and `curator_latest.json`
+5. Sends morning briefing to Telegram via `telegram_bot.py --send`
 
-**History behavior:** `curator_history.json` handles multiple runs gracefully:
-- Updates existing entries with new rank/score
-- No duplicate appearances for same day
-
-**Recommendation:** Use `--dry-run` for testing model or configuration changes.
-
-### Testing Without Archive Pollution
-
-```bash
-# Test run (no archive/history updates)
-cd ~/Projects/personal-ai-agents
-python curator_rss_v2.py --dry-run --mode=xai --open
-
-# Output saved to curator_preview.html
-# Archive and history remain unchanged
-```
-
-**When to use dry run:**
-- Testing model changes (e.g., trying grok-3-mini vs grok-2)
-- Testing config tweaks
-- Debugging scoring logic
-- Preview before committing to archive
-
-**Future enhancement:** Timestamp-based archiving planned if multiple real runs per day become needed.
-
----
-
-## Background Services
-
-### curator_server.py (launchd)
-
-**What it does:** Web server for interactive features (deep dive buttons, feedback)  
-**Port:** 8765  
-**Auto-starts:** On login  
-**Auto-restarts:** If it crashes
-
-#### Management Commands
-
-```bash
-# Check status
-launchctl list | grep curator
-
-# Stop & disable
-launchctl unload ~/Library/LaunchAgents/com.user.curator-server.plist
-
-# Start & enable
-launchctl load ~/Library/LaunchAgents/com.user.curator-server.plist
-
-# Restart (after code changes)
-launchctl kickstart -k gui/$(id -u)/com.user.curator-server
-
-# View live logs
-tail -f ~/Projects/personal-ai-agents/logs/curator_server_stderr.log
-```
-
-#### Log Locations
-- Stdout: `~/Projects/personal-ai-agents/logs/curator_server_stdout.log`
-- Stderr: `~/Projects/personal-ai-agents/logs/curator_server_stderr.log`
-
-#### Configuration File
-- `~/Library/LaunchAgents/com.user.curator-server.plist`
-
----
-
-## Scheduled Jobs (OpenClaw Cron)
-
-### Daily Curator (7:00 AM CST)
-
-**Command:** Runs through OpenClaw gateway cron  
-**What it does:** 
-- Fetches RSS feeds
-- Generates briefing
-- Sends to Telegram
-
-**Check if it ran:**
-```bash
-ls -la ~/Projects/personal-ai-agents/curator_latest.html
-# Should show today's date at 7:00-7:15 AM
-```
+**Idempotency marker:** `curator_latest.json` — checks first article's date field
 
 **Manual trigger:**
 ```bash
@@ -186,177 +69,258 @@ cd ~/Projects/personal-ai-agents
 ./run_curator_cron.sh
 ```
 
-### Viewing Cron Jobs
-
+**Check if it ran:**
 ```bash
-# List all cron jobs
-openclaw cron list
-
-# View specific job runs
-openclaw cron runs --jobId <job-id>
+ls -la ~/Projects/personal-ai-agents/curator_latest.html
+# Should show today's date
 ```
 
 ---
 
-## Credentials & Configuration
+### 2. AI Observations (`com.vanstedum.curator-intelligence`)
 
-### API Keys (macOS Keychain)
+**Script:** `run_intelligence_cron.sh`
+**Runs:** Hourly, 6 AM–6 PM, once per day
+**Depends on:** Briefing must have run first (checks `curator_latest.json`)
 
-All credentials stored in macOS Keychain via `keyring` library:
+**What it does:**
+1. Waits for today's briefing to exist before running
+2. Runs `curator_intelligence.py --telegram`
+3. Generates geopolitical/finance intelligence analysis
+4. Sends via Telegram
 
-| Service | Keychain Entry | Used By |
-|---------|---------------|---------|
-| Anthropic | `anthropic` / `api_key` | Deep dives, fallback |
-| xAI | `xai` / `api_key` | Daily curator |
-| Telegram | `telegram` / `bot_token` | Message delivery |
+**Idempotency marker:** `intelligence_YYYYMMDD.json` — file existence check
 
-#### Viewing Keys
+**Manual trigger:**
 ```bash
-# Check if keys are stored
-python3 -c "import keyring; print(keyring.get_password('anthropic', 'api_key')[:20] + '...')"
-python3 -c "import keyring; print(keyring.get_password('xai', 'api_key')[:20] + '...')"
-python3 -c "import keyring; print(keyring.get_password('telegram', 'bot_token')[:20] + '...')"
+cd ~/Projects/personal-ai-agents
+./run_intelligence_cron.sh
 ```
 
-#### Adding/Updating Keys
+---
+
+### 3. Priority Feed (`com.vanstedum.curator-priority-feed`)
+
+**Script:** `run_priority_feed_cron.sh`
+**Runs:** Hourly, 6 AM–6 PM, once per day
+
+**What it does:**
+1. Runs web search pipeline for all active tracked topics
+2. Accumulates results in `priorities.json`
+3. Results appear at `/curator_priorities.html`
+
+**Idempotency marker:** `priorities.json` → `last_run_date` field
+
+**Manual trigger:**
+```bash
+cd ~/Projects/personal-ai-agents
+./run_priority_feed_cron.sh
+```
+
+---
+
+## Launchd Management
+
+### Check Status of All Services
+```bash
+launchctl list | grep com.vanstedum
+```
+
+A healthy entry looks like: `[PID]  0  com.vanstedum.curator` (non-zero PID, exit code 0)
+
+### Start / Stop Individual Services
+```bash
+# Load (start and enable auto-start)
+launchctl load ~/Library/LaunchAgents/com.vanstedum.curator.plist
+launchctl load ~/Library/LaunchAgents/com.vanstedum.curator-intelligence.plist
+launchctl load ~/Library/LaunchAgents/com.vanstedum.curator-priority-feed.plist
+
+# Unload (stop and disable auto-start)
+launchctl unload ~/Library/LaunchAgents/com.vanstedum.curator.plist
+
+# Restart (e.g. after code changes)
+launchctl kickstart -k gui/$(id -u)/com.vanstedum.curator
+```
+
+### Plist Locations
+```
+~/Library/LaunchAgents/
+├── com.vanstedum.curator.plist
+├── com.vanstedum.curator-intelligence.plist
+└── com.vanstedum.curator-priority-feed.plist
+```
+
+---
+
+## Manual Operations
+
+### Run Briefing Manually (Full Pipeline)
+```bash
+cd ~/Projects/personal-ai-agents
+./run_curator_cron.sh
+```
+
+### Test Changes Without Affecting Production
+```bash
+cd ~/Projects/personal-ai-agents
+source venv/bin/activate
+python curator_rss_v2.py --dry-run --model=grok-4-1 --temperature=0.7
+```
+
+Dry run behavior:
+- Runs the full pipeline (fetch → score → rank)
+- Saves to `curator_preview.html` and `curator_preview.txt`
+- Does **not** update `curator_latest.json`, archive, or history
+- Does **not** send to Telegram
+- Safe for testing model changes, scoring logic, configuration tweaks
+
+### View Latest Briefing
+```bash
+open ~/Projects/personal-ai-agents/curator_latest.html
+```
+
+### List Recent Archive
+```bash
+ls -lt ~/Projects/personal-ai-agents/curator_archive/ | head -10
+```
+
+---
+
+## Log Files
+
+All logs live in `~/Projects/personal-ai-agents/logs/`. Rotation is managed by newsyslog (config at `/etc/newsyslog.d/com.vanstedum.curator-logs.conf`).
+
+| Log File | Contents | Max Size |
+|----------|----------|----------|
+| `curator_launchd.log` | Briefing job stdout | 2 MB |
+| `curator_launchd_error.log` | Briefing job stderr / errors | 1 MB |
+| `intelligence_launchd.log` | AI Observations job output | 1 MB |
+| `intelligence_launchd_error.log` | AI Observations errors | 1 MB |
+| `priority_feed_launchd.log` | Priority feed output | 1 MB |
+| `curator_server_stdout.log` | Web server normal output | 2 MB |
+| `curator_server_stderr.log` | Web server errors | 2 MB |
+| `telegram_bot.log` | Bot activity | 2 MB |
+| `telegram_bot_stderr.log` | Bot errors (NetworkError suppressed) | 5 MB |
+
+Up to 5 rotated archives per log file (`.0`, `.1`, etc.).
+
+### Viewing Logs
+```bash
+# Live tail — briefing errors
+tail -f ~/Projects/personal-ai-agents/logs/curator_launchd_error.log
+
+# Quick error scan — all pipeline jobs
+tail -20 ~/Projects/personal-ai-agents/logs/curator_launchd_error.log
+tail -20 ~/Projects/personal-ai-agents/logs/intelligence_launchd_error.log
+tail -20 ~/Projects/personal-ai-agents/logs/priority_feed_launchd.log
+```
+
+---
+
+## Credentials
+
+All API keys stored in macOS Keychain via the `keyring` library. Never stored in files or environment variables.
+
+| Service | Keychain Service | Keychain Account | Used By |
+|---------|-----------------|-----------------|---------|
+| xAI | `xai` | `api_key` | Briefing (grok-4-1) |
+| Anthropic | `anthropic` | `api_key` | Deep dives, fallback |
+| Telegram briefing bot | `telegram` | `bot_token` | `telegram_bot.py` |
+| Telegram gateway bot | `telegram` | `polling_bot_token` | OpenClaw commands |
+| X OAuth2 client ID | `x_oauth2` | `client_id` | X bookmark API |
+| X OAuth2 client secret | `x_oauth2` | `client_secret` | X bookmark API |
+| X access token | `x_oauth2` | `access_token` | X bookmark API |
+| X refresh token | `x_oauth2` | `refresh_token` | X bookmark API |
+
+### Check if a Key Is Stored
+```bash
+cd ~/Projects/personal-ai-agents && source venv/bin/activate
+python3 -c "import keyring; v=keyring.get_password('xai','api_key'); print(v[:12]+'...' if v else '❌ missing')"
+python3 -c "import keyring; v=keyring.get_password('anthropic','api_key'); print(v[:12]+'...' if v else '❌ missing')"
+python3 -c "import keyring; v=keyring.get_password('telegram','bot_token'); print(v[:12]+'...' if v else '❌ missing')"
+```
+
+### Add or Update a Key
 ```bash
 cd ~/Projects/personal-ai-agents
 source venv/bin/activate
 python3 setup_keys.py
 ```
 
-### Environment Variables
-
-Optional fallback if Keychain fails:
-- `ANTHROPIC_API_KEY`
-- `XAI_API_KEY`
-- `TELEGRAM_BOT_TOKEN`
-
-Not recommended for daily use (Keychain is more secure).
-
----
-
-## Cost Management
-
-### OpenClaw Session Context
-
-**The Problem:** Long OpenClaw sessions accumulate context (conversation history), making each message progressively more expensive.
-
-**Example from Feb 21, 2026:**
-- Session ran all day (9 AM - 5 PM)
-- Context grew to 141k tokens (1.4MB session file)
-- Each message cost **$0.52+** due to context size
-- A few back-and-forth messages = $3-5 quickly
-
-**Rule of thumb:** Context size matters more than task complexity for cost.
-
-### Session Reset Best Practices
-
-**After major working sessions:**
-1. Close the webchat/session
-2. Start a fresh session for next task
-3. All work is preserved (git commits, files, memory)
-4. Only the conversation context resets
-
-**When to reset:**
-- After multi-hour working sessions
-- After completing a major feature/task
-- When you notice slow responses (likely large context)
-- Before starting unrelated work
-
-**Cost comparison:**
-- Fresh session: $0.003-0.01 per message
-- 141k context: $0.52+ per message
-- **170x difference!**
-
-### Three-Way Workflow Cost Optimization
-
-**Expensive (avoid):**
-- Long exploratory sessions in OpenClaw ($50-100+)
-
-**Efficient (use this):**
-1. **Claude** - Exploratory design, architecture ($20/month flat)
-2. **OpenClaw** - Focused execution with tight spec (low token count)
-3. **Regular resets** - Keep OpenClaw sessions short
-
-**Target:** OpenClaw sessions under 50k tokens (<$0.10/message)
-
-### Future: Telegram → OpenClaw Integration
-
-**Status:** Design only, not built yet
-
-**Approach:** Minimal persistent memory via `TELEGRAM_CONTEXT.md`
-- Each Telegram session reads context file instead of full history
-- File stays under 50 lines / 3kb max
-- Contains: last 5-10 commands, current tasks, key preferences
-- After each command: update file, close session
-- **Result:** flat low cost regardless of usage history
-
-**Commands planned:**
-- `"daily report"` → run curator, send summary
-- `"status"` → system health check
-- `"balance"` → API spend check
-- `"deep dive [topic]"` → trigger analysis
-- `"archive"` → list recent briefings
-
-**Design principle:** Telegram = command interface, NOT chat interface.
-- Short in, short out
-- No exploratory work on Telegram - that's Claude's job
-
-### Future: Session Cost Monitor (Feature Request)
-
-**Status:** To be built in OpenClaw core
-
-**Requirement:** Warn when session context gets expensive
-- At 50k tokens: prepend ⚠️ warning to responses
-- Warning text: `"Session at Xk tokens (~$Y/msg) - consider reset"`
-- Include estimated cost per message
-- Add to `session_status` output automatically
-
-**Why needed:** Prevents surprise costs like Feb 21's 141k token session ($0.52/msg)
+### Re-authorize X OAuth (if bookmarks stop syncing)
+```bash
+cd ~/Projects/personal-ai-agents
+source venv/bin/activate
+python x_oauth2_authorize.py          # Full browser flow (first time or re-auth)
+python x_oauth2_authorize.py --status # Check token expiry
+python x_oauth2_authorize.py --refresh # Refresh without browser (if refresh_token valid)
+```
 
 ---
 
 ## Troubleshooting
 
-### Deep Dive Buttons Not Working
-
-**Symptom:** Clicking buttons in HTML does nothing
-
-**Fix:**
-```bash
-# Check if server is running
-launchctl list | grep curator
-
-# If not running, start it
-launchctl load ~/Library/LaunchAgents/com.user.curator-server.plist
-
-# Test server
-curl http://localhost:8765/
-```
-
-### Curator Didn't Run This Morning
-
-**Symptom:** `curator_latest.html` is old
+### Briefing Didn't Arrive This Morning
 
 **Check:**
 ```bash
-# 1. Check OpenClaw cron status
-openclaw cron list
+# 1. Did the briefing file generate today?
+ls -la ~/Projects/personal-ai-agents/curator_latest.html
 
-# 2. Check for errors
-tail -50 ~/Projects/personal-ai-agents/curator_errors.log
+# 2. What happened?
+tail -40 ~/Projects/personal-ai-agents/logs/curator_launchd_error.log
 
-# 3. Run manually to diagnose
-cd ~/Projects/personal-ai-agents
-./run_curator_cron.sh
+# 3. Is the service running?
+launchctl list | grep com.vanstedum.curator
+
+# 4. Run manually to diagnose
+cd ~/Projects/personal-ai-agents && ./run_curator_cron.sh
 ```
 
-### API Key Errors
+**Common causes:**
+- Mac was asleep all morning → will run automatically within the hour after wake
+- API key error → check logs for "Authentication failed", re-run `setup_keys.py`
+- Service not loaded → `launchctl load ~/Library/LaunchAgents/com.vanstedum.curator.plist`
 
-**Symptom:** "Authentication failed" or "Invalid API key"
+---
 
-**Fix:**
+### AI Observations Not Appearing
+
+**Check:**
+```bash
+# Did intelligence run today?
+ls ~/Projects/personal-ai-agents/intelligence_$(date +%Y-%m-%d).json
+
+# Did the briefing run first? (required dependency)
+ls -la ~/Projects/personal-ai-agents/curator_latest.html
+
+# Errors?
+tail -30 ~/Projects/personal-ai-agents/logs/intelligence_launchd_error.log
+```
+
+**Most common cause:** Briefing ran late and intelligence hadn't fired yet. Will self-resolve within the hour.
+
+---
+
+### Telegram Not Receiving Messages
+
+**Check:**
+```bash
+# 1. Was Telegram message generated?
+cat ~/Projects/personal-ai-agents/telegram_message.txt
+
+# 2. Bot errors?
+tail -30 ~/Projects/personal-ai-agents/logs/telegram_bot_stderr.log
+
+# 3. Is the bot token valid?
+cd ~/Projects/personal-ai-agents && source venv/bin/activate
+python3 -c "import keyring; v=keyring.get_password('telegram','bot_token'); print(v[:12]+'...' if v else '❌ missing')"
+```
+
+---
+
+### API Key Error ("Authentication failed" / "Invalid API key")
+
 ```bash
 cd ~/Projects/personal-ai-agents
 source venv/bin/activate
@@ -364,151 +328,134 @@ python3 setup_keys.py
 # Re-enter the failing key when prompted
 ```
 
-### Server Won't Start
+---
 
-**Symptom:** launchctl shows exit code != 0
+### Web Server Not Responding (Deep Dive Buttons Broken)
 
-**Check logs:**
 ```bash
-tail -50 ~/Projects/personal-ai-agents/logs/curator_server_stderr.log
+# Check status
+launchctl list | grep curator-server
+
+# Check logs
+tail -30 ~/Projects/personal-ai-agents/logs/curator_server_stderr.log
+
+# Restart
+launchctl kickstart -k gui/$(id -u)/com.vanstedum.curator-server
+
+# Test
+curl http://localhost:8765/
 ```
 
-**Common causes:**
-- Port 8765 already in use
-- Missing dependencies (reinstall venv)
-- Python version mismatch
+**Common causes:** Port 8765 already in use, Python version mismatch, missing dependencies.
 
-**Nuclear option (rebuild venv):**
+**Rebuild venv (last resort):**
 ```bash
 cd ~/Projects/personal-ai-agents
 rm -rf venv
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-launchctl kickstart -k gui/$(id -u)/com.user.curator-server
-```
-
-### Telegram Not Receiving Briefing
-
-**Check:**
-```bash
-# 1. Did curator run?
-ls -la ~/Projects/personal-ai-agents/curator_latest.html
-
-# 2. Was Telegram message generated?
-cat ~/Projects/personal-ai-agents/telegram_message.txt
-
-# 3. Check OpenClaw Telegram config
-openclaw status
+launchctl kickstart -k gui/$(id -u)/com.vanstedum.curator-server
 ```
 
 ---
 
-## File Locations Reference
+## Key Files Reference
 
-### Generated Files
+### Generated Daily
 ```
 ~/Projects/personal-ai-agents/
-├── curator_latest.html          # Current briefing
-├── curator_output.txt           # Text summary
-├── telegram_message.txt         # Telegram content
-├── curator_history.json         # Article tracking
-├── curator_preferences.json     # User feedback
-├── curator_archive/             # Historical briefings
+├── curator_latest.html          # Today's briefing (open in browser)
+├── curator_latest.json          # Scored articles (idempotency marker)
+├── curator_output.txt           # Plain text summary
+├── telegram_message.txt         # Message sent to Telegram
+├── intelligence_YYYYMMDD.json   # AI Observations output (idempotency marker)
+└── priorities.json              # Priority feed results + last_run_date
+```
+
+### Archives
+```
+~/Projects/personal-ai-agents/
+├── curator_archive/             # Daily briefings (HTML)
 │   └── curator_briefing_YYYYMMDD_HHMM.html
 ├── curator_cache/               # Cached article content
 │   └── {hash_id}.json
-└── interests/2026/deep-dives/   # Deep dive research
+├── curator_history.json         # Article appearance tracking
+└── interests/2026/deep-dives/  # Deep dive research output
     └── {topic}-{hash_id}.html
 ```
 
-### Log Files
+### Signal Store (X Bookmarks)
 ```
-~/Projects/personal-ai-agents/logs/
-├── curator_server_stdout.log    # Server normal output
-├── curator_server_stderr.log    # Server errors
-└── curator_errors.log           # Cron run errors
+~/Projects/personal-ai-agents/
+├── curator_signals.json         # 425 X bookmark signals (398 historical + growing)
+└── x_pull_state.json            # last_pull_at timestamp (authoritative pull tracker)
 ```
 
-### Configuration
-```
-~/Library/LaunchAgents/
-└── com.user.curator-server.plist  # launchd service config
-```
+### Scripts
+| Script | Purpose |
+|--------|---------|
+| `run_curator_cron.sh` | Hourly briefing job (launchd entry point) |
+| `run_intelligence_cron.sh` | Hourly AI Observations job |
+| `run_priority_feed_cron.sh` | Hourly Priority Feed job |
+| `curator_rss_v2.py` | Main curator pipeline |
+| `curator_intelligence.py` | Intelligence layer |
+| `curator_priority_feed.py` | Priority feed pipeline |
+| `curator_server.py` | Web server (port 8765) |
+| `telegram_bot.py` | Telegram bot (polling + send) |
+| `x_pull_incremental.py` | Pulls new X bookmarks since last pull |
+| `x_oauth2_authorize.py` | X OAuth2 PKCE authorization flow |
+| `setup_keys.py` | Add/update API keys in Keychain |
 
 ---
 
 ## Quick Command Reference
 
 ```bash
-# HEALTH CHECK (run daily)
-launchctl list | grep curator
+# HEALTH CHECK
+launchctl list | grep com.vanstedum
 ls -la ~/Projects/personal-ai-agents/curator_latest.html
-tail -20 ~/Projects/personal-ai-agents/logs/curator_server_stderr.log
+tail -20 ~/Projects/personal-ai-agents/logs/curator_launchd_error.log
 
-# RUN CURATOR MANUALLY
+# RUN BRIEFING MANUALLY
 cd ~/Projects/personal-ai-agents && ./run_curator_cron.sh
 
-# TEST CHANGES (DRY RUN)
-cd ~/Projects/personal-ai-agents && python curator_rss_v2.py --dry-run --mode=xai --open
+# DRY RUN (test changes — no Telegram, no archive)
+cd ~/Projects/personal-ai-agents && source venv/bin/activate
+python curator_rss_v2.py --dry-run --model=grok-4-1 --temperature=0.7
 
-# CHECK WHAT'S RUNNING
-launchctl list | grep curator
-ps aux | grep curator_server
+# VIEW LATEST BRIEFING
+open ~/Projects/personal-ai-agents/curator_latest.html
 
-# VIEW LOGS
-tail -f ~/Projects/personal-ai-agents/logs/curator_server_stderr.log
-tail -50 ~/Projects/personal-ai-agents/curator_errors.log
+# VIEW LOGS (live)
+tail -f ~/Projects/personal-ai-agents/logs/curator_launchd_error.log
 
-# RESTART SERVER
-launchctl kickstart -k gui/$(id -u)/com.user.curator-server
+# RESTART A SERVICE
+launchctl kickstart -k gui/$(id -u)/com.vanstedum.curator
+launchctl kickstart -k gui/$(id -u)/com.vanstedum.curator-intelligence
+launchctl kickstart -k gui/$(id -u)/com.vanstedum.curator-priority-feed
 
 # MANAGE CREDENTIALS
 cd ~/Projects/personal-ai-agents && source venv/bin/activate && python3 setup_keys.py
 
-# VIEW LATEST BRIEFING
-open ~/Projects/personal-ai-agents/curator_latest.html
+# X OAUTH STATUS
+cd ~/Projects/personal-ai-agents && source venv/bin/activate
+python x_oauth2_authorize.py --status
 ```
 
 ---
 
-## Mac Mini Migration Checklist
+## Documentation
 
-When moving to Mac Mini as always-on server:
+- `README.md` — Project overview and setup
+- `ARCHITECTURE.md` — System design and technical decisions
+- `ROADMAP.md` — Build priorities and future work
+- `CHANGELOG.md` — Version history
+- `CREDENTIALS_SETUP.md` — Initial credential setup guide
+- This file (`OPERATIONS.md`) — Day-to-day operations
 
-- [ ] Install Python 3.14 on Mini
-- [ ] Clone repo to Mini
-- [ ] Create venv and install requirements
-- [ ] Run `setup_keys.py` to migrate credentials
-- [ ] Copy launchd plist to Mini's `~/Library/LaunchAgents/`
-- [ ] Load launchd service on Mini
-- [ ] Move OpenClaw cron jobs from MacBook to Mini
-- [ ] Update curator HTML to use Mini's IP instead of localhost
-- [ ] Configure Mini firewall (allow port 8765)
-- [ ] Test from MacBook browser → Mini server
-- [ ] Verify deep dive generation works end-to-end
+**Repository:** https://github.com/robertvanstedum/personal-ai-agents
 
 ---
 
-## Support Resources
-
-**Documentation:**
-- `PROJECT_BRIEF.md` - System architecture and features
-- `CHANGELOG.md` - Version history
-- `CREDENTIALS_SETUP.md` - Initial setup guide
-- This file (`OPERATIONS.md`) - Day-to-day operations
-
-**Repositories:**
-- Public: https://github.com/robertvanstedum/personal-ai-agents
-- Private: https://github.com/robertvanstedum/rvs-openclaw-agent
-
-**Key Scripts:**
-- `curator_rss_v2.py` - Main curator
-- `curator_server.py` - Web server
-- `curator_feedback.py` - Deep dive generation
-- `setup_keys.py` - Credential management
-- `run_curator_cron.sh` - Cron wrapper
-
----
-
-**Remember:** If something breaks at 2 AM, start with the Daily Health Check. Most issues show up in those three commands.
+**Remember:** If something breaks, start with the Daily Health Check. Most issues surface in those three commands.
