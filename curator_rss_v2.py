@@ -1994,6 +1994,16 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
             padding: 32px;
         }}
 
+        /* ── Briefing Date ── */
+        .briefing-date {{
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 1rem;
+        }}
+
         /* ── Table ── */
         .briefing-table {{
             border: 1px solid var(--border);
@@ -2251,6 +2261,7 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
 </header>
 
 <main>
+    <div class="briefing-date">{day_str}, {date_str}</div>
     <div class="briefing-table">
         <table>
             <thead>
