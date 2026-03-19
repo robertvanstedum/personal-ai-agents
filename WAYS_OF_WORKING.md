@@ -280,6 +280,20 @@ When PDFs appear in `~/.openclaw/workspace/`:
 | Agent orientation | `CLAUDE.md` (repo root, protected) |
 | Private design docs | `_NewDomains/` (gitignored) |
 | Operational state files | `~/.openclaw/workspace/` — never in repo |
+| Superseded docs | `archive/` (repo root) |
+| Superseded screenshots / visual artifacts | `docs/screenshots/archive/` |
+
+## Archive Policy
+
+**Archive, don't delete.** The build journey is part of the project.
+
+Superseded documents, old drafts, replaced READMEs, and stale specs move to
+`archive/` rather than being deleted. Old screenshots and visual artifacts move
+to `docs/screenshots/archive/`. Both remain in git history and are visible on
+GitHub.
+
+Nothing is deleted unless it contains sensitive data or is truly valueless noise.
+When in doubt, archive.
 
 ---
 
@@ -296,3 +310,7 @@ Key additions: explicit divergence location (Principle 2), build workflow steps 
 (Memory Agent provides commit command, Robert confirms push), Pre-conditions section
 made mandatory in BUILD docs, session start list updated to include WAYS_OF_WORKING.md.
 Supersedes CONVENTIONS.md (deleted). BUILD doc naming updated to include date.
+
+**2026-03-18:** Archive policy added. Superseded docs move to `archive/`, old screenshots
+to `docs/screenshots/archive/`. Archive, don't delete — the build journey is part of
+the project. What goes where table updated with archive locations.
