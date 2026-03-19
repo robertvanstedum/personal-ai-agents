@@ -76,6 +76,76 @@
 
 ---
 
+## 2026-03-15 — WS5 Phase A: Intelligence Layer Foundation
+
+Commits: see `docs/BUILD_WS5_PHASE_A.md` for full record
+
+**Result:** `curator_intelligence.py` running in production. Daily 7:30 AM intelligence message confirmed delivered to Telegram on first run.
+
+### What Was Built
+
+**Pre-conditions:**
+- `send_telegram_alert()` moved from `curator_rss_v2.py` → `curator_utils.py` (shared helper, clean import path for all future scripts)
+- `_log_probationary_domains()` in `curator_priority_feed.py` fixed to write `added_date` + `query` fields; 8 existing probationary entries backfilled with `added_date: 2026-03-14`
+
+**`curator_intelligence.py`**
+New daily observation script. Two observations: Topic Velocity (Haiku infers topics from title corpus, compares today vs 30-day baseline) and Discovery Candidates (Haiku quality-rates new probationary domains from Brave). Output: Telegram message (5 lines max) + `intelligence_YYYYMMDD.json` in OpenClaw workspace.
+
+**`run_intelligence_cron.sh` + `com.vanstedum.curator-intelligence.plist`**
+Shell wrapper pattern matching existing curator cron jobs. Registered to `~/Library/LaunchAgents/`, fires 7:30 AM daily.
+
+### First Output (March 15)
+Momentum: Iran/energy, tariffs, AI. Gap: crypto/detailed Fed policy. Sources: none new (Brave rate limiting).
+
+### Open Items → Phase B
+- Brave `time.sleep(1)` delay fix
+- Gap detection: keyword-level → thesis-level matching
+- Treasury MSPD per-source cap (3x in top 20 today)
+
+### Phase B: Remaining Observations
+Source anomalies (Haiku), US press blind spots (cross-source), weekly lateral connections (Sonnet).
+
+
+## 2026-03-15 — WS5 Phase B: Intelligence Layer Complete
+
+Commits: `846a0df` (feat), `23ff20d` (fix) — see `docs/BUILD_WS5_PhaseB_2026-03-15.md`
+
+**Result:** All five intelligence observations operational. Workstream 5 complete.
+
+### What Was Built
+- Pre-condition: `curator_rss_v2.py` writes `curator_latest.json` after each run (full scored pool for blind spot detection)
+- Obs 3: Source Anomalies — Haiku detects trusted source drift vs 30-day baseline, quiet path
+- Obs 4: US Press Blind Spots — Haiku surfaces non-US stories absent from US outlets, reads `curator_latest.json`, quiet path
+- Obs 5: Lateral Connections — Sonnet surfaces adjacent topics from reading history, Sunday only, separate Telegram message
+- Bug fix: Obs 4 domain classification — `source` field is display name, not domain; switched to `extract_domain(link)`. Before: 0 articles classified. After: 6 non-US + 7 US classified, Obs 4 fired (Minab classroom missile strike, Al Jazeera/DW only).
+
+### Open Items → Post-1.0
+- `curator_latest.json` writes top_articles, not full pre-scoring pool — revisit in 1.1
+- Lateral connections prompt tuning after a few weeks of Sunday runs
+- Source anomaly minimum threshold (5 articles) may need lowering for newer trusted sources
+
+
+## 2026-03-15 — WS5 Phase C: Intelligence Response Capture
+
+Commits: see `docs/BUILD_WS5_PhaseC_2026-03-15.md`
+
+**Result:** `curator_intelligence.html` live — daily observations and weekly lateral connections displayed with response forms. Responses written to `intelligence_responses.json`. Feedback loop data layer complete for 1.0.
+
+### What Was Built
+- `intelligence_responses.json` created in `~/.openclaw/workspace/` (not committed — operational data)
+- `curator_intelligence.py`: `RESPONSES_PATH` constant + `save_response()` helper (auto-ID, timestamp, `acted_on: False`)
+- `curator_server.py`: `GET /api/intelligence/latest` + `POST /api/intelligence/respond`
+- `curator_intelligence.html`: full page — weekly lateral connections (full form: prominent position textarea + reaction + want more) and daily observations (light form: reaction + one-line note). `mdToHtml()` JS helper for markdown cleanup. `data-*` attributes for save handlers. Button disabled during async POST.
+
+### Design note
+Static mockup reviewed and iterated (3 passes) before API wiring — caught layout issues before backend work. Pattern worth repeating for new UI pages.
+
+### Open Items → 1.1
+- Step 5: Telegram reply detection + Haiku classification
+- Domain badge on weekly cards
+- Condensed/filter view
+- `acted_on` flag activation when `pending_action` executed
+
 ## 2026-03-12 - Phase 3C.7: Incremental X Bookmark Pull
 
 Commits: `4a77020` (x_pull_incremental.py), `f0dbe80` (cron integration)
@@ -533,73 +603,6 @@ Technical highlights:
 
 ---
 
-## 2026-02-19 - Platform Unification & UI Consistency
-
-### Major Changes
-
-**Unified Briefing Platform Architecture**
-- Replaced card-based layout with table-based layout (Bloomberg Terminal aesthetic)
-- Unified header across all pages (1.5em, purple gradient, centered)
-- Consistent navigation on every page: 📰 Today | 📚 Archive | 🔍 Deep Dives
-- Fixed navigation flow between all three core pages
-
-**Files Modified:**
-- `curator_rss_v2.py`:
-  - Rewrote `format_html()` to generate table format (was card format)
-  - Fixed rank numbering: `for i, entry in enumerate(entries, 1)` → `rank = i`
-  - Fixed field mappings: `category_tag` → `category`, `url` → `link`
-  - Rewrote `generate_index_page()` with unified header (1.5em, not 2.5em)
-  - Fixed deep dives path: `interests/deep-dives/` → `interests/2026/deep-dives/`
-
-- `curator_feedback.py`:
-  - Updated deep dive prompt for concise "point-of-departure" format
-  - Sections 1-6: Brief (2-3 sentences max)
-  - Section 7 (Bibliography): Most detailed with proper citations
-  - Fixed `\1` bug in HTML generation (regex backreference: `r'\1'` → `'\\1'`)
-  - Added unified header and navigation bar to deep dive articles
-  - Reduced yellow interest box padding/font size
-  - Reduced back button size for consistency
-
-**Deep Dive Cost Optimization:**
-- Output tokens: 2995 → 977 (67% reduction)
-- Cost per analysis: $0.047 → $0.017 (64% cheaper)
-- Quality: Improved (concise research launchpad vs verbose explanations)
-
-**New Files:**
-- `PLATFORM_POC.md` - Complete platform overview and usage guide
-- `PLATFORM_UNIFIED.md` - Design system specifications
-- `curator_cache/` - Article storage for deep dive system (hash-based)
-- `curator_history.json` - Article index with appearance tracking
-- `interests/2026/deep-dives/` - New deep dive storage location
-- `interests/2026/deep-dives/index.html` - Deep dive archive index
-
-### Bug Fixes
-- Fixed archive header size (was 2.5em, now 1.5em for consistency)
-- Fixed rank numbers showing "?" instead of 1-20
-- Fixed deep dive path inconsistencies across navigation
-- Fixed browser caching issue with `curator_latest_with_buttons.html`
-- Fixed navigation back button on all pages
-
-### Design System
-- Base font: 14px (System fonts)
-- Header: 1.5em title, 0.88em metadata, 12px padding
-- Navigation buttons: 6-14px padding, 0.85em font, purple (#667eea)
-- Tables: 12px cell padding, #ddd borders, alternating row backgrounds
-- Max width: 1400px (consistent across all pages)
-- Colors: Purple gradient (#667eea → #764ba2)
-
-### Status
-✅ POC Complete - Consistent navigation flow across all pages
-✅ All pages use identical header/navigation structure
-✅ Table format generates correctly from curator_rss_v2.py
-✅ Deep dive format optimized (cost -64%, quality improved)
-
-### Next Steps (Future)
-- UI polish (fine-tune colors, spacing)
-- Deep dive bookmark action implementation
-- CLI history viewer
-- Telegram button integration
-
 ## 2026-02-20 - xAI Integration & Multi-Provider Support
 
 ### Major Changes
@@ -701,73 +704,70 @@ python3 curator_rss_v2.py --mode=xai
 - ✅ Clean HTML output (no duplicate headings)
 - ✅ Robust to multiple curator runs per day
 
-## 2026-03-15 — WS5 Phase A: Intelligence Layer Foundation
+## 2026-02-19 - Platform Unification & UI Consistency
 
-Commits: see `docs/BUILD_WS5_PHASE_A.md` for full record
+### Major Changes
 
-**Result:** `curator_intelligence.py` running in production. Daily 7:30 AM intelligence message confirmed delivered to Telegram on first run.
+**Unified Briefing Platform Architecture**
+- Replaced card-based layout with table-based layout (Bloomberg Terminal aesthetic)
+- Unified header across all pages (1.5em, purple gradient, centered)
+- Consistent navigation on every page: 📰 Today | 📚 Archive | 🔍 Deep Dives
+- Fixed navigation flow between all three core pages
 
-### What Was Built
+**Files Modified:**
+- `curator_rss_v2.py`:
+  - Rewrote `format_html()` to generate table format (was card format)
+  - Fixed rank numbering: `for i, entry in enumerate(entries, 1)` → `rank = i`
+  - Fixed field mappings: `category_tag` → `category`, `url` → `link`
+  - Rewrote `generate_index_page()` with unified header (1.5em, not 2.5em)
+  - Fixed deep dives path: `interests/deep-dives/` → `interests/2026/deep-dives/`
 
-**Pre-conditions:**
-- `send_telegram_alert()` moved from `curator_rss_v2.py` → `curator_utils.py` (shared helper, clean import path for all future scripts)
-- `_log_probationary_domains()` in `curator_priority_feed.py` fixed to write `added_date` + `query` fields; 8 existing probationary entries backfilled with `added_date: 2026-03-14`
+- `curator_feedback.py`:
+  - Updated deep dive prompt for concise "point-of-departure" format
+  - Sections 1-6: Brief (2-3 sentences max)
+  - Section 7 (Bibliography): Most detailed with proper citations
+  - Fixed `\1` bug in HTML generation (regex backreference: `r'\1'` → `'\\1'`)
+  - Added unified header and navigation bar to deep dive articles
+  - Reduced yellow interest box padding/font size
+  - Reduced back button size for consistency
 
-**`curator_intelligence.py`**
-New daily observation script. Two observations: Topic Velocity (Haiku infers topics from title corpus, compares today vs 30-day baseline) and Discovery Candidates (Haiku quality-rates new probationary domains from Brave). Output: Telegram message (5 lines max) + `intelligence_YYYYMMDD.json` in OpenClaw workspace.
+**Deep Dive Cost Optimization:**
+- Output tokens: 2995 → 977 (67% reduction)
+- Cost per analysis: $0.047 → $0.017 (64% cheaper)
+- Quality: Improved (concise research launchpad vs verbose explanations)
 
-**`run_intelligence_cron.sh` + `com.vanstedum.curator-intelligence.plist`**
-Shell wrapper pattern matching existing curator cron jobs. Registered to `~/Library/LaunchAgents/`, fires 7:30 AM daily.
+**New Files:**
+- `PLATFORM_POC.md` - Complete platform overview and usage guide
+- `PLATFORM_UNIFIED.md` - Design system specifications
+- `curator_cache/` - Article storage for deep dive system (hash-based)
+- `curator_history.json` - Article index with appearance tracking
+- `interests/2026/deep-dives/` - New deep dive storage location
+- `interests/2026/deep-dives/index.html` - Deep dive archive index
 
-### First Output (March 15)
-Momentum: Iran/energy, tariffs, AI. Gap: crypto/detailed Fed policy. Sources: none new (Brave rate limiting).
+### Bug Fixes
+- Fixed archive header size (was 2.5em, now 1.5em for consistency)
+- Fixed rank numbers showing "?" instead of 1-20
+- Fixed deep dive path inconsistencies across navigation
+- Fixed browser caching issue with `curator_latest_with_buttons.html`
+- Fixed navigation back button on all pages
 
-### Open Items → Phase B
-- Brave `time.sleep(1)` delay fix
-- Gap detection: keyword-level → thesis-level matching
-- Treasury MSPD per-source cap (3x in top 20 today)
+### Design System
+- Base font: 14px (System fonts)
+- Header: 1.5em title, 0.88em metadata, 12px padding
+- Navigation buttons: 6-14px padding, 0.85em font, purple (#667eea)
+- Tables: 12px cell padding, #ddd borders, alternating row backgrounds
+- Max width: 1400px (consistent across all pages)
+- Colors: Purple gradient (#667eea → #764ba2)
 
-### Phase B: Remaining Observations
-Source anomalies (Haiku), US press blind spots (cross-source), weekly lateral connections (Sonnet).
+### Status
+✅ POC Complete - Consistent navigation flow across all pages
+✅ All pages use identical header/navigation structure
+✅ Table format generates correctly from curator_rss_v2.py
+✅ Deep dive format optimized (cost -64%, quality improved)
 
-
-## 2026-03-15 — WS5 Phase B: Intelligence Layer Complete
-
-Commits: `846a0df` (feat), `23ff20d` (fix) — see `docs/BUILD_WS5_PhaseB_2026-03-15.md`
-
-**Result:** All five intelligence observations operational. Workstream 5 complete.
-
-### What Was Built
-- Pre-condition: `curator_rss_v2.py` writes `curator_latest.json` after each run (full scored pool for blind spot detection)
-- Obs 3: Source Anomalies — Haiku detects trusted source drift vs 30-day baseline, quiet path
-- Obs 4: US Press Blind Spots — Haiku surfaces non-US stories absent from US outlets, reads `curator_latest.json`, quiet path
-- Obs 5: Lateral Connections — Sonnet surfaces adjacent topics from reading history, Sunday only, separate Telegram message
-- Bug fix: Obs 4 domain classification — `source` field is display name, not domain; switched to `extract_domain(link)`. Before: 0 articles classified. After: 6 non-US + 7 US classified, Obs 4 fired (Minab classroom missile strike, Al Jazeera/DW only).
-
-### Open Items → Post-1.0
-- `curator_latest.json` writes top_articles, not full pre-scoring pool — revisit in 1.1
-- Lateral connections prompt tuning after a few weeks of Sunday runs
-- Source anomaly minimum threshold (5 articles) may need lowering for newer trusted sources
-
-
-## 2026-03-15 — WS5 Phase C: Intelligence Response Capture
-
-Commits: see `docs/BUILD_WS5_PhaseC_2026-03-15.md`
-
-**Result:** `curator_intelligence.html` live — daily observations and weekly lateral connections displayed with response forms. Responses written to `intelligence_responses.json`. Feedback loop data layer complete for 1.0.
-
-### What Was Built
-- `intelligence_responses.json` created in `~/.openclaw/workspace/` (not committed — operational data)
-- `curator_intelligence.py`: `RESPONSES_PATH` constant + `save_response()` helper (auto-ID, timestamp, `acted_on: False`)
-- `curator_server.py`: `GET /api/intelligence/latest` + `POST /api/intelligence/respond`
-- `curator_intelligence.html`: full page — weekly lateral connections (full form: prominent position textarea + reaction + want more) and daily observations (light form: reaction + one-line note). `mdToHtml()` JS helper for markdown cleanup. `data-*` attributes for save handlers. Button disabled during async POST.
-
-### Design note
-Static mockup reviewed and iterated (3 passes) before API wiring — caught layout issues before backend work. Pattern worth repeating for new UI pages.
-
-### Open Items → 1.1
-- Step 5: Telegram reply detection + Haiku classification
-- Domain badge on weekly cards
-- Condensed/filter view
-- `acted_on` flag activation when `pending_action` executed
+### Next Steps (Future)
+- UI polish (fine-tune colors, spacing)
+- Deep dive bookmark action implementation
+- CLI history viewer
+- Telegram button integration
 
