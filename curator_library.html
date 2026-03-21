@@ -897,7 +897,7 @@ function render() {
 
   tbody.innerHTML = rows.map((a, i) => {
     const date = a.date
-      ? new Date(a.date).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
+      ? new Date(a.date.substring(0,23)).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
       : '—';
     const scoreNum = parseFloat(a.score) || 0;
     const scorePct = (scoreNum / 10 * 100).toFixed(0);
