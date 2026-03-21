@@ -277,6 +277,7 @@ When PDFs appear in `~/.openclaw/workspace/`:
 | Test reports | `docs/test-reports/` |
 | Sprint plan and workstream status | `SPRINT_*.md` (repo root) |
 | Running changelog | `CHANGELOG.md` (repo root, append only) |
+| Architectural decisions (non-obvious, deliberate) | `DECISIONS.md` (repo root) |
 | Agent orientation | `CLAUDE.md` (repo root, protected) |
 | Private design docs | `_NewDomains/` (gitignored) |
 | Operational state files | `~/.openclaw/workspace/` — never in repo |
@@ -314,3 +315,9 @@ Supersedes CONVENTIONS.md (deleted). BUILD doc naming updated to include date.
 **2026-03-18:** Archive policy added. Superseded docs move to `archive/`, old screenshots
 to `docs/screenshots/archive/`. Archive, don't delete — the build journey is part of
 the project. What goes where table updated with archive locations.
+
+**2026-03-20:** `DECISIONS.md` created at repo root. Logs non-obvious architectural
+decisions — patterns chosen, tradeoffs accepted, intentional behavior that shouldn't
+be "fixed." Log a decision when the rationale would not be obvious from reading the
+code alone. What goes where table updated. First entry: DEC-001, filesystem
+reconciliation for deep dive URL resolution.
