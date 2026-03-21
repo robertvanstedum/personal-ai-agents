@@ -10,11 +10,11 @@ secrets.json
 
 # Curator output files (generated, not source)
 curator_output.txt
-curator_briefing.html
-curator_latest.html
 curator_index.html
 telegram_message*.txt
 curator_archive/
+# NOTE: curator_briefing.html and curator_latest.html are tracked (Flask-served templates).
+# They are regenerated daily by the curator run — expect dirty git state after each run.
 
 # Personal feedback data (contains preferences and feedback history)
 curator_preferences.json
@@ -26,12 +26,16 @@ signal_store.jsonl.bak
 curator_costs.json
 
 # Generated UI output files
-curator_preview.html
 curator_preview_recovered.html
 server.log
 
-# Personal deep dive content (generated, private)
-interests/
+# Personal deep dive content — personal analysis stays private, track only the index template
+interests/ratings.json
+interests/TEMPLATE.md
+interests/2026-*.md
+interests/2026/deep-dives/*.md
+interests/2026/deep-dives/*.html
+!interests/2026/deep-dives/index.html
 
 # Deep dive system (generated content)
 curator_cache/
