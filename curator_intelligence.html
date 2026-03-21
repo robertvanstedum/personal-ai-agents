@@ -802,11 +802,8 @@ let _today = '';
 let _currentDate = '';  // YYYY-MM-DD of date currently being viewed
 
 function updateMetaCount() {
-  const fmtToday = _today
-    ? new Date(_today + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
-    : _today;
   document.getElementById('pageMeta').textContent =
-    `${fmtToday} · ${_responseCount} response${_responseCount !== 1 ? 's' : ''} saved`;
+    `${_responseCount} response${_responseCount !== 1 ? 's' : ''} saved`;
 }
 
 function offsetDate(dateStr, days) {
