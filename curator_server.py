@@ -213,7 +213,33 @@ def api_library():
                     'deep_dive_path': deep_dive,
                 }
 
-    # ── 3. Sort: most recently liked/saved first ──────────────────────────────
+    # ── 3. Resolve deep_dive_url for each article ─────────────────────────────
+    # Scan deep-dives directory to catch dives not recorded in curator_history.json
+    deep_dives_dir = BASE_DIR / 'interests' / '2026' / 'deep-dives'
+    dive_url_map = {}  # hash_id -> web URL
+    if deep_dives_dir.exists():
+        for f in deep_dives_dir.glob('*.html'):
+            if f.name == 'index.html':
+                continue
+            parts = f.name.split('-', 1)
+            if len(parts) >= 1 and len(parts[0]) == 5:
+                dive_url_map[parts[0]] = f'/interests/2026/deep-dives/{f.name}'
+
+    for art in articles.values():
+        hash_id = art.get('hash_id')
+        dive_path = art.get('deep_dive_path')
+        dive_url = None
+        if dive_path:
+            # Convert absolute .md path to web URL
+            path_match = re.search(r'interests/(.+\.md)$', str(dive_path))
+            if path_match:
+                dive_url = '/interests/' + path_match.group(1).replace('.md', '.html')
+        elif hash_id and hash_id in dive_url_map:
+            # Dive file exists on disk but wasn't recorded in history
+            dive_url = dive_url_map[hash_id]
+        art['deep_dive_url'] = dive_url
+
+    # ── 4. Sort: most recently liked/saved first ──────────────────────────────
     result = sorted(
         articles.values(),
         key=lambda a: a.get('timestamp') or a.get('date') or '',

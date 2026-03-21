@@ -26,7 +26,6 @@ signal_store.jsonl.bak
 curator_costs.json
 
 # Generated UI output files
-curator_library.html
 curator_preview.html
 curator_preview_recovered.html
 server.log
