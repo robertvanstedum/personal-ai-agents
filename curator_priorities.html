@@ -1011,7 +1011,7 @@
     const score = parseFloat(a.score) || 0;
     const scoreClass = score >= 7 ? 'high' : score >= 4 ? 'mid' : '';
     const dateStr = a.fetched_at
-      ? new Date(a.fetched_at).toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric'})
+      ? new Date(a.fetched_at).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
       : '—';
     return `
       <div class="feed-article"
@@ -1043,7 +1043,7 @@
     const count = feed.length;
     const isExpired = !!p.expired;
     const lastUpdated = p.feed_last_updated
-      ? new Date(p.feed_last_updated).toLocaleString('en-GB', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})
+      ? new Date(p.feed_last_updated).toLocaleString('en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', hour12:false})
       : '—';
 
     const pausedBadge = isExpired
@@ -1111,7 +1111,7 @@
         .join('');
 
       const createdDate = p.created_at
-        ? new Date(p.created_at).toLocaleDateString('en-GB', {day:'numeric', month:'short'})
+        ? new Date(p.created_at).toLocaleDateString('en-US', {month:'short', day:'numeric'})
         : '—';
 
       const toggleLabel = p.active ? 'Deactivate' : 'Activate';
