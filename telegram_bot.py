@@ -261,22 +261,31 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     processed_callbacks.add(callback_id)
-    await query.answer(f"⏳ Recording {action}...")
-    
+    try:
+        await query.answer(f"⏳ Recording {action}...")
+    except Exception as e:
+        print(f"⚠️  Could not send callback ack (network issue?): {e}")
+
     # Parse article data from message text
     article_data = parse_article_from_message(query.message.text, rank)
     result = record_feedback(action, rank, article_data)
-    
+
     if result['success']:
         original = query.message.text
         if "✅" in original:
             original = original.split('\n✅')[0]
-        await query.edit_message_text(
-            text=original + f"\n\n✅ {action.capitalize()}d!",
-            reply_markup=query.message.reply_markup
-        )
+        try:
+            await query.edit_message_text(
+                text=original + f"\n\n✅ {action.capitalize()}d!",
+                reply_markup=query.message.reply_markup
+            )
+        except Exception as e:
+            print(f"⚠️  Could not edit message after feedback (network issue?): {e}")
     else:
-        await query.answer(f"❌ {result['message']}", show_alert=True)
+        try:
+            await query.answer(f"❌ {result['message']}", show_alert=True)
+        except Exception as e:
+            print(f"⚠️  Could not send error callback: {e}")
 
 def record_feedback(action, rank, article_data):
     """Call curator_feedback.py in workspace with article data"""
@@ -716,12 +725,20 @@ def handle_webhook_command(message, token):
             send_message(token, str(chat_id), f"❌ Curator failed:\n{result.stderr.decode()[:300]}")
 
 def answer_callback(token, query_id, text, alert=False):
-    """Send answerCallbackQuery to Telegram"""
-    requests.post(
-        f"https://api.telegram.org/bot{token}/answerCallbackQuery",
-        json={"callback_query_id": query_id, "text": text, "show_alert": alert},
-        timeout=5
-    )
+    """Send answerCallbackQuery to Telegram with retry on network error"""
+    for attempt in range(1, 3):
+        try:
+            requests.post(
+                f"https://api.telegram.org/bot{token}/answerCallbackQuery",
+                json={"callback_query_id": query_id, "text": text, "show_alert": alert},
+                timeout=5
+            )
+            return
+        except Exception as e:
+            print(f"⚠️  answer_callback attempt {attempt}/2 failed: {e}")
+            if attempt < 2:
+                import time; time.sleep(2)
+    print("❌ answer_callback failed after 2 attempts — feedback still recorded")
 
 def edit_message(token, chat_id, message_id, text):
     """Edit an existing message"""
