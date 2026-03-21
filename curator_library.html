@@ -847,7 +847,7 @@ function updateStats() {
 
   const dates = allArticles.map(a => a.date).filter(Boolean).sort();
   if (dates.length) {
-    const fmt = d => new Date(d).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+    const fmt = d => { const p = new Date(d); return isNaN(p) ? '—' : p.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}); };
     document.getElementById('meta-line').textContent =
       `${allArticles.length} articles saved · ${fmt(dates[0])} – ${fmt(dates[dates.length-1])}`;
   }
