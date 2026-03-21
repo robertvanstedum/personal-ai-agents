@@ -151,7 +151,7 @@ def api_library():
                         'article_id':  article_id,
                         'hash_id':     hash_id_direct,  # set directly from article_id
                         'type':        feedback_type,
-                        'date':        item.get('timestamp') or (date_str + 'T12:00:00'),
+                        'date':        item.get('timestamp') or (re.sub(r'^[^0-9]+', '', date_str) + 'T12:00:00'),
                         'timestamp':   item.get('timestamp', ''),
                         'title':       item.get('title', ''),
                         'url':         item.get('url', ''),
