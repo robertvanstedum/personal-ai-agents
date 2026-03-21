@@ -84,6 +84,12 @@ curator_media/
 # New domains working docs — private until prototype ready
 _NewDomains/
 
+# Private onboarding context — never commit
+context/
+
+# Working/scratch files — short-term, not for repo
+_working/
+
 # Finance domain — private data
 domains/finance/statements/
 domains/finance/reports/
