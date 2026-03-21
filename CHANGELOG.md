@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-03-20 - v1.0.3: Bug Fixes + Job Search Module Init
+
+**Summary:** Two UI bugs fixed and closed. Job search module scaffolded and seeded. DECISIONS.md governance doc introduced.
+
+### Bug Fixes
+
+- **#2** — View Dive button: `/api/library` now scans `interests/2026/deep-dives/` on each request and resolves `deep_dive_url` via filesystem reconciliation. Closes the gap where dives on disk weren't recorded in `curator_history.json`. Library renders 🔭 View Dive → when set, ✨ Start Dive otherwise. (commits 74b53a4, e4f1b22)
+- **#9** — Date display consistency: `.page-meta` in `curator_library.html` updated to match `date-nav-label` style from `curator_intelligence.html` — color, letter-spacing, margin-top aligned. (commit 74b53a4)
+- **Bonus** — `curator_library.html` removed from `.gitignore` (source file, not generated)
+
+### New: Job Search Module
+
+- `job-search/` directory scaffolded inside `personal-ai-agents/` per `JOB_SEARCH_FUNCTIONAL_DESIGN.md` v1.0
+- `data/applications.json` seeded with ACC-001 (Accenture R00306873, submitted 2026-03-20)
+- `DECISIONS.md` initialized with 10 design decisions
+- `scripts/openclaw-hook.js` command registry (`job-search:*` commands registered, build deferred)
+- (commit 46ab3af)
+
+### Governance
+
+- `DECISIONS.md` created at repo root — first entry DEC-001 (filesystem reconciliation pattern for deep-dive detection)
+- `WAYS_OF_WORKING.md` updated: DECISIONS.md added to What Goes Where table
+
+---
+
 ## 2026-03-18 - v1.0.2: Docs Overhaul + Pipeline Stable
 
 **Summary:** Documentation fully current with production reality. README replaced with v3 (mini-moi framing, screenshots gallery). ROADMAP and ARCHITECTURE updated. Pipeline healthy — all launchd jobs running, X OAuth active, grok-4-1 in production. Two bugs filed for next session.

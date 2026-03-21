@@ -1,5 +1,5 @@
 # PROJECT_STATE.md
-**Last updated:** March 18, 2026
+**Last updated:** March 20, 2026
 **Updated by:** OpenClaw (Memory Agent)
 
 > **Read this first.** One page. All parties — Robert, OpenClaw, Claude Code, Claude.ai — read this at the start of every session before touching anything else.
@@ -35,7 +35,6 @@ The geopolitics curator is in production. Daily briefings run at 7 AM via launch
 | # | Title | Owner |
 |---|-------|-------|
 | #8 | Telegram save callback silent on NetworkError at startup | Claude Code |
-| #9 | UI date consistency: Library vs AI Observations headers | Claude Code |
 
 ---
 
@@ -73,6 +72,7 @@ Nothing currently approved. See ROADMAP.md for candidates.
 
 | Date | What happened |
 |------|---------------|
+| Mar 20 | Job-search module scaffold + ACC-001 seed. Issues #2 (View Dive button) and #9 (date stat styling) fixed and closed. DECISIONS.md created (DEC-001). WAYS_OF_WORKING.md updated. |
 | Mar 18 | README v3, ROADMAP rewrite, ARCHITECTURE Agent Layer, CHANGELOG v1.0.2, PROJECT_STATE created |
 | Mar 17 | Telegram timeout/retry, date headers, grok-4-1 in cron, time gate, X OAuth re-auth, ARCHITECTURE.md, OPERATIONS.md, CHANGELOG v1.0.1 |
 | Mar 15 | WS5 complete (AI Observations A+B+C), WAYS_OF_WORKING.md, 27 commits |
