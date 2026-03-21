@@ -196,7 +196,9 @@ def api_library():
 
             elif bookmarked:
                 # Pure bookmark (not in liked/saved) — add it
-                bookmark_date = item.get('bookmark_date') or item.get('first_seen', '')
+                # Strip x_bootstrap_ prefixes from cold-start signals so dates parse correctly
+                raw_date = item.get('bookmark_date') or item.get('first_seen', '')
+                bookmark_date = re.sub(r'^[^0-9]+', '', raw_date) if raw_date else ''
                 articles[url] = {
                     'article_id':     url,
                     'hash_id':        hash_id,
