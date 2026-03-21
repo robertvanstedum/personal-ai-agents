@@ -71,3 +71,41 @@ at current scale (tens of files). Revisit if the deep-dives directory grows
 into hundreds of files.
 
 ---
+
+### DEC-002 — X bootstrap signals poisoning Library date range
+
+**Date:** 2026-03-21
+**Area:** Library UI / curator_server.py
+**Logged by:** OpenClaw (from Robert's session summary)
+**Commits:** `919c9f0`, `6986fbb`, `f5fcc96`
+
+**Context:**
+The Library date range stat ("447 articles saved · Feb 18, 2026 – Mar 21, 2026")
+was rendering as "Invalid Date" or showing stray characters. The bug was subtle
+and survived multiple fix attempts.
+
+**Root cause:**
+X cold-start bootstrap stored signals in `feedback_history` under a non-ISO key
+format (`x_bootstrap_2026-02-28`). When `curator_server.py` built a date string
+from this key, it prepended the bootstrap prefix to what should have been a
+clean ISO date, producing an unparseable string like `x_bootstrap_2026-02-28T12:00:00`.
+JavaScript's `new Date()` returned `Invalid Date`, breaking the stat bar.
+
+**Decision:**
+Strip non-numeric leading characters from `date_str` before fallback timestamp
+construction: `re.sub(r'^[^0-9]+', '', date_str)` — ensures only the ISO date
+portion is used regardless of key prefix format.
+
+**Pattern:** Defensive date parsing at the server boundary.
+Any string entering the date field should be sanitized to a clean ISO format
+before being passed to the client. Do not assume feedback_history keys are
+always clean ISO dates.
+
+**Why not fix the key format instead?**
+Existing bootstrap data already written with the prefixed key format. Renaming
+keys would require a migration and risk breaking other logic that references
+the same keys. The strip-and-sanitize approach is backward-compatible.
+
+**Lesson:**
+Bootstrap/seed data keys should always use the same format as runtime data keys.
+If they differ, date parsing and sorting will silently produce wrong output.
