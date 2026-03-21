@@ -18,7 +18,7 @@ fi
 TODAY=$(date +%Y-%m-%d)
 LATEST="$PROJECT_DIR/curator_latest.json"
 if [ -f "$LATEST" ]; then
-    FILE_DATE=$(python3 -c "import json; d=json.load(open('$LATEST')); print(d[0].get('date','')[:10])" 2>/dev/null)
+    FILE_DATE=$(python3 -c "import json; d=json.load(open('$LATEST')); print(d[0].get('briefing_date', d[0].get('date',''))[:10])" 2>/dev/null)
     if [ "$FILE_DATE" = "$TODAY" ]; then
         echo "✅ Briefing already ran today ($TODAY) — skipping"
         exit 0
@@ -43,6 +43,15 @@ export TELEGRAM_CHAT_ID="8379221702"
 python telegram_bot.py --send
 
 if [ $? -eq 0 ]; then
+    # Stamp briefing_date so idempotency check works regardless of article dates
+    python3 -c "
+import json, datetime
+with open('$LATEST') as f:
+    data = json.load(f)
+data[0]['briefing_date'] = datetime.date.today().isoformat()
+with open('$LATEST', 'w') as f:
+    json.dump(data, f)
+" 2>/dev/null
     echo "✅ Curator briefing generated and sent successfully at $(date)"
     exit 0
 else
