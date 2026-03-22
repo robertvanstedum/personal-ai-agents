@@ -109,3 +109,26 @@ the same keys. The strip-and-sanitize approach is backward-compatible.
 **Lesson:**
 Bootstrap/seed data keys should always use the same format as runtime data keys.
 If they differ, date parsing and sorting will silently produce wrong output.
+
+---
+
+### DEC-003 — Two-bot Telegram routing: content vs command channel
+**Date:** 2026-03-22
+**Component:** Research Intelligence Agent — Telegram delivery
+
+**Context:**
+Two Telegram bots configured:
+- `rvsopenbot` (`bot_token` in Keychain) — content delivery channel
+- `minimoi_cmd_bot` (`polling_bot_token` in Keychain) — OpenClaw command/conversation channel
+
+**Decision:**
+Research session summaries route via `rvsopenbot` (same channel as daily briefing).
+`minimoi_cmd_bot` is reserved exclusively for OpenClaw ↔ Robert conversation.
+
+**Config:** `agent/config.json` → `research_telegram_bot: "bot_token"`, `research_chat_id: "8379221702"`
+
+**Why not separate research from briefing?**
+Both are content — daily events and research findings are complementary, not competing.
+Mixing them on one channel keeps the content flow unified. The command channel stays clean for operations.
+
+**Pattern:** Content goes to rvsopenbot. Commands/operations go to minimoi_cmd_bot. Never cross them.
