@@ -9,7 +9,8 @@ Commits: see `_NewDomains/research-intelligence/docs/BUILD_ResearchWebUI_2026-03
 ### What Was Built
 - `web/candidates.html` — filter, promote, retire query candidates; rows removed from DOM on action
 - `web/save.html` — save articles with URL, title, session ID, note; inline duplicate/error handling
-- `curator_server.py` — 6 new routes covering candidates UI, candidates API (list/promote/retire), save UI, save API
+- `research_routes.py` — new Flask Blueprint owning all 8 research routes; `curator_server.py` registers it in 5 lines and is now closed to research changes
+- `curator_server.py` — research section replaced with Blueprint registration only
 - `agent/candidates.py` — `cmd_promote()` / `cmd_retire()` refactored to return status dicts (prerequisite for Flask routes)
 - `web/observe.html` — four-way nav bar added
 - `curator_intelligence.html` — research strip nav added
