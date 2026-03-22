@@ -166,6 +166,18 @@ See [ROADMAP.md](ROADMAP.md) for what's next.
 
 ---
 
+## Upstream Contributions
+
+Issues and observations filed during active development — real production gaps, not theoretical:
+
+- **openclaw/openclaw #18160** — Direct exec mode for cron jobs (feature request)
+- **openclaw/openclaw #52314** — Pre-compaction memory flush hook for agents (feature request, emerged from OPS-001)
+- **openclaw/openclaw #19249** — Model failover on billing exhaustion: confirmed tool-layer local models don't automatically become session fallbacks when cloud billing fails (comment with production evidence)
+
+All three emerged from building and operating this system.
+
+---
+
 ## Screenshots
 
 | Daily Briefing | Signal Priorities |
