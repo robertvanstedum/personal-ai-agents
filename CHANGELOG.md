@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-03-22 — Research Web UI: candidates.html + save.html
+
+Commits: see `_NewDomains/research-intelligence/docs/BUILD_ResearchWebUI_2026-03-22.md`
+
+**Result:** Research loop now fully operable from browser — candidates can be reviewed and promoted, articles saved with notes, without any CLI.
+
+### What Was Built
+- `web/candidates.html` — filter, promote, retire query candidates; rows removed from DOM on action
+- `web/save.html` — save articles with URL, title, session ID, note; inline duplicate/error handling
+- `curator_server.py` — 6 new routes covering candidates UI, candidates API (list/promote/retire), save UI, save API
+- `agent/candidates.py` — `cmd_promote()` / `cmd_retire()` refactored to return status dicts (prerequisite for Flask routes)
+- `web/observe.html` — four-way nav bar added
+- `curator_intelligence.html` — research strip nav added
+
+### Open Items → Next Phase
+- Left rail migration: unified chrome across all Curator + Research pages (CSS spec locked, separate task)
+- Robert to tune research tool over next week before expanding scope
+- Bug #8 (Telegram save silent on NetworkError) still open
+
+---
+
 ## 2026-03-20 - v1.0.3: Bug Fixes + Job Search Module Init
 
 **Summary:** Two UI bugs fixed and closed. Job search module scaffolded and seeded. DECISIONS.md governance doc introduced.
