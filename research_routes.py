@@ -388,3 +388,117 @@ def api_research_dashboard():
         },
         "agent_active": log['agent_active'],
     })
+
+
+# ── API: Threads ──────────────────────────────────────────────────────────────
+
+@research_bp.route('/api/research/thread/<topic>')
+def api_research_thread_get(topic: str):
+    """
+    Return thread.json + recent annotations for a topic.
+    GET /api/research/thread/gold-geopolitics
+    """
+    from agent.threads import load_thread, load_annotations
+    thread = load_thread(topic)
+    if not thread:
+        return jsonify({"ok": False, "error": f"No thread found for '{topic}'"}), 404
+    annotations = load_annotations(topic)
+    return jsonify({
+        "ok":          True,
+        "thread":      thread.model_dump(),
+        "annotations": [a.model_dump() for a in annotations[-20:]],
+    })
+
+
+@research_bp.route('/api/research/thread/<topic>/annotate', methods=['POST'])
+def api_research_thread_annotate(topic: str):
+    """
+    Add an annotation to a thread.
+    POST /api/research/thread/gold-geopolitics/annotate
+    Body: {"type": "direction_shift", "note": "...", "ref_session": null, "ref_article": null}
+    """
+    from agent.threads import load_thread, cmd_annotate
+    body        = request.get_json() or {}
+    ann_type    = body.get("type", "").strip()
+    note        = body.get("note", "").strip()
+    ref_session = body.get("ref_session") or None
+    ref_article = body.get("ref_article") or None
+
+    if not ann_type:
+        return jsonify({"ok": False, "error": "type required"}), 400
+    if ann_type not in {"direction_shift", "reaction", "observation", "wrap_up"}:
+        return jsonify({"ok": False, "error": f"invalid type: {ann_type}"}), 400
+    if not note:
+        return jsonify({"ok": False, "error": "note required"}), 400
+
+    thread = load_thread(topic)
+    if not thread:
+        return jsonify({"ok": False, "error": f"No thread found for '{topic}'"}), 404
+
+    cmd_annotate(topic, ann_type, note,
+                 ref_session=ref_session, ref_article=ref_article)
+    return jsonify({"ok": True, "topic": topic, "type": ann_type})
+
+
+@research_bp.route('/api/research/thread/create', methods=['POST'])
+def api_research_thread_create():
+    """
+    Create a new thread for a topic.
+    POST /api/research/thread/create
+    Body: {"topic": "gold-geopolitics", "motivation": "...", "prior_belief": "..."}
+    """
+    from agent.threads import cmd_create
+    body         = request.get_json() or {}
+    topic        = body.get("topic", "").strip()
+    motivation   = body.get("motivation", "To be written").strip()
+    prior_belief = body.get("prior_belief", "To be written").strip()
+
+    if not topic:
+        return jsonify({"ok": False, "error": "topic required"}), 400
+
+    cmd_create(topic, motivation, prior_belief)
+    return jsonify({"ok": True, "topic": topic})
+
+
+@research_bp.route('/api/research/thread/<topic>/retire', methods=['POST'])
+def api_research_thread_retire(topic: str):
+    """
+    Retire a thread — hidden from UI, preserved on disk.
+    POST /api/research/thread/gold-geopolitics/retire
+    Body: {"reason": "..."}
+    """
+    from agent.threads import load_thread, cmd_retire
+    body   = request.get_json() or {}
+    reason = body.get("reason", "").strip()
+
+    if not reason:
+        return jsonify({"ok": False, "error": "reason required"}), 400
+
+    thread = load_thread(topic)
+    if not thread:
+        return jsonify({"ok": False, "error": f"No thread found for '{topic}'"}), 404
+
+    cmd_retire(topic, reason)
+    return jsonify({"ok": True, "topic": topic, "status": "retired"})
+
+
+@research_bp.route('/api/research/thread/<topic>/wrap-up', methods=['POST'])
+def api_research_thread_wrap_up(topic: str):
+    """
+    Close a thread with a conclusion note.
+    POST /api/research/thread/gold-geopolitics/wrap-up
+    Body: {"note": "..."}
+    """
+    from agent.threads import load_thread, cmd_wrap_up
+    body   = request.get_json() or {}
+    note   = body.get("note", "").strip()
+
+    if not note:
+        return jsonify({"ok": False, "error": "note required"}), 400
+
+    thread = load_thread(topic)
+    if not thread:
+        return jsonify({"ok": False, "error": f"No thread found for '{topic}'"}), 404
+
+    cmd_wrap_up(topic, note)
+    return jsonify({"ok": True, "topic": topic, "status": "closed"})
