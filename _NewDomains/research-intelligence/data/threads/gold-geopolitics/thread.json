@@ -1,0 +1,20 @@
+{
+  "id": "gold-geopolitics-2026",
+  "topic": "gold-geopolitics",
+  "version": 1,
+  "status": "active",
+  "opened": "2026-03-23T13:47:10+00:00",
+  "closed": null,
+  "retired": false,
+  "auto_close_days": 30,
+  "last_session_date": null,
+  "session_count": 0,
+  "links_to": [],
+  "links_from": [],
+  "motivation": "Gold appears to be in a long-term upward shift as currencies weaken, US Treasuries become less attractive, and the world order restructures. However, as the Iran crisis erupts, prices have gone down not up — which is counterintuitive. I want to understand pullbacks in other epochs even when the long-term trend is appreciation, especially during periods of inflation and/or currency value fluctuation. What were the proximate events around major drops historically, and are there relevant theories that explain why gold drops during geopolitical stress rather than rising?",
+  "prior_belief": "Gold should rise during geopolitical stress and currency instability. Safe haven demand should dominate. The Iran drop is an anomaly that needs explaining.",
+  "wrap_up": null,
+  "retired_reason": null,
+  "created_by": "robert",
+  "schema_version": "1.0"
+}

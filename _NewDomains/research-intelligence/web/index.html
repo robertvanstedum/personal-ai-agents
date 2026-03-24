@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research Intelligence Library</title>
+<style>
+  :root {
+    --bg:     #f5f0e8;
+    --text:   #2c1a0e;
+    --accent: #8b6914;
+    --muted:  #6b5a3e;
+    --border: #d4c5a9;
+    --alt:    #ede8de;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 15px; line-height: 1.6;
+    padding: 2rem 1.5rem; max-width: 1100px; margin: 0 auto;
+  }
+  h1  { font-size: 1.8rem; margin-bottom: 0.2rem; }
+  h2  { font-size: 1.05rem; color: var(--accent); margin: 2.5rem 0 0.9rem;
+        letter-spacing: 0.07em; text-transform: uppercase; }
+  .meta   { font-size: 0.82rem; color: var(--muted); margin-bottom: 0.3rem; }
+  .budget { font-family: 'Courier New', monospace; font-size: 0.82rem;
+            color: var(--muted); margin-bottom: 2rem; }
+  .note   { font-size: 0.82rem; color: var(--muted); font-style: italic; margin-bottom: 0.75rem; }
+  .filters { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.9rem; align-items: center; }
+  .filters input, .filters select {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 3px;
+    color: var(--text); font-family: inherit; font-size: 0.83rem; padding: 0.28rem 0.55rem;
+  }
+  .filters input { width: 210px; }
+  table   { width: 100%; border-collapse: collapse; font-size: 0.87rem; }
+  th      { background: var(--text); color: var(--bg); font-family: Georgia, serif;
+            font-size: 0.75rem; font-weight: normal; letter-spacing: 0.06em;
+            padding: 0.4rem 0.6rem; text-align: left; text-transform: uppercase; }
+  td      { border-bottom: 1px solid var(--border); padding: 0.38rem 0.6rem; vertical-align: top; }
+  tr:nth-child(even) td { background: var(--alt); }
+  tr.hidden { display: none; }
+  code    { font-family: 'Courier New', monospace; font-size: 0.8rem; color: var(--muted); }
+  a       { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .empty  { color: var(--muted); font-style: italic; padding: 0.9rem 0.6rem; }
+  .essay-entry        { border-bottom: 1px solid var(--border); padding: 0.85rem 0; }
+  .essay-entry:last-child { border-bottom: none; }
+  .essay-title        { font-weight: bold; }
+  .essay-meta         { font-size: 0.78rem; color: var(--muted); font-family: monospace; margin: 0.15rem 0 0.35rem; }
+  .essay-summary      { font-size: 0.87rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<h1>Research Intelligence Library</h1>
+<p class="meta">Generated: Mar 21, 2026, 06:30 PM</p>
+<p class="budget">Budget: $20.00 total / $10.00 weekly / $3.00 daily · Cumulative: <strong>$0.08</strong></p>
+
+<h2>Library</h2>
+<div class="filters">
+  <input type="text" id="srch" placeholder="Search title, summary, source…" oninput="applyFilters()">
+  <select id="fTopic" onchange="applyFilters()">
+    <option value="">Topic: All</option><option value="empire-landpower">empire-landpower</option>
+  </select>
+  <select id="fLang" onchange="applyFilters()">
+    <option value="">Language: All</option><option value="English">English</option><option value="English (German institutional)">English (German institutional)</option><option value="Portuguese (EN translation available)">Portuguese (EN translation available)</option><option value="Revista Desenvolvimento &amp; Civilização&quot;">Revista Desenvolvimento &amp; Civilização&quot;</option><option value="The Chinese Journal of International Politics">The Chinese Journal of International Politics</option>
+  </select>
+  <select id="fType" onchange="applyFilters()">
+    <option value="">Type: All</option><option value="Book">Book</option><option value="Book chapter (PDF)">Book chapter (PDF)</option><option value="Journal article (OA)">Journal article (OA)</option><option value="Oxford Academic&quot;">Oxford Academic&quot;</option><option value="Portuguese">Portuguese</option><option value="Web">Web</option>
+  </select>
+</div>
+<table>
+  <thead><tr><th>Date</th><th>Topic</th><th>Source</th><th>Language</th><th>Type</th><th>Summary</th><th>Path/URL</th></tr></thead>
+  <tbody id="libBody"><tr><td>2026-03-21</td><td>empire-landpower</td><td>escholarship.org. &quot;Giovanni Arrighi: Systemic Cycles of Accumulation, ...&quot;</td><td>English</td><td>Web</td><td>The source directly addresses the core topic of systemic cycles of accumulation, a crucial element in understanding Grea</td><td><a href="https://escholarship.org/content/qt34b5s46w/qt34b5s46w_noSplash_bea171f1bbbdcb4548b7194d6cc9c949.pdf?t=lfbx87" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>www.amazon.com. &quot;The Long Twentieth Century: Arrighi, Giovanni: 9781859840153: Amazon.com: Books&quot;</td><td>English</td><td>Web</td><td>The source directly addresses the ‘long twentieth century’ and its impact on global power dynamics, aligning well with t</td><td><a href="https://www.amazon.com/Long-Twentieth-Century-Giovanni-Arrighi/dp/1859840159" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>krieger.jhu.edu. &quot;giovanni arrighi HEGEMONY UNRAVELLING —2 I&quot;</td><td>English</td><td>Web</td><td>The source focuses directly on the concept of hegemony and its evolution across historical periods, aligning strongly wi</td><td><a href="https://krieger.jhu.edu/arrighi/wp-content/uploads/sites/29/2023/11/HegemonyUnravellingPartII_tagged.pdf" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>escholarship.org. &quot;Giovanni Arrighi: Systemic Cycles of Accumulation, Hegemonic Transitions, and the Rise of China&quot;</td><td>English</td><td>Web</td><td>The source directly addresses the research targets by focusing on historical power shifts, particularly examining China’</td><td><a href="https://escholarship.org/uc/item/34b5s46w" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>www.cambridge.org. &quot;The Conception of Morality in Moral Realism (Chapter 6) - The Essence of Interstate Leadership&quot;</td><td>English</td><td>Web</td><td>The source directly addresses China-Russia positional swap, a key element of Mackinder's argument, and offers a unique p</td><td><a href="https://www.cambridge.org/core/books/abs/essence-of-interstate-leadership/conception-of-morality-in-moral-realism/102E28785048C58D07BE10704F48F005" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>academic.oup.com. &quot;Political Leadership and Power Redistribution</td><td>The Chinese Journal of International Politics</td><td>Oxford Academic&quot;</td><td>English</td><td><code>Web</code></td><td>The source directly addresses the complex dynamics of power redistribution and strategic positioning, aligning well with</td><td>https://academic.oup.com/cjip/article-abstract/9/1/1/2365941</td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>www.e-publicacoes.uerj.br. &quot;A TEORIA SOCIAL LATINO-AMERICANA NO LABIRINTO DA HISTÓRIA</td><td>Revista Desenvolvimento &amp; Civilização&quot;</td><td>Portuguese</td><td>Web</td><td><code>Strong non-Anglophone source directly addressing Latin American dependency theory with scholarly rigor, highly relevant</code></td><td>https://www.e-publicacoes.uerj.br/index.php/rdciv/article/view/66269</td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>journals.sagepub.com. &quot;The Longue Durée of the Marxist Theory of Dependency and the Twenty-First Century - Carlos Eduardo Martins, 2022&quot;</td><td>English</td><td>Web</td><td>Strong engagement with Latin American dependency theory's contemporary relevance to global power structures, though the</td><td><a href="https://journals.sagepub.com/doi/10.1177/0094582X211052029" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>dokumen.pub. &quot;Sub-Imperalism Revisited: Dependency Theory in the Thought of Ruy Mauro Marini 9789004319417, 9789004319400, 9004319417 - DOKUMEN.PUB&quot;</td><td>English</td><td>Web</td><td>Strong engagement with Latin American dependency theory and neo-imperialism directly applicable to great power competiti</td><td><a href="https://dokumen.pub/sub-imperalism-revisited-dependency-theory-in-the-thought-of-ruy-mauro-marini-9789004319417-9789004319400-9004319417.html" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>journals.sagepub.com. &quot;Changing international hegemony and dependency in peripheral countries: A case study of Latin America - Barbara Stallings, 2025&quot;</td><td>English</td><td>Web</td><td>Strong direct engagement with Latin American dependency theory applied to contemporary great power competition (China-La</td><td><a href="https://journals.sagepub.com/doi/10.1177/10245294241235686" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>www.researchgate.net. &quot;(PDF) Dependency in the Twenty-First Century? The Political Economy of China–Latin America Relations , by Barbara Stallings. Cambridge: Cambridge University Press, 2020. vii+82 pp. US$20.00 (paper), US$16.00 (e-book).&quot;</td><td>English</td><td>Web</td><td>Strong direct engagement with dependency theory applied to contemporary China-Latin America relations and great power co</td><td><a href="https://www.researchgate.net/publication/349229389_Dependency_in_the_Twenty-First_Century_The_Political_Economy_of_China-Latin_America_Relations_by_Barbara_Stallings_Cambridge_Cambridge_University_Press_2020_vii82_pp_US2000_paper_US1600_e-book" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>Library initialized, no entries yet</td><td>—</td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>Martins, Carlos Eduardo. *Globalização, dependência e neoliberalismo na América Latina* (2011/2019)</td><td>Portuguese (EN translation available)</td><td>Book</td><td>Brazilian CLACSO scholar — key argument: US-to-China industrial transfer reproduces &quot;super-exploitation&quot;; periphery stays peripheral regardless of which core dominates. &quot;The center changes; the periphery remains.&quot;</td><td><code>topics/empire-landpower/translations/session-001-martins.md</code></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>Stallings, Barbara. &quot;A Dependency Perspective on the United States, China, and Latin America&quot; (2021)</td><td>English</td><td>Book chapter (PDF)</td><td>Best direct mapping of dependency theory onto US/China hegemony transition; accessible PDF from Pitt</td><td><a href="https://www.ucis.pitt.edu/clas/sites/default/files/Stallings_A%20Dependency%20Perspective%20on%20US,%20China,%20and%20LAC.pdf" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>Krause, Oliver. &quot;Mackinder's 'heartland' — legitimation of US foreign policy in WWII and Cold War&quot; (2023)</td><td>English (German institutional)</td><td>Journal article (OA)</td><td>German critical geography — examines how Mackinder was instrumentalized for US policy; entry point into non-Anglophone Mackinder scholarship</td><td><a href="https://gh.copernicus.org/articles/78/183/2023/" target="_blank" rel="noopener">link ↗</a></td></tr></tbody>
+</table>
+
+<h2>Essays</h2>
+<p class="note">Agent-written syntheses. Stored in library/essays/.</p>
+<p class="empty">No essays yet.</p>
+
+<h2>Reading List</h2>
+<p class="note">Books and long-form flagged for Robert.</p>
+<table>
+  <thead><tr><th>Title</th><th>Author</th><th>Why it matters now</th><th>Date added</th></tr></thead>
+  <tbody><tr><td colspan="4" class="empty">No entries yet</td></tr></tbody>
+</table>
+
+<h2>Recent Sessions</h2>
+<table>
+  <thead><tr><th>Date</th><th>Session</th><th>Duration</th><th>Cost</th><th>Cumulative</th><th>Notes</th></tr></thead>
+  <tbody><tr><td>2026-03-20</td><td>phase-zero-init</td><td>—</td><td>$0.00</td><td><strong>$0.00</strong></td><td>Infrastructure only. No research. No API cost.</td></tr>
+<tr><td>2026-03-21</td><td>test-clear</td><td>2min</td><td>$0.05</td><td><strong>$0.05</strong></td><td>test session complete</td></tr>
+<tr><td>2026-03-21</td><td>kotkin-001</td><td>35min</td><td>$0.00</td><td><strong>$0.05</strong></td><td>Session 001: Kotkin thread, free source pass + Haiku triage + translation + Grok search</td></tr>
+<tr><td>2026-03-21</td><td>test-dry-run</td><td>1min</td><td>$0.00</td><td><strong>$0.05</strong></td><td>test-dry-run: 0 triaged, top find: no candidates</td></tr>
+<tr><td>2026-03-21</td><td>test-dry-run-2</td><td>1min</td><td>$0.00</td><td><strong>$0.05</strong></td><td>test-dry-run-2: 1 triaged, top find: Chowdhury, Suban Kumar; Hel Kafi, Abdullah (2015). &quot;The Hear</td></tr>
+<tr><td>2026-03-21</td><td>kotkin-002</td><td>2min</td><td>$0.01</td><td><strong>$0.06</strong></td><td>kotkin-002: 12 triaged, top find: GH - Mackinder's “heartland” – legitimation of US foreign po</td></tr>
+<tr><td>2026-03-21</td><td>kotkin-003</td><td>2min</td><td>$0.01</td><td><strong>$0.07</strong></td><td>kotkin-003: 12 triaged, top find: A TEORIA SOCIAL LATINO-AMERICANA NO LABIRINTO DA HISTÓRIA</td><td></td></tr>
+<tr><td>2026-03-21</td><td>kotkin-004</td><td>2min</td><td>$0.01</td><td><strong>$0.08</strong></td><td>kotkin-004: 12 triaged, top find: A TEORIA SOCIAL LATINO-AMERICANA NO LABIRINTO DA HISTÓRIA</td><td></td></tr>
+<tr><td>2026-03-21</td><td>kotkin-005</td><td>1min</td><td>$0.00</td><td><strong>$0.08</strong></td><td>kotkin-005: 12 triaged, top find: Giovanni Arrighi: Systemic Cycles of Accumulation, ...</td></tr></tbody>
+</table>
+
+<script>
+const TOPIC_IDX   = 1;
+const LANG_IDX    = 3;
+const TYPE_IDX    = 4;
+const SEARCH_COLS = [0, 1, 2, 3, 4, 5];
+
+function applyFilters() {
+  const q     = document.getElementById('srch').value.toLowerCase();
+  const topic = document.getElementById('fTopic').value.toLowerCase();
+  const lang  = document.getElementById('fLang').value.toLowerCase();
+  const type  = document.getElementById('fType').value.toLowerCase();
+
+  document.querySelectorAll('#libBody tr').forEach(row => {
+    const cells = [...row.querySelectorAll('td')].map(td => td.textContent.toLowerCase());
+    const hit = (!q     || SEARCH_COLS.some(i => cells[i] && cells[i].includes(q)))
+             && (!topic || cells[TOPIC_IDX] === topic)
+             && (!lang  || cells[LANG_IDX]  === lang)
+             && (!type  || cells[TYPE_IDX]  === type);
+    row.classList.toggle('hidden', !hit);
+  });
+}
+</script>
+
+</body>
+</html>

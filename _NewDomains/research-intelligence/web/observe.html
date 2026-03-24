@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Research Observer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Georgia, 'Times New Roman', serif;
+      background: #f5f0e8;
+      color: #2c1f0e;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 780px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: normal;
+      letter-spacing: 0.02em;
+      color: #4a3520;
+      margin-bottom: 0.25rem;
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: #8a7055;
+      margin-bottom: 2rem;
+    }
+
+    .form-card {
+      background: #fdf8f0;
+      border: 1px solid #d4c5a9;
+      border-radius: 6px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .field label {
+      font-size: 0.78rem;
+      color: #6b5540;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .field input, .field select {
+      font-family: Georgia, serif;
+      font-size: 0.95rem;
+      background: #fff8ee;
+      border: 1px solid #c8b898;
+      border-radius: 4px;
+      padding: 0.5rem 0.75rem;
+      color: #2c1f0e;
+      outline: none;
+    }
+
+    .field input { min-width: 260px; }
+    .field select { min-width: 140px; }
+
+    .field input:focus, .field select:focus {
+      border-color: #8a6a40;
+      background: #fffdf5;
+    }
+
+    button {
+      font-family: Georgia, serif;
+      font-size: 0.95rem;
+      background: #6b4c28;
+      color: #fdf8f0;
+      border: none;
+      border-radius: 4px;
+      padding: 0.55rem 1.4rem;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    button:hover  { background: #4a3520; }
+    button:active { background: #2c1f0e; }
+    button:disabled { background: #b0a090; cursor: not-allowed; }
+
+    /* Result area */
+    #result {
+      display: none;
+      background: #fdf8f0;
+      border: 1px solid #d4c5a9;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    #cost-bar {
+      background: #eee4d0;
+      border-bottom: 1px solid #d4c5a9;
+      padding: 0.5rem 1rem;
+      font-size: 0.8rem;
+      color: #6b5540;
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    #cost-bar span { white-space: nowrap; }
+    #cost-bar .cost-highlight { color: #4a3520; font-weight: bold; }
+
+    #observation-text {
+      padding: 1.5rem;
+      font-size: 0.95rem;
+      line-height: 1.75;
+      white-space: pre-wrap;
+      color: #2c1f0e;
+    }
+
+    #observation-text h1, #observation-text h2, #observation-text h3 {
+      font-size: 1.05rem;
+      font-weight: bold;
+      margin: 1rem 0 0.4rem;
+      color: #4a3520;
+    }
+
+    #observation-text strong { color: #4a3520; }
+
+    #file-link {
+      padding: 0.5rem 1rem;
+      background: #eee4d0;
+      border-top: 1px solid #d4c5a9;
+      font-size: 0.78rem;
+      color: #8a7055;
+    }
+
+    /* Status/error */
+    #status {
+      font-size: 0.85rem;
+      color: #8a7055;
+      min-height: 1.2rem;
+      margin-top: 0.75rem;
+    }
+
+    #status.error { color: #8b2020; }
+
+    /* History */
+    #history-section { margin-top: 2rem; }
+    #history-section h2 {
+      font-size: 0.9rem;
+      color: #6b5540;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.75rem;
+    }
+
+    .history-item {
+      background: #fdf8f0;
+      border: 1px solid #d4c5a9;
+      border-radius: 4px;
+      padding: 0.6rem 1rem;
+      margin-bottom: 0.5rem;
+      font-size: 0.85rem;
+      color: #4a3520;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .history-item .meta { color: #8a7055; font-size: 0.78rem; white-space: nowrap; }
+
+    /* ── Nav ── */
+    .research-nav {
+      display: flex;
+      gap: 0.25rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .research-nav a {
+      font-family: Georgia, serif;
+      font-size: 0.82rem;
+      color: #6b5540;
+      text-decoration: none;
+      padding: 0.3rem 0.8rem;
+      border: 1px solid #c8b898;
+      border-radius: 3px;
+      background: #fdf8f0;
+      transition: background 0.12s, color 0.12s;
+    }
+
+    .research-nav a:hover  { background: #eee4d0; color: #4a3520; }
+    .research-nav a.active {
+      background: #6b4c28;
+      color: #fdf8f0;
+      border-color: #6b4c28;
+    }
+
+    @media (max-width: 600px) {
+      .form-row { flex-direction: column; }
+      .field input { min-width: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <nav class="research-nav">
+    <a href="/research/dashboard">Dashboard</a>
+    <a href="/research/observe" class="active">Observe</a>
+    <a href="/research/candidates">Candidates</a>
+    <a href="/research/save">Save</a>
+    <a href="/curator_intelligence.html">Library</a>
+  </nav>
+
+  <h1>Research Observer</h1>
+  <p class="subtitle">Synthesise saved research signals with Sonnet · Option A: saved articles only</p>
+
+  <div class="form-card">
+    <div class="form-row">
+      <div class="field">
+        <label>Topic</label>
+        <input type="text" id="topic" value="empire-landpower" placeholder="e.g. empire-landpower">
+      </div>
+      <div class="field">
+        <label>Command</label>
+        <select id="command">
+          <option value="observe">observe</option>
+          <option value="status">status</option>
+        </select>
+      </div>
+      <button id="run-btn" onclick="runObserve()">Run</button>
+    </div>
+    <div id="status"></div>
+  </div>
+
+  <div id="result">
+    <div id="cost-bar"></div>
+    <div id="observation-text"></div>
+    <div id="file-link"></div>
+  </div>
+
+  <div id="history-section" style="display:none">
+    <h2>This session</h2>
+    <div id="history-list"></div>
+  </div>
+
+</div>
+
+<script>
+  const history = [];
+
+  async function runObserve() {
+    const topic   = document.getElementById('topic').value.trim();
+    const command = document.getElementById('command').value;
+    const btn     = document.getElementById('run-btn');
+    const status  = document.getElementById('status');
+
+    if (!topic) { setStatus('Topic is required.', true); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Running…';
+    setStatus(`Calling Sonnet via observe.py — ${command} on "${topic}"…`);
+    document.getElementById('result').style.display = 'none';
+
+    try {
+      const res = await fetch('/api/research/observe', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({topic, command}),
+      });
+
+      const data = await res.json();
+
+      if (!data.ok) {
+        setStatus(`Error: ${data.error}`, true);
+        return;
+      }
+
+      renderResult(data, topic, command);
+      addToHistory(data, topic, command);
+      setStatus('');
+
+    } catch (err) {
+      setStatus(`Network error: ${err.message}`, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Run';
+    }
+  }
+
+  function renderResult(data, topic, command) {
+    // Cost bar
+    const tokensIn   = (data.tokens_in  || 0).toLocaleString();
+    const tokensOut  = (data.tokens_out || 0).toLocaleString();
+    const cost       = (data.cost_usd   || 0).toFixed(4);
+    const articles   = data.saved_articles_used ?? '—';
+    const totalCost  = (data.total_cost_usd || data.cost_usd || 0).toFixed(4);
+    const candidates = data.query_candidates_added ?? 0;
+
+    let haikusPart = '';
+    if (data.haiku_tokens_in) {
+      const hIn  = (data.haiku_tokens_in  || 0).toLocaleString();
+      const hOut = (data.haiku_tokens_out || 0).toLocaleString();
+      const hCost = (data.haiku_cost_usd  || 0).toFixed(4);
+      haikusPart = `<span>Haiku · ${hIn} in / ${hOut} out · $${hCost}</span>`;
+    }
+
+    document.getElementById('cost-bar').innerHTML =
+      `<span>Sonnet · ${tokensIn} in / ${tokensOut} out · $${cost}</span>` +
+      haikusPart +
+      `<span class="cost-highlight">Total $${totalCost}</span>` +
+      `<span>${articles} article${articles !== 1 ? 's' : ''} · ${candidates} quer${candidates !== 1 ? 'ies' : 'y'} extracted</span>` +
+      `<span>${topic} · ${command}</span>`;
+
+    // Observation text — basic markdown rendering
+    document.getElementById('observation-text').innerHTML =
+      renderMarkdown(data.text || '(no output)');
+
+    // File link
+    document.getElementById('file-link').textContent =
+      `Saved to: ${data.output_file || '—'}`;
+
+    document.getElementById('result').style.display = 'block';
+    document.getElementById('result').scrollIntoView({behavior: 'smooth', block: 'start'});
+  }
+
+  function addToHistory(data, topic, command) {
+    history.unshift({data, topic, command, ts: new Date().toLocaleTimeString()});
+    const section = document.getElementById('history-section');
+    const list    = document.getElementById('history-list');
+    section.style.display = 'block';
+    list.innerHTML = history.slice(0, 5).map(h =>
+      `<div class="history-item">
+        <span>${h.topic} · ${h.command}</span>
+        <span class="meta">$${(h.data.cost_usd||0).toFixed(4)} · ${h.ts}</span>
+      </div>`
+    ).join('');
+  }
+
+  function setStatus(msg, isError = false) {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = isError ? 'error' : '';
+  }
+
+  // Minimal markdown → HTML (headers, bold, paragraphs)
+  function renderMarkdown(text) {
+    return text
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm,  '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm,   '<h1>$1</h1>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g,    '<em>$1</em>')
+      .replace(/\n{2,}/g, '\n\n')
+      .split('\n\n').map(p => p.startsWith('<h') ? p : `<p>${p.replace(/\n/g, '<br>')}</p>`)
+      .join('\n');
+  }
+</script>
+</body>
+</html>

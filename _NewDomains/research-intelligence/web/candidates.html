@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Research Candidates</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Georgia, 'Times New Roman', serif;
+      background: #f5f0e8;
+      color: #2c1f0e;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .container { max-width: 860px; margin: 0 auto; }
+
+    /* ── Nav ── */
+    .research-nav {
+      display: flex;
+      gap: 0.25rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .research-nav a {
+      font-family: Georgia, serif;
+      font-size: 0.82rem;
+      color: #6b5540;
+      text-decoration: none;
+      padding: 0.3rem 0.8rem;
+      border: 1px solid #c8b898;
+      border-radius: 3px;
+      background: #fdf8f0;
+      transition: background 0.12s, color 0.12s;
+    }
+
+    .research-nav a:hover { background: #eee4d0; color: #4a3520; }
+
+    .research-nav a.active {
+      background: #6b4c28;
+      color: #fdf8f0;
+      border-color: #6b4c28;
+    }
+
+    /* ── Header ── */
+    h1 {
+      font-size: 1.5rem;
+      font-weight: normal;
+      letter-spacing: 0.02em;
+      color: #4a3520;
+      margin-bottom: 0.25rem;
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: #8a7055;
+      margin-bottom: 1.75rem;
+    }
+
+    /* ── Filter bar ── */
+    .filter-bar {
+      background: #fdf8f0;
+      border: 1px solid #d4c5a9;
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.25rem;
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+
+    .field label {
+      font-size: 0.75rem;
+      color: #6b5540;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .field input, .field select {
+      font-family: Georgia, serif;
+      font-size: 0.92rem;
+      background: #fff8ee;
+      border: 1px solid #c8b898;
+      border-radius: 4px;
+      padding: 0.45rem 0.7rem;
+      color: #2c1f0e;
+      outline: none;
+    }
+
+    .field input { min-width: 200px; }
+    .field select { min-width: 150px; }
+
+    .field input:focus, .field select:focus {
+      border-color: #8a6a40;
+      background: #fffdf5;
+    }
+
+    button.filter-btn {
+      font-family: Georgia, serif;
+      font-size: 0.92rem;
+      background: #6b4c28;
+      color: #fdf8f0;
+      border: none;
+      border-radius: 4px;
+      padding: 0.5rem 1.2rem;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    button.filter-btn:hover  { background: #4a3520; }
+    button.filter-btn:active { background: #2c1f0e; }
+
+    /* ── Row count ── */
+    .row-count {
+      font-size: 0.8rem;
+      color: #8a7055;
+      margin-bottom: 0.6rem;
+      min-height: 1.1rem;
+    }
+
+    /* ── Table ── */
+    .table-wrap {
+      background: #fdf8f0;
+      border: 1px solid #d4c5a9;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    thead th {
+      background: #eee4d0;
+      color: #4a3520;
+      font-weight: normal;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      padding: 0.6rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid #d4c5a9;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid #e8dece;
+      transition: background 0.1s;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #faf5ea; }
+
+    tbody td {
+      padding: 0.65rem 1rem;
+      vertical-align: middle;
+      color: #2c1f0e;
+    }
+
+    td.id-col   { font-size: 0.78rem; color: #8a7055; white-space: nowrap; font-family: monospace; }
+    td.topic-col { font-size: 0.82rem; color: #6b5540; white-space: nowrap; }
+    td.query-col { line-height: 1.45; }
+    td.action-col { white-space: nowrap; }
+
+    /* ── Action buttons ── */
+    .btn-promote, .btn-retire {
+      font-family: Georgia, serif;
+      font-size: 0.82rem;
+      border-radius: 3px;
+      padding: 0.3rem 0.7rem;
+      cursor: pointer;
+      border: 1px solid;
+      transition: background 0.12s, color 0.12s;
+      margin-right: 0.3rem;
+    }
+
+    .btn-promote {
+      background: #fdf8f0;
+      color: #4a8c28;
+      border-color: #9abf80;
+    }
+
+    .btn-promote:hover  { background: #4a8c28; color: #fff; border-color: #4a8c28; }
+    .btn-promote:active { background: #2c6010; color: #fff; }
+
+    .btn-retire {
+      background: #fdf8f0;
+      color: #8b2020;
+      border-color: #c89898;
+    }
+
+    .btn-retire:hover  { background: #8b2020; color: #fff; border-color: #8b2020; }
+    .btn-retire:active { background: #5a1010; color: #fff; }
+
+    .btn-promote:disabled, .btn-retire:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      padding: 2.5rem 1rem;
+      text-align: center;
+      color: #8a7055;
+      font-size: 0.9rem;
+    }
+
+    /* ── Status bar ── */
+    #status {
+      margin-top: 0.9rem;
+      font-size: 0.84rem;
+      color: #8a7055;
+      min-height: 1.2rem;
+    }
+
+    #status.error { color: #8b2020; }
+    #status.ok    { color: #4a8c28; }
+
+    @media (max-width: 600px) {
+      .filter-bar { flex-direction: column; }
+      .field input, .field select { min-width: 0; width: 100%; }
+      td.id-col, td.topic-col { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <nav class="research-nav">
+    <a href="/research/dashboard">Dashboard</a>
+    <a href="/research/observe">Observe</a>
+    <a href="/research/candidates" class="active">Candidates</a>
+    <a href="/research/save">Save</a>
+    <a href="/curator_intelligence.html">Library</a>
+  </nav>
+
+  <h1>Research Candidates</h1>
+  <p class="subtitle">Query candidates extracted by the observer · promote to feed next session, retire to remove</p>
+
+  <div class="filter-bar">
+    <div class="field">
+      <label>Topic</label>
+      <input type="text" id="f-topic" placeholder="e.g. empire-landpower" oninput="applyFilters()">
+    </div>
+    <div class="field">
+      <label>Status</label>
+      <select id="f-status" onchange="loadCandidates()">
+        <option value="candidate">Candidate</option>
+        <option value="promoted">Promoted</option>
+        <option value="retired">Retired</option>
+      </select>
+    </div>
+    <button class="filter-btn" onclick="loadCandidates()">Refresh</button>
+  </div>
+
+  <div class="row-count" id="row-count"></div>
+
+  <div class="table-wrap">
+    <table id="candidates-table">
+      <thead>
+        <tr>
+          <th class="id-col">ID</th>
+          <th class="topic-col">Topic</th>
+          <th>Query</th>
+          <th class="action-col">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="candidates-body">
+        <tr><td colspan="4" class="empty-state">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="status"></div>
+
+</div>
+
+<script>
+  let allRows = [];
+
+  async function loadCandidates() {
+    const status = document.getElementById('f-status').value;
+    setStatus('Loading…');
+    try {
+      const res  = await fetch(`/api/research/candidates?status=${encodeURIComponent(status)}`);
+      const data = await res.json();
+      if (!data.ok) { setStatus(`Error: ${data.error}`, 'error'); return; }
+      allRows = data.candidates;
+      applyFilters();
+      setStatus('');
+    } catch (err) {
+      setStatus(`Network error: ${err.message}`, 'error');
+    }
+  }
+
+  function applyFilters() {
+    const topicFilter = document.getElementById('f-topic').value.trim().toLowerCase();
+    const status      = document.getElementById('f-status').value;
+    const filtered    = topicFilter
+      ? allRows.filter(r => (r.topic || '').toLowerCase().includes(topicFilter))
+      : allRows;
+    renderRows(filtered, status);
+  }
+
+  function renderRows(rows, status) {
+    const tbody = document.getElementById('candidates-body');
+    const count = document.getElementById('row-count');
+
+    if (rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" class="empty-state">No ${status} candidates found.</td></tr>`;
+      count.textContent = '';
+      return;
+    }
+
+    count.textContent = `${rows.length} record${rows.length !== 1 ? 's' : ''}`;
+
+    tbody.innerHTML = rows.map(r => {
+      const actionBtns = status === 'candidate'
+        ? `<button class="btn-promote" onclick="promote('${r.id}', this)">↑ Promote</button>
+           <button class="btn-retire"  onclick="retire('${r.id}', this)">× Retire</button>`
+        : `<span style="font-size:0.78rem;color:#8a7055">${status}</span>`;
+      return `
+        <tr id="row-${r.id}">
+          <td class="id-col">${escHtml(r.id)}</td>
+          <td class="topic-col">${escHtml(r.topic || '—')}</td>
+          <td class="query-col">${escHtml(r.query || '—')}</td>
+          <td class="action-col">${actionBtns}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  async function promote(id, btn) {
+    await doAction('/api/research/candidates/promote', id, btn, `Promoted`);
+  }
+
+  async function retire(id, btn) {
+    await doAction('/api/research/candidates/retire', id, btn, `Retired`);
+  }
+
+  async function doAction(endpoint, id, triggerBtn, verb) {
+    // Disable both buttons in the row while in-flight
+    const row  = document.getElementById(`row-${id}`);
+    const btns = row ? row.querySelectorAll('button') : [];
+    btns.forEach(b => b.disabled = true);
+
+    try {
+      const res  = await fetch(endpoint, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id}),
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        setStatus(`${verb}: "${truncate(data.query, 60)}"`, 'ok');
+        // Remove row from DOM — no hide, no stale counts
+        if (row) row.remove();
+        updateCount();
+      } else {
+        setStatus(`Error: ${data.error}`, 'error');
+        btns.forEach(b => b.disabled = false);
+      }
+    } catch (err) {
+      setStatus(`Network error: ${err.message}`, 'error');
+      btns.forEach(b => b.disabled = false);
+    }
+  }
+
+  function updateCount() {
+    const tbody = document.getElementById('candidates-body');
+    const rows  = tbody.querySelectorAll('tr[id^="row-"]');
+    const count = document.getElementById('row-count');
+    if (rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" class="empty-state">All done — no more candidates in this view.</td></tr>`;
+      count.textContent = '';
+    } else {
+      count.textContent = `${rows.length} record${rows.length !== 1 ? 's' : ''}`;
+    }
+  }
+
+  function setStatus(msg, cls = '') {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className   = cls;
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function truncate(str, n) {
+    return str && str.length > n ? str.slice(0, n) + '…' : str;
+  }
+
+  // Load on page open
+  loadCandidates();
+</script>
+</body>
+</html>

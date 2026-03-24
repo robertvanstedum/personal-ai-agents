@@ -1,0 +1,30 @@
+[
+  {
+    "id": "ann-001",
+    "thread_id": "gold-geopolitics-2026",
+    "timestamp": "2026-03-23T13:47:28+00:00",
+    "type": "direction_shift",
+    "level": "thread",
+    "ref_session": null,
+    "ref_article": null,
+    "note": "Focus on proximate events around price drops, not long-term cycles. What triggered each major drop historically and is there a geopolitical pattern? The Iran timing is the specific puzzle.",
+    "affects_next_session": true,
+    "influenced_sessions": [
+      "gold-005"
+    ]
+  },
+  {
+    "id": "ann-002",
+    "thread_id": "gold-geopolitics-2026",
+    "timestamp": "2026-03-24T03:32:27+00:00",
+    "type": "direction_shift",
+    "level": "thread",
+    "ref_session": null,
+    "ref_article": null,
+    "note": "Test shift for gold-003",
+    "affects_next_session": true,
+    "influenced_sessions": [
+      "gold-004"
+    ]
+  }
+]

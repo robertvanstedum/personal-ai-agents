@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Research Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Georgia, 'Times New Roman', serif;
+      background: #f5f0e8;
+      color: #2c1f0e;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 780px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: normal;
+      letter-spacing: 0.02em;
+      color: #4a3520;
+      margin-bottom: 0.25rem;
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: #8a7055;
+      margin-bottom: 2rem;
+    }
+
+    /* ── Nav ── */
+    .research-nav {
+      display: flex;
+      gap: 0.25rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .research-nav a {
+      font-family: Georgia, serif;
+      font-size: 0.82rem;
+      color: #6b5540;
+      text-decoration: none;
+      padding: 0.3rem 0.8rem;
+      border: 1px solid #c8b898;
+      border-radius: 3px;
+      background: #fdf8f0;
+      transition: background 0.12s, color 0.12s;
+    }
+
+    .research-nav a:hover  { background: #eee4d0; color: #4a3520; }
+    .research-nav a.active {
+      background: #6b4c28;
+      color: #fdf8f0;
+      border-color: #6b4c28;
+    }
+
+    /* ── Budget bar ── */
+    .budget-row {
+      background: #fdf8f0;
+      border: 1px solid #d4c5a9;
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.75rem;
+    }
+
+    .budget-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      color: #6b5540;
+      margin-bottom: 0.5rem;
+    }
+
+    .budget-label .budget-used {
+      font-weight: bold;
+      color: #2c1f0e;
+    }
+
+    .budget-track {
+      height: 8px;
+      background: #e8dfc8;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .budget-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: #7a9e6e;
+      transition: width 0.4s ease;
+    }
+
+    .budget-fill.warn { background: #c4933a; }
+    .budget-fill.over { background: #b84a3a; }
+
+    /* ── Topic cards ── */
+    .topic-card {
+      background: #fdf8f0;
+      border: 1px solid #d4c5a9;
+      border-radius: 6px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .topic-card.empty {
+      opacity: 0.7;
+    }
+
+    .topic-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .topic-name {
+      font-size: 1.05rem;
+      color: #4a3520;
+      letter-spacing: 0.01em;
+    }
+
+    .topic-meta {
+      font-size: 0.78rem;
+      color: #8a7055;
+    }
+
+    .topic-stats {
+      display: flex;
+      gap: 1.5rem;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .stat-value {
+      font-size: 1.4rem;
+      font-weight: bold;
+      color: #4a3520;
+      line-height: 1.1;
+    }
+
+    .stat-label {
+      font-size: 0.72rem;
+      color: #8a7055;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .topic-find {
+      font-size: 0.82rem;
+      color: #5a4535;
+      font-style: italic;
+      margin-bottom: 0.9rem;
+      border-left: 2px solid #c8b898;
+      padding-left: 0.75rem;
+      line-height: 1.4;
+    }
+
+    .topic-find.empty-find {
+      color: #a08060;
+      font-style: normal;
+    }
+
+    .topic-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      font-family: Georgia, serif;
+      font-size: 0.78rem;
+      padding: 0.28rem 0.75rem;
+      border-radius: 3px;
+      border: 1px solid #c8b898;
+      background: #fdf8f0;
+      color: #6b5540;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: background 0.12s, color 0.12s;
+    }
+
+    .btn:hover { background: #eee4d0; color: #4a3520; }
+
+    .btn-run {
+      border-color: #8a6a3a;
+      color: #5a3e18;
+      background: #f5ead8;
+    }
+
+    .btn-run:hover { background: #ead8b8; }
+
+    /* run command tooltip */
+    .run-cmd {
+      display: none;
+      margin-top: 0.6rem;
+      font-family: 'Courier New', monospace;
+      font-size: 0.78rem;
+      background: #2c1f0e;
+      color: #e8d8b8;
+      padding: 0.5rem 0.75rem;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* ── Status bar ── */
+    .status-bar {
+      font-size: 0.78rem;
+      color: #8a7055;
+      text-align: right;
+      margin-top: 1.5rem;
+    }
+
+    .status-bar .agent-active {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #7a9e6e;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+
+    .status-bar .agent-idle {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #c8b898;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+
+    @media (max-width: 600px) {
+      .topic-stats { gap: 1rem; }
+      .stat-value  { font-size: 1.2rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <nav class="research-nav">
+    <a href="/research/dashboard" class="active">Dashboard</a>
+    <a href="/research/observe">Observe</a>
+    <a href="/research/candidates">Candidates</a>
+    <a href="/research/save">Save</a>
+    <a href="/curator_intelligence.html">Library</a>
+  </nav>
+
+  <h1>Research Intelligence</h1>
+  <p class="subtitle" id="subtitle">Loading…</p>
+
+  <div class="budget-row" id="budget-row" style="display:none">
+    <div class="budget-label">
+      <span>Pilot budget</span>
+      <span><span class="budget-used" id="budget-used">—</span> of <span id="budget-total">—</span> used · <span id="budget-pct">—</span>%</span>
+    </div>
+    <div class="budget-track">
+      <div class="budget-fill" id="budget-fill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div id="topic-cards"></div>
+
+  <div class="status-bar" id="status-bar"></div>
+
+</div>
+
+<script>
+  const REFRESH_MS = 60000;
+  let refreshTimer = null;
+
+  async function load() {
+    try {
+      const res  = await fetch('/api/research/dashboard');
+      const data = await res.json();
+      if (!data.ok) { showError(data.error || 'API error'); return; }
+      render(data);
+      scheduleRefresh(data.agent_active);
+    } catch (e) {
+      showError(e.message);
+    }
+  }
+
+  function render(data) {
+    const now = new Date().toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+    document.getElementById('subtitle').textContent =
+      `Overview of all active research topics · refreshed ${now}`;
+
+    // Budget bar
+    const b = data.budget;
+    document.getElementById('budget-row').style.display = '';
+    document.getElementById('budget-used').textContent  = '$' + b.used.toFixed(2);
+    document.getElementById('budget-total').textContent = '$' + b.total.toFixed(2);
+    document.getElementById('budget-pct').textContent   = b.pct.toFixed(1);
+
+    const fill = document.getElementById('budget-fill');
+    fill.style.width = Math.min(b.pct, 100) + '%';
+    fill.className   = 'budget-fill' +
+      (b.used >= b.warn  ? ' over' :
+       b.used >= b.warn * 0.85 ? ' warn' : '');
+
+    // Topic cards
+    const container = document.getElementById('topic-cards');
+    container.innerHTML = '';
+    for (const t of data.topics) {
+      container.appendChild(buildCard(t));
+    }
+
+    // Status bar
+    const bar = document.getElementById('status-bar');
+    if (data.agent_active) {
+      bar.innerHTML = '<span class="agent-active"></span> Agent running · auto-refresh on';
+    } else {
+      bar.innerHTML = '<span class="agent-idle"></span> Agent idle · last refreshed ' + now;
+    }
+  }
+
+  function buildCard(t) {
+    const isEmpty   = t.session_count === 0;
+    const lastRun   = t.last_run
+      ? new Date(t.last_run).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})
+      : 'never';
+    const topFind   = t.top_find || null;
+    const runCmd    = `python agent/research.py --topic ${t.topic} --session-name ${t.topic}-001`;
+
+    const card = document.createElement('div');
+    card.className = 'topic-card' + (isEmpty ? ' empty' : '');
+
+    card.innerHTML = `
+      <div class="topic-header">
+        <span class="topic-name">${t.topic}</span>
+        <span class="topic-meta">Last run: ${lastRun}</span>
+      </div>
+      <div class="topic-stats">
+        <div class="stat">
+          <span class="stat-value">${t.session_count}</span>
+          <span class="stat-label">Sessions</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value">${t.saved_count}</span>
+          <span class="stat-label">Saved</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value">${t.candidate_count}</span>
+          <span class="stat-label">Candidates</span>
+        </div>
+      </div>
+      ${topFind
+        ? `<div class="topic-find">⭐ ${topFind}</div>`
+        : `<div class="topic-find empty-find">No sessions run yet</div>`
+      }
+      <div class="topic-actions">
+        <button class="btn btn-run" onclick="toggleCmd(this, '${runCmd}')">Run Session ▾</button>
+        <a class="btn" href="/research/observe?topic=${t.topic}">Observe</a>
+        <a class="btn" href="/research/candidates?topic=${t.topic}">Candidates</a>
+      </div>
+      <div class="run-cmd"></div>
+    `;
+
+    return card;
+  }
+
+  function toggleCmd(btn, cmd) {
+    const cmdEl = btn.closest('.topic-card').querySelector('.run-cmd');
+    if (cmdEl.style.display === 'block') {
+      cmdEl.style.display = 'none';
+      btn.textContent = 'Run Session ▾';
+    } else {
+      cmdEl.textContent = cmd;
+      cmdEl.style.display = 'block';
+      btn.textContent = 'Run Session ▴';
+    }
+  }
+
+  function scheduleRefresh(agentActive) {
+    clearTimeout(refreshTimer);
+    if (agentActive) {
+      refreshTimer = setTimeout(load, REFRESH_MS);
+    }
+  }
+
+  function showError(msg) {
+    document.getElementById('subtitle').textContent = '⚠ ' + msg;
+  }
+
+  load();
+</script>
+</body>
+</html>

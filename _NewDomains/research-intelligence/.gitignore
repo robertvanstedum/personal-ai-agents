@@ -1,0 +1,12 @@
+# Personal reading signals — private
+data/feedback/
+
+# Generated session output — large, regeneratable
+topics/*/
+!topics/*/CONTEXT.md
+!topics/*/STORY_FOR_CLAUDE_AI.md
+
+# Python
+__pycache__/
+*.pyc
+.DS_Store
