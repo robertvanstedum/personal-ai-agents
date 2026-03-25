@@ -100,6 +100,98 @@ header {
   border-color: rgba(139,94,42,0.2);
 }
 
+/* ── Domain Rail ── */
+body { display: flex; align-items: flex-start; }
+
+.domain-rail {
+  width: 210px;
+  min-width: 210px;
+  background: #f9f5ed;
+  border-right: 1px solid var(--border);
+  box-shadow: 2px 0 4px rgba(42,36,24,0.06);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+  transition: width 0.2s ease, min-width 0.2s ease;
+  z-index: 90;
+  flex-shrink: 0;
+}
+.domain-rail.collapsed { width: 48px; min-width: 48px; }
+
+.rail-toggle {
+  font-family: 'DM Mono', monospace;
+  font-size: 14px;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 14px 16px;
+  text-align: right;
+  transition: color 0.15s;
+  align-self: flex-end;
+}
+.rail-toggle:hover { color: var(--accent); }
+.domain-rail.collapsed .rail-toggle { transform: scaleX(-1); }
+
+.rail-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  overflow: hidden;
+}
+
+.rail-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text-muted);
+  transition: all 0.15s;
+  cursor: pointer;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.rail-item:hover:not(.rail-coming) { background: var(--surface2); color: var(--text); }
+.rail-item.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: rgba(139,94,42,0.2);
+}
+.rail-item.rail-coming { opacity: 0.4; cursor: default; }
+
+.rail-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
+.rail-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  font-weight: 500;
+}
+.domain-rail.collapsed .rail-label { display: none; }
+.domain-rail.collapsed .rail-item { justify-content: center; }
+
+.rail-settings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 16px;
+  transition: color 0.15s;
+  border-top: 1px solid var(--border);
+}
+.rail-settings:hover { color: var(--accent); }
+
+.main-content { flex: 1; min-width: 0; overflow-x: hidden; }
+
 /* ── Main layout ── */
 main {
   max-width: 780px;
@@ -131,13 +223,33 @@ main {
   margin-top: 6px;
 }
 
-.date-nav {
+/* ── Section headers ── */
+.section-header-row {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-top: 14px;
-  margin-bottom: 28px;
+  justify-content: space-between;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  margin-top: 36px;
 }
+
+.section-header-row:first-of-type { margin-top: 20px; }
+
+.date-inline-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .date-nav-btn {
   font-family: 'DM Mono', monospace;
   font-size: 11px;
@@ -158,21 +270,28 @@ main {
   letter-spacing: 0.04em;
 }
 
-/* ── Section headers ── */
-.section-header {
-  font-family: 'DM Mono', monospace;
+.weekly-stale-label {
   font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 16px;
-  margin-top: 36px;
+  color: var(--warn);
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-weight: 400;
 }
 
-.section-header:first-of-type { margin-top: 0; }
+.weekly-toggle {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 0 16px;
+  letter-spacing: 0.03em;
+  transition: color 0.15s;
+  width: 100%;
+  text-align: left;
+}
+.weekly-toggle:hover { color: var(--accent); }
 
 /* ── Weekly connection cards ── */
 .weekly-card {
@@ -495,6 +614,29 @@ main {
 </head>
 <body>
 
+<aside class="domain-rail">
+  <button class="rail-toggle" id="railToggle" title="Toggle rail">‹</button>
+  <nav class="rail-nav">
+    <a href="/" class="rail-item active" data-domain="curator">
+      <span class="rail-icon">🗞</span>
+      <span class="rail-label">CURATOR</span>
+    </a>
+    <a href="/research/dashboard" class="rail-item" data-domain="research">
+      <span class="rail-icon">🔬</span>
+      <span class="rail-label">RESEARCH</span>
+    </a>
+    <span class="rail-item rail-coming" title="Language Learning — coming soon">
+      <span class="rail-icon">💬</span>
+      <span class="rail-label">LANGUAGE</span>
+    </span>
+    <span class="rail-item rail-coming" title="Jobs &amp; Opportunities — coming soon">
+      <span class="rail-icon">💼</span>
+      <span class="rail-label">JOBS</span>
+    </span>
+  </nav>
+  <a href="/curator_priorities.html" class="rail-settings" title="Settings">⚙</a>
+</aside>
+<div class="main-content">
 <header>
   <div class="header-left">
     <a href="/" class="logo">Curator</a>
@@ -504,8 +646,8 @@ main {
     <a href="/" class="nav-link">Daily</a>
     <a href="/curator_library.html" class="nav-link">Library</a>
     <a href="/interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
-    <a href="/curator_priorities.html" class="nav-link">Priorities</a>
-    <a href="/curator_intelligence.html" class="nav-link active">AI Observations</a>
+    <a href="/curator_intelligence.html" class="nav-link active">Observations</a>
+    <a href="/curator_priorities.html" class="nav-link nav-focus">🎯</a>
   </nav>
 </header>
 
@@ -515,21 +657,27 @@ main {
     <p class="page-meta" id="pageMeta">Loading…</p>
   </div>
 
-  <div class="date-nav">
-    <button class="date-nav-btn" id="btnPrev"
-      onclick="loadDate(offsetDate(_currentDate, -1))">← prev</button>
-    <span class="date-nav-label" id="dateLabel"></span>
-    <button class="date-nav-btn" id="btnToday"
-      onclick="loadDate('')">today →</button>
+  <!-- ── TODAY'S OBSERVATIONS ── -->
+  <div class="section-header-row">
+    <span>Today's Observations</span>
+    <span class="date-inline-nav">
+      <button class="date-nav-btn" id="btnPrev"
+        onclick="loadDate(offsetDate(_currentDate, -1))">← prev</button>
+      <span class="date-nav-label" id="dateLabel"></span>
+      <button class="date-nav-btn" id="btnToday"
+        onclick="loadDate('')">today →</button>
+    </span>
   </div>
+  <div id="dailySection"></div>
 
   <!-- ── WEEKLY CONNECTIONS ── -->
-  <div class="section-header">Weekly Connections</div>
+  <div class="section-header-row" id="weeklySectionHeader">
+    <span>Weekly Connections</span>
+    <span class="weekly-stale-label" id="weeklyStaleLabel" style="display:none"></span>
+  </div>
+  <button class="weekly-toggle" id="weeklyToggle" style="display:none"
+    onclick="toggleWeekly()"></button>
   <div id="weeklySection"></div>
-
-  <!-- ── TODAY'S OBSERVATIONS ── -->
-  <div class="section-header">Today's Observations</div>
-  <div id="dailySection"></div>
 
 </main>
 
@@ -838,7 +986,7 @@ async function loadDate(dateStr) {
   try {
     data = await fetch(url).then(r => r.json());
   } catch (e) {
-    document.getElementById('weeklySection').innerHTML =
+    document.getElementById('dailySection').innerHTML =
       '<p style="color:var(--text-dim)">Could not load intelligence data.</p>';
     return;
   }
@@ -858,10 +1006,44 @@ async function loadDate(dateStr) {
   updateMetaCount();
   updateDateNav(data.is_today, data.has_prev);
 
-  document.getElementById('weeklySection').innerHTML =
-    renderWeeklySection(data.weekly, responses, weeklyRef);
   document.getElementById('dailySection').innerHTML =
     renderDailySection(data.daily, responses, dailyRef);
+  document.getElementById('weeklySection').innerHTML =
+    renderWeeklySection(data.weekly, responses, weeklyRef);
+
+  // ── Weekly staleness check ────────────────────────────────────────────────
+  const weeklyStaleLabel  = document.getElementById('weeklyStaleLabel');
+  const weeklyToggle      = document.getElementById('weeklyToggle');
+  const weeklySection     = document.getElementById('weeklySection');
+  weeklyStaleLabel.style.display = 'none';
+  weeklyToggle.style.display     = 'none';
+  weeklySection.style.display    = '';
+
+  const weeklyDateStr = data.weekly ? (data.weekly.date || '') : '';
+  if (weeklyDateStr) {
+    const weeklyDate = new Date(weeklyDateStr + 'T12:00:00');
+    const daysDiff   = (Date.now() - weeklyDate) / 86400000;
+    if (daysDiff > 7) {
+      const shortDate = weeklyDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      weeklyStaleLabel.textContent   = `last updated ${shortDate}`;
+      weeklyStaleLabel.style.display = '';
+      weeklySection.style.display    = 'none';
+      weeklyToggle.style.display     = '';
+      weeklyToggle.textContent       = `▼ Show Weekly Connections`;
+    }
+  }
+}
+
+// ── Weekly collapse toggle ─────────────────────────────────────────────────
+
+function toggleWeekly() {
+  const section = document.getElementById('weeklySection');
+  const toggle  = document.getElementById('weeklyToggle');
+  const visible = section.style.display !== 'none';
+  section.style.display = visible ? 'none' : '';
+  toggle.textContent    = visible
+    ? '▼ Show Weekly Connections'
+    : '▲ Hide Weekly Connections';
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -869,6 +1051,15 @@ async function loadDate(dateStr) {
 document.addEventListener('DOMContentLoaded', () => {
   loadDate('');
 });
+</script>
+</div>
+<script>
+(function() {
+  var toggle = document.getElementById('railToggle');
+  if (toggle) toggle.addEventListener('click', function() {
+    document.querySelector('.domain-rail').classList.toggle('collapsed');
+  });
+})();
 </script>
 </body>
 </html>
