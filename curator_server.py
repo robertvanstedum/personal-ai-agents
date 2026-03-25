@@ -8,19 +8,80 @@ Usage:
 Then open curator_latest.html or curator_library.html in browser
 """
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_cors import CORS
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import re
 
 BASE_DIR = Path(__file__).parent
-app = Flask(__name__)
+app = Flask(__name__, template_folder=str(BASE_DIR / 'templates'))
 CORS(app)  # Enable CORS for all routes
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Briefing helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _calc_time_ago(published_str, now):
+    """Return a human-readable 'Xh ago' / 'Xd ago' string for a published timestamp."""
+    if not published_str:
+        return 'N/A'
+    try:
+        import dateutil.parser
+        pub_dt = dateutil.parser.parse(published_str)
+        if pub_dt.tzinfo is None:
+            pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+        diff = now - pub_dt
+        hours = diff.total_seconds() / 3600
+        if hours < 1:
+            return f"{int(diff.total_seconds() / 60)}m ago"
+        elif hours < 24:
+            return f"{int(hours)}h ago"
+        else:
+            return f"{int(hours / 24)}d ago"
+    except Exception:
+        return 'N/A'
+
+
+def _load_briefing_articles():
+    """Read curator_latest.json and enrich each article with time_ago and score_pct.
+
+    Returns (articles, day_str, date_str, model_display, briefing_date) or None
+    if the JSON file does not exist.
+    """
+    json_path = BASE_DIR / 'curator_latest.json'
+    if not json_path.exists():
+        return None
+
+    try:
+        raw = json.loads(json_path.read_text())
+    except Exception:
+        return None
+
+    now = datetime.now(timezone.utc)
+    today = datetime.now()
+    day_str = today.strftime('%A')
+    date_str = today.strftime('%B %d, %Y')
+
+    # Derive briefing_date and model_display from first article if available
+    briefing_date = raw[0].get('briefing_date', today.strftime('%Y-%m-%d')) if raw else today.strftime('%Y-%m-%d')
+    model_display = 'grok-3-mini'  # default; curator_latest.json does not store model name
+
+    articles = []
+    for entry in raw:
+        score = entry.get('final_score', 0) or 0
+        score_pct = min(100, max(0, (score / 20.0) * 100)) if score > 0 else 0
+        enriched = dict(entry)
+        enriched['time_ago'] = _calc_time_ago(entry.get('published', ''), now)
+        enriched['score_pct'] = score_pct
+        articles.append(enriched)
+
+    return articles, day_str, date_str, model_display, briefing_date
 
 # Shared navigation HTML
 SHARED_NAV_HTML = """
@@ -790,7 +851,19 @@ def api_intelligence_respond():
 
 @app.route('/')
 def index():
-    """Root URL redirects to latest briefing"""
+    """Root URL — serve briefing from Jinja2 template when JSON exists."""
+    result = _load_briefing_articles()
+    if result is not None:
+        articles, day_str, date_str, model_display, briefing_date = result
+        return render_template(
+            'curator_briefing.html',
+            articles=articles,
+            day_str=day_str,
+            date_str=date_str,
+            model_display=model_display,
+            run_mode='production',
+            briefing_date=briefing_date,
+        )
     return send_from_directory(BASE_DIR, 'curator_latest.html')
 
 @app.route('/curator_library.html')
@@ -807,10 +880,36 @@ def intelligence_page():
 
 @app.route('/curator_briefing.html')
 def briefing_page():
+    """Serve briefing from Jinja2 template when JSON exists."""
+    result = _load_briefing_articles()
+    if result is not None:
+        articles, day_str, date_str, model_display, briefing_date = result
+        return render_template(
+            'curator_briefing.html',
+            articles=articles,
+            day_str=day_str,
+            date_str=date_str,
+            model_display=model_display,
+            run_mode='production',
+            briefing_date=briefing_date,
+        )
     return send_from_directory(BASE_DIR, 'curator_briefing.html')
 
 @app.route('/curator_latest.html')
 def latest_page():
+    """Serve briefing from Jinja2 template when JSON exists."""
+    result = _load_briefing_articles()
+    if result is not None:
+        articles, day_str, date_str, model_display, briefing_date = result
+        return render_template(
+            'curator_briefing.html',
+            articles=articles,
+            day_str=day_str,
+            date_str=date_str,
+            model_display=model_display,
+            run_mode='production',
+            briefing_date=briefing_date,
+        )
     return send_from_directory(BASE_DIR, 'curator_latest.html')
 
 @app.route('/curator_index.html')
