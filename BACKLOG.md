@@ -27,6 +27,7 @@ _Promoted to active work by Robert's decision only. OpenClaw can add items. Only
 | # | Item | Notes |
 |---|------|-------|
 | B-006 | **UI bug fixes** | Spec in `_working/curator_ui_fix_plan.md`. Dedicated session, don't mix with other work. |
+| B-011 | **Card edge definition (refinement day)** | Card borders blend into parchment background, especially at the rail/content boundary. Fix: increase `--border2` contrast slightly, or add `box-shadow: 0 1px 4px rgba(42,36,24,0.10), 0 0 0 1px rgba(42,36,24,0.06)` to `.weekly-card`, `.topic-card`, and equivalent card classes across all domains. Warm light tan border or 10–15% opacity drop shadow. CSS-only, low effort. |
 
 ## Job Search
 
