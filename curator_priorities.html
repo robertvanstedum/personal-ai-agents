@@ -108,6 +108,98 @@
     border-color: rgba(139,94,42,0.2);
   }
 
+  /* ── Domain Rail ── */
+  body { display: flex; align-items: flex-start; }
+
+  .domain-rail {
+    width: 210px;
+    min-width: 210px;
+    background: #f9f5ed;
+    border-right: 1px solid var(--border);
+    box-shadow: 2px 0 4px rgba(42,36,24,0.06);
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: hidden;
+    transition: width 0.2s ease, min-width 0.2s ease;
+    z-index: 90;
+    flex-shrink: 0;
+  }
+  .domain-rail.collapsed { width: 48px; min-width: 48px; }
+
+  .rail-toggle {
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    color: var(--text-dim);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 14px 16px;
+    text-align: right;
+    transition: color 0.15s;
+    align-self: flex-end;
+  }
+  .rail-toggle:hover { color: var(--accent); }
+  .domain-rail.collapsed .rail-toggle { transform: scaleX(-1); }
+
+  .rail-nav {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 12px;
+    overflow: hidden;
+  }
+
+  .rail-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--text-muted);
+    transition: all 0.15s;
+    cursor: pointer;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .rail-item:hover:not(.rail-coming) { background: var(--surface2); color: var(--text); }
+  .rail-item.active {
+    background: var(--accent-dim);
+    color: var(--accent);
+    border-color: rgba(139,94,42,0.2);
+  }
+  .rail-item.rail-coming { opacity: 0.4; cursor: default; }
+
+  .rail-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
+  .rail-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    font-weight: 500;
+  }
+  .domain-rail.collapsed .rail-label { display: none; }
+  .domain-rail.collapsed .rail-item { justify-content: center; }
+
+  .rail-settings {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 16px;
+    transition: color 0.15s;
+    border-top: 1px solid var(--border);
+  }
+  .rail-settings:hover { color: var(--accent); }
+
+  .main-content { flex: 1; min-width: 0; overflow-x: hidden; }
+
   /* ── Main layout ── */
   main {
     max-width: 860px;
@@ -858,6 +950,29 @@
 </head>
 <body>
 
+<aside class="domain-rail">
+  <button class="rail-toggle" id="railToggle" title="Toggle rail">‹</button>
+  <nav class="rail-nav">
+    <a href="/" class="rail-item active" data-domain="curator">
+      <span class="rail-icon">🗞</span>
+      <span class="rail-label">CURATOR</span>
+    </a>
+    <a href="/research/dashboard" class="rail-item" data-domain="research">
+      <span class="rail-icon">🔬</span>
+      <span class="rail-label">RESEARCH</span>
+    </a>
+    <span class="rail-item rail-coming" title="Language Learning — coming soon">
+      <span class="rail-icon">💬</span>
+      <span class="rail-label">LANGUAGE</span>
+    </span>
+    <span class="rail-item rail-coming" title="Jobs &amp; Opportunities — coming soon">
+      <span class="rail-icon">💼</span>
+      <span class="rail-label">JOBS</span>
+    </span>
+  </nav>
+  <a href="/curator_priorities.html" class="rail-settings" title="Settings">⚙</a>
+</aside>
+<div class="main-content">
 <header>
   <div class="header-left">
     <a href="/" class="logo">Curator</a>
@@ -867,8 +982,8 @@
     <a href="/" class="nav-link">Daily</a>
     <a href="/curator_library.html" class="nav-link">Library</a>
     <a href="/interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
-    <a href="/curator_priorities.html" class="nav-link active">Priorities</a>
-    <a href="/curator_intelligence.html" class="nav-link">AI Observations</a>
+    <a href="/curator_intelligence.html" class="nav-link">Observations</a>
+    <a href="/curator_priorities.html" class="nav-link nav-focus active">🎯</a>
   </nav>
 </header>
 
@@ -1454,6 +1569,15 @@
 
   // ── Init ─────────────────────────────────────────────────────
   loadPriorities();
+</script>
+</div>
+<script>
+(function() {
+  var toggle = document.getElementById('railToggle');
+  if (toggle) toggle.addEventListener('click', function() {
+    document.querySelector('.domain-rail').classList.toggle('collapsed');
+  });
+})();
 </script>
 </body>
 </html>

@@ -4,67 +4,168 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Research Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --bg: #f5f0e8;
+      --bg-texture: #ede8df;
+      --surface: #faf7f2;
+      --surface2: #f0ebe0;
+      --border: #ddd6c8;
+      --border2: #c8bfaf;
+      --text: #2a2418;
+      --text-muted: #6b5f4e;
+      --text-dim: #9e9080;
+      --accent: #8b5e2a;
+      --accent-dim: rgba(139,94,42,0.08);
+      --accent-glow: rgba(139,94,42,0.18);
+      --shadow: rgba(42,36,24,0.08);
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: Georgia, 'Times New Roman', serif;
-      background: #f5f0e8;
-      color: #2c1f0e;
+      font-family: 'Source Sans 3', sans-serif;
+      background: var(--bg);
+      color: var(--text);
       min-height: 100vh;
-      padding: 2rem 1rem;
+      display: flex;
+      align-items: flex-start;
     }
 
     .container {
       max-width: 780px;
       margin: 0 auto;
+      padding: 2rem 1rem;
     }
 
     h1 {
+      font-family: 'Playfair Display', serif;
       font-size: 1.5rem;
       font-weight: normal;
       letter-spacing: 0.02em;
-      color: #4a3520;
+      color: var(--text);
       margin-bottom: 0.25rem;
     }
 
     .subtitle {
       font-size: 0.85rem;
-      color: #8a7055;
+      color: var(--text-muted);
       margin-bottom: 2rem;
     }
 
-    /* ── Nav ── */
-    .research-nav {
-      display: flex;
-      gap: 0.25rem;
-      margin-bottom: 2rem;
-      flex-wrap: wrap;
-    }
-
-    .research-nav a {
-      font-family: Georgia, serif;
-      font-size: 0.82rem;
-      color: #6b5540;
+    /* ── Header Nav ── */
+    .header-nav { display: flex; gap: 4px; }
+    .nav-link {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
       text-decoration: none;
-      padding: 0.3rem 0.8rem;
-      border: 1px solid #c8b898;
-      border-radius: 3px;
-      background: #fdf8f0;
-      transition: background 0.12s, color 0.12s;
+      padding: 6px 14px;
+      border-radius: 6px;
+      transition: all 0.15s;
+      border: 1px solid transparent;
+    }
+    .nav-link:hover { color: var(--text); background: var(--surface2); }
+    .nav-link.active { color: var(--accent); background: var(--accent-dim); border-color: rgba(139,94,42,0.2); }
+    .nav-link.nav-focus { letter-spacing: 0; }
+
+    /* ── Domain Rail ── */
+    .domain-rail {
+      width: 210px;
+      min-width: 210px;
+      background: #f9f5ed;
+      border-right: 1px solid var(--border);
+      box-shadow: 2px 0 4px rgba(42,36,24,0.06);
+      display: flex;
+      flex-direction: column;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: hidden;
+      transition: width 0.2s ease, min-width 0.2s ease;
+      z-index: 90;
+      flex-shrink: 0;
+    }
+    .domain-rail.collapsed { width: 48px; min-width: 48px; }
+
+    .rail-toggle {
+      font-family: 'DM Mono', monospace;
+      font-size: 14px;
+      color: var(--text-dim);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 14px 16px;
+      text-align: right;
+      transition: color 0.15s;
+      align-self: flex-end;
+    }
+    .rail-toggle:hover { color: var(--accent); }
+    .domain-rail.collapsed .rail-toggle { transform: scaleX(-1); }
+
+    .rail-nav {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px 12px;
+      overflow: hidden;
     }
 
-    .research-nav a:hover  { background: #eee4d0; color: #4a3520; }
-    .research-nav a.active {
-      background: #6b4c28;
-      color: #fdf8f0;
-      border-color: #6b4c28;
+    .rail-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      text-decoration: none;
+      color: var(--text-muted);
+      transition: all 0.15s;
+      cursor: pointer;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      overflow: hidden;
     }
+    .rail-item:hover:not(.rail-coming) { background: var(--surface2); color: var(--text); }
+    .rail-item.active {
+      background: var(--accent-dim);
+      color: var(--accent);
+      border-color: rgba(139,94,42,0.2);
+    }
+    .rail-item.rail-coming { opacity: 0.4; cursor: default; }
+
+    .rail-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
+    .rail-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      font-weight: 500;
+    }
+    .domain-rail.collapsed .rail-label { display: none; }
+    .domain-rail.collapsed .rail-item { justify-content: center; }
+
+    .rail-settings {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 16px;
+      transition: color 0.15s;
+      border-top: 1px solid var(--border);
+    }
+    .rail-settings:hover { color: var(--accent); }
+
+    .main-content { flex: 1; min-width: 0; overflow-x: hidden; }
 
     /* ── Budget bar ── */
     .budget-row {
-      background: #fdf8f0;
-      border: 1px solid #d4c5a9;
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: 6px;
       padding: 1rem 1.25rem;
       margin-bottom: 1.75rem;
@@ -74,18 +175,18 @@
       display: flex;
       justify-content: space-between;
       font-size: 0.82rem;
-      color: #6b5540;
+      color: var(--text-muted);
       margin-bottom: 0.5rem;
     }
 
     .budget-label .budget-used {
       font-weight: bold;
-      color: #2c1f0e;
+      color: var(--text);
     }
 
     .budget-track {
       height: 8px;
-      background: #e8dfc8;
+      background: var(--surface2);
       border-radius: 4px;
       overflow: hidden;
     }
@@ -102,8 +203,8 @@
 
     /* ── Topic cards ── */
     .topic-card {
-      background: #fdf8f0;
-      border: 1px solid #d4c5a9;
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: 6px;
       padding: 1.25rem 1.5rem;
       margin-bottom: 1rem;
@@ -123,14 +224,15 @@
     }
 
     .topic-name {
+      font-family: 'Playfair Display', serif;
       font-size: 1.05rem;
-      color: #4a3520;
+      color: var(--text);
       letter-spacing: 0.01em;
     }
 
     .topic-meta {
       font-size: 0.78rem;
-      color: #8a7055;
+      color: var(--text-muted);
     }
 
     .topic-stats {
@@ -149,29 +251,29 @@
     .stat-value {
       font-size: 1.4rem;
       font-weight: bold;
-      color: #4a3520;
+      color: var(--text);
       line-height: 1.1;
     }
 
     .stat-label {
       font-size: 0.72rem;
-      color: #8a7055;
+      color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.04em;
     }
 
     .topic-find {
       font-size: 0.82rem;
-      color: #5a4535;
+      color: var(--text-muted);
       font-style: italic;
       margin-bottom: 0.9rem;
-      border-left: 2px solid #c8b898;
+      border-left: 2px solid var(--border);
       padding-left: 0.75rem;
       line-height: 1.4;
     }
 
     .topic-find.empty-find {
-      color: #a08060;
+      color: var(--text-dim);
       font-style: normal;
     }
 
@@ -182,37 +284,37 @@
     }
 
     .btn {
-      font-family: Georgia, serif;
+      font-family: 'Source Sans 3', sans-serif;
       font-size: 0.78rem;
       padding: 0.28rem 0.75rem;
       border-radius: 3px;
-      border: 1px solid #c8b898;
-      background: #fdf8f0;
-      color: #6b5540;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
       cursor: pointer;
       text-decoration: none;
       display: inline-block;
       transition: background 0.12s, color 0.12s;
     }
 
-    .btn:hover { background: #eee4d0; color: #4a3520; }
+    .btn:hover { background: var(--surface2); color: var(--text); }
 
     .btn-run {
-      border-color: #8a6a3a;
-      color: #5a3e18;
-      background: #f5ead8;
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-dim);
     }
 
-    .btn-run:hover { background: #ead8b8; }
+    .btn-run:hover { background: var(--accent-glow); }
 
     /* run command tooltip */
     .run-cmd {
       display: none;
       margin-top: 0.6rem;
-      font-family: 'Courier New', monospace;
+      font-family: 'DM Mono', monospace;
       font-size: 0.78rem;
-      background: #2c1f0e;
-      color: #e8d8b8;
+      background: var(--text);
+      color: var(--surface2);
       padding: 0.5rem 0.75rem;
       border-radius: 4px;
       white-space: pre-wrap;
@@ -222,7 +324,7 @@
     /* ── Status bar ── */
     .status-bar {
       font-size: 0.78rem;
-      color: #8a7055;
+      color: var(--text-dim);
       text-align: right;
       margin-top: 1.5rem;
     }
@@ -242,7 +344,7 @@
       width: 7px;
       height: 7px;
       border-radius: 50%;
-      background: #c8b898;
+      background: var(--border);
       margin-right: 4px;
       vertical-align: middle;
     }
@@ -254,15 +356,43 @@
   </style>
 </head>
 <body>
-<div class="container">
-
-  <nav class="research-nav">
-    <a href="/research/dashboard" class="active">Dashboard</a>
-    <a href="/research/observe">Observe</a>
-    <a href="/research/candidates">Candidates</a>
-    <a href="/research/save">Save</a>
-    <a href="/curator_intelligence.html">Library</a>
+<aside class="domain-rail">
+  <button class="rail-toggle" id="railToggle" title="Toggle rail">‹</button>
+  <nav class="rail-nav">
+    <a href="/" class="rail-item" data-domain="curator">
+      <span class="rail-icon">🗞</span>
+      <span class="rail-label">CURATOR</span>
+    </a>
+    <a href="/research/dashboard" class="rail-item active" data-domain="research">
+      <span class="rail-icon">🔬</span>
+      <span class="rail-label">RESEARCH</span>
+    </a>
+    <span class="rail-item rail-coming" title="Language Learning — coming soon">
+      <span class="rail-icon">💬</span>
+      <span class="rail-label">LANGUAGE</span>
+    </span>
+    <span class="rail-item rail-coming" title="Jobs &amp; Opportunities — coming soon">
+      <span class="rail-icon">💼</span>
+      <span class="rail-label">JOBS</span>
+    </span>
   </nav>
+  <a href="/curator_priorities.html" class="rail-settings" title="Settings">⚙</a>
+</aside>
+<div class="main-content">
+  <header style="background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 28px; height: 52px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100;">
+    <div style="display: flex; align-items: baseline; gap: 10px;">
+      <a href="/" style="font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 600; color: var(--text); text-decoration: none; letter-spacing: -0.02em;">mini-moi</a>
+      <span style="font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 0.06em; text-transform: uppercase;">Research</span>
+    </div>
+    <nav class="header-nav" style="display: flex; gap: 4px;">
+      <a href="/research/dashboard" class="nav-link active">Dashboard</a>
+      <a href="/research/candidates" class="nav-link">Queries</a>
+      <a href="/research/observe" class="nav-link">Observations</a>
+      <a href="/research/save" class="nav-link">Save</a>
+      <a href="/curator_priorities.html" class="nav-link nav-focus">🎯</a>
+    </nav>
+  </header>
+  <div class="container">
 
   <h1>Research Intelligence</h1>
   <p class="subtitle" id="subtitle">Loading…</p>
@@ -402,6 +532,16 @@
   }
 
   load();
+</script>
+</div>
+</div>
+<script>
+(function() {
+  var toggle = document.getElementById('railToggle');
+  if (toggle) toggle.addEventListener('click', function() {
+    document.querySelector('.domain-rail').classList.toggle('collapsed');
+  });
+})();
 </script>
 </body>
 </html>
