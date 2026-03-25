@@ -817,6 +817,14 @@ def latest_page():
 def index_page():
     return send_from_directory(BASE_DIR, 'curator_index.html')
 
+@app.route('/language')
+def language_coming():
+    return send_from_directory(BASE_DIR, 'language_coming.html')
+
+@app.route('/jobs')
+def jobs_coming():
+    return send_from_directory(BASE_DIR, 'jobs_coming.html')
+
 @app.route('/interests/<path:filepath>')
 def serve_interests(filepath):
     """Serve deep dive markdown and HTML files from interests directory"""
