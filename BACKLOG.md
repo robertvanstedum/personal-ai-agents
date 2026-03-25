@@ -18,6 +18,9 @@ _Promoted to active work by Robert's decision only. OpenClaw can add items. Only
 |---|------|-------|
 | B-004 | **HTML reader** | Trigger Claude Code after 50+ library items. Spec in `WAY_OF_WORKING.md`. |
 | B-005 | **Curator integration** | Validated sources pipeline. Phase 2, not PoC. |
+| B-008 | **Source-level priority weights** | Allow demoting individual sources (e.g. Al Jazeera) without removing from candidate pool. Current system only weights topics. Needed for triage precision. |
+| B-009 | **Reading Room page** (Research) | New page: saved articles under active investigation. Distinct from Queries (which manages search queries). Add to Research sub-nav when built: `Dashboard · Queries · Reading Room · Observations · Save · 🎯`. New route required — no `/research/reading-room` exists yet. |
+| B-010 | **Sessions page** (Research) | New page: list of past `research.py` session files with their findings, filterable by topic. No `/research/sessions` route exists yet. New build required. |
 
 ## Curator
 
@@ -39,4 +42,4 @@ _Nothing yet._
 
 ---
 
-_Last updated: 2026-03-21 by OpenClaw_
+_Last updated: 2026-03-24 by Claude Code_
