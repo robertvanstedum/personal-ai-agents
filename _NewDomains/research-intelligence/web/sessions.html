@@ -678,6 +678,7 @@
     const anns = data.annotations.slice().reverse(); // newest first
     count.textContent = anns.length;
     panel.style.display = 'block';
+    body.classList.add('open'); // auto-expand when there are notes
 
     body.innerHTML = anns.map(a => {
       const consumed = a.influenced_sessions?.length > 0;
