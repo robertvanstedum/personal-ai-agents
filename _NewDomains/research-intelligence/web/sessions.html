@@ -101,21 +101,31 @@
       margin-bottom: 28px;
     }
 
-    /* ── Topic Selector ── */
-    .topic-bar {
-      display: flex; gap: 8px; margin-bottom: 28px;
-      flex-wrap: wrap;
+    /* ── Topic List (replaces pill bar — scales to 30+) ── */
+    .topic-list {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden; margin-bottom: 10px;
     }
-    .topic-btn {
-      font-family: 'DM Mono', monospace; font-size: 11px;
-      letter-spacing: 0.05em; text-transform: uppercase;
-      padding: 7px 16px; border-radius: 20px;
-      border: 1px solid var(--border2);
-      background: var(--surface); color: var(--text-muted);
-      cursor: pointer; transition: all 0.15s;
+    .topic-list-header {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--text-dim); padding: 10px 14px 8px;
+      border-bottom: 1px solid var(--border);
     }
-    .topic-btn:hover { border-color: var(--accent); color: var(--accent); }
-    .topic-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+    .topic-list-inner { max-height: 220px; overflow-y: auto; }
+    .topic-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 14px; cursor: pointer;
+      font-family: 'DM Mono', monospace; font-size: 12px;
+      color: var(--text-muted); transition: all 0.12s;
+      border-bottom: 1px solid var(--border);
+    }
+    .topic-row:last-child { border-bottom: none; }
+    .topic-row:hover { background: var(--surface2); color: var(--text); }
+    .topic-row.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+    .topic-row.active .topic-count { color: var(--accent); opacity: 0.7; }
+    .topic-name { letter-spacing: 0.03em; }
+    .topic-count { font-size: 11px; color: var(--text-dim); }
 
     /* ── Session List ── */
     .sessions-layout { display: grid; grid-template-columns: 280px 1fr; gap: 24px; align-items: start; }
@@ -332,12 +342,12 @@
   <div class="page-title">Session Archive</div>
   <div class="page-subtitle" id="subtitleLine">Loading topics…</div>
 
-  <!-- Topic Selector -->
-  <div class="topic-bar" id="topicBar"></div>
-
-  <!-- Main Layout: session list + detail -->
   <div class="sessions-layout">
     <div>
+      <div class="topic-list">
+        <div class="topic-list-header">Topics</div>
+        <div class="topic-list-inner" id="topicBar"></div>
+      </div>
       <div class="session-list" id="sessionList">
         <div class="empty"><div class="empty-icon">🔬</div><div class="empty-msg">Select a topic above</div></div>
       </div>
@@ -380,12 +390,12 @@
 
     const bar = document.getElementById('topicBar');
     data.topics.forEach(t => {
-      const btn = document.createElement('button');
-      btn.className = 'topic-btn';
-      btn.textContent = `${t.topic}  ·  ${t.count}`;
-      btn.dataset.topic = t.topic;
-      btn.onclick = () => selectTopic(t.topic);
-      bar.appendChild(btn);
+      const row = document.createElement('div');
+      row.className = 'topic-row';
+      row.dataset.topic = t.topic;
+      row.innerHTML = `<span class="topic-name">${t.topic}</span><span class="topic-count">${t.count}</span>`;
+      row.onclick = () => selectTopic(t.topic);
+      bar.appendChild(row);
     });
 
     document.getElementById('subtitleLine').textContent =
@@ -400,7 +410,7 @@
     activeTopic = topic;
     activeSession = null;
 
-    document.querySelectorAll('.topic-btn').forEach(b => {
+    document.querySelectorAll('.topic-row').forEach(b => {
       b.classList.toggle('active', b.dataset.topic === topic);
     });
 

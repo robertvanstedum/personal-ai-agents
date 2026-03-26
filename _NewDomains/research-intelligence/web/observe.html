@@ -87,19 +87,33 @@
     .page-title { font-family: 'Playfair Display', serif; font-size: 28px; color: var(--text); margin-bottom: 4px; }
     .page-subtitle { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 28px; }
 
-    .topic-bar { display: flex; gap: 8px; margin-bottom: 28px; flex-wrap: wrap; }
-    .topic-btn {
-      font-family: 'DM Mono', monospace; font-size: 11px;
-      letter-spacing: 0.05em; text-transform: uppercase;
-      padding: 7px 16px; border-radius: 20px;
-      border: 1px solid var(--border2);
-      background: var(--surface); color: var(--text-muted);
-      cursor: pointer; transition: all 0.15s;
-    }
-    .topic-btn:hover { border-color: var(--accent); color: var(--accent); }
-    .topic-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 600; }
-
     .obs-layout { display: grid; grid-template-columns: 260px 1fr; gap: 24px; align-items: start; }
+
+    /* ── Topic List (replaces pill bar — scales to 30+) ── */
+    .topic-list {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden; margin-bottom: 10px;
+    }
+    .topic-list-header {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--text-dim); padding: 10px 14px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .topic-list-inner { max-height: 220px; overflow-y: auto; }
+    .topic-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 14px; cursor: pointer;
+      font-family: 'DM Mono', monospace; font-size: 12px;
+      color: var(--text-muted); transition: all 0.12s;
+      border-bottom: 1px solid var(--border);
+    }
+    .topic-row:last-child { border-bottom: none; }
+    .topic-row:hover { background: var(--surface2); color: var(--text); }
+    .topic-row.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+    .topic-row.active .topic-count { color: var(--accent); opacity: 0.7; }
+    .topic-name { letter-spacing: 0.03em; }
+    .topic-count { font-size: 11px; color: var(--text-dim); }
 
     .obs-list { display: flex; flex-direction: column; gap: 6px; }
     .obs-item {
@@ -212,10 +226,12 @@
   <div class="page-title">Observations</div>
   <div class="page-subtitle" id="subtitleLine">Loading…</div>
 
-  <div class="topic-bar" id="topicBar"></div>
-
   <div class="obs-layout">
     <div>
+      <div class="topic-list">
+        <div class="topic-list-header">Topics</div>
+        <div class="topic-list-inner" id="topicBar"></div>
+      </div>
       <div class="obs-list" id="obsList">
         <div class="empty"><div class="empty-icon">🔭</div><div class="empty-msg">Select a topic above</div></div>
       </div>
@@ -271,12 +287,12 @@
 
     const bar = document.getElementById('topicBar');
     topics.forEach(t => {
-      const btn = document.createElement('button');
-      btn.className = 'topic-btn';
-      btn.textContent = `${t}  ·  ${topicMap[t]}`;
-      btn.dataset.topic = t;
-      btn.onclick = () => selectTopic(t);
-      bar.appendChild(btn);
+      const row = document.createElement('div');
+      row.className = 'topic-row';
+      row.dataset.topic = t;
+      row.innerHTML = `<span class="topic-name">${t}</span><span class="topic-count">${topicMap[t]}</span>`;
+      row.onclick = () => selectTopic(t);
+      bar.appendChild(row);
     });
 
     if (topics[0]) selectTopic(topics[0]);
@@ -285,7 +301,7 @@
   async function selectTopic(topic) {
     activeTopic = topic;
     activeFile  = null;
-    document.querySelectorAll('.topic-btn').forEach(b =>
+    document.querySelectorAll('.topic-row').forEach(b =>
       b.classList.toggle('active', b.dataset.topic === topic));
 
     const res  = await fetch(`/api/research/observations?topic=${encodeURIComponent(topic)}`);
