@@ -502,3 +502,200 @@ def api_research_thread_wrap_up(topic: str):
 
     cmd_wrap_up(topic, note)
     return jsonify({"ok": True, "topic": topic, "status": "closed"})
+
+
+# ── HTML: Sessions ────────────────────────────────────────────────────────────
+
+@research_bp.route('/research/sessions')
+def research_sessions_ui():
+    """Serve the session viewer page."""
+    html = RESEARCH_ROOT / 'web' / 'sessions.html'
+    if not html.exists():
+        return "sessions.html not found", 404
+    return html.read_text(), 200, {'Content-Type': 'text/html'}
+
+
+# ── API: Sessions ─────────────────────────────────────────────────────────────
+
+def _parse_session_header(text: str) -> dict:
+    """Extract the machine-readable header block from a session .md file."""
+    header = {}
+    m = _re.search(
+        r'<!-- MACHINE-READABLE HEADER.*?-->(.*?)<!-- END HEADER -->',
+        text, _re.DOTALL
+    )
+    if m:
+        for line in m.group(1).strip().splitlines():
+            if ':' in line:
+                k, _, v = line.partition(':')
+                header[k.strip()] = v.strip()
+    return header
+
+
+def _parse_session_sections(text: str) -> dict:
+    """
+    Parse a session .md file into structured sections.
+    Returns dict with keys: findings, sources, threads, agent_notes, cost_table
+    Each finding is a plain string. Each source is {num, domain, title, url}.
+    """
+    sections: dict = {
+        'findings': [],
+        'sources': [],
+        'threads': [],
+        'agent_notes': '',
+        'cost_table': '',
+    }
+
+    # ── Key Findings ─────────────────────────────────────────────────────────
+    fm = _re.search(r'## Key Findings\s*\n(.*?)(?=\n## |\Z)', text, _re.DOTALL)
+    if fm:
+        for line in fm.group(1).splitlines():
+            line = line.strip().lstrip('- ').strip()
+            if line:
+                sections['findings'].append(line)
+
+    # ── Sources ──────────────────────────────────────────────────────────────
+    sm = _re.search(r'## Sources\s*\n(.*?)(?=\n## |\Z)', text, _re.DOTALL)
+    if sm:
+        entries = _re.findall(
+            r'\[(\d+)\]\s+(\S+)\.\s+"([^"]+)"\.\s*\n\s*(https?://\S+)',
+            sm.group(1)
+        )
+        for num, domain, title, url in entries:
+            sections['sources'].append({
+                'num': int(num), 'domain': domain,
+                'title': title, 'url': url
+            })
+
+    # ── Threads to Continue ───────────────────────────────────────────────────
+    tm = _re.search(r'## Threads to Continue\s*\n(.*?)(?=\n## |\Z)', text, _re.DOTALL)
+    if tm:
+        for line in tm.group(1).splitlines():
+            line = line.strip().lstrip('- ').strip()
+            if line:
+                sections['threads'].append(line)
+
+    # ── Agent Notes ───────────────────────────────────────────────────────────
+    am = _re.search(r'## Agent Notes\s*\n(.*?)(?=\n## |\Z)', text, _re.DOTALL)
+    if am:
+        sections['agent_notes'] = am.group(1).strip()
+
+    # ── Cost Breakdown ────────────────────────────────────────────────────────
+    cm = _re.search(r'## Cost Breakdown\s*\n(.*?)(?=\n---|\Z)', text, _re.DOTALL)
+    if cm:
+        sections['cost_table'] = cm.group(1).strip()
+
+    return sections
+
+
+@research_bp.route('/api/research/sessions')
+def api_research_sessions_list():
+    """
+    List sessions for a topic, most recent first.
+    GET /api/research/sessions?topic=gold-geopolitics
+
+    Returns: {ok, topic, sessions: [{id, date, cost, duration, sources_reviewed, file}]}
+    """
+    topic = request.args.get('topic', '').strip()
+    if not topic:
+        # Return all topics with session counts if no topic given
+        topics_dir = RESEARCH_ROOT / 'topics'
+        if not topics_dir.exists():
+            return jsonify({"ok": True, "topics": []})
+        result = []
+        for td in sorted(topics_dir.iterdir()):
+            if td.is_dir():
+                sessions = sorted(
+                    [f for f in td.glob('*.md') if not f.name.startswith('sources-') and f.name != 'CONTEXT.md' and not f.name.isupper()],
+                    reverse=True
+                )
+                result.append({"topic": td.name, "count": len(sessions)})
+        return jsonify({"ok": True, "topics": result})
+
+    topic_dir = RESEARCH_ROOT / 'topics' / topic
+    if not topic_dir.exists():
+        return jsonify({"ok": False, "error": f"topic '{topic}' not found"}), 404
+
+    session_files = sorted(
+        [f for f in topic_dir.glob('*.md')
+         if not f.name.startswith('sources-')
+         and f.name not in ('CONTEXT.md', 'ORIGIN.md', 'STORY_FOR_CLAUDE_AI.md')
+         and not f.stem.isupper()],
+        reverse=True
+    )
+
+    sessions = []
+    for f in session_files:
+        text = f.read_text()
+        hdr  = _parse_session_header(text)
+        sessions.append({
+            'id':               hdr.get('session', f.stem),
+            'date':             hdr.get('date', ''),
+            'cost':             hdr.get('cost', ''),
+            'duration':         hdr.get('duration', ''),
+            'sources_reviewed': hdr.get('sources_reviewed', ''),
+            'file':             f.name,
+        })
+
+    return jsonify({"ok": True, "topic": topic, "sessions": sessions})
+
+
+@research_bp.route('/api/research/sessions/<topic>/<session_id>')
+def api_research_session_detail(topic: str, session_id: str):
+    """
+    Return full parsed content of a single session.
+    GET /api/research/sessions/gold-geopolitics/gold-005
+
+    Returns: {ok, topic, session_id, header, findings, sources, threads, agent_notes}
+    """
+    topic_dir = RESEARCH_ROOT / 'topics' / topic
+    if not topic_dir.exists():
+        return jsonify({"ok": False, "error": f"topic '{topic}' not found"}), 404
+
+    # Accept session_id with or without .md
+    stem = session_id.replace('.md', '')
+    f = topic_dir / f'{stem}.md'
+    if not f.exists():
+        return jsonify({"ok": False, "error": f"session '{session_id}' not found"}), 404
+
+    text     = f.read_text()
+    header   = _parse_session_header(text)
+    sections = _parse_session_sections(text)
+
+    return jsonify({
+        "ok":         True,
+        "topic":      topic,
+        "session_id": stem,
+        "header":     header,
+        **sections,
+    })
+
+
+@research_bp.route('/api/research/sessions/<topic>/<session_id>/annotate', methods=['POST'])
+def api_research_session_annotate(topic: str, session_id: str):
+    """
+    Add a reaction/note to a session or individual finding.
+    POST /api/research/sessions/gold-geopolitics/gold-005/annotate
+    Body: {"type": "reaction"|"direction_shift"|"observation",
+           "note": "...",
+           "ref_article": "optional source title or url"}
+    Stored as a thread annotation with ref_session set automatically.
+    """
+    from agent.threads import load_thread, cmd_annotate
+    body        = request.get_json() or {}
+    ann_type    = body.get("type", "reaction").strip()
+    note        = body.get("note", "").strip()
+    ref_article = body.get("ref_article") or None
+
+    if not note:
+        return jsonify({"ok": False, "error": "note required"}), 400
+    if ann_type not in {"direction_shift", "reaction", "observation", "wrap_up"}:
+        return jsonify({"ok": False, "error": f"invalid type: {ann_type}"}), 400
+
+    thread = load_thread(topic)
+    if not thread:
+        return jsonify({"ok": False, "error": f"No thread for '{topic}' — create one first"}), 404
+
+    stem = session_id.replace('.md', '')
+    cmd_annotate(topic, ann_type, note, ref_session=stem, ref_article=ref_article)
+    return jsonify({"ok": True, "topic": topic, "session_id": stem, "type": ann_type})
