@@ -398,9 +398,9 @@
 
       <!-- Direction Shift Panel -->
       <div class="direction-panel" id="directionPanel" style="display:none">
-        <div class="direction-title">↪ Direction Shift — next run</div>
-        <textarea class="direction-input" id="directionInput" placeholder="Write a note to steer the next session… e.g. 'Focus on proximate events around price drops, not long-term cycles'"></textarea>
-        <button class="direction-submit" id="directionSubmit">Save shift →</button>
+        <div class="direction-title">Note for next run</div>
+        <textarea class="direction-input" id="directionInput" placeholder="Anything for next session — a nudge, a question, a shift… e.g. 'Go deeper on financial mechanics'"></textarea>
+        <button class="direction-submit" id="directionSubmit">Save note →</button>
         <div style="clear:both"></div>
       </div>
 
@@ -542,7 +542,7 @@
             <div class="finding-text">${escHtml(f)}</div>
             <div class="finding-actions">
               <button class="find-btn" onclick="toggleNote(${i}, 'reaction')">💬 Note</button>
-              <button class="find-btn" onclick="toggleNote(${i}, 'direction_shift')">↪ Direction shift</button>
+              <button class="find-btn" onclick="toggleNote(${i}, 'direction_shift')">↪ Note</button>
             </div>
             <div class="note-area" id="note-${i}">
               <textarea class="note-input" id="note-text-${i}" placeholder="Your note…"></textarea>
@@ -643,7 +643,7 @@
   // ── Direction Shift ──────────────────────────────────────────────────────────
   async function submitDirectionShift(topic) {
     const note = document.getElementById('directionInput').value.trim();
-    if (!note) { showToast('Write a direction shift note first'); return; }
+    if (!note) { showToast('Write a note first'); return; }
 
     const res = await fetch(`/api/research/thread/${topic}/annotate`, {
       method: 'POST',
@@ -654,7 +654,7 @@
 
     if (data.ok) {
       document.getElementById('directionInput').value = '';
-      showToast('Direction shift saved — will influence next run ✓');
+      showToast('Note saved — will influence next run ✓');
       loadAnnotations(topic);   // refresh panel immediately
     } else {
       showToast(data.error || 'Save failed', true);
@@ -692,7 +692,7 @@
       return `
         <div class="ann-item ${consumed ? 'ann-consumed' : ''}">
           <div class="ann-row">
-            <span class="ann-type ${escHtml(a.type)}">${escHtml(a.type.replace('_', ' '))}</span>
+            <span class="ann-type ${escHtml(a.type)}">${escHtml(annTypeLabel(a.type))}</span>
             <span class="ann-date">${dateStr}</span>
           </div>
           <div class="ann-note">${escHtml(a.note)}</div>
@@ -703,6 +703,11 @@
 
   function toggleAnnPanel() {
     document.getElementById('annBody').classList.toggle('open');
+  }
+
+  function annTypeLabel(type) {
+    const map = { direction_shift: 'note', reaction: 'note', observation: 'observation', wrap_up: 'wrap-up' };
+    return map[type] || type.replace('_', ' ');
   }
 
   function fmtAnnDate(iso) {
