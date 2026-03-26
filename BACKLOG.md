@@ -20,7 +20,9 @@ _Promoted to active work by Robert's decision only. OpenClaw can add items. Only
 | B-005 | **Curator integration** | Validated sources pipeline. Phase 2, not PoC. |
 | B-008 | **Source-level priority weights** | Allow demoting individual sources (e.g. Al Jazeera) without removing from candidate pool. Current system only weights topics. Needed for triage precision. |
 | B-009 | **Reading Room page** (Research) | New page: saved articles under active investigation. Distinct from Queries (which manages search queries). Add to Research sub-nav when built: `Dashboard · Queries · Reading Room · Observations · Save · 🎯`. New route required — no `/research/reading-room` exists yet. |
-| B-010 | **Sessions page** (Research) | New page: list of past `research.py` session files with their findings, filterable by topic. No `/research/sessions` route exists yet. New build required. |
+| B-010 | **Sessions page** (Research) | ✅ Built 2026-03-25. `/research/sessions` live with topic selector, session list, per-finding notes and direction shifts. |
+| B-015 | **Research sessions: resolve triage target labels** | Finding cards show raw pipeline text ("Target 1, Target 2, Target 3…"). For demo-ready/hosted stage, resolve these to actual target description strings from `config.json triage_targets`. Personal tool: acceptable as-is. Flag before demo recording. |
+| B-016 | **Research sessions: source title truncation** | Source titles cut off mid-word in the session detail panel. Fix: `text-overflow: ellipsis` on `.source-title` with `white-space: nowrap; overflow: hidden`, or expand-on-hover tooltip. CSS-only, low effort. |
 
 ## Curator
 

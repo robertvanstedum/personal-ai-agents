@@ -106,6 +106,130 @@ def api_research_observe():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+# ── API: Observations archive ────────────────────────────────────────────────
+
+@research_bp.route('/api/research/observations')
+def api_research_observations_list():
+    """
+    List past observation files, optionally filtered by topic.
+    GET /api/research/observations?topic=empire-landpower
+
+    Filename pattern: {topic}-{command}-{timestamp}.md
+    Returns: {ok, observations: [{topic, command, timestamp, filename, generated, cost}]}
+    """
+    topic_filter = request.args.get('topic', '').strip()
+    obs_dir = RESEARCH_ROOT / 'data' / 'observations'
+
+    if not obs_dir.exists():
+        return jsonify({"ok": True, "observations": []})
+
+    results = []
+    for f in sorted(obs_dir.glob('*.md'), reverse=True):
+        # Parse filename: {topic}-{command}-{timestamp}.md
+        # command is 'observe' or 'status'; timestamp contains hyphens too
+        # Strategy: split on '-observe-' or '-status-'
+        name = f.stem
+        command = None
+        for cmd in ('observe', 'status'):
+            marker = f'-{cmd}-'
+            if marker in name:
+                idx = name.index(marker)
+                topic = name[:idx]
+                timestamp = name[idx + len(marker):]
+                command = cmd
+                break
+        if not command:
+            continue
+        if topic_filter and topic != topic_filter:
+            continue
+
+        # Extract metadata from file header (first 8 lines)
+        meta = {'generated': '', 'cost': ''}
+        try:
+            lines = f.read_text().splitlines()[:8]
+            for line in lines:
+                if line.startswith('**Generated:**'):
+                    meta['generated'] = line.replace('**Generated:**', '').strip()
+                elif line.startswith('**Cost:**'):
+                    meta['cost'] = line.replace('**Cost:**', '').strip()
+        except Exception:
+            pass
+
+        results.append({
+            'topic':     topic,
+            'command':   command,
+            'timestamp': timestamp,
+            'filename':  f.name,
+            'generated': meta['generated'],
+            'cost':      meta['cost'],
+        })
+
+    return jsonify({"ok": True, "observations": results})
+
+
+@research_bp.route('/api/research/observations/<filename>')
+def api_research_observation_detail(filename: str):
+    """
+    Return full content of a single observation file.
+    GET /api/research/observations/empire-landpower-observe-2026-03-25T13-49-36.md
+
+    Returns: {ok, filename, topic, command, generated, cost, tokens_in, tokens_out,
+              model, content_md}
+    """
+    obs_dir = RESEARCH_ROOT / 'data' / 'observations'
+    # Sanitise filename — no path traversal
+    safe = Path(filename).name
+    f = obs_dir / safe
+    if not f.exists():
+        return jsonify({"ok": False, "error": f"observation '{safe}' not found"}), 404
+
+    text = f.read_text()
+    lines = text.splitlines()
+
+    meta = {'generated': '', 'model': '', 'tokens_in': '', 'tokens_out': '', 'cost': ''}
+    for line in lines[:10]:
+        for key, marker in [
+            ('generated',  '**Generated:**'),
+            ('model',      '**Model:**'),
+            ('cost',       '**Cost:**'),
+        ]:
+            if line.startswith(marker):
+                meta[key] = line.replace(marker, '').strip()
+        if line.startswith('**Tokens:**'):
+            # Format: "615 in / 577 out"
+            tok = line.replace('**Tokens:**', '').strip()
+            m = _re.match(r'(\d+)\s+in\s*/\s*(\d+)\s+out', tok)
+            if m:
+                meta['tokens_in'], meta['tokens_out'] = m.group(1), m.group(2)
+
+    # Strip the header block (everything up to and including first '---')
+    sep = text.find('\n---\n')
+    content_md = text[sep + 5:].strip() if sep >= 0 else text
+
+    # Parse topic/command from filename stem
+    name = f.stem
+    topic, command = '', 'observe'
+    for cmd in ('observe', 'status'):
+        marker = f'-{cmd}-'
+        if marker in name:
+            topic = name[:name.index(marker)]
+            command = cmd
+            break
+
+    return jsonify({
+        "ok":          True,
+        "filename":    safe,
+        "topic":       topic,
+        "command":     command,
+        "generated":   meta['generated'],
+        "model":       meta['model'],
+        "cost":        meta['cost'],
+        "tokens_in":   meta['tokens_in'],
+        "tokens_out":  meta['tokens_out'],
+        "content_md":  content_md,
+    })
+
+
 # ── API: Candidates ───────────────────────────────────────────────────────────
 
 @research_bp.route('/api/research/candidates')

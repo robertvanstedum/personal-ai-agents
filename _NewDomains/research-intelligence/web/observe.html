@@ -3,13 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Research Observer</title>
+  <title>Research Observations</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #f5f0e8;
-      --bg-texture: #ede8df;
       --surface: #faf7f2;
       --surface2: #f0ebe0;
       --border: #ddd6c8;
@@ -19,498 +18,433 @@
       --text-dim: #9e9080;
       --accent: #8b5e2a;
       --accent-dim: rgba(139,94,42,0.08);
-      --accent-glow: rgba(139,94,42,0.18);
       --shadow: rgba(42,36,24,0.08);
     }
-
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: 'Source Sans 3', sans-serif;
       background: var(--bg);
+      background-image:
+        radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
       color: var(--text);
       min-height: 100vh;
+      font-size: 14px;
       display: flex;
       align-items: flex-start;
     }
 
-    .container {
-      max-width: 780px;
-      margin: 0 auto;
-      padding: 2rem 1rem;
+    .domain-rail {
+      width: 200px; min-width: 200px;
+      background: rgba(245,240,232,0.6);
+      border-right: 1px solid var(--border);
+      min-height: 100vh;
+      padding: 24px 0;
+      position: sticky; top: 0;
+      display: flex; flex-direction: column; gap: 4px;
+      z-index: 50;
     }
-
-    h1 {
-      font-family: 'Playfair Display', serif;
-      font-size: 1.5rem;
-      font-weight: normal;
-      letter-spacing: 0.02em;
-      color: var(--text);
-      margin-bottom: 0.25rem;
+    .rail-domain {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 20px; text-decoration: none;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--text-muted); transition: all 0.15s;
     }
+    .rail-domain:hover { background: var(--surface2); color: var(--text); }
+    .rail-domain.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; border-right: 2px solid var(--accent); }
+    .rail-domain.coming-soon { opacity: 0.4; cursor: default; pointer-events: none; }
+    .rail-icon { font-size: 14px; }
 
-    .subtitle {
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      margin-bottom: 2rem;
+    .main-content { flex: 1; min-width: 0; min-height: 100vh; overflow-x: hidden; }
+
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 60px; position: sticky; top: 0;
+      background: rgba(245,240,232,0.94);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+      box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
     }
-
-    /* ── Header Nav ── */
+    .header-left { display: flex; align-items: baseline; gap: 16px; }
+    .logo { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--accent); text-decoration: none; }
+    .logo-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase; }
     .header-nav { display: flex; gap: 4px; }
     .nav-link {
-      font-family: 'DM Mono', monospace;
-      font-size: 11px;
-      letter-spacing: 0.05em;
-      color: var(--text-muted);
-      text-decoration: none;
-      padding: 6px 14px;
-      border-radius: 6px;
-      transition: all 0.15s;
-      border: 1px solid transparent;
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-muted); text-decoration: none;
+      padding: 6px 14px; border-radius: 6px; letter-spacing: 0.05em;
+      transition: all 0.15s; border: 1px solid transparent;
     }
     .nav-link:hover { color: var(--text); background: var(--surface2); }
     .nav-link.active { color: var(--accent); background: var(--accent-dim); border-color: rgba(139,94,42,0.2); }
-    .nav-link.nav-focus { letter-spacing: 0; }
 
-    /* ── Domain Rail ── */
-    .domain-rail {
-      width: 210px;
-      min-width: 210px;
-      background: #f9f5ed;
-      border-right: 1px solid var(--border);
-      box-shadow: 2px 0 4px rgba(42,36,24,0.06);
-      display: flex;
-      flex-direction: column;
-      position: sticky;
-      top: 0;
-      height: 100vh;
-      overflow: hidden;
-      transition: width 0.2s ease, min-width 0.2s ease;
-      z-index: 90;
-      flex-shrink: 0;
+    main { max-width: 1100px; margin: 0 auto; padding: 32px; }
+
+    .page-title { font-family: 'Playfair Display', serif; font-size: 28px; color: var(--text); margin-bottom: 4px; }
+    .page-subtitle { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 28px; }
+
+    .topic-bar { display: flex; gap: 8px; margin-bottom: 28px; flex-wrap: wrap; }
+    .topic-btn {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      padding: 7px 16px; border-radius: 20px;
+      border: 1px solid var(--border2);
+      background: var(--surface); color: var(--text-muted);
+      cursor: pointer; transition: all 0.15s;
     }
-    .domain-rail.collapsed { width: 48px; min-width: 48px; }
+    .topic-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .topic-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
-    .rail-toggle {
-      font-family: 'DM Mono', monospace;
-      font-size: 14px;
-      color: var(--text-dim);
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 14px 16px;
-      text-align: right;
-      transition: color 0.15s;
-      align-self: flex-end;
+    .obs-layout { display: grid; grid-template-columns: 260px 1fr; gap: 24px; align-items: start; }
+
+    .obs-list { display: flex; flex-direction: column; gap: 6px; }
+    .obs-item {
+      padding: 12px 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; cursor: pointer; transition: all 0.15s;
     }
-    .rail-toggle:hover { color: var(--accent); }
-    .domain-rail.collapsed .rail-toggle { transform: scaleX(-1); }
-
-    .rail-nav {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      padding: 8px 12px;
-      overflow: hidden;
+    .obs-item:hover { border-color: var(--accent); background: var(--accent-dim); }
+    .obs-item.active { border-color: var(--accent); background: var(--accent-dim); border-left: 3px solid var(--accent); }
+    .obs-cmd {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text-dim); margin-bottom: 4px;
     }
+    .obs-cmd.observe { color: var(--accent); }
+    .obs-date { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); font-weight: 500; }
+    .obs-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
 
-    .rail-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
-      border-radius: 8px;
-      text-decoration: none;
-      color: var(--text-muted);
-      transition: all 0.15s;
-      cursor: pointer;
-      border: 1px solid transparent;
-      white-space: nowrap;
-      overflow: hidden;
+    .run-panel {
+      margin-top: 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px;
     }
-    .rail-item:hover:not(.rail-coming) { background: var(--surface2); color: var(--text); }
-    .rail-item.active {
-      background: var(--accent-dim);
-      color: var(--accent);
-      border-color: rgba(139,94,42,0.2);
+    .run-title {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text-dim); margin-bottom: 12px;
     }
-    .rail-item.rail-coming { opacity: 0.4; cursor: default; }
-
-    .rail-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
-    .rail-label {
-      font-family: 'DM Mono', monospace;
-      font-size: 10px;
-      letter-spacing: 0.1em;
-      font-weight: 500;
+    .run-row { display: flex; gap: 8px; align-items: center; }
+    .run-select {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      padding: 6px 10px; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--bg);
+      color: var(--text); cursor: pointer; flex: 1;
     }
-    .domain-rail.collapsed .rail-label { display: none; }
-    .domain-rail.collapsed .rail-item { justify-content: center; }
-
-    .rail-settings {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-      color: var(--text-dim);
-      text-decoration: none;
-      font-size: 16px;
-      transition: color 0.15s;
-      border-top: 1px solid var(--border);
+    .run-btn {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      padding: 6px 16px; border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: var(--accent-dim); color: var(--accent);
+      cursor: pointer; transition: all 0.15s; white-space: nowrap;
     }
-    .rail-settings:hover { color: var(--accent); }
+    .run-btn:hover:not(:disabled) { background: var(--accent); color: white; }
+    .run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .run-status { font-size: 12px; color: var(--text-muted); margin-top: 8px; min-height: 18px; }
 
-    .main-content { flex: 1; min-width: 0; overflow-x: hidden; min-height: 100vh; background: var(--bg); }
-
-    .form-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
+    .obs-detail {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden;
     }
-
-    .form-row {
-      display: flex;
-      gap: 0.75rem;
-      align-items: flex-end;
-      flex-wrap: wrap;
+    .detail-header {
+      padding: 20px 28px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap;
     }
+    .detail-title { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--text); }
+    .detail-stats { display: flex; gap: 16px; flex-wrap: wrap; }
+    .stat { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted); }
+    .stat span { color: var(--text); font-weight: 500; }
 
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
+    .obs-body { padding: 28px; line-height: 1.75; color: var(--text); }
+    .obs-body h1 { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--text); margin: 0 0 20px; font-weight: 600; }
+    .obs-body h2 { font-family: 'Playfair Display', serif; font-size: 16px; color: var(--accent); margin: 28px 0 10px; font-weight: 600; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+    .obs-body p { margin-bottom: 16px; font-size: 15px; }
+    .obs-body strong { color: var(--text); font-weight: 600; }
+    .obs-body hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+    .obs-body ul { margin: 0 0 16px 20px; }
+    .obs-body li { margin-bottom: 6px; font-size: 15px; }
+
+    .empty { padding: 48px 24px; text-align: center; color: var(--text-dim); }
+    .empty-icon { font-size: 32px; margin-bottom: 12px; }
+    .empty-msg { font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: 0.06em; }
+
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      padding: 10px 18px; border-radius: 8px;
+      background: var(--accent); color: white;
+      font-family: 'DM Mono', monospace; font-size: 12px;
+      box-shadow: 0 4px 12px var(--shadow);
+      opacity: 0; transform: translateY(8px);
+      transition: all 0.25s; pointer-events: none; z-index: 9999;
     }
-
-    .field label {
-      font-size: 0.78rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-
-    .field input, .field select {
-      font-family: 'Source Sans 3', sans-serif;
-      font-size: 0.95rem;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 0.5rem 0.75rem;
-      color: var(--text);
-      outline: none;
-    }
-
-    .field input { min-width: 260px; }
-    .field select { min-width: 140px; }
-
-    .field input:focus, .field select:focus {
-      border-color: var(--accent);
-      background: var(--surface);
-    }
-
-    button {
-      font-family: 'Source Sans 3', sans-serif;
-      font-size: 0.95rem;
-      background: var(--accent);
-      color: var(--surface);
-      border: none;
-      border-radius: 4px;
-      padding: 0.55rem 1.4rem;
-      cursor: pointer;
-      transition: background 0.15s;
-      white-space: nowrap;
-    }
-
-    button:hover  { background: var(--text); }
-    button:active { background: var(--text); }
-    button:disabled { background: var(--text-dim); cursor: not-allowed; }
-
-    /* Result area */
-    #result {
-      display: none;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      overflow: hidden;
-    }
-
-    #cost-bar {
-      background: var(--surface2);
-      border-bottom: 1px solid var(--border);
-      padding: 0.5rem 1rem;
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      display: flex;
-      gap: 1.5rem;
-      flex-wrap: wrap;
-    }
-
-    #cost-bar span { white-space: nowrap; }
-    #cost-bar .cost-highlight { color: var(--text); font-weight: bold; }
-
-    #observation-text {
-      padding: 1.5rem;
-      font-size: 0.95rem;
-      line-height: 1.75;
-      white-space: pre-wrap;
-      color: var(--text);
-    }
-
-    #observation-text h1, #observation-text h2, #observation-text h3 {
-      font-family: 'Playfair Display', serif;
-      font-size: 1.05rem;
-      font-weight: bold;
-      margin: 1rem 0 0.4rem;
-      color: var(--text);
-    }
-
-    #observation-text strong { color: var(--text); }
-
-    #file-link {
-      padding: 0.5rem 1rem;
-      background: var(--surface2);
-      border-top: 1px solid var(--border);
-      font-size: 0.78rem;
-      color: var(--text-muted);
-    }
-
-    /* Status/error */
-    #status {
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      min-height: 1.2rem;
-      margin-top: 0.75rem;
-    }
-
-    #status.error { color: #8b2020; }
-
-    /* History */
-    #history-section { margin-top: 2rem; }
-    #history-section h2 {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.9rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 0.75rem;
-    }
-
-    .history-item {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 0.6rem 1rem;
-      margin-bottom: 0.5rem;
-      font-size: 0.85rem;
-      color: var(--text);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 1rem;
-    }
-
-    .history-item .meta { color: var(--text-muted); font-size: 0.78rem; white-space: nowrap; }
-
-    @media (max-width: 600px) {
-      .form-row { flex-direction: column; }
-      .field input { min-width: 0; width: 100%; }
-    }
+    .toast.show { opacity: 1; transform: translateY(0); }
   </style>
 </head>
 <body>
-<aside class="domain-rail">
-  <button class="rail-toggle" id="railToggle" title="Toggle rail">‹</button>
-  <nav class="rail-nav">
-    <a href="/" class="rail-item" data-domain="curator">
-      <span class="rail-icon">🗞</span>
-      <span class="rail-label">CURATOR</span>
-    </a>
-    <a href="/research/dashboard" class="rail-item active" data-domain="research">
-      <span class="rail-icon">🔬</span>
-      <span class="rail-label">RESEARCH</span>
-    </a>
-    <a href="/language" class="rail-item rail-coming" title="Language Learning — coming soon">
-      <span class="rail-icon">💬</span>
-      <span class="rail-label">LANGUAGE</span>
-    </a>
-    <a href="/jobs" class="rail-item rail-coming" title="Jobs &amp; Opportunities — coming soon">
-      <span class="rail-icon">💼</span>
-      <span class="rail-label">JOBS</span>
-    </a>
-  </nav>
-  <a href="/curator_priorities.html" class="rail-settings" title="Settings">⚙</a>
-</aside>
-<div class="main-content">
-  <header style="background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 28px; height: 52px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100;">
-    <div style="display: flex; align-items: baseline; gap: 10px;">
-      <a href="/" style="font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 600; color: var(--text); text-decoration: none; letter-spacing: -0.02em;">mini-moi</a>
-      <span style="font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 0.06em; text-transform: uppercase;">Research</span>
-    </div>
-    <nav class="header-nav" style="display: flex; gap: 4px;">
-      <a href="/research/dashboard" class="nav-link">Dashboard</a>
-      <a href="/research/candidates" class="nav-link">Queries</a>
-      <a href="/research/observe" class="nav-link active">Observations</a>
-      <a href="/research/save" class="nav-link">Save</a>
-      <a href="/curator_priorities.html" class="nav-link nav-focus">🎯</a>
-    </nav>
-  </header>
-  <div class="container">
 
-  <h1>Research Observer</h1>
-  <p class="subtitle">Synthesise saved research signals with Sonnet · Option A: saved articles only</p>
-
-  <div class="form-card">
-    <div class="form-row">
-      <div class="field">
-        <label>Topic</label>
-        <input type="text" id="topic" value="empire-landpower" placeholder="e.g. empire-landpower">
-      </div>
-      <div class="field">
-        <label>Command</label>
-        <select id="command">
-          <option value="observe">observe</option>
-          <option value="status">status</option>
-        </select>
-      </div>
-      <button id="run-btn" onclick="runObserve()">Run</button>
-    </div>
-    <div id="status"></div>
-  </div>
-
-  <div id="result">
-    <div id="cost-bar"></div>
-    <div id="observation-text"></div>
-    <div id="file-link"></div>
-  </div>
-
-  <div id="history-section" style="display:none">
-    <h2>This session</h2>
-    <div id="history-list"></div>
-  </div>
-
+<div class="domain-rail">
+  <a href="/" class="rail-domain"><span class="rail-icon">📚</span><span>Curator</span></a>
+  <a href="/research/dashboard" class="rail-domain active"><span class="rail-icon">🔬</span><span>Research</span></a>
+  <span class="rail-domain coming-soon"><span class="rail-icon">💬</span><span>Language</span></span>
+  <span class="rail-domain coming-soon"><span class="rail-icon">💼</span><span>Jobs</span></span>
 </div>
 
+<div class="main-content">
+<header>
+  <div class="header-left">
+    <a href="/research/dashboard" class="logo">🔬 Research</a>
+    <span class="logo-sub">Observations</span>
+  </div>
+  <nav class="header-nav">
+    <a href="/research/dashboard" class="nav-link">Dashboard</a>
+    <a href="/research/sessions" class="nav-link">Sessions</a>
+    <a href="/research/observe" class="nav-link active">Observations</a>
+    <a href="/research/candidates" class="nav-link">Candidates</a>
+    <a href="/research/save" class="nav-link">Save</a>
+  </nav>
+</header>
+
+<main>
+  <div class="page-title">Observations</div>
+  <div class="page-subtitle" id="subtitleLine">Loading…</div>
+
+  <div class="topic-bar" id="topicBar"></div>
+
+  <div class="obs-layout">
+    <div>
+      <div class="obs-list" id="obsList">
+        <div class="empty"><div class="empty-icon">🔭</div><div class="empty-msg">Select a topic above</div></div>
+      </div>
+
+      <div class="run-panel" id="runPanel" style="display:none">
+        <div class="run-title">Run new observation</div>
+        <div class="run-row">
+          <select class="run-select" id="runCommand">
+            <option value="observe">observe — full synthesis</option>
+            <option value="status">status — quick check</option>
+          </select>
+          <button class="run-btn" id="runBtn" onclick="runObserve()">Run →</button>
+        </div>
+        <div class="run-status" id="runStatus"></div>
+      </div>
+    </div>
+
+    <div id="obsDetail">
+      <div class="obs-detail">
+        <div class="empty" style="padding: 60px 24px">
+          <div class="empty-icon">←</div>
+          <div class="empty-msg">Select an observation to read it</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+
+<div class="toast" id="toast"></div>
+
 <script>
-  const history = [];
+  let activeTopic = null;
+  let activeFile  = null;
+
+  async function boot() {
+    const res  = await fetch('/api/research/observations');
+    const data = await res.json();
+
+    const topicMap = {};
+    (data.observations || []).forEach(o => {
+      if (o.command === 'observe') topicMap[o.topic] = (topicMap[o.topic] || 0) + 1;
+    });
+
+    const topics = Object.keys(topicMap).sort();
+    if (!topics.length) {
+      document.getElementById('subtitleLine').textContent = 'No observations yet — run one below';
+      return;
+    }
+
+    document.getElementById('subtitleLine').textContent =
+      `${topics.length} topics · ${Object.values(topicMap).reduce((a,b)=>a+b,0)} observations`;
+
+    const bar = document.getElementById('topicBar');
+    topics.forEach(t => {
+      const btn = document.createElement('button');
+      btn.className = 'topic-btn';
+      btn.textContent = `${t}  ·  ${topicMap[t]}`;
+      btn.dataset.topic = t;
+      btn.onclick = () => selectTopic(t);
+      bar.appendChild(btn);
+    });
+
+    if (topics[0]) selectTopic(topics[0]);
+  }
+
+  async function selectTopic(topic) {
+    activeTopic = topic;
+    activeFile  = null;
+    document.querySelectorAll('.topic-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.topic === topic));
+
+    const res  = await fetch(`/api/research/observations?topic=${encodeURIComponent(topic)}`);
+    const data = await res.json();
+    const list = document.getElementById('obsList');
+    list.innerHTML = '';
+
+    const obs = (data.observations || []).filter(o => o.command === 'observe');
+    if (!obs.length) {
+      list.innerHTML = '<div class="empty"><div class="empty-icon">🔭</div><div class="empty-msg">No observations yet</div></div>';
+    } else {
+      obs.forEach(o => {
+        const el = document.createElement('div');
+        el.className = 'obs-item';
+        el.dataset.file = o.filename;
+        el.innerHTML = `
+          <div class="obs-cmd observe">synthesis</div>
+          <div class="obs-date">${fmtDate(o.generated || o.timestamp)}</div>
+          <div class="obs-meta">${o.cost || ''}</div>
+        `;
+        el.onclick = () => loadObservation(o.filename);
+        list.appendChild(el);
+      });
+    }
+
+    document.getElementById('runPanel').style.display = 'block';
+    if (obs[0]) loadObservation(obs[0].filename);
+  }
+
+  async function loadObservation(filename) {
+    activeFile = filename;
+    document.querySelectorAll('.obs-item').forEach(el =>
+      el.classList.toggle('active', el.dataset.file === filename));
+
+    const res  = await fetch(`/api/research/observations/${encodeURIComponent(filename)}`);
+    const data = await res.json();
+
+    if (!data.ok) {
+      document.getElementById('obsDetail').innerHTML =
+        '<div class="obs-detail"><div class="empty"><div class="empty-msg">Failed to load</div></div></div>';
+      return;
+    }
+
+    document.getElementById('obsDetail').innerHTML = `
+      <div class="obs-detail">
+        <div class="detail-header">
+          <div class="detail-title">${escHtml(data.topic)}</div>
+          <div class="detail-stats">
+            ${data.generated ? `<div class="stat">Generated <span>${fmtDate(data.generated)}</span></div>` : ''}
+            ${data.model     ? `<div class="stat">Model <span>${escHtml(data.model)}</span></div>` : ''}
+            ${data.tokens_in ? `<div class="stat">Tokens <span>${data.tokens_in} in / ${data.tokens_out} out</span></div>` : ''}
+            ${data.cost      ? `<div class="stat">Cost <span>${escHtml(data.cost)}</span></div>` : ''}
+          </div>
+        </div>
+        <div class="obs-body">${renderMd(data.content_md)}</div>
+      </div>`;
+  }
 
   async function runObserve() {
-    const topic   = document.getElementById('topic').value.trim();
-    const command = document.getElementById('command').value;
-    const btn     = document.getElementById('run-btn');
-    const status  = document.getElementById('status');
-
-    if (!topic) { setStatus('Topic is required.', true); return; }
+    if (!activeTopic) { showToast('Select a topic first'); return; }
+    const command = document.getElementById('runCommand').value;
+    const btn     = document.getElementById('runBtn');
+    const status  = document.getElementById('runStatus');
 
     btn.disabled = true;
-    btn.textContent = 'Running…';
-    setStatus(`Calling Sonnet via observe.py — ${command} on "${topic}"…`);
-    document.getElementById('result').style.display = 'none';
+    btn.textContent = '⏳ Running…';
+    status.textContent = `Running ${command} on ${activeTopic} — may take 30–60s…`;
 
     try {
-      const res = await fetch('/api/research/observe', {
+      const res  = await fetch('/api/research/observe', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({topic, command}),
+        body: JSON.stringify({ topic: activeTopic, command })
       });
-
       const data = await res.json();
 
-      if (!data.ok) {
-        setStatus(`Error: ${data.error}`, true);
-        return;
+      if (data.ok) {
+        status.textContent = `✓ Done · ${data.cost_usd ? '$' + data.cost_usd.toFixed(4) : ''}`;
+        showToast('Observation complete — reloading');
+        setTimeout(() => selectTopic(activeTopic), 800);
+      } else {
+        status.textContent = `Error: ${data.error}`;
+        showToast(data.error || 'Run failed', true);
       }
-
-      renderResult(data, topic, command);
-      addToHistory(data, topic, command);
-      setStatus('');
-
-    } catch (err) {
-      setStatus(`Network error: ${err.message}`, true);
+    } catch (e) {
+      status.textContent = 'Network error';
+      showToast('Network error', true);
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Run';
+      btn.textContent = 'Run →';
     }
   }
 
-  function renderResult(data, topic, command) {
-    // Cost bar
-    const tokensIn   = (data.tokens_in  || 0).toLocaleString();
-    const tokensOut  = (data.tokens_out || 0).toLocaleString();
-    const cost       = (data.cost_usd   || 0).toFixed(4);
-    const articles   = data.saved_articles_used ?? '—';
-    const totalCost  = (data.total_cost_usd || data.cost_usd || 0).toFixed(4);
-    const candidates = data.query_candidates_added ?? 0;
+  // Simple markdown renderer — handles headings, bold, italic, hr, lists
+  function renderMd(md) {
+    if (!md) return '';
+    const lines = md.split('\n');
+    let html = '', inList = false;
 
-    let haikusPart = '';
-    if (data.haiku_tokens_in) {
-      const hIn  = (data.haiku_tokens_in  || 0).toLocaleString();
-      const hOut = (data.haiku_tokens_out || 0).toLocaleString();
-      const hCost = (data.haiku_cost_usd  || 0).toFixed(4);
-      haikusPart = `<span>Haiku · ${hIn} in / ${hOut} out · $${hCost}</span>`;
-    }
+    lines.forEach(line => {
+      if (/^### /.test(line)) {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += `<h2>${inlineMd(line.slice(4))}</h2>`;
+      } else if (/^## /.test(line)) {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += `<h2>${inlineMd(line.slice(3))}</h2>`;
+      } else if (/^# /.test(line)) {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += `<h1>${inlineMd(line.slice(2))}</h1>`;
+      } else if (/^---+$/.test(line)) {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += '<hr>';
+      } else if (/^[-*] /.test(line)) {
+        if (!inList) { html += '<ul>'; inList = true; }
+        html += `<li>${inlineMd(line.slice(2))}</li>`;
+      } else if (/^\s*$/.test(line)) {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += '<p></p>';
+      } else {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += `<p>${inlineMd(line)}</p>`;
+      }
+    });
 
-    document.getElementById('cost-bar').innerHTML =
-      `<span>Sonnet · ${tokensIn} in / ${tokensOut} out · $${cost}</span>` +
-      haikusPart +
-      `<span class="cost-highlight">Total $${totalCost}</span>` +
-      `<span>${articles} article${articles !== 1 ? 's' : ''} · ${candidates} quer${candidates !== 1 ? 'ies' : 'y'} extracted</span>` +
-      `<span>${topic} · ${command}</span>`;
-
-    // Observation text — basic markdown rendering
-    document.getElementById('observation-text').innerHTML =
-      renderMarkdown(data.text || '(no output)');
-
-    // File link
-    document.getElementById('file-link').textContent =
-      `Saved to: ${data.output_file || '—'}`;
-
-    document.getElementById('result').style.display = 'block';
-    document.getElementById('result').scrollIntoView({behavior: 'smooth', block: 'start'});
+    if (inList) html += '</ul>';
+    // Collapse consecutive empty paragraphs
+    return html.replace(/(<p><\/p>){2,}/g, '<p></p>');
   }
 
-  function addToHistory(data, topic, command) {
-    history.unshift({data, topic, command, ts: new Date().toLocaleTimeString()});
-    const section = document.getElementById('history-section');
-    const list    = document.getElementById('history-list');
-    section.style.display = 'block';
-    list.innerHTML = history.slice(0, 5).map(h =>
-      `<div class="history-item">
-        <span>${h.topic} · ${h.command}</span>
-        <span class="meta">$${(h.data.cost_usd||0).toFixed(4)} · ${h.ts}</span>
-      </div>`
-    ).join('');
-  }
-
-  function setStatus(msg, isError = false) {
-    const el = document.getElementById('status');
-    el.textContent = msg;
-    el.className = isError ? 'error' : '';
-  }
-
-  // Minimal markdown → HTML (headers, bold, paragraphs)
-  function renderMarkdown(text) {
-    return text
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-      .replace(/^## (.+)$/gm,  '<h2>$1</h2>')
-      .replace(/^# (.+)$/gm,   '<h1>$1</h1>')
+  function inlineMd(s) {
+    return escHtml(s)
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g,    '<em>$1</em>')
-      .replace(/\n{2,}/g, '\n\n')
-      .split('\n\n').map(p => p.startsWith('<h') ? p : `<p>${p.replace(/\n/g, '<br>')}</p>`)
-      .join('\n');
+      .replace(/\*(.+?)\*/g,     '<em>$1</em>');
   }
-</script>
-</div>
-</div>
-<script>
-(function() {
-  var toggle = document.getElementById('railToggle');
-  if (toggle) toggle.addEventListener('click', function() {
-    document.querySelector('.domain-rail').classList.toggle('collapsed');
-  });
-})();
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+             + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    } catch(e) { return iso; }
+  }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function showToast(msg, isErr) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = isErr ? '#b43c3c' : 'var(--accent)';
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  boot();
 </script>
 </body>
 </html>
