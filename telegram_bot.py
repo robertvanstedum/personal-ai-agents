@@ -43,6 +43,7 @@ VOICE_COMMAND_PATTERNS = [
 # ─── Token helpers ────────────────────────────────────────────────────────────
 
 def get_token():
+    """Outbound sending token (rvsopenbot). Used by send_mode only."""
     try:
         token = keyring.get_password("telegram", "bot_token")
         if token:
@@ -50,6 +51,18 @@ def get_token():
     except Exception:
         pass
     return os.environ.get('TELEGRAM_BOT_TOKEN')
+
+def get_polling_token():
+    """Inbound polling token (minimoi_cmd_bot). Used by run_bot_mode only.
+    Must be a different bot from get_token() — Telegram allows only one
+    getUpdates poller per token. Mixing causes silent message loss."""
+    try:
+        token = keyring.get_password("telegram", "polling_bot_token")
+        if token:
+            return token
+    except Exception:
+        pass
+    return os.environ.get('TELEGRAM_POLLING_BOT_TOKEN')
 
 def get_chat_id():
     return os.environ.get('TELEGRAM_CHAT_ID')
@@ -549,10 +562,10 @@ def run_send_mode():
 
 def run_bot_mode():
     """Run persistent bot for button callbacks and commands"""
-    token = get_token()
-    
+    token = get_polling_token()
+
     if not token:
-        print("❌ No Telegram token found")
+        print("❌ No polling token found (keyring 'telegram/polling_bot_token' or TELEGRAM_POLLING_BOT_TOKEN)")
         return
     
     print("🤖 Unified Telegram bot starting...")
