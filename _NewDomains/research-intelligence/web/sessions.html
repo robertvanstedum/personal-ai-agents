@@ -295,6 +295,50 @@
     .notes-body.open { display: block; }
     .notes-body pre { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted); white-space: pre-wrap; line-height: 1.6; }
 
+    /* ── Annotations Panel ── */
+    .ann-panel {
+      margin-top: 14px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden; display: none;
+    }
+    .ann-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer; user-select: none;
+    }
+    .ann-panel-title {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .ann-panel-count {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-muted);
+    }
+    .ann-panel-body { display: none; }
+    .ann-panel-body.open { display: block; }
+    .ann-item {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .ann-item:last-child { border-bottom: none; }
+    .ann-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+    .ann-type {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 2px 7px; border-radius: 3px; white-space: nowrap;
+    }
+    .ann-type.direction_shift { background: var(--accent-dim); color: var(--accent); }
+    .ann-type.reaction       { background: rgba(46,125,82,0.08); color: #2e7d52; }
+    .ann-type.observation    { background: rgba(26,92,138,0.08); color: #1a5c8a; }
+    .ann-date { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); }
+    .ann-note { font-size: 13px; color: var(--text); line-height: 1.5; }
+    .ann-ref  { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); margin-top: 4px; }
+    .ann-ref a { color: var(--accent); text-decoration: none; }
+    .ann-ref a:hover { text-decoration: underline; }
+    .ann-consumed { opacity: 0.5; }
+
     /* ── Empty State ── */
     .empty { padding: 40px 24px; text-align: center; color: var(--text-dim); }
     .empty-icon { font-size: 32px; margin-bottom: 12px; }
@@ -358,6 +402,15 @@
         <textarea class="direction-input" id="directionInput" placeholder="Write a note to steer the next session… e.g. 'Focus on proximate events around price drops, not long-term cycles'"></textarea>
         <button class="direction-submit" id="directionSubmit">Save shift →</button>
         <div style="clear:both"></div>
+      </div>
+
+      <!-- Annotations Panel -->
+      <div class="ann-panel" id="annPanel">
+        <div class="ann-panel-header" onclick="toggleAnnPanel()">
+          <span class="ann-panel-title">Thread notes</span>
+          <span class="ann-panel-count" id="annCount"></span>
+        </div>
+        <div class="ann-panel-body" id="annBody"></div>
       </div>
     </div>
 
@@ -441,6 +494,9 @@
     // Show direction shift panel
     document.getElementById('directionPanel').style.display = 'block';
     document.getElementById('directionSubmit').onclick = () => submitDirectionShift(topic);
+
+    // Load annotations for this topic
+    loadAnnotations(topic);
 
     // Auto-load first session
     loadSession(topic, data.sessions[0].id);
@@ -578,6 +634,7 @@
       const btns = document.querySelectorAll(`#finding-${idx} .find-btn`);
       btns.forEach(b => b.classList.add('noted'));
       showToast(`${type} saved`);
+      loadAnnotations(activeTopic);  // refresh panel immediately
     } else {
       showToast(data.error || 'Save failed', true);
     }
@@ -598,9 +655,63 @@
     if (data.ok) {
       document.getElementById('directionInput').value = '';
       showToast('Direction shift saved — will influence next run ✓');
+      loadAnnotations(topic);   // refresh panel immediately
     } else {
       showToast(data.error || 'Save failed', true);
     }
+  }
+
+  // ── Annotations Panel ────────────────────────────────────────────────────────
+  async function loadAnnotations(topic) {
+    const panel = document.getElementById('annPanel');
+    const body  = document.getElementById('annBody');
+    const count = document.getElementById('annCount');
+
+    const res  = await fetch(`/api/research/thread/${topic}`);
+    const data = await res.json();
+
+    if (!data.ok || !data.annotations?.length) {
+      panel.style.display = 'none';
+      return;
+    }
+
+    const anns = data.annotations.slice().reverse(); // newest first
+    count.textContent = anns.length;
+    panel.style.display = 'block';
+
+    body.innerHTML = anns.map(a => {
+      const consumed = a.influenced_sessions?.length > 0;
+      const dateStr  = fmtAnnDate(a.timestamp);
+      const refParts = [];
+      if (a.ref_session) {
+        refParts.push(`session: <a href="#" onclick="loadSession('${escHtml(topic)}','${escHtml(a.ref_session)}');return false">${escHtml(a.ref_session)}</a>`);
+      }
+      if (a.ref_article) refParts.push(`re: ${escHtml(a.ref_article.substring(0, 60))}${a.ref_article.length > 60 ? '…' : ''}`);
+      if (consumed) refParts.push(`influenced: ${a.influenced_sessions.join(', ')}`);
+
+      return `
+        <div class="ann-item ${consumed ? 'ann-consumed' : ''}">
+          <div class="ann-row">
+            <span class="ann-type ${escHtml(a.type)}">${escHtml(a.type.replace('_', ' '))}</span>
+            <span class="ann-date">${dateStr}</span>
+          </div>
+          <div class="ann-note">${escHtml(a.note)}</div>
+          ${refParts.length ? `<div class="ann-ref">${refParts.join(' · ')}</div>` : ''}
+        </div>`;
+    }).join('');
+  }
+
+  function toggleAnnPanel() {
+    document.getElementById('annBody').classList.toggle('open');
+  }
+
+  function fmtAnnDate(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+             + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    } catch(e) { return iso; }
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
