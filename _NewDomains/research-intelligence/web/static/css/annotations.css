@@ -270,27 +270,27 @@
   right: 0;
   top: 50%;
   transform: translateY(-50%);
-  background: var(--bg, #f5f0e8);
-  border: 1px solid var(--border, #ddd6c8);
-  border-right: none;
+  background: var(--accent, #8b5e2a);
+  border: none;
   border-radius: 6px 0 0 6px;
-  padding: 16px 10px;
+  padding: 14px 10px;
   cursor: pointer;
   z-index: 500;
   font-family: 'DM Mono', monospace;
-  font-size: 13px;
-  color: var(--text-muted, #6b5f4e);
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
   writing-mode: vertical-rl;
   text-orientation: mixed;
   display: flex;
   align-items: center;
-  gap: 8px;
-  box-shadow: -2px 0 6px rgba(42,36,24,0.07);
+  gap: 6px;
+  letter-spacing: 0.05em;
+  box-shadow: -2px 0 8px rgba(0,0,0,0.12);
 }
 
 .ann-panel-tab:hover {
-  background: var(--surface, #faf7f2);
-  color: var(--accent, #8b5e2a);
+  background: var(--accent-dim, #7a5226);
 }
 
 .ann-right-panel {
