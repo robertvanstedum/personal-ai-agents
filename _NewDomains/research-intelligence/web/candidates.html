@@ -308,6 +308,71 @@
       cursor: not-allowed;
     }
 
+    /* ── Inbox section ── */
+    .inbox-section {
+      margin-bottom: 2rem;
+    }
+
+    .inbox-header {
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+      margin-bottom: 0.6rem;
+    }
+
+    .inbox-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.1rem;
+      font-weight: normal;
+      color: var(--text);
+    }
+
+    .inbox-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      background: var(--accent-dim);
+      color: var(--accent);
+      border: 1px solid rgba(139,94,42,0.2);
+      border-radius: 10px;
+      padding: 1px 8px;
+    }
+
+    .inbox-subtitle {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-bottom: 0.8rem;
+    }
+
+    .inbox-table .bib-title-col { max-width: 300px; word-break: break-word; line-height: 1.4; }
+    .inbox-table .author-col    { font-size: 0.82rem; color: var(--text-muted); }
+    .inbox-table .url-col a     { font-size: 0.78rem; color: var(--accent); font-family: 'DM Mono', monospace; }
+    .inbox-table .assign-col    { white-space: nowrap; display: flex; gap: 0.4rem; align-items: center; }
+
+    .assign-select {
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 0.82rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.3rem 0.5rem;
+      color: var(--text);
+      outline: none;
+    }
+
+    .btn-assign {
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 0.82rem;
+      background: var(--accent-dim);
+      color: var(--accent);
+      border: 1px solid rgba(139,94,42,0.2);
+      border-radius: 3px;
+      padding: 0.3rem 0.7rem;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+    }
+    .btn-assign:hover { background: var(--accent); color: #fff; }
+    .btn-assign:disabled { opacity: 0.4; cursor: not-allowed; }
+
     /* ── Empty state ── */
     .empty-state {
       padding: 2.5rem 1rem;
@@ -374,8 +439,35 @@
   </header>
   <div class="container">
 
-  <h1>Research Candidates</h1>
-  <p class="subtitle">Query candidates extracted by the observer · promote to feed next session, retire to remove</p>
+  <h1>Research Queries</h1>
+  <p class="subtitle">Candidates for next session · promote to schedule, retire to dismiss</p>
+
+  <!-- ── Inbox bucket ── -->
+  <div class="inbox-section" id="inbox-section" style="display:none">
+    <div class="inbox-header">
+      <span class="inbox-title">Inbox</span>
+      <span class="inbox-badge" id="inbox-badge">0</span>
+    </div>
+    <p class="inbox-subtitle">Items promoted from Deep Dives — assign to a topic or retire</p>
+    <div class="table-wrap">
+      <table class="inbox-table" style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+        <thead>
+          <tr>
+            <th style="background:var(--surface2);color:var(--text);font-weight:normal;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.07em;padding:0.6rem 1rem;text-align:left;border-bottom:1px solid var(--border);">Source</th>
+            <th style="background:var(--surface2);color:var(--text);font-weight:normal;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.07em;padding:0.6rem 1rem;text-align:left;border-bottom:1px solid var(--border);">Author</th>
+            <th style="background:var(--surface2);color:var(--text);font-weight:normal;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.07em;padding:0.6rem 1rem;text-align:left;border-bottom:1px solid var(--border);">Link</th>
+            <th style="background:var(--surface2);color:var(--text);font-weight:normal;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.07em;padding:0.6rem 1rem;text-align:left;border-bottom:1px solid var(--border);">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="inbox-body">
+          <tr><td colspan="4" class="empty-state">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Candidates section ── -->
+  <h2 style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:normal;color:var(--text);margin-bottom:0.6rem;">Topic Candidates</h2>
 
   <div class="filter-bar">
     <div class="field">
@@ -416,7 +508,136 @@
 </div>
 
 <script>
-  let allRows = [];
+  let allRows   = [];
+  let allTopics = [];
+
+  async function init() {
+    // Load inbox + topic list in parallel with candidates
+    await Promise.all([loadInbox(), loadTopics(), loadCandidates()]);
+  }
+
+  async function loadTopics() {
+    try {
+      const res  = await fetch('/api/research/sessions');
+      const data = await res.json();
+      if (data.ok && data.topics) {
+        allTopics = data.topics.map(t => t.topic).sort();
+      }
+    } catch (_) {}
+  }
+
+  async function loadInbox() {
+    try {
+      const res  = await fetch('/api/research/candidates?status=unassigned');
+      const data = await res.json();
+      if (!data.ok) return;
+      renderInbox(data.candidates);
+    } catch (_) {}
+  }
+
+  function renderInbox(items) {
+    const section = document.getElementById('inbox-section');
+    const badge   = document.getElementById('inbox-badge');
+    const tbody   = document.getElementById('inbox-body');
+
+    badge.textContent = items.length;
+
+    if (items.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = 'block';
+
+    const topicOptions = allTopics.length
+      ? allTopics.map(t => `<option value="${escHtml(t)}">${escHtml(t)}</option>`).join('')
+      : '<option value="">— no topics —</option>';
+
+    tbody.innerHTML = items.map(item => {
+      const title  = escHtml(item.title || item.query || '—');
+      const author = escHtml(item.author || '—');
+      let   linkHtml = '—';
+      if (item.url) {
+        linkHtml = `<a href="${escHtml(item.url)}" target="_blank" rel="noopener" style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--accent);">↗ link</a>`;
+      }
+      return `
+        <tr id="inbox-row-${item.id}" style="border-bottom:1px solid var(--border);">
+          <td style="padding:0.65rem 1rem;vertical-align:middle;" class="bib-title-col">${title}</td>
+          <td style="padding:0.65rem 1rem;vertical-align:middle;" class="author-col">${author}</td>
+          <td style="padding:0.65rem 1rem;vertical-align:middle;">${linkHtml}</td>
+          <td style="padding:0.65rem 1rem;vertical-align:middle;">
+            <div class="assign-col">
+              <select class="assign-select" id="sel-${item.id}">
+                <option value="">Assign to…</option>
+                ${topicOptions}
+              </select>
+              <button class="btn-assign" onclick="assignItem('${item.id}', this)">Assign</button>
+              <button class="btn-retire" onclick="retireInboxItem('${item.id}', this)" style="margin-right:0">× Retire</button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  async function assignItem(id, btn) {
+    const sel   = document.getElementById(`sel-${id}`);
+    const topic = sel ? sel.value.trim() : '';
+    if (!topic) { setStatus('Select a topic first', 'error'); return; }
+    btn.disabled = true;
+    try {
+      const res  = await fetch('/api/research/candidates/assign', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id, topic}),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        const row = document.getElementById(`inbox-row-${id}`);
+        if (row) row.remove();
+        updateInboxBadge();
+        setStatus(`Assigned to "${topic}"`, 'ok');
+        // Reload candidates list to show the newly assigned item
+        await loadCandidates();
+      } else {
+        btn.disabled = false;
+        setStatus(`Error: ${data.error}`, 'error');
+      }
+    } catch (err) {
+      btn.disabled = false;
+      setStatus(`Network error: ${err.message}`, 'error');
+    }
+  }
+
+  async function retireInboxItem(id, btn) {
+    btn.disabled = true;
+    try {
+      const res  = await fetch('/api/research/candidates/retire', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id}),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        const row = document.getElementById(`inbox-row-${id}`);
+        if (row) row.remove();
+        updateInboxBadge();
+        setStatus('Retired from inbox', 'ok');
+      } else {
+        btn.disabled = false;
+        setStatus(`Error: ${data.error}`, 'error');
+      }
+    } catch (err) {
+      btn.disabled = false;
+      setStatus(`Network error: ${err.message}`, 'error');
+    }
+  }
+
+  function updateInboxBadge() {
+    const section = document.getElementById('inbox-section');
+    const badge   = document.getElementById('inbox-badge');
+    const rows    = document.querySelectorAll('#inbox-body tr[id^="inbox-row-"]');
+    badge.textContent = rows.length;
+    if (rows.length === 0) section.style.display = 'none';
+  }
 
   async function loadCandidates() {
     const status = document.getElementById('f-status').value;
@@ -535,7 +756,7 @@
   }
 
   // Load on page open
-  loadCandidates();
+  init();
 </script>
 </div>
 </div>
