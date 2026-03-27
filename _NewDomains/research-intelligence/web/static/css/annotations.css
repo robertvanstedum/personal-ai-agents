@@ -177,3 +177,198 @@
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ─── Tier 1: Floating button + compact overlay ─── */
+
+.ann-float-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent, #8b5e2a);
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ann-float-btn .ann-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: var(--text, #2a2418);
+  color: white;
+  font-size: 9px;
+  font-family: 'DM Mono', monospace;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ann-compact-overlay {
+  position: fixed;
+  bottom: 76px;
+  right: 24px;
+  width: 300px;
+  background: var(--surface, #faf7f2);
+  border: 1px solid var(--border, #ddd6c8);
+  border-radius: 8px;
+  padding: 14px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  z-index: 600;
+  display: none;
+}
+
+.ann-compact-overlay.visible {
+  display: block;
+  animation: ann-fadein 0.15s ease;
+}
+
+.ann-compact-header {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted, #6b5f4e);
+  margin-bottom: 8px;
+}
+
+.ann-compact-textarea {
+  width: 100%;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 13px;
+  color: var(--text, #2a2418);
+  background: var(--bg, #f5f0e8);
+  border: 1px solid var(--border, #ddd6c8);
+  border-radius: 4px;
+  padding: 7px 9px;
+  resize: none;
+  box-sizing: border-box;
+  min-height: 56px;
+}
+
+.ann-compact-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+
+/* ─── Tier 2: Collapsible right panel ─── */
+
+.ann-panel-tab {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--surface, #faf7f2);
+  border: 1px solid var(--border, #ddd6c8);
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  padding: 12px 8px;
+  cursor: pointer;
+  z-index: 500;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted, #6b5f4e);
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ann-panel-tab:hover {
+  background: var(--bg, #f5f0e8);
+}
+
+.ann-right-panel {
+  position: fixed;
+  right: -320px;
+  top: 60px;
+  width: 300px;
+  height: calc(100vh - 60px);
+  background: var(--surface, #faf7f2);
+  border-left: 1px solid var(--border, #ddd6c8);
+  padding: 16px;
+  overflow-y: auto;
+  transition: right 0.2s ease;
+  z-index: 490;
+}
+
+.ann-right-panel.open {
+  right: 0;
+}
+
+.ann-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.ann-panel-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted, #6b5f4e);
+}
+
+.ann-pin-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.4;
+  padding: 2px;
+}
+
+.ann-pin-btn.pinned {
+  opacity: 1;
+  color: var(--accent, #8b5e2a);
+}
+
+/* Pinned: push content left */
+body.notes-pinned .main-content,
+body.notes-pinned .content-area {
+  margin-right: 310px;
+  transition: margin-right 0.2s ease;
+}
+
+/* ─── Tier 3: Left panel notes (sessions page) ─── */
+
+.ann-left-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border, #ddd6c8);
+}
+
+.ann-left-header {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted, #6b5f4e);
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Compact note item for left panel */
+.ann-left-item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border, #ddd6c8);
+  font-size: 12px;
+}
+
+.ann-left-item:last-child {
+  border-bottom: none;
+}

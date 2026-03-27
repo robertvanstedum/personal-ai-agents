@@ -466,11 +466,11 @@
   boot();
 </script>
 
-<div id="ann-comment-area"></div>
 <script src="/research/static/js/annotations.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
-    AnnotationSystem.init('ann-comment-area');
+    AnnotationSystem.initCollapsiblePanel('notes-pinned-observe');
+    AnnotationSystem.initSelectionPopup();
   });
 </script>
 </body>

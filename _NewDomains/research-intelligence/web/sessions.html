@@ -389,7 +389,7 @@
   <div class="page-subtitle" id="subtitleLine">Loading topics…</div>
 
   <div class="sessions-layout">
-    <div>
+    <div id="ann-left-panel">
       <div class="topic-list">
         <div class="topic-list-header">Topics</div>
         <div class="topic-list-inner" id="topicBar"></div>
@@ -465,6 +465,7 @@
     activeTopic = topic;
     activeSession = null;
     document.body.dataset.topic = topic || '';
+    if (window.AnnotationSystem) AnnotationSystem.refreshLeftPanel();
 
     document.querySelectorAll('.topic-row').forEach(b => {
       b.classList.toggle('active', b.dataset.topic === topic);
@@ -741,11 +742,11 @@
   boot();
 </script>
 
-<div id="ann-comment-area"></div>
 <script src="/research/static/js/annotations.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
-    AnnotationSystem.init('ann-comment-area');
+    AnnotationSystem.initLeftPanel('ann-left-panel');
+    AnnotationSystem.initSelectionPopup();
   });
 </script>
 </body>

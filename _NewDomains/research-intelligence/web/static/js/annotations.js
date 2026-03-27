@@ -224,3 +224,208 @@ const AnnotationSystem = {
     this.initSelectionPopup();
   }
 };
+
+// ─── Tier 1: Floating button + compact overlay ───
+
+AnnotationSystem.initFloating = function() {
+  // Inject floating button
+  const btn = document.createElement('button');
+  btn.className = 'ann-float-btn';
+  btn.innerHTML = '💬<span class="ann-count" style="display:none">0</span>';
+  btn.onclick = () => this.toggleCompactOverlay();
+  document.body.appendChild(btn);
+
+  // Inject compact overlay
+  const overlay = document.createElement('div');
+  overlay.id = 'ann-compact-overlay';
+  overlay.className = 'ann-compact-overlay';
+  overlay.innerHTML = `
+    <div class="ann-compact-header">QUICK NOTE</div>
+    <textarea
+      id="ann-compact-textarea"
+      class="ann-compact-textarea"
+      placeholder="Reaction? Question? Just type..."
+      rows="2"
+    ></textarea>
+    <div class="ann-compact-footer">
+      <select id="ann-compact-type" class="ann-type-select">
+        <option value="reaction">reaction</option>
+        <option value="note">note</option>
+        <option value="direction_shift">direction shift</option>
+      </select>
+      <button class="ann-save-btn" onclick="AnnotationSystem.saveFromCompact()">
+        Save →
+      </button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // Close on outside click
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.ann-float-btn') &&
+        !e.target.closest('#ann-compact-overlay')) {
+      this.closeCompactOverlay();
+    }
+  });
+
+  this.updateFloatCount();
+};
+
+AnnotationSystem.toggleCompactOverlay = function() {
+  const overlay = document.getElementById('ann-compact-overlay');
+  overlay.classList.toggle('visible');
+  if (overlay.classList.contains('visible')) {
+    document.getElementById('ann-compact-textarea')?.focus();
+  }
+};
+
+AnnotationSystem.closeCompactOverlay = function() {
+  document.getElementById('ann-compact-overlay')?.classList.remove('visible');
+};
+
+AnnotationSystem.saveFromCompact = async function() {
+  const textarea = document.getElementById('ann-compact-textarea');
+  const typeSelect = document.getElementById('ann-compact-type');
+  const note = textarea?.value?.trim();
+  if (!note) return;
+
+  await this.save(note, { type: typeSelect?.value || 'reaction' });
+  textarea.value = '';
+  this.closeCompactOverlay();
+  this.updateFloatCount();
+};
+
+AnnotationSystem.updateFloatCount = async function() {
+  const annotations = await this.loadRecent();
+  const countEl = document.querySelector('.ann-float-btn .ann-count');
+  if (!countEl) return;
+  if (annotations.length > 0) {
+    countEl.textContent = annotations.length;
+    countEl.style.display = 'flex';
+  } else {
+    countEl.style.display = 'none';
+  }
+};
+
+// ─── Tier 2: Collapsible right panel ───
+
+AnnotationSystem.initCollapsiblePanel = function(storageKey) {
+  // Inject tab trigger
+  const tab = document.createElement('div');
+  tab.className = 'ann-panel-tab';
+  tab.innerHTML = '💬 Notes';
+  tab.onclick = () => this.toggleRightPanel();
+  document.body.appendChild(tab);
+
+  // Inject panel
+  const panel = document.createElement('div');
+  panel.id = 'ann-right-panel';
+  panel.className = 'ann-right-panel';
+  panel.innerHTML = `
+    <div class="ann-panel-header">
+      <span class="ann-panel-title">NOTES</span>
+      <button class="ann-pin-btn" id="ann-pin-btn"
+              onclick="AnnotationSystem.togglePin('${storageKey}')"
+              title="Pin panel open">📌</button>
+    </div>
+    <div class="ann-box">
+      <textarea
+        id="ann-textarea"
+        class="ann-textarea"
+        placeholder="Reaction? Question? Next step?"
+        rows="3"
+      ></textarea>
+      <div class="ann-box-footer">
+        <select id="ann-type" class="ann-type-select">
+          <option value="reaction">reaction</option>
+          <option value="note">note</option>
+          <option value="direction_shift">direction shift</option>
+        </select>
+        <button class="ann-save-btn" onclick="AnnotationSystem.saveFromBox()">
+          Save →
+        </button>
+      </div>
+    </div>
+    <div class="ann-sidebar">
+      <div class="ann-sidebar-header">RECENT NOTES</div>
+      <div id="ann-sidebar-list"></div>
+    </div>
+  `;
+  document.body.appendChild(panel);
+
+  // Restore pinned state
+  const pinned = localStorage.getItem(storageKey) === 'true';
+  if (pinned) {
+    panel.classList.add('open');
+    document.body.classList.add('notes-pinned');
+    document.getElementById('ann-pin-btn')?.classList.add('pinned');
+  }
+
+  this.refreshSidebar();
+};
+
+AnnotationSystem.toggleRightPanel = function() {
+  const panel = document.getElementById('ann-right-panel');
+  panel?.classList.toggle('open');
+};
+
+AnnotationSystem.togglePin = function(storageKey) {
+  const panel = document.getElementById('ann-right-panel');
+  const btn = document.getElementById('ann-pin-btn');
+  const isPinned = panel?.classList.contains('open') &&
+                   btn?.classList.contains('pinned');
+
+  if (isPinned) {
+    btn?.classList.remove('pinned');
+    document.body.classList.remove('notes-pinned');
+    localStorage.setItem(storageKey, 'false');
+  } else {
+    panel?.classList.add('open');
+    btn?.classList.add('pinned');
+    document.body.classList.add('notes-pinned');
+    localStorage.setItem(storageKey, 'true');
+  }
+};
+
+// ─── Tier 3: Left panel injection ───
+
+AnnotationSystem.initLeftPanel = function(leftPanelId) {
+  const leftPanel = document.getElementById(leftPanelId);
+  if (!leftPanel) return;
+
+  const section = document.createElement('div');
+  section.className = 'ann-left-section';
+  section.innerHTML = `
+    <div class="ann-left-header">
+      <span>NOTES</span>
+      <span id="ann-left-count"></span>
+    </div>
+    <div id="ann-left-list"></div>
+  `;
+  leftPanel.appendChild(section);
+
+  this.refreshLeftPanel();
+};
+
+AnnotationSystem.refreshLeftPanel = async function() {
+  const list = document.getElementById('ann-left-list');
+  const countEl = document.getElementById('ann-left-count');
+  if (!list) return;
+
+  const annotations = await this.loadRecent();
+  if (countEl) countEl.textContent = annotations.length || '';
+
+  if (annotations.length === 0) {
+    list.innerHTML = '<p class="ann-empty">No notes yet.</p>';
+    return;
+  }
+
+  list.innerHTML = annotations.map(a => `
+    <div class="ann-left-item">
+      <span class="ann-type-badge ann-type-${a.type}">${a.type}</span>
+      <span class="ann-date">${new Date(a.timestamp).toLocaleDateString()}</span>
+      ${a.ref_title ? `<div class="ann-ref">↳ ${a.ref_title}</div>` : ''}
+      <div class="ann-note">${a.note}</div>
+    </div>
+  `).join('');
+};
