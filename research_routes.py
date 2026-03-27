@@ -1321,3 +1321,63 @@ def api_research_candidates_assign():
 
     candidates_path.write_text(json.dumps(records, indent=2, ensure_ascii=False))
     return jsonify({"ok": True, "id": id_, "topic": topic, "title": title})
+
+# ─────────────────────────────────────────────
+# ANNOTATIONS — Comment anywhere
+# Added: 2026-03-27
+# ─────────────────────────────────────────────
+
+from annotations import save_annotation, get_recent_annotations as _get_recent_annotations
+
+@research_bp.route('/api/research/annotate', methods=['POST'])
+def annotate():
+    """
+    Save an annotation from any research page.
+    Body: { note, domain, page, topic?, ref_type?, ref_id?,
+            ref_title?, ref_text?, url?, type? }
+    """
+    try:
+        data = request.get_json()
+        if not data or not data.get('note', '').strip():
+            return jsonify({'error': 'note required'}), 400
+
+        record = save_annotation(
+            note=data['note'],
+            domain=data.get('domain', 'research'),
+            page=data.get('page', 'unknown'),
+            topic=data.get('topic'),
+            ref_type=data.get('ref_type'),
+            ref_id=data.get('ref_id'),
+            ref_title=data.get('ref_title'),
+            ref_text=data.get('ref_text'),
+            url=data.get('url'),
+            annotation_type=data.get('type', 'reaction')
+        )
+        return jsonify({'status': 'saved', 'note_id': record['note_id']})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@research_bp.route('/api/research/annotations', methods=['GET'])
+def get_annotations():
+    """
+    Get recent annotations.
+    Query params: domain, topic, limit (default 10)
+    """
+    try:
+        domain = request.args.get('domain', 'research')
+        topic = request.args.get('topic')
+        limit = int(request.args.get('limit', 10))
+        annotations = _get_recent_annotations(domain, topic, limit)
+        return jsonify({'annotations': annotations, 'count': len(annotations)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@research_bp.route('/research/static/<path:filename>')
+def research_static(filename):
+    """Serve static assets for research pages (annotations.js, annotations.css, etc.)"""
+    from flask import send_from_directory
+    static_dir = RESEARCH_ROOT / 'web' / 'static'
+    return send_from_directory(str(static_dir), filename)

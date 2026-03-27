@@ -356,8 +356,9 @@
     }
     .toast.show { opacity: 1; transform: translateY(0); }
   </style>
+  <link rel="stylesheet" href="/research/static/css/annotations.css">
 </head>
-<body>
+<body data-domain="research" data-page="sessions" data-topic="">
 
 <!-- Domain Rail -->
 <div class="domain-rail">
@@ -463,6 +464,7 @@
   async function selectTopic(topic) {
     activeTopic = topic;
     activeSession = null;
+    document.body.dataset.topic = topic || '';
 
     document.querySelectorAll('.topic-row').forEach(b => {
       b.classList.toggle('active', b.dataset.topic === topic);
@@ -737,6 +739,14 @@
   }
 
   boot();
+</script>
+
+<div id="ann-comment-area"></div>
+<script src="/research/static/js/annotations.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    AnnotationSystem.init('ann-comment-area');
+  });
 </script>
 </body>
 </html>

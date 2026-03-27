@@ -1,0 +1,32 @@
+[
+  {
+    "note_id": "38735603",
+    "timestamp": "2026-03-27T14:18:49.056044+00:00",
+    "domain": "research",
+    "page": "observe",
+    "type": "reaction",
+    "note": "Test annotation",
+    "topic": "empire-landpower",
+    "ref_type": null,
+    "ref_id": null,
+    "ref_title": null,
+    "ref_text": null,
+    "url": null,
+    "influenced_sessions": []
+  },
+  {
+    "note_id": "20aa6779",
+    "timestamp": "2026-03-27T14:22:39.919855+00:00",
+    "domain": "research",
+    "page": "observe",
+    "type": "reaction",
+    "note": "test from curl",
+    "topic": "empire-landpower",
+    "ref_type": null,
+    "ref_id": null,
+    "ref_title": null,
+    "ref_text": null,
+    "url": null,
+    "influenced_sessions": []
+  }
+]

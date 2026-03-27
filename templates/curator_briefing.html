@@ -414,8 +414,9 @@
             transform: scale(1.05);
         }
     </style>
+  <link rel="stylesheet" href="/research/static/css/annotations.css">
 </head>
-<body data-run-mode="{{ run_mode }}">
+<body data-run-mode="{{ run_mode }}" data-domain="curator" data-page="daily" data-topic="">
 <div class="domain-rail">
   <a href="/" class="rail-domain active"><span class="rail-icon">📚</span><span>Curator</span></a>
   <a href="/research/dashboard" class="rail-domain"><span class="rail-icon">🔬</span><span>Research</span></a>
@@ -762,5 +763,13 @@
     }
     </style>
 </div><!-- /.main-content -->
+
+<div id="ann-comment-area" style="max-width:860px;margin:0 auto;padding:0 24px 48px;"></div>
+<script src="/research/static/js/annotations.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    AnnotationSystem.init('ann-comment-area');
+  });
+</script>
 </body>
 </html>
