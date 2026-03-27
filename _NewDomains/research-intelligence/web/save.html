@@ -279,12 +279,17 @@
       <span style="font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 0.06em; text-transform: uppercase;">Research</span>
     </div>
     <nav class="header-nav" style="display: flex; gap: 4px;">
-      <a href="/research/dashboard" class="nav-link">Dashboard</a>
       <a href="/research/sessions" class="nav-link">Sessions</a>
       <a href="/research/observe" class="nav-link">Observations</a>
-      <a href="/research/candidates" class="nav-link">Queries</a>
-      <a href="/research/save" class="nav-link active">Save</a>
-      <a href="/curator_priorities.html" class="nav-link nav-focus">🎯</a>
+      <div class="nav-more-wrapper">
+        <button class="nav-more-btn">···</button>
+        <div class="nav-more-dropdown">
+          <a href="/research/dashboard">Dashboard</a>
+          <a href="/research/candidates">Queries</a>
+          <a href="/research/save" class="active">Save</a>
+          <a href="/curator_priorities.html">Priorities</a>
+        </div>
+      </div>
     </nav>
   </header>
   <div class="container">

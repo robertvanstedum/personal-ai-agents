@@ -429,3 +429,20 @@ AnnotationSystem.refreshLeftPanel = async function() {
     </div>
   `).join('');
 };
+
+// ─── ··· Nav dropdown ───
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.querySelector('.nav-more-btn');
+  const dropdown = document.querySelector('.nav-more-dropdown');
+  if (!btn || !dropdown) return;
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dropdown.classList.toggle('open');
+  });
+
+  document.addEventListener('click', () => {
+    dropdown.classList.remove('open');
+  });
+});

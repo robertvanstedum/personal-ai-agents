@@ -983,7 +983,12 @@
     <a href="/curator_library.html" class="nav-link">Library</a>
     <a href="/interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
     <a href="/curator_intelligence.html" class="nav-link">Observations</a>
-    <a href="/curator_priorities.html" class="nav-link nav-focus active">🎯</a>
+    <div class="nav-more-wrapper">
+      <button class="nav-more-btn">···</button>
+      <div class="nav-more-dropdown">
+        <a href="/curator_priorities.html" class="active">Priorities</a>
+      </div>
+    </div>
   </nav>
 </header>
 
@@ -1578,6 +1583,17 @@
     document.querySelector('.domain-rail').classList.toggle('collapsed');
   });
 })();
+</script>
+
+<link rel="stylesheet" href="/research/static/css/annotations.css">
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.querySelector('.nav-more-btn');
+    const dropdown = document.querySelector('.nav-more-dropdown');
+    if (!btn || !dropdown) return;
+    btn.addEventListener('click', (e) => { e.stopPropagation(); dropdown.classList.toggle('open'); });
+    document.addEventListener('click', () => dropdown.classList.remove('open'));
+  });
 </script>
 </body>
 </html>

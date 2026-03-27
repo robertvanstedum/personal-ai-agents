@@ -612,7 +612,7 @@ main {
 .toast.err  { background: var(--danger); }
 </style>
 </head>
-<body>
+<body data-domain="curator" data-page="ai-observations">
 
 <aside class="domain-rail">
   <button class="rail-toggle" id="railToggle" title="Toggle rail">‹</button>
@@ -647,7 +647,12 @@ main {
     <a href="/curator_library.html" class="nav-link">Library</a>
     <a href="/interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
     <a href="/curator_intelligence.html" class="nav-link active">Observations</a>
-    <a href="/curator_priorities.html" class="nav-link nav-focus">🎯</a>
+    <div class="nav-more-wrapper">
+      <button class="nav-more-btn">···</button>
+      <div class="nav-more-dropdown">
+        <a href="/curator_priorities.html">Priorities</a>
+      </div>
+    </div>
   </nav>
 </header>
 
@@ -1060,6 +1065,15 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('.domain-rail').classList.toggle('collapsed');
   });
 })();
+</script>
+
+<link rel="stylesheet" href="/research/static/css/annotations.css">
+<script src="/research/static/js/annotations.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    AnnotationSystem.initFloating();
+    AnnotationSystem.initSelectionPopup();
+  });
 </script>
 </body>
 </html>

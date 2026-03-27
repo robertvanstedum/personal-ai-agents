@@ -374,3 +374,66 @@ body.notes-pinned .content-area {
 .ann-left-item:last-child {
   border-bottom: none;
 }
+
+/* ─── ··· nav dropdown ─── */
+
+.nav-more-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.nav-more-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  color: var(--text-muted, #6b5f4e);
+  padding: 4px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+.nav-more-btn:hover {
+  background: var(--surface, #faf7f2);
+  color: var(--text, #2a2418);
+}
+
+.nav-more-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: var(--surface, #faf7f2);
+  border: 1px solid var(--border, #ddd6c8);
+  border-radius: 6px;
+  padding: 6px 0;
+  min-width: 140px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  z-index: 400;
+}
+
+.nav-more-dropdown.open {
+  display: block;
+  animation: ann-fadein 0.15s ease;
+}
+
+.nav-more-dropdown a {
+  display: block;
+  padding: 8px 16px;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  color: var(--text-muted, #6b5f4e);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nav-more-dropdown a:hover {
+  background: var(--bg, #f5f0e8);
+  color: var(--text, #2a2418);
+}
+
+.nav-more-dropdown a.active {
+  color: var(--accent, #8b5e2a);
+  font-weight: 600;
+}
