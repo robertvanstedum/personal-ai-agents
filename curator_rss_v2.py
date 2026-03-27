@@ -849,7 +849,7 @@ ARTICLES:
             raise
 
 
-def score_entries_xai(entries: List[Dict], fallback_on_error: bool = False, user_profile: str = "", model: str = "grok-3-mini", temperature: float = 0.0) -> List[Dict]:
+def score_entries_xai(entries: List[Dict], fallback_on_error: bool = False, user_profile: str = "", model: str = "grok-4-1-fast-reasoning", temperature: float = 0.0) -> List[Dict]:
     """
     Score all entries using xAI Grok (batch processing)
     
@@ -1526,7 +1526,7 @@ def _fetch_web_search_candidates(
 
 
 def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanical',
-           fallback_on_error: bool = False, xai_model: str = 'grok-3-mini', temperature: float = 0.0) -> List[Dict]:
+           fallback_on_error: bool = False, xai_model: str = 'grok-4-1-fast-reasoning', temperature: float = 0.0) -> List[Dict]:
     """
     Fetch all feeds, score, rank, return top N
     
@@ -3027,7 +3027,7 @@ def main():
     # Map --model= flag to internal scoring mode
     mode_map = {
         'ollama': 'mechanical',   # Free local, keyword-based
-        'xai':    'xai',          # xAI Grok-3-mini (~$0.15/day) — production default
+        'xai':    'xai',          # xAI Grok-4-1-fast-reasoning (~$0.15/day) — production default
         'grok-4-1': 'xai',        # xAI Grok-4-1-fast-reasoning (NEW - faster, better reasoning)
         'haiku':  'ai',           # Anthropic Haiku (~$0.20/day) — single-stage
         'sonnet': 'ai-two-stage', # Anthropic Haiku pre-filter + Sonnet ranking (~$0.90/day)
@@ -3035,7 +3035,7 @@ def main():
     mode = mode_map.get(model, 'xai')  # Default: xai
     
     # For grok-4-1, we need to track which xAI model variant to use
-    xai_model_variant = 'grok-3-mini'  # default
+    xai_model_variant = 'grok-4-1-fast-reasoning'  # default
     if model == 'grok-4-1':
         xai_model_variant = 'grok-4-1-fast-reasoning'
 
