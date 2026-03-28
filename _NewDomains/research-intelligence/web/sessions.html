@@ -58,7 +58,7 @@
     }
     .rail-domain:hover { background: var(--surface2); color: var(--text); }
     .rail-domain.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; border-right: 2px solid var(--accent); }
-    .rail-domain.coming-soon { opacity: 0.4; cursor: default; }
+    .rail-domain.coming-soon { opacity: 0.4; cursor: default; pointer-events: none; }
     .rail-icon { font-size: 14px; }
 
     /* ── Main Content ── */
@@ -366,8 +366,8 @@
 <div class="domain-rail">
   <a href="/" class="rail-domain"><span class="rail-icon">📚</span><span>Curator</span></a>
   <a href="/research/dashboard" class="rail-domain active"><span class="rail-icon">🔬</span><span>Research</span></a>
-  <a href="/language" class="rail-domain coming-soon"><span class="rail-icon">💬</span><span>Language</span></a>
-  <a href="/jobs" class="rail-domain coming-soon"><span class="rail-icon">💼</span><span>Jobs</span></a>
+  <span class="rail-domain coming-soon"><span class="rail-icon">💬</span><span>Language</span></span>
+  <span class="rail-domain coming-soon"><span class="rail-icon">💼</span><span>Jobs</span></span>
 </div>
 
 <div class="main-content">
