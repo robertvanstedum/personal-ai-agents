@@ -63,3 +63,16 @@ Press Ctrl+C to stop
 
  * Serving Flask app 'curator_server'
  * Debug mode: off
+✓ Research Intelligence routes loaded
+
+🌐 Curator Server Starting (Flask)...
+
+📍 Server running at: http://localhost:8765
+📄 curator_latest.html - Daily briefing with feedback buttons
+📚 curator_library.html - Reading library (liked/saved/bookmarked)
+🔌 /api/library - Library data endpoint
+
+Press Ctrl+C to stop
+
+ * Serving Flask app 'curator_server'
+ * Debug mode: off
