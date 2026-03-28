@@ -1131,7 +1131,7 @@ def research_deep_dive_view(hash_id: str):
   <link rel="stylesheet" href="/research/static/css/nav.css">
   <script src="/research/static/js/nav.js"></script>
 </head>
-<body>
+<body data-domain="curator" data-page="deep-dive" data-ref-id="{_html_lib.escape(hash_id)}">
 <header>
   <a href="/" class="site-brand">mini-moi</a>
   <nav class="header-nav">
@@ -1208,6 +1208,14 @@ def research_deep_dive_view(hash_id: str):
     t.style.display = 'block';
     setTimeout(() => {{ t.style.display = 'none'; }}, 3000);
   }}
+</script>
+<link rel="stylesheet" href="/research/static/css/annotations.css">
+<script src="/research/static/js/annotations.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {{
+    AnnotationSystem.initFloating();
+    AnnotationSystem.initSelectionPopup();
+  }});
 </script>
 </body>
 </html>'''
