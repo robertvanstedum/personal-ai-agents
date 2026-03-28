@@ -14435,5 +14435,73 @@
       "text_analysis": null
     },
     "folder": null
+  },
+  {
+    "tweet_id": "2032274796218593511",
+    "source": "X/@zerohedge",
+    "url": "https://x.com/zerohedge/status/2032274796218593511",
+    "action": "save",
+    "fetched_at": "2026-03-14T12:12:40",
+    "metadata": {
+      "tweet_text": "Gold has been steady since the start of the Iran war. \nToo steady: HFT algos always migrate to anywhere there is momentum (or they create it)... could they be moving back to bitcoin, which has now outperformed gold since the war started https://t.co/T8rWzJ58au",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2033897242986209689",
+    "source": "X/@joekent16jan19",
+    "url": "https://x.com/joekent16jan19/status/2033897242986209689",
+    "action": "save",
+    "fetched_at": "2026-03-18T04:04:48",
+    "metadata": {
+      "tweet_text": "After much reflection, I have decided to resign from my position as Director of the National Counterterrorism Center, effective today.\n\nI cannot in good conscience support the ongoing war in Iran. Iran posed no imminent threat to our nation, and it is clear that we started this https://t.co/prtu86DpEr",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2036342731123896574",
+    "source": "X/@visegrad24",
+    "url": "https://x.com/visegrad24/status/2036342731123896574",
+    "action": "save",
+    "fetched_at": "2026-03-25T11:24:08",
+    "metadata": {
+      "tweet_text": "BREAKING:\n\nMajor confrontation between China and the Philippines near the Scarborough Shoal.\n\nThe Philippine Coast Guard (PCG) and Bureau of Fisheries and Aquatic Resources (BFAR) have deployed 2 PCG vessels and 5 fishery patrol vessels to the shoal after Chinese Coast Guard https://t.co/iEw9cIbPq1",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2037023566563295385",
+    "source": "X/@pmarca",
+    "url": "https://x.com/pmarca/status/2037023566563295385",
+    "action": "save",
+    "fetched_at": "2026-03-26T12:02:52",
+    "metadata": {
+      "tweet_text": "Birth of the AI book. \ud83e\udd16\ud83e\udd1d\ud83e\uddd1\u200d\ud83c\udfeb https://t.co/GXD3dal4FB",
+      "linked_content": {
+        "destination_url": "https://tylercowen.com/marginal-revolution-generative-book/",
+        "domain": "tylercowen.com",
+        "source_type": "web_article",
+        "title": "Explore The Marginal Revolution Generative Book | Tyler Cowen",
+        "content_preview": "How are ideas are born, why do they take so long to arrive, and what happens when machines begin to see around corners that humans cannot?",
+        "enriched_at": "2026-03-26T12:02:53",
+        "enrichment_failed": false,
+        "destination_text": "The most important idea in economics is being automated out of existence \u2014 and that might be the most important economic insight of our time. Tyler traces the birth, triumph, and quiet decline of marginalism \u2014 the idea that made modern economics possible. Beginning with the 1871 Marginal Revolution and ending with the AI tools transforming research today, this is a book about how ideas are born, why they take so long to arrive, and what happens when machines begin to see around corners that humans cannot. Every word of the generative book is Tyler\u2019s and can be read in the traditional way, but you\u2019re encouraged to use AI as an alternate way to absorb the ideas in the text, understand their deeper context, and follow your curiosity wherever it leads. Use the integrated AI assistant , or download the text and upload it in the AI tool of your choice. Ask questions about what\u2019s in the text, generate your own index, and surface connections across chapters you might otherwise miss. Steelman an argument, challenge a claim, and contrast Tyler\u2019s thinking with the public intellectual of your choice. Find what else Tyler and others have written on a topic and let the text become a springboard into the broader intellectual landscape.",
+        "destination_text_source": "fetched",
+        "destination_text_error": null,
+        "destination_text_at": "2026-03-26T12:02:53"
+      },
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
   }
 ]

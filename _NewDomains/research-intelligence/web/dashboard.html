@@ -72,6 +72,49 @@
     .nav-link.active { color: var(--accent); background: var(--accent-dim); border-color: rgba(139,94,42,0.2); }
     .nav-link.nav-focus { letter-spacing: 0; }
 
+    /* ── Nav more dropdown ── */
+    .nav-more-wrapper { position: relative; }
+    .nav-more-btn {
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      padding: 5px 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .nav-more-btn:hover { color: var(--text); background: var(--surface2); }
+    .nav-more-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px;
+      min-width: 140px;
+      box-shadow: 0 4px 16px rgba(42,36,24,0.12);
+      z-index: 200;
+    }
+    .nav-more-dropdown.open { display: block; }
+    .nav-more-dropdown a {
+      display: block;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 7px 12px;
+      border-radius: 5px;
+      transition: all 0.12s;
+    }
+    .nav-more-dropdown a:hover { background: var(--surface2); color: var(--text); }
+    .nav-more-dropdown a.active { color: var(--accent); background: var(--accent-dim); }
+
     /* ── Domain Rail ── */
     .domain-rail {
       width: 210px;
@@ -389,11 +432,10 @@
       <a href="/research/observe" class="nav-link">Observations</a>
       <div class="nav-more-wrapper">
         <button class="nav-more-btn">···</button>
-        <div class="nav-more-dropdown">
+        <div class="nav-more-dropdown" style="display:none">
           <a href="/research/dashboard" class="active">Dashboard</a>
           <a href="/research/candidates">Queries</a>
           <a href="/research/save">Save</a>
-          <a href="/curator_priorities.html">Priorities</a>
         </div>
       </div>
     </nav>
@@ -547,6 +589,16 @@
   if (toggle) toggle.addEventListener('click', function() {
     document.querySelector('.domain-rail').classList.toggle('collapsed');
   });
+})();
+(function() {
+  var btn = document.querySelector('.nav-more-btn');
+  var dd = document.querySelector('.nav-more-dropdown');
+  if (!btn || !dd) return;
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+  });
+  document.addEventListener('click', function() { dd.style.display = 'none'; });
 })();
 </script>
 </body>

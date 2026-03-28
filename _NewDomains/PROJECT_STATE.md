@@ -168,3 +168,34 @@ Never publish:
 | `OPERATIONS.md` | Daily ops and cost management |
 | `docs/FEATURE_TELEGRAM_ARCHITECTURE.md` | Two-bot Telegram design |
 | `docs/NEXT_PHASE_PLAN_grok41.md` | Model upgrade plan |
+
+---
+
+## Tonight's Build Queue — 2026-03-24
+
+### AI Observations page — navigation + ordering fix
+
+**Problem:**
+- Weekly Connections (last run 03-15, 9 days stale) renders above Today's Observations
+- Date nav `← prev / today →` is ambiguous — navigates daily only but Weekly doesn't move with it
+- Weekly staleness not communicated clearly
+
+**Approved fix:**
+
+1. Reorder sections — Today's Observations first, Weekly Connections below
+2. Weekly section: add "Last updated: Mar 15" label, collapse by default if > 7 days old
+3. Date nav: move inline with "Daily Observations" section header, remove standalone buttons
+   - Pattern: `Daily Observations — Mar 24  ←  →`
+
+**Files to touch:**
+- `curator_intelligence.html` — reorder HTML sections, update date nav placement
+- `curator_intelligence.py` — check if weekly staleness date is passed in API response (may need `weekly.date` field surfaced)
+
+**Not in scope tonight:**
+- Weekly intelligence regeneration schedule (OpenClaw cron question)
+- Reaction/save UI on weekly items
+
+**Also fixed today (already committed):**
+- `run_intelligence_cron.sh` — was checking `date` field, briefing uses `briefing_date`. Intelligence hadn't run since 03-15. Fixed and verified running.
+- `curator_latest.html` — nav emoji + order inconsistency fixed
+
