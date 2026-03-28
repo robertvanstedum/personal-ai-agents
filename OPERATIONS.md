@@ -140,6 +140,11 @@ launchctl unload ~/Library/LaunchAgents/com.vanstedum.curator.plist
 
 # Restart (e.g. after code changes)
 launchctl kickstart -k gui/$(id -u)/com.vanstedum.curator
+
+# ⚠️  Known issue: kickstart -k does not always kill a long-running process.
+# If the old PID is still alive after kickstart, use this instead:
+kill $(lsof -ti :8765) && sleep 3
+# launchd will auto-restart the process. Verify with: lsof -i :8765
 ```
 
 ### Plist Locations

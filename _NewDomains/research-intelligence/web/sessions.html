@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Research Sessions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/research/static/css/nav.css">
+  <style>
+    :root {
+      --bg: #f5f0e8;
+      --surface: #faf7f2;
+      --surface2: #f0ebe0;
+      --border: #ddd6c8;
+      --border2: #c8bfaf;
+      --text: #2a2418;
+      --text-muted: #6b5f4e;
+      --text-dim: #9e9080;
+      --accent: #8b5e2a;
+      --accent-dim: rgba(139,94,42,0.08);
+      --accent-glow: rgba(139,94,42,0.18);
+      --shadow: rgba(42,36,24,0.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Source Sans 3', sans-serif;
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+      display: flex;
+      align-items: flex-start;
+    }
+
+    /* ── Domain Rail ── */
+    .domain-rail {
+      width: 200px; min-width: 200px;
+      background: rgba(245,240,232,0.6);
+      border-right: 1px solid var(--border);
+      min-height: 100vh;
+      padding: 24px 0;
+      position: sticky; top: 0;
+      display: flex; flex-direction: column; gap: 4px;
+      z-index: 50;
+    }
+    .rail-domain {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 20px;
+      text-decoration: none;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--text-muted); transition: all 0.15s;
+    }
+    .rail-domain:hover { background: var(--surface2); color: var(--text); }
+    .rail-domain.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; border-right: 2px solid var(--accent); }
+    .rail-domain.coming-soon { opacity: 0.4; cursor: default; pointer-events: none; }
+    .rail-icon { font-size: 14px; }
+
+    /* ── Main Content ── */
+    .main-content { flex: 1; min-width: 0; min-height: 100vh; overflow-x: hidden; }
+
+    /* ── Header ── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 60px;
+      position: sticky; top: 0;
+      background: rgba(245,240,232,0.94);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+      box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
+    }
+    .header-left { display: flex; align-items: baseline; gap: 16px; }
+    .logo { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--accent); text-decoration: none; }
+    .logo-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase; }
+    .header-nav { display: flex; gap: 4px; }
+    .nav-link {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-muted); text-decoration: none;
+      padding: 6px 14px; border-radius: 6px; letter-spacing: 0.05em;
+      transition: all 0.15s; border: 1px solid transparent;
+    }
+    .nav-link:hover { color: var(--text); background: var(--surface2); }
+    .nav-link.active { color: var(--accent); background: var(--accent-dim); border-color: rgba(139,94,42,0.2); }
+
+    /* ── Page Layout ── */
+    main { max-width: 1100px; margin: 0 auto; padding: 32px; }
+
+    .page-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 28px; color: var(--text); margin-bottom: 4px;
+    }
+    .page-subtitle {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-dim); letter-spacing: 0.06em; text-transform: uppercase;
+      margin-bottom: 28px;
+    }
+
+    /* ── Topic List (replaces pill bar — scales to 30+) ── */
+    .topic-list {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden; margin-bottom: 10px;
+    }
+    .topic-list-header {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--text-dim); padding: 10px 14px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .topic-list-inner { max-height: 220px; overflow-y: auto; }
+    .topic-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 14px; cursor: pointer;
+      font-family: 'DM Mono', monospace; font-size: 12px;
+      color: var(--text-muted); transition: all 0.12s;
+      border-bottom: 1px solid var(--border);
+    }
+    .topic-row:last-child { border-bottom: none; }
+    .topic-row:hover { background: var(--surface2); color: var(--text); }
+    .topic-row.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+    .topic-row.active .topic-count { color: var(--accent); opacity: 0.7; }
+    .topic-name { letter-spacing: 0.03em; }
+    .topic-count { font-size: 11px; color: var(--text-dim); }
+
+    /* ── Session List ── */
+    .sessions-layout { display: grid; grid-template-columns: 280px 1fr; gap: 24px; align-items: start; }
+
+    .session-list { display: flex; flex-direction: column; gap: 6px; }
+    .session-item {
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .session-item:hover { border-color: var(--accent); background: var(--accent-dim); }
+    .session-item.active { border-color: var(--accent); background: var(--accent-dim); border-left: 3px solid var(--accent); }
+    .session-id { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--accent); font-weight: 500; }
+    .session-meta { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+    /* ── Session Detail ── */
+    .session-detail {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .detail-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+    }
+    .detail-session-id { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--text); }
+    .detail-stats { display: flex; gap: 16px; flex-wrap: wrap; }
+    .stat { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted); }
+    .stat span { color: var(--text); font-weight: 500; }
+
+    .detail-section { padding: 20px 24px; border-bottom: 1px solid var(--border); }
+    .detail-section:last-child { border-bottom: none; }
+    .section-label {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--text-dim); margin-bottom: 14px;
+    }
+
+    /* ── Findings ── */
+    .finding-item {
+      padding: 14px 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 10px;
+      position: relative;
+    }
+    .finding-text { font-size: 14px; line-height: 1.6; color: var(--text); margin-bottom: 10px; }
+    .finding-actions { display: flex; gap: 8px; align-items: center; }
+    .find-btn {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      padding: 4px 12px; border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--surface); color: var(--text-muted);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .find-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .find-btn.saved { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+    .find-btn.noted { background: rgba(46,125,82,0.08); border-color: rgba(46,125,82,0.3); color: #2e7d52; }
+
+    /* ── Note Input ── */
+    .note-area {
+      margin-top: 10px;
+      display: none;
+    }
+    .note-area.open { display: block; }
+    .note-input {
+      width: 100%; padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 13px; color: var(--text);
+      resize: vertical; min-height: 64px;
+    }
+    .note-input:focus { outline: none; border-color: var(--accent); }
+    .note-row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+    .note-type {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      padding: 4px 10px; border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--surface); color: var(--text-muted);
+      cursor: pointer;
+    }
+    .note-type.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+    .note-save-btn {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      padding: 4px 14px; border-radius: 4px;
+      border: 1px solid var(--accent);
+      background: var(--accent-dim); color: var(--accent);
+      cursor: pointer; transition: all 0.15s; margin-left: auto;
+    }
+    .note-save-btn:hover { background: var(--accent); color: white; }
+
+    /* ── Sources ── */
+    .source-item {
+      display: flex; gap: 14px; align-items: flex-start;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .source-item:last-child { border-bottom: none; }
+    .source-num {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-dim); min-width: 20px; padding-top: 2px;
+    }
+    .source-body { flex: 1; }
+    .source-title { font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+    .source-title a { color: inherit; text-decoration: none; }
+    .source-title a:hover { color: var(--accent); text-decoration: underline; }
+    .source-title[title] { cursor: help; }
+    .source-domain { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+
+    /* ── Threads ── */
+    .thread-item {
+      font-size: 13px; color: var(--text-muted);
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .thread-item:last-child { border-bottom: none; }
+
+    /* ── Direction Shift Panel ── */
+    .direction-panel {
+      background: rgba(139,94,42,0.05);
+      border: 1px solid rgba(139,94,42,0.2);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin-top: 20px;
+    }
+    .direction-title {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 10px;
+    }
+    .direction-input {
+      width: 100%; padding: 10px 14px;
+      border: 1px solid rgba(139,94,42,0.25);
+      border-radius: 6px;
+      background: var(--surface);
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 14px; color: var(--text);
+      resize: vertical; min-height: 72px;
+    }
+    .direction-input:focus { outline: none; border-color: var(--accent); }
+    .direction-submit {
+      margin-top: 10px;
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      padding: 7px 18px; border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: var(--accent-dim); color: var(--accent);
+      cursor: pointer; transition: all 0.15s; float: right;
+    }
+    .direction-submit:hover { background: var(--accent); color: white; }
+
+    /* ── Agent Notes (collapsible) ── */
+    .notes-toggle {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-dim); cursor: pointer;
+      display: flex; align-items: center; gap: 6px;
+      background: none; border: none; padding: 0;
+    }
+    .notes-toggle:hover { color: var(--accent); }
+    .notes-body { display: none; margin-top: 12px; }
+    .notes-body.open { display: block; }
+    .notes-body pre { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted); white-space: pre-wrap; line-height: 1.6; }
+
+    /* ── Annotations Panel ── */
+    .ann-panel {
+      margin-top: 14px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden; display: none;
+    }
+    .ann-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer; user-select: none;
+    }
+    .ann-panel-title {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .ann-panel-count {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-muted);
+    }
+    .ann-panel-body { display: none; }
+    .ann-panel-body.open { display: block; }
+    .ann-item {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .ann-item:last-child { border-bottom: none; }
+    .ann-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+    .ann-type {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 2px 7px; border-radius: 3px; white-space: nowrap;
+    }
+    .ann-type.direction_shift { background: var(--accent-dim); color: var(--accent); }
+    .ann-type.reaction       { background: rgba(46,125,82,0.08); color: #2e7d52; }
+    .ann-type.observation    { background: rgba(26,92,138,0.08); color: #1a5c8a; }
+    .ann-date { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); }
+    .ann-note { font-size: 13px; color: var(--text); line-height: 1.5; }
+    .ann-ref  { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); margin-top: 4px; }
+    .ann-ref a { color: var(--accent); text-decoration: none; }
+    .ann-ref a:hover { text-decoration: underline; }
+    .ann-consumed { opacity: 0.5; }
+
+    /* ── Empty State ── */
+    .empty { padding: 40px 24px; text-align: center; color: var(--text-dim); }
+    .empty-icon { font-size: 32px; margin-bottom: 12px; }
+    .empty-msg { font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: 0.06em; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      padding: 10px 18px; border-radius: 8px;
+      background: var(--accent); color: white;
+      font-family: 'DM Mono', monospace; font-size: 12px;
+      box-shadow: 0 4px 12px var(--shadow);
+      opacity: 0; transform: translateY(8px);
+      transition: all 0.25s; pointer-events: none; z-index: 9999;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+  </style>
+  <link rel="stylesheet" href="/research/static/css/annotations.css">
+</head>
+<body data-domain="research" data-page="sessions" data-topic="">
+
+<!-- Domain Rail -->
+<div class="domain-rail">
+  <a href="/" class="rail-domain"><span class="rail-icon">📚</span><span>Curator</span></a>
+  <a href="/research/dashboard" class="rail-domain active"><span class="rail-icon">🔬</span><span>Research</span></a>
+  <a href="/language" class="rail-domain"><span class="rail-icon">💬</span><span>Language</span></a>
+  <a href="/jobs" class="rail-domain"><span class="rail-icon">💼</span><span>Jobs</span></a>
+</div>
+
+<div class="main-content">
+<header>
+  <div class="header-left">
+    <a href="/research/dashboard" class="logo">🔬 Research</a>
+    <span class="logo-sub">Sessions</span>
+  </div>
+  <nav class="header-nav">
+    <a href="/research/sessions" class="nav-link active">Sessions</a>
+    <a href="/research/observe" class="nav-link">Observations</a>
+    <div class="nav-more-wrapper">
+      <button class="nav-more-btn">···</button>
+      <div class="nav-more-dropdown">
+        <a href="/research/dashboard">Dashboard</a>
+        <a href="/research/candidates">Queries</a>
+        <a href="/research/save">Save</a>
+      </div>
+    </div>
+  </nav>
+</header>
+
+<main>
+  <div class="page-title">Session Archive</div>
+  <div class="page-subtitle" id="subtitleLine">Loading topics…</div>
+
+  <div class="sessions-layout">
+    <div id="ann-left-panel">
+      <div class="topic-list">
+        <div class="topic-list-header">Topics</div>
+        <div class="topic-list-inner" id="topicBar"></div>
+      </div>
+      <div class="session-list" id="sessionList">
+        <div class="empty"><div class="empty-icon">🔬</div><div class="empty-msg">Select a topic above</div></div>
+      </div>
+
+      <!-- Direction Shift Panel -->
+      <div class="direction-panel" id="directionPanel" style="display:none">
+        <div class="direction-title">Note for next run</div>
+        <textarea class="direction-input" id="directionInput" placeholder="Anything for next session — a nudge, a question, a shift… e.g. 'Go deeper on financial mechanics'"></textarea>
+        <button class="direction-submit" id="directionSubmit">Save note →</button>
+        <div style="clear:both"></div>
+      </div>
+
+      <!-- Annotations Panel -->
+      <div class="ann-panel" id="annPanel">
+        <div class="ann-panel-header" onclick="toggleAnnPanel()">
+          <span class="ann-panel-title">Thread notes</span>
+          <span class="ann-panel-count" id="annCount"></span>
+        </div>
+        <div class="ann-panel-body" id="annBody"></div>
+      </div>
+    </div>
+
+    <div id="sessionDetail">
+      <div class="session-detail">
+        <div class="empty" style="padding: 60px 24px">
+          <div class="empty-icon">←</div>
+          <div class="empty-msg">Select a session to read it</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  let activeTopic  = null;
+  let activeSession = null;
+
+  // ── Boot ────────────────────────────────────────────────────────────────────
+  async function boot() {
+    const res  = await fetch('/api/research/sessions');
+    const data = await res.json();
+    if (!data.ok || !data.topics?.length) {
+      document.getElementById('subtitleLine').textContent = 'No topics found';
+      return;
+    }
+
+    const bar = document.getElementById('topicBar');
+    data.topics.forEach(t => {
+      const row = document.createElement('div');
+      row.className = 'topic-row';
+      row.dataset.topic = t.topic;
+      row.innerHTML = `<span class="topic-name">${t.topic}</span><span class="topic-count">${t.count}</span>`;
+      row.onclick = () => selectTopic(t.topic);
+      bar.appendChild(row);
+    });
+
+    document.getElementById('subtitleLine').textContent =
+      `${data.topics.length} topics · ${data.topics.reduce((s,t) => s + t.count, 0)} sessions`;
+
+    // Auto-select first topic
+    if (data.topics[0]) selectTopic(data.topics[0].topic);
+  }
+
+  // ── Select Topic ────────────────────────────────────────────────────────────
+  async function selectTopic(topic) {
+    activeTopic = topic;
+    activeSession = null;
+    document.body.dataset.topic = topic || '';
+    if (window.AnnotationSystem) AnnotationSystem.refreshLeftPanel();
+
+    document.querySelectorAll('.topic-row').forEach(b => {
+      b.classList.toggle('active', b.dataset.topic === topic);
+    });
+
+    const res  = await fetch(`/api/research/sessions?topic=${encodeURIComponent(topic)}`);
+    const data = await res.json();
+
+    const list = document.getElementById('sessionList');
+    list.innerHTML = '';
+
+    if (!data.sessions?.length) {
+      list.innerHTML = '<div class="empty"><div class="empty-icon">🔬</div><div class="empty-msg">No sessions yet</div></div>';
+      document.getElementById('directionPanel').style.display = 'none';
+      return;
+    }
+
+    data.sessions.forEach(s => {
+      const el = document.createElement('div');
+      el.className = 'session-item';
+      el.dataset.sid = s.id;
+      el.innerHTML = `
+        <div class="session-id">${s.id}</div>
+        <div class="session-meta">${s.date || ''}${s.cost ? ' · ' + s.cost : ''}${s.sources_reviewed ? ' · ' + s.sources_reviewed + ' sources' : ''}</div>
+      `;
+      el.onclick = () => loadSession(topic, s.id);
+      list.appendChild(el);
+    });
+
+    // Show direction shift panel
+    document.getElementById('directionPanel').style.display = 'block';
+    document.getElementById('directionSubmit').onclick = () => submitDirectionShift(topic);
+
+    // Load annotations for this topic
+    loadAnnotations(topic);
+
+    // Auto-load first session
+    loadSession(topic, data.sessions[0].id);
+  }
+
+  // ── Load Session Detail ──────────────────────────────────────────────────────
+  async function loadSession(topic, sessionId) {
+    activeSession = sessionId;
+
+    document.querySelectorAll('.session-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.sid === sessionId);
+    });
+
+    const res  = await fetch(`/api/research/sessions/${topic}/${sessionId}`);
+    const data = await res.json();
+
+    if (!data.ok) {
+      document.getElementById('sessionDetail').innerHTML = `<div class="session-detail"><div class="empty"><div class="empty-msg">Error loading session</div></div></div>`;
+      return;
+    }
+
+    const h = data.header;
+    let html = `
+      <div class="session-detail">
+        <div class="detail-header">
+          <div class="detail-session-id">${data.session_id}</div>
+          <div class="detail-stats">
+            ${h.date ? `<div class="stat">Date <span>${h.date}</span></div>` : ''}
+            ${h.sources_reviewed ? `<div class="stat">Sources <span>${h.sources_reviewed}</span></div>` : ''}
+            ${h.cost ? `<div class="stat">Cost <span>${h.cost}</span></div>` : ''}
+            ${h.duration ? `<div class="stat">Duration <span>${h.duration}</span></div>` : ''}
+          </div>
+        </div>
+    `;
+
+    // ── Key Findings ──────────────────────────────────────────────────────────
+    if (data.findings?.length) {
+      html += `<div class="detail-section">
+        <div class="section-label">Key Findings</div>`;
+      data.findings.forEach((f, i) => {
+        html += `
+          <div class="finding-item" id="finding-${i}">
+            <div class="finding-text">${escHtml(f)}</div>
+            <div class="finding-actions">
+              <button class="find-btn" onclick="toggleNote(${i}, 'reaction')">💬 Note</button>
+              <button class="find-btn" onclick="toggleNote(${i}, 'direction_shift')">↪ Note</button>
+            </div>
+            <div class="note-area" id="note-${i}">
+              <textarea class="note-input" id="note-text-${i}" placeholder="Your note…"></textarea>
+              <div class="note-row">
+                <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-dim)" id="note-type-label-${i}">reaction</span>
+                <button class="note-save-btn" onclick="saveNote(${i}, '${escHtml(f).substring(0,80)}')">Save →</button>
+              </div>
+            </div>
+          </div>`;
+      });
+      html += `</div>`;
+    }
+
+    // ── Sources ───────────────────────────────────────────────────────────────
+    if (data.sources?.length) {
+      html += `<div class="detail-section">
+        <div class="section-label">Sources (${data.sources.length})</div>`;
+      data.sources.forEach(s => {
+        html += `
+          <div class="source-item">
+            <div class="source-num">[${s.num}]</div>
+            <div class="source-body">
+              <div class="source-title" title="${escHtml(s.title)}"><a href="${escHtml(s.url)}" target="_blank">${escHtml(s.title)}</a></div>
+              <div class="source-domain">${escHtml(s.domain)}</div>
+            </div>
+          </div>`;
+      });
+      html += `</div>`;
+    }
+
+    // ── Threads to Continue ───────────────────────────────────────────────────
+    if (data.threads?.length) {
+      html += `<div class="detail-section">
+        <div class="section-label">Threads to Continue</div>`;
+      data.threads.forEach(t => {
+        html += `<div class="thread-item">${escHtml(t)}</div>`;
+      });
+      html += `</div>`;
+    }
+
+    // ── Agent Notes (collapsible) ─────────────────────────────────────────────
+    if (data.agent_notes) {
+      html += `<div class="detail-section">
+        <button class="notes-toggle" onclick="this.nextElementSibling.classList.toggle('open')">
+          ▸ Agent Notes
+        </button>
+        <div class="notes-body">
+          <pre>${escHtml(data.agent_notes)}</pre>
+        </div>
+      </div>`;
+    }
+
+    html += `</div>`;
+    document.getElementById('sessionDetail').innerHTML = html;
+  }
+
+  // ── Note toggling ────────────────────────────────────────────────────────────
+  let noteTypes = {};
+  function toggleNote(idx, type) {
+    noteTypes[idx] = type;
+    const area = document.getElementById(`note-${idx}`);
+    const label = document.getElementById(`note-type-label-${idx}`);
+    if (label) label.textContent = type;
+    if (area.classList.contains('open') && noteTypes[idx] === type) {
+      area.classList.remove('open');
+    } else {
+      area.classList.add('open');
+    }
+  }
+
+  // ── Save Note ────────────────────────────────────────────────────────────────
+  async function saveNote(idx, refSnippet) {
+    const note = document.getElementById(`note-text-${idx}`).value.trim();
+    const type = noteTypes[idx] || 'reaction';
+    if (!note) { showToast('Write a note first'); return; }
+
+    const res = await fetch(`/api/research/sessions/${activeTopic}/${activeSession}/annotate`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ type, note, ref_article: refSnippet })
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      const area = document.getElementById(`note-${idx}`);
+      area.classList.remove('open');
+      document.getElementById(`note-text-${idx}`).value = '';
+      // Mark button as noted
+      const btns = document.querySelectorAll(`#finding-${idx} .find-btn`);
+      btns.forEach(b => b.classList.add('noted'));
+      showToast(`${type} saved`);
+      loadAnnotations(activeTopic);  // refresh panel immediately
+    } else {
+      showToast(data.error || 'Save failed', true);
+    }
+  }
+
+  // ── Direction Shift ──────────────────────────────────────────────────────────
+  async function submitDirectionShift(topic) {
+    const note = document.getElementById('directionInput').value.trim();
+    if (!note) { showToast('Write a note first'); return; }
+
+    const res = await fetch(`/api/research/thread/${topic}/annotate`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ type: 'direction_shift', note })
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      document.getElementById('directionInput').value = '';
+      showToast('Note saved — will influence next run ✓');
+      loadAnnotations(topic);   // refresh panel immediately
+    } else {
+      showToast(data.error || 'Save failed', true);
+    }
+  }
+
+  // ── Annotations Panel ────────────────────────────────────────────────────────
+  async function loadAnnotations(topic) {
+    const panel = document.getElementById('annPanel');
+    const body  = document.getElementById('annBody');
+    const count = document.getElementById('annCount');
+
+    const res  = await fetch(`/api/research/thread/${topic}`);
+    const data = await res.json();
+
+    if (!data.ok || !data.annotations?.length) {
+      panel.style.display = 'none';
+      return;
+    }
+
+    const anns = data.annotations.slice().reverse(); // newest first
+    count.textContent = anns.length;
+    panel.style.display = 'block';
+    body.classList.add('open'); // auto-expand when there are notes
+
+    body.innerHTML = anns.map(a => {
+      const consumed = a.influenced_sessions?.length > 0;
+      const dateStr  = fmtAnnDate(a.timestamp);
+      const refParts = [];
+      if (a.ref_session) {
+        refParts.push(`session: <a href="#" onclick="loadSession('${escHtml(topic)}','${escHtml(a.ref_session)}');return false">${escHtml(a.ref_session)}</a>`);
+      }
+      if (a.ref_article) refParts.push(`re: ${escHtml(a.ref_article.substring(0, 60))}${a.ref_article.length > 60 ? '…' : ''}`);
+      if (consumed) refParts.push(`influenced: ${a.influenced_sessions.join(', ')}`);
+
+      return `
+        <div class="ann-item ${consumed ? 'ann-consumed' : ''}">
+          <div class="ann-row">
+            <span class="ann-type ${escHtml(a.type)}">${escHtml(annTypeLabel(a.type))}</span>
+            <span class="ann-date">${dateStr}</span>
+          </div>
+          <div class="ann-note">${escHtml(a.note)}</div>
+          ${refParts.length ? `<div class="ann-ref">${refParts.join(' · ')}</div>` : ''}
+        </div>`;
+    }).join('');
+  }
+
+  function toggleAnnPanel() {
+    document.getElementById('annBody').classList.toggle('open');
+  }
+
+  function annTypeLabel(type) {
+    const map = { direction_shift: 'note', reaction: 'note', observation: 'observation', wrap_up: 'wrap-up' };
+    return map[type] || type.replace('_', ' ');
+  }
+
+  function fmtAnnDate(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+             + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    } catch(e) { return iso; }
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function showToast(msg, isErr) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = isErr ? '#b43c3c' : 'var(--accent)';
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  boot();
+</script>
+
+<script src="/research/static/js/nav.js"></script>
+<script src="/research/static/js/annotations.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    AnnotationSystem.initLeftPanel('ann-left-panel');
+    AnnotationSystem.initSelectionPopup();
+  });
+</script>
+</body>
+</html>

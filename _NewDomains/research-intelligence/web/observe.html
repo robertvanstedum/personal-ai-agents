@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Research Observations</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/research/static/css/nav.css">
+  <style>
+    :root {
+      --bg: #f5f0e8;
+      --surface: #faf7f2;
+      --surface2: #f0ebe0;
+      --border: #ddd6c8;
+      --border2: #c8bfaf;
+      --text: #2a2418;
+      --text-muted: #6b5f4e;
+      --text-dim: #9e9080;
+      --accent: #8b5e2a;
+      --accent-dim: rgba(139,94,42,0.08);
+      --shadow: rgba(42,36,24,0.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Source Sans 3', sans-serif;
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+      display: flex;
+      align-items: flex-start;
+    }
+
+    .domain-rail {
+      width: 200px; min-width: 200px;
+      background: rgba(245,240,232,0.6);
+      border-right: 1px solid var(--border);
+      min-height: 100vh;
+      padding: 24px 0;
+      position: sticky; top: 0;
+      display: flex; flex-direction: column; gap: 4px;
+      z-index: 50;
+    }
+    .rail-domain {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 20px; text-decoration: none;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--text-muted); transition: all 0.15s;
+    }
+    .rail-domain:hover { background: var(--surface2); color: var(--text); }
+    .rail-domain.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; border-right: 2px solid var(--accent); }
+    .rail-domain.coming-soon { opacity: 0.4; cursor: default; pointer-events: none; }
+    .rail-icon { font-size: 14px; }
+
+    .main-content { flex: 1; min-width: 0; min-height: 100vh; overflow-x: hidden; }
+
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 60px; position: sticky; top: 0;
+      background: rgba(245,240,232,0.94);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+      box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
+    }
+    .header-left { display: flex; align-items: baseline; gap: 16px; }
+    .logo { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--accent); text-decoration: none; }
+    .logo-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase; }
+    .header-nav { display: flex; gap: 4px; }
+    .nav-link {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-muted); text-decoration: none;
+      padding: 6px 14px; border-radius: 6px; letter-spacing: 0.05em;
+      transition: all 0.15s; border: 1px solid transparent;
+    }
+    .nav-link:hover { color: var(--text); background: var(--surface2); }
+    .nav-link.active { color: var(--accent); background: var(--accent-dim); border-color: rgba(139,94,42,0.2); }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 32px; }
+
+    .page-title { font-family: 'Playfair Display', serif; font-size: 28px; color: var(--text); margin-bottom: 4px; }
+    .page-subtitle { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 28px; }
+
+    .obs-layout { display: grid; grid-template-columns: 260px 1fr; gap: 24px; align-items: start; }
+
+    /* ── Topic List (replaces pill bar — scales to 30+) ── */
+    .topic-list {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden; margin-bottom: 10px;
+    }
+    .topic-list-header {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--text-dim); padding: 10px 14px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .topic-list-inner { max-height: 220px; overflow-y: auto; }
+    .topic-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 14px; cursor: pointer;
+      font-family: 'DM Mono', monospace; font-size: 12px;
+      color: var(--text-muted); transition: all 0.12s;
+      border-bottom: 1px solid var(--border);
+    }
+    .topic-row:last-child { border-bottom: none; }
+    .topic-row:hover { background: var(--surface2); color: var(--text); }
+    .topic-row.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+    .topic-row.active .topic-count { color: var(--accent); opacity: 0.7; }
+    .topic-name { letter-spacing: 0.03em; }
+    .topic-count { font-size: 11px; color: var(--text-dim); }
+
+    .obs-list { display: flex; flex-direction: column; gap: 6px; }
+    .obs-item {
+      padding: 12px 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; cursor: pointer; transition: all 0.15s;
+    }
+    .obs-item:hover { border-color: var(--accent); background: var(--accent-dim); }
+    .obs-item.active { border-color: var(--accent); background: var(--accent-dim); border-left: 3px solid var(--accent); }
+    .obs-cmd {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text-dim); margin-bottom: 4px;
+    }
+    .obs-cmd.observe { color: var(--accent); }
+    .obs-date { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); font-weight: 500; }
+    .obs-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+
+    .run-panel {
+      margin-top: 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px;
+    }
+    .run-title {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text-dim); margin-bottom: 12px;
+    }
+    .run-row { display: flex; gap: 8px; align-items: center; }
+    .run-select {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      padding: 6px 10px; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--bg);
+      color: var(--text); cursor: pointer; flex: 1;
+    }
+    .run-btn {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      padding: 6px 16px; border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: var(--accent-dim); color: var(--accent);
+      cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    }
+    .run-btn:hover:not(:disabled) { background: var(--accent); color: white; }
+    .run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .run-status { font-size: 12px; color: var(--text-muted); margin-top: 8px; min-height: 18px; }
+
+    .obs-detail {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden;
+    }
+    .detail-header {
+      padding: 20px 28px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    }
+    .detail-title { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--text); }
+    .detail-stats { display: flex; gap: 16px; flex-wrap: wrap; }
+    .stat { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted); }
+    .stat span { color: var(--text); font-weight: 500; }
+
+    .obs-body { padding: 28px; line-height: 1.75; color: var(--text); }
+    .obs-body h1 { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--text); margin: 0 0 20px; font-weight: 600; }
+    .obs-body h2 { font-family: 'Playfair Display', serif; font-size: 16px; color: var(--accent); margin: 28px 0 10px; font-weight: 600; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+    .obs-body p { margin-bottom: 16px; font-size: 15px; }
+    .obs-body strong { color: var(--text); font-weight: 600; }
+    .obs-body hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+    .obs-body ul { margin: 0 0 16px 20px; }
+    .obs-body li { margin-bottom: 6px; font-size: 15px; }
+
+    .empty { padding: 48px 24px; text-align: center; color: var(--text-dim); }
+    .empty-icon { font-size: 32px; margin-bottom: 12px; }
+    .empty-msg { font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: 0.06em; }
+
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      padding: 10px 18px; border-radius: 8px;
+      background: var(--accent); color: white;
+      font-family: 'DM Mono', monospace; font-size: 12px;
+      box-shadow: 0 4px 12px var(--shadow);
+      opacity: 0; transform: translateY(8px);
+      transition: all 0.25s; pointer-events: none; z-index: 9999;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+  </style>
+  <link rel="stylesheet" href="/research/static/css/annotations.css">
+</head>
+<body data-domain="research" data-page="observe" data-topic="">
+
+<div class="domain-rail">
+  <a href="/" class="rail-domain"><span class="rail-icon">📚</span><span>Curator</span></a>
+  <a href="/research/dashboard" class="rail-domain active"><span class="rail-icon">🔬</span><span>Research</span></a>
+  <a href="/language" class="rail-domain"><span class="rail-icon">💬</span><span>Language</span></a>
+  <a href="/jobs" class="rail-domain"><span class="rail-icon">💼</span><span>Jobs</span></a>
+</div>
+
+<div class="main-content">
+<header>
+  <div class="header-left">
+    <a href="/research/dashboard" class="logo">🔬 Research</a>
+    <span class="logo-sub">Observations</span>
+  </div>
+  <nav class="header-nav">
+    <a href="/research/sessions" class="nav-link">Sessions</a>
+    <a href="/research/observe" class="nav-link active">Observations</a>
+    <div class="nav-more-wrapper">
+      <button class="nav-more-btn">···</button>
+      <div class="nav-more-dropdown">
+        <a href="/research/dashboard">Dashboard</a>
+        <a href="/research/candidates">Queries</a>
+        <a href="/research/save">Save</a>
+      </div>
+    </div>
+  </nav>
+</header>
+
+<main>
+  <div class="page-title">Observations</div>
+  <div class="page-subtitle" id="subtitleLine">Loading…</div>
+
+  <div class="obs-layout">
+    <div>
+      <div class="topic-list">
+        <div class="topic-list-header">Topics</div>
+        <div class="topic-list-inner" id="topicBar"></div>
+      </div>
+      <div class="obs-list" id="obsList">
+        <div class="empty"><div class="empty-icon">🔭</div><div class="empty-msg">Select a topic above</div></div>
+      </div>
+
+      <div class="run-panel" id="runPanel" style="display:none">
+        <div class="run-title">Run new observation</div>
+        <div class="run-row">
+          <select class="run-select" id="runCommand">
+            <option value="observe">observe — full synthesis</option>
+            <option value="status">status — quick check</option>
+          </select>
+          <button class="run-btn" id="runBtn" onclick="runObserve()">Run →</button>
+        </div>
+        <div class="run-status" id="runStatus"></div>
+      </div>
+    </div>
+
+    <div id="obsDetail">
+      <div class="obs-detail">
+        <div class="empty" style="padding: 60px 24px">
+          <div class="empty-icon">←</div>
+          <div class="empty-msg">Select an observation to read it</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  let activeTopic = null;
+  let activeFile  = null;
+
+  async function boot() {
+    const res  = await fetch('/api/research/observations');
+    const data = await res.json();
+
+    const topicMap = {};
+    (data.observations || []).forEach(o => {
+      if (o.command === 'observe') topicMap[o.topic] = (topicMap[o.topic] || 0) + 1;
+    });
+
+    const topics = Object.keys(topicMap).sort();
+    if (!topics.length) {
+      document.getElementById('subtitleLine').textContent = 'No observations yet — run one below';
+      return;
+    }
+
+    document.getElementById('subtitleLine').textContent =
+      `${topics.length} topics · ${Object.values(topicMap).reduce((a,b)=>a+b,0)} observations`;
+
+    const bar = document.getElementById('topicBar');
+    topics.forEach(t => {
+      const row = document.createElement('div');
+      row.className = 'topic-row';
+      row.dataset.topic = t;
+      row.innerHTML = `<span class="topic-name">${t}</span><span class="topic-count">${topicMap[t]}</span>`;
+      row.onclick = () => selectTopic(t);
+      bar.appendChild(row);
+    });
+
+    if (topics[0]) selectTopic(topics[0]);
+  }
+
+  async function selectTopic(topic) {
+    activeTopic = topic;
+    activeFile  = null;
+    document.body.dataset.topic = topic || '';
+    document.querySelectorAll('.topic-row').forEach(b =>
+      b.classList.toggle('active', b.dataset.topic === topic));
+
+    const res  = await fetch(`/api/research/observations?topic=${encodeURIComponent(topic)}`);
+    const data = await res.json();
+    const list = document.getElementById('obsList');
+    list.innerHTML = '';
+
+    const obs = (data.observations || []).filter(o => o.command === 'observe');
+    if (!obs.length) {
+      list.innerHTML = '<div class="empty"><div class="empty-icon">🔭</div><div class="empty-msg">No observations yet</div></div>';
+    } else {
+      obs.forEach(o => {
+        const el = document.createElement('div');
+        el.className = 'obs-item';
+        el.dataset.file = o.filename;
+        el.innerHTML = `
+          <div class="obs-cmd observe">synthesis</div>
+          <div class="obs-date">${fmtDate(o.generated || o.timestamp)}</div>
+          <div class="obs-meta">${o.cost || ''}</div>
+        `;
+        el.onclick = () => loadObservation(o.filename);
+        list.appendChild(el);
+      });
+    }
+
+    document.getElementById('runPanel').style.display = 'block';
+    if (obs[0]) loadObservation(obs[0].filename);
+  }
+
+  async function loadObservation(filename) {
+    activeFile = filename;
+    document.querySelectorAll('.obs-item').forEach(el =>
+      el.classList.toggle('active', el.dataset.file === filename));
+
+    const res  = await fetch(`/api/research/observations/${encodeURIComponent(filename)}`);
+    const data = await res.json();
+
+    if (!data.ok) {
+      document.getElementById('obsDetail').innerHTML =
+        '<div class="obs-detail"><div class="empty"><div class="empty-msg">Failed to load</div></div></div>';
+      return;
+    }
+
+    document.getElementById('obsDetail').innerHTML = `
+      <div class="obs-detail">
+        <div class="detail-header">
+          <div class="detail-title">${escHtml(data.topic)}</div>
+          <div class="detail-stats">
+            ${data.generated ? `<div class="stat">Generated <span>${fmtDate(data.generated)}</span></div>` : ''}
+            ${data.model     ? `<div class="stat">Model <span>${escHtml(data.model)}</span></div>` : ''}
+            ${data.tokens_in ? `<div class="stat">Tokens <span>${data.tokens_in} in / ${data.tokens_out} out</span></div>` : ''}
+            ${data.cost      ? `<div class="stat">Cost <span>${escHtml(data.cost)}</span></div>` : ''}
+          </div>
+        </div>
+        <div class="obs-body">${renderMd(data.content_md)}</div>
+      </div>`;
+  }
+
+  async function runObserve() {
+    if (!activeTopic) { showToast('Select a topic first'); return; }
+    const command = document.getElementById('runCommand').value;
+    const btn     = document.getElementById('runBtn');
+    const status  = document.getElementById('runStatus');
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Running…';
+    status.textContent = `Running ${command} on ${activeTopic} — may take 30–60s…`;
+
+    try {
+      const res  = await fetch('/api/research/observe', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ topic: activeTopic, command })
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        status.textContent = `✓ Done · ${data.cost_usd ? '$' + data.cost_usd.toFixed(4) : ''}`;
+        showToast('Observation complete — reloading');
+        setTimeout(() => selectTopic(activeTopic), 800);
+      } else {
+        status.textContent = `Error: ${data.error}`;
+        showToast(data.error || 'Run failed', true);
+      }
+    } catch (e) {
+      status.textContent = 'Network error';
+      showToast('Network error', true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Run →';
+    }
+  }
+
+  // Simple markdown renderer — handles headings, bold, italic, hr, lists
+  function renderMd(md) {
+    if (!md) return '';
+    const lines = md.split('\n');
+    let html = '', inList = false;
+
+    lines.forEach(line => {
+      if (/^### /.test(line)) {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += `<h2>${inlineMd(line.slice(4))}</h2>`;
+      } else if (/^## /.test(line)) {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += `<h2>${inlineMd(line.slice(3))}</h2>`;
+      } else if (/^# /.test(line)) {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += `<h1>${inlineMd(line.slice(2))}</h1>`;
+      } else if (/^---+$/.test(line)) {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += '<hr>';
+      } else if (/^[-*] /.test(line)) {
+        if (!inList) { html += '<ul>'; inList = true; }
+        html += `<li>${inlineMd(line.slice(2))}</li>`;
+      } else if (/^\s*$/.test(line)) {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += '<p></p>';
+      } else {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += `<p>${inlineMd(line)}</p>`;
+      }
+    });
+
+    if (inList) html += '</ul>';
+    // Collapse consecutive empty paragraphs
+    return html.replace(/(<p><\/p>){2,}/g, '<p></p>');
+  }
+
+  function inlineMd(s) {
+    return escHtml(s)
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g,     '<em>$1</em>');
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+             + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    } catch(e) { return iso; }
+  }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function showToast(msg, isErr) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = isErr ? '#b43c3c' : 'var(--accent)';
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  boot();
+</script>
+
+<script src="/research/static/js/nav.js"></script>
+<script src="/research/static/js/annotations.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    AnnotationSystem.initCollapsiblePanel('notes-pinned-observe');
+    AnnotationSystem.initSelectionPopup();
+  });
+</script>
+</body>
+</html>

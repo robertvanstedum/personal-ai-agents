@@ -1,0 +1,20 @@
+{
+  "id": "china-rise-2026",
+  "topic": "china-rise",
+  "version": 1,
+  "status": "active",
+  "opened": "2026-03-24T03:26:07+00:00",
+  "closed": null,
+  "retired": false,
+  "auto_close_days": 30,
+  "last_session_date": "2026-03-22",
+  "session_count": 2,
+  "links_to": [],
+  "links_from": [],
+  "motivation": "To be written",
+  "prior_belief": "To be written",
+  "wrap_up": null,
+  "retired_reason": null,
+  "created_by": "robert",
+  "schema_version": "1.0"
+}

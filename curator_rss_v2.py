@@ -849,7 +849,7 @@ ARTICLES:
             raise
 
 
-def score_entries_xai(entries: List[Dict], fallback_on_error: bool = False, user_profile: str = "", model: str = "grok-3-mini", temperature: float = 0.0) -> List[Dict]:
+def score_entries_xai(entries: List[Dict], fallback_on_error: bool = False, user_profile: str = "", model: str = "grok-4-1-fast-reasoning", temperature: float = 0.0) -> List[Dict]:
     """
     Score all entries using xAI Grok (batch processing)
     
@@ -1526,7 +1526,7 @@ def _fetch_web_search_candidates(
 
 
 def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanical',
-           fallback_on_error: bool = False, xai_model: str = 'grok-3-mini', temperature: float = 0.0) -> List[Dict]:
+           fallback_on_error: bool = False, xai_model: str = 'grok-4-1-fast-reasoning', temperature: float = 0.0) -> List[Dict]:
     """
     Fetch all feeds, score, rank, return top N
     
@@ -1919,6 +1919,53 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
             min-height: 100vh;
             font-size: 14px;
             line-height: 1.5;
+            display: flex;
+            align-items: flex-start;
+        }}
+
+        /* ── Domain Rail ── */
+        .domain-rail {{
+            width: 200px;
+            min-width: 200px;
+            background: rgba(245,240,232,0.6);
+            border-right: 1px solid var(--border);
+            min-height: 100vh;
+            padding: 24px 0;
+            position: sticky;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 50;
+        }}
+        .rail-domain {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            cursor: pointer;
+            text-decoration: none;
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            transition: all 0.15s;
+        }}
+        .rail-domain:hover {{ background: var(--surface2); color: var(--text); }}
+        .rail-domain.active {{
+            background: var(--accent-dim);
+            color: var(--accent);
+            font-weight: 600;
+            border-right: 2px solid var(--accent);
+        }}
+        .rail-domain.coming-soon {{ opacity: 0.4; cursor: default; pointer-events: none; }}
+        .rail-icon {{ font-size: 14px; }}
+        .main-content {{
+            flex: 1;
+            min-width: 0;
+            overflow-x: hidden;
+            min-height: 100vh;
         }}
 
         /* ── Header ── */
@@ -2246,6 +2293,13 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
     </style>
 </head>
 <body data-run-mode="{run_mode}">
+<div class="domain-rail">
+  <a href="/" class="rail-domain active"><span class="rail-icon">📚</span><span>Curator</span></a>
+  <a href="/research/dashboard" class="rail-domain"><span class="rail-icon">🔬</span><span>Research</span></a>
+  <span class="rail-domain coming-soon"><span class="rail-icon">💬</span><span>Language</span></span>
+  <span class="rail-domain coming-soon"><span class="rail-icon">💼</span><span>Jobs</span></span>
+</div>
+<div class="main-content">
 <header class="curator-header">
   <div class="header-left">
     <a href="/" class="logo">📚 Curator</a>
@@ -2254,9 +2308,9 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
   <nav class="header-nav">
     <a href="/" class="nav-link active">Daily</a>
     <a href="curator_library.html" class="nav-link">Library</a>
-    <a href="curator_priorities.html" class="nav-link">🎯 Priorities</a>
     <a href="interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
-    <a href="curator_intelligence.html" class="nav-link">AI Observations</a>
+    <a href="curator_intelligence.html" class="nav-link">Observations</a>
+    <a href="curator_priorities.html" class="nav-link">🎯</a>
   </nav>
 </header>
 
@@ -2633,10 +2687,11 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
         transform: scale(1.05);
     }
     </style>
+</div><!-- /.main-content -->
 </body>
 </html>
 """
-    
+
     return html
 def generate_index_page(archive_dir: str):
     """Generate unified archive index page with timestamp and model info"""
@@ -2972,7 +3027,7 @@ def main():
     # Map --model= flag to internal scoring mode
     mode_map = {
         'ollama': 'mechanical',   # Free local, keyword-based
-        'xai':    'xai',          # xAI Grok-3-mini (~$0.15/day) — production default
+        'xai':    'xai',          # xAI Grok-4-1-fast-reasoning (~$0.15/day) — production default
         'grok-4-1': 'xai',        # xAI Grok-4-1-fast-reasoning (NEW - faster, better reasoning)
         'haiku':  'ai',           # Anthropic Haiku (~$0.20/day) — single-stage
         'sonnet': 'ai-two-stage', # Anthropic Haiku pre-filter + Sonnet ranking (~$0.90/day)
@@ -2980,7 +3035,7 @@ def main():
     mode = mode_map.get(model, 'xai')  # Default: xai
     
     # For grok-4-1, we need to track which xAI model variant to use
-    xai_model_variant = 'grok-3-mini'  # default
+    xai_model_variant = 'grok-4-1-fast-reasoning'  # default
     if model == 'grok-4-1':
         xai_model_variant = 'grok-4-1-fast-reasoning'
 

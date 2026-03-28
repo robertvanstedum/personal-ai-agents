@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="curator-model" content="grok-4-1">
     <meta name="curator-mode" content="production">
-    <meta name="curator-timestamp" content="2026-03-21 11:07:06">
+    <meta name="curator-timestamp" content="2026-03-27 08:45:06">
     <meta name="curator-articles" content="20">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-    <title>Morning Briefing - March 21, 2026</title>
+    <title>Morning Briefing - March 27, 2026</title>
     <style>
         :root {
             --bg: #f5f0e8;
@@ -43,6 +43,53 @@
             min-height: 100vh;
             font-size: 14px;
             line-height: 1.5;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        /* ── Domain Rail ── */
+        .domain-rail {
+            width: 200px;
+            min-width: 200px;
+            background: rgba(245,240,232,0.6);
+            border-right: 1px solid var(--border);
+            min-height: 100vh;
+            padding: 24px 0;
+            position: sticky;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 50;
+        }
+        .rail-domain {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            cursor: pointer;
+            text-decoration: none;
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            transition: all 0.15s;
+        }
+        .rail-domain:hover { background: var(--surface2); color: var(--text); }
+        .rail-domain.active {
+            background: var(--accent-dim);
+            color: var(--accent);
+            font-weight: 600;
+            border-right: 2px solid var(--accent);
+        }
+        .rail-domain.coming-soon { opacity: 0.4; cursor: default; pointer-events: none; }
+        .rail-icon { font-size: 14px; }
+        .main-content {
+            flex: 1;
+            min-width: 0;
+            overflow-x: hidden;
+            min-height: 100vh;
         }
 
         /* ── Header ── */
@@ -370,6 +417,13 @@
     </style>
 </head>
 <body data-run-mode="production">
+<div class="domain-rail">
+  <a href="/" class="rail-domain active"><span class="rail-icon">📚</span><span>Curator</span></a>
+  <a href="/research/dashboard" class="rail-domain"><span class="rail-icon">🔬</span><span>Research</span></a>
+  <a href="/language" class="rail-domain"><span class="rail-icon">💬</span><span>Language</span></a>
+  <a href="/jobs" class="rail-domain"><span class="rail-icon">💼</span><span>Jobs</span></a>
+</div>
+<div class="main-content">
 <header class="curator-header">
   <div class="header-left">
     <a href="/" class="logo">📚 Curator</a>
@@ -378,14 +432,14 @@
   <nav class="header-nav">
     <a href="/" class="nav-link active">Daily</a>
     <a href="curator_library.html" class="nav-link">Library</a>
-    <a href="curator_priorities.html" class="nav-link">Priorities</a>
     <a href="interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
-    <a href="curator_intelligence.html" class="nav-link">AI Observations</a>
+    <a href="curator_intelligence.html" class="nav-link">Observations</a>
+    <a href="curator_priorities.html" class="nav-link">🎯</a>
   </nav>
 </header>
 
 <main>
-    <div class="briefing-date">Saturday, March 21, 2026</div>
+    <div class="briefing-date">Friday, March 27, 2026</div>
     <div class="briefing-table">
         <table>
             <thead>
@@ -400,18 +454,18 @@
                 </tr>
             </thead>
             <tbody>
-                <tr data-hash-id="ba112" 
+                <tr data-hash-id="43c03" 
                         data-rank="1"
-                        data-title="Trump, Xi, and the Case for Strategic Calm"
-                        data-url="https://www.foreignaffairs.com/united-states/trump-xi-and-case-strategic-calm"
-                        data-source="Foreign Affairs"
+                        data-title="Hellscape Taiwan: A Porcupine Defense in the Drone Age"
+                        data-url="https://warontherocks.com/2026/03/hellscape-taiwan-a-porcupine-defense-in-the-drone-age/"
+                        data-source="War on the Rocks"
                         data-category="geo_major">
                     <td class="col-rank"><span class="rank-badge">1</span></td>
                     <td class="col-category"><span class="cat-badge cat-geo_major">geo_major</span></td>
-                    <td class="col-source"><span class="source-name">Foreign Affairs</span></td>
+                    <td class="col-source"><span class="source-name">War on the Rocks</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.foreignaffairs.com/united-states/trump-xi-and-case-strategic-calm" target="_blank">Trump, Xi, and the Case for Strategic Calm</a>
+                            <a href="https://warontherocks.com/2026/03/hellscape-taiwan-a-porcupine-defense-in-the-drone-age/" target="_blank">Hellscape Taiwan: A Porcupine Defense in the Drone Age</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
@@ -427,24 +481,24 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="93e8b" 
+                <tr data-hash-id="92835" 
                         data-rank="2"
-                        data-title="What the Donroe Doctrine Could Mean for China’s Economic Statecraft"
-                        data-url="https://warontherocks.com/2026/03/what-the-donroe-doctrine-could-mean-for-chinas-economic-statecraft/"
-                        data-source="War on the Rocks"
+                        data-title="Trump, Xi, and the Specter of 1914"
+                        data-url="https://www.foreignaffairs.com/united-states/trump-xi-and-specter-1914"
+                        data-source="Foreign Affairs"
                         data-category="geo_major">
                     <td class="col-rank"><span class="rank-badge">2</span></td>
                     <td class="col-category"><span class="cat-badge cat-geo_major">geo_major</span></td>
-                    <td class="col-source"><span class="source-name">War on the Rocks</span></td>
+                    <td class="col-source"><span class="source-name">Foreign Affairs</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://warontherocks.com/2026/03/what-the-donroe-doctrine-could-mean-for-chinas-economic-statecraft/" target="_blank">What the Donroe Doctrine Could Mean for China’s Economic Statecraft</a>
+                            <a href="https://www.foreignaffairs.com/united-states/trump-xi-and-specter-1914" target="_blank">Trump, Xi, and the Specter of 1914</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">17.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:88%"></div></div>
+                        <div class="score-val">19.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:95%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -454,18 +508,18 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="7e1fb" 
+                <tr data-hash-id="4eff2" 
                         data-rank="3"
-                        data-title="Our underappreciated international reserve system"
-                        data-url="https://cepr.org/voxeu/columns/our-underappreciated-international-reserve-system"
-                        data-source="CEPR VoxEU"
-                        data-category="monetary">
+                        data-title="Expert Q&amp;A: A Targeting Primer on Iran War"
+                        data-url="https://www.justsecurity.org/135050/expert-faq-targeting-primer-iran-war/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=expert-faq-targeting-primer-iran-war"
+                        data-source="Just Security"
+                        data-category="geo_other">
                     <td class="col-rank"><span class="rank-badge">3</span></td>
-                    <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
-                    <td class="col-source"><span class="source-name">CEPR VoxEU</span></td>
+                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
+                    <td class="col-source"><span class="source-name">Just Security</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://cepr.org/voxeu/columns/our-underappreciated-international-reserve-system" target="_blank">Our underappreciated international reserve system</a>
+                            <a href="https://www.justsecurity.org/135050/expert-faq-targeting-primer-iran-war/?utm_source=rss&utm_medium=rss&utm_campaign=expert-faq-targeting-primer-iran-war" target="_blank">Expert Q&A: A Targeting Primer on Iran War</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
@@ -481,24 +535,24 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="03d3d" 
+                <tr data-hash-id="80532" 
                         data-rank="4"
-                        data-title="Fighting an Illegal War and Fighting a War Illegally: the Link between Regime Change Operations and International Humanitarian Law Violations"
-                        data-url="https://www.justsecurity.org/134514/fighting-illegal-war-fighting-war-illegally-regime-change-ihl/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=fighting-illegal-war-fighting-war-illegally-regime-change-ihl"
-                        data-source="Just Security"
-                        data-category="us_foreign_policy">
+                        data-title="Subsidising the supply chain: How China’s industrial policy shapes export competitiveness"
+                        data-url="https://cepr.org/voxeu/columns/subsidising-supply-chain-how-chinas-industrial-policy-shapes-export-competitiveness"
+                        data-source="CEPR VoxEU"
+                        data-category="monetary">
                     <td class="col-rank"><span class="rank-badge">4</span></td>
-                    <td class="col-category"><span class="cat-badge cat-us_foreign_policy">us_foreign_policy</span></td>
-                    <td class="col-source"><span class="source-name">Just Security</span></td>
+                    <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
+                    <td class="col-source"><span class="source-name">CEPR VoxEU</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.justsecurity.org/134514/fighting-illegal-war-fighting-war-illegally-regime-change-ihl/?utm_source=rss&utm_medium=rss&utm_campaign=fighting-illegal-war-fighting-war-illegally-regime-change-ihl" target="_blank">Fighting an Illegal War and Fighting a War Illegally: the Link between Regime Change Operations and International Humanitarian Law Violations</a>
+                            <a href="https://cepr.org/voxeu/columns/subsidising-supply-chain-how-chinas-industrial-policy-shapes-export-competitiveness" target="_blank">Subsidising the supply chain: How China’s industrial policy shapes export competitiveness</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">12.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:60%"></div></div>
+                        <div class="score-val">13.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:68%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -508,24 +562,24 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="50e3f" 
+                <tr data-hash-id="79f19" 
                         data-rank="5"
-                        data-title="US Says Iran\&#x27;s Threat To Hormuz Traffic &quot;Degraded&quot; As 23 Nations Signal Waterway Support"
-                        data-url="https://www.zerohedge.com/markets/us-strikes-iranian-hormuz-targets-23-nations-signal-waterway-support"
-                        data-source="ZeroHedge"
-                        data-category="geo_other">
+                        data-title="Modeling and Forecasting Tail Risk Spillovers: A Component-Based CAViaR Approach"
+                        data-url="https://arxiv.org/abs/2603.25217"
+                        data-source="arXiv q-fin"
+                        data-category="q-fin">
                     <td class="col-rank"><span class="rank-badge">5</span></td>
-                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
-                    <td class="col-source"><span class="source-name">ZeroHedge</span></td>
+                    <td class="col-category"><span class="cat-badge cat-q-fin">q-fin</span></td>
+                    <td class="col-source"><span class="source-name">arXiv q-fin</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.zerohedge.com/markets/us-strikes-iranian-hormuz-targets-23-nations-signal-waterway-support" target="_blank">US Says Iran's Threat To Hormuz Traffic "Degraded" As 23 Nations Signal Waterway Support</a>
+                            <a href="https://arxiv.org/abs/2603.25217" target="_blank">Modeling and Forecasting Tail Risk Spillovers: A Component-Based CAViaR Approach</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">9.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:45%"></div></div>
+                        <div class="score-val">12.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:60%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -535,18 +589,18 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="13b3a" 
+                <tr data-hash-id="19883" 
                         data-rank="6"
-                        data-title="A Look at Recent Developments in the Federal Fiscal Balance"
-                        data-url="https://www.stlouisfed.org/on-the-economy/2026/feb/look-recent-developments-federal-fiscal-balance"
-                        data-source="Fed On The Economy"
-                        data-category="fiscal">
+                        data-title="Trump Has Detained the Parents of More Than 11,000 U.S. Citizen Kids"
+                        data-url="https://www.propublica.org/article/trump-family-deportations-ice-citizen-kids"
+                        data-source="ProPublica"
+                        data-category="immigration_policy">
                     <td class="col-rank"><span class="rank-badge">6</span></td>
-                    <td class="col-category"><span class="cat-badge cat-fiscal">fiscal</span></td>
-                    <td class="col-source"><span class="source-name">Fed On The Economy</span></td>
+                    <td class="col-category"><span class="cat-badge cat-immigration_policy">immigration_policy</span></td>
+                    <td class="col-source"><span class="source-name">ProPublica</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/look-recent-developments-federal-fiscal-balance" target="_blank">A Look at Recent Developments in the Federal Fiscal Balance</a>
+                            <a href="https://www.propublica.org/article/trump-family-deportations-ice-citizen-kids" target="_blank">Trump Has Detained the Parents of More Than 11,000 U.S. Citizen Kids</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
@@ -562,24 +616,24 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="a1761" 
+                <tr data-hash-id="67a97" 
                         data-rank="7"
-                        data-title="WOW. Lina Maria Orovio-Hernandez, an illegal alien from Colombia, was CONVICTED "
-                        data-url="https://x.com/libsoftiktok/status/2020966570294641068"
-                        data-source="X/@libsoftiktok"
-                        data-category="immigration_policy">
+                        data-title="K-Shaped Economy Bites Back: Retail CRE Transactions For Shops, Malls Plunge"
+                        data-url="https://www.zerohedge.com/markets/k-shaped-economy-revenge-retail-cre-transactions-shops-malls-plunge"
+                        data-source="ZeroHedge"
+                        data-category="fiscal">
                     <td class="col-rank"><span class="rank-badge">7</span></td>
-                    <td class="col-category"><span class="cat-badge cat-immigration_policy">immigration_policy</span></td>
-                    <td class="col-source"><span class="source-name">X/@libsoftiktok</span></td>
+                    <td class="col-category"><span class="cat-badge cat-fiscal">fiscal</span></td>
+                    <td class="col-source"><span class="source-name">ZeroHedge</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://x.com/libsoftiktok/status/2020966570294641068" target="_blank">WOW. Lina Maria Orovio-Hernandez, an illegal alien from Colombia, was CONVICTED </a>
+                            <a href="https://www.zerohedge.com/markets/k-shaped-economy-revenge-retail-cre-transactions-shops-malls-plunge" target="_blank">K-Shaped Economy Bites Back: Retail CRE Transactions For Shops, Malls Plunge</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">9.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:45%"></div></div>
+                        <div class="score-val">8.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:40%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -589,24 +643,24 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="3c890" 
+                <tr data-hash-id="0c66d" 
                         data-rank="8"
-                        data-title="California\&#x27;s Central Valley produces 80% of the world\&#x27;s almonds. Each almond req"
-                        data-url="https://x.com/SamaHoole/status/2015647929172680922"
-                        data-source="X/@SamaHoole"
-                        data-category="commodity">
+                        data-title="Breakeven Employment Growth: Estimate Range Widens in 2026"
+                        data-url="https://www.stlouisfed.org/on-the-economy/2026/mar/breakeven-employment-growth-estimate-range-widens-2026"
+                        data-source="Fed On The Economy"
+                        data-category="labor_market">
                     <td class="col-rank"><span class="rank-badge">8</span></td>
-                    <td class="col-category"><span class="cat-badge cat-commodity">commodity</span></td>
-                    <td class="col-source"><span class="source-name">X/@SamaHoole</span></td>
+                    <td class="col-category"><span class="cat-badge cat-labor_market">labor_market</span></td>
+                    <td class="col-source"><span class="source-name">Fed On The Economy</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://x.com/SamaHoole/status/2015647929172680922" target="_blank">California's Central Valley produces 80% of the world's almonds. Each almond req</a>
+                            <a href="https://www.stlouisfed.org/on-the-economy/2026/mar/breakeven-employment-growth-estimate-range-widens-2026" target="_blank">Breakeven Employment Growth: Estimate Range Widens in 2026</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">9.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:45%"></div></div>
+                        <div class="score-val">8.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:40%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -616,18 +670,18 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="6cd59" 
+                <tr data-hash-id="38cca" 
                         data-rank="9"
-                        data-title="&quot;Reckless, Suicidal Race&quot;: The Deadly Threat Posed by Artificial Intelligence"
-                        data-url="https://www.spiegel.de/international/zeitgeist/reckless-suicidal-race-the-deadly-threat-posed-by-artificial-intelligence-a-8d17183a-90d8-4660-a1bb-d1f1ce560cae#ref=rss"
-                        data-source="Spiegel International"
-                        data-category="technology">
+                        data-title="SPD rutscht ab, AfD zieht mit Union gleich – Mehrheit erwartet vorzeitiges Koalitions-Aus"
+                        data-url="https://www.welt.de/politik/deutschland/article69c6441a8f57616717161101/umfragen-spd-rutscht-ab-afd-zieht-mit-union-gleich-mehrheit-erwartet-vorzeitiges-koalitions-aus.html"
+                        data-source="Die Welt"
+                        data-category="election_integrity">
                     <td class="col-rank"><span class="rank-badge">9</span></td>
-                    <td class="col-category"><span class="cat-badge cat-technology">technology</span></td>
-                    <td class="col-source"><span class="source-name">Spiegel International</span></td>
+                    <td class="col-category"><span class="cat-badge cat-election_integrity">election_integrity</span></td>
+                    <td class="col-source"><span class="source-name">Die Welt</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.spiegel.de/international/zeitgeist/reckless-suicidal-race-the-deadly-threat-posed-by-artificial-intelligence-a-8d17183a-90d8-4660-a1bb-d1f1ce560cae#ref=rss" target="_blank">"Reckless, Suicidal Race": The Deadly Threat Posed by Artificial Intelligence</a>
+                            <a href="https://www.welt.de/politik/deutschland/article69c6441a8f57616717161101/umfragen-spd-rutscht-ab-afd-zieht-mit-union-gleich-mehrheit-erwartet-vorzeitiges-koalitions-aus.html" target="_blank">SPD rutscht ab, AfD zieht mit Union gleich – Mehrheit erwartet vorzeitiges Koalitions-Aus</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
@@ -643,80 +697,18 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="aedd8" 
+                <tr data-hash-id="6cd59" 
                         data-rank="10"
-                        data-title="🚨 Anthropic just open-sourced the exact Skills library their own engineers use i"
-                        data-url="https://x.com/ihtesham2005/status/2026752089473314975"
-                        data-source="X/@ihtesham2005"
-                        data-category="software_development">
+                        data-title="&quot;Reckless, Suicidal Race&quot;: The Deadly Threat Posed by Artificial Intelligence"
+                        data-url="https://www.spiegel.de/international/zeitgeist/reckless-suicidal-race-the-deadly-threat-posed-by-artificial-intelligence-a-8d17183a-90d8-4660-a1bb-d1f1ce560cae#ref=rss"
+                        data-source="Spiegel International"
+                        data-category="technology">
                     <td class="col-rank"><span class="rank-badge">10</span></td>
-                    <td class="col-category"><span class="cat-badge cat-software_development">software_development</span></td>
-                    <td class="col-source"><span class="source-name">X/@ihtesham2005</span></td>
+                    <td class="col-category"><span class="cat-badge cat-technology">technology</span></td>
+                    <td class="col-source"><span class="source-name">Spiegel International</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://x.com/ihtesham2005/status/2026752089473314975" target="_blank">🚨 Anthropic just open-sourced the exact Skills library their own engineers use i</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">8.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:40%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 10);">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 10);">👎</button>
-                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 10);">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="9b75b" 
-                        data-rank="11"
-                        data-title="The US labor market needs far fewer jobs to prevent unemployment from rising:
-
-T"
-                        data-url="https://x.com/KobeissiLetter/status/2025329419041341629"
-                        data-source="X/@KobeissiLetter"
-                        data-category="labor_market">
-                    <td class="col-rank"><span class="rank-badge">11</span></td>
-                    <td class="col-category"><span class="cat-badge cat-labor_market">labor_market</span></td>
-                    <td class="col-source"><span class="source-name">X/@KobeissiLetter</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://x.com/KobeissiLetter/status/2025329419041341629" target="_blank">The US labor market needs far fewer jobs to prevent unemployment from rising:
-
-T</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">8.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:40%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 11);">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 11);">👎</button>
-                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 11);">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="99d6c" 
-                        data-rank="12"
-                        data-title="Here are some facts: 
-
-1. A small number of people commit a wildly disproportion"
-                        data-url="https://x.com/DanFriedman81/status/2021259566910931215"
-                        data-source="X/@DanFriedman81"
-                        data-category="criminal_justice">
-                    <td class="col-rank"><span class="rank-badge">12</span></td>
-                    <td class="col-category"><span class="cat-badge cat-criminal_justice">criminal_justice</span></td>
-                    <td class="col-source"><span class="source-name">X/@DanFriedman81</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://x.com/DanFriedman81/status/2021259566910931215" target="_blank">Here are some facts: 
-
-1. A small number of people commit a wildly disproportion</a>
+                            <a href="https://www.spiegel.de/international/zeitgeist/reckless-suicidal-race-the-deadly-threat-posed-by-artificial-intelligence-a-8d17183a-90d8-4660-a1bb-d1f1ce560cae#ref=rss" target="_blank">"Reckless, Suicidal Race": The Deadly Threat Posed by Artificial Intelligence</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
@@ -726,30 +718,84 @@ T</a>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 12);">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 12);">👎</button>
-                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 12);">💾</button>
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 10);">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 10);">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 10);">💾</button>
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="6a651" 
-                        data-rank="13"
-                        data-title="This DHS Official Oversees the Security of Federal Elections. He Wants to Ban Voting Machines."
-                        data-url="https://www.propublica.org/article/david-harvilicz-homeland-security-voting-machines"
-                        data-source="ProPublica"
-                        data-category="election_integrity">
-                    <td class="col-rank"><span class="rank-badge">13</span></td>
-                    <td class="col-category"><span class="cat-badge cat-election_integrity">election_integrity</span></td>
-                    <td class="col-source"><span class="source-name">ProPublica</span></td>
+                <tr data-hash-id="ab2ae" 
+                        data-rank="11"
+                        data-title="LtCOL. Karen Kwiatkowski : A Revolution in the US Military?"
+                        data-url="https://theduran.com/ltcol-karen-kwiatkowski-a-revolution-in-the-us-military/"
+                        data-source="The Duran"
+                        data-category="other">
+                    <td class="col-rank"><span class="rank-badge">11</span></td>
+                    <td class="col-category"><span class="cat-badge cat-other">other</span></td>
+                    <td class="col-source"><span class="source-name">The Duran</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.propublica.org/article/david-harvilicz-homeland-security-voting-machines" target="_blank">This DHS Official Oversees the Security of Federal Elections. He Wants to Ban Voting Machines.</a>
+                            <a href="https://theduran.com/ltcol-karen-kwiatkowski-a-revolution-in-the-us-military/" target="_blank">LtCOL. Karen Kwiatkowski : A Revolution in the US Military?</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
                         <div class="score-val">6.0</div>
                         <div class="score-bar"><div class="score-fill" style="width:30%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 11);">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 11);">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 11);">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="02934" 
+                        data-rank="12"
+                        data-title="Faulheit im Kopf: So beeinflusst KI heimlich unser Denken"
+                        data-url="https://www.faz.net/aktuell/wissen/computer-mathematik/macht-chatgpt-dumm-so-beeinflusst-ki-heimlich-unser-denken-200651750.html"
+                        data-source="FAZ"
+                        data-category="personal_development">
+                    <td class="col-rank"><span class="rank-badge">12</span></td>
+                    <td class="col-category"><span class="cat-badge cat-personal_development">personal_development</span></td>
+                    <td class="col-source"><span class="source-name">FAZ</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://www.faz.net/aktuell/wissen/computer-mathematik/macht-chatgpt-dumm-so-beeinflusst-ki-heimlich-unser-denken-200651750.html" target="_blank">Faulheit im Kopf: So beeinflusst KI heimlich unser Denken</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">6.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:30%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 12);">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 12);">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 12);">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="67c2e" 
+                        data-rank="13"
+                        data-title="Vance Tries To Justify Continued Iran War by Suggesting Iran Could Make a Nuclear Suicide Vest"
+                        data-url="https://news.antiwar.com/2026/03/26/vance-tries-to-justify-continued-iran-war-by-suggesting-iran-could-make-a-nuclear-suicide-vest/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=vance-tries-to-justify-continued-iran-war-by-suggesting-iran-could-make-a-nuclear-suicide-vest"
+                        data-source="Antiwar.com"
+                        data-category="geo_other">
+                    <td class="col-rank"><span class="rank-badge">13</span></td>
+                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
+                    <td class="col-source"><span class="source-name">Antiwar.com</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://news.antiwar.com/2026/03/26/vance-tries-to-justify-continued-iran-war-by-suggesting-iran-could-make-a-nuclear-suicide-vest/?utm_source=rss&utm_medium=rss&utm_campaign=vance-tries-to-justify-continued-iran-war-by-suggesting-iran-could-make-a-nuclear-suicide-vest" target="_blank">Vance Tries To Justify Continued Iran War by Suggesting Iran Could Make a Nuclear Suicide Vest</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">4.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:22%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -759,121 +805,13 @@ T</a>
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="abd4c" 
-                        data-rank="14"
-                        data-title="Richtig fit werden: Soll man lieber Kraft oder Ausdauer trainieren?"
-                        data-url="https://www.faz.net/aktuell/feuilleton/debatten/soll-man-lieber-kraft-oder-ausdauer-trainieren-das-sagt-die-wissenschaft-accg-200613800.html"
-                        data-source="FAZ"
-                        data-category="personal_development">
-                    <td class="col-rank"><span class="rank-badge">14</span></td>
-                    <td class="col-category"><span class="cat-badge cat-personal_development">personal_development</span></td>
-                    <td class="col-source"><span class="source-name">FAZ</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://www.faz.net/aktuell/feuilleton/debatten/soll-man-lieber-kraft-oder-ausdauer-trainieren-das-sagt-die-wissenschaft-accg-200613800.html" target="_blank">Richtig fit werden: Soll man lieber Kraft oder Ausdauer trainieren?</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">6.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:30%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 14);">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 14);">👎</button>
-                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 14);">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="bbb3e" 
-                        data-rank="15"
-                        data-title="“If there is no equality of outcomes among people born to the same parents and r"
-                        data-url="https://x.com/ThomasSowell/status/2025712204851605604"
-                        data-source="X/@ThomasSowell"
-                        data-category="other">
-                    <td class="col-rank"><span class="rank-badge">15</span></td>
-                    <td class="col-category"><span class="cat-badge cat-other">other</span></td>
-                    <td class="col-source"><span class="source-name">X/@ThomasSowell</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://x.com/ThomasSowell/status/2025712204851605604" target="_blank">“If there is no equality of outcomes among people born to the same parents and r</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">5.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:25%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 15);">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 15);">👎</button>
-                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 15);">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="4a2f2" 
-                        data-rank="16"
-                        data-title="today is january 13, 2026, reminder that most american OEMs (aerospace, defense,"
-                        data-url="https://x.com/aphysicist/status/2011115953975668820"
-                        data-source="X/@aphysicist"
-                        data-category="commodity">
-                    <td class="col-rank"><span class="rank-badge">16</span></td>
-                    <td class="col-category"><span class="cat-badge cat-commodity">commodity</span></td>
-                    <td class="col-source"><span class="source-name">X/@aphysicist</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://x.com/aphysicist/status/2011115953975668820" target="_blank">today is january 13, 2026, reminder that most american OEMs (aerospace, defense,</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">4.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:22%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 16);">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 16);">👎</button>
-                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 16);">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="0447f" 
-                        data-rank="17"
-                        data-title="Democrats in 1776: Let’s use slaves to increase our electoral power without lett"
-                        data-url="https://x.com/TheRabbitHole/status/2020745318929735801"
-                        data-source="X/@TheRabbitHole"
-                        data-category="immigration_policy">
-                    <td class="col-rank"><span class="rank-badge">17</span></td>
-                    <td class="col-category"><span class="cat-badge cat-immigration_policy">immigration_policy</span></td>
-                    <td class="col-source"><span class="source-name">X/@TheRabbitHole</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://x.com/TheRabbitHole/status/2020745318929735801" target="_blank">Democrats in 1776: Let’s use slaves to increase our electoral power without lett</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">4.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:22%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 17);">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 17);">👎</button>
-                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 17);">💾</button>
-                        </div>
-                    </td>
-                </tr>
                 <tr data-hash-id="7f21a" 
-                        data-rank="18"
+                        data-rank="14"
                         data-title="Monthly Statement of the Public Debt, February 28, 2026"
                         data-url="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding"
                         data-source="Treasury MSPD"
                         data-category="fiscal">
-                    <td class="col-rank"><span class="rank-badge">18</span></td>
+                    <td class="col-rank"><span class="rank-badge">14</span></td>
                     <td class="col-category"><span class="cat-badge cat-fiscal">fiscal</span></td>
                     <td class="col-source"><span class="source-name">Treasury MSPD</span></td>
                     <td class="col-title">
@@ -883,8 +821,120 @@ T</a>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">4.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:22%"></div></div>
+                        <div class="score-val">3.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:18%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 14);">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 14);">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 14);">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="e3fc2" 
+                        data-rank="15"
+                        data-title="Germany debates rape law to tackle AI and online abuse"
+                        data-url="https://www.dw.com/en/germany-debates-rape-law-to-tackle-ai-and-online-abuse/a-76531016?maca=en-rss-en-all-1573-xml-mrss"
+                        data-source="Deutsche Welle"
+                        data-category="criminal_justice">
+                    <td class="col-rank"><span class="rank-badge">15</span></td>
+                    <td class="col-category"><span class="cat-badge cat-criminal_justice">criminal_justice</span></td>
+                    <td class="col-source"><span class="source-name">Deutsche Welle</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://www.dw.com/en/germany-debates-rape-law-to-tackle-ai-and-online-abuse/a-76531016?maca=en-rss-en-all-1573-xml-mrss" target="_blank">Germany debates rape law to tackle AI and online abuse</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">3.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:18%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 15);">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 15);">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 15);">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="48024" 
+                        data-rank="16"
+                        data-title="At The Money: Investing in Freedom"
+                        data-url="https://ritholtz.com/2026/03/atm-freedom/"
+                        data-source="The Big Picture"
+                        data-category="monetary">
+                    <td class="col-rank"><span class="rank-badge">16</span></td>
+                    <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
+                    <td class="col-source"><span class="source-name">The Big Picture</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://ritholtz.com/2026/03/atm-freedom/" target="_blank">At The Money: Investing in Freedom</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">2.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:12%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 16);">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 16);">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 16);">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="ebeff" 
+                        data-rank="17"
+                        data-title="🚨BREAKING:  
+
+🇮🇹 Giorgia Meloni REVEALS that Japan will now be a Special Strateg"
+                        data-url="https://x.com/HungaryBased/status/2028885617229132276"
+                        data-source="X/@HungaryBased"
+                        data-category="other">
+                    <td class="col-rank"><span class="rank-badge">17</span></td>
+                    <td class="col-category"><span class="cat-badge cat-other">other</span></td>
+                    <td class="col-source"><span class="source-name">X/@HungaryBased</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://x.com/HungaryBased/status/2028885617229132276" target="_blank">🚨BREAKING:  
+
+🇮🇹 Giorgia Meloni REVEALS that Japan will now be a Special Strateg</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">0.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:2%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 17);">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 17);">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 17);">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="7701b" 
+                        data-rank="18"
+                        data-title="Too fast to adjust: Adoption speed and the permanent cost of AI transitions"
+                        data-url="https://cepr.org/voxeu/columns/too-fast-adjust-adoption-speed-and-permanent-cost-ai-transitions"
+                        data-source="CEPR VoxEU"
+                        data-category="technology">
+                    <td class="col-rank"><span class="rank-badge">18</span></td>
+                    <td class="col-category"><span class="cat-badge cat-technology">technology</span></td>
+                    <td class="col-source"><span class="source-name">CEPR VoxEU</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://cepr.org/voxeu/columns/too-fast-adjust-adoption-speed-and-permanent-cost-ai-transitions" target="_blank">Too fast to adjust: Adoption speed and the permanent cost of AI transitions</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">-1.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -894,24 +944,24 @@ T</a>
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="6e8c9" 
+                <tr data-hash-id="1a99a" 
                         data-rank="19"
-                        data-title="UK Allows US To Use British Bases for Strikes on Iran"
-                        data-url="https://news.antiwar.com/2026/03/20/uk-allows-us-to-use-british-bases-for-strikes-on-iran/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=uk-allows-us-to-use-british-bases-for-strikes-on-iran"
-                        data-source="Antiwar.com"
-                        data-category="geo_other">
+                        data-title="The Trump Administration’s Strategy for Reshaping Elections"
+                        data-url="https://www.justsecurity.org/133953/the-trump-administrations-strategy-for-reshaping-elections/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=the-trump-administrations-strategy-for-reshaping-elections"
+                        data-source="Just Security"
+                        data-category="election_integrity">
                     <td class="col-rank"><span class="rank-badge">19</span></td>
-                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
-                    <td class="col-source"><span class="source-name">Antiwar.com</span></td>
+                    <td class="col-category"><span class="cat-badge cat-election_integrity">election_integrity</span></td>
+                    <td class="col-source"><span class="source-name">Just Security</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://news.antiwar.com/2026/03/20/uk-allows-us-to-use-british-bases-for-strikes-on-iran/?utm_source=rss&utm_medium=rss&utm_campaign=uk-allows-us-to-use-british-bases-for-strikes-on-iran" target="_blank">UK Allows US To Use British Bases for Strikes on Iran</a>
+                            <a href="https://www.justsecurity.org/133953/the-trump-administrations-strategy-for-reshaping-elections/?utm_source=rss&utm_medium=rss&utm_campaign=the-trump-administrations-strategy-for-reshaping-elections" target="_blank">The Trump Administration’s Strategy for Reshaping Elections</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">4.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:22%"></div></div>
+                        <div class="score-val">-1.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -921,24 +971,24 @@ T</a>
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="d075a" 
+                <tr data-hash-id="dae4f" 
                         data-rank="20"
-                        data-title="Daily Memo: Belarusian Fertilizers, US-Japan Relations"
-                        data-url="https://geopoliticalfutures.com/daily-memo-belarusian-fertilizers-us-japan-relations/"
-                        data-source="Geopolitical Futures"
-                        data-category="monetary">
+                        data-title="Semi-Static Variance-Optimal Hedging of Covariance Risk in Multi-Asset Derivatives"
+                        data-url="https://arxiv.org/abs/2603.25320"
+                        data-source="arXiv q-fin"
+                        data-category="q-fin">
                     <td class="col-rank"><span class="rank-badge">20</span></td>
-                    <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
-                    <td class="col-source"><span class="source-name">Geopolitical Futures</span></td>
+                    <td class="col-category"><span class="cat-badge cat-q-fin">q-fin</span></td>
+                    <td class="col-source"><span class="source-name">arXiv q-fin</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://geopoliticalfutures.com/daily-memo-belarusian-fertilizers-us-japan-relations/" target="_blank">Daily Memo: Belarusian Fertilizers, US-Japan Relations</a>
+                            <a href="https://arxiv.org/abs/2603.25320" target="_blank">Semi-Static Variance-Optimal Hedging of Covariance Risk in Multi-Asset Derivatives</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">4.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:22%"></div></div>
+                        <div class="score-val">-1.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -1220,5 +1270,6 @@ T</a>
         transform: scale(1.05);
     }
     </style>
+</div><!-- /.main-content -->
 </body>
 </html>

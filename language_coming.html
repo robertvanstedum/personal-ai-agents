@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Language Learning — Curator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5f0e8;
+  --bg-texture: #ede8df;
+  --surface: #faf7f2;
+  --surface2: #f0ebe0;
+  --border: #ddd6c8;
+  --border2: #c8bfaf;
+  --text: #2a2418;
+  --text-muted: #6b5f4e;
+  --text-dim: #9e9080;
+  --accent: #8b5e2a;
+  --accent-dim: rgba(139,94,42,0.08);
+  --accent-glow: rgba(139,94,42,0.18);
+  --shadow: rgba(42,36,24,0.08);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Source Sans 3', sans-serif;
+  background: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+}
+
+/* ── Header ── */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
+}
+
+.header-left { display: flex; align-items: baseline; gap: 10px; }
+.logo {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  letter-spacing: -0.02em;
+}
+.logo-sub {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.header-nav { display: flex; gap: 4px; }
+.nav-link {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+.nav-link:hover { color: var(--text); background: var(--surface2); }
+.nav-link.active { color: var(--accent); background: var(--accent-dim); border-color: rgba(139,94,42,0.2); }
+.nav-link.nav-focus { letter-spacing: 0; }
+
+/* ── Domain Rail ── */
+.domain-rail {
+  width: 210px; min-width: 210px;
+  background: #f9f5ed;
+  border-right: 1px solid var(--border);
+  box-shadow: 2px 0 4px rgba(42,36,24,0.06);
+  display: flex; flex-direction: column;
+  position: sticky; top: 0; height: 100vh;
+  overflow: hidden;
+  transition: width 0.2s ease, min-width 0.2s ease;
+  z-index: 90; flex-shrink: 0;
+}
+.domain-rail.collapsed { width: 48px; min-width: 48px; }
+.rail-toggle {
+  font-family: 'DM Mono', monospace; font-size: 14px;
+  color: var(--text-dim); background: none; border: none;
+  cursor: pointer; padding: 14px 16px;
+  text-align: right; transition: color 0.15s; align-self: flex-end;
+}
+.rail-toggle:hover { color: var(--accent); }
+.domain-rail.collapsed .rail-toggle { transform: scaleX(-1); }
+.rail-nav {
+  flex: 1; display: flex; flex-direction: column;
+  gap: 4px; padding: 8px 12px; overflow: hidden;
+}
+.rail-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px;
+  text-decoration: none; color: var(--text-muted);
+  transition: all 0.15s; cursor: pointer;
+  border: 1px solid transparent;
+  white-space: nowrap; overflow: hidden;
+}
+.rail-item:hover:not(.rail-coming) { background: var(--surface2); color: var(--text); }
+.rail-item.active { background: var(--accent-dim); color: var(--accent); border-color: rgba(139,94,42,0.2); }
+.rail-item.rail-coming { opacity: 0.4; cursor: default; }
+.rail-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
+.rail-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; font-weight: 500; }
+.domain-rail.collapsed .rail-label { display: none; }
+.domain-rail.collapsed .rail-item { justify-content: center; }
+.rail-settings {
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px; color: var(--text-dim); text-decoration: none;
+  font-size: 16px; transition: color 0.15s;
+  border-top: 1px solid var(--border);
+}
+.rail-settings:hover { color: var(--accent); }
+.main-content { flex: 1; min-width: 0; overflow-x: hidden; min-height: 100vh; background: var(--bg); }
+
+/* ── Coming Soon Card ── */
+main {
+  max-width: 580px;
+  margin: 80px auto;
+  padding: 0 24px;
+}
+
+.coming-card {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 40px 44px;
+  box-shadow: 0 2px 12px var(--shadow);
+}
+
+.coming-icon {
+  font-size: 36px;
+  margin-bottom: 20px;
+  display: block;
+}
+
+.coming-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px;
+  font-weight: 400;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+
+.coming-subtitle {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 20px;
+}
+
+.coming-desc {
+  font-size: 16px;
+  color: var(--text-muted);
+  line-height: 1.65;
+  margin-bottom: 32px;
+  border-left: 2px solid var(--border2);
+  padding-left: 16px;
+  font-style: italic;
+}
+
+.coming-features {
+  list-style: none;
+  margin-bottom: 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.coming-features li {
+  font-size: 14px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.coming-features li::before {
+  content: '—';
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.coming-back {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  text-decoration: none;
+  border: 1px solid rgba(139,94,42,0.3);
+  padding: 8px 18px;
+  border-radius: 6px;
+  display: inline-block;
+  transition: all 0.15s;
+}
+.coming-back:hover { background: var(--accent-dim); }
+</style>
+</head>
+<body>
+
+<aside class="domain-rail">
+  <button class="rail-toggle" id="railToggle" title="Toggle rail">‹</button>
+  <nav class="rail-nav">
+    <a href="/" class="rail-item" data-domain="curator">
+      <span class="rail-icon">🗞</span>
+      <span class="rail-label">CURATOR</span>
+    </a>
+    <a href="/research/dashboard" class="rail-item" data-domain="research">
+      <span class="rail-icon">🔬</span>
+      <span class="rail-label">RESEARCH</span>
+    </a>
+    <a href="/language" class="rail-item active" data-domain="language">
+      <span class="rail-icon">💬</span>
+      <span class="rail-label">LANGUAGE</span>
+    </a>
+    <a href="/jobs" class="rail-item" data-domain="jobs">
+      <span class="rail-icon">💼</span>
+      <span class="rail-label">JOBS</span>
+    </a>
+  </nav>
+  <a href="/curator_priorities.html" class="rail-settings" title="Settings">⚙</a>
+</aside>
+
+<div class="main-content">
+  <header>
+    <div class="header-left">
+      <a href="/" class="logo">mini-moi</a>
+      <span class="logo-sub">Language</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="coming-card">
+      <span class="coming-icon">💬</span>
+      <h1 class="coming-title">Language Learning</h1>
+      <p class="coming-subtitle">Launching soon</p>
+      <p class="coming-desc">Daily practice, spaced repetition, conversation simulation, and memory of your progress — built for the way you actually learn.</p>
+      <ul class="coming-features">
+        <li>Vocabulary with spaced repetition and context sentences</li>
+        <li>Daily practice sessions tuned to your pace</li>
+        <li>Conversation simulation with the agent</li>
+        <li>Progress memory across sessions — the agent remembers where you left off</li>
+        <li>Multi-language track support (German, Portuguese, Spanish)</li>
+      </ul>
+      <a href="/" class="coming-back">← Back to Curator</a>
+    </div>
+  </main>
+</div>
+
+<script>
+(function() {
+  var toggle = document.getElementById('railToggle');
+  if (toggle) toggle.addEventListener('click', function() {
+    document.querySelector('.domain-rail').classList.toggle('collapsed');
+  });
+})();
+</script>
+</body>
+</html>

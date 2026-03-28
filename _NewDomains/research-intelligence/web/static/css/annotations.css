@@ -1,0 +1,439 @@
+/* annotations.css — Comment anywhere system */
+
+/* Bottom comment box */
+.ann-box {
+  margin: 32px 0 16px 0;
+  padding: 16px;
+  background: var(--surface, #faf7f2);
+  border: 1px solid var(--border, #ddd6c8);
+  border-radius: 6px;
+}
+
+.ann-box-header {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted, #6b5f4e);
+  margin-bottom: 8px;
+}
+
+.ann-textarea {
+  width: 100%;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 14px;
+  color: var(--text, #2a2418);
+  background: var(--bg, #f5f0e8);
+  border: 1px solid var(--border, #ddd6c8);
+  border-radius: 4px;
+  padding: 8px 10px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.ann-textarea:focus {
+  outline: none;
+  border-color: var(--accent, #8b5e2a);
+}
+
+.ann-box-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.ann-type-select {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--border, #ddd6c8);
+  border-radius: 4px;
+  padding: 4px 8px;
+  color: var(--text-muted, #6b5f4e);
+}
+
+.ann-save-btn {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  background: var(--accent, #8b5e2a);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.ann-save-btn:hover {
+  opacity: 0.85;
+}
+
+/* Recent notes sidebar */
+.ann-sidebar {
+  margin-top: 16px;
+}
+
+.ann-sidebar-header {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted, #6b5f4e);
+  margin-bottom: 8px;
+}
+
+.ann-item {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border, #ddd6c8);
+  font-size: 13px;
+}
+
+.ann-type-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--surface, #faf7f2);
+  border: 1px solid var(--border, #ddd6c8);
+  color: var(--text-muted, #6b5f4e);
+  margin-right: 6px;
+}
+
+.ann-type-badge.ann-type-direction_shift {
+  border-color: var(--accent, #8b5e2a);
+  color: var(--accent, #8b5e2a);
+}
+
+.ann-date {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim, #9e9080);
+}
+
+.ann-ref {
+  font-size: 11px;
+  color: var(--text-muted, #6b5f4e);
+  margin: 4px 0 2px 0;
+  font-style: italic;
+}
+
+.ann-note {
+  color: var(--text, #2a2418);
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+.ann-empty {
+  font-size: 12px;
+  color: var(--text-dim, #9e9080);
+  font-style: italic;
+}
+
+/* Text selection popup */
+.ann-selection-popup {
+  position: absolute;
+  z-index: 1000;
+  background: var(--text, #2a2418);
+  border-radius: 4px;
+  padding: 4px 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.ann-selection-popup button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: 'DM Mono', monospace;
+  white-space: nowrap;
+}
+
+.ann-selection-popup input {
+  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  border: none;
+}
+
+/* Toast */
+.ann-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--text, #2a2418);
+  color: white;
+  padding: 10px 18px;
+  border-radius: 6px;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  z-index: 2000;
+  animation: ann-fadein 0.2s ease;
+}
+
+.ann-toast-error {
+  background: #8b2a2a;
+}
+
+@keyframes ann-fadein {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Tier 1: Floating button + compact overlay ─── */
+
+.ann-float-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent, #8b5e2a);
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ann-float-btn .ann-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: var(--text, #2a2418);
+  color: white;
+  font-size: 9px;
+  font-family: 'DM Mono', monospace;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ann-compact-overlay {
+  position: fixed;
+  bottom: 76px;
+  right: 24px;
+  width: 300px;
+  background: var(--surface, #faf7f2);
+  border: 1px solid var(--border, #ddd6c8);
+  border-radius: 8px;
+  padding: 14px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  z-index: 600;
+  display: none;
+}
+
+.ann-compact-overlay.visible {
+  display: block;
+  animation: ann-fadein 0.15s ease;
+}
+
+.ann-compact-header {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted, #6b5f4e);
+  margin-bottom: 8px;
+}
+
+.ann-compact-textarea {
+  width: 100%;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 13px;
+  color: var(--text, #2a2418);
+  background: var(--bg, #f5f0e8);
+  border: 1px solid var(--border, #ddd6c8);
+  border-radius: 4px;
+  padding: 7px 9px;
+  resize: none;
+  box-sizing: border-box;
+  min-height: 56px;
+}
+
+.ann-compact-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+
+/* ─── Tier 2: Collapsible right panel ─── */
+
+.ann-panel-tab {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--accent, #8b5e2a);
+  border: none;
+  border-radius: 6px 0 0 6px;
+  padding: 14px 10px;
+  cursor: pointer;
+  z-index: 500;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.05em;
+  box-shadow: -2px 0 8px rgba(0,0,0,0.12);
+}
+
+.ann-panel-tab:hover {
+  background: var(--accent-dim, #7a5226);
+}
+
+.ann-right-panel {
+  position: fixed;
+  right: -320px;
+  top: 60px;
+  width: 300px;
+  height: calc(100vh - 60px);
+  background: var(--surface, #faf7f2);
+  border-left: 1px solid var(--border, #ddd6c8);
+  padding: 16px;
+  overflow-y: auto;
+  transition: right 0.2s ease;
+  z-index: 490;
+}
+
+.ann-right-panel.open {
+  right: 0;
+}
+
+.ann-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.ann-panel-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted, #6b5f4e);
+}
+
+.ann-pin-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.4;
+  padding: 2px;
+}
+
+.ann-pin-btn.pinned {
+  opacity: 1;
+  color: var(--accent, #8b5e2a);
+}
+
+/* Pinned: push content left */
+body.notes-pinned .main-content,
+body.notes-pinned .content-area {
+  margin-right: 310px;
+  transition: margin-right 0.2s ease;
+}
+
+/* ─── Tier 3: Left panel notes (sessions page) ─── */
+
+.ann-left-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border, #ddd6c8);
+}
+
+.ann-left-header {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted, #6b5f4e);
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Compact note item for left panel */
+.ann-left-item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border, #ddd6c8);
+  font-size: 12px;
+}
+
+.ann-left-item:last-child {
+  border-bottom: none;
+}
+
+/* ─── ··· nav dropdown ─── */
+
+.nav-more-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.nav-more-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  color: var(--text-muted, #6b5f4e);
+  padding: 4px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+.nav-more-btn:hover {
+  background: var(--surface, #faf7f2);
+  color: var(--text, #2a2418);
+}
+
+.nav-more-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: var(--surface, #faf7f2);
+  border: 1px solid var(--border, #ddd6c8);
+  border-radius: 6px;
+  padding: 6px 0;
+  min-width: 140px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  z-index: 400;
+}
+
+.nav-more-dropdown.open {
+  display: block;
+  animation: ann-fadein 0.15s ease;
+}
+
+.nav-more-dropdown a {
+  display: block;
+  padding: 8px 16px;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  color: var(--text-muted, #6b5f4e);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nav-more-dropdown a:hover {
+  background: var(--bg, #f5f0e8);
+  color: var(--text, #2a2418);
+}
+
+.nav-more-dropdown a.active {
+  color: var(--accent, #8b5e2a);
+  font-weight: 600;
+}

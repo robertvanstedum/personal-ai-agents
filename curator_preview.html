@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="curator-model" content="grok-4-1">
+    <meta name="curator-model" content="grok-3-mini">
     <meta name="curator-mode" content="dry-run">
-    <meta name="curator-timestamp" content="2026-03-17 22:08:59">
+    <meta name="curator-timestamp" content="2026-03-27 20:31:47">
     <meta name="curator-articles" content="20">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-    <title>Morning Briefing - March 17, 2026</title>
+    <title>Morning Briefing - March 27, 2026</title>
     <style>
         :root {
             --bg: #f5f0e8;
@@ -43,6 +43,53 @@
             min-height: 100vh;
             font-size: 14px;
             line-height: 1.5;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        /* ── Domain Rail ── */
+        .domain-rail {
+            width: 200px;
+            min-width: 200px;
+            background: rgba(245,240,232,0.6);
+            border-right: 1px solid var(--border);
+            min-height: 100vh;
+            padding: 24px 0;
+            position: sticky;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 50;
+        }
+        .rail-domain {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            cursor: pointer;
+            text-decoration: none;
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            transition: all 0.15s;
+        }
+        .rail-domain:hover { background: var(--surface2); color: var(--text); }
+        .rail-domain.active {
+            background: var(--accent-dim);
+            color: var(--accent);
+            font-weight: 600;
+            border-right: 2px solid var(--accent);
+        }
+        .rail-domain.coming-soon { opacity: 0.4; cursor: default; pointer-events: none; }
+        .rail-icon { font-size: 14px; }
+        .main-content {
+            flex: 1;
+            min-width: 0;
+            overflow-x: hidden;
+            min-height: 100vh;
         }
 
         /* ── Header ── */
@@ -370,6 +417,13 @@
     </style>
 </head>
 <body data-run-mode="dry-run">
+<div class="domain-rail">
+  <a href="/" class="rail-domain active"><span class="rail-icon">📚</span><span>Curator</span></a>
+  <a href="/research/dashboard" class="rail-domain"><span class="rail-icon">🔬</span><span>Research</span></a>
+  <a href="/language" class="rail-domain"><span class="rail-icon">💬</span><span>Language</span></a>
+  <a href="/jobs" class="rail-domain"><span class="rail-icon">💼</span><span>Jobs</span></a>
+</div>
+<div class="main-content">
 <header class="curator-header">
   <div class="header-left">
     <a href="/" class="logo">📚 Curator</a>
@@ -378,14 +432,14 @@
   <nav class="header-nav">
     <a href="/" class="nav-link active">Daily</a>
     <a href="curator_library.html" class="nav-link">Library</a>
-    <a href="curator_priorities.html" class="nav-link">Priorities</a>
     <a href="interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
-    <a href="curator_intelligence.html" class="nav-link">AI Observations</a>
+    <a href="curator_intelligence.html" class="nav-link">Observations</a>
+    <a href="curator_priorities.html" class="nav-link">🎯</a>
   </nav>
 </header>
 
 <main>
-    <div class="briefing-date">Tuesday, March 17, 2026</div>
+    <div class="briefing-date">Friday, March 27, 2026</div>
     <div class="briefing-table">
         <table>
             <thead>
@@ -400,24 +454,24 @@
                 </tr>
             </thead>
             <tbody>
-                <tr data-hash-id="1fb54" 
+                <tr data-hash-id="43c03" 
                         data-rank="1"
-                        data-title="Analyzing Japan’s $550 Billion Pledge to Invest in the U.S."
-                        data-url="https://www.stlouisfed.org/on-the-economy/2025/nov/analyzing-japan-550-billion-pledge-invest-us"
-                        data-source="Fed On The Economy"
+                        data-title="Hellscape Taiwan: A Porcupine Defense in the Drone Age"
+                        data-url="https://warontherocks.com/2026/03/hellscape-taiwan-a-porcupine-defense-in-the-drone-age/"
+                        data-source="War on the Rocks"
                         data-category="geo_major">
                     <td class="col-rank"><span class="rank-badge">1</span></td>
                     <td class="col-category"><span class="cat-badge cat-geo_major">geo_major</span></td>
-                    <td class="col-source"><span class="source-name">Fed On The Economy</span></td>
+                    <td class="col-source"><span class="source-name">War on the Rocks</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.stlouisfed.org/on-the-economy/2025/nov/analyzing-japan-550-billion-pledge-invest-us" target="_blank">Analyzing Japan’s $550 Billion Pledge to Invest in the U.S.</a>
+                            <a href="https://warontherocks.com/2026/03/hellscape-taiwan-a-porcupine-defense-in-the-drone-age/" target="_blank">Hellscape Taiwan: A Porcupine Defense in the Drone Age</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">18.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:90%"></div></div>
+                        <div class="score-val">22.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:100%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -427,18 +481,45 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="57355" 
+                <tr data-hash-id="92835" 
                         data-rank="2"
-                        data-title="Iran Confirms Death Of Ali Larijani In Another Key Loss Of Leadership"
-                        data-url="https://www.zerohedge.com/geopolitical/not-our-war-allies-shun-trump-coalition-iran-security-chief-alleged-killed-oil"
-                        data-source="ZeroHedge"
-                        data-category="geo_other">
+                        data-title="Trump, Xi, and the Specter of 1914"
+                        data-url="https://www.foreignaffairs.com/united-states/trump-xi-and-specter-1914"
+                        data-source="Foreign Affairs"
+                        data-category="geo_major">
                     <td class="col-rank"><span class="rank-badge">2</span></td>
-                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
-                    <td class="col-source"><span class="source-name">ZeroHedge</span></td>
+                    <td class="col-category"><span class="cat-badge cat-geo_major">geo_major</span></td>
+                    <td class="col-source"><span class="source-name">Foreign Affairs</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.zerohedge.com/geopolitical/not-our-war-allies-shun-trump-coalition-iran-security-chief-alleged-killed-oil" target="_blank">Iran Confirms Death Of Ali Larijani In Another Key Loss Of Leadership</a>
+                            <a href="https://www.foreignaffairs.com/united-states/trump-xi-and-specter-1914" target="_blank">Trump, Xi, and the Specter of 1914</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">17.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:88%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
+                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
+                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="80532" 
+                        data-rank="3"
+                        data-title="Subsidising the supply chain: How China’s industrial policy shapes export competitiveness"
+                        data-url="https://cepr.org/voxeu/columns/subsidising-supply-chain-how-chinas-industrial-policy-shapes-export-competitiveness"
+                        data-source="CEPR VoxEU"
+                        data-category="monetary">
+                    <td class="col-rank"><span class="rank-badge">3</span></td>
+                    <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
+                    <td class="col-source"><span class="source-name">CEPR VoxEU</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://cepr.org/voxeu/columns/subsidising-supply-chain-how-chinas-industrial-policy-shapes-export-competitiveness" target="_blank">Subsidising the supply chain: How China’s industrial policy shapes export competitiveness</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
@@ -454,18 +535,18 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="5d530" 
-                        data-rank="3"
-                        data-title="Takeaways from China’s National People’s Congress Meeting"
-                        data-url="https://warontherocks.com/2026/03/takeaways-from-chinas-national-peoples-congress-meeting/"
-                        data-source="War on the Rocks"
-                        data-category="other">
-                    <td class="col-rank"><span class="rank-badge">3</span></td>
-                    <td class="col-category"><span class="cat-badge cat-other">other</span></td>
-                    <td class="col-source"><span class="source-name">War on the Rocks</span></td>
+                <tr data-hash-id="4eff2" 
+                        data-rank="4"
+                        data-title="Expert Q&amp;A: A Targeting Primer on Iran War"
+                        data-url="https://www.justsecurity.org/135050/expert-faq-targeting-primer-iran-war/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=expert-faq-targeting-primer-iran-war"
+                        data-source="Just Security"
+                        data-category="geo_other">
+                    <td class="col-rank"><span class="rank-badge">4</span></td>
+                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
+                    <td class="col-source"><span class="source-name">Just Security</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://warontherocks.com/2026/03/takeaways-from-chinas-national-peoples-congress-meeting/" target="_blank">Takeaways from China’s National People’s Congress Meeting</a>
+                            <a href="https://www.justsecurity.org/135050/expert-faq-targeting-primer-iran-war/?utm_source=rss&utm_medium=rss&utm_campaign=expert-faq-targeting-primer-iran-war" target="_blank">Expert Q&A: A Targeting Primer on Iran War</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
@@ -481,18 +562,18 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="b8aa5" 
-                        data-rank="4"
-                        data-title="10 Thursday AM Reads"
-                        data-url="https://ritholtz.com/2026/03/10-thursday-am-reads-487/"
-                        data-source="The Big Picture"
-                        data-category="monetary">
-                    <td class="col-rank"><span class="rank-badge">4</span></td>
-                    <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
-                    <td class="col-source"><span class="source-name">The Big Picture</span></td>
+                <tr data-hash-id="3c890" 
+                        data-rank="5"
+                        data-title="California\&#x27;s Central Valley produces 80% of the world\&#x27;s almonds. Each almond req"
+                        data-url="https://x.com/SamaHoole/status/2015647929172680922"
+                        data-source="X/@SamaHoole"
+                        data-category="commodity">
+                    <td class="col-rank"><span class="rank-badge">5</span></td>
+                    <td class="col-category"><span class="cat-badge cat-commodity">commodity</span></td>
+                    <td class="col-source"><span class="source-name">X/@SamaHoole</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://ritholtz.com/2026/03/10-thursday-am-reads-487/" target="_blank">10 Thursday AM Reads</a>
+                            <a href="https://x.com/SamaHoole/status/2015647929172680922" target="_blank">California's Central Valley produces 80% of the world's almonds. Each almond req</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
@@ -508,121 +589,13 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="26be4" 
-                        data-rank="5"
-                        data-title="Geopolitics, War and Iran"
-                        data-url="https://geopoliticalfutures.com/geopolitics-war-and-iran/"
-                        data-source="Geopolitical Futures"
-                        data-category="geo_other">
-                    <td class="col-rank"><span class="rank-badge">5</span></td>
-                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
-                    <td class="col-source"><span class="source-name">Geopolitical Futures</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://geopoliticalfutures.com/geopolitics-war-and-iran/" target="_blank">Geopolitics, War and Iran</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">6.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:32%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
-                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
-                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="01031" 
-                        data-rank="6"
-                        data-title="The AI Transformation Gap Index (AITG): An Empirical Framework for Measuring AI Transformation Opportunity, Disruption Risk, and Value Creation at the Industry and Firm Level"
-                        data-url="https://arxiv.org/abs/2603.13278"
-                        data-source="arXiv q-fin"
-                        data-category="other">
-                    <td class="col-rank"><span class="rank-badge">6</span></td>
-                    <td class="col-category"><span class="cat-badge cat-other">other</span></td>
-                    <td class="col-source"><span class="source-name">arXiv q-fin</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://arxiv.org/abs/2603.13278" target="_blank">The AI Transformation Gap Index (AITG): An Empirical Framework for Measuring AI Transformation Opportunity, Disruption Risk, and Value Creation at the Industry and Firm Level</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">6.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:30%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
-                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
-                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="7f21a" 
-                        data-rank="7"
-                        data-title="Monthly Statement of the Public Debt, February 28, 2026"
-                        data-url="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding"
-                        data-source="Treasury MSPD"
-                        data-category="fiscal">
-                    <td class="col-rank"><span class="rank-badge">7</span></td>
-                    <td class="col-category"><span class="cat-badge cat-fiscal">fiscal</span></td>
-                    <td class="col-source"><span class="source-name">Treasury MSPD</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding" target="_blank">Monthly Statement of the Public Debt, February 28, 2026</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">6.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:30%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
-                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
-                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="f5840" 
-                        data-rank="8"
-                        data-title="US Confirms Tesla–LG Energy Solution\&#x27;s $4.3 Billion LFP Battery Plant In Michigan"
-                        data-url="https://www.zerohedge.com/technology/us-confirms-tesla-lg-energy-solutions-43-billion-lfp-battery-plant-michigan"
-                        data-source="ZeroHedge"
-                        data-category="technology">
-                    <td class="col-rank"><span class="rank-badge">8</span></td>
-                    <td class="col-category"><span class="cat-badge cat-technology">technology</span></td>
-                    <td class="col-source"><span class="source-name">ZeroHedge</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://www.zerohedge.com/technology/us-confirms-tesla-lg-energy-solutions-43-billion-lfp-battery-plant-michigan" target="_blank">US Confirms Tesla–LG Energy Solution's $4.3 Billion LFP Battery Plant In Michigan</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">1.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:5%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
-                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
-                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
-                        </div>
-                    </td>
-                </tr>
                 <tr data-hash-id="13b3a" 
-                        data-rank="9"
+                        data-rank="6"
                         data-title="A Look at Recent Developments in the Federal Fiscal Balance"
                         data-url="https://www.stlouisfed.org/on-the-economy/2026/feb/look-recent-developments-federal-fiscal-balance"
                         data-source="Fed On The Economy"
                         data-category="fiscal">
-                    <td class="col-rank"><span class="rank-badge">9</span></td>
+                    <td class="col-rank"><span class="rank-badge">6</span></td>
                     <td class="col-category"><span class="cat-badge cat-fiscal">fiscal</span></td>
                     <td class="col-source"><span class="source-name">Fed On The Economy</span></td>
                     <td class="col-title">
@@ -632,8 +605,8 @@
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-3.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
+                        <div class="score-val">7.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:35%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -643,24 +616,113 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="071b6" 
+                <tr data-hash-id="a0081" 
+                        data-rank="7"
+                        data-title="THE 2028 GLOBAL INTELLIGENCE CRISIS"
+                        data-url="https://www.citriniresearch.com/p/2028gic"
+                        data-source="X/@Citrini7"
+                        data-category="technology">
+                    <td class="col-rank"><span class="rank-badge">7</span></td>
+                    <td class="col-category"><span class="cat-badge cat-technology">technology</span></td>
+                    <td class="col-source"><span class="source-name">X/@Citrini7</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://www.citriniresearch.com/p/2028gic" target="_blank">THE 2028 GLOBAL INTELLIGENCE CRISIS</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">7.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:35%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
+                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
+                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="9b75b" 
+                        data-rank="8"
+                        data-title="The US labor market needs far fewer jobs to prevent unemployment from rising:
+
+T"
+                        data-url="https://x.com/KobeissiLetter/status/2025329419041341629"
+                        data-source="X/@KobeissiLetter"
+                        data-category="labor_market">
+                    <td class="col-rank"><span class="rank-badge">8</span></td>
+                    <td class="col-category"><span class="cat-badge cat-labor_market">labor_market</span></td>
+                    <td class="col-source"><span class="source-name">X/@KobeissiLetter</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://x.com/KobeissiLetter/status/2025329419041341629" target="_blank">The US labor market needs far fewer jobs to prevent unemployment from rising:
+
+T</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">7.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:35%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
+                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
+                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="4ff5e" 
+                        data-rank="9"
+                        data-title="We cannot let them stay.
+
+Debates regarding illegal immigration often focus on p"
+                        data-url="https://x.com/PalmerLuckey/status/2013831417923567812"
+                        data-source="X/@PalmerLuckey"
+                        data-category="immigration_policy">
+                    <td class="col-rank"><span class="rank-badge">9</span></td>
+                    <td class="col-category"><span class="cat-badge cat-immigration_policy">immigration_policy</span></td>
+                    <td class="col-source"><span class="source-name">X/@PalmerLuckey</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://x.com/PalmerLuckey/status/2013831417923567812" target="_blank">We cannot let them stay.
+
+Debates regarding illegal immigration often focus on p</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">7.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:35%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
+                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
+                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="d09ac" 
                         data-rank="10"
-                        data-title="Ill-Liquidity Premium"
-                        data-url="https://ritholtz.com/2026/03/ill-liquidity-premium/"
-                        data-source="The Big Picture"
+                        data-title="Bid--Ask Martingale Optimal Transport"
+                        data-url="https://arxiv.org/abs/2603.24605"
+                        data-source="arXiv q-fin"
                         data-category="monetary">
                     <td class="col-rank"><span class="rank-badge">10</span></td>
                     <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
-                    <td class="col-source"><span class="source-name">The Big Picture</span></td>
+                    <td class="col-source"><span class="source-name">arXiv q-fin</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://ritholtz.com/2026/03/ill-liquidity-premium/" target="_blank">Ill-Liquidity Premium</a>
+                            <a href="https://arxiv.org/abs/2603.24605" target="_blank">Bid--Ask Martingale Optimal Transport</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-6.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
+                        <div class="score-val">6.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:30%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -670,240 +732,24 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="353de" 
+                <tr data-hash-id="3463b" 
                         data-rank="11"
-                        data-title="Forward-looking labour supply: Lessons from Poland’s pension reform"
-                        data-url="https://cepr.org/voxeu/columns/forward-looking-labour-supply-lessons-polands-pension-reform"
-                        data-source="CEPR VoxEU"
+                        data-title="10 Thursday AM Reads"
+                        data-url="https://ritholtz.com/2026/03/10-thursday-am-reads-488/"
+                        data-source="The Big Picture"
                         data-category="other">
                     <td class="col-rank"><span class="rank-badge">11</span></td>
                     <td class="col-category"><span class="cat-badge cat-other">other</span></td>
-                    <td class="col-source"><span class="source-name">CEPR VoxEU</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://cepr.org/voxeu/columns/forward-looking-labour-supply-lessons-polands-pension-reform" target="_blank">Forward-looking labour supply: Lessons from Poland’s pension reform</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">-7.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
-                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
-                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="c441d" 
-                        data-rank="12"
-                        data-title="The War is Evolving: George Friedman on Miscalculations in Iran"
-                        data-url="https://geopoliticalfutures.com/the-war-is-evolving-george-friedman-on-miscalculations-in-iran/"
-                        data-source="Geopolitical Futures"
-                        data-category="geo_other">
-                    <td class="col-rank"><span class="rank-badge">12</span></td>
-                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
-                    <td class="col-source"><span class="source-name">Geopolitical Futures</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://geopoliticalfutures.com/the-war-is-evolving-george-friedman-on-miscalculations-in-iran/" target="_blank">The War is Evolving: George Friedman on Miscalculations in Iran</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">-18.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
-                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
-                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="7f21a" 
-                        data-rank="13"
-                        data-title="Monthly Statement of the Public Debt, January 31, 2026"
-                        data-url="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding"
-                        data-source="Treasury MSPD"
-                        data-category="fiscal">
-                    <td class="col-rank"><span class="rank-badge">13</span></td>
-                    <td class="col-category"><span class="cat-badge cat-fiscal">fiscal</span></td>
-                    <td class="col-source"><span class="source-name">Treasury MSPD</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding" target="_blank">Monthly Statement of the Public Debt, January 31, 2026</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">-21.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
-                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
-                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="51190" 
-                        data-rank="14"
-                        data-title="The Curse of Middle-Sized Wars"
-                        data-url="https://www.foreignaffairs.com/iran/curse-middle-sized-wars"
-                        data-source="Foreign Affairs"
-                        data-category="other">
-                    <td class="col-rank"><span class="rank-badge">14</span></td>
-                    <td class="col-category"><span class="cat-badge cat-other">other</span></td>
-                    <td class="col-source"><span class="source-name">Foreign Affairs</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://www.foreignaffairs.com/iran/curse-middle-sized-wars" target="_blank">The Curse of Middle-Sized Wars</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">-31.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
-                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
-                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="9acf8" 
-                        data-rank="15"
-                        data-title="Tracking AI’s Contribution to GDP Growth"
-                        data-url="https://www.stlouisfed.org/on-the-economy/2026/jan/tracking-ai-contribution-gdp-growth"
-                        data-source="Fed On The Economy"
-                        data-category="technology">
-                    <td class="col-rank"><span class="rank-badge">15</span></td>
-                    <td class="col-category"><span class="cat-badge cat-technology">technology</span></td>
-                    <td class="col-source"><span class="source-name">Fed On The Economy</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://www.stlouisfed.org/on-the-economy/2026/jan/tracking-ai-contribution-gdp-growth" target="_blank">Tracking AI’s Contribution to GDP Growth</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">-31.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
-                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
-                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="b9889" 
-                        data-rank="16"
-                        data-title="Trump Admin Seeks Alternative Fertilizer Supplies"
-                        data-url="https://www.zerohedge.com/commodities/trump-administration-seeks-alternative-fertilizer-supplies"
-                        data-source="ZeroHedge"
-                        data-category="monetary">
-                    <td class="col-rank"><span class="rank-badge">16</span></td>
-                    <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
-                    <td class="col-source"><span class="source-name">ZeroHedge</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://www.zerohedge.com/commodities/trump-administration-seeks-alternative-fertilizer-supplies" target="_blank">Trump Admin Seeks Alternative Fertilizer Supplies</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">-42.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
-                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
-                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="9e8b5" 
-                        data-rank="17"
-                        data-title="If the U.S. Wants Durable Peace, It Must Protect the Institutions That Build It"
-                        data-url="https://www.justsecurity.org/134093/us-protect-institute-of-peace/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=us-protect-institute-of-peace"
-                        data-source="Just Security"
-                        data-category="other">
-                    <td class="col-rank"><span class="rank-badge">17</span></td>
-                    <td class="col-category"><span class="cat-badge cat-other">other</span></td>
-                    <td class="col-source"><span class="source-name">Just Security</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://www.justsecurity.org/134093/us-protect-institute-of-peace/?utm_source=rss&utm_medium=rss&utm_campaign=us-protect-institute-of-peace" target="_blank">If the U.S. Wants Durable Peace, It Must Protect the Institutions That Build It</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">-64.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
-                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
-                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="fd689" 
-                        data-rank="18"
-                        data-title="The Evolution of the Iran War"
-                        data-url="https://geopoliticalfutures.com/the-evolution-of-the-iran-war/"
-                        data-source="Geopolitical Futures"
-                        data-category="geo_other">
-                    <td class="col-rank"><span class="rank-badge">18</span></td>
-                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
-                    <td class="col-source"><span class="source-name">Geopolitical Futures</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://geopoliticalfutures.com/the-evolution-of-the-iran-war/" target="_blank">The Evolution of the Iran War</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">-67.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
-                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
-                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="cf1b3" 
-                        data-rank="19"
-                        data-title="At The Money: Pursuing Alpha through Exchange-Traded Funds"
-                        data-url="https://ritholtz.com/2026/03/atm-pursuing-alpha-etf/"
-                        data-source="The Big Picture"
-                        data-category="monetary">
-                    <td class="col-rank"><span class="rank-badge">19</span></td>
-                    <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
                     <td class="col-source"><span class="source-name">The Big Picture</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://ritholtz.com/2026/03/atm-pursuing-alpha-etf/" target="_blank">At The Money: Pursuing Alpha through Exchange-Traded Funds</a>
+                            <a href="https://ritholtz.com/2026/03/10-thursday-am-reads-488/" target="_blank">10 Thursday AM Reads</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-70.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
+                        <div class="score-val">6.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:30%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -913,24 +759,252 @@
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="7f21a" 
-                        data-rank="20"
-                        data-title="Monthly Statement of the Public Debt, December 31, 2025"
-                        data-url="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding"
-                        data-source="Treasury MSPD"
-                        data-category="fiscal">
-                    <td class="col-rank"><span class="rank-badge">20</span></td>
-                    <td class="col-category"><span class="cat-badge cat-fiscal">fiscal</span></td>
-                    <td class="col-source"><span class="source-name">Treasury MSPD</span></td>
+                <tr data-hash-id="99d6c" 
+                        data-rank="12"
+                        data-title="Here are some facts: 
+
+1. A small number of people commit a wildly disproportion"
+                        data-url="https://x.com/DanFriedman81/status/2021259566910931215"
+                        data-source="X/@DanFriedman81"
+                        data-category="criminal_justice">
+                    <td class="col-rank"><span class="rank-badge">12</span></td>
+                    <td class="col-category"><span class="cat-badge cat-criminal_justice">criminal_justice</span></td>
+                    <td class="col-source"><span class="source-name">X/@DanFriedman81</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding" target="_blank">Monthly Statement of the Public Debt, December 31, 2025</a>
+                            <a href="https://x.com/DanFriedman81/status/2021259566910931215" target="_blank">Here are some facts: 
+
+1. A small number of people commit a wildly disproportion</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-70.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
+                        <div class="score-val">5.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:25%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
+                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
+                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="f33e1" 
+                        data-rank="13"
+                        data-title="Good News: Scientists discover a way to regrow cartilage, stop arthritis"
+                        data-url="https://notthebee.com/article/good-news-scientists-discover-a-way-to-regrow-cartilage-and-stop-arthritis"
+                        data-source="X/@Not_the_Bee"
+                        data-category="personal_development">
+                    <td class="col-rank"><span class="rank-badge">13</span></td>
+                    <td class="col-category"><span class="cat-badge cat-personal_development">personal_development</span></td>
+                    <td class="col-source"><span class="source-name">X/@Not_the_Bee</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://notthebee.com/article/good-news-scientists-discover-a-way-to-regrow-cartilage-and-stop-arthritis" target="_blank">Good News: Scientists discover a way to regrow cartilage, stop arthritis</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">5.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:25%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
+                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
+                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="eff18" 
+                        data-rank="14"
+                        data-title="Abigail Shrier: &quot;The number one symptom of depression is rumination, pathologica"
+                        data-url="https://x.com/joeroganhq/status/2008493748183761133"
+                        data-source="X/@joeroganhq"
+                        data-category="mental_health">
+                    <td class="col-rank"><span class="rank-badge">14</span></td>
+                    <td class="col-category"><span class="cat-badge cat-mental_health">mental_health</span></td>
+                    <td class="col-source"><span class="source-name">X/@joeroganhq</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://x.com/joeroganhq/status/2008493748183761133" target="_blank">Abigail Shrier: "The number one symptom of depression is rumination, pathologica</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">5.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:25%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
+                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
+                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="4a2f2" 
+                        data-rank="15"
+                        data-title="today is january 13, 2026, reminder that most american OEMs (aerospace, defense,"
+                        data-url="https://x.com/aphysicist/status/2011115953975668820"
+                        data-source="X/@aphysicist"
+                        data-category="commodity">
+                    <td class="col-rank"><span class="rank-badge">15</span></td>
+                    <td class="col-category"><span class="cat-badge cat-commodity">commodity</span></td>
+                    <td class="col-source"><span class="source-name">X/@aphysicist</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://x.com/aphysicist/status/2011115953975668820" target="_blank">today is january 13, 2026, reminder that most american OEMs (aerospace, defense,</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">3.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:18%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
+                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
+                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="ddb4c" 
+                        data-rank="16"
+                        data-title="Vance Claims Iran Could Make Nuclear Suicide Vest"
+                        data-url="https://www.zerohedge.com/political/vance-claims-iran-could-make-nuclear-suicide-vest"
+                        data-source="ZeroHedge"
+                        data-category="geo_other">
+                    <td class="col-rank"><span class="rank-badge">16</span></td>
+                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
+                    <td class="col-source"><span class="source-name">ZeroHedge</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://www.zerohedge.com/political/vance-claims-iran-could-make-nuclear-suicide-vest" target="_blank">Vance Claims Iran Could Make Nuclear Suicide Vest</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">3.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:18%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
+                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
+                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="f9008" 
+                        data-rank="17"
+                        data-title="&quot;Anthropic is releasing a new version of its most powerful AI model that’s desig"
+                        data-url="https://x.com/LukeGromen/status/2019488862133702837"
+                        data-source="X/@LukeGromen"
+                        data-category="labor_market">
+                    <td class="col-rank"><span class="rank-badge">17</span></td>
+                    <td class="col-category"><span class="cat-badge cat-labor_market">labor_market</span></td>
+                    <td class="col-source"><span class="source-name">X/@LukeGromen</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://x.com/LukeGromen/status/2019488862133702837" target="_blank">"Anthropic is releasing a new version of its most powerful AI model that’s desig</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">2.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:12%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
+                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
+                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="0149c" 
+                        data-rank="18"
+                        data-title="Elon Musk thinks coding dies this year.
+
+Not evolves. Dies.
+
+By December, AI won"
+                        data-url="https://x.com/r0ck3t23/status/2021805528309956905"
+                        data-source="X/@r0ck3t23"
+                        data-category="technology">
+                    <td class="col-rank"><span class="rank-badge">18</span></td>
+                    <td class="col-category"><span class="cat-badge cat-technology">technology</span></td>
+                    <td class="col-source"><span class="source-name">X/@r0ck3t23</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://x.com/r0ck3t23/status/2021805528309956905" target="_blank">Elon Musk thinks coding dies this year.
+
+Not evolves. Dies.
+
+By December, AI won</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">2.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:12%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
+                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
+                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="b438d" 
+                        data-rank="19"
+                        data-title="Prof. John Mearsheimer  :  No Way Out"
+                        data-url="https://theduran.com/prof-john-mearsheimer-no-way-out/"
+                        data-source="The Duran"
+                        data-category="other">
+                    <td class="col-rank"><span class="rank-badge">19</span></td>
+                    <td class="col-category"><span class="cat-badge cat-other">other</span></td>
+                    <td class="col-source"><span class="source-name">The Duran</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://theduran.com/prof-john-mearsheimer-no-way-out/" target="_blank">Prof. John Mearsheimer  :  No Way Out</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">1.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:8%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👍</button>
+                            <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">👎</button>
+                            <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled style="opacity: 0.5; cursor: not-allowed;">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="9a12e" 
+                        data-rank="20"
+                        data-title="RFK Jr. just revived an inconvenient history lesson about Democrats and illegal "
+                        data-url="https://x.com/VigilantFox/status/2026697023970267505"
+                        data-source="X/@VigilantFox"
+                        data-category="immigration_policy">
+                    <td class="col-rank"><span class="rank-badge">20</span></td>
+                    <td class="col-category"><span class="cat-badge cat-immigration_policy">immigration_policy</span></td>
+                    <td class="col-source"><span class="source-name">X/@VigilantFox</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://x.com/VigilantFox/status/2026697023970267505" target="_blank">RFK Jr. just revived an inconvenient history lesson about Democrats and illegal </a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">1.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:8%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
@@ -1212,5 +1286,6 @@
         transform: scale(1.05);
     }
     </style>
+</div><!-- /.main-content -->
 </body>
 </html>

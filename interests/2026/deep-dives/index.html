@@ -203,25 +203,20 @@
         }
 
         .action-btn {
-            display: inline-flex;
-            align-items: center;
-            padding: 4px 10px;
-            background: var(--bg);
-            color: var(--text-muted);
+            padding: 4px 12px;
+            background: var(--accent-dim);
+            color: var(--accent);
             text-decoration: none;
             border-radius: 4px;
             font-family: 'DM Mono', monospace;
-            font-size: 10px;
+            font-size: 11px;
             font-weight: 500;
-            letter-spacing: 0.04em;
-            border: 1px solid var(--border);
+            border: 1px solid rgba(139,94,42,0.2);
             transition: all 0.15s;
         }
 
         .action-btn:hover {
-            border-color: var(--accent);
-            color: var(--accent);
-            background: var(--accent-dim);
+            background: rgba(139,94,42,0.15);
         }
     </style>
 </head>
@@ -235,15 +230,20 @@
     <a href="../../../" class="nav-link">Daily</a>
     <a href="../../../curator_library.html" class="nav-link">Library</a>
     <a href="../../../interests/2026/deep-dives/index.html" class="nav-link active">Deep Dives</a>
-    <a href="../../../curator_priorities.html" class="nav-link">Priorities</a>
-    <a href="../../../curator_intelligence.html" class="nav-link">AI Observations</a>
+    <a href="../../../curator_intelligence.html" class="nav-link">Observations</a>
+    <div class="nav-more-wrapper">
+      <button class="nav-more-btn">···</button>
+      <div class="nav-more-dropdown">
+        <a href="../../../curator_priorities.html">Priorities</a>
+      </div>
+    </div>
   </nav>
 </header>
 
 <main>
     <div class="page-header">
-        <h1 class="page-title">Deep <em>Dive Archive</em></h1>
-        <p class="page-meta">19 deep dives</p>
+        <h1 class="page-title">🔍 Deep Dive Archive</h1>
+        <p class="page-meta">22 deep dives</p>
     </div>
 
     <div class="table-wrap">
@@ -258,161 +258,195 @@
             </thead>
             <tbody>
                 <tr>
+                    <td><span class="date-badge">Mar 26, 2026</span></td>
+                    <td><span class="source-name">Geopolitical Futures</span></td>
+                    <td class="dive-title">
+                        <a href="/research/deep-dive/7129d">How Iran Is Repricing Geography</a>
+                    </td>
+                    <td><a href="/research/deep-dive/7129d" class="action-btn">Read Analysis →</a></td>
+                </tr>
+                <tr>
+                    <td><span class="date-badge">Mar 25, 2026</span></td>
+                    <td><span class="source-name">ZeroHedge</span></td>
+                    <td class="dive-title">
+                        <a href="/research/deep-dive/57f27">Israel Seeks To Disrupt Russian-Iranian Arms Transfer Route In The Caspian Sea</a>
+                    </td>
+                    <td><a href="/research/deep-dive/57f27" class="action-btn">Read Analysis →</a></td>
+                </tr>
+                <tr>
+                    <td><span class="date-badge">Mar 23, 2026</span></td>
+                    <td><span class="source-name">arXiv q-fin</span></td>
+                    <td class="dive-title">
+                        <a href="/research/deep-dive/bc66a">Generalized Stock Price Prediction for Multiple Stocks Combined with News Fusion</a>
+                    </td>
+                    <td><a href="/research/deep-dive/bc66a" class="action-btn">Read Analysis →</a></td>
+                </tr>
+                <tr>
                     <td><span class="date-badge">Mar 20, 2026</span></td>
                     <td><span class="source-name">Deutsche Welle</span></td>
                     <td class="dive-title">
-                        <a href="f41de-iran-war-why-gold-prices-are-not-soaring.html">Iran war: Why gold prices are not soaring</a>
+                        <a href="/research/deep-dive/f41de">Iran war: Why gold prices are not soaring</a>
                     </td>
-                    <td><a href="f41de-iran-war-why-gold-prices-are-not-soaring.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/f41de" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Mar 01, 2026</span></td>
                     <td><span class="source-name">The Big Picture</span></td>
                     <td class="dive-title">
-                        <a href="a0c43-10-weekend-reads.html">10 Weekend Reads</a>
+                        <a href="/research/deep-dive/a0c43">10 Weekend Reads</a>
                     </td>
-                    <td><a href="a0c43-10-weekend-reads.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/a0c43" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 28, 2026</span></td>
                     <td><span class="source-name">Geopolitical Futures</span></td>
                     <td class="dive-title">
-                        <a href="03624-the-chokepoint-at-the-center-of-the-us-iran-stando.html">The Chokepoint at the Center of the US-Iran Standoff</a>
+                        <a href="/research/deep-dive/03624">The Chokepoint at the Center of the US-Iran Standoff</a>
                     </td>
-                    <td><a href="03624-the-chokepoint-at-the-center-of-the-us-iran-stando.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/03624" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 28, 2026</span></td>
                     <td><span class="source-name">FAZ</span></td>
                     <td class="dive-title">
-                        <a href="3a4a0-pekings-aufstieg-der-unheimliche-erfolg-von-chinas.html">Pekings Aufstieg: Der unheimliche Erfolg von Chinas Bürokraten</a>
+                        <a href="/research/deep-dive/3a4a0">Pekings Aufstieg: Der unheimliche Erfolg von Chinas Bürokraten</a>
                     </td>
-                    <td><a href="3a4a0-pekings-aufstieg-der-unheimliche-erfolg-von-chinas.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/3a4a0" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 27, 2026</span></td>
                     <td><span class="source-name">Fed On The Economy</span></td>
                     <td class="dive-title">
-                        <a href="26fa9-u-s-import-price-dynamics-following-the-2025-tarif.html">U.S. Import Price Dynamics Following the 2025 Tariffs</a>
+                        <a href="/research/deep-dive/26fa9">U.S. Import Price Dynamics Following the 2025 Tariffs</a>
                     </td>
-                    <td><a href="26fa9-u-s-import-price-dynamics-following-the-2025-tarif.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/26fa9" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 26, 2026</span></td>
                     <td><span class="source-name">Geopolitical Futures</span></td>
                     <td class="dive-title">
-                        <a href="e3057-the-tigray-powder-keg-in-the-horn-of-africa.html">The Tigray Powder Keg in the Horn of Africa</a>
+                        <a href="/research/deep-dive/e3057">The Tigray Powder Keg in the Horn of Africa</a>
                     </td>
-                    <td><a href="e3057-the-tigray-powder-keg-in-the-horn-of-africa.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/e3057" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 26, 2026</span></td>
                     <td><span class="source-name">ZeroHedge</span></td>
                     <td class="dive-title">
-                        <a href="d144f-the-mirage-of-manufactured-calm-and-the-disconnec.html">'The Mirage' Of Manufactured Calm And The Disconnect Between Markets And Reality</a>
+                        <a href="/research/deep-dive/d144f">'The Mirage' Of Manufactured Calm And The Disconnect Between Markets And Reality</a>
                     </td>
-                    <td><a href="d144f-the-mirage-of-manufactured-calm-and-the-disconnec.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/d144f" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 25, 2026</span></td>
                     <td><span class="source-name">Geopolitical Futures</span></td>
                     <td class="dive-title">
-                        <a href="f0564-daily-memo-starlink-disruption-in-south-china-sea.html">Daily Memo: Starlink Disruption in South China Sea, Russia’s Footprint in Africa</a>
+                        <a href="/research/deep-dive/f0564">Daily Memo: Starlink Disruption in South China Sea, Russia’s Footprint in Africa</a>
                     </td>
-                    <td><a href="f0564-daily-memo-starlink-disruption-in-south-china-sea.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/f0564" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 24, 2026</span></td>
                     <td><span class="source-name">Treasury MSPD</span></td>
                     <td class="dive-title">
-                        <a href="7f21a-monthly-statement-of-the-public-debt-january-31-20.html">Monthly Statement of the Public Debt, January 31, 2026</a>
+                        <a href="/research/deep-dive/7f21a">Monthly Statement of the Public Debt, January 31, 2026</a>
                     </td>
-                    <td><a href="7f21a-monthly-statement-of-the-public-debt-january-31-20.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/7f21a" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 23, 2026</span></td>
                     <td><span class="source-name">Fed On The Economy</span></td>
                     <td class="dive-title">
-                        <a href="8ab3d-flash-report-january-jobless-data-may-signal-impro.html">Flash Report: January Jobless Data May Signal Improving Labor Market</a>
+                        <a href="/research/deep-dive/8ab3d">Flash Report: January Jobless Data May Signal Improving Labor Market</a>
                     </td>
-                    <td><a href="8ab3d-flash-report-january-jobless-data-may-signal-impro.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/8ab3d" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 22, 2026</span></td>
                     <td><span class="source-name">Al Jazeera</span></td>
                     <td class="dive-title">
-                        <a href="1332e-israeli-army-kills-2-palestinians-in-strikes-on-ga.html">Israeli army kills 2 Palestinians in strikes on Gaza during Ramadan</a>
+                        <a href="/research/deep-dive/1332e">Israeli army kills 2 Palestinians in strikes on Gaza during Ramadan</a>
                     </td>
-                    <td><a href="1332e-israeli-army-kills-2-palestinians-in-strikes-on-ga.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/1332e" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 22, 2026</span></td>
                     <td><span class="source-name">Fed On The Economy</span></td>
                     <td class="dive-title">
-                        <a href="fd0f0-china-s-role-in-global-innovation-is-changing.html">China’s Role in Global Innovation Is Changing</a>
+                        <a href="/research/deep-dive/fd0f0">China’s Role in Global Innovation Is Changing</a>
                     </td>
-                    <td><a href="fd0f0-china-s-role-in-global-innovation-is-changing.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/fd0f0" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 21, 2026</span></td>
                     <td><span class="source-name">Antiwar.com</span></td>
                     <td class="dive-title">
-                        <a href="5bbc8-us-plans-to-build-a-5-000-person-military-base-in.html">US Plans To Build a 5,000-Person Military Base in Gaza for International Force</a>
+                        <a href="/research/deep-dive/5bbc8">US Plans To Build a 5,000-Person Military Base in Gaza for International Force</a>
                     </td>
-                    <td><a href="5bbc8-us-plans-to-build-a-5-000-person-military-base-in.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/5bbc8" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 21, 2026</span></td>
                     <td><span class="source-name">Fed On The Economy</span></td>
                     <td class="dive-title">
-                        <a href="94a40-why-ai-advancements-may-push-some-workers-out-of-t.html">Why AI Advancements May Push Some Workers Out of the Labor Force</a>
+                        <a href="/research/deep-dive/94a40">Why AI Advancements May Push Some Workers Out of the Labor Force</a>
                     </td>
-                    <td><a href="94a40-why-ai-advancements-may-push-some-workers-out-of-t.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/94a40" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 20, 2026</span></td>
                     <td><span class="source-name">ZeroHedge</span></td>
                     <td class="dive-title">
-                        <a href="d6456-ex-cia-analyst-peels-back-the-us-information-opera.html">Ex-CIA Analyst Peels Back The US Information Operation In Iran</a>
+                        <a href="/research/deep-dive/d6456">Ex-CIA Analyst Peels Back The US Information Operation In Iran</a>
                     </td>
-                    <td><a href="d6456-ex-cia-analyst-peels-back-the-us-information-opera.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/d6456" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 20, 2026</span></td>
                     <td><span class="source-name">Geopolitical Futures</span></td>
                     <td class="dive-title">
-                        <a href="a19c5-taiwan-at-the-center-of-a-fragile-us-china-rapproc.html">Taiwan at the Center of a Fragile US-China Rapprochement</a>
+                        <a href="/research/deep-dive/a19c5">Taiwan at the Center of a Fragile US-China Rapprochement</a>
                     </td>
-                    <td><a href="a19c5-taiwan-at-the-center-of-a-fragile-us-china-rapproc.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/a19c5" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 20, 2026</span></td>
                     <td><span class="source-name">Geopolitical Futures</span></td>
                     <td class="dive-title">
-                        <a href="435ce-why-trump-is-not-to-blame-for-europe-s-predicament.html">Why Trump is Not to Blame for Europe’s Predicament | George Friedman</a>
+                        <a href="/research/deep-dive/435ce">Why Trump is Not to Blame for Europe’s Predicament | George Friedman</a>
                     </td>
-                    <td><a href="435ce-why-trump-is-not-to-blame-for-europe-s-predicament.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/435ce" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 20, 2026</span></td>
                     <td><span class="source-name">Deutsche Welle</span></td>
                     <td class="dive-title">
-                        <a href="93439-trump-sweeping-tariffs-struck-down-what-happens-ne.html">Trump sweeping tariffs struck down: What happens next?</a>
+                        <a href="/research/deep-dive/93439">Trump sweeping tariffs struck down: What happens next?</a>
                     </td>
-                    <td><a href="93439-trump-sweeping-tariffs-struck-down-what-happens-ne.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/93439" class="action-btn">Read Analysis →</a></td>
                 </tr>
                 <tr>
                     <td><span class="date-badge">Feb 19, 2026</span></td>
                     <td><span class="source-name">ZeroHedge</span></td>
                     <td class="dive-title">
-                        <a href="90610-futures-slide-as-iran-war-risks-add-to-growing-ai.html">Futures Slide As Iran War Risks Add To Growing AI Disruption Fears; Oil Surges</a>
+                        <a href="/research/deep-dive/90610">Futures Slide As Iran War Risks Add To Growing AI Disruption Fears; Oil Surges</a>
                     </td>
-                    <td><a href="90610-futures-slide-as-iran-war-risks-add-to-growing-ai.html" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/90610" class="action-btn">Read Analysis →</a></td>
                 </tr>
             </tbody>
         </table>
     </div>
 </main>
 
+<link rel="stylesheet" href="/research/static/css/annotations.css">
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.querySelector('.nav-more-btn');
+    const dropdown = document.querySelector('.nav-more-dropdown');
+    if (!btn || !dropdown) return;
+    btn.addEventListener('click', (e) => { e.stopPropagation(); dropdown.classList.toggle('open'); });
+    document.addEventListener('click', () => dropdown.classList.remove('open'));
+  });
+</script>
 </body>
 </html>

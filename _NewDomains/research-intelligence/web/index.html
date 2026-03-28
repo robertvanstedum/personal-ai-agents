@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research Intelligence Library</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f0e8;
+    --bg-texture: #ede8df;
+    --surface: #faf7f2;
+    --surface2: #f0ebe0;
+    --border: #ddd6c8;
+    --border2: #c8bfaf;
+    --text: #2a2418;
+    --text-muted: #6b5f4e;
+    --text-dim: #9e9080;
+    --accent: #8b5e2a;
+    --accent-dim: rgba(139,94,42,0.08);
+    --accent-glow: rgba(139,94,42,0.18);
+    --shadow: rgba(42,36,24,0.08);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 15px; line-height: 1.6;
+    display: flex; align-items: flex-start;
+    min-height: 100vh;
+  }
+  h1  { font-family: 'Playfair Display', serif; font-size: 1.8rem; margin-bottom: 0.2rem; }
+  h2  { font-family: 'Playfair Display', serif; font-size: 1.05rem; color: var(--accent); margin: 2.5rem 0 0.9rem;
+        letter-spacing: 0.07em; text-transform: uppercase; }
+  .meta   { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.3rem; }
+  .budget { font-family: 'DM Mono', monospace; font-size: 0.82rem;
+            color: var(--text-muted); margin-bottom: 2rem; }
+  .note   { font-size: 0.82rem; color: var(--text-muted); font-style: italic; margin-bottom: 0.75rem; }
+  .filters { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.9rem; align-items: center; }
+  .filters input, .filters select {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 3px;
+    color: var(--text); font-family: inherit; font-size: 0.83rem; padding: 0.28rem 0.55rem;
+  }
+  .filters input { width: 210px; }
+  table   { width: 100%; border-collapse: collapse; font-size: 0.87rem; }
+  th      { background: var(--text); color: var(--bg); font-family: 'Playfair Display', serif;
+            font-size: 0.75rem; font-weight: normal; letter-spacing: 0.06em;
+            padding: 0.4rem 0.6rem; text-align: left; text-transform: uppercase; }
+  td      { border-bottom: 1px solid var(--border); padding: 0.38rem 0.6rem; vertical-align: top; }
+  tr:nth-child(even) td { background: var(--surface2); }
+  tr.hidden { display: none; }
+  code    { font-family: 'DM Mono', monospace; font-size: 0.8rem; color: var(--text-muted); }
+  a       { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .empty  { color: var(--text-muted); font-style: italic; padding: 0.9rem 0.6rem; }
+  .essay-entry        { border-bottom: 1px solid var(--border); padding: 0.85rem 0; }
+  .essay-entry:last-child { border-bottom: none; }
+  .essay-title        { font-weight: bold; }
+  .essay-meta         { font-size: 0.78rem; color: var(--text-muted); font-family: 'DM Mono', monospace; margin: 0.15rem 0 0.35rem; }
+  .essay-summary      { font-size: 0.87rem; color: var(--text-muted); }
+
+  /* ── Header Nav ── */
+  .header-nav { display: flex; gap: 4px; }
+  .nav-link {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+  }
+  .nav-link:hover { color: var(--text); background: var(--surface2); }
+  .nav-link.active { color: var(--accent); background: var(--accent-dim); border-color: rgba(139,94,42,0.2); }
+  .nav-link.nav-focus { letter-spacing: 0; }
+
+  /* ── Domain Rail ── */
+  .domain-rail {
+    width: 210px;
+    min-width: 210px;
+    background: #f9f5ed;
+    border-right: 1px solid var(--border);
+    box-shadow: 2px 0 4px rgba(42,36,24,0.06);
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: hidden;
+    transition: width 0.2s ease, min-width 0.2s ease;
+    z-index: 90;
+    flex-shrink: 0;
+  }
+  .domain-rail.collapsed { width: 48px; min-width: 48px; }
+
+  .rail-toggle {
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    color: var(--text-dim);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 14px 16px;
+    text-align: right;
+    transition: color 0.15s;
+    align-self: flex-end;
+  }
+  .rail-toggle:hover { color: var(--accent); }
+  .domain-rail.collapsed .rail-toggle { transform: scaleX(-1); }
+
+  .rail-nav {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 12px;
+    overflow: hidden;
+  }
+
+  .rail-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--text-muted);
+    transition: all 0.15s;
+    cursor: pointer;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .rail-item:hover:not(.rail-coming) { background: var(--surface2); color: var(--text); }
+  .rail-item.active {
+    background: var(--accent-dim);
+    color: var(--accent);
+    border-color: rgba(139,94,42,0.2);
+  }
+  .rail-item.rail-coming { opacity: 0.4; cursor: default; }
+
+  .rail-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
+  .rail-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    font-weight: 500;
+  }
+  .domain-rail.collapsed .rail-label { display: none; }
+  .domain-rail.collapsed .rail-item { justify-content: center; }
+
+  .rail-settings {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 16px;
+    transition: color 0.15s;
+    border-top: 1px solid var(--border);
+  }
+  .rail-settings:hover { color: var(--accent); }
+
+  .main-content { flex: 1; min-width: 0; overflow-x: hidden; min-height: 100vh; background: var(--bg); }
+  .container { padding: 2rem 1.5rem; max-width: 1100px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<aside class="domain-rail">
+  <button class="rail-toggle" id="railToggle" title="Toggle rail">‹</button>
+  <nav class="rail-nav">
+    <a href="/" class="rail-item" data-domain="curator">
+      <span class="rail-icon">🗞</span>
+      <span class="rail-label">CURATOR</span>
+    </a>
+    <a href="/research/dashboard" class="rail-item active" data-domain="research">
+      <span class="rail-icon">🔬</span>
+      <span class="rail-label">RESEARCH</span>
+    </a>
+    <a href="/language" class="rail-item rail-coming" title="Language Learning — coming soon">
+      <span class="rail-icon">💬</span>
+      <span class="rail-label">LANGUAGE</span>
+    </a>
+    <a href="/jobs" class="rail-item rail-coming" title="Jobs &amp; Opportunities — coming soon">
+      <span class="rail-icon">💼</span>
+      <span class="rail-label">JOBS</span>
+    </a>
+  </nav>
+  <a href="/curator_priorities.html" class="rail-settings" title="Settings">⚙</a>
+</aside>
+<div class="main-content">
+  <header style="background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 28px; height: 52px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100;">
+    <div style="display: flex; align-items: baseline; gap: 10px;">
+      <a href="/" style="font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 600; color: var(--text); text-decoration: none; letter-spacing: -0.02em;">mini-moi</a>
+      <span style="font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 0.06em; text-transform: uppercase;">Research</span>
+    </div>
+    <nav class="header-nav" style="display: flex; gap: 4px;">
+      <a href="/research/dashboard" class="nav-link active">Dashboard</a>
+      <a href="/research/sessions" class="nav-link">Sessions</a>
+      <a href="/research/observe" class="nav-link">Observations</a>
+      <a href="/research/candidates" class="nav-link">Queries</a>
+      <a href="/research/save" class="nav-link">Save</a>
+      <a href="/curator_priorities.html" class="nav-link nav-focus">🎯</a>
+    </nav>
+  </header>
+  <div class="container">
+
+<h1>Research Intelligence Library</h1>
+<p class="meta">Generated: Mar 21, 2026, 06:30 PM</p>
+<p class="budget">Budget: $20.00 total / $10.00 weekly / $3.00 daily · Cumulative: <strong>$0.08</strong></p>
+
+<h2>Library</h2>
+<div class="filters">
+  <input type="text" id="srch" placeholder="Search title, summary, source…" oninput="applyFilters()">
+  <select id="fTopic" onchange="applyFilters()">
+    <option value="">Topic: All</option><option value="empire-landpower">empire-landpower</option>
+  </select>
+  <select id="fLang" onchange="applyFilters()">
+    <option value="">Language: All</option><option value="English">English</option><option value="English (German institutional)">English (German institutional)</option><option value="Portuguese (EN translation available)">Portuguese (EN translation available)</option><option value="Revista Desenvolvimento &amp; Civilização&quot;">Revista Desenvolvimento &amp; Civilização&quot;</option><option value="The Chinese Journal of International Politics">The Chinese Journal of International Politics</option>
+  </select>
+  <select id="fType" onchange="applyFilters()">
+    <option value="">Type: All</option><option value="Book">Book</option><option value="Book chapter (PDF)">Book chapter (PDF)</option><option value="Journal article (OA)">Journal article (OA)</option><option value="Oxford Academic&quot;">Oxford Academic&quot;</option><option value="Portuguese">Portuguese</option><option value="Web">Web</option>
+  </select>
+</div>
+<table>
+  <thead><tr><th>Date</th><th>Topic</th><th>Source</th><th>Language</th><th>Type</th><th>Summary</th><th>Path/URL</th></tr></thead>
+  <tbody id="libBody"><tr><td>2026-03-21</td><td>empire-landpower</td><td>escholarship.org. &quot;Giovanni Arrighi: Systemic Cycles of Accumulation, ...&quot;</td><td>English</td><td>Web</td><td>The source directly addresses the core topic of systemic cycles of accumulation, a crucial element in understanding Grea</td><td><a href="https://escholarship.org/content/qt34b5s46w/qt34b5s46w_noSplash_bea171f1bbbdcb4548b7194d6cc9c949.pdf?t=lfbx87" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>www.amazon.com. &quot;The Long Twentieth Century: Arrighi, Giovanni: 9781859840153: Amazon.com: Books&quot;</td><td>English</td><td>Web</td><td>The source directly addresses the ‘long twentieth century’ and its impact on global power dynamics, aligning well with t</td><td><a href="https://www.amazon.com/Long-Twentieth-Century-Giovanni-Arrighi/dp/1859840159" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>krieger.jhu.edu. &quot;giovanni arrighi HEGEMONY UNRAVELLING —2 I&quot;</td><td>English</td><td>Web</td><td>The source focuses directly on the concept of hegemony and its evolution across historical periods, aligning strongly wi</td><td><a href="https://krieger.jhu.edu/arrighi/wp-content/uploads/sites/29/2023/11/HegemonyUnravellingPartII_tagged.pdf" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>escholarship.org. &quot;Giovanni Arrighi: Systemic Cycles of Accumulation, Hegemonic Transitions, and the Rise of China&quot;</td><td>English</td><td>Web</td><td>The source directly addresses the research targets by focusing on historical power shifts, particularly examining China’</td><td><a href="https://escholarship.org/uc/item/34b5s46w" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>www.cambridge.org. &quot;The Conception of Morality in Moral Realism (Chapter 6) - The Essence of Interstate Leadership&quot;</td><td>English</td><td>Web</td><td>The source directly addresses China-Russia positional swap, a key element of Mackinder's argument, and offers a unique p</td><td><a href="https://www.cambridge.org/core/books/abs/essence-of-interstate-leadership/conception-of-morality-in-moral-realism/102E28785048C58D07BE10704F48F005" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>academic.oup.com. &quot;Political Leadership and Power Redistribution</td><td>The Chinese Journal of International Politics</td><td>Oxford Academic&quot;</td><td>English</td><td><code>Web</code></td><td>The source directly addresses the complex dynamics of power redistribution and strategic positioning, aligning well with</td><td>https://academic.oup.com/cjip/article-abstract/9/1/1/2365941</td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>www.e-publicacoes.uerj.br. &quot;A TEORIA SOCIAL LATINO-AMERICANA NO LABIRINTO DA HISTÓRIA</td><td>Revista Desenvolvimento &amp; Civilização&quot;</td><td>Portuguese</td><td>Web</td><td><code>Strong non-Anglophone source directly addressing Latin American dependency theory with scholarly rigor, highly relevant</code></td><td>https://www.e-publicacoes.uerj.br/index.php/rdciv/article/view/66269</td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>journals.sagepub.com. &quot;The Longue Durée of the Marxist Theory of Dependency and the Twenty-First Century - Carlos Eduardo Martins, 2022&quot;</td><td>English</td><td>Web</td><td>Strong engagement with Latin American dependency theory's contemporary relevance to global power structures, though the</td><td><a href="https://journals.sagepub.com/doi/10.1177/0094582X211052029" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>dokumen.pub. &quot;Sub-Imperalism Revisited: Dependency Theory in the Thought of Ruy Mauro Marini 9789004319417, 9789004319400, 9004319417 - DOKUMEN.PUB&quot;</td><td>English</td><td>Web</td><td>Strong engagement with Latin American dependency theory and neo-imperialism directly applicable to great power competiti</td><td><a href="https://dokumen.pub/sub-imperalism-revisited-dependency-theory-in-the-thought-of-ruy-mauro-marini-9789004319417-9789004319400-9004319417.html" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>journals.sagepub.com. &quot;Changing international hegemony and dependency in peripheral countries: A case study of Latin America - Barbara Stallings, 2025&quot;</td><td>English</td><td>Web</td><td>Strong direct engagement with Latin American dependency theory applied to contemporary great power competition (China-La</td><td><a href="https://journals.sagepub.com/doi/10.1177/10245294241235686" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>www.researchgate.net. &quot;(PDF) Dependency in the Twenty-First Century? The Political Economy of China–Latin America Relations , by Barbara Stallings. Cambridge: Cambridge University Press, 2020. vii+82 pp. US$20.00 (paper), US$16.00 (e-book).&quot;</td><td>English</td><td>Web</td><td>Strong direct engagement with dependency theory applied to contemporary China-Latin America relations and great power co</td><td><a href="https://www.researchgate.net/publication/349229389_Dependency_in_the_Twenty-First_Century_The_Political_Economy_of_China-Latin_America_Relations_by_Barbara_Stallings_Cambridge_Cambridge_University_Press_2020_vii82_pp_US2000_paper_US1600_e-book" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>Library initialized, no entries yet</td><td>—</td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>Martins, Carlos Eduardo. *Globalização, dependência e neoliberalismo na América Latina* (2011/2019)</td><td>Portuguese (EN translation available)</td><td>Book</td><td>Brazilian CLACSO scholar — key argument: US-to-China industrial transfer reproduces &quot;super-exploitation&quot;; periphery stays peripheral regardless of which core dominates. &quot;The center changes; the periphery remains.&quot;</td><td><code>topics/empire-landpower/translations/session-001-martins.md</code></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>Stallings, Barbara. &quot;A Dependency Perspective on the United States, China, and Latin America&quot; (2021)</td><td>English</td><td>Book chapter (PDF)</td><td>Best direct mapping of dependency theory onto US/China hegemony transition; accessible PDF from Pitt</td><td><a href="https://www.ucis.pitt.edu/clas/sites/default/files/Stallings_A%20Dependency%20Perspective%20on%20US,%20China,%20and%20LAC.pdf" target="_blank" rel="noopener">link ↗</a></td></tr>
+<tr><td>2026-03-21</td><td>empire-landpower</td><td>Krause, Oliver. &quot;Mackinder's 'heartland' — legitimation of US foreign policy in WWII and Cold War&quot; (2023)</td><td>English (German institutional)</td><td>Journal article (OA)</td><td>German critical geography — examines how Mackinder was instrumentalized for US policy; entry point into non-Anglophone Mackinder scholarship</td><td><a href="https://gh.copernicus.org/articles/78/183/2023/" target="_blank" rel="noopener">link ↗</a></td></tr></tbody>
+</table>
+
+<h2>Essays</h2>
+<p class="note">Agent-written syntheses. Stored in library/essays/.</p>
+<p class="empty">No essays yet.</p>
+
+<h2>Reading List</h2>
+<p class="note">Books and long-form flagged for Robert.</p>
+<table>
+  <thead><tr><th>Title</th><th>Author</th><th>Why it matters now</th><th>Date added</th></tr></thead>
+  <tbody><tr><td colspan="4" class="empty">No entries yet</td></tr></tbody>
+</table>
+
+<h2>Recent Sessions</h2>
+<table>
+  <thead><tr><th>Date</th><th>Session</th><th>Duration</th><th>Cost</th><th>Cumulative</th><th>Notes</th></tr></thead>
+  <tbody><tr><td>2026-03-20</td><td>phase-zero-init</td><td>—</td><td>$0.00</td><td><strong>$0.00</strong></td><td>Infrastructure only. No research. No API cost.</td></tr>
+<tr><td>2026-03-21</td><td>test-clear</td><td>2min</td><td>$0.05</td><td><strong>$0.05</strong></td><td>test session complete</td></tr>
+<tr><td>2026-03-21</td><td>kotkin-001</td><td>35min</td><td>$0.00</td><td><strong>$0.05</strong></td><td>Session 001: Kotkin thread, free source pass + Haiku triage + translation + Grok search</td></tr>
+<tr><td>2026-03-21</td><td>test-dry-run</td><td>1min</td><td>$0.00</td><td><strong>$0.05</strong></td><td>test-dry-run: 0 triaged, top find: no candidates</td></tr>
+<tr><td>2026-03-21</td><td>test-dry-run-2</td><td>1min</td><td>$0.00</td><td><strong>$0.05</strong></td><td>test-dry-run-2: 1 triaged, top find: Chowdhury, Suban Kumar; Hel Kafi, Abdullah (2015). &quot;The Hear</td></tr>
+<tr><td>2026-03-21</td><td>kotkin-002</td><td>2min</td><td>$0.01</td><td><strong>$0.06</strong></td><td>kotkin-002: 12 triaged, top find: GH - Mackinder's “heartland” – legitimation of US foreign po</td></tr>
+<tr><td>2026-03-21</td><td>kotkin-003</td><td>2min</td><td>$0.01</td><td><strong>$0.07</strong></td><td>kotkin-003: 12 triaged, top find: A TEORIA SOCIAL LATINO-AMERICANA NO LABIRINTO DA HISTÓRIA</td><td></td></tr>
+<tr><td>2026-03-21</td><td>kotkin-004</td><td>2min</td><td>$0.01</td><td><strong>$0.08</strong></td><td>kotkin-004: 12 triaged, top find: A TEORIA SOCIAL LATINO-AMERICANA NO LABIRINTO DA HISTÓRIA</td><td></td></tr>
+<tr><td>2026-03-21</td><td>kotkin-005</td><td>1min</td><td>$0.00</td><td><strong>$0.08</strong></td><td>kotkin-005: 12 triaged, top find: Giovanni Arrighi: Systemic Cycles of Accumulation, ...</td></tr></tbody>
+</table>
+
+<script>
+const TOPIC_IDX   = 1;
+const LANG_IDX    = 3;
+const TYPE_IDX    = 4;
+const SEARCH_COLS = [0, 1, 2, 3, 4, 5];
+
+function applyFilters() {
+  const q     = document.getElementById('srch').value.toLowerCase();
+  const topic = document.getElementById('fTopic').value.toLowerCase();
+  const lang  = document.getElementById('fLang').value.toLowerCase();
+  const type  = document.getElementById('fType').value.toLowerCase();
+
+  document.querySelectorAll('#libBody tr').forEach(row => {
+    const cells = [...row.querySelectorAll('td')].map(td => td.textContent.toLowerCase());
+    const hit = (!q     || SEARCH_COLS.some(i => cells[i] && cells[i].includes(q)))
+             && (!topic || cells[TOPIC_IDX] === topic)
+             && (!lang  || cells[LANG_IDX]  === lang)
+             && (!type  || cells[TYPE_IDX]  === type);
+    row.classList.toggle('hidden', !hit);
+  });
+}
+</script>
+</div>
+</div>
+<script>
+(function() {
+  var toggle = document.getElementById('railToggle');
+  if (toggle) toggle.addEventListener('click', function() {
+    document.querySelector('.domain-rail').classList.toggle('collapsed');
+  });
+})();
+</script>
+</body>
+</html>

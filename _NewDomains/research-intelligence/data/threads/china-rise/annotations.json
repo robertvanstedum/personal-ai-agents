@@ -1,0 +1,26 @@
+[
+  {
+    "id": "ann-001",
+    "thread_id": "china-rise-2026",
+    "timestamp": "2026-03-26T03:01:13+00:00",
+    "type": "direction_shift",
+    "level": "thread",
+    "ref_session": null,
+    "ref_article": null,
+    "note": "i'm curious about the commentary in Japan on the Chinese rise",
+    "affects_next_session": true,
+    "influenced_sessions": []
+  },
+  {
+    "id": "ann-002",
+    "thread_id": "china-rise-2026",
+    "timestamp": "2026-03-26T03:08:28+00:00",
+    "type": "direction_shift",
+    "level": "thread",
+    "ref_session": null,
+    "ref_article": null,
+    "note": "I made note about the commentary in Japan to Chinese rise.  I'd like to expand that to Vietnam and nearby growing countries with some industrial capacity.",
+    "affects_next_session": true,
+    "influenced_sessions": []
+  }
+]

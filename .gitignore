@@ -81,8 +81,8 @@ curator_preview.txt
 # Downloaded media — large binaries, personal reading signals
 curator_media/
 
-# New domains working docs — private until prototype ready
-_NewDomains/
+# New domains — research-intelligence now tracked on poc/research-source-quality
+# _NewDomains/
 
 # Private onboarding context — never commit
 context/
