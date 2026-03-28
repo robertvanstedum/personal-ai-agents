@@ -45,3 +45,20 @@
 .nav-more-wrapper {
   position: relative;
 }
+
+.nav-more-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  color: var(--text-muted, #6b5f4e);
+  padding: 4px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+.nav-more-btn:hover {
+  background: var(--surface, #faf7f2);
+  color: var(--text, #2a2418);
+}
