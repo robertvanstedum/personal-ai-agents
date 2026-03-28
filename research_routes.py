@@ -19,7 +19,7 @@ import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, redirect
 
 # ── Blueprint ─────────────────────────────────────────────────────────────────
 
@@ -400,6 +400,10 @@ def _parse_session_log() -> dict:
 
 
 # ── HTML: Dashboard ───────────────────────────────────────────────────────────
+
+@research_bp.route('/research')
+def research_home():
+    return redirect('/research/sessions')
 
 @research_bp.route('/research/dashboard')
 def research_dashboard_ui():
