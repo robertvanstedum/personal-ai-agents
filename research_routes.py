@@ -11,12 +11,13 @@ for research features.
 
 import html as _html_lib
 import json
+import os
 import re as _re
 import secrets
 import subprocess
 import sys
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from flask import Blueprint, jsonify, request, redirect
@@ -519,7 +520,178 @@ def api_research_dashboard():
             "warn":  budget_warn,
             "pct":   round(used / budget_total * 100, 1) if budget_total else 0.0,
         },
-        "agent_active": log['agent_active'],
+        "agent_active": _run_state_active(),
+    })
+
+
+# ── API: Run Session ──────────────────────────────────────────────────────────
+
+_RUN_STATE_PATH = RESEARCH_ROOT / 'data' / 'run_state.json'
+_RUN_STATE_MAX_AGE_MINUTES = 60
+
+# Module-level reference to the running Popen object (single session only).
+# Stored here so status checks can call proc.poll() which correctly reaps zombies.
+# NOTE: This reference is lost on server restart — the stale-age check in
+# _run_state_active() provides the safety net in that case.
+_active_proc: subprocess.Popen | None = None
+
+
+def _is_proc_alive() -> bool:
+    """Check liveness using proc.poll() if we have the object, else fall back to os.kill."""
+    global _active_proc
+    if _active_proc is not None:
+        return _active_proc.poll() is None  # None = still running; int = exited
+    # Fallback for restarts: os.kill with signal 0.
+    # PID recycling is an accepted risk for a personal tool.
+    if not _RUN_STATE_PATH.exists():
+        return False
+    try:
+        state = json.loads(_RUN_STATE_PATH.read_text())
+        os.kill(state['pid'], 0)
+        return True
+    except (ProcessLookupError, KeyError, json.JSONDecodeError, OSError):
+        return False
+
+
+def _run_state_active() -> bool:
+    """Return True if a research session is currently running (not stale)."""
+    if not _RUN_STATE_PATH.exists():
+        return False
+    try:
+        state = json.loads(_RUN_STATE_PATH.read_text())
+        started = datetime.fromisoformat(state['started_at'])
+        if datetime.now(timezone.utc) - started > timedelta(minutes=_RUN_STATE_MAX_AGE_MINUTES):
+            _RUN_STATE_PATH.unlink(missing_ok=True)
+            return False
+        return _is_proc_alive()
+    except (KeyError, ValueError, json.JSONDecodeError, OSError):
+        return False
+
+
+def _next_session_name(topic: str) -> str:
+    """Auto-generate the next session name as {topic}-NNN."""
+    import re as _re2
+    topic_dir = RESEARCH_ROOT / 'topics' / topic
+    max_n = 0
+    if topic_dir.exists():
+        pat = _re2.compile(rf'^{_re2.escape(topic)}-(\d+)\.md$')
+        for f in topic_dir.glob('*.md'):
+            m = pat.match(f.name)
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+    return f"{topic}-{max_n + 1:03d}"
+
+
+@research_bp.route('/api/research/run-session', methods=['POST'])
+def api_research_run_session():
+    """
+    Spawn a research session for a topic as a non-blocking subprocess.
+    POST /api/research/run-session
+    Body: {"topic": "strait-of-hormuz"}
+    Returns immediately — session runs in background.
+    Poll GET /api/research/run-session/status for completion.
+    """
+    body  = request.get_json() or {}
+    topic = body.get('topic', '').strip()
+
+    if not topic:
+        return jsonify({"ok": False, "error": "topic required"}), 400
+
+    # Validate topic exists in config
+    config_path = RESEARCH_ROOT / 'agent' / 'config.json'
+    try:
+        config = json.loads(config_path.read_text())
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"could not read config: {e}"}), 500
+
+    if topic not in config.get('session_searches', {}):
+        return jsonify({"ok": False, "error": f"topic '{topic}' not found in config"}), 400
+
+    # Reject if a session is already running
+    if _run_state_active():
+        try:
+            running_topic = json.loads(_RUN_STATE_PATH.read_text()).get('topic', 'unknown')
+        except Exception:
+            running_topic = 'unknown'
+        return jsonify({
+            "ok": False,
+            "error": f"session already running for '{running_topic}'",
+            "running_topic": running_topic,
+        }), 409
+
+    session_name = _next_session_name(topic)
+
+    # Launch non-blocking subprocess — research.py can run 1-35 min,
+    # far too long to block a Flask worker.
+    global _active_proc
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, 'agent/research.py',
+             '--topic', topic,
+             '--session-name', session_name],
+            cwd=str(RESEARCH_ROOT),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError) as e:
+        # Log to stderr for debugging via curator_server_stderr.log
+        print(f"[run-session] OSError launching research.py: {e}", file=sys.stderr)
+        return jsonify({"ok": False, "error": f"failed to launch agent: {e}"}), 500
+
+    _active_proc = proc
+
+    # Write state file — single source of truth for running state.
+    # NOTE: PID recycling is an accepted risk for a personal tool. The 60-minute
+    # stale timeout in _run_state_active() provides a safety net against orphaned state.
+    state = {
+        "topic":        topic,
+        "session_name": session_name,
+        "pid":          proc.pid,
+        "started_at":   datetime.now(timezone.utc).isoformat(),
+    }
+    _RUN_STATE_PATH.write_text(json.dumps(state, indent=2))
+
+    return jsonify({"ok": True, "topic": topic, "session_name": session_name, "pid": proc.pid})
+
+
+@research_bp.route('/api/research/run-session/status')
+def api_research_run_session_status():
+    """
+    Check if a research session subprocess is currently running.
+    GET /api/research/run-session/status
+    Returns: {running: bool, topic, session_name, started_at} or {running: false}
+    """
+    if not _RUN_STATE_PATH.exists():
+        return jsonify({"running": False})
+
+    try:
+        state = json.loads(_RUN_STATE_PATH.read_text())
+    except (json.JSONDecodeError, OSError):
+        _RUN_STATE_PATH.unlink(missing_ok=True)
+        return jsonify({"running": False})
+
+    # Stale check — server restart could leave a stale PID
+    try:
+        started = datetime.fromisoformat(state['started_at'])
+        if datetime.now(timezone.utc) - started > timedelta(minutes=_RUN_STATE_MAX_AGE_MINUTES):
+            _RUN_STATE_PATH.unlink(missing_ok=True)
+            return jsonify({"running": False})
+    except (KeyError, ValueError):
+        _RUN_STATE_PATH.unlink(missing_ok=True)
+        return jsonify({"running": False})
+
+    # Liveness check via proc.poll() (preferred) or os.kill fallback
+    global _active_proc
+    running = _is_proc_alive()
+    if not running:
+        _active_proc = None
+        _RUN_STATE_PATH.unlink(missing_ok=True)
+
+    return jsonify({
+        "running":      running,
+        "topic":        state.get('topic'),
+        "session_name": state.get('session_name'),
+        "started_at":   state.get('started_at'),
     })
 
 

@@ -290,6 +290,35 @@
 
     .thread-empty { opacity: 0.55; }
 
+    .thread-run-btn {
+      display: none;
+      margin-left: 0.5rem;
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--accent);
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+      opacity: 0.7;
+      transition: opacity 0.1s;
+    }
+    .thread-run-btn:hover { opacity: 1; }
+    .thread-row:hover .thread-run-btn { display: inline-block; }
+    .thread-row.running .thread-run-btn { display: none; }
+
+    .thread-running-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: #7a9e6e;
+      margin-left: 0.5rem;
+      display: none;
+      flex-shrink: 0;
+    }
+    .thread-row.running .thread-running-badge { display: inline; }
+
     /* ── Status bar ── */
     .status-bar {
       font-size: 0.78rem;
@@ -453,6 +482,8 @@
       <span class="thread-name">${t.topic}</span>
       <span class="thread-stats">${parts.join(' · ')}</span>
       <span class="thread-last-run">${lastRun}</span>
+      <span class="thread-running-badge">running…</span>
+      <button class="thread-run-btn" onclick="runSession(event, '${t.topic}')">▶</button>
     `;
 
     return row;
@@ -469,7 +500,97 @@
     document.getElementById('subtitle').textContent = '⚠ ' + msg;
   }
 
-  load();
+  // ── On-demand session trigger ────────────────────────────────────────────────
+
+  let pollTimer  = null;
+  let pollCount  = 0;
+  const MAX_POLLS = 30; // 5 minutes at 10s intervals
+
+  async function runSession(e, topic) {
+    e.preventDefault();
+    e.stopPropagation();
+    const row = e.target.closest('.thread-row');
+    row.classList.add('running');
+    try {
+      const res  = await fetch('/api/research/run-session', {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify({topic}),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        row.classList.remove('running');
+        showToast(data.error || 'Failed to start session', true);
+        return;
+      }
+      showToast(`Session ${data.session_name} started`);
+      startTightPoll();
+    } catch (err) {
+      row.classList.remove('running');
+      showToast('Network error', true);
+    }
+  }
+
+  function startTightPoll() {
+    clearTimeout(pollTimer);
+    pollCount = 0;
+    pollStatus();
+  }
+
+  async function pollStatus() {
+    pollCount++;
+    if (pollCount > MAX_POLLS) {
+      // Stalled or very long session — stop tight polling
+      showToast('Session still running — check back later');
+      document.querySelectorAll('.thread-row.running').forEach(r => r.classList.remove('running'));
+      load();
+      return;
+    }
+    try {
+      const res  = await fetch('/api/research/run-session/status');
+      const data = await res.json();
+      if (!data.running) {
+        document.querySelectorAll('.thread-row.running').forEach(r => r.classList.remove('running'));
+        load(); // reload thread list with updated stats
+        return;
+      }
+    } catch (_) { /* network blip — keep polling */ }
+    pollTimer = setTimeout(pollStatus, 10000);
+  }
+
+  function showToast(msg, isErr) {
+    let t = document.getElementById('run-toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'run-toast';
+      t.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#4a8c28;color:#fff;font-family:"DM Mono",monospace;font-size:0.82rem;padding:10px 18px;border-radius:6px;display:none;z-index:200;';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.background = isErr ? '#8b2020' : '#4a8c28';
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 3500);
+  }
+
+  // On load, check if a session is already running and restore row state
+  async function restoreRunningState() {
+    try {
+      const res  = await fetch('/api/research/run-session/status');
+      const data = await res.json();
+      if (data.running && data.topic) {
+        // Find the matching row and mark it running, then start polling
+        const rows = document.querySelectorAll('.thread-row');
+        rows.forEach(row => {
+          if (row.querySelector('.thread-name')?.textContent === data.topic) {
+            row.classList.add('running');
+          }
+        });
+        startTightPoll();
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  load().then(() => restoreRunningState());
 </script>
 </div>
 </div>
