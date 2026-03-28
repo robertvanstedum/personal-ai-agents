@@ -1128,6 +1128,8 @@ def research_deep_dive_view(hash_id: str):
     .dd-footer {{ margin-top: 2.5rem; font-size: 0.8rem; color: var(--text-dim); font-family: 'DM Mono', monospace; }}
     #toast {{ position: fixed; bottom: 24px; right: 24px; background: #4a8c28; color: #fff; font-family: 'DM Mono', monospace; font-size: 0.82rem; padding: 10px 18px; border-radius: 6px; display: none; z-index: 200; }}
   </style>
+  <link rel="stylesheet" href="/research/static/css/nav.css">
+  <script src="/research/static/js/nav.js"></script>
 </head>
 <body>
 <header>
@@ -1137,7 +1139,13 @@ def research_deep_dive_view(hash_id: str):
     <a href="/curator_library.html" class="nav-link">Library</a>
     <a href="/interests/2026/deep-dives/index.html" class="nav-link active">Deep Dives</a>
     <a href="/curator_intelligence.html" class="nav-link">Observations</a>
-    <a href="/curator_priorities.html" class="nav-link">🎯</a>
+    <div class="nav-more-wrapper">
+      <button class="nav-more-btn">···</button>
+      <div class="nav-more-dropdown">
+        <a href="/curator_priorities.html">Priorities</a>
+      </div>
+    </div>
+    <a href="/curator_priorities.html" class="nav-link nav-icon">🍎</a>
   </nav>
 </header>
 <main>
