@@ -637,6 +637,9 @@ def api_research_spawn_thread():
     # Create thread record (reuse existing cmd_create)
     cmd_create(topic, motivation or "To be written", "")
 
+    # Ensure topics/<topic>/ directory exists so sessions page sidebar shows it
+    (RESEARCH_ROOT / 'topics' / topic).mkdir(parents=True, exist_ok=True)
+
     return jsonify({
         "ok": True,
         "status": "created",
