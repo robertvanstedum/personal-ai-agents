@@ -439,10 +439,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    dropdown.classList.toggle('open');
+    dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
   });
 
   document.addEventListener('click', () => {
-    dropdown.classList.remove('open');
+    dropdown.style.display = 'none';
   });
 });
