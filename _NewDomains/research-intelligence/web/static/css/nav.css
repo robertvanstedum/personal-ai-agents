@@ -1,0 +1,47 @@
+/* ─── Research nav: ··· dropdown ───────────────────────────────────────────── */
+/* Loaded in <head> so the dropdown is hidden before first paint.              */
+
+.nav-more-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--surface, #faf7f2);
+  border: 1px solid var(--border, #ddd6c8);
+  border-radius: 8px;
+  padding: 6px;
+  min-width: 140px;
+  box-shadow: 0 4px 16px rgba(42,36,24,0.12);
+  z-index: 200;
+}
+
+.nav-more-dropdown.nav-open {
+  display: block;
+}
+
+.nav-more-dropdown a {
+  display: block;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #6b5f4e);
+  text-decoration: none;
+  padding: 7px 12px;
+  border-radius: 5px;
+  white-space: nowrap;
+  transition: all 0.12s;
+}
+
+.nav-more-dropdown a:hover {
+  background: var(--surface2, #f0ebe0);
+  color: var(--text, #2a2418);
+}
+
+.nav-more-dropdown a.active {
+  color: var(--accent, #8b5e2a);
+  font-weight: 600;
+}
+
+.nav-more-wrapper {
+  position: relative;
+}
