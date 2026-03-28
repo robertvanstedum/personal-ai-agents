@@ -593,6 +593,58 @@ def api_research_thread_create():
     return jsonify({"ok": True, "topic": topic})
 
 
+@research_bp.route('/api/research/spawn-thread', methods=['POST'])
+def api_research_spawn_thread():
+    """
+    Spawn a new research thread from a deep dive.
+    POST /api/research/spawn-thread
+    Body: {
+      "topic": "taiwan-defense",
+      "motivation": "...",
+      "queries": ["query 1", "query 2"],
+      "deep_dive_id": "43c03",
+      "deep_dive_title": "...",
+      "duration_days": 5
+    }
+    duration_days is stored as metadata only — no scheduling is wired.
+    """
+    import re as _re
+    from agent.threads import cmd_create
+
+    body            = request.get_json() or {}
+    topic           = body.get("topic", "").strip()
+    motivation      = body.get("motivation", "").strip()
+    queries         = body.get("queries") or []
+    duration_days   = int(body.get("duration_days", 5))
+
+    if not topic:
+        return jsonify({"ok": False, "error": "topic required"}), 400
+    if not _re.match(r'^[a-z0-9-]+$', topic):
+        return jsonify({"ok": False, "error": "topic must be lowercase letters, numbers, and hyphens only"}), 400
+    if not queries:
+        return jsonify({"ok": False, "error": "at least one query required"}), 400
+
+    config_path = RESEARCH_ROOT / 'agent' / 'config.json'
+    config      = json.loads(config_path.read_text())
+
+    if topic in config.get('session_searches', {}):
+        return jsonify({"ok": False, "error": f"topic '{topic}' already exists"}), 409
+
+    # Add queries to config
+    config.setdefault('session_searches', {})[topic] = [q.strip() for q in queries if q.strip()]
+    config_path.write_text(json.dumps(config, indent=2))
+
+    # Create thread record (reuse existing cmd_create)
+    cmd_create(topic, motivation or "To be written", "")
+
+    return jsonify({
+        "ok": True,
+        "status": "created",
+        "topic": topic,
+        "redirect": f"/research/sessions?topic={topic}"
+    })
+
+
 @research_bp.route('/api/research/thread/<topic>/retire', methods=['POST'])
 def api_research_thread_retire(topic: str):
     """
@@ -1067,7 +1119,8 @@ def research_deep_dive_view(hash_id: str):
         meta_parts.append(f'<div class="meta-row"><span class="meta-label">Your interest</span>{_html_lib.escape(meta["interest"])}</div>')
     if meta.get('focus'):
         meta_parts.append(f'<div class="meta-row"><span class="meta-label">Focus</span>{_html_lib.escape(meta["focus"])}</div>')
-    meta_block = '\n'.join(meta_parts)
+    meta_block    = '\n'.join(meta_parts)
+    interest_text = _html_lib.escape(meta.get('interest', ''))
 
     footer = ''
     if dd['cost']:
@@ -1127,6 +1180,23 @@ def research_deep_dive_view(hash_id: str):
     .bib-empty {{ color: var(--text-muted); font-style: italic; }}
     .dd-footer {{ margin-top: 2.5rem; font-size: 0.8rem; color: var(--text-dim); font-family: 'DM Mono', monospace; }}
     #toast {{ position: fixed; bottom: 24px; right: 24px; background: #4a8c28; color: #fff; font-family: 'DM Mono', monospace; font-size: 0.82rem; padding: 10px 18px; border-radius: 6px; display: none; z-index: 200; }}
+    .spawn-thread-panel {{ margin-top: 3rem; padding: 1.5rem 1.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }}
+    .spawn-thread-panel h2 {{ font-family: 'Playfair Display', serif; font-size: 1.1rem; font-weight: 600; margin-bottom: 1.25rem; color: var(--text); }}
+    .spawn-field {{ margin-bottom: 1rem; }}
+    .spawn-field label {{ display: block; font-family: 'DM Mono', monospace; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); margin-bottom: 0.4rem; }}
+    .spawn-field label .muted {{ font-style: italic; text-transform: none; letter-spacing: 0; color: var(--text-dim); opacity: 0.7; }}
+    .spawn-field input[type="text"], .spawn-field textarea, .spawn-field select {{ width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 8px 12px; font-family: 'Source Sans 3', sans-serif; font-size: 0.9rem; color: var(--text); outline: none; transition: border-color 0.15s; }}
+    .spawn-field input:focus, .spawn-field textarea:focus, .spawn-field select:focus {{ border-color: var(--accent); }}
+    .spawn-field textarea {{ resize: vertical; min-height: 72px; }}
+    #st-queries {{ display: flex; flex-direction: column; gap: 0.4rem; }}
+    .st-query-row {{ display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.88rem; }}
+    .st-query-row input[type="checkbox"] {{ margin-top: 3px; flex-shrink: 0; accent-color: var(--accent); }}
+    .st-query-row span {{ color: var(--text); line-height: 1.4; }}
+    #st-launch {{ margin-top: 1.25rem; background: var(--accent); color: var(--surface); border: none; border-radius: 5px; padding: 10px 22px; font-family: 'DM Mono', monospace; font-size: 0.82rem; cursor: pointer; transition: opacity 0.15s; }}
+    #st-launch:hover {{ opacity: 0.85; }}
+    #st-launch:disabled {{ opacity: 0.45; cursor: not-allowed; }}
+    #st-status {{ margin-top: 0.75rem; font-family: 'DM Mono', monospace; font-size: 0.82rem; color: var(--text-muted); min-height: 1.2em; }}
+    #st-status.err {{ color: #8b2020; }}
   </style>
   <link rel="stylesheet" href="/research/static/css/nav.css">
   <script src="/research/static/js/nav.js"></script>
@@ -1160,6 +1230,32 @@ def research_deep_dive_view(hash_id: str):
     <h2>Sources &amp; Further Reading</h2>
     {bib_html}
   </div>
+  <section class="spawn-thread-panel" id="spawn-thread">
+    <h2>🔬 Start Research Thread</h2>
+    <div class="spawn-field">
+      <label>Topic name (slug)</label>
+      <input id="st-topic" type="text" placeholder="e.g. taiwan-defense">
+    </div>
+    <div class="spawn-field">
+      <label>Motivation</label>
+      <textarea id="st-motivation" rows="3">{interest_text}</textarea>
+    </div>
+    <div class="spawn-field" id="st-queries-wrapper">
+      <label>Starting queries <span class="muted">(from bibliography)</span></label>
+      <div id="st-queries"><span style="color:var(--text-dim);font-size:0.85rem">Loading…</span></div>
+    </div>
+    <div class="spawn-field">
+      <label>Duration</label>
+      <select id="st-duration">
+        <option value="3">3 days</option>
+        <option value="5" selected>5 days</option>
+        <option value="7">7 days</option>
+        <option value="14">14 days</option>
+      </select>
+    </div>
+    <button id="st-launch" onclick="spawnThread()">Launch Research Thread →</button>
+    <div id="st-status"></div>
+  </section>
   {footer}
 </main>
 <div id="toast"></div>
@@ -1207,6 +1303,76 @@ def research_deep_dive_view(hash_id: str):
     t.style.background = isErr ? '#8b2020' : '#4a8c28';
     t.style.display = 'block';
     setTimeout(() => {{ t.style.display = 'none'; }}, 3000);
+  }}
+</script>
+<script>
+  // ── Spawn Thread ─────────────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', async () => {{
+    const container = document.getElementById('st-queries');
+    try {{
+      const res  = await fetch('/api/research/deep-dives/{_html_lib.escape(hash_id)}/bibliography');
+      const data = await res.json();
+      if (!data.ok || !data.items.length) {{
+        container.innerHTML = '<span style="color:var(--text-dim);font-size:0.85rem">No bibliography items found.</span>';
+        return;
+      }}
+      container.innerHTML = data.items
+        .filter(item => item.title && item.title.trim())
+        .map((item, i) => {{
+          const safe = item.title.replace(/"/g, '&quot;').replace(/</g, '&lt;');
+          return `<label class="st-query-row"><input type="checkbox" value="${{safe}}" checked><span>${{safe}}</span></label>`;
+        }})
+        .join('');
+    }} catch (e) {{
+      container.innerHTML = '<span style="color:#8b2020;font-size:0.85rem">Could not load bibliography.</span>';
+    }}
+  }});
+
+  async function spawnThread() {{
+    const btn      = document.getElementById('st-launch');
+    const status   = document.getElementById('st-status');
+    const topic    = document.getElementById('st-topic').value.trim();
+    const motivation = document.getElementById('st-motivation').value.trim();
+    const duration = parseInt(document.getElementById('st-duration').value, 10);
+    const queries  = Array.from(document.querySelectorAll('#st-queries input[type="checkbox"]:checked'))
+                         .map(cb => cb.value)
+                         .filter(Boolean);
+
+    status.className = '';
+    if (!topic) {{ status.textContent = 'Topic slug is required.'; return; }}
+    if (!/^[a-z0-9-]+$/.test(topic)) {{ status.textContent = 'Topic must be lowercase letters, numbers, and hyphens only.'; return; }}
+    if (!queries.length) {{ status.textContent = 'Select at least one starting query.'; return; }}
+
+    btn.disabled = true;
+    status.textContent = 'Launching…';
+
+    try {{
+      const res  = await fetch('/api/research/spawn-thread', {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{
+          topic,
+          motivation,
+          queries,
+          deep_dive_id: HASH_ID,
+          deep_dive_title: document.querySelector('h1') ? document.querySelector('h1').textContent : '',
+          duration_days: duration,
+        }}),
+      }});
+      const data = await res.json();
+      if (data.ok) {{
+        status.textContent = 'Thread created! Redirecting…';
+        setTimeout(() => {{ window.location.href = data.redirect; }}, 800);
+      }} else {{
+        status.textContent = data.error || 'Unknown error.';
+        status.className = 'err';
+        btn.disabled = false;
+      }}
+    }} catch (e) {{
+      status.textContent = 'Network error — please try again.';
+      status.className = 'err';
+      btn.disabled = false;
+    }}
   }}
 </script>
 <link rel="stylesheet" href="/research/static/css/annotations.css">
