@@ -206,38 +206,34 @@
 
     .main-content { flex: 1; min-width: 0; overflow-x: hidden; min-height: 100vh; background: var(--bg); }
 
-    /* ── Budget bar ── */
+    /* ── Budget bar (demoted — slim status line, no card) ── */
     .budget-row {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 1rem 1.25rem;
       margin-bottom: 1.75rem;
     }
 
     .budget-label {
       display: flex;
       justify-content: space-between;
-      font-size: 0.82rem;
-      color: var(--text-muted);
-      margin-bottom: 0.5rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-bottom: 0.35rem;
     }
 
     .budget-label .budget-used {
-      font-weight: bold;
-      color: var(--text);
+      color: var(--text-muted);
     }
 
     .budget-track {
-      height: 8px;
-      background: var(--surface2);
-      border-radius: 4px;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
       overflow: hidden;
     }
 
     .budget-fill {
       height: 100%;
-      border-radius: 4px;
+      border-radius: 2px;
       background: #7a9e6e;
       transition: width 0.4s ease;
     }
@@ -245,125 +241,54 @@
     .budget-fill.warn { background: #c4933a; }
     .budget-fill.over { background: #b84a3a; }
 
-    /* ── Topic cards ── */
-    .topic-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 1.25rem 1.5rem;
-      margin-bottom: 1rem;
+    /* ── Thread list ── */
+    .thread-list {
+      margin-top: 0.5rem;
     }
 
-    .topic-card.empty {
-      opacity: 0.7;
-    }
-
-    .topic-header {
+    .thread-row {
       display: flex;
       align-items: baseline;
-      justify-content: space-between;
-      margin-bottom: 0.5rem;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-
-    .topic-name {
-      font-family: 'Playfair Display', serif;
-      font-size: 1.05rem;
-      color: var(--text);
-      letter-spacing: 0.01em;
-    }
-
-    .topic-meta {
-      font-size: 0.78rem;
-      color: var(--text-muted);
-    }
-
-    .topic-stats {
-      display: flex;
-      gap: 1.5rem;
-      margin-bottom: 0.75rem;
-      flex-wrap: wrap;
-    }
-
-    .stat {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    .stat-value {
-      font-size: 1.4rem;
-      font-weight: bold;
-      color: var(--text);
-      line-height: 1.1;
-    }
-
-    .stat-label {
-      font-size: 0.72rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-
-    .topic-find {
-      font-size: 0.82rem;
-      color: var(--text-muted);
-      font-style: italic;
-      margin-bottom: 0.9rem;
-      border-left: 2px solid var(--border);
-      padding-left: 0.75rem;
-      line-height: 1.4;
-    }
-
-    .topic-find.empty-find {
-      color: var(--text-dim);
-      font-style: normal;
-    }
-
-    .topic-actions {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    .btn {
-      font-family: 'Source Sans 3', sans-serif;
-      font-size: 0.78rem;
-      padding: 0.28rem 0.75rem;
-      border-radius: 3px;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      color: var(--text-muted);
+      gap: 0;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--border);
       cursor: pointer;
       text-decoration: none;
-      display: inline-block;
-      transition: background 0.12s, color 0.12s;
+      color: inherit;
+      transition: background 0.1s;
+      margin: 0 -1rem;
+      padding-left: 1rem;
+      padding-right: 1rem;
     }
 
-    .btn:hover { background: var(--surface2); color: var(--text); }
+    .thread-row:last-child { border-bottom: none; }
 
-    .btn-run {
-      border-color: var(--accent);
+    .thread-row:hover { background: rgba(139,94,42,0.04); }
+
+    .thread-name {
+      font-size: 0.95rem;
       color: var(--accent);
-      background: var(--accent-dim);
+      flex-shrink: 0;
     }
 
-    .btn-run:hover { background: var(--accent-glow); }
-
-    /* run command tooltip */
-    .run-cmd {
-      display: none;
-      margin-top: 0.6rem;
+    .thread-stats {
       font-family: 'DM Mono', monospace;
-      font-size: 0.78rem;
-      background: var(--text);
-      color: var(--surface2);
-      padding: 0.5rem 0.75rem;
-      border-radius: 4px;
-      white-space: pre-wrap;
-      word-break: break-all;
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      margin-left: 0.75rem;
+      white-space: nowrap;
     }
+
+    .thread-last-run {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      margin-left: auto;
+      white-space: nowrap;
+      padding-left: 1.5rem;
+    }
+
+    .thread-empty { opacity: 0.55; }
 
     /* ── Status bar ── */
     .status-bar {
@@ -444,7 +369,7 @@
   <div class="container">
 
   <h1>Research Intelligence</h1>
-  <p class="subtitle" id="subtitle">Loading…</p>
+  <p class="subtitle">Your active research threads</p>
 
   <div class="budget-row" id="budget-row" style="display:none">
     <div class="budget-label">
@@ -456,7 +381,7 @@
     </div>
   </div>
 
-  <div id="topic-cards"></div>
+  <div class="thread-list" id="thread-list"></div>
 
   <div class="status-bar" id="status-bar"></div>
 
@@ -480,8 +405,6 @@
 
   function render(data) {
     const now = new Date().toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
-    document.getElementById('subtitle').textContent =
-      `Overview of all active research topics · refreshed ${now}`;
 
     // Budget bar
     const b = data.budget;
@@ -496,11 +419,11 @@
       (b.used >= b.warn  ? ' over' :
        b.used >= b.warn * 0.85 ? ' warn' : '');
 
-    // Topic cards
-    const container = document.getElementById('topic-cards');
+    // Thread list
+    const container = document.getElementById('thread-list');
     container.innerHTML = '';
     for (const t of data.topics) {
-      container.appendChild(buildCard(t));
+      container.appendChild(buildRow(t));
     }
 
     // Status bar
@@ -512,61 +435,27 @@
     }
   }
 
-  function buildCard(t) {
-    const isEmpty   = t.session_count === 0;
-    const lastRun   = t.last_run
-      ? new Date(t.last_run).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})
-      : 'never';
-    const topFind   = t.top_find || null;
-    const runCmd    = `python agent/research.py --topic ${t.topic} --session-name ${t.topic}-001`;
+  function buildRow(t) {
+    const isEmpty  = t.session_count === 0;
+    const lastRun  = t.last_run
+      ? new Date(t.last_run).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})
+      : 'never run';
+    const parts = [];
+    parts.push(`${t.session_count} session${t.session_count !== 1 ? 's' : ''}`);
+    if (t.saved_count)     parts.push(`${t.saved_count} saved`);
+    if (t.candidate_count) parts.push(`${t.candidate_count} candidates`);
 
-    const card = document.createElement('div');
-    card.className = 'topic-card' + (isEmpty ? ' empty' : '');
+    const row = document.createElement('a');
+    row.className  = 'thread-row' + (isEmpty ? ' thread-empty' : '');
+    row.href       = `/research/sessions?topic=${encodeURIComponent(t.topic)}`;
 
-    card.innerHTML = `
-      <div class="topic-header">
-        <span class="topic-name">${t.topic}</span>
-        <span class="topic-meta">Last run: ${lastRun}</span>
-      </div>
-      <div class="topic-stats">
-        <div class="stat">
-          <span class="stat-value">${t.session_count}</span>
-          <span class="stat-label">Sessions</span>
-        </div>
-        <div class="stat">
-          <span class="stat-value">${t.saved_count}</span>
-          <span class="stat-label">Saved</span>
-        </div>
-        <div class="stat">
-          <span class="stat-value">${t.candidate_count}</span>
-          <span class="stat-label">Candidates</span>
-        </div>
-      </div>
-      ${topFind
-        ? `<div class="topic-find">⭐ ${topFind}</div>`
-        : `<div class="topic-find empty-find">No sessions run yet</div>`
-      }
-      <div class="topic-actions">
-        <button class="btn btn-run" onclick="toggleCmd(this, '${runCmd}')">Run Session ▾</button>
-        <a class="btn" href="/research/observe?topic=${t.topic}">Observe</a>
-        <a class="btn" href="/research/candidates?topic=${t.topic}">Candidates</a>
-      </div>
-      <div class="run-cmd"></div>
+    row.innerHTML = `
+      <span class="thread-name">${t.topic}</span>
+      <span class="thread-stats">${parts.join(' · ')}</span>
+      <span class="thread-last-run">${lastRun}</span>
     `;
 
-    return card;
-  }
-
-  function toggleCmd(btn, cmd) {
-    const cmdEl = btn.closest('.topic-card').querySelector('.run-cmd');
-    if (cmdEl.style.display === 'block') {
-      cmdEl.style.display = 'none';
-      btn.textContent = 'Run Session ▾';
-    } else {
-      cmdEl.textContent = cmd;
-      cmdEl.style.display = 'block';
-      btn.textContent = 'Run Session ▴';
-    }
+    return row;
   }
 
   function scheduleRefresh(agentActive) {
