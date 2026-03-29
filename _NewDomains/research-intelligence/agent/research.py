@@ -674,7 +674,7 @@ def main():
         print(f"    {star} Score: {score}/5 | {language} | {usage_note} | {explanation[:80]}")
 
     # Apply novelty discount before ranking (modifies scores in-place)
-    novelty_discount = config.get("search", {}).get("novelty_discount_factor", 0.3)
+    novelty_discount = cfg.get("search", {}).get("novelty_discount_factor", 0.3)
     apply_novelty_score(scored, seen_urls, discount=novelty_discount)
     flagged = sum(1 for c in scored if not c.get("novelty_flag", True))
     if flagged:

@@ -1021,7 +1021,6 @@ def api_research_generate_deeper_dive_status():
                 from agent.threads import load_thread, save_thread
                 thread = load_thread(topic)
                 if thread:
-                    thread.status               = "closed"
                     thread.deeper_dive_generated = True
                     thread.deeper_dive_path      = str(Path(out_path).relative_to(RESEARCH_ROOT))
                     save_thread(topic, thread)
