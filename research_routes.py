@@ -1181,9 +1181,19 @@ def _parse_deep_dive_md(md_path: Path) -> dict:
             ('interest', '**Your Interest:**'),
             ('focus',    '**Focus:**'),
             ('date',     '**Analyzed:**'),
+            ('date',     '**Date:**'),
         ]:
             if line.startswith(marker):
                 metadata[key] = line.replace(marker, '').strip()
+
+    # Also extract ## Your Interest section (multi-line, common format)
+    if 'interest' not in metadata or not metadata['interest']:
+        interest_m = _re.search(
+            r'##\s+Your Interest\s*\n(.*?)(?=\n---|\n## |\Z)',
+            text, _re.DOTALL | _re.IGNORECASE
+        )
+        if interest_m:
+            metadata['interest'] = interest_m.group(1).strip()
 
     # Analysis: everything from first ## up to Sources section
     analysis_start = 0
@@ -1364,7 +1374,7 @@ def research_deep_dive_view(hash_id: str):
     .spawn-field input:focus, .spawn-field textarea:focus, .spawn-field select:focus {{ border-color: var(--accent); }}
     .spawn-field textarea {{ resize: vertical; min-height: 72px; }}
     #st-queries {{ display: flex; flex-direction: column; gap: 0.4rem; }}
-    .st-query-row {{ display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.88rem; }}
+    .st-query-row {{ display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.88rem; text-transform: none; letter-spacing: 0; font-family: 'Source Sans 3', sans-serif; }}
     .st-query-row input[type="checkbox"] {{ margin-top: 3px; flex-shrink: 0; accent-color: var(--accent); }}
     .st-query-row span {{ color: var(--text); line-height: 1.4; }}
     #st-launch {{ margin-top: 1.25rem; background: var(--accent); color: var(--surface); border: none; border-radius: 5px; padding: 10px 22px; font-family: 'DM Mono', monospace; font-size: 0.82rem; cursor: pointer; transition: opacity 0.15s; }}
@@ -1378,19 +1388,19 @@ def research_deep_dive_view(hash_id: str):
 </head>
 <body data-domain="curator" data-page="deep-dive" data-ref-id="{_html_lib.escape(hash_id)}">
 <header>
-  <a href="/" class="site-brand">mini-moi</a>
+  <a href="/" class="site-brand">mini-moi · CURATOR</a>
   <nav class="header-nav">
     <a href="/" class="nav-link">Daily</a>
     <a href="/curator_library.html" class="nav-link">Library</a>
     <a href="/interests/2026/deep-dives/index.html" class="nav-link active">Deep Dives</a>
     <a href="/curator_intelligence.html" class="nav-link">Observations</a>
+    <a href="/research/dashboard" class="nav-link">Research</a>
     <div class="nav-more-wrapper">
       <button class="nav-more-btn">···</button>
       <div class="nav-more-dropdown">
         <a href="/curator_priorities.html">Priorities</a>
       </div>
     </div>
-    <a href="/curator_priorities.html" class="nav-link nav-icon">🍎</a>
   </nav>
 </header>
 <main>
