@@ -233,7 +233,7 @@ Estimated total cost increase per session: $0.02-0.05. Acceptable given current 
 
 ## Acceptance Criteria
 
-- [ ] Novelty scoring: no URL repeats across sessions for same topic within 30 days
+- [ ] Novelty scoring: no URL repeats across sessions for same topic within 30 days; log discarded sources per-session for debug\n- [ ] No regression in session diversity (e.g., Shannon index on sources before/after)
 - [ ] Discovery allocation: 20-25% of session sources from outside trust tier list
 - [ ] Lateral search: at least 1 lateral domain query per session when configured
 - [ ] Citation chasing: tier-1 citations added to candidate pool

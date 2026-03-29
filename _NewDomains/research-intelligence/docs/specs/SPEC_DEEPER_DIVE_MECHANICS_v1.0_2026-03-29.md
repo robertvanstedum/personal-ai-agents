@@ -108,7 +108,7 @@ Deeper Dives are stored alongside Deep Dives in the Curator archive. Same format
 
 **File location:**
 ```
-interests/2026/deep-dives/{topic}-deeper-dive-{NNN}.md
+interests/2026/deep-dives/{topic}-deeper-dive-{NNN}-{YYYY-MM-DD}.md
 ```
 Consistent with existing Deep Dive naming convention.
 
