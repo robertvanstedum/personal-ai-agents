@@ -19,6 +19,20 @@ v1.0 proved the Curator worked. v1.1 makes Research Intelligence real.
 
 ---
 
+## Validated in production — Taiwan research thread
+
+The Research Intelligence pipeline was stress-tested against a real hypothesis on the day of release. The full arc — topic drift, silent failure, diagnosis, fix, and first clean output — is documented in [docs/case-studies/CASE_STUDY_TAIWAN_THREAD_2026-03-29.md](../case-studies/CASE_STUDY_TAIWAN_THREAD_2026-03-29.md).
+
+Key validation points:
+
+- System prompt injection confirmed working (4204 chars, populated from `thread.json`)
+- Post-fix session retrieved 10/12 sources scoring ≥4/5, all Taiwan-specific
+- Zero drift to U.S. military doctrine after fix
+- Opus synthesizer correctly identified three consecutive deeper dives as having no usable evidence — no hallucinated confirmation
+- Auto-close removal confirmed — thread stayed active through four deeper dive generations
+
+---
+
 ## What's new in v1.1
 
 ### The reading-to-research loop is closed
