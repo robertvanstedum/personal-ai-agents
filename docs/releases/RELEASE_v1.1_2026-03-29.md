@@ -120,6 +120,29 @@ Cost discipline is a design constraint, not an afterthought. The model stack, se
 
 ---
 
+## Testing
+
+An automated UAT script is included at `tests/research_uat.py`. It runs two back-to-back research sessions for a configurable topic and validates five conditions:
+
+| # | Test | Validates |
+|---|------|-----------|
+| 1 | System prompt injection | `load_session_system_prompt()` fires; `seen_urls` cache created |
+| 2 | Novelty discounting | Session 2 reports `N seen URL(s) discounted by 30%` |
+| 3 | No topic drift | No Iraq War / Mackinder / U.S. military culture sources in output; ≥80% Taiwan-relevant |
+| 4 | Backlog entries | B-018 and B-019 present in `BACKLOG.md` |
+| 5 | Graceful degradation | Missing `motivation` field logs warning and continues (no crash) |
+
+**Usage:**
+```bash
+cd ~/Projects/personal-ai-agents
+source venv/bin/activate
+python tests/research_uat.py
+```
+
+The script defaults to `hellscape-taiwan-porcupine`. Change `TOPIC` at the top of the file to run against any thread. UAT sessions use a high-numbered name prefix (`uat-100`) to avoid colliding with production session logs.
+
+---
+
 ## What's next
 
 ### v1.2 — Mac Mini + infrastructure
