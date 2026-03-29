@@ -131,6 +131,10 @@
     /* ── Session List ── */
     .sessions-layout { display: grid; grid-template-columns: 280px 1fr; gap: 24px; align-items: start; }
 
+    .session-list-header { display: flex; align-items: center; justify-content: space-between; font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); padding: 4px 0 6px; cursor: pointer; user-select: none; }
+    .session-list-header:hover { color: var(--text); }
+    .session-list-toggle { font-size: 10px; }
+    .session-list.collapsed { display: none; }
     .session-list { display: flex; flex-direction: column; gap: 6px; }
     .session-item {
       padding: 12px 16px;
@@ -400,6 +404,9 @@
         <div class="topic-list-header">Topics</div>
         <div class="topic-list-inner" id="topicBar"></div>
       </div>
+      <div class="session-list-header" onclick="toggleSessionList()" id="sessionListHeader">
+        <span>Sessions</span><span class="session-list-toggle" id="sessionListToggle">▾</span>
+      </div>
       <div class="session-list" id="sessionList">
         <div class="empty"><div class="empty-icon">🔬</div><div class="empty-msg">Select a topic above</div></div>
       </div>
@@ -549,9 +556,11 @@
       html += `<div class="detail-section">
         <div class="section-label">Key Findings</div>`;
       data.findings.forEach((f, i) => {
+        // Strip triage artefact "(Target 1, Target 2, …)" annotations
+        const fClean = f.replace(/\s*\(Target\s+\d+(?:,\s*Target\s+\d+)*\)\s*/g, ' ').trim();
         html += `
           <div class="finding-item" id="finding-${i}">
-            <div class="finding-text">${escHtml(f)}</div>
+            <div class="finding-text">${escHtml(fClean)}</div>
             <div class="finding-actions">
               <button class="find-btn" onclick="toggleNote(${i}, 'reaction')">💬 Note</button>
             </div>
@@ -719,6 +728,13 @@
           ${refParts.length ? `<div class="ann-ref">${refParts.join(' · ')}</div>` : ''}
         </div>`;
     }).join('');
+  }
+
+  function toggleSessionList() {
+    const list   = document.getElementById('sessionList');
+    const toggle = document.getElementById('sessionListToggle');
+    const collapsed = list.classList.toggle('collapsed');
+    toggle.textContent = collapsed ? '▸' : '▾';
   }
 
   function toggleAnnPanel() {
