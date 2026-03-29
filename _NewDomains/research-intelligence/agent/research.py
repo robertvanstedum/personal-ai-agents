@@ -89,7 +89,7 @@ def track_cost(usage, model="claude-3-5-haiku-20241022"):
 
 # ── Triage model routing ───────────────────────────────────────────────────────
 
-def try_ollama(prompt, endpoint, timeout, model_name):
+def try_ollama(prompt, endpoint, timeout, model_name, system=None):
     """Call Ollama. Returns parsed JSON dict or None on failure (silently falls back)."""
     payload = {
         "model":  model_name,
@@ -97,6 +97,8 @@ def try_ollama(prompt, endpoint, timeout, model_name):
         "stream": False,
         "format": "json",
     }
+    if system:
+        payload["system"] = system
     try:
         r = requests.post(endpoint, json=payload, timeout=timeout)
         if r.ok:
@@ -132,19 +134,83 @@ def check_ollama_available(triage_cfg=None):
         return False
 
 
-def call_haiku(prompt, client, model, temperature=0.0, max_tokens=512):
+def call_haiku(prompt, client, model, temperature=0.0, max_tokens=512, system=None):
     """Call Haiku. Returns (result, usage) — result is the raw response text."""
     try:
-        msg = client.messages.create(
+        kwargs = dict(
             model=model,
             max_tokens=max_tokens,
             temperature=temperature,
             messages=[{"role": "user", "content": prompt}],
         )
+        if system:
+            kwargs["system"] = system
+        msg = client.messages.create(**kwargs)
         return msg.content[0].text.strip(), msg.usage
     except Exception as e:
         print(f"  WARNING: Haiku call failed: {e}")
         return None, None
+
+
+def load_thread_json(topic):
+    """Load thread metadata from data/threads/{topic}/thread.json. Returns {} on failure."""
+    thread_path = (
+        Path(__file__).resolve().parent.parent / "data" / "threads" / topic / "thread.json"
+    )
+    try:
+        return json.loads(thread_path.read_text())
+    except Exception as e:
+        print(f"  WARNING: Could not load thread.json for '{topic}': {e}")
+        return {}
+
+
+def load_session_system_prompt(topic, thread_data, session_number):
+    """Load agent/prompts/research_session_v1.1.md and populate template variables.
+
+    Logs a WARNING for each field absent from thread_data; substitutes sensible defaults
+    rather than failing. Returns None if the template file is missing — triage continues
+    without a system prompt in that case.
+    """
+    prompt_path = Path(__file__).resolve().parent / "prompts" / "research_session_v1.1.md"
+    try:
+        template = prompt_path.read_text()
+    except Exception as e:
+        print(f"  WARNING: Session system prompt not loaded: {e}")
+        return None
+
+    # {{THREAD_TITLE}} — prefer explicit title field, fall back to humanised topic slug
+    title = thread_data.get("title", "").strip()
+    if not title:
+        title = topic.replace("-", " ").title()
+        print(f"  WARNING: thread.json missing 'title' — derived: '{title}'")
+
+    # {{ORIGINAL_HYPOTHESIS}} — motivation field
+    hypothesis = thread_data.get("motivation", "").strip()
+    if not hypothesis:
+        hypothesis = "(no hypothesis recorded)"
+        print("  WARNING: thread.json missing 'motivation'")
+
+    # {{CURRENT_RESEARCH_QUESTION}} — current_focus if set, else fall back to motivation
+    current_focus = thread_data.get("current_focus", "").strip() or hypothesis
+    if not thread_data.get("current_focus"):
+        print("  WARNING: thread.json missing 'current_focus' — using motivation as fallback")
+
+    # {{DOMAIN}} — explicit domain field, else first segment of topic slug
+    domain = thread_data.get("domain", "").strip()
+    if not domain:
+        domain = topic.split("-")[0].title()
+        print(f"  WARNING: thread.json missing 'domain' — derived: '{domain}'")
+
+    populated = (
+        template
+        .replace("{{THREAD_TITLE}}", title)
+        .replace("{{ORIGINAL_HYPOTHESIS}}", hypothesis)
+        .replace("{{CURRENT_RESEARCH_QUESTION}}", current_focus)
+        .replace("{{DOMAIN}}", domain)
+        .replace("{{SESSION_NUMBER}}", str(session_number))
+    )
+    print(f"  System prompt: loaded and populated ({len(populated)} chars)")
+    return populated
 
 
 def parse_json_response(text):
@@ -475,6 +541,11 @@ def main():
     except ImportError:
         print("  Direction shift: threads.py not available (skipping)")
 
+    # ── Session system prompt ───────────────────────────────────────────────────
+    thread_data         = load_thread_json(topic)
+    _session_number     = thread_data.get("session_count", 0) + 1
+    session_system_prompt = load_session_system_prompt(topic, thread_data, _session_number)
+
     # ── 1. Free source pass ────────────────────────────────────────────────────
     print("[1] Free source pass...")
     raw_candidates = []
@@ -559,7 +630,8 @@ def main():
         print(f"  [{i}/{len(raw_candidates)}] {title_short}")
 
         # Try Ollama first (free) — skip entirely if unavailable (pre-checked at session start)
-        result = try_ollama(prompt, ollama_endpoint, ollama_timeout, ollama_model) \
+        result = try_ollama(prompt, ollama_endpoint, ollama_timeout, ollama_model,
+                            system=session_system_prompt) \
                  if ollama_available else None
         if result is not None:
             model_used = "ollama"
@@ -567,7 +639,8 @@ def main():
             model_log.append((cand.get("title", ""), "ollama"))
         else:
             # Fall back to Haiku
-            raw_text, usage = call_haiku(prompt, client, haiku_model, triage_temp)
+            raw_text, usage = call_haiku(prompt, client, haiku_model, triage_temp,
+                                         system=session_system_prompt)
             result = parse_json_response(raw_text)
             model_used = "haiku"
             if usage is not None:

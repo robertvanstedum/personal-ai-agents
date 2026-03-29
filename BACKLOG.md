@@ -24,6 +24,8 @@ _Promoted to active work by Robert's decision only. OpenClaw can add items. Only
 | B-015 | **Research sessions: resolve triage target labels** | Finding cards show raw pipeline text ("Target 1, Target 2, Target 3…"). For demo-ready/hosted stage, resolve these to actual target description strings from `config.json triage_targets`. Personal tool: acceptable as-is. Flag before demo recording. |
 | B-016 | **Research sessions: source title truncation** | Source titles cut off mid-word in the session detail panel. Fix: `text-overflow: ellipsis` on `.source-title` with `white-space: nowrap; overflow: hidden`, or expand-on-hover tooltip. CSS-only, low effort. |
 | B-017 | **Topic search bar** (Sessions + Observations) | Filter/search bar above the topic sidebar in `/research/sessions` and `/research/observe`. Needed when topic count grows past ~10. Deferred from 2026-03-25 session. |
+| B-018 | **BUG: Topic drift in research sessions — system prompt missing** | Root cause: `research.py` had no session-level system prompt, so the triage model used broad keyword matching with no thread context. Taiwan sessions 001/002 retrieved U.S. military doctrine and Iraq War sources as a result. Fix: `agent/prompts/research_session_v1.1.md` injected at session start via `system` param for both Ollama and Haiku. Status: fixed 2026-03-29. |
+| B-019 | **BUG: hellscape-taiwan-porcupine query drift — manual correction required** | `config.json` session_searches contained U.S. military culture queries (QDR, "Army of None", Replicator Initiative) instead of Taiwan-specific queries. Sessions 001/002 findings are invalid baseline data for this thread. Queries replaced with 8 Taiwan-focused candidates; `triage_targets` added for this topic. Status: fixed 2026-03-29. |
 
 ## Curator
 
@@ -52,4 +54,4 @@ _Promoted to active work by Robert's decision only. OpenClaw can add items. Only
 
 ---
 
-_Last updated: 2026-03-25 by Claude Code_
+_Last updated: 2026-03-29 by Claude Code_

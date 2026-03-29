@@ -124,7 +124,6 @@ v1.1 ships with several known gaps being tracked for v1.2:
 
 - Session count before first deeper dive generation not tracked correctly in thread metadata
 - Deeper dive generation closes the thread automatically — a keep-open option is needed
-- Nav labels ("Sessions", "Observations") not yet updated to final names ("Threads", "AI Feedback")
 - Static `.html` deep dive files still present in directory pending cleanup
 
 ---
