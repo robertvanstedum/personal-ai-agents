@@ -626,7 +626,8 @@
     const row = document.createElement('a');
     row.className = 'thread-row' + (isEmpty ? ' thread-empty' : '');
     row.href = `/research/sessions?topic=${encodeURIComponent(t.topic)}`;
-    const canGenerateDD = !t.deeper_dive_generated && t.session_count >= 2;
+    const canGenerateDD = t.session_count > (t.sessions_at_last_dive || 0)
+                          && t.session_count >= 2;
     const ddAffordance  = canGenerateDD
       ? `<a class="btn-view-dd" href="/research/deeper-dive-confirm?topic=${encodeURIComponent(t.topic)}" onclick="event.stopPropagation()">Generate Deeper Dive →</a>`
       : '';

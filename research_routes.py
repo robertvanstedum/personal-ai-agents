@@ -509,6 +509,15 @@ def api_research_dashboard():
         thread_dd_generated = _thread.deeper_dive_generated if _thread else False
         thread_dd_path      = _thread.deeper_dive_path      if _thread else None
 
+        # Compute session count at time of last deeper dive (for repeatable dive gate)
+        sessions_at_last_dive = 0
+        if thread_dd_generated and thread_dd_path:
+            _dd_full = RESEARCH_ROOT / thread_dd_path
+            if _dd_full.exists():
+                _m = _re.search(r'(\d+)\s+sessions?', _dd_full.read_text()[:300])
+                if _m:
+                    sessions_at_last_dive = int(_m.group(1))
+
         topic_summaries.append({
             "topic":                  topic,
             "session_count":          len(session_ids),
@@ -520,6 +529,7 @@ def api_research_dashboard():
             "expires":                thread_expires,
             "deeper_dive_generated":  thread_dd_generated,
             "deeper_dive_path":       thread_dd_path,
+            "sessions_at_last_dive":  sessions_at_last_dive,
         })
 
     used = log['budget_cumulative']
