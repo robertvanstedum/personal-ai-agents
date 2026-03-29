@@ -60,27 +60,38 @@ def check_output(output, pattern):
 
 
 def check_drift(output):
-    """Return True if no invalid-topic sources appear in session output."""
+    """Return True if no invalid-topic sources appear in scored/title source lines.
+
+    Excludes raw log lines (e.g. 'Fetching Wikipedia Mackinder citations...')
+    which are standard research.py workflow steps, not drifted sources.
+    Only checks [N/M] title lines and Score: explanation lines.
+    """
     invalid_keywords = ['Iraq', 'Mackinder', 'U.S. military culture',
                         'dependency theory', 'Quadrennial Defense Review']
-    for kw in invalid_keywords:
-        if kw in output:
-            return False
+    source_lines = re.findall(r'(?:\[\d+/\d+\].*|Score: \d/5.*)', output)
+    for line in source_lines:
+        for kw in invalid_keywords:
+            if kw in line:
+                return False
     return True
 
 
 def check_taiwan_relevance(output):
-    """Return True if ≥80% of scored sources are Taiwan-relevant."""
+    """Return True if ≥80% of retrieved sources are Taiwan-relevant.
+
+    Uses [N/M] title lines rather than Score: explanation lines — titles are
+    more complete and don't get truncated the way explanation snippets do.
+    """
     taiwan_keywords = ['Taiwan', 'ODC', 'TSMC', 'cross-strait', 'porcupine',
                        'PRC', 'Taipei', 'NCCU']
-    scored_lines = re.findall(r'Score: \d/5.*', output)
-    if not scored_lines:
-        return False  # No scored sources found — inconclusive
+    title_lines = re.findall(r'\[\d+/\d+\]\s+.*', output)
+    if not title_lines:
+        return False  # No title lines found — inconclusive
     relevant = sum(
         any(kw in line for kw in taiwan_keywords)
-        for line in scored_lines
+        for line in title_lines
     )
-    ratio = relevant / len(scored_lines)
+    ratio = relevant / len(title_lines)
     return ratio >= 0.80
 
 
