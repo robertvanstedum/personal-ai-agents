@@ -631,6 +631,14 @@
         window.location = `/research/sessions?topic=${encodeURIComponent(t.topic)}`;
       }
     });
+    row.addEventListener('mouseenter', () => {
+      const btn = row.querySelector('.thread-run-btn');
+      if (btn && !row.classList.contains('running')) btn.style.display = 'inline-block';
+    });
+    row.addEventListener('mouseleave', () => {
+      const btn = row.querySelector('.thread-run-btn');
+      if (btn) btn.style.display = 'none';
+    });
     const canGenerateDD = t.session_count > (t.sessions_at_last_dive || 0)
                           && t.session_count >= 2;
     const ddAffordance  = canGenerateDD
