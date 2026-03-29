@@ -290,6 +290,8 @@
 
     .thread-empty { opacity: 0.55; }
 
+    .thread-spacer { flex: 1; min-width: 0; }
+
     .thread-run-btn {
       display: none;
       margin-left: 0.5rem;
@@ -641,15 +643,15 @@
     });
     const canGenerateDD = t.session_count > (t.sessions_at_last_dive || 0)
                           && t.session_count >= 2;
-    const ddAffordance  = canGenerateDD
-      ? `<span class="btn-view-dd" onclick="event.stopPropagation();window.location='/research/deeper-dive-confirm?topic=${encodeURIComponent(t.topic)}'">Generate Deeper Dive →</span>`
-      : '';
     row.innerHTML = `
       <span class="thread-name">${t.topic}</span>
       <span class="thread-stats">${statsText}</span>
-      ${ddAffordance || `<span class="thread-last-run">${lastRun}</span>`}
+      <span class="thread-spacer"></span>
       <span class="thread-running-badge">running…</span>
       <button class="thread-run-btn" onclick="runSession(event, '${t.topic}')">▶</button>
+      ${canGenerateDD
+        ? `<span class="btn-view-dd" onclick="event.stopPropagation();window.location='/research/deeper-dive-confirm?topic=${encodeURIComponent(t.topic)}'">Generate Deeper Dive →</span>`
+        : `<span class="thread-last-run">${lastRun}</span>`}
     `;
     return row;
   }
