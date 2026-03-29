@@ -73,9 +73,18 @@ def _parse_session_sections(text: str) -> dict:
                     findings.append(line)
 
         elif 'source' in heading and 'further' not in heading:
-            for line in body.splitlines():
+            # Join continuation lines (URL lives on indented line after the [N] line)
+            raw_lines = body.splitlines()
+            joined: list[str] = []
+            for raw in raw_lines:
+                if raw and raw[0] in ' \t' and joined and re.match(r'\[\d+\]', joined[-1]):
+                    joined[-1] = joined[-1].rstrip() + ' ' + raw.strip()
+                else:
+                    joined.append(raw)
+            for line in joined:
                 line = line.strip()
-                m = re.match(r'\[(\d+)\]\s+([^.]+)\.\s+"([^"]+)"\.\s*(https?://\S*)?', line)
+                # Domain may contain dots (e.g. www.eia.gov) — use lazy (.+?) match
+                m = re.match(r'\[(\d+)\]\s+(.+?)\.\s+"([^"]+)"\.?\s*(https?://\S*)?', line)
                 if m:
                     sources.append({
                         'num':    int(m.group(1)),
