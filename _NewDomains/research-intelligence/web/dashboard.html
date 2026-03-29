@@ -634,8 +634,7 @@
     row.innerHTML = `
       <span class="thread-name">${t.topic}</span>
       <span class="thread-stats">${statsText}</span>
-      <span class="thread-last-run">${lastRun}</span>
-      ${ddAffordance}
+      ${ddAffordance || `<span class="thread-last-run">${lastRun}</span>`}
       <span class="thread-running-badge">running…</span>
       <button class="thread-run-btn" onclick="runSession(event, '${t.topic}')">▶</button>
     `;
