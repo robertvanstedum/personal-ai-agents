@@ -595,9 +595,17 @@
       row.className = 'thread-row thread-closed';
       row.style.cursor = 'pointer';
       row.addEventListener('click', (e) => {
-        if (!e.target.closest('.btn-view-dd')) {
+        if (!e.target.closest('button, .btn-view-dd')) {
           window.location = `/research/sessions?topic=${encodeURIComponent(t.topic)}`;
         }
+      });
+      row.addEventListener('mouseenter', () => {
+        const btn = row.querySelector('.thread-run-btn');
+        if (btn && !row.classList.contains('running')) btn.style.display = 'inline-block';
+      });
+      row.addEventListener('mouseleave', () => {
+        const btn = row.querySelector('.thread-run-btn');
+        if (btn) btn.style.display = 'none';
       });
       let ddLink = '';
       if (t.deeper_dive_generated && t.deeper_dive_path) {
@@ -608,6 +616,9 @@
       row.innerHTML = `
         <span class="thread-name">${t.topic}</span>
         <span class="thread-stats">${statsText}</span>
+        <span class="thread-spacer"></span>
+        <span class="thread-running-badge">running…</span>
+        <button class="thread-run-btn" onclick="runSession(event, '${t.topic}')">▶</button>
         ${ddLink || `<span class="thread-last-run">${lastRun}</span>`}
       `;
       return row;
