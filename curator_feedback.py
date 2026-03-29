@@ -345,49 +345,154 @@ Write directly - no preamble."""
 
 def regenerate_deep_dives_index():
     """Regenerate deep dives index.html after creating a new deep dive"""
+    from datetime import datetime
     deep_dives_dir = Path(__file__).parent / "interests" / "2026" / "deep-dives"
-    
+
     if not deep_dives_dir.exists():
         return
-    
-    # Scan for markdown files
-    dives = []
+
+    # ── Scan curator deep dives (existing) ───────────────────────────────────
+    deep_dives = []
     for md_file in deep_dives_dir.glob("*.md"):
         with open(md_file, 'r') as f:
             content = f.read()
-        
-        # Extract metadata
-        title_match = re.search(r'^# (.+)$', content, re.MULTILINE)
+
+        title_match  = re.search(r'^# (.+)$', content, re.MULTILINE)
         source_match = re.search(r'\*\*Source:\*\* (.+)$', content, re.MULTILINE)
-        date_match = re.search(r'\*\*Date:\*\* (.+)$', content, re.MULTILINE)
-        
+        date_match   = re.search(r'\*\*Date:\*\* (.+)$', content, re.MULTILINE)
+
         if title_match and source_match and date_match:
-            from datetime import datetime
-            title = title_match.group(1).strip()
-            source = source_match.group(1).strip()
+            title    = title_match.group(1).strip()
+            source   = source_match.group(1).strip()
             date_str = date_match.group(1).strip()
-            html_file = md_file.stem + '.html'
-            hash_id   = md_file.stem[:5]
+            hash_id  = md_file.stem[:5]
+            try:
+                date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+            except Exception:
+                date_obj = datetime.now()
+
+            deep_dives.append({
+                'title':   title,
+                'source':  source,
+                'date':    date_obj,
+                'hash_id': hash_id,
+            })
+
+    deep_dives.sort(key=lambda x: x['date'], reverse=True)
+
+    # ── Scan research deeper dives ────────────────────────────────────────────
+    research_dd_dir = Path(__file__).parent / "_NewDomains" / "research-intelligence" / "data" / "deeper_dives"
+    deeper_dives = []
+
+    if research_dd_dir.exists():
+        for md_file in research_dd_dir.glob("*-deeper-dive-*.md"):
+            with open(md_file, 'r') as f:
+                content = f.read()
+
+            title_m    = re.search(r'^#\s+DEEPER DIVE:\s+(.+)$', content, re.MULTILINE)
+            date_m     = re.search(r'Generated:\s*(\d{4}-\d{2}-\d{2})', content)
+            sessions_m = re.search(r'(\d+)\s+sessions?', content)
+            sources_m  = re.search(r'(\d+)\s+sources?', content)
+            cost_m     = re.search(r'Est\.\s*cost:\s*\$([0-9.]+)', content)
+
+            if not (title_m and date_m):
+                continue
+
+            topic    = title_m.group(1).strip()
+            date_str = date_m.group(1).strip()
+            sessions = sessions_m.group(1) if sessions_m else '?'
+            sources  = sources_m.group(1)  if sources_m  else '?'
+            cost     = f'${cost_m.group(1)}' if cost_m else ''
+            stem     = md_file.stem
 
             try:
                 date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-            except:
+            except Exception:
                 date_obj = datetime.now()
 
-            dives.append({
-                'title': title,
-                'source': source,
-                'date': date_obj,
-                'html_file': html_file,
-                'hash_id': hash_id,
+            # Extract first sentence from Revised Framing section
+            excerpt = ''
+            framing_m = re.search(
+                r'##\s+[0-9.]*\s*REVISED FRAMING[^\n]*\n+(.*?)(?=\n##|\Z)',
+                content, re.DOTALL | re.IGNORECASE
+            )
+            if framing_m:
+                raw = framing_m.group(1).strip()
+                # Strip markdown bold/italic markers
+                raw = re.sub(r'\*\*(.+?)\*\*', r'\1', raw)
+                raw = re.sub(r'\*(.+?)\*', r'\1', raw)
+                raw = re.sub(r'^#+\s+', '', raw, flags=re.MULTILINE)
+                # Take first non-empty line
+                for line in raw.splitlines():
+                    line = line.strip()
+                    if line:
+                        excerpt = line[:160] + ('…' if len(line) > 160 else '')
+                        break
+
+            stats_parts = [f'{sessions} sessions', f'{sources} sources']
+            if cost:
+                stats_parts.append(cost)
+            stats = ' · '.join(stats_parts)
+
+            deeper_dives.append({
+                'topic':   topic,
+                'stem':    stem,
+                'date':    date_obj,
+                'stats':   stats,
+                'excerpt': excerpt,
             })
-    
-    # Sort newest first
-    dives.sort(key=lambda x: x['date'], reverse=True)
-    
-    # Generate HTML (simplified version)
+
+    deeper_dives.sort(key=lambda x: x['date'], reverse=True)
+
+    # ── Build rows ─────────────────────────────────────────────────────────────
+
+    # Deeper Dives section (research threads)
+    deeper_section = ''
+    if deeper_dives:
+        dd_rows = ''
+        for dd in deeper_dives:
+            formatted_date = dd['date'].strftime("%b %d, %Y")
+            url = f'/research/deeper-dive-result/{dd["stem"]}'
+            excerpt_html = f'<span class="dd-excerpt">{dd["excerpt"]}</span>' if dd['excerpt'] else ''
+            dd_rows += f'''                <tr class="deeper-dive-row">
+                    <td>
+                        <span class="deeper-dive-badge">Deeper Dive</span>
+                    </td>
+                    <td class="dd-topic">
+                        <a href="{url}">{dd["topic"]}</a>
+                        {excerpt_html}
+                    </td>
+                    <td><span class="dd-stats">{dd["stats"]}</span></td>
+                    <td><span class="date-badge">{formatted_date}</span></td>
+                    <td><a href="{url}" class="action-btn">Read →</a></td>
+                </tr>
+'''
+        deeper_section = f'''    <div class="section-label">Deeper Dives</div>
+    <div class="table-wrap" style="margin-bottom: 2rem;">
+        <table>
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Thread</th>
+                    <th>Stats</th>
+                    <th>Date</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+{dd_rows}            </tbody>
+        </table>
+    </div>
+'''
+
+    # Divider (only if both sections have entries)
+    divider = ''
+    if deeper_dives and deep_dives:
+        divider = '    <div class="section-divider">Deep Dives</div>\n'
+
+    # Deep Dives rows (curator — unchanged)
     rows = ""
-    for dive in dives:
+    for dive in deep_dives:
         formatted_date = dive['date'].strftime("%b %d, %Y")
         rows += f'''                <tr>
                     <td><span class="date-badge">{formatted_date}</span></td>
@@ -398,7 +503,7 @@ def regenerate_deep_dives_index():
                     <td><a href="/research/deep-dive/{dive['hash_id']}" class="action-btn">Read Analysis →</a></td>
                 </tr>
 '''
-    
+
     if not rows:
         rows = '''                <tr>
                     <td colspan="4" style="text-align: center; padding: 30px; color: #888;">
@@ -406,6 +511,13 @@ def regenerate_deep_dives_index():
                     </td>
                 </tr>
 '''
+
+    # Count line
+    count_parts = []
+    if deeper_dives:
+        count_parts.append(f'{len(deeper_dives)} deeper dive{"s" if len(deeper_dives) != 1 else ""}')
+    count_parts.append(f'{len(deep_dives)} deep dive{"s" if len(deep_dives) != 1 else ""}')
+    count_label = ' · '.join(count_parts)
     
     html = f'''<!DOCTYPE html>
 <html>
@@ -627,6 +739,69 @@ def regenerate_deep_dives_index():
         .action-btn:hover {{
             background: rgba(139,94,42,0.15);
         }}
+
+        /* ── Deeper Dive rows ── */
+        .deeper-dive-row {{
+            border-left: 3px solid #f59e0b;
+        }}
+        .deeper-dive-row td:first-child {{
+            padding-left: 13px;  /* compensate for border */
+        }}
+        .deeper-dive-badge {{
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #f59e0b;
+            border-radius: 4px;
+            padding: 2px 6px;
+            white-space: nowrap;
+        }}
+        .dd-topic a {{
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            text-decoration: none;
+            display: block;
+            line-height: 1.4;
+        }}
+        .dd-topic a:hover {{ color: var(--accent); }}
+        .dd-excerpt {{
+            font-size: 12px;
+            color: var(--text-dim);
+            font-style: italic;
+            display: block;
+            margin-top: 3px;
+            line-height: 1.4;
+        }}
+        .dd-stats {{
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            white-space: nowrap;
+        }}
+
+        /* ── Section labels / dividers ── */
+        .section-label {{
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+        }}
+        .section-divider {{
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            border-top: 1px solid var(--border);
+            padding-top: 20px;
+            margin-bottom: 14px;
+        }}
     </style>
 </head>
 <body>
@@ -647,10 +822,10 @@ def regenerate_deep_dives_index():
 <main>
     <div class="page-header">
         <h1 class="page-title">🔍 Deep Dive Archive</h1>
-        <p class="page-meta">{len(dives)} deep dives</p>
+        <p class="page-meta">{count_label}</p>
     </div>
 
-    <div class="table-wrap">
+{deeper_section}{divider}    <div class="table-wrap">
         <table>
             <thead>
                 <tr>
@@ -668,12 +843,13 @@ def regenerate_deep_dives_index():
 
 </body>
 </html>'''
-    
+
     index_file = deep_dives_dir / "index.html"
     with open(index_file, 'w') as f:
         f.write(html)
-    
-    print(f"📑 Deep dives index updated ({len(dives)} entries)")
+
+    total = len(deeper_dives) + len(deep_dives)
+    print(f"📑 Deep dives index updated ({len(deeper_dives)} deeper + {len(deep_dives)} deep = {total} total)")
 
 def generate_deep_dive_html(hash_id, article_data, initial_interest, dive_focus, analysis_content, cost, input_tokens, output_tokens):
     """Generate HTML version of deep dive analysis"""

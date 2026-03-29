@@ -218,6 +218,69 @@
         .action-btn:hover {
             background: rgba(139,94,42,0.15);
         }
+
+        /* ── Deeper Dive rows ── */
+        .deeper-dive-row {
+            border-left: 3px solid #f59e0b;
+        }
+        .deeper-dive-row td:first-child {
+            padding-left: 13px;  /* compensate for border */
+        }
+        .deeper-dive-badge {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #f59e0b;
+            border-radius: 4px;
+            padding: 2px 6px;
+            white-space: nowrap;
+        }
+        .dd-topic a {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            text-decoration: none;
+            display: block;
+            line-height: 1.4;
+        }
+        .dd-topic a:hover { color: var(--accent); }
+        .dd-excerpt {
+            font-size: 12px;
+            color: var(--text-dim);
+            font-style: italic;
+            display: block;
+            margin-top: 3px;
+            line-height: 1.4;
+        }
+        .dd-stats {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            white-space: nowrap;
+        }
+
+        /* ── Section labels / dividers ── */
+        .section-label {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+        }
+        .section-divider {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            border-top: 1px solid var(--border);
+            padding-top: 20px;
+            margin-bottom: 14px;
+        }
     </style>
 </head>
 <body>
@@ -238,9 +301,86 @@
 <main>
     <div class="page-header">
         <h1 class="page-title">🔍 Deep Dive Archive</h1>
-        <p class="page-meta">23 deep dives</p>
+        <p class="page-meta">5 deeper dives · 23 deep dives</p>
     </div>
 
+    <div class="section-label">Deeper Dives</div>
+    <div class="table-wrap" style="margin-bottom: 2rem;">
+        <table>
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Thread</th>
+                    <th>Stats</th>
+                    <th>Date</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="deeper-dive-row">
+                    <td>
+                        <span class="deeper-dive-badge">Deeper Dive</span>
+                    </td>
+                    <td class="dd-topic">
+                        <a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-005">Strait Of Hormuz</a>
+                        <span class="dd-excerpt">Your hypothesis contains an important insight: asymmetric stakes matter, and the party willing to suffer more has leverage. But the research—and the logical str…</span>
+                    </td>
+                    <td><span class="dd-stats">3 sessions · 3 sources · $0.24</span></td>
+                    <td><span class="date-badge">Mar 29, 2026</span></td>
+                    <td><a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-005" class="action-btn">Read →</a></td>
+                </tr>
+                <tr class="deeper-dive-row">
+                    <td>
+                        <span class="deeper-dive-badge">Deeper Dive</span>
+                    </td>
+                    <td class="dd-topic">
+                        <a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-002">Strait Of Hormuz</a>
+                        <span class="dd-excerpt">Your original hypothesis has a compelling internal logic but may be inverting the asymmetry. Consider reframing:</span>
+                    </td>
+                    <td><span class="dd-stats">3 sessions · 0 sources · $0.21</span></td>
+                    <td><span class="date-badge">Mar 28, 2026</span></td>
+                    <td><a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-002" class="action-btn">Read →</a></td>
+                </tr>
+                <tr class="deeper-dive-row">
+                    <td>
+                        <span class="deeper-dive-badge">Deeper Dive</span>
+                    </td>
+                    <td class="dd-topic">
+                        <a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-003">Strait Of Hormuz</a>
+                        <span class="dd-excerpt">Your original hypothesis has a compelling internal logic but rests on an untested asymmetry. The research didn't challenge it — but it also didn't support it.</span>
+                    </td>
+                    <td><span class="dd-stats">3 sessions · 3 sources · $0.22</span></td>
+                    <td><span class="date-badge">Mar 28, 2026</span></td>
+                    <td><a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-003" class="action-btn">Read →</a></td>
+                </tr>
+                <tr class="deeper-dive-row">
+                    <td>
+                        <span class="deeper-dive-badge">Deeper Dive</span>
+                    </td>
+                    <td class="dd-topic">
+                        <a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-004">Strait Of Hormuz</a>
+                        <span class="dd-excerpt">Your original motivation frames this as a pain-tolerance competition: Iran is willing to suffer; is everyone else?</span>
+                    </td>
+                    <td><span class="dd-stats">3 sessions · 3 sources · $0.21</span></td>
+                    <td><span class="date-badge">Mar 28, 2026</span></td>
+                    <td><a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-004" class="action-btn">Read →</a></td>
+                </tr>
+                <tr class="deeper-dive-row">
+                    <td>
+                        <span class="deeper-dive-badge">Deeper Dive</span>
+                    </td>
+                    <td class="dd-topic">
+                        <a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-001">Strait Of Hormuz</a>
+                        <span class="dd-excerpt">Your original hypothesis was: Iran is willing to suffer more than the world is willing to suffer for lack of oil. They can hold for months without starvation or…</span>
+                    </td>
+                    <td><span class="dd-stats">2 sessions · 0 sources · $0.22</span></td>
+                    <td><span class="date-badge">Mar 28, 2026</span></td>
+                    <td><a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-001" class="action-btn">Read →</a></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="section-divider">Deep Dives</div>
     <div class="table-wrap">
         <table>
             <thead>
