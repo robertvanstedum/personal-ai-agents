@@ -140,6 +140,29 @@ Later in the day, **AI Observations** arrives: the system's own read on
 what it surfaced — what's surging, what's missing, where the story is.
 You respond. Those responses feed the learning loop.
 
+### Research Intelligence (v1.1)
+
+Background research threads accumulate sources daily against your defined
+topics. Each session scores candidates against your research targets,
+builds a library of qualified sources, and tracks what's been seen — so
+subsequent sessions surface fresh material rather than repeating the same
+sources.
+
+Five active threads as of v1.1: empire-landpower, china-rise,
+gold-geopolitics, strait-of-hormuz, hellscape-taiwan-porcupine.
+
+### Deeper Dives
+
+On-demand synthesis documents generated from research threads. A
+Synthesizer pass assembles findings and bibliography; a Challenger pass
+pressure-tests the hypothesis. The result is a structured document you
+can return to and build on. Dives are iterative — generate again after
+new sessions accumulate and get a fresh synthesis against a richer source
+base.
+
+The reading-to-research loop: morning article → Deep Dive → spawn thread
+→ sessions accumulate → generate Deeper Dive → repeat.
+
 ### On Demand
 
 - **React & learn** — like, dislike, or save any article on either surface.
@@ -155,14 +178,53 @@ You respond. Those responses feed the learning loop.
 
 ---
 
+## How It's Built
+
+mini-moi uses a three-agent workflow with strict separation of concerns:
+
+| Agent | Role |
+|-------|------|
+| Claude.ai | Design, strategy, architecture decisions |
+| Claude Code | Implementation, commits, file-level execution |
+| OpenClaw | Planning, documentation, memory, issue tracking |
+
+One agent is active on the repository at a time. Robert is the decision
+point between them. New domains and features stage in `_NewDomains/`
+before graduating to the main repo on release — Research Intelligence
+followed this path. Language and Jobs are next.
+
+### Cost baseline (build phase)
+
+These reflect active development. Production costs for a stable daily-use
+system will be meaningfully lower.
+
+| Item | Cost |
+|------|------|
+| Monthly API spend | $35–45 (build phase) |
+| Per research session | ~$0.002–0.005 |
+| Per deeper dive | ~$0.21–0.24 |
+| Research pilot budget | $20 allocated · $0.08 used at v1.1 |
+
+Cost discipline is a design constraint, not an afterthought.
+
+---
+
 ## Where It Goes Next
 
-The geopolitics and finance domain is 1.0. Active development continues —
-expanding sources, deepening the learning loop, and refining the pipeline
-within this domain. The architecture is designed to extend to others:
-health, language learning, team environments at work.
+### v1.2 — Mac Mini + infrastructure
 
-See [ROADMAP.md](ROADMAP.md) for what's next.
+Always-on Mac Mini eliminates sleep interruptions. PostgreSQL activates
+for structured storage. Reading Room lands — full article text, not just
+links. Curator novelty scoring with 7-day windowed implementation.
+
+### v1.3 — Intelligence layer
+
+Neo4j graph activation. Cross-thread pattern detection. Local LLM for
+mining latent connections across months of accumulated sessions. The
+backtrace vision: *"I thought X in March 2026 — was I right, and what
+led me there."*
+
+See [ROADMAP.md](ROADMAP.md) for full detail.
 
 ---
 
@@ -190,5 +252,6 @@ All three emerged from building and operating this system.
 
 ---
 
-**Status:** v1.0 feature complete — March 2026
+**Status:** v1.1 — Research Intelligence — March 29, 2026
 **Author:** Robert van Stedum
+**Release notes:** [docs/releases/RELEASE_v1.1_2026-03-29.md](docs/releases/RELEASE_v1.1_2026-03-29.md)
