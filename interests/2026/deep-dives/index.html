@@ -13,13 +13,11 @@
             --surface: #faf7f2;
             --surface2: #f0ebe0;
             --border: #ddd6c8;
-            --border2: #c8bfaf;
             --text: #2a2418;
             --text-muted: #6b5f4e;
             --text-dim: #9e9080;
             --accent: #8b5e2a;
             --accent-dim: rgba(139,94,42,0.08);
-            --accent-glow: rgba(139,94,42,0.18);
             --shadow: rgba(42,36,24,0.08);
         }
 
@@ -38,7 +36,7 @@
         }
 
         header {
-            border-bottom: 1px solid var(--border);
+            border-bottom: 0.5px solid var(--border);
             padding: 0 32px;
             display: flex;
             align-items: center;
@@ -46,17 +44,12 @@
             height: 60px;
             position: sticky;
             top: 0;
-            background: rgba(245,240,232,0.94);
+            background: rgba(245,240,232,0.95);
             backdrop-filter: blur(12px);
             z-index: 100;
-            box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
         }
 
-        .header-left {
-            display: flex;
-            align-items: baseline;
-            gap: 16px;
-        }
+        .header-left { display: flex; align-items: baseline; gap: 16px; }
 
         .logo {
             font-family: 'Playfair Display', serif;
@@ -74,10 +67,7 @@
             text-transform: uppercase;
         }
 
-        .header-nav {
-            display: flex;
-            gap: 4px;
-        }
+        .header-nav { display: flex; gap: 4px; }
 
         .nav-link {
             font-family: 'DM Mono', monospace;
@@ -91,10 +81,7 @@
             border: 1px solid transparent;
         }
 
-        .nav-link:hover {
-            color: var(--text);
-            background: var(--surface2);
-        }
+        .nav-link:hover { color: var(--text); background: var(--surface2); }
 
         .nav-link.active {
             color: var(--accent);
@@ -103,18 +90,16 @@
         }
 
         main {
-            max-width: 1400px;
+            max-width: 900px;
             margin: 0 auto;
-            padding: 32px;
+            padding: 36px 32px 60px;
         }
 
-        .page-header {
-            margin-bottom: 28px;
-        }
+        .page-header { margin-bottom: 36px; }
 
         .page-title {
             font-family: 'Playfair Display', serif;
-            font-size: 32px;
+            font-size: 28px;
             font-weight: 400;
             color: var(--text);
             letter-spacing: -0.03em;
@@ -129,157 +114,181 @@
             letter-spacing: 0.04em;
         }
 
-        .table-wrap {
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 12px var(--shadow);
-            background: var(--surface);
+        /* ── Section ── */
+        .section {
+            margin-bottom: 36px;
         }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
+        .section-hdr {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            padding-bottom: 9px;
+            border-bottom: 0.5px solid var(--border);
+            margin-bottom: 0;
         }
 
-        thead {
-            background: var(--bg-texture);
-            border-bottom: 2px solid var(--border);
-        }
-
-        th {
-            padding: 11px 16px;
-            text-align: left;
+        .section-name {
             font-family: 'DM Mono', monospace;
-            font-size: 10px;
-            font-weight: 500;
-            color: var(--text-dim);
+            font-size: 11px;
             letter-spacing: 0.08em;
             text-transform: uppercase;
-            white-space: nowrap;
-        }
-
-        tbody tr {
-            border-bottom: 1px solid var(--border);
-            transition: background 0.1s;
-            background: var(--surface);
-        }
-
-        tbody tr:last-child {
-            border-bottom: none;
-        }
-
-        tbody tr:hover {
-            background: rgba(139,94,42,0.04);
-        }
-
-        td {
-            padding: 14px 16px;
-            vertical-align: top;
-        }
-
-        .dive-title a {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text);
-            text-decoration: none;
-            line-height: 1.4;
-        }
-
-        .dive-title a:hover {
-            color: var(--accent);
-        }
-
-        .date-badge {
-            font-family: 'DM Mono', monospace;
-            font-size: 11px;
             color: var(--text-dim);
         }
 
-        .source-name {
-            font-size: 12px;
-            color: var(--text-muted);
-            font-weight: 500;
-        }
-
-        .action-btn {
-            padding: 4px 12px;
-            background: var(--accent-dim);
-            color: var(--accent);
-            text-decoration: none;
-            border-radius: 4px;
+        .section-count {
             font-family: 'DM Mono', monospace;
-            font-size: 11px;
-            font-weight: 500;
-            border: 1px solid rgba(139,94,42,0.2);
-            transition: all 0.15s;
+            font-size: 10px;
+            color: var(--text-dim);
+            opacity: 0.6;
+            margin-left: 6px;
         }
 
-        .action-btn:hover {
-            background: rgba(139,94,42,0.15);
-        }
-
-        /* ── Deeper Dive rows ── */
-        .deeper-dive-row {
-            border-left: 3px solid #f59e0b;
-        }
-        .deeper-dive-row td:first-child {
-            padding-left: 13px;  /* compensate for border */
-        }
-        .deeper-dive-badge {
+        .toggle-btn {
             font-family: 'DM Mono', monospace;
             font-size: 10px;
             letter-spacing: 0.06em;
+            color: var(--accent);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .toggle-btn:hover { text-decoration: underline; }
+
+        /* ── Rows ── */
+        .row {
+            display: flex;
+            align-items: baseline;
+            gap: 14px;
+            padding: 11px 6px;
+            border-bottom: 0.5px solid var(--border);
+            text-decoration: none;
+            color: inherit;
+            transition: background 0.1s;
+        }
+
+        .row:last-of-type { border-bottom: none; }
+        .row:hover { background: rgba(139,94,42,0.04); }
+        .row-hidden { display: none !important; }
+
+        /* Thread row parts */
+        .row-badge {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
             background: #fef3c7;
             color: #92400e;
-            border: 1px solid #f59e0b;
-            border-radius: 4px;
+            border: 0.5px solid #f59e0b;
+            border-radius: 3px;
             padding: 2px 6px;
             white-space: nowrap;
+            flex-shrink: 0;
         }
-        .dd-topic a {
+
+        .row-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .row-title {
             font-size: 13px;
             font-weight: 600;
             color: var(--text);
-            text-decoration: none;
             display: block;
             line-height: 1.4;
         }
-        .dd-topic a:hover { color: var(--accent); }
-        .dd-excerpt {
+
+        .row:hover .row-title { color: var(--accent); }
+
+        .row-excerpt {
             font-size: 12px;
             color: var(--text-dim);
             font-style: italic;
             display: block;
-            margin-top: 3px;
+            margin-top: 2px;
             line-height: 1.4;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 520px;
         }
-        .dd-stats {
+
+        .row-meta {
             font-family: 'DM Mono', monospace;
             font-size: 11px;
             color: var(--text-dim);
             white-space: nowrap;
+            flex-shrink: 0;
         }
 
-        /* ── Section labels / dividers ── */
-        .section-label {
+        /* Article row parts */
+        .row-date-col {
             font-family: 'DM Mono', monospace;
-            font-size: 10px;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
+            font-size: 11px;
             color: var(--text-dim);
-            margin-bottom: 10px;
+            white-space: nowrap;
+            flex-shrink: 0;
+            width: 88px;
         }
-        .section-divider {
+
+        .row-source {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 500;
+            white-space: nowrap;
+            flex-shrink: 0;
+            width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Date on thread rows */
+        .row-thread .row-date {
             font-family: 'DM Mono', monospace;
-            font-size: 10px;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
+            font-size: 11px;
             color: var(--text-dim);
-            border-top: 1px solid var(--border);
-            padding-top: 20px;
-            margin-bottom: 14px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        /* Hover-reveal action */
+        .row-action {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--accent);
+            white-space: nowrap;
+            flex-shrink: 0;
+            opacity: 0;
+            transition: opacity 0.15s;
+            font-weight: 500;
+        }
+
+        .row:hover .row-action { opacity: 1; }
+
+        /* Expand footer */
+        .expand-footer {
+            padding: 10px 6px;
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--accent);
+            cursor: pointer;
+            border-top: 0.5px solid var(--border);
+            transition: color 0.1s;
+        }
+
+        .expand-footer:hover { color: var(--text); }
+
+        .section-body.expanded .expand-footer { display: none; }
+        .section-body.expanded .row-hidden { display: flex !important; }
+
+        .row-empty {
+            padding: 20px 6px;
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
         }
     </style>
 </head>
@@ -300,286 +309,66 @@
 
 <main>
     <div class="page-header">
-        <h1 class="page-title">🔍 Deep Dive Archive</h1>
-        <p class="page-meta">5 deeper dives · 23 deep dives</p>
+        <h1 class="page-title">Deep Dive Archive</h1>
+        <p class="page-meta">1 deeper dive · 23 deep dives</p>
     </div>
 
-    <div class="section-label">Deeper Dives</div>
-    <div class="table-wrap" style="margin-bottom: 2rem;">
-        <table>
-            <thead>
-                <tr>
-                    <th></th>
-                    <th>Thread</th>
-                    <th>Stats</th>
-                    <th>Date</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr class="deeper-dive-row">
-                    <td>
-                        <span class="deeper-dive-badge">Deeper Dive</span>
-                    </td>
-                    <td class="dd-topic">
-                        <a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-005">Strait Of Hormuz</a>
-                        <span class="dd-excerpt">Your hypothesis contains an important insight: asymmetric stakes matter, and the party willing to suffer more has leverage. But the research—and the logical str…</span>
-                    </td>
-                    <td><span class="dd-stats">3 sessions · 3 sources · $0.24</span></td>
-                    <td><span class="date-badge">Mar 29, 2026</span></td>
-                    <td><a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-005" class="action-btn">Read →</a></td>
-                </tr>
-                <tr class="deeper-dive-row">
-                    <td>
-                        <span class="deeper-dive-badge">Deeper Dive</span>
-                    </td>
-                    <td class="dd-topic">
-                        <a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-002">Strait Of Hormuz</a>
-                        <span class="dd-excerpt">Your original hypothesis has a compelling internal logic but may be inverting the asymmetry. Consider reframing:</span>
-                    </td>
-                    <td><span class="dd-stats">3 sessions · 0 sources · $0.21</span></td>
-                    <td><span class="date-badge">Mar 28, 2026</span></td>
-                    <td><a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-002" class="action-btn">Read →</a></td>
-                </tr>
-                <tr class="deeper-dive-row">
-                    <td>
-                        <span class="deeper-dive-badge">Deeper Dive</span>
-                    </td>
-                    <td class="dd-topic">
-                        <a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-003">Strait Of Hormuz</a>
-                        <span class="dd-excerpt">Your original hypothesis has a compelling internal logic but rests on an untested asymmetry. The research didn't challenge it — but it also didn't support it.</span>
-                    </td>
-                    <td><span class="dd-stats">3 sessions · 3 sources · $0.22</span></td>
-                    <td><span class="date-badge">Mar 28, 2026</span></td>
-                    <td><a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-003" class="action-btn">Read →</a></td>
-                </tr>
-                <tr class="deeper-dive-row">
-                    <td>
-                        <span class="deeper-dive-badge">Deeper Dive</span>
-                    </td>
-                    <td class="dd-topic">
-                        <a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-004">Strait Of Hormuz</a>
-                        <span class="dd-excerpt">Your original motivation frames this as a pain-tolerance competition: Iran is willing to suffer; is everyone else?</span>
-                    </td>
-                    <td><span class="dd-stats">3 sessions · 3 sources · $0.21</span></td>
-                    <td><span class="date-badge">Mar 28, 2026</span></td>
-                    <td><a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-004" class="action-btn">Read →</a></td>
-                </tr>
-                <tr class="deeper-dive-row">
-                    <td>
-                        <span class="deeper-dive-badge">Deeper Dive</span>
-                    </td>
-                    <td class="dd-topic">
-                        <a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-001">Strait Of Hormuz</a>
-                        <span class="dd-excerpt">Your original hypothesis was: Iran is willing to suffer more than the world is willing to suffer for lack of oil. They can hold for months without starvation or…</span>
-                    </td>
-                    <td><span class="dd-stats">2 sessions · 0 sources · $0.22</span></td>
-                    <td><span class="date-badge">Mar 28, 2026</span></td>
-                    <td><a href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-001" class="action-btn">Read →</a></td>
-                </tr>
-            </tbody>
-        </table>
+    <div class="section" id="section-threads">
+      <div class="section-hdr">
+        <span class="section-name">Deeper dives <span class="section-count">1</span></span>
+        <button class="toggle-btn" style="display:none" onclick="toggleSection('section-threads', this)">show all</button>
+      </div>
+      <div class="section-body">
+        <a class="row row-thread" href="/research/deeper-dive-result/strait-of-hormuz-deeper-dive-005"><span class="row-badge">Thread</span><span class="row-main"><span class="row-title">Strait Of Hormuz</span><span class="row-excerpt">Your hypothesis contains an important insight: asymmetric stakes matter, and the party willing to suffer more has leverage. But the research—and the logical str…</span></span><span class="row-meta">3 sessions · 3 sources · $0.24</span><span class="row-date">Mar 29, 2026</span><span class="row-action">Read &#8594;</span></a>
+      </div>
     </div>
-    <div class="section-divider">Deep Dives</div>
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Source</th>
-                    <th>Title</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><span class="date-badge">Mar 27, 2026</span></td>
-                    <td><span class="source-name">War on the Rocks</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/43c03">Hellscape Taiwan: A Porcupine Defense in the Drone Age</a>
-                    </td>
-                    <td><a href="/research/deep-dive/43c03" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Mar 26, 2026</span></td>
-                    <td><span class="source-name">Geopolitical Futures</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/7129d">How Iran Is Repricing Geography</a>
-                    </td>
-                    <td><a href="/research/deep-dive/7129d" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Mar 25, 2026</span></td>
-                    <td><span class="source-name">ZeroHedge</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/57f27">Israel Seeks To Disrupt Russian-Iranian Arms Transfer Route In The Caspian Sea</a>
-                    </td>
-                    <td><a href="/research/deep-dive/57f27" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Mar 23, 2026</span></td>
-                    <td><span class="source-name">arXiv q-fin</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/bc66a">Generalized Stock Price Prediction for Multiple Stocks Combined with News Fusion</a>
-                    </td>
-                    <td><a href="/research/deep-dive/bc66a" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Mar 20, 2026</span></td>
-                    <td><span class="source-name">Deutsche Welle</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/f41de">Iran war: Why gold prices are not soaring</a>
-                    </td>
-                    <td><a href="/research/deep-dive/f41de" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Mar 01, 2026</span></td>
-                    <td><span class="source-name">The Big Picture</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/a0c43">10 Weekend Reads</a>
-                    </td>
-                    <td><a href="/research/deep-dive/a0c43" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 28, 2026</span></td>
-                    <td><span class="source-name">Geopolitical Futures</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/03624">The Chokepoint at the Center of the US-Iran Standoff</a>
-                    </td>
-                    <td><a href="/research/deep-dive/03624" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 28, 2026</span></td>
-                    <td><span class="source-name">FAZ</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/3a4a0">Pekings Aufstieg: Der unheimliche Erfolg von Chinas Bürokraten</a>
-                    </td>
-                    <td><a href="/research/deep-dive/3a4a0" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 27, 2026</span></td>
-                    <td><span class="source-name">Fed On The Economy</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/26fa9">U.S. Import Price Dynamics Following the 2025 Tariffs</a>
-                    </td>
-                    <td><a href="/research/deep-dive/26fa9" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 26, 2026</span></td>
-                    <td><span class="source-name">Geopolitical Futures</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/e3057">The Tigray Powder Keg in the Horn of Africa</a>
-                    </td>
-                    <td><a href="/research/deep-dive/e3057" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 26, 2026</span></td>
-                    <td><span class="source-name">ZeroHedge</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/d144f">'The Mirage' Of Manufactured Calm And The Disconnect Between Markets And Reality</a>
-                    </td>
-                    <td><a href="/research/deep-dive/d144f" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 25, 2026</span></td>
-                    <td><span class="source-name">Geopolitical Futures</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/f0564">Daily Memo: Starlink Disruption in South China Sea, Russia’s Footprint in Africa</a>
-                    </td>
-                    <td><a href="/research/deep-dive/f0564" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 24, 2026</span></td>
-                    <td><span class="source-name">Treasury MSPD</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/7f21a">Monthly Statement of the Public Debt, January 31, 2026</a>
-                    </td>
-                    <td><a href="/research/deep-dive/7f21a" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 23, 2026</span></td>
-                    <td><span class="source-name">Fed On The Economy</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/8ab3d">Flash Report: January Jobless Data May Signal Improving Labor Market</a>
-                    </td>
-                    <td><a href="/research/deep-dive/8ab3d" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 22, 2026</span></td>
-                    <td><span class="source-name">Al Jazeera</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/1332e">Israeli army kills 2 Palestinians in strikes on Gaza during Ramadan</a>
-                    </td>
-                    <td><a href="/research/deep-dive/1332e" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 22, 2026</span></td>
-                    <td><span class="source-name">Fed On The Economy</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/fd0f0">China’s Role in Global Innovation Is Changing</a>
-                    </td>
-                    <td><a href="/research/deep-dive/fd0f0" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 21, 2026</span></td>
-                    <td><span class="source-name">Antiwar.com</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/5bbc8">US Plans To Build a 5,000-Person Military Base in Gaza for International Force</a>
-                    </td>
-                    <td><a href="/research/deep-dive/5bbc8" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 21, 2026</span></td>
-                    <td><span class="source-name">Fed On The Economy</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/94a40">Why AI Advancements May Push Some Workers Out of the Labor Force</a>
-                    </td>
-                    <td><a href="/research/deep-dive/94a40" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 20, 2026</span></td>
-                    <td><span class="source-name">ZeroHedge</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/d6456">Ex-CIA Analyst Peels Back The US Information Operation In Iran</a>
-                    </td>
-                    <td><a href="/research/deep-dive/d6456" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 20, 2026</span></td>
-                    <td><span class="source-name">Geopolitical Futures</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/a19c5">Taiwan at the Center of a Fragile US-China Rapprochement</a>
-                    </td>
-                    <td><a href="/research/deep-dive/a19c5" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 20, 2026</span></td>
-                    <td><span class="source-name">Geopolitical Futures</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/435ce">Why Trump is Not to Blame for Europe’s Predicament | George Friedman</a>
-                    </td>
-                    <td><a href="/research/deep-dive/435ce" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 20, 2026</span></td>
-                    <td><span class="source-name">Deutsche Welle</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/93439">Trump sweeping tariffs struck down: What happens next?</a>
-                    </td>
-                    <td><a href="/research/deep-dive/93439" class="action-btn">Read Analysis →</a></td>
-                </tr>
-                <tr>
-                    <td><span class="date-badge">Feb 19, 2026</span></td>
-                    <td><span class="source-name">ZeroHedge</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/90610">Futures Slide As Iran War Risks Add To Growing AI Disruption Fears; Oil Surges</a>
-                    </td>
-                    <td><a href="/research/deep-dive/90610" class="action-btn">Read Analysis →</a></td>
-                </tr>
-            </tbody>
-        </table>
+
+    <div class="section" id="section-articles">
+      <div class="section-hdr">
+        <span class="section-name">Deep dives <span class="section-count">23</span></span>
+        <button class="toggle-btn" onclick="toggleSection('section-articles', this)">show all</button>
+      </div>
+      <div class="section-body">
+        <a class="row row-article" href="/research/deep-dive/43c03"><span class="row-date-col">Mar 27, 2026</span><span class="row-source">War on the Rocks</span><span class="row-title">Hellscape Taiwan: A Porcupine Defense in the Drone Age</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article" href="/research/deep-dive/7129d"><span class="row-date-col">Mar 26, 2026</span><span class="row-source">Geopolitical Futures</span><span class="row-title">How Iran Is Repricing Geography</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article" href="/research/deep-dive/57f27"><span class="row-date-col">Mar 25, 2026</span><span class="row-source">ZeroHedge</span><span class="row-title">Israel Seeks To Disrupt Russian-Iranian Arms Transfer Route In The Caspian Sea</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article" href="/research/deep-dive/bc66a"><span class="row-date-col">Mar 23, 2026</span><span class="row-source">arXiv q-fin</span><span class="row-title">Generalized Stock Price Prediction for Multiple Stocks Combined with News Fusion</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article" href="/research/deep-dive/f41de"><span class="row-date-col">Mar 20, 2026</span><span class="row-source">Deutsche Welle</span><span class="row-title">Iran war: Why gold prices are not soaring</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/a0c43"><span class="row-date-col">Mar 1, 2026</span><span class="row-source">The Big Picture</span><span class="row-title">10 Weekend Reads</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/03624"><span class="row-date-col">Feb 28, 2026</span><span class="row-source">Geopolitical Futures</span><span class="row-title">The Chokepoint at the Center of the US-Iran Standoff</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/3a4a0"><span class="row-date-col">Feb 28, 2026</span><span class="row-source">FAZ</span><span class="row-title">Pekings Aufstieg: Der unheimliche Erfolg von Chinas Bürokraten</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/26fa9"><span class="row-date-col">Feb 27, 2026</span><span class="row-source">Fed On The Economy</span><span class="row-title">U.S. Import Price Dynamics Following the 2025 Tariffs</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/e3057"><span class="row-date-col">Feb 26, 2026</span><span class="row-source">Geopolitical Futures</span><span class="row-title">The Tigray Powder Keg in the Horn of Africa</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/d144f"><span class="row-date-col">Feb 26, 2026</span><span class="row-source">ZeroHedge</span><span class="row-title">'The Mirage' Of Manufactured Calm And The Disconnect Between Markets And Reality</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/f0564"><span class="row-date-col">Feb 25, 2026</span><span class="row-source">Geopolitical Futures</span><span class="row-title">Daily Memo: Starlink Disruption in South China Sea, Russia’s Footprint in Africa</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/7f21a"><span class="row-date-col">Feb 24, 2026</span><span class="row-source">Treasury MSPD</span><span class="row-title">Monthly Statement of the Public Debt, January 31, 2026</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/8ab3d"><span class="row-date-col">Feb 23, 2026</span><span class="row-source">Fed On The Economy</span><span class="row-title">Flash Report: January Jobless Data May Signal Improving Labor Market</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/1332e"><span class="row-date-col">Feb 22, 2026</span><span class="row-source">Al Jazeera</span><span class="row-title">Israeli army kills 2 Palestinians in strikes on Gaza during Ramadan</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/fd0f0"><span class="row-date-col">Feb 22, 2026</span><span class="row-source">Fed On The Economy</span><span class="row-title">China’s Role in Global Innovation Is Changing</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/5bbc8"><span class="row-date-col">Feb 21, 2026</span><span class="row-source">Antiwar.com</span><span class="row-title">US Plans To Build a 5,000-Person Military Base in Gaza for International Force</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/94a40"><span class="row-date-col">Feb 21, 2026</span><span class="row-source">Fed On The Economy</span><span class="row-title">Why AI Advancements May Push Some Workers Out of the Labor Force</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/d6456"><span class="row-date-col">Feb 20, 2026</span><span class="row-source">ZeroHedge</span><span class="row-title">Ex-CIA Analyst Peels Back The US Information Operation In Iran</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/a19c5"><span class="row-date-col">Feb 20, 2026</span><span class="row-source">Geopolitical Futures</span><span class="row-title">Taiwan at the Center of a Fragile US-China Rapprochement</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/435ce"><span class="row-date-col">Feb 20, 2026</span><span class="row-source">Geopolitical Futures</span><span class="row-title">Why Trump is Not to Blame for Europe’s Predicament | George Friedman</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/93439"><span class="row-date-col">Feb 20, 2026</span><span class="row-source">Deutsche Welle</span><span class="row-title">Trump sweeping tariffs struck down: What happens next?</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/90610"><span class="row-date-col">Feb 19, 2026</span><span class="row-source">ZeroHedge</span><span class="row-title">Futures Slide As Iran War Risks Add To Growing AI Disruption Fears; Oil Surges</span><span class="row-action">Read analysis &#8594;</span></a>
+        <div class="expand-footer" onclick="expandSection('section-articles')">+ 18 more deep dives</div>
+      </div>
     </div>
 </main>
 
+<script>
+function toggleSection(sectionId, btn) {
+    const body = document.getElementById(sectionId).querySelector('.section-body');
+    const expanded = body.classList.toggle('expanded');
+    btn.textContent = expanded ? 'collapse' : 'show all';
+}
+function expandSection(sectionId) {
+    const body = document.getElementById(sectionId).querySelector('.section-body');
+    const btn  = document.getElementById(sectionId).querySelector('.toggle-btn');
+    body.classList.add('expanded');
+    if (btn) btn.textContent = 'collapse';
+}
+</script>
 </body>
 </html>

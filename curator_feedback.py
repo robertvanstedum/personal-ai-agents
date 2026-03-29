@@ -444,73 +444,44 @@ def regenerate_deep_dives_index():
 
     deeper_dives.sort(key=lambda x: x['date'], reverse=True)
 
-    # ── Build rows ─────────────────────────────────────────────────────────────
+    # ── Build rows (new layout: collapsed sections, hover-reveal actions) ────────
 
-    # Deeper Dives section (research threads)
-    deeper_section = ''
-    if deeper_dives:
-        dd_rows = ''
-        for dd in deeper_dives:
-            formatted_date = dd['date'].strftime("%b %d, %Y")
-            url = f'/research/deeper-dive-result/{dd["stem"]}'
-            excerpt_html = f'<span class="dd-excerpt">{dd["excerpt"]}</span>' if dd['excerpt'] else ''
-            dd_rows += f'''                <tr class="deeper-dive-row">
-                    <td>
-                        <span class="deeper-dive-badge">Deeper Dive</span>
-                    </td>
-                    <td class="dd-topic">
-                        <a href="{url}">{dd["topic"]}</a>
-                        {excerpt_html}
-                    </td>
-                    <td><span class="dd-stats">{dd["stats"]}</span></td>
-                    <td><span class="date-badge">{formatted_date}</span></td>
-                    <td><a href="{url}" class="action-btn">Read →</a></td>
-                </tr>
-'''
-        deeper_section = f'''    <div class="section-label">Deeper Dives</div>
-    <div class="table-wrap" style="margin-bottom: 2rem;">
-        <table>
-            <thead>
-                <tr>
-                    <th></th>
-                    <th>Thread</th>
-                    <th>Stats</th>
-                    <th>Date</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-{dd_rows}            </tbody>
-        </table>
-    </div>
-'''
+    THREAD_LIMIT  = 3
+    ARTICLE_LIMIT = 5
 
-    # Divider (only if both sections have entries)
-    divider = ''
-    if deeper_dives and deep_dives:
-        divider = '    <div class="section-divider">Deep Dives</div>\n'
+    # Thread rows
+    thread_rows_html = ''
+    for i, dd in enumerate(deeper_dives):
+        formatted_date = dd['date'].strftime("%b %-d, %Y")
+        url = f'/research/deeper-dive-result/{dd["stem"]}'
+        excerpt_html = f'<span class="row-excerpt">{dd["excerpt"]}</span>' if dd['excerpt'] else ''
+        hidden_cls = ' row-hidden' if i >= THREAD_LIMIT else ''
+        thread_rows_html += f'        <a class="row row-thread{hidden_cls}" href="{url}"><span class="row-badge">Thread</span><span class="row-main"><span class="row-title">{dd["topic"]}</span>{excerpt_html}</span><span class="row-meta">{dd["stats"]}</span><span class="row-date">{formatted_date}</span><span class="row-action">Read &#8594;</span></a>\n'
 
-    # Deep Dives rows (curator — unchanged)
-    rows = ""
-    for dive in deep_dives:
-        formatted_date = dive['date'].strftime("%b %d, %Y")
-        rows += f'''                <tr>
-                    <td><span class="date-badge">{formatted_date}</span></td>
-                    <td><span class="source-name">{dive['source']}</span></td>
-                    <td class="dive-title">
-                        <a href="/research/deep-dive/{dive['hash_id']}">{dive['title']}</a>
-                    </td>
-                    <td><a href="/research/deep-dive/{dive['hash_id']}" class="action-btn">Read Analysis →</a></td>
-                </tr>
-'''
+    thread_more = len(deeper_dives) - THREAD_LIMIT
+    thread_toggle_style = ' style="display:none"' if len(deeper_dives) <= THREAD_LIMIT else ''
+    thread_footer_html = ''
+    if thread_more > 0:
+        label = f'+ {thread_more} more thread{"s" if thread_more != 1 else ""}'
+        thread_footer_html = f'        <div class="expand-footer" onclick="expandSection(\'section-threads\')">{label}</div>\n'
 
-    if not rows:
-        rows = '''                <tr>
-                    <td colspan="4" style="text-align: center; padding: 30px; color: #888;">
-                        No deep dives yet. Like or save an article, then click 🔖 Deep Dive!
-                    </td>
-                </tr>
-'''
+    # Article rows
+    article_rows_html = ''
+    for i, dive in enumerate(deep_dives):
+        formatted_date = dive['date'].strftime("%b %-d, %Y")
+        url = f'/research/deep-dive/{dive["hash_id"]}'
+        hidden_cls = ' row-hidden' if i >= ARTICLE_LIMIT else ''
+        article_rows_html += f'        <a class="row row-article{hidden_cls}" href="{url}"><span class="row-date-col">{formatted_date}</span><span class="row-source">{dive["source"]}</span><span class="row-title">{dive["title"]}</span><span class="row-action">Read analysis &#8594;</span></a>\n'
+
+    if not article_rows_html:
+        article_rows_html = '        <div class="row-empty">No deep dives yet. Like or save an article, then click 🔖 Deep Dive!</div>\n'
+
+    article_more = len(deep_dives) - ARTICLE_LIMIT
+    article_toggle_style = ' style="display:none"' if len(deep_dives) <= ARTICLE_LIMIT else ''
+    article_footer_html = ''
+    if article_more > 0:
+        label = f'+ {article_more} more deep dive{"s" if article_more != 1 else ""}'
+        article_footer_html = f'        <div class="expand-footer" onclick="expandSection(\'section-articles\')">{label}</div>\n'
 
     # Count line
     count_parts = []
@@ -518,7 +489,20 @@ def regenerate_deep_dives_index():
         count_parts.append(f'{len(deeper_dives)} deeper dive{"s" if len(deeper_dives) != 1 else ""}')
     count_parts.append(f'{len(deep_dives)} deep dive{"s" if len(deep_dives) != 1 else ""}')
     count_label = ' · '.join(count_parts)
-    
+
+    # Deeper Dives section block (only if entries exist)
+    threads_section_html = ''
+    if deeper_dives:
+        threads_section_html = f'''    <div class="section" id="section-threads">
+      <div class="section-hdr">
+        <span class="section-name">Deeper dives <span class="section-count">{len(deeper_dives)}</span></span>
+        <button class="toggle-btn"{thread_toggle_style} onclick="toggleSection(\'section-threads\', this)">show all</button>
+      </div>
+      <div class="section-body">
+{thread_rows_html}{thread_footer_html}      </div>
+    </div>
+'''
+
     html = f'''<!DOCTYPE html>
 <html>
 <head>
@@ -534,13 +518,11 @@ def regenerate_deep_dives_index():
             --surface: #faf7f2;
             --surface2: #f0ebe0;
             --border: #ddd6c8;
-            --border2: #c8bfaf;
             --text: #2a2418;
             --text-muted: #6b5f4e;
             --text-dim: #9e9080;
             --accent: #8b5e2a;
             --accent-dim: rgba(139,94,42,0.08);
-            --accent-glow: rgba(139,94,42,0.18);
             --shadow: rgba(42,36,24,0.08);
         }}
 
@@ -559,7 +541,7 @@ def regenerate_deep_dives_index():
         }}
 
         header {{
-            border-bottom: 1px solid var(--border);
+            border-bottom: 0.5px solid var(--border);
             padding: 0 32px;
             display: flex;
             align-items: center;
@@ -567,17 +549,12 @@ def regenerate_deep_dives_index():
             height: 60px;
             position: sticky;
             top: 0;
-            background: rgba(245,240,232,0.94);
+            background: rgba(245,240,232,0.95);
             backdrop-filter: blur(12px);
             z-index: 100;
-            box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
         }}
 
-        .header-left {{
-            display: flex;
-            align-items: baseline;
-            gap: 16px;
-        }}
+        .header-left {{ display: flex; align-items: baseline; gap: 16px; }}
 
         .logo {{
             font-family: 'Playfair Display', serif;
@@ -595,10 +572,7 @@ def regenerate_deep_dives_index():
             text-transform: uppercase;
         }}
 
-        .header-nav {{
-            display: flex;
-            gap: 4px;
-        }}
+        .header-nav {{ display: flex; gap: 4px; }}
 
         .nav-link {{
             font-family: 'DM Mono', monospace;
@@ -612,10 +586,7 @@ def regenerate_deep_dives_index():
             border: 1px solid transparent;
         }}
 
-        .nav-link:hover {{
-            color: var(--text);
-            background: var(--surface2);
-        }}
+        .nav-link:hover {{ color: var(--text); background: var(--surface2); }}
 
         .nav-link.active {{
             color: var(--accent);
@@ -624,18 +595,16 @@ def regenerate_deep_dives_index():
         }}
 
         main {{
-            max-width: 1400px;
+            max-width: 900px;
             margin: 0 auto;
-            padding: 32px;
+            padding: 36px 32px 60px;
         }}
 
-        .page-header {{
-            margin-bottom: 28px;
-        }}
+        .page-header {{ margin-bottom: 36px; }}
 
         .page-title {{
             font-family: 'Playfair Display', serif;
-            font-size: 32px;
+            font-size: 28px;
             font-weight: 400;
             color: var(--text);
             letter-spacing: -0.03em;
@@ -650,157 +619,181 @@ def regenerate_deep_dives_index():
             letter-spacing: 0.04em;
         }}
 
-        .table-wrap {{
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 12px var(--shadow);
-            background: var(--surface);
+        /* ── Section ── */
+        .section {{
+            margin-bottom: 36px;
         }}
 
-        table {{
-            width: 100%;
-            border-collapse: collapse;
+        .section-hdr {{
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            padding-bottom: 9px;
+            border-bottom: 0.5px solid var(--border);
+            margin-bottom: 0;
         }}
 
-        thead {{
-            background: var(--bg-texture);
-            border-bottom: 2px solid var(--border);
-        }}
-
-        th {{
-            padding: 11px 16px;
-            text-align: left;
+        .section-name {{
             font-family: 'DM Mono', monospace;
-            font-size: 10px;
-            font-weight: 500;
-            color: var(--text-dim);
+            font-size: 11px;
             letter-spacing: 0.08em;
             text-transform: uppercase;
-            white-space: nowrap;
-        }}
-
-        tbody tr {{
-            border-bottom: 1px solid var(--border);
-            transition: background 0.1s;
-            background: var(--surface);
-        }}
-
-        tbody tr:last-child {{
-            border-bottom: none;
-        }}
-
-        tbody tr:hover {{
-            background: rgba(139,94,42,0.04);
-        }}
-
-        td {{
-            padding: 14px 16px;
-            vertical-align: top;
-        }}
-
-        .dive-title a {{
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text);
-            text-decoration: none;
-            line-height: 1.4;
-        }}
-
-        .dive-title a:hover {{
-            color: var(--accent);
-        }}
-
-        .date-badge {{
-            font-family: 'DM Mono', monospace;
-            font-size: 11px;
             color: var(--text-dim);
         }}
 
-        .source-name {{
-            font-size: 12px;
-            color: var(--text-muted);
-            font-weight: 500;
-        }}
-
-        .action-btn {{
-            padding: 4px 12px;
-            background: var(--accent-dim);
-            color: var(--accent);
-            text-decoration: none;
-            border-radius: 4px;
+        .section-count {{
             font-family: 'DM Mono', monospace;
-            font-size: 11px;
-            font-weight: 500;
-            border: 1px solid rgba(139,94,42,0.2);
-            transition: all 0.15s;
+            font-size: 10px;
+            color: var(--text-dim);
+            opacity: 0.6;
+            margin-left: 6px;
         }}
 
-        .action-btn:hover {{
-            background: rgba(139,94,42,0.15);
-        }}
-
-        /* ── Deeper Dive rows ── */
-        .deeper-dive-row {{
-            border-left: 3px solid #f59e0b;
-        }}
-        .deeper-dive-row td:first-child {{
-            padding-left: 13px;  /* compensate for border */
-        }}
-        .deeper-dive-badge {{
+        .toggle-btn {{
             font-family: 'DM Mono', monospace;
             font-size: 10px;
             letter-spacing: 0.06em;
+            color: var(--accent);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+        }}
+
+        .toggle-btn:hover {{ text-decoration: underline; }}
+
+        /* ── Rows ── */
+        .row {{
+            display: flex;
+            align-items: baseline;
+            gap: 14px;
+            padding: 11px 6px;
+            border-bottom: 0.5px solid var(--border);
+            text-decoration: none;
+            color: inherit;
+            transition: background 0.1s;
+        }}
+
+        .row:last-of-type {{ border-bottom: none; }}
+        .row:hover {{ background: rgba(139,94,42,0.04); }}
+        .row-hidden {{ display: none !important; }}
+
+        /* Thread row parts */
+        .row-badge {{
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
             background: #fef3c7;
             color: #92400e;
-            border: 1px solid #f59e0b;
-            border-radius: 4px;
+            border: 0.5px solid #f59e0b;
+            border-radius: 3px;
             padding: 2px 6px;
             white-space: nowrap;
+            flex-shrink: 0;
         }}
-        .dd-topic a {{
+
+        .row-main {{
+            flex: 1;
+            min-width: 0;
+        }}
+
+        .row-title {{
             font-size: 13px;
             font-weight: 600;
             color: var(--text);
-            text-decoration: none;
             display: block;
             line-height: 1.4;
         }}
-        .dd-topic a:hover {{ color: var(--accent); }}
-        .dd-excerpt {{
+
+        .row:hover .row-title {{ color: var(--accent); }}
+
+        .row-excerpt {{
             font-size: 12px;
             color: var(--text-dim);
             font-style: italic;
             display: block;
-            margin-top: 3px;
+            margin-top: 2px;
             line-height: 1.4;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 520px;
         }}
-        .dd-stats {{
+
+        .row-meta {{
             font-family: 'DM Mono', monospace;
             font-size: 11px;
             color: var(--text-dim);
             white-space: nowrap;
+            flex-shrink: 0;
         }}
 
-        /* ── Section labels / dividers ── */
-        .section-label {{
+        /* Article row parts */
+        .row-date-col {{
             font-family: 'DM Mono', monospace;
-            font-size: 10px;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
+            font-size: 11px;
             color: var(--text-dim);
-            margin-bottom: 10px;
+            white-space: nowrap;
+            flex-shrink: 0;
+            width: 88px;
         }}
-        .section-divider {{
+
+        .row-source {{
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 500;
+            white-space: nowrap;
+            flex-shrink: 0;
+            width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+
+        /* Date on thread rows */
+        .row-thread .row-date {{
             font-family: 'DM Mono', monospace;
-            font-size: 10px;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
+            font-size: 11px;
             color: var(--text-dim);
-            border-top: 1px solid var(--border);
-            padding-top: 20px;
-            margin-bottom: 14px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }}
+
+        /* Hover-reveal action */
+        .row-action {{
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--accent);
+            white-space: nowrap;
+            flex-shrink: 0;
+            opacity: 0;
+            transition: opacity 0.15s;
+            font-weight: 500;
+        }}
+
+        .row:hover .row-action {{ opacity: 1; }}
+
+        /* Expand footer */
+        .expand-footer {{
+            padding: 10px 6px;
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--accent);
+            cursor: pointer;
+            border-top: 0.5px solid var(--border);
+            transition: color 0.1s;
+        }}
+
+        .expand-footer:hover {{ color: var(--text); }}
+
+        .section-body.expanded .expand-footer {{ display: none; }}
+        .section-body.expanded .row-hidden {{ display: flex !important; }}
+
+        .row-empty {{
+            padding: 20px 6px;
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
         }}
     </style>
 </head>
@@ -821,26 +814,34 @@ def regenerate_deep_dives_index():
 
 <main>
     <div class="page-header">
-        <h1 class="page-title">🔍 Deep Dive Archive</h1>
+        <h1 class="page-title">Deep Dive Archive</h1>
         <p class="page-meta">{count_label}</p>
     </div>
 
-{deeper_section}{divider}    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Source</th>
-                    <th>Title</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-{rows}            </tbody>
-        </table>
+{threads_section_html}
+    <div class="section" id="section-articles">
+      <div class="section-hdr">
+        <span class="section-name">Deep dives <span class="section-count">{len(deep_dives)}</span></span>
+        <button class="toggle-btn"{article_toggle_style} onclick="toggleSection(\'section-articles\', this)">show all</button>
+      </div>
+      <div class="section-body">
+{article_rows_html}{article_footer_html}      </div>
     </div>
 </main>
 
+<script>
+function toggleSection(sectionId, btn) {{
+    const body = document.getElementById(sectionId).querySelector('.section-body');
+    const expanded = body.classList.toggle('expanded');
+    btn.textContent = expanded ? 'collapse' : 'show all';
+}}
+function expandSection(sectionId) {{
+    const body = document.getElementById(sectionId).querySelector('.section-body');
+    const btn  = document.getElementById(sectionId).querySelector('.toggle-btn');
+    body.classList.add('expanded');
+    if (btn) btn.textContent = 'collapse';
+}}
+</script>
 </body>
 </html>'''
 
