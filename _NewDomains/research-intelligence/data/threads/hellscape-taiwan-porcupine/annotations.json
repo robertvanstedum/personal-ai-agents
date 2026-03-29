@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "id": "ann-001",
+    "thread_id": "hellscape-taiwan-porcupine-2026",
+    "timestamp": "2026-03-29T19:02:29+00:00",
+    "type": "direction_shift",
+    "level": "thread",
+    "ref_session": null,
+    "ref_article": null,
+    "note": "There was drift on the last run, so the prompts have been updated and when a deep dive is generated, hopefully it is better.",
+    "affects_next_session": true,
+    "influenced_sessions": [
+      "taiwan-003"
+    ]
+  }
+]

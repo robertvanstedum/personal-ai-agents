@@ -21,9 +21,9 @@ This is not a polished retrospective. It is an honest account of what happened, 
 **User motivation:**
 > "This is a place that regime in Iran is willing to suffer for more than the world will want to suffer for lack of oil. Can they hold for months without general starvation or domestic uprising? Probably. The world costs will be worse and objective of regime for world to back off accomplished? That's the game, I think. They are willing to suffer. Is everyone else?"
 
-**Framework:** Two sequential Claude Opus calls
-- Agent 1 (Synthesizer): honest assessment of what the research found
-- Agent 2 (Challenger): structured counter-analysis modeled on CIA Devil's Advocacy and Red Team techniques (Heuer & Pherson, 2009)
+**Framework:** Two sequential API calls
+- Agent 1 (Synthesizer): claude-opus-4-5, temp 0.3 — honest assessment of what the research found
+- Agent 2 (Challenger): claude-opus-4-5, temp 0.7 — structured counter-analysis modeled on CIA Devil's Advocacy and Red Team techniques (Heuer & Pherson, 2009)
 
 **Cost per Deeper Dive:** ~$0.21-0.22
 
@@ -33,9 +33,9 @@ This is not a polished retrospective. It is an honest account of what happened, 
 
 The full output is in `data/deeper_dives/strait-of-hormuz-deeper-dive-001.md`.
 
-### What worked immediately
+### What worked
 
-**The Challenger did real intellectual work.** On a thread with only 2 sessions and thin source coverage, the Challenger:
+On a thread with only 2 sessions and thin source coverage, the Challenger (claude-opus-4-5, temp 0.7):
 
 - Identified that the "willing to suffer" premise conflates *regime survival* with *population tolerance* — a genuine analytical distinction
 - Surfaced the Iran food import dependency (~30-40% of food imported) as a critical gap in the hypothesis
@@ -44,7 +44,7 @@ The full output is in `data/deeper_dives/strait-of-hormuz-deeper-dive-001.md`.
 - Raised the China complication — Iran's largest oil customer might not support closure
 - Reframed a "drift" source (Strait of Malacca) as a useful comparative case rather than noise
 
-**The revised framing section worked as designed.** The Challenger correctly identified the motivation as a hypothesis (not curiosity) and produced a reframed, more precise hypothesis plus four specific research questions — telling the user exactly what to investigate next.
+The revised framing section identified the motivation as a hypothesis rather than curiosity and produced a reframed hypothesis plus four specific research questions — pointing directly at what to investigate next.
 
 ### What needed improvement
 
@@ -68,7 +68,9 @@ These were passed to OpenClaw (the memory/ops agent) as promoted query suggestio
 
 **OpenClaw did not just add the queries. It opened the web interface and clicked the ▶ run button itself.**
 
-This was not explicitly instructed. OpenClaw read the context, understood the intent, navigated to the Research landing page (a feature built earlier the same day), and executed the session autonomously.
+This was not explicitly instructed. The instruction passed was: *"Tell OpenClaw to add these as promoted queries for the `strait-of-hormuz` topic in `research_config.json`, then kick off a session via the ▶ button on the Research landing page."* OpenClaw read that, navigated to the Research landing page (a feature built earlier the same day), and executed the session without further hand-holding.
+
+The specific Challenger output that drove this was the revised framing section ending with: *"A second research pass focused on Iranian domestic resilience, historical blockade/embargo cases, and Chinese strategic interests would either strengthen or break it. What do you want to know next?"* — five specific gaps, each translatable directly into a search query.
 
 ### Why this matters
 
@@ -80,7 +82,7 @@ The Deeper Dive framework created conditions for agent autonomy that didn't prev
 
 The intelligence layer (Deeper Dive) fed directly into operational execution (OpenClaw autonomously running the session via the ▶ button) without explicit human instruction. This was emergent behavior.
 
-**The implication:** Higher quality analysis produces clearer, more actionable gaps — which in turn enables more autonomous agent behavior. The quality of the analytical output directly affects the system's operational capability. This is a core mini-moi design principle worth tracking.
+**The observation:** Specific, actionable analytical output appears to lower the threshold for autonomous agent execution. The quality of analysis affected operational behavior — not through explicit instruction but through the clarity of the gaps it surfaced. Whether this generalizes beyond this instance is worth watching.
 
 ---
 
@@ -110,7 +112,7 @@ Deeper Dive reruns with richer material
 Hypothesis either strengthened or broken
 ```
 
-This is the intended mini-moi intelligence loop. It ran end-to-end for the first time on March 28, 2026.
+The loop ran end-to-end for the first time on March 28, 2026.
 
 ---
 
@@ -181,11 +183,11 @@ These are named workstreams, not vague improvement notes. They follow naturally 
 
 ## Verdict
 
-**The two-agent Deeper Dive framework is validated.** It produces genuine analytical value — not summaries, but structured challenges to the user's thinking — at low cost and fast iteration speed. The framework was built and validated in a single afternoon.
+The two-agent framework produced structured analytical challenge rather than confirmatory summary — on a thin thread, at low cost, with measurable improvement across four iterations in a single day.
 
 The next steps are:
-1. Wire into thread closing flow (SPEC_DEEPER_DIVE_MECHANICS — to be written)
-2. Upgrade the research agent so it surfaces the sources the Challenger keeps asking for
+1. Wire into thread closing flow (SPEC_DEEPER_DIVE_MECHANICS — written March 29)
+2. Upgrade the research agent — the Challenger kept asking questions the research layer couldn't answer. This elevates Research Agent v2 from nice-to-have to priority.
 3. Run against the taiwan-defense thread once it has 3-5 sessions for a second domain test
 
 ---
@@ -222,29 +224,10 @@ This is mini-moi as a living system, not a fixed stack.
 
 ---
 
-## A Note on Mini-moi's Design Philosophy
+## A Note on Methodology
 
-This POC was built the same way the Curator intelligence layer was built: prove the output quality on real data before investing in UI or flow integration. The Deeper Dive framework was designed, specced, reviewed by three agents (Claude.ai, OpenClaw, Claude Code), and built in a single afternoon — running against real data the same day.
+This POC followed the same pattern as the Curator intelligence layer: run against real data before building UI or flow integration. The framework was specced, reviewed by three agents, built as a standalone script, and run four times on the same day against a live research thread.
 
-The case study is being written while the POC is still live because the most interesting findings — including the unexpected agent autonomy moment — happen in real time and are lost if captured only in retrospect.
+The case study was written while the POC was still running because the most interesting observations — including the autonomy moment — are lost if captured only in retrospect.
 
-The Deeper Dive framework closes the loop between Curator and Research. A user reads a Daily Briefing article, saves it, runs a Deep Dive, spawns a Research thread, accumulates sessions over days, and closes with a Deeper Dive that challenges their original thinking. Mini-moi is not a tool that finds information. It is a thinking partner that pushes back.
-
-This is mini-moi as a methodology, not just a tool.
-
-## Close Out — March 28, 2026
-
-This POC was completed in a single day. The two-agent Deeper Dive framework was designed, specced, reviewed by three agents (Claude.ai, OpenClaw, Claude Code), built as a standalone script, and run against real research data four times — all within ~6 hours.
-
-The framework works. It produces genuine analytical friction rather than confirmatory summaries. The quality improved measurably with each iteration, even with thin source data.
-
-The most interesting outcome was not the analysis itself, but the unexpected agent autonomy it enabled: the Challenger’s output directly drove OpenClaw to autonomously trigger the next research session. This is the intelligence → action loop we are trying to build.
-
-**Next phase:** Integrate into the thread closing flow, upgrade the research agent to better answer the questions the Challenger keeps asking, and test on a second domain (Taiwan defense thread).
-
-This case study will be maintained as a living document.
-
-**Total POC cost:** ~$0.85
-**Research thread sessions:** 3 on `strait-of-hormuz`
-**Deeper Dive runs:** 4
-**Status:** Framework validated. Ready for integration.
+The Deeper Dive closes a loop: a user reads the Daily Briefing, saves an article, runs a Deep Dive, spawns a Research thread, accumulates sessions over days, and closes with a Deeper Dive that challenges their original thinking. The system is designed to push back, not confirm.

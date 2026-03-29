@@ -52,3 +52,21 @@ agent_active: false
 | 2026-03-23 | gold-004 | 1min | $0.00 | $0.08 | gold-004: 12 triaged, top find: The Bretton Woods System | World Gold Council |
 
 | 2026-03-23 | gold-005 | 1min | $0.00 | $0.08 | gold-005: 12 triaged, top find: The Bretton Woods System | World Gold Council |
+
+| 2026-03-28 | strait-of-hormuz-001 | 1min | $0.00 | $0.08 | strait-of-hormuz-001: 12 triaged, top find: Amid regional conflict, the Strait of Hormuz remains critica |
+
+| 2026-03-28 | strait-of-hormuz-002 | 1min | $0.00 | $0.08 | strait-of-hormuz-002: 12 triaged, top find: Amid regional conflict, the Strait of Hormuz remains critica |
+
+| 2026-03-28 | strait-of-hormuz-003 | 1min | $0.00 | $0.08 | strait-of-hormuz-003: 12 triaged, top find: Amid regional conflict, the Strait of Hormuz remains critica |
+
+| 2026-03-29 | empire-landpower-001 | 1min | $0.00 | $0.08 | empire-landpower-001: 12 triaged, top find: Empire or Imperialism? A debate with Giovanni Arrighi's |
+
+| 2026-03-29 | hellscape-taiwan-porcupine-001 | 1min | $0.00 | $0.08 | hellscape-taiwan-porcupine-001: 12 triaged, top find: The New American Way of War: Military Culture and the Politi |
+
+| 2026-03-29 | hellscape-taiwan-porcupine-002 | 1min | $0.00 | $0.08 | hellscape-taiwan-porcupine-002: 12 triaged, top find: The New American Way of War: Military Culture and the Politi |
+
+| 2026-03-29 | hellscape-taiwan-porcupine-003 | RUNNING | TBD | $0.08 | Started 12:49 |
+| 2026-03-29 | taiwan-003 | RUNNING | TBD | $0.08 | Started 14:13 | orphan RUNNING session(s) detected: [hellscape-taiwan-porcupine-003] |
+| 2026-03-29 | taiwan-003 | 1min | $0.00 | $0.08 | taiwan-003: 12 triaged, top find: Porcupine or Honey Badger?: The “Overall Defense Concept” an |
+
+| 2026-03-29 | hellscape-taiwan-porcupine-003 | 1min | $0.00 | $0.08 | hellscape-taiwan-porcupine-003: 12 triaged, top find: Porcupine or Honey Badger?: The “Overall Defense Concept” an |
