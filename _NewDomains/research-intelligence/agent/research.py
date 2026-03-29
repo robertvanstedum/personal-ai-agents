@@ -25,6 +25,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
+from source_utils import load_seen_urls, save_seen_urls, apply_novelty_score
 
 try:
     import anthropic
@@ -544,6 +545,11 @@ def main():
         raw_candidates = raw_candidates[:12]
 
     # ── 2. Triage ──────────────────────────────────────────────────────────────
+    # Novelty scoring — load seen URLs for this topic
+    seen_urls = load_seen_urls(topic)
+    if seen_urls:
+        print(f"  Novelty cache: {len(seen_urls)} previously-seen URLs for '{topic}'")
+
     print(f"\n[2] Triage ({len(raw_candidates)} candidates)...")
     scored = []
 
@@ -593,6 +599,13 @@ def main():
 
         star = "⭐" if score >= 4 else "  "
         print(f"    {star} Score: {score}/5 | {language} | {usage_note} | {explanation[:80]}")
+
+    # Apply novelty discount before ranking (modifies scores in-place)
+    novelty_discount = config.get("search", {}).get("novelty_discount_factor", 0.3)
+    apply_novelty_score(scored, seen_urls, discount=novelty_discount)
+    flagged = sum(1 for c in scored if not c.get("novelty_flag", True))
+    if flagged:
+        print(f"  Novelty: {flagged} seen URL(s) discounted by {novelty_discount:.0%}")
 
     scored.sort(key=lambda x: x.get("score", 0), reverse=True)
 
@@ -845,6 +858,12 @@ def main():
     )
     findings_path.write_text(findings_md)
     print(f"  → Written: {findings_path.name}")
+
+    # Persist seen URLs for next session (all triaged candidates)
+    all_scored_urls = [c['url'] for c in scored if c.get('url')]
+    if all_scored_urls:
+        save_seen_urls(topic, all_scored_urls)
+        print(f"  Novelty cache: {len(all_scored_urls)} URLs saved for '{topic}'")
 
     # ── 6. Update library/README.md ────────────────────────────────────────────
     print(f"\n[6] Updating library/README.md...")
