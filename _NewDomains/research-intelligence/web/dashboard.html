@@ -591,14 +591,19 @@
 
     // ── Closed with Deeper Dive ───────────────────────────────────────────────
     if (isClosed) {
-      const row = document.createElement('a');
+      const row = document.createElement('div');
       row.className = 'thread-row thread-closed';
-      row.href = `/research/sessions?topic=${encodeURIComponent(t.topic)}`;
+      row.style.cursor = 'pointer';
+      row.addEventListener('click', (e) => {
+        if (!e.target.closest('.btn-view-dd')) {
+          window.location = `/research/sessions?topic=${encodeURIComponent(t.topic)}`;
+        }
+      });
       let ddLink = '';
       if (t.deeper_dive_generated && t.deeper_dive_path) {
         // Derive URL: data/deeper_dives/strait-of-hormuz-deeper-dive-005.md → stem
         const stem = t.deeper_dive_path.split('/').pop().replace(/\.md$/, '');
-        ddLink = `<a class="btn-view-dd" href="/research/deeper-dive-result/${encodeURIComponent(stem)}" onclick="event.stopPropagation()">View Deeper Dive →</a>`;
+        ddLink = `<span class="btn-view-dd" onclick="event.stopPropagation();window.location='/research/deeper-dive-result/${encodeURIComponent(stem)}'">View Deeper Dive →</span>`;
       }
       row.innerHTML = `
         <span class="thread-name">${t.topic}</span>
