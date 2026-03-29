@@ -1312,12 +1312,13 @@ def research_deep_dive_view(hash_id: str):
     meta_block    = '\n'.join(meta_parts)
     interest_text = _html_lib.escape(meta.get('interest', ''))
 
-    # Derive a default topic slug from the title
-    _raw_slug = dd['title'].lower()
-    _raw_slug = _re.sub(r'[^a-z0-9\s]', ' ', _raw_slug)
-    _raw_slug = _re.sub(r'\s+', '-', _raw_slug.strip())
-    _raw_slug = _re.sub(r'-+', '-', _raw_slug)
-    topic_slug = _raw_slug[:60].rstrip('-')
+    # Derive a short topic slug: strip stop words, take first 3 meaningful words
+    _STOP = {'a','an','the','in','on','at','of','to','and','or','for','by',
+             'with','from','is','are','was','were','be','been','as','it','its',
+             'this','that','how','why','what','when','where','who'}
+    _words = _re.sub(r'[^a-z0-9\s]', ' ', dd['title'].lower()).split()
+    _keep  = [w for w in _words if w not in _STOP and len(w) > 1][:3]
+    topic_slug = '-'.join(_keep) if _keep else _re.sub(r'[^a-z0-9]+', '-', dd['title'].lower()).strip('-')[:40]
 
     footer = ''
     if dd['cost']:

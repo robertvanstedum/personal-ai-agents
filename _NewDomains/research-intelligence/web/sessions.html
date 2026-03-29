@@ -462,8 +462,10 @@
     document.getElementById('subtitleLine').textContent =
       `${data.topics.length} topics · ${data.topics.reduce((s,t) => s + t.count, 0)} sessions`;
 
-    // Auto-select first topic
-    if (data.topics[0]) selectTopic(data.topics[0].topic);
+    // Select topic from URL param, falling back to first
+    const urlTopic = new URLSearchParams(window.location.search).get('topic');
+    const initial  = data.topics.find(t => t.topic === urlTopic) || data.topics[0];
+    if (initial) selectTopic(initial.topic);
   }
 
   // ── Select Topic ────────────────────────────────────────────────────────────
