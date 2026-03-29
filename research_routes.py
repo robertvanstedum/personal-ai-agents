@@ -746,6 +746,107 @@ def _next_dd_output_path(topic: str) -> Path:
     return dd_dir / f'{topic}-deeper-dive-{n:03d}.md'
 
 
+@research_bp.route('/research/deeper-dive-result/<stem>')
+def research_deeper_dive_result(stem: str):
+    """
+    Serve a research Deeper Dive output file by filename stem.
+    GET /research/deeper-dive-result/strait-of-hormuz-deeper-dive-005
+
+    Renders the markdown file from data/deeper_dives/ as a styled read-only page.
+    """
+    # Sanitise: only slug-safe characters
+    if not _re.match(r'^[a-zA-Z0-9_-]+$', stem):
+        return "invalid filename", 400
+
+    dd_dir  = RESEARCH_ROOT / 'data' / 'deeper_dives'
+    md_path = dd_dir / f'{stem}.md'
+    if not md_path.exists():
+        return f"Deeper Dive '{stem}' not found", 404
+
+    raw   = md_path.read_text()
+    title = stem.replace('-', ' ').title()
+    # Extract first H1 for page title
+    h1_m  = _re.search(r'^#\s+(.+)$', raw, _re.MULTILINE)
+    if h1_m:
+        title = h1_m.group(1).strip()
+
+    # Lightweight markdown → HTML
+    def _md_to_html(text: str) -> str:
+        lines  = text.splitlines()
+        out    = []
+        in_p   = False
+        for line in lines:
+            if _re.match(r'^#{1,6}\s', line):
+                if in_p: out.append('</p>'); in_p = False
+                level = len(_re.match(r'^(#+)', line).group(1))
+                content = _html_lib.escape(line.lstrip('#').strip())
+                out.append(f'<h{level}>{content}</h{level}>')
+            elif line.strip() == '---':
+                if in_p: out.append('</p>'); in_p = False
+                out.append('<hr>')
+            elif line.startswith('- ') or line.startswith('* '):
+                if in_p: out.append('</p>'); in_p = False
+                out.append(f'<li>{_html_lib.escape(line[2:].strip())}</li>')
+            elif line.strip() == '':
+                if in_p: out.append('</p>'); in_p = False
+            else:
+                # Italics from *...*
+                escaped = _html_lib.escape(line.strip())
+                escaped = _re.sub(r'\*(.+?)\*', r'<em>\1</em>', escaped)
+                if not in_p: out.append('<p>'); in_p = True
+                out.append(escaped + ' ')
+        if in_p: out.append('</p>')
+        return '\n'.join(out)
+
+    body_html = _md_to_html(raw)
+    safe_title = _html_lib.escape(title)
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{safe_title}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {{
+      --bg: #f5f0e8; --surface: #faf7f2; --border: #ddd6c8;
+      --text: #2a2418; --text-muted: #6b5f4e; --text-dim: #9e9080;
+      --accent: #8b5e2a;
+    }}
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{ font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); padding: 0; }}
+    .page-header {{
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0 2rem; height: 52px; display: flex; align-items: center;
+      justify-content: space-between; position: sticky; top: 0; z-index: 100;
+    }}
+    .page-header a {{ font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 600; color: var(--text); text-decoration: none; }}
+    .back-link {{ font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); text-decoration: none; }}
+    .back-link:hover {{ color: var(--accent); }}
+    .container {{ max-width: 760px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }}
+    h1 {{ font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: normal; margin-bottom: 0.5rem; line-height: 1.3; }}
+    h2 {{ font-family: 'Playfair Display', serif; font-size: 1.15rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--text); }}
+    h3 {{ font-family: 'DM Mono', monospace; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 1.5rem 0 0.5rem; }}
+    p {{ font-size: 1rem; line-height: 1.7; color: var(--text); margin-bottom: 1rem; }}
+    li {{ font-size: 1rem; line-height: 1.6; color: var(--text); margin-left: 1.5rem; margin-bottom: 0.35rem; list-style: disc; }}
+    hr {{ border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }}
+    em {{ color: var(--text-muted); font-style: italic; }}
+  </style>
+</head>
+<body>
+<header class="page-header">
+  <a href="/">mini-moi</a>
+  <a href="/research/dashboard" class="back-link">← Dashboard</a>
+</header>
+<div class="container">
+{body_html}
+</div>
+</body>
+</html>""", 200, {'Content-Type': 'text/html'}
+
+
 @research_bp.route('/research/deeper-dive-confirm')
 def research_deeper_dive_confirm():
     """

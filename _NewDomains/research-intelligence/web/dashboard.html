@@ -400,6 +400,41 @@
     .thread-row.thread-expired:hover .btn-archive { display: inline-block; }
     .btn-archive:hover { color: var(--text); border-color: var(--border2); }
 
+    /* ── Generating state (DD in progress) ── */
+    .thread-row.thread-generating {
+      border-left: 3px solid var(--accent);
+      padding-left: calc(1rem - 3px);
+      opacity: 0.75;
+    }
+
+    .thread-generating-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--accent);
+      margin-left: 0.5rem;
+      flex-shrink: 0;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    /* ── Closed thread with Deeper Dive ── */
+    .thread-row.thread-closed {
+      opacity: 0.6;
+    }
+
+    .btn-view-dd {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--accent);
+      text-decoration: none;
+      margin-left: auto;
+      padding-left: 1rem;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .btn-view-dd:hover { text-decoration: underline; }
+
     @media (max-width: 600px) {
       .topic-stats { gap: 1rem; }
       .stat-value  { font-size: 1.2rem; }
@@ -473,6 +508,12 @@
   const REFRESH_MS = 60000;
   let refreshTimer = null;
 
+  // ── Deeper Dive generation state ─────────────────────────────────────────────
+  let _ddGeneratingTopic = null;
+  let _ddPollTimer = null;
+  let _ddPollCount = 0;
+  const DD_MAX_POLLS = 40; // 40 × 10s = ~6 min ceiling
+
   async function load() {
     try {
       const res  = await fetch('/api/research/dashboard');
@@ -501,11 +542,13 @@
       (b.used >= b.warn  ? ' over' :
        b.used >= b.warn * 0.85 ? ' warn' : '');
 
-    // Thread list
+    // Thread list — skip archived and retired; they are preserved on disk but not shown
     const container = document.getElementById('thread-list');
     container.innerHTML = '';
     for (const t of data.topics) {
-      container.appendChild(buildRow(t));
+      if (t.status === 'archived' || t.status === 'retired') continue;
+      const row = buildRow(t);
+      if (row) container.appendChild(row);
     }
 
     // Status bar
@@ -518,46 +561,78 @@
   }
 
   function buildRow(t) {
-    const isEmpty  = t.session_count === 0;
-    const isExpired = t.status === 'expired';
-    const lastRun  = t.last_run
+    const isEmpty      = t.session_count === 0;
+    const isExpired    = t.status === 'expired';
+    const isClosed     = t.status === 'closed';
+    const isGenerating = _ddGeneratingTopic === t.topic;
+    const lastRun      = t.last_run
       ? new Date(t.last_run).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})
       : 'never run';
     const parts = [];
     parts.push(`${t.session_count} session${t.session_count !== 1 ? 's' : ''}`);
     if (t.saved_count)     parts.push(`${t.saved_count} saved`);
     if (t.candidate_count) parts.push(`${t.candidate_count} candidates`);
+    const statsText = parts.join(' · ');
 
-    const row = document.createElement(isExpired ? 'div' : 'a');
-    let cls = 'thread-row';
-    if (isEmpty)   cls += ' thread-empty';
-    if (isExpired) cls += ' thread-expired';
-    row.className = cls;
-    if (!isExpired) {
-      row.href = `/research/sessions?topic=${encodeURIComponent(t.topic)}`;
-    } else {
+    // ── Generating (DD in progress) ──────────────────────────────────────────
+    if (isGenerating) {
+      const row = document.createElement('div');
+      row.className = 'thread-row thread-generating';
       row.style.cursor = 'default';
-    }
-
-    if (isExpired) {
       row.innerHTML = `
         <span class="thread-name">${t.topic}</span>
-        <span class="thread-stats">${parts.join(' · ')}</span>
+        <span class="thread-stats">${statsText}</span>
+        <span class="thread-generating-badge">✦ generating…</span>
+      `;
+      return row;
+    }
+
+    // ── Closed with Deeper Dive ───────────────────────────────────────────────
+    if (isClosed) {
+      const row = document.createElement('a');
+      row.className = 'thread-row thread-closed';
+      row.href = `/research/sessions?topic=${encodeURIComponent(t.topic)}`;
+      let ddLink = '';
+      if (t.deeper_dive_generated && t.deeper_dive_path) {
+        // Derive URL: data/deeper_dives/strait-of-hormuz-deeper-dive-005.md → stem
+        const stem = t.deeper_dive_path.split('/').pop().replace(/\.md$/, '');
+        ddLink = `<a class="btn-view-dd" href="/research/deeper-dive-result/${encodeURIComponent(stem)}" onclick="event.stopPropagation()">View Deeper Dive →</a>`;
+      }
+      row.innerHTML = `
+        <span class="thread-name">${t.topic}</span>
+        <span class="thread-stats">${statsText}</span>
+        ${ddLink || `<span class="thread-last-run">${lastRun}</span>`}
+      `;
+      return row;
+    }
+
+    // ── Expired (Ready to close) ──────────────────────────────────────────────
+    if (isExpired) {
+      const row = document.createElement('div');
+      row.className = 'thread-row thread-expired';
+      row.style.cursor = 'default';
+      row.innerHTML = `
+        <span class="thread-name">${t.topic}</span>
+        <span class="thread-stats">${statsText}</span>
         <span class="thread-expired-badge">Ready to close</span>
         <a class="btn-deeper-dive" href="/research/deeper-dive-confirm?topic=${encodeURIComponent(t.topic)}">✦ Deeper Dive</a>
         <button class="btn-archive" onclick="archiveThread(event, '${t.topic}')">Archive</button>
         <span class="thread-last-run">${lastRun}</span>
       `;
-    } else {
-      row.innerHTML = `
-        <span class="thread-name">${t.topic}</span>
-        <span class="thread-stats">${parts.join(' · ')}</span>
-        <span class="thread-last-run">${lastRun}</span>
-        <span class="thread-running-badge">running…</span>
-        <button class="thread-run-btn" onclick="runSession(event, '${t.topic}')">▶</button>
-      `;
+      return row;
     }
 
+    // ── Active ────────────────────────────────────────────────────────────────
+    const row = document.createElement('a');
+    row.className = 'thread-row' + (isEmpty ? ' thread-empty' : '');
+    row.href = `/research/sessions?topic=${encodeURIComponent(t.topic)}`;
+    row.innerHTML = `
+      <span class="thread-name">${t.topic}</span>
+      <span class="thread-stats">${statsText}</span>
+      <span class="thread-last-run">${lastRun}</span>
+      <span class="thread-running-badge">running…</span>
+      <button class="thread-run-btn" onclick="runSession(event, '${t.topic}')">▶</button>
+    `;
     return row;
   }
 
@@ -677,7 +752,50 @@
     } catch (_) { /* ignore */ }
   }
 
-  load().then(() => restoreRunningState());
+  // ── Deeper Dive generation polling ───────────────────────────────────────────
+
+  function startDDPoll() {
+    clearTimeout(_ddPollTimer);
+    _ddPollCount = 0;
+    _ddPollTimer = setTimeout(pollDDStatus, 10000);
+  }
+
+  async function pollDDStatus() {
+    _ddPollCount++;
+    if (_ddPollCount > DD_MAX_POLLS) {
+      _ddGeneratingTopic = null;
+      load();
+      return;
+    }
+    try {
+      const res  = await fetch('/api/research/generate-deeper-dive/status');
+      const data = await res.json();
+      if (!data.running) {
+        _ddGeneratingTopic = null;
+        showToast('Deeper Dive ready');
+        load();
+        return;
+      }
+    } catch (_) { /* network blip — keep polling */ }
+    _ddPollTimer = setTimeout(pollDDStatus, 10000);
+  }
+
+  async function restoreDDState() {
+    try {
+      const res  = await fetch('/api/research/generate-deeper-dive/status');
+      const data = await res.json();
+      if (data.running && data.topic) {
+        _ddGeneratingTopic = data.topic;
+        // Re-render so the generating row shows immediately, then start polling
+        load().then(() => startDDPoll());
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  load().then(() => {
+    restoreRunningState();
+    restoreDDState();
+  });
 </script>
 </div>
 </div>
