@@ -554,12 +554,12 @@
             <div class="finding-text">${escHtml(f)}</div>
             <div class="finding-actions">
               <button class="find-btn" onclick="toggleNote(${i}, 'reaction')">💬 Note</button>
-              <button class="find-btn" onclick="toggleNote(${i}, 'direction_shift')">↪ Note</button>
             </div>
             <div class="note-area" id="note-${i}">
               <textarea class="note-input" id="note-text-${i}" placeholder="Your note…"></textarea>
               <div class="note-row">
-                <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-dim)" id="note-type-label-${i}">reaction</span>
+                <button class="note-type" id="ntype-reaction-${i}" onclick="setNoteType(${i},'reaction')" title="Reaction">💬</button>
+                <button class="note-type" id="ntype-direction_shift-${i}" onclick="setNoteType(${i},'direction_shift')" title="Direction shift">↪</button>
                 <button class="note-save-btn" onclick="saveNote(${i}, '${escHtml(f).substring(0,80)}')">Save →</button>
               </div>
             </div>
@@ -613,15 +613,22 @@
 
   // ── Note toggling ────────────────────────────────────────────────────────────
   let noteTypes = {};
-  function toggleNote(idx, type) {
+  function setNoteType(idx, type) {
     noteTypes[idx] = type;
+    ['reaction', 'direction_shift'].forEach(t => {
+      const btn = document.getElementById(`ntype-${t}-${idx}`);
+      if (btn) btn.classList.toggle('active', t === type);
+    });
+  }
+
+  function toggleNote(idx, type) {
     const area = document.getElementById(`note-${idx}`);
-    const label = document.getElementById(`note-type-label-${idx}`);
-    if (label) label.textContent = type;
-    if (area.classList.contains('open') && noteTypes[idx] === type) {
+    const isOpen = area.classList.contains('open');
+    if (isOpen && noteTypes[idx] === type) {
       area.classList.remove('open');
     } else {
       area.classList.add('open');
+      setNoteType(idx, type);
     }
   }
 
