@@ -73,4 +73,4 @@ Deep Dive page becomes the connection point between the two domains. Users don't
 
 - Public roadmap: `ROADMAP.md` (repo root)
 - Vision / ownership architecture: `~/.openclaw/workspace/VISION.md`
-- Build plan (current): `_NewDomains/research-intelligence/docs/specs/build-plan-2026-03-22.md`
+- Build plan (current): `_NewDomains/research-intelligence/docs/specs/build-plan-2026-03-22.md`\n\n## Upcoming Builds (Post-Phase 1)\n- Implement Source Intelligence Upgrade (GitHub #10)\n- Implement Deeper Dive Mechanics (GitHub #11)\n\nPrioritize: Novelty + Discovery first for Source Upgrade.
