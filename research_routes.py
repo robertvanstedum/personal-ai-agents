@@ -1202,6 +1202,11 @@ def _parse_deep_dive_md(md_path: Path) -> dict:
             analysis_start = i
             break
     analysis_raw = '\n'.join(lines[analysis_start:])
+    # Strip ## Your Interest section — already shown in the meta card
+    analysis_raw = _re.sub(
+        r'^##\s+Your Interest\s*\n.*?(?=\n## )',
+        '', analysis_raw, flags=_re.DOTALL | _re.IGNORECASE
+    ).lstrip('\n -').strip()
     sources_m = _re.search(r'\n##\s+\d*\.?\s*Sources[^\n]*', analysis_raw, _re.IGNORECASE)
     if sources_m:
         analysis_raw = analysis_raw[:sources_m.start()]

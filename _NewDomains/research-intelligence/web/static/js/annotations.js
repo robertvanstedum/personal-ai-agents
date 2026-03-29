@@ -144,6 +144,8 @@ const AnnotationSystem = {
   initSelectionPopup() {
     document.addEventListener('mouseup', (e) => {
       const existing = document.getElementById('ann-selection-popup');
+      // Don't interfere while user is interacting with the popup itself
+      if (existing && e.target.closest('#ann-selection-popup')) return;
       if (existing) existing.remove();
 
       const selection = window.getSelection();
