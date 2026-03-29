@@ -367,17 +367,19 @@ def regenerate_deep_dives_index():
             source = source_match.group(1).strip()
             date_str = date_match.group(1).strip()
             html_file = md_file.stem + '.html'
-            
+            hash_id   = md_file.stem[:5]
+
             try:
                 date_obj = datetime.strptime(date_str, "%Y-%m-%d")
             except:
                 date_obj = datetime.now()
-            
+
             dives.append({
                 'title': title,
                 'source': source,
                 'date': date_obj,
-                'html_file': html_file
+                'html_file': html_file,
+                'hash_id': hash_id,
             })
     
     # Sort newest first
@@ -391,9 +393,9 @@ def regenerate_deep_dives_index():
                     <td><span class="date-badge">{formatted_date}</span></td>
                     <td><span class="source-name">{dive['source']}</span></td>
                     <td class="dive-title">
-                        <a href="{dive['html_file']}">{dive['title']}</a>
+                        <a href="/research/deep-dive/{dive['hash_id']}">{dive['title']}</a>
                     </td>
-                    <td><a href="{dive['html_file']}" class="action-btn">Read Analysis →</a></td>
+                    <td><a href="/research/deep-dive/{dive['hash_id']}" class="action-btn">Read Analysis →</a></td>
                 </tr>
 '''
     
