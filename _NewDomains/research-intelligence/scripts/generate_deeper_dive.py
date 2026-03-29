@@ -380,6 +380,8 @@ def main() -> None:
     parser.add_argument('--topic',   required=True, help='Topic slug (e.g. strait-of-hormuz)')
     parser.add_argument('--dry-run', action='store_true',
                         help='Print prompts and data summary without calling the API')
+    parser.add_argument('--output-path', type=Path, default=None,
+                        help='Override output path (default: auto-numbered in data/deeper_dives/)')
     args = parser.parse_args()
 
     topic = args.topic
@@ -445,7 +447,8 @@ def main() -> None:
 
     # Assemble and write
     essay = assemble_essay(data, s_out, c_out, total_cost)
-    out_path = next_output_path(topic)
+    out_path = args.output_path or next_output_path(topic)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(essay)
 
     create_reading_room_stub(topic)

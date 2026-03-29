@@ -501,13 +501,25 @@ def api_research_dashboard():
             tf_match = _re.search(r'top find:\s*(.+)', latest.get('notes', ''))
             top_find = tf_match.group(1).strip() if tf_match else None
 
+        # Thread lifecycle fields
+        from agent.threads import load_thread as _lt
+        _thread = _lt(topic)
+        thread_status       = _thread.status      if _thread else "active"
+        thread_expires      = _thread.expires     if _thread else None
+        thread_dd_generated = _thread.deeper_dive_generated if _thread else False
+        thread_dd_path      = _thread.deeper_dive_path      if _thread else None
+
         topic_summaries.append({
-            "topic":           topic,
-            "session_count":   len(session_ids),
-            "saved_count":     saved_count,
-            "candidate_count": candidate_count,
-            "last_run":        last_run,
-            "top_find":        top_find,
+            "topic":                  topic,
+            "session_count":          len(session_ids),
+            "saved_count":            saved_count,
+            "candidate_count":        candidate_count,
+            "last_run":               last_run,
+            "top_find":               top_find,
+            "status":                 thread_status,
+            "expires":                thread_expires,
+            "deeper_dive_generated":  thread_dd_generated,
+            "deeper_dive_path":       thread_dd_path,
         })
 
     used = log['budget_cumulative']
@@ -534,6 +546,12 @@ _RUN_STATE_MAX_AGE_MINUTES = 60
 # NOTE: This reference is lost on server restart — the stale-age check in
 # _run_state_active() provides the safety net in that case.
 _active_proc: subprocess.Popen | None = None
+
+# ── Deeper Dive generation state (same pattern as run-session) ────────────────
+
+_DD_STATE_PATH = RESEARCH_ROOT / 'data' / 'dd_run_state.json'
+_DD_STATE_MAX_AGE_MINUTES = 120   # Opus calls can take 2–5 min; generous ceiling
+_dd_proc: subprocess.Popen | None = None
 
 
 def _is_proc_alive() -> bool:
@@ -695,6 +713,224 @@ def api_research_run_session_status():
     })
 
 
+# ── API: Deeper Dive generation ───────────────────────────────────────────────
+
+def _dd_state_active() -> bool:
+    """Return True if a Deeper Dive generation is currently running (not stale)."""
+    if not _DD_STATE_PATH.exists():
+        return False
+    try:
+        state = json.loads(_DD_STATE_PATH.read_text())
+        started = datetime.fromisoformat(state.get('started_at', ''))
+        age = (datetime.now(timezone.utc) - started).total_seconds() / 60
+        if age > _DD_STATE_MAX_AGE_MINUTES:
+            _DD_STATE_PATH.unlink(missing_ok=True)
+            return False
+    except Exception:
+        return False
+    return True
+
+
+def _next_dd_output_path(topic: str) -> Path:
+    """Return next sequential output path: {topic}-deeper-dive-NNN.md"""
+    import re as _re2
+    dd_dir = RESEARCH_ROOT / 'data' / 'deeper_dives'
+    dd_dir.mkdir(parents=True, exist_ok=True)
+    existing = list(dd_dir.glob(f'{topic}-deeper-dive-*.md'))
+    nums = []
+    for f in existing:
+        m = _re2.search(r'-deeper-dive-(\d+)\.md$', f.name)
+        if m:
+            nums.append(int(m.group(1)))
+    n = (max(nums) + 1) if nums else 1
+    return dd_dir / f'{topic}-deeper-dive-{n:03d}.md'
+
+
+@research_bp.route('/research/deeper-dive-confirm')
+def research_deeper_dive_confirm():
+    """
+    Confirmation page before generating a Deeper Dive.
+    GET /research/deeper-dive-confirm?topic=strait-of-hormuz
+    """
+    topic = request.args.get('topic', '').strip()
+    if not topic:
+        return "topic parameter required", 400
+
+    html = RESEARCH_ROOT / 'web' / 'deeper_dive_confirm.html'
+    if not html.exists():
+        return "deeper_dive_confirm.html not found", 404
+    return html.read_text(), 200, {'Content-Type': 'text/html'}
+
+
+@research_bp.route('/api/research/deeper-dive-confirm-data')
+def api_research_deeper_dive_confirm_data():
+    """
+    Return thread metadata for the Deeper Dive confirmation page.
+    GET /api/research/deeper-dive-confirm-data?topic=strait-of-hormuz
+    """
+    from agent.threads import load_thread
+    topic = request.args.get('topic', '').strip()
+    if not topic:
+        return jsonify({"ok": False, "error": "topic required"}), 400
+
+    thread = load_thread(topic)
+    if not thread:
+        return jsonify({"ok": False, "error": f"No thread found for '{topic}'"}), 404
+
+    # Count sessions
+    STATIC_FILES = {"CONTEXT.md", "ORIGIN.md", "STORY_FOR_CLAUDE_AI.md", "README.md"}
+    SESSION_RE = _re.compile(r'^[a-z][a-z0-9-]*\.md$')
+    topic_dir = RESEARCH_ROOT / 'topics' / topic
+    sessions = []
+    if topic_dir.exists():
+        sessions = [
+            p for p in topic_dir.iterdir()
+            if p.is_file()
+            and SESSION_RE.match(p.name)
+            and p.name not in STATIC_FILES
+            and not p.name.startswith("sources-candidates-")
+        ]
+
+    # Count unique sources across sessions
+    source_count = 0
+    seen_urls: set = set()
+    for sf in sessions:
+        text = sf.read_text()
+        # Simple URL extraction from bibliography-style lines
+        for url in _re.findall(r'https?://\S+', text):
+            url = url.rstrip(')')
+            if url not in seen_urls:
+                seen_urls.add(url)
+                source_count += 1
+
+    return jsonify({
+        "ok":            True,
+        "topic":         topic,
+        "motivation":    thread.motivation,
+        "session_count": len(sessions),
+        "source_count":  source_count,
+        "expires":       thread.expires,
+        "opened":        thread.opened[:10] if thread.opened else None,
+    })
+
+
+@research_bp.route('/api/research/generate-deeper-dive', methods=['POST'])
+def api_research_generate_deeper_dive():
+    """
+    Spawn a Deeper Dive generation for a topic as a non-blocking subprocess.
+    POST /api/research/generate-deeper-dive
+    Body: {"topic": "strait-of-hormuz"}
+    Returns immediately — generation runs in background.
+    Poll GET /api/research/generate-deeper-dive/status for completion.
+    """
+    global _dd_proc
+
+    body  = request.get_json() or {}
+    topic = body.get('topic', '').strip()
+    if not topic:
+        return jsonify({"ok": False, "error": "topic required"}), 400
+
+    if _dd_state_active():
+        try:
+            running_topic = json.loads(_DD_STATE_PATH.read_text()).get('topic', 'unknown')
+        except Exception:
+            running_topic = 'unknown'
+        return jsonify({
+            "ok": False,
+            "error": f"A Deeper Dive is already running for '{running_topic}'. Wait for it to finish."
+        }), 409
+
+    out_path = _next_dd_output_path(topic)
+    script   = RESEARCH_ROOT / 'scripts' / 'generate_deeper_dive.py'
+
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, str(script),
+             '--topic', topic,
+             '--output-path', str(out_path)],
+            cwd=str(RESEARCH_ROOT),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"[generate-deeper-dive] OSError: {e}", file=sys.stderr)
+        return jsonify({"ok": False, "error": f"failed to launch: {e}"}), 500
+
+    _dd_proc = proc
+
+    state = {
+        "topic":       topic,
+        "output_path": str(out_path),
+        "pid":         proc.pid,
+        "started_at":  datetime.now(timezone.utc).isoformat(),
+        "status":      "running",
+    }
+    _DD_STATE_PATH.write_text(json.dumps(state, indent=2))
+
+    return jsonify({"ok": True, "topic": topic, "pid": proc.pid})
+
+
+@research_bp.route('/api/research/generate-deeper-dive/status')
+def api_research_generate_deeper_dive_status():
+    """
+    Check if a Deeper Dive generation is currently running.
+    GET /api/research/generate-deeper-dive/status
+    Returns: {running: bool, topic, output_path} or {running: false}
+    """
+    global _dd_proc
+
+    if not _DD_STATE_PATH.exists():
+        return jsonify({"running": False})
+
+    try:
+        state = json.loads(_DD_STATE_PATH.read_text())
+    except Exception:
+        return jsonify({"running": False})
+
+    # Liveness check
+    running = False
+    if _dd_proc is not None:
+        running = (_dd_proc.poll() is None)
+    else:
+        # Fallback after server restart: check age
+        try:
+            started = datetime.fromisoformat(state.get('started_at', ''))
+            age = (datetime.now(timezone.utc) - started).total_seconds() / 60
+            running = age < _DD_STATE_MAX_AGE_MINUTES
+        except Exception:
+            running = False
+
+    if not running:
+        _dd_proc = None
+        # Generation finished — update thread.json
+        topic      = state.get('topic', '')
+        out_path   = state.get('output_path', '')
+        if topic and out_path and Path(out_path).exists():
+            try:
+                from agent.threads import load_thread, save_thread
+                thread = load_thread(topic)
+                if thread:
+                    thread.status               = "closed"
+                    thread.deeper_dive_generated = True
+                    thread.deeper_dive_path      = str(Path(out_path).relative_to(RESEARCH_ROOT))
+                    save_thread(topic, thread)
+            except Exception as e:
+                print(f"[dd-status] failed to update thread.json: {e}", file=sys.stderr)
+
+        _DD_STATE_PATH.unlink(missing_ok=True)
+        return jsonify({
+            "running":     False,
+            "topic":       topic,
+            "output_path": out_path,
+        })
+
+    return jsonify({
+        "running":    True,
+        "topic":      state.get('topic'),
+        "started_at": state.get('started_at'),
+    })
+
+
 # ── API: Threads ──────────────────────────────────────────────────────────────
 
 @research_bp.route('/api/research/thread/<topic>')
@@ -781,13 +1017,14 @@ def api_research_spawn_thread():
     duration_days is stored as metadata only — no scheduling is wired.
     """
     import re as _re
-    from agent.threads import cmd_create
+    from datetime import date as _date
+    from agent.threads import cmd_create, load_thread, save_thread
 
     body            = request.get_json() or {}
     topic           = body.get("topic", "").strip()
     motivation      = body.get("motivation", "").strip()
     queries         = body.get("queries") or []
-    duration_days   = int(body.get("duration_days", 5))
+    duration_days   = int(body.get("duration_days", 14))
 
     if not topic:
         return jsonify({"ok": False, "error": "topic required"}), 400
@@ -808,6 +1045,13 @@ def api_research_spawn_thread():
 
     # Create thread record (reuse existing cmd_create)
     cmd_create(topic, motivation or "To be written", "")
+
+    # Persist duration_days + expires (cmd_create doesn't accept these fields)
+    thread = load_thread(topic)
+    if thread:
+        thread.duration_days = duration_days
+        thread.expires = (_date.today() + timedelta(days=duration_days)).isoformat()
+        save_thread(topic, thread)
 
     # Ensure topics/<topic>/ directory exists so sessions page sidebar shows it
     (RESEARCH_ROOT / 'topics' / topic).mkdir(parents=True, exist_ok=True)
@@ -862,6 +1106,38 @@ def api_research_thread_wrap_up(topic: str):
 
     cmd_wrap_up(topic, note)
     return jsonify({"ok": True, "topic": topic, "status": "closed"})
+
+
+@research_bp.route('/api/research/thread/<topic>/expire', methods=['POST'])
+def api_research_thread_expire(topic: str):
+    """
+    Mark a thread as expired (Ready to close).
+    POST /api/research/thread/gold-geopolitics/expire
+    No body required.
+    """
+    from agent.threads import load_thread, save_thread
+    thread = load_thread(topic)
+    if not thread:
+        return jsonify({"ok": False, "error": f"No thread found for '{topic}'"}), 404
+    thread.status = "expired"
+    save_thread(topic, thread)
+    return jsonify({"ok": True, "topic": topic, "status": "expired"})
+
+
+@research_bp.route('/api/research/thread/<topic>/archive', methods=['POST'])
+def api_research_thread_archive(topic: str):
+    """
+    Archive a thread — hidden from dashboard, preserved on disk.
+    POST /api/research/thread/gold-geopolitics/archive
+    No body required.
+    """
+    from agent.threads import load_thread, save_thread
+    thread = load_thread(topic)
+    if not thread:
+        return jsonify({"ok": False, "error": f"No thread found for '{topic}'"}), 404
+    thread.status = "archived"
+    save_thread(topic, thread)
+    return jsonify({"ok": True, "topic": topic, "status": "archived"})
 
 
 # ── HTML: Sessions ────────────────────────────────────────────────────────────

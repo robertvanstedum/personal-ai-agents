@@ -347,6 +347,59 @@
       vertical-align: middle;
     }
 
+    /* ── Expired thread state ── */
+    .thread-row.thread-expired {
+      border-left: 3px solid #f59e0b;
+      padding-left: calc(1rem - 3px);
+    }
+
+    .thread-expired-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #f59e0b;
+      border-radius: 4px;
+      padding: 1px 6px;
+      margin-left: 0.5rem;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .btn-deeper-dive {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 2px 8px;
+      margin-left: 0.5rem;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn-deeper-dive:hover { background: #7a4e20; }
+
+    .btn-archive {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      background: none;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 8px;
+      margin-left: 0.25rem;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      display: none;
+    }
+    .thread-row.thread-expired:hover .btn-archive { display: inline-block; }
+    .btn-archive:hover { color: var(--text); border-color: var(--border2); }
+
     @media (max-width: 600px) {
       .topic-stats { gap: 1rem; }
       .stat-value  { font-size: 1.2rem; }
@@ -466,6 +519,7 @@
 
   function buildRow(t) {
     const isEmpty  = t.session_count === 0;
+    const isExpired = t.status === 'expired';
     const lastRun  = t.last_run
       ? new Date(t.last_run).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})
       : 'never run';
@@ -474,19 +528,52 @@
     if (t.saved_count)     parts.push(`${t.saved_count} saved`);
     if (t.candidate_count) parts.push(`${t.candidate_count} candidates`);
 
-    const row = document.createElement('a');
-    row.className  = 'thread-row' + (isEmpty ? ' thread-empty' : '');
-    row.href       = `/research/sessions?topic=${encodeURIComponent(t.topic)}`;
+    const row = document.createElement(isExpired ? 'div' : 'a');
+    let cls = 'thread-row';
+    if (isEmpty)   cls += ' thread-empty';
+    if (isExpired) cls += ' thread-expired';
+    row.className = cls;
+    if (!isExpired) {
+      row.href = `/research/sessions?topic=${encodeURIComponent(t.topic)}`;
+    } else {
+      row.style.cursor = 'default';
+    }
 
-    row.innerHTML = `
-      <span class="thread-name">${t.topic}</span>
-      <span class="thread-stats">${parts.join(' · ')}</span>
-      <span class="thread-last-run">${lastRun}</span>
-      <span class="thread-running-badge">running…</span>
-      <button class="thread-run-btn" onclick="runSession(event, '${t.topic}')">▶</button>
-    `;
+    if (isExpired) {
+      row.innerHTML = `
+        <span class="thread-name">${t.topic}</span>
+        <span class="thread-stats">${parts.join(' · ')}</span>
+        <span class="thread-expired-badge">Ready to close</span>
+        <a class="btn-deeper-dive" href="/research/deeper-dive-confirm?topic=${encodeURIComponent(t.topic)}">✦ Deeper Dive</a>
+        <button class="btn-archive" onclick="archiveThread(event, '${t.topic}')">Archive</button>
+        <span class="thread-last-run">${lastRun}</span>
+      `;
+    } else {
+      row.innerHTML = `
+        <span class="thread-name">${t.topic}</span>
+        <span class="thread-stats">${parts.join(' · ')}</span>
+        <span class="thread-last-run">${lastRun}</span>
+        <span class="thread-running-badge">running…</span>
+        <button class="thread-run-btn" onclick="runSession(event, '${t.topic}')">▶</button>
+      `;
+    }
 
     return row;
+  }
+
+  async function archiveThread(e, topic) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(`Archive thread "${topic}"? It will be hidden from the dashboard.`)) return;
+    try {
+      const res  = await fetch(`/api/research/thread/${encodeURIComponent(topic)}/archive`, {method: 'POST'});
+      const data = await res.json();
+      if (!data.ok) { showToast(data.error || 'Archive failed', true); return; }
+      showToast(`Thread "${topic}" archived`);
+      load();
+    } catch (err) {
+      showToast('Network error', true);
+    }
   }
 
   function scheduleRefresh(agentActive) {

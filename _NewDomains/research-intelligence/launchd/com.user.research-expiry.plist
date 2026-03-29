@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.user.research-expiry</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/vanstedum/Projects/personal-ai-agents/venv/bin/python3</string>
+    <string>/Users/vanstedum/Projects/personal-ai-agents/_NewDomains/research-intelligence/agent/thread_expiry.py</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/vanstedum/Projects/personal-ai-agents/_NewDomains/research-intelligence</string>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>6</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/research-expiry.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/tmp/research-expiry-err.log</string>
+
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>

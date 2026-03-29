@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Generate Deeper Dive</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/research/static/css/nav.css">
+  <style>
+    :root {
+      --bg: #f5f0e8;
+      --surface: #faf7f2;
+      --surface2: #f0ebe0;
+      --border: #ddd6c8;
+      --border2: #c8bfaf;
+      --text: #2a2418;
+      --text-muted: #6b5f4e;
+      --text-dim: #9e9080;
+      --accent: #8b5e2a;
+      --accent-dim: rgba(139,94,42,0.08);
+      --shadow: rgba(42,36,24,0.08);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Source Sans 3', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+    }
+
+    .domain-rail {
+      width: 210px;
+      min-width: 210px;
+      background: #f9f5ed;
+      border-right: 1px solid var(--border);
+      box-shadow: 2px 0 4px rgba(42,36,24,0.06);
+      display: flex;
+      flex-direction: column;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: hidden;
+      transition: width 0.2s ease, min-width 0.2s ease;
+      z-index: 90;
+      flex-shrink: 0;
+    }
+    .domain-rail.collapsed { width: 48px; min-width: 48px; }
+    .rail-toggle {
+      font-family: 'DM Mono', monospace;
+      font-size: 14px;
+      color: var(--text-dim);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 14px 16px;
+      text-align: right;
+      transition: color 0.15s;
+      align-self: flex-end;
+    }
+    .rail-toggle:hover { color: var(--accent); }
+    .domain-rail.collapsed .rail-toggle { transform: scaleX(-1); }
+    .rail-nav {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px 12px;
+      overflow: hidden;
+    }
+    .rail-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      text-decoration: none;
+      color: var(--text-muted);
+      transition: all 0.15s;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .rail-item:hover:not(.rail-coming) { background: var(--surface2); color: var(--text); }
+    .rail-item.active { background: var(--accent-dim); color: var(--accent); border-color: rgba(139,94,42,0.2); }
+    .rail-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
+    .rail-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; font-weight: 500; }
+    .domain-rail.collapsed .rail-label { display: none; }
+    .domain-rail.collapsed .rail-item { justify-content: center; }
+    .rail-settings {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 16px;
+      transition: color 0.15s;
+      border-top: 1px solid var(--border);
+    }
+    .rail-settings:hover { color: var(--accent); }
+
+    .main-content { flex: 1; min-width: 0; overflow-x: hidden; min-height: 100vh; background: var(--bg); }
+
+    .header-nav { display: flex; gap: 4px; }
+    .nav-link {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      transition: all 0.15s;
+      border: 1px solid transparent;
+    }
+    .nav-link:hover { color: var(--text); background: var(--surface2); }
+    .nav-more-wrapper { position: relative; }
+    .nav-more-btn {
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      padding: 5px 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .nav-more-btn:hover { color: var(--text); background: var(--surface2); }
+    .nav-more-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px;
+      min-width: 140px;
+      box-shadow: 0 4px 16px rgba(42,36,24,0.12);
+      z-index: 200;
+    }
+    .nav-more-dropdown.open { display: block; }
+    .nav-more-dropdown a {
+      display: block;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 7px 12px;
+      border-radius: 5px;
+      transition: all 0.12s;
+    }
+    .nav-more-dropdown a:hover { background: var(--surface2); color: var(--text); }
+
+    /* ── Page content ── */
+    .container {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem;
+    }
+
+    .page-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.5rem;
+      font-weight: normal;
+      color: var(--text);
+      margin-bottom: 0.25rem;
+    }
+
+    .topic-slug {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.85rem;
+      color: var(--accent);
+      margin-bottom: 2rem;
+    }
+
+    .meta-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 2rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .meta-stat {
+      text-align: center;
+    }
+
+    .meta-stat-value {
+      font-family: 'Playfair Display', serif;
+      font-size: 2rem;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .meta-stat-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-top: 0.3rem;
+    }
+
+    .meta-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 1rem 0;
+    }
+
+    .meta-motivation {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      font-style: italic;
+      line-height: 1.5;
+    }
+
+    .meta-motivation::before { content: '"'; }
+    .meta-motivation::after  { content: '"'; }
+
+    .cost-note {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      margin-bottom: 2rem;
+    }
+
+    /* ── Action buttons ── */
+    .action-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.85rem;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 0.65rem 1.5rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-primary:hover:not(:disabled) { background: #7a4e20; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-secondary {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.85rem;
+      background: none;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.65rem 1.25rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-secondary:hover { color: var(--text); border-color: var(--border2); }
+
+    /* ── Loading state ── */
+    .loading-panel {
+      display: none;
+      margin-top: 2rem;
+      padding: 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .loading-panel.visible { display: block; }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .loading-note {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-top: 0.5rem;
+    }
+
+    .error-msg {
+      display: none;
+      margin-top: 1rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.8rem;
+      color: #8b2020;
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+    }
+    .error-msg.visible { display: block; }
+
+    /* ── Back link ── */
+    .back-link {
+      display: inline-block;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      margin-bottom: 2rem;
+    }
+    .back-link:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+<aside class="domain-rail">
+  <button class="rail-toggle" id="railToggle" title="Toggle rail">‹</button>
+  <nav class="rail-nav">
+    <a href="/" class="rail-item" data-domain="curator">
+      <span class="rail-icon">🗞</span>
+      <span class="rail-label">CURATOR</span>
+    </a>
+    <a href="/research/dashboard" class="rail-item active" data-domain="research">
+      <span class="rail-icon">🔬</span>
+      <span class="rail-label">RESEARCH</span>
+    </a>
+    <a href="/language" class="rail-item">
+      <span class="rail-icon">💬</span>
+      <span class="rail-label">LANGUAGE</span>
+    </a>
+    <a href="/jobs" class="rail-item">
+      <span class="rail-icon">💼</span>
+      <span class="rail-label">JOBS</span>
+    </a>
+  </nav>
+  <a href="/curator_priorities.html" class="rail-settings" title="Settings">⚙</a>
+</aside>
+<div class="main-content">
+  <header style="background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 28px; height: 52px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100;">
+    <div style="display: flex; align-items: baseline; gap: 10px;">
+      <a href="/" style="font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 600; color: var(--text); text-decoration: none; letter-spacing: -0.02em;">mini-moi</a>
+      <span style="font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 0.06em; text-transform: uppercase;">Research</span>
+    </div>
+    <nav class="header-nav">
+      <a href="/research/sessions" class="nav-link">Sessions</a>
+      <a href="/research/observe" class="nav-link">Observations</a>
+      <div class="nav-more-wrapper">
+        <button class="nav-more-btn">···</button>
+        <div class="nav-more-dropdown">
+          <a href="/research/dashboard">Dashboard</a>
+          <a href="/research/candidates">Queries</a>
+          <a href="/research/save">Save</a>
+        </div>
+      </div>
+    </nav>
+  </header>
+  <div class="container">
+    <a href="/research/dashboard" class="back-link">← Dashboard</a>
+
+    <div id="page-loading" style="font-family:'DM Mono',monospace;font-size:0.85rem;color:var(--text-dim);">Loading thread data…</div>
+
+    <div id="page-content" style="display:none">
+      <p class="page-title">Generate Deeper Dive</p>
+      <p class="topic-slug" id="topic-display"></p>
+
+      <div class="meta-card">
+        <div class="meta-row">
+          <div class="meta-stat">
+            <div class="meta-stat-value" id="stat-sessions">—</div>
+            <div class="meta-stat-label">Sessions</div>
+          </div>
+          <div class="meta-stat">
+            <div class="meta-stat-value" id="stat-sources">—</div>
+            <div class="meta-stat-label">Sources</div>
+          </div>
+          <div class="meta-stat">
+            <div class="meta-stat-value" id="stat-opened">—</div>
+            <div class="meta-stat-label">Opened</div>
+          </div>
+        </div>
+        <hr class="meta-divider">
+        <p class="meta-motivation" id="meta-motivation"></p>
+      </div>
+
+      <p class="cost-note" id="cost-note">Est. cost: ~$0.50–1.50 · Two Opus calls (Synthesizer → Challenger)</p>
+
+      <div class="action-row">
+        <button class="btn-primary" id="btn-generate" onclick="generate()">✦ Generate Deeper Dive</button>
+        <button class="btn-secondary" id="btn-archive" onclick="archiveWithout()">Archive without generating</button>
+      </div>
+
+      <div class="loading-panel" id="loading-panel">
+        <p class="loading-text"><span class="loading-spinner"></span> Running two-agent analysis…</p>
+        <p class="loading-note">This takes 1–3 minutes. Do not close this tab.</p>
+      </div>
+
+      <div class="error-msg" id="error-msg"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const topic = new URLSearchParams(window.location.search).get('topic') || '';
+  let pollTimer = null;
+  let pollCount = 0;
+  const MAX_POLLS = 40;  // 40 × 5s = 3m20s
+
+  async function boot() {
+    if (!topic) { showError('No topic specified in URL'); return; }
+    try {
+      const res  = await fetch(`/api/research/deeper-dive-confirm-data?topic=${encodeURIComponent(topic)}`);
+      const data = await res.json();
+      if (!data.ok) { showError(data.error || 'Failed to load thread data'); return; }
+
+      document.getElementById('topic-display').textContent = topic;
+      document.getElementById('stat-sessions').textContent = data.session_count;
+      document.getElementById('stat-sources').textContent  = data.source_count || '—';
+      document.getElementById('stat-opened').textContent   = data.opened ? formatDate(data.opened) : '—';
+      document.getElementById('meta-motivation').textContent = data.motivation || '(no motivation recorded)';
+
+      document.getElementById('page-loading').style.display = 'none';
+      document.getElementById('page-content').style.display = '';
+
+      // Check if a DD is already running for this topic
+      checkExistingRun();
+    } catch (e) {
+      showError(e.message);
+    }
+  }
+
+  async function checkExistingRun() {
+    try {
+      const res  = await fetch('/api/research/generate-deeper-dive/status');
+      const data = await res.json();
+      if (data.running && data.topic === topic) {
+        setGenerating(true);
+        startPoll();
+      }
+    } catch (_) {}
+  }
+
+  async function generate() {
+    setGenerating(true);
+    try {
+      const res  = await fetch('/api/research/generate-deeper-dive', {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify({topic}),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setGenerating(false);
+        showError(data.error || 'Failed to start generation');
+        return;
+      }
+      startPoll();
+    } catch (e) {
+      setGenerating(false);
+      showError(e.message);
+    }
+  }
+
+  function startPoll() {
+    pollCount = 0;
+    clearTimeout(pollTimer);
+    pollTimer = setTimeout(pollStatus, 5000);
+  }
+
+  async function pollStatus() {
+    pollCount++;
+    if (pollCount > MAX_POLLS) {
+      showError('Generation is taking longer than expected. Check back later — it may still be running.');
+      setGenerating(false);
+      return;
+    }
+    try {
+      const res  = await fetch('/api/research/generate-deeper-dive/status');
+      const data = await res.json();
+      if (!data.running) {
+        // Done — redirect to dashboard (or deep dive if we have a path)
+        window.location.href = '/research/dashboard';
+        return;
+      }
+    } catch (_) { /* network blip — keep polling */ }
+    pollTimer = setTimeout(pollStatus, 5000);
+  }
+
+  async function archiveWithout() {
+    if (!confirm(`Archive "${topic}" without generating a Deeper Dive?`)) return;
+    try {
+      const res  = await fetch(`/api/research/thread/${encodeURIComponent(topic)}/archive`, {method: 'POST'});
+      const data = await res.json();
+      if (!data.ok) { showError(data.error || 'Archive failed'); return; }
+      window.location.href = '/research/dashboard';
+    } catch (e) {
+      showError(e.message);
+    }
+  }
+
+  function setGenerating(on) {
+    document.getElementById('btn-generate').disabled = on;
+    document.getElementById('btn-archive').disabled  = on;
+    document.getElementById('loading-panel').classList.toggle('visible', on);
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error-msg');
+    el.textContent = msg;
+    el.classList.add('visible');
+    document.getElementById('page-loading').style.display = 'none';
+    document.getElementById('page-content').style.display = '';
+  }
+
+  function formatDate(iso) {
+    const d = new Date(iso + 'T00:00:00');
+    return d.toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
+  }
+
+  boot();
+</script>
+<script>
+(function() {
+  var toggle = document.getElementById('railToggle');
+  if (toggle) toggle.addEventListener('click', function() {
+    document.querySelector('.domain-rail').classList.toggle('collapsed');
+  });
+})();
+</script>
+<script src="/research/static/js/nav.js"></script>
+</body>
+</html>

@@ -50,30 +50,34 @@ SESSION_RE   = re.compile(r'^[a-z][a-z0-9-]*\.md$')
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class ThreadRecord(BaseModel):
-    id:                str
-    topic:             str
-    version:           int = 1
-    status:            str = "active"       # active | closed | retired
-    opened:            str
-    closed:            Optional[str] = None
-    retired:           bool = False
-    auto_close_days:   int = 30
-    last_session_date: Optional[str] = None
-    session_count:     int = 0
-    links_to:          list[str] = []
-    links_from:        list[str] = []
-    motivation:        str
-    prior_belief:      str
-    wrap_up:           Optional[str] = None
-    retired_reason:    Optional[str] = None
-    created_by:        str = "robert"
-    schema_version:    str = "1.0"
+    id:                     str
+    topic:                  str
+    version:                int = 1
+    status:                 str = "active"       # active | expired | closed | archived | retired
+    opened:                 str
+    closed:                 Optional[str] = None
+    retired:                bool = False
+    auto_close_days:        int = 30
+    duration_days:          Optional[int] = None
+    expires:                Optional[str] = None   # ISO date string YYYY-MM-DD
+    deeper_dive_generated:  bool = False
+    deeper_dive_path:       Optional[str] = None
+    last_session_date:      Optional[str] = None
+    session_count:          int = 0
+    links_to:               list[str] = []
+    links_from:             list[str] = []
+    motivation:             str
+    prior_belief:           str
+    wrap_up:                Optional[str] = None
+    retired_reason:         Optional[str] = None
+    created_by:             str = "robert"
+    schema_version:         str = "1.0"
 
     @field_validator("status")
     @classmethod
     def valid_status(cls, v):
-        if v not in {"active", "closed", "retired"}:
-            raise ValueError(f"status must be active | closed | retired — got '{v}'")
+        if v not in {"active", "expired", "closed", "archived", "retired"}:
+            raise ValueError(f"status must be active | expired | closed | archived | retired — got '{v}'")
         return v
 
 
