@@ -1,0 +1,15 @@
+GERMAN_SESSION_TRANSCRIPT
+Date: 2026-04-20
+Persona: Frau Berger
+Scenario: bakery_order
+
+Robert: Guten Morgen! Ich hätte gerne zwei Kipferln, bitte.
+Frau Berger: Natürlich! Frisch gebacken. Sonst noch etwas?
+Robert: Ja, ich nehme auch der Brot, bitte. Das dunkle.
+Frau Berger: Sie meinen das Brot — sehr gerne! Das macht 3,40 Euro.
+Robert: Hier ist fünf Euro. Äh... wie sagt man "to go" auf Deutsch?
+Frau Berger: Man sagt "zum Mitnehmen". Einen Moment, ich pack das ein.
+Robert: Danke schön. Das war sehr hilfreich!
+Frau Berger: Bitte sehr! Und 1,60 Euro zurück. Einen schönen Tag noch!
+Robert: Danke, Ihnen auch. Tschüss!
+Frau Berger: Auf Wiederschauen!
