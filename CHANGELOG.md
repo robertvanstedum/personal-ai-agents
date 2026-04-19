@@ -10,6 +10,19 @@
 - **Tweak C — Probationary multiplier tightened**: `_TRUST_MULTIPLIERS['probationary']` lowered from `0.7` → `0.6`. Probationary sources (fox32chicago.com, bangerterlaw.com) are now suppressed more aggressively post-scoring.
 - **Tweak B — Trusted source diversity discount**: Diversity penalty in `curate()` selection loop now applies a `0.5` discount for trusted-tier domains (`_source_trust`). Second articles from trusted sources (Foreign Affairs, War on the Rocks) surface more readily instead of being double-penalized.
 
+### A/B Test Results (April 18, 2026)
+
+Tested against f36f61c baseline using live signal pool, grok-4-1 at temp=0.7, `--dry-run`. **All three tweaks validated. No regressions.**
+
+- **Tweak A**: `X/@IranSpec` and `X/@__Injaneb96` (both "Unknown date") dropped out of top 20 — replaced by higher-quality articles. ✅
+- **Tweak B**: `Treasury MSPD` +3 (#10→#7), `X/@KobeissiLetter` +5 (#17→#12), `The Big Picture` +1 (#7→#6). Trusted sources hold mid-table better. ✅
+- **Tweak C**: Probationary leakage reduced; 6 new entrants from stronger sources (Antiwar.com, Geopolitical Futures, The Duran). ✅
+- Top 5 identical in both runs — core signal stable.
+
+**Known item to monitor:** `X/@samdblond` ("Monaco automates customer acquisition") at #19 — startup promo content, pre-existing signal quality issue, not caused by these tweaks.
+
+Live from 7 AM run April 19, 2026.
+
 ---
 
 ## 2026-03-22 — Research Web UI: candidates.html + save.html
