@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-04-18 — v1.1.5: Curator Tweaks
+
+**Summary:** Three targeted fixes to scoring and diversity selection.
+
+### Fixes
+
+- **Tweak A — X Timestamp bug**: `score_entry_mechanical()` now assigns `recency_score = 50` (neutral ~5 days old) when `entry["published"]` is absent, instead of silently skipping recency. Prevents undated X posts from floating to the top or bottom of mechanical rankings.
+- **Tweak C — Probationary multiplier tightened**: `_TRUST_MULTIPLIERS['probationary']` lowered from `0.7` → `0.6`. Probationary sources (fox32chicago.com, bangerterlaw.com) are now suppressed more aggressively post-scoring.
+- **Tweak B — Trusted source diversity discount**: Diversity penalty in `curate()` selection loop now applies a `0.5` discount for trusted-tier domains (`_source_trust`). Second articles from trusted sources (Foreign Affairs, War on the Rocks) surface more readily instead of being double-penalized.
+
+---
+
 ## 2026-03-22 — Research Web UI: candidates.html + save.html
 
 Commits: see `_NewDomains/research-intelligence/docs/BUILD_ResearchWebUI_2026-03-22.md`
