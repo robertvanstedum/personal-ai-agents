@@ -1,0 +1,13 @@
+{
+  "domain": "german",
+  "active": true,
+  "current_lesson_number": 1,
+  "active_persona": "Frau Berger",
+  "level": "A2-B1",
+  "target": "B1 spoken confidence for Vienna trip",
+  "trip_date": "2026-05-10",
+  "reviewer_model": "claude-sonnet-4-6",
+  "sessions_dir": "sessions",
+  "anki_dir": "anki",
+  "lessons_dir": "lessons"
+}

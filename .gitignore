@@ -99,3 +99,9 @@ domains/language_learning/languages/
 domains/language_learning/*/sessions/
 domains/language_learning/*/exercises/
 domains/language_learning/*/vocabulary/
+
+# Language German domain — personal data
+_NewDomains/language-german/language/german/sessions/
+_NewDomains/language-german/language/german/anki/
+_NewDomains/language-german/language/german/lessons/
+_NewDomains/language-german/language/german/progress.json
