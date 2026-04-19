@@ -205,6 +205,18 @@ Commits: see docs/BUILD_{...}.md for full record
 
 ---
 
+## PR and Issue Descriptions
+
+Claude Code does not write PR descriptions or GitHub issue text independently.
+
+- **PR descriptions** are supplied by OpenClaw or Claude.ai. Claude Code updates the PR with the provided text verbatim.
+- **GitHub issues** are drafted by OpenClaw or Claude.ai and handed to Claude Code to file.
+- If no description is provided, Claude Code opens the PR as a draft and flags it for description input before requesting review.
+
+Rationale: Claude Code has diff context but not analytical context. PR descriptions require understanding of why changes were made, test results, and design intent — that lives in OpenClaw and Claude.ai.
+
+---
+
 ## Git Conventions
 
 **Commit message format:**
@@ -315,6 +327,8 @@ Supersedes CONVENTIONS.md (deleted). BUILD doc naming updated to include date.
 **2026-03-18:** Archive policy added. Superseded docs move to `archive/`, old screenshots
 to `docs/screenshots/archive/`. Archive, don't delete — the build journey is part of
 the project. What goes where table updated with archive locations.
+
+**2026-04-19:** PR and issue description ownership rule added. Claude Code does not independently write PR descriptions or GitHub issue text — OpenClaw or Claude.ai supplies the text and Claude Code files/applies it verbatim.
 
 **2026-03-20:** `DECISIONS.md` created at repo root. Logs non-obvious architectural
 decisions — patterns chosen, tradeoffs accepted, intentional behavior that shouldn't
