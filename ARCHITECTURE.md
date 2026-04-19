@@ -118,20 +118,26 @@ Feedback (like/dislike/save, deep dive, notes) POSTs to `/feedback` and `/deepdi
 
 ## Telegram Layer
 
-Two bots, two distinct responsibilities — a deliberate architectural separation.
+Two bots, two distinct responsibilities — a deliberate architectural separation locked in April 2026 during the language-german domain build.
 
-**`rvsopenbot`** (`telegram_bot.py`) — the curator channel:
+**`@rvsopenbot`** (`telegram_bot.py`) — the execution channel:
 - Delivers top 10 articles each morning with inline Like/Dislike/Save buttons
 - Callback handlers POST feedback to the Flask server
 - Commands: `/run`, `/status`, `/briefing`, `/dry-run`
 - Voice messages are transcribed, pattern-matched against known commands, and executed
+- Handles all domain pipeline commands: `!german`, future `!french`, `!research` etc.
+- Receives `GERMAN_SESSION_TRANSCRIPT` and other structured data submissions
+- **Owns polling exclusively** — no other process polls this token
 
-**`minimoi`** (OpenClaw gateway) — the planning/command channel:
-- Natural language instructions, memory updates, cron scheduling
-- Cross-session coordination and agent orchestration
+**`minimoi_cmd_bot`** — the command and agent channel:
+- Plain text commands and open-ended agent requests
+- Routes to OpenClaw or future agent for reasoning, tool use, multi-step tasks
+- Natural language instructions, memory updates, operational queries
 - Separate bot token, separate chat ID, separate responsibilities
 
-Execution feedback flows through one channel. Planning and instruction flows through the other.
+**Binding rule — one poller per token:** `telegram_bot.py` is the sole poller for `@rvsopenbot`. OpenClaw or any future agent is the sole poller for `minimoi_cmd_bot`. No two processes ever poll the same token simultaneously. Violations cause 409 conflicts and silent message loss.
+
+**Agent portability:** The Telegram interface (`telegram_bot.py`) is independent of any specific agent. If OpenClaw is replaced, the interface does not change — only the routing target changes.
 
 **Messaging platform:** Telegram is the current choice — secure, bot API is clean, and free. There is no architectural preference for Telegram over WhatsApp, Signal, or any other platform. The integration is isolated to `telegram_bot.py` and swappable.
 
@@ -155,7 +161,9 @@ As the platform matures, the agent layer shifts from build support toward runtim
 
 **Run first, design later** — operational decisions (flat files, single user, local infra) were deliberate deferrals. Six weeks of daily production has generated the context to make the next infrastructure decisions correctly: database schema, multi-domain data separation, always-on hosting.
 
-**Infrastructure migration path** — currently runs on a MacBook laptop. Hourly polling with idempotency (rather than fixed-time cron) was a conscious design choice: it works correctly on a laptop that sleeps and is equally correct on always-on infrastructure. Migration to Mac Mini or equivalent is a configuration change, not a rewrite.
+**Infrastructure migration path** — currently runs on a MacBook laptop. Hourly polling with idempotency (rather than fixed-time cron) was a conscious design choice: it works correctly on a laptop that sleeps and is equally correct on always-on infrastructure. Migration to Mac Mini or equivalent is a configuration change, not a rewrite. See Deployment Constraints section below for the full migration strategy.
+
+**One domain per language** — the language learning domain pattern establishes that each language gets its own independent domain (`language-german`, `language-french`, etc.). Shared utility code is factored out only after two domains prove the pattern. Progress tracking, personas, and error taxonomies are language-specific and never shared across domains.
 
 **Content breadth as a direction** — a key evolution ahead is consuming broader and deeper sources. The ingestion layer is designed to absorb new RSS feeds, APIs, and signal types without changes to the scoring or delivery pipeline.
 
@@ -164,6 +172,47 @@ As the platform matures, the agent layer shifts from build support toward runtim
 **Dry-run mode** — full pipeline execution without writing to history or archive. Output goes to `curator_preview.html`. Used for model changes, config tweaks, and testing.
 
 **Credentials** — macOS Keychain via `keyring`. No credentials in files or environment variables.
+
+---
+
+## Deployment Constraints & Migration Path
+
+### Current State: MacBook-Dependent
+
+The entire stack runs on a MacBook. This works for daily home use. It breaks for mobile use: when the MacBook is closed, sleeping, or not on the network, polling stops, pipelines cannot fire, and Telegram commands go unanswered.
+
+This constraint became real during the language-german domain build (April 2026). The domain works. The pipeline works. But using it from Vienna — submitting a transcript from an iPhone while traveling — requires the pipeline to be running somewhere always-on.
+
+### Migration Stages
+
+**Stage 1 — Mac Mini (v1.2, target Summer 2026)**
+
+Move the entire stack to a Mac Mini that stays home, always on. This is a configuration change, not a rewrite — the idempotency design means everything runs correctly on always-on infrastructure without modification.
+
+Required additions:
+- `systemd`-equivalent launchd services with auto-restart on reboot
+- Tailscale for secure remote SSH access from anywhere (free, non-negotiable)
+- Validation: full pipeline fires from iPhone while MacBook is off
+
+Tailscale is essential — it provides SSH access to the Mac Mini from Vienna or anywhere, enables remote service restarts from an iPhone, and does not expose the Mac Mini to the public internet.
+
+**Stage 2 — Cloud Relay (v1.3, only if Mac Mini proves insufficient)**
+
+A lightweight stateless relay (Cloudflare Workers, Railway, or Fly.io — $0-5/month) sits in front of the Mac Mini. It receives Telegram messages and queues them when the Mac Mini is unreachable, forwarding when it comes back.
+
+The relay is a dumb pipe — no compute, no data storage, no API calls. All processing stays on the Mac Mini. This adds resilience against home network outages and power failures without moving data to the cloud.
+
+Build trigger: only justified if Mac Mini + Tailscale proves unreliable across multiple trips. Do not build speculatively.
+
+**What never moves to the cloud:**
+- Session data, Anki cards, progress tracking
+- Personal content of any kind
+- Anthropic API calls (direct from Mac Mini)
+- Domain data files
+
+### Principle
+
+Functionality before portability. The Mac Mini migration unlocks mobile use. The cloud relay adds resilience. Neither is needed to learn German before Vienna.
 
 ---
 
