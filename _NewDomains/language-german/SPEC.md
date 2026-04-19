@@ -1,11 +1,12 @@
 # Language Learning Domain – German POC
-## Design Specification v1.0
+## Design Specification v1.1
 **Status:** _NewDomains candidate  
 **Author:** Robert van Stedum  
 **Date:** 2026-04-19  
 **Reviewed by:** Claude, Grok, Claude Code  
 **Target:** Vienna trip, ~3 weeks  
-**Graduation target:** After Vienna trip validation
+**Graduation target:** After Vienna trip validation  
+**Changed in v1.1:** Added section 2 — Multi-Language Architecture Vision
 
 ---
 
@@ -18,7 +19,68 @@ Build spoken German confidence for a Vienna trip through daily mobile voice prac
 
 ---
 
-## 2. Architecture Overview
+## 2. Multi-Language Architecture Vision
+
+### One Domain Per Language
+
+This domain is intentionally named `language-german`, not `language`. The design decision is **one domain per language**, each living independently under `_NewDomains/` until it graduates:
+
+```
+_NewDomains/language-german/     ← current build
+_NewDomains/language-french/     ← future, when needed
+_NewDomains/language-portuguese/ ← future (lower priority given existing fluency)
+_NewDomains/language-spanish/    ← future
+```
+
+**Why one domain per language, not subfolders:**
+- Error taxonomies are language-specific. German errors (case, gender, V2 word order) are structurally different from French errors (subjunctive, liaison, register agreement). A shared schema would require language-aware branching throughout.
+- Persona libraries are language-and-culture specific. Frau Berger is not reusable for Paris.
+- Progress tracking is meaningless across languages — cumulative error counts only make sense within one language.
+- Graduation criteria apply per language independently.
+
+### Shared Utility Library (Post-Graduation Refactor)
+
+The implementation code — `parse_transcript.py`, `reviewer.py`, `status.py` — will be **written first for German** with reuse in mind, then refactored into a shared library once a second language domain proves the pattern. This follows the mini-moi principle: prove on real data before abstracting.
+
+Target structure after first graduation:
+
+```
+language_core/
+  parse_transcript.py    ← language-agnostic transcript parser
+  reviewer.py            ← language-agnostic reviewer (language passed as param)
+  status.py              ← language-agnostic status reader
+  base_progress.json     ← template for new language domains
+
+language-german/
+  config/
+    domain.json          ← german-specific: personas, error types, level
+    personas.json
+  sessions/
+  anki/
+  lessons/
+  progress.json
+
+language-french/
+  config/
+    domain.json          ← french-specific config
+    personas.json
+  sessions/
+  ...
+```
+
+**Design principle for v1.0 German build:** Write every utility function to accept `language` and `base_dir` as parameters rather than hardcoding German-specific values. This costs almost nothing now and makes the refactor trivial later.
+
+### Language-Specific Reviewer Prompts
+
+The Claude reviewer prompt will be stored per-language in `config/domain.json` or a dedicated `config/reviewer_prompt.txt`. It is **not** shared — French grammar instruction requires a completely different system prompt from German grammar instruction. The reviewer infrastructure (API call, JSON parsing, error handling) is shared; the prompt content is not.
+
+### Graduation Independence
+
+Each language domain graduates on its own merits after a trip or sustained practice period. `language-german` graduating does not trigger `language-french` graduation. The shared utility library (`language_core/`) graduates when two or more language domains have proven stable.
+
+---
+
+## 3. Architecture Overview
 
 ```
 iPhone (Grok Voice)
@@ -58,7 +120,7 @@ Output files → anki/, lessons/, progress.json
 
 ---
 
-## 3. Folder Structure
+## 4. Folder Structure
 
 Lives inside the main mini-moi repo under `_NewDomains/` until post-Vienna graduation.
 
@@ -78,9 +140,9 @@ _NewDomains/language-german/
       lessons/               ← gitignored; YYYY-MM-DD_lesson.json
       progress.json          ← gitignored; cumulative stats
       README.md
-  parse_transcript.py
-  reviewer.py
-  status.py
+  parse_transcript.py        ← written for German, parameterized for reuse
+  reviewer.py                ← written for German, parameterized for reuse
+  status.py                  ← written for German, parameterized for reuse
 ```
 
 **.gitignore additions required:**
@@ -93,7 +155,7 @@ _NewDomains/language-german/language/german/progress.json
 
 ---
 
-## 4. Handoff Mechanism: Telegram Bridge
+## 5. Handoff Mechanism: Telegram Bridge
 
 ### Why Telegram
 - OpenClaw already runs on Telegram — no new infrastructure
@@ -113,7 +175,7 @@ _NewDomains/language-german/language/german/progress.json
 
 ### Telegram Message Format Contract
 
-**What Robert sends** (Grok output + manual header prepended if Grok doesn't produce it):
+**What Robert sends** (Grok output + manual header prepended if needed):
 
 ```
 GERMAN_SESSION_TRANSCRIPT
@@ -154,7 +216,7 @@ Drop the transcript text as a `.txt` file into `sessions/inbox/` via iCloud Driv
 
 ---
 
-## 5. JSON Transcript Schema
+## 6. JSON Transcript Schema
 
 Saved by OpenClaw to `sessions/YYYY-MM-DD_NNN.json`:
 
@@ -181,55 +243,53 @@ Saved by OpenClaw to `sessions/YYYY-MM-DD_NNN.json`:
 
 ---
 
-## 6. Personas (Vienna Travel Focus)
+## 7. Personas (Vienna Travel Focus)
 
 All personas are optimized for voice — natural spoken register, forgiving but realistic, occasional gentle in-character correction.
 
-### Persona Definitions
-
 **1. Frau Berger — Bakery Owner**  
-Warm, patient Viennese woman in her 50s. Runs a traditional Bäckerei near the Naschmarkt. Loves chatting about bread and pastries. Will gently rephrase things Robert says incorrectly as part of her natural reply ("Ach, Sie meinen...").  
+Warm, patient Viennese woman in her 50s. Runs a traditional Bäckerei near the Naschmarkt. Will gently rephrase things Robert says incorrectly as part of her natural reply ("Ach, Sie meinen...").  
 *Scenarios:* `bakery_order`, `neighborhood_chat`  
 *Difficulty:* Beginner-friendly
 
 **2. Herr Fischer — Hotel Receptionist**  
-Professional, efficient, polite. Works at a mid-range hotel near the Ringstraße. Speaks clearly and somewhat formally — good for practicing standard Hochdeutsch before encountering Viennese dialect.  
+Professional, efficient, polite. Works at a mid-range hotel near the Ringstraße. Speaks clearly and somewhat formally.  
 *Scenarios:* `hotel_checkin`, `hotel_checkout`, `room_problem`, `directions_from_hotel`  
 *Difficulty:* Beginner-friendly
 
 **3. Maria — Café Waitress**  
-Young, slightly hurried, uses a bit of Viennese slang. Works at a classic Kaffeehaus. Tests whether Robert can keep up with natural pace and informal register.  
+Young, slightly hurried, uses a bit of Viennese slang. Works at a classic Kaffeehaus. Tests natural pace and informal register.  
 *Scenarios:* `cafe_order`, `cafe_bill`, `cafe_small_meal`  
 *Difficulty:* Intermediate
 
 **4. Dr. Huber — Museum Guide**  
-Enthusiastic, knowledgeable, speaks in complete sentences. Works at the Kunsthistorisches Museum. Good for practicing listening comprehension of longer explanations and asking follow-up questions.  
+Enthusiastic, knowledgeable, speaks in complete sentences. Works at the Kunsthistorisches Museum.  
 *Scenarios:* `museum_exhibit`, `museum_navigation`, `museum_recommendation`  
 *Difficulty:* Intermediate
 
 **5. Stefan — U-Bahn Stranger**  
-Relaxed local, early 30s. Willing to help a tourist but speaks at normal speed. Tests directional vocabulary and city navigation under mild time pressure.  
+Relaxed local, early 30s. Willing to help a tourist but speaks at normal speed.  
 *Scenarios:* `ubahn_directions`, `ubahn_which_line`, `ubahn_confirm_stop`  
 *Difficulty:* Intermediate
 
 **6. Frau Novak — Pharmacist**  
-Calm, precise, professional. Good for medical and practical vocabulary that travelers might genuinely need.  
+Calm, precise, professional. Good for medical and practical vocabulary.  
 *Scenarios:* `pharmacy_medicine`, `pharmacy_symptom`, `pharmacy_instructions`  
 *Difficulty:* Beginner-friendly
 
 **7. Klaus — Upscale Restaurant Waiter**  
-Formal, proud of the menu, expects proper dining etiquette. Slight Austrian formality ("Bitte sehr, der Herr..."). Good for practicing elevated register and full meal interactions.  
+Formal, proud of the menu. Slight Austrian formality ("Bitte sehr, der Herr...").  
 *Scenarios:* `restaurant_reservation`, `restaurant_full_meal`, `restaurant_wine`, `restaurant_bill`  
 *Difficulty:* Advanced
 
 **8. Anna — Airbnb Host**  
-Friendly, practical, explains things clearly. A good onboarding persona for early sessions — patient and encouraging.  
+Friendly, practical, patient and encouraging. Good onboarding persona for early sessions.  
 *Scenarios:* `apartment_handoff`, `appliance_question`, `neighborhood_recommendations`, `small_problem`  
 *Difficulty:* Beginner-friendly
 
 ---
 
-## 7. Reviewer Output Schema
+## 8. Reviewer Output Schema
 
 ```json
 "reviewer_output": {
@@ -269,7 +329,6 @@ Friendly, practical, explains things clearly. A good onboarding persona for earl
 ```
 
 ### Error Taxonomy
-Track errors by type across sessions to surface patterns over the 3-week period:
 
 | Type | Description |
 |---|---|
@@ -285,23 +344,19 @@ Track errors by type across sessions to surface patterns over the 3-week period:
 
 ---
 
-## 8. Anki CSV Format
-
-Standard Anki import with tags and example sentences:
+## 9. Anki CSV Format
 
 ```
 Front,Back,Tags
-"das Kipferl","crescent roll (Austrian) — Example: Ich hätte gerne zwei Kipferln, bitte.","german vienna food bakery"
-"Ich hätte gerne...","I would like... (polite order form) — Example: Ich hätte gerne einen Kaffee, bitte.","german vienna polite_forms"
+"das Kipferl","crescent roll (Austrian) — Example: Ich hätte gerne zwei Kipferln, bitte. — bakery_order 2026-04-20","german vienna food bakery"
 ```
 
-**Deduplication:** Check each vocabulary highlight's `german` field against `progress["vocabulary_seen"]` before writing. Skip if already present. Add new words to `vocabulary_seen` after writing.
-
-**File path:** `anki/YYYY-MM-DD_anki.csv`. If file already exists for the date, append new rows — handles multiple sessions per day.
+**Deduplication:** Check `german` field against `progress["vocabulary_seen"]` before writing. Skip if present.  
+**File path:** `anki/YYYY-MM-DD_anki.csv`. Append if file already exists.
 
 ---
 
-## 9. Daily Lesson Plan Schema
+## 10. Daily Lesson Plan Schema
 
 ```json
 {
@@ -312,7 +367,7 @@ Front,Back,Tags
   "warm_up": "Review: das Brot, die Semmel, das Kipferl. Gender drill.",
   "focus": "Ordering coffee in a Kaffeehaus. Practice Melange, Verlängerter, Einspänner.",
   "speaking_prompt": "You walk into Café Central. Maria greets you. Order a Melange and a piece of Apfelstrudel. Ask if they have a newspaper.",
-  "writing_exercise": "Write 3–4 sentences describing what you ordered yesterday and how the conversation went. Focus on past tense (hatte, war, habe bestellt).",
+  "writing_exercise": "Write 3–4 sentences describing what you ordered yesterday. Focus on past tense.",
   "vocabulary_targets": ["Melange", "Verlängerter", "Einspänner", "die Rechnung", "Zahlen bitte"],
   "carry_forward_errors": ["das/die/der Brot correction from session 2026-04-20"]
 }
@@ -320,9 +375,7 @@ Front,Back,Tags
 
 ---
 
-## 10. Progress Tracking
-
-`progress.json` accumulates across all sessions:
+## 11. Progress Tracking
 
 ```json
 {
@@ -350,7 +403,7 @@ Front,Back,Tags
 
 ---
 
-## 11. OpenClaw Orchestration Commands
+## 12. OpenClaw Orchestration Commands
 
 | Command | Action |
 |---|---|
@@ -364,30 +417,29 @@ Front,Back,Tags
 
 ---
 
-## 12. Build Sequence & Timeline
+## 13. Build Sequence & Timeline
 
 ### Step 0 — Pre-build validation (before any code)
 - [ ] Telegram bridge: send test message, confirm OpenClaw receives and parses
 - [ ] `python -c "import anthropic"` works in the venv
 
-Both must pass before build starts. If either fails, resolve before proceeding.
+Both must pass before build starts.
 
 ### Today (Sunday April 19) — Documents to GitHub
-1. OpenClaw creates files in `_NewDomains/language-german/`
+1. OpenClaw replaces SPEC.md in `_NewDomains/language-german/` with this v1.1
 2. Claude Code commits and pushes to GitHub
 3. Confirm live on GitHub before any implementation begins
 
 ### Monday (April 20) — Build
 1. Scaffold folder structure + config files
-2. `parse_transcript.py` — tested with sample fixture
-3. `reviewer.py` — tested with session JSON from step 2
-4. Anki CSV and lesson plan generators
-5. `status.py`
-6. `.gitignore` update
-7. First live test session
+2. `parse_transcript.py` with test fixture
+3. `reviewer.py` with Anki and lesson generators
+4. `status.py`
+5. `.gitignore` update
+6. First live Telegram bridge test
 
 ### Tuesday (April 21) — Use & Fix
-- Morning: first real voice session (Frau Berger, bakery)
+- First real voice session (Frau Berger, bakery)
 - Fix reviewer output quality issues
 - Import first Anki deck
 
@@ -396,24 +448,27 @@ Both must pass before build starts. If either fails, resolve before proceeding.
 
 ---
 
-## 13. Graduation Criteria (Post-Vienna)
+## 14. Graduation Criteria (Post-Vienna)
 
-This domain graduates from `_NewDomains/` to main repo if, after the Vienna trip:
+This domain graduates from `_NewDomains/` to main repo if:
 - Telegram bridge was stable across 5+ sessions
 - Reviewer output quality was genuinely useful
 - Anki cards were imported and used
 - Progress tracking showed meaningful pattern detection
 
-If any criterion fails, domain is archived with a post-mortem note.
+On graduation, evaluate whether `parse_transcript.py`, `reviewer.py`, and `status.py` warrant refactoring into a shared `language_core/` library. This refactor is only justified if a second language domain is actively planned.
+
+If any criterion fails, domain is archived with a post-mortem note and learnings applied to the next language domain attempt.
 
 ---
 
-## 14. Out of Scope (v1.0)
+## 15. Out of Scope (v1.0)
 
 - Real-time voice error correction during session
-- Automated Anki import (manual import is fine)
+- Automated Anki import (manual is fine)
 - Full mobile review UI
 - Pronunciation scoring
 - Audio hints in Anki cards (post-graduation candidate)
 - Grammar explanation depth beyond practical corrections
 - Any language other than German
+- `language_core/` shared library refactor (post-graduation, only if second language warranted)
