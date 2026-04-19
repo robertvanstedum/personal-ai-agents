@@ -64,7 +64,7 @@ Required schema:
     "register": 0
   },
   "vocabulary_highlights": [
-    { "german": "word or phrase", "english": "translation", "note": "used correctly / new this session / needs practice" }
+    { "german": "word or phrase", "english": "translation", "note": "used correctly / new this session / needs practice", "tags": ["optional", "anki", "tags"] }
   ],
   "strengths": ["specific things Robert did well"],
   "next_focus": "one concrete grammar or vocabulary focus for the next session"
@@ -168,12 +168,14 @@ def _generate_anki_csv(reviewer_output: dict, session: dict,
     with open(csv_path, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f, quoting=csv.QUOTE_ALL)
         if write_header:
-            writer.writerow(["Front", "Back"])
+            writer.writerow(["Front", "Back", "Tags"])
         for card in new_cards:
             back = f"{card['english']} — {scenario} session {date_str}"
             if card.get("note"):
                 back += f" ({card['note']})"
-            writer.writerow([card["german"], back])
+            raw_tags = card.get("tags") or []
+            tags = " ".join(raw_tags) if raw_tags else "german vienna"
+            writer.writerow([card["german"], back, tags])
 
     # Update vocabulary_seen in progress (before _update_progress is called)
     progress["vocabulary_seen"].extend(c["german"] for c in new_cards)
@@ -184,14 +186,21 @@ def _generate_anki_csv(reviewer_output: dict, session: dict,
 
 # ── Step 3b: Generate lesson plan ────────────────────────────────────────────
 
+ANCHOR_PERSONA = "Frau Berger"
+
+
 def _pick_next_persona(personas: list, progress: dict) -> dict:
+    anchor = next((p for p in personas if p["name"] == ANCHOR_PERSONA), None)
     recent = progress.get("personas_practiced", [])[-2:]
-    candidates = [p for p in personas if p["name"] not in recent]
-    if not candidates:
-        candidates = personas
-    not_yet = [p for p in candidates if p["name"] not in progress.get("personas_practiced", [])]
-    pool = not_yet if not_yet else candidates
-    return pool[0]
+    # Non-anchor candidates: avoid last 2 used
+    non_anchor = [p for p in personas if p["name"] != ANCHOR_PERSONA and p["name"] not in recent]
+    if not non_anchor:
+        non_anchor = [p for p in personas if p["name"] != ANCHOR_PERSONA]
+    # Prefer non-anchor personas not yet practiced at all
+    not_yet = [p for p in non_anchor if p["name"] not in progress.get("personas_practiced", [])]
+    pool = not_yet if not_yet else non_anchor
+    # Anchor is always eligible — return it if it's the only option or pool is empty
+    return pool[0] if pool else anchor
 
 
 def _pick_next_scenario(persona: dict, progress: dict) -> str:
@@ -231,6 +240,23 @@ def _generate_lesson_plan(reviewer_output: dict, session: dict, domain_cfg: dict
         v["german"] for v in reviewer_output.get("vocabulary_highlights", [])[:5]
     ]
 
+    # Build speaking prompt — richer when anchor persona repeats to keep it fresh
+    if next_persona["name"] == ANCHOR_PERSONA:
+        prompt_parts = [
+            f"You return to Frau Berger's Bäckerei."
+        ]
+        if carry:
+            prompt_parts.append(f"Focus on fixing: {carry[0]}.")
+        if vocab_targets:
+            prompt_parts.append(f"Try to use: {', '.join(vocab_targets[:3])}.")
+        prompt_parts.append("Speak naturally — aim for complete sentences this time.")
+        speaking_prompt = " ".join(prompt_parts)
+    else:
+        speaking_prompt = (
+            f"You walk into a scene with {next_persona['name']} ({next_persona['role']}). "
+            f"Scenario: {next_scenario.replace('_', ' ')}. Speak naturally."
+        )
+
     lesson = {
         "lesson_date": next_date,
         "lesson_number": lesson_number + 1,
@@ -239,10 +265,7 @@ def _generate_lesson_plan(reviewer_output: dict, session: dict, domain_cfg: dict
         "scenario": next_scenario,
         "warm_up": f"Review top error from last session: {top_error.replace('_', ' ')}.",
         "focus": reviewer_output.get("next_focus", ""),
-        "speaking_prompt": (
-            f"You walk into a scene with {next_persona['name']} ({next_persona['role']}). "
-            f"Scenario: {next_scenario.replace('_', ' ')}. Speak naturally."
-        ),
+        "speaking_prompt": speaking_prompt,
         "vocabulary_targets": vocab_targets,
         "carry_forward_errors": carry,
     }
