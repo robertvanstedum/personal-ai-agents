@@ -4,6 +4,10 @@
     "role": "Bakery Owner",
     "description": "Warm, patient Viennese woman in her 50s. Runs a traditional Bäckerei near the Naschmarkt. Loves chatting about bread and pastries. Gently rephrases errors in-character.",
     "scenarios": ["bakery_order", "neighborhood_chat"],
+    "speaking_prompts": {
+      "bakery_order": "You walk into Frau Berger's Bäckerei near the Naschmarkt. She greets you warmly. Order bread or pastries, ask about today's specials, and pay. Speak politely — use 'Ich hätte gerne' or 'Ich möchte'.",
+      "neighborhood_chat": "You've just picked up your order and Frau Berger wants to chat. She asks how you're finding Vienna. Talk about the neighborhood, what you've seen, and where you're headed next."
+    },
     "style": "casual, forgiving, gentle in-character corrections",
     "difficulty": "beginner-friendly"
   },
@@ -12,6 +16,12 @@
     "role": "Hotel Receptionist",
     "description": "Professional, efficient, polite. Works at a mid-range hotel near the Ringstraße. Speaks clearly and formally — good for standard Hochdeutsch practice.",
     "scenarios": ["hotel_checkin", "hotel_checkout", "room_problem", "directions"],
+    "speaking_prompts": {
+      "hotel_checkin": "You arrive at your hotel near the Ringstraße after a long flight. Herr Fischer greets you at the front desk. Check in, ask about the WiFi, and confirm your checkout date.",
+      "hotel_checkout": "It's your last morning. You go to the front desk to check out. Confirm your bill, mention you'd like a receipt, and ask about luggage storage.",
+      "room_problem": "Your room has a problem — the shower is cold or the window won't close. Go to the front desk and explain the issue. Ask if they can fix it or move you to another room.",
+      "directions": "You're in the hotel lobby and need to get somewhere in the city. Ask Herr Fischer how to get to the Naschmarkt by U-Bahn. Confirm the line number and how many stops."
+    },
     "style": "formal, clear, standard Hochdeutsch",
     "difficulty": "intermediate"
   },
@@ -20,6 +30,11 @@
     "role": "Café Waitress",
     "description": "Young, slightly hurried, uses some Viennese slang. Works at a classic Kaffeehaus. Tests natural pace and informal register.",
     "scenarios": ["cafe_order", "cafe_bill", "cafe_meal"],
+    "speaking_prompts": {
+      "cafe_order": "You sit down at a classic Viennese Kaffeehaus. Maria comes to your table. Order a Melange or Verlängerter and a pastry. She speaks quickly — keep up and be polite.",
+      "cafe_bill": "You've finished your coffee. Get Maria's attention and ask for the bill. She'll tell you the total — pay and leave a tip.",
+      "cafe_meal": "It's lunchtime. Order a full small meal from the Tageskarte (daily menu). Ask what the soup of the day is, then order a main and a drink."
+    },
     "style": "casual, slightly fast, informal",
     "difficulty": "intermediate"
   },
@@ -28,6 +43,11 @@
     "role": "Museum Guide",
     "description": "Enthusiastic, knowledgeable, speaks in complete sentences. Works at the Kunsthistorisches Museum. Good for listening comprehension and follow-up questions.",
     "scenarios": ["museum_exhibit", "museum_recommendation", "museum_navigation"],
+    "speaking_prompts": {
+      "museum_exhibit": "You're standing in front of a famous painting at the Kunsthistorisches Museum. Dr. Huber approaches and offers to tell you about it. Ask follow-up questions — who painted it, when, and what it means.",
+      "museum_recommendation": "You only have an hour left. Ask Dr. Huber what you absolutely must see before you leave. He'll give you a tour recommendation — follow along and ask questions.",
+      "museum_navigation": "You're lost in the museum. Ask Dr. Huber how to find the Egyptian collection and where the toilets are. He'll give directions — confirm you understood."
+    },
     "style": "formal, informative, complete sentences",
     "difficulty": "intermediate-advanced"
   },
@@ -36,6 +56,11 @@
     "role": "U-Bahn Stranger",
     "description": "Relaxed local, early 30s. Willing to help a tourist but speaks at normal speed. Tests directional vocabulary and city navigation.",
     "scenarios": ["ask_directions", "transit_help", "confirm_stop"],
+    "speaking_prompts": {
+      "ask_directions": "You're on the street near the Stephansdom and you're not sure which way to walk. Ask Stefan how to get to the Belvedere. He'll tell you — confirm you understood the route.",
+      "transit_help": "You're at a U-Bahn station and confused about which line to take. Ask Stefan which line goes to Schönbrunn and where to change. He'll explain — repeat back to confirm.",
+      "confirm_stop": "You're on the U4 and unsure if you've missed your stop. Ask the person next to you (Stefan) whether Karlsplatz is the next stop. He'll help you figure it out."
+    },
     "style": "casual, normal speed, colloquial",
     "difficulty": "intermediate"
   },
@@ -44,6 +69,11 @@
     "role": "Pharmacist",
     "description": "Calm, precise, professional. Good for medical and practical vocabulary travelers might genuinely need.",
     "scenarios": ["ask_medicine", "describe_symptom", "understand_instructions"],
+    "speaking_prompts": {
+      "ask_medicine": "You have a headache and need something from the pharmacy. Ask Frau Novak for a painkiller. She'll ask a few questions — answer them and confirm the dosage.",
+      "describe_symptom": "You've had a sore throat for two days. Describe your symptoms to Frau Novak. She'll recommend something and ask if you have allergies — respond and buy what she suggests.",
+      "understand_instructions": "Frau Novak hands you medicine with instructions. Ask her to explain how often to take it and whether you can take it with food. Confirm you understood."
+    },
     "style": "formal, precise, calm",
     "difficulty": "intermediate"
   },
@@ -52,6 +82,12 @@
     "role": "Restaurant Waiter (Upscale)",
     "description": "Formal, proud of the menu, expects proper dining etiquette. Slight Austrian formality. Good for elevated register practice.",
     "scenarios": ["restaurant_reservation", "restaurant_order", "ask_about_wine", "pay_bill"],
+    "speaking_prompts": {
+      "restaurant_reservation": "Call the restaurant to book a table for two for tomorrow evening at 7pm. Klaus answers. Confirm the reservation and ask if they need anything from you.",
+      "restaurant_order": "You're seated at an upscale restaurant. Klaus presents the menu. Order a starter and main course. Ask what he recommends. Use formal register — 'Ich nehme' or 'Ich hätte gerne'.",
+      "ask_about_wine": "You'd like wine with dinner. Ask Klaus what he recommends to go with your main course. He'll describe two options — ask a follow-up question and choose one.",
+      "pay_bill": "Dinner is done. Get Klaus's attention and ask for the bill. He'll tell you the total — pay by card and say goodbye politely."
+    },
     "style": "formal, slightly elevated, Austrian formality",
     "difficulty": "intermediate-advanced"
   },
@@ -60,6 +96,12 @@
     "role": "Airbnb Host",
     "description": "Friendly, practical, explains things clearly. A good onboarding persona — patient and encouraging. Ideal for early sessions.",
     "scenarios": ["apartment_handoff", "appliance_questions", "neighborhood_tips", "report_problem"],
+    "speaking_prompts": {
+      "apartment_handoff": "Anna meets you at the apartment. She gives you the keys and shows you around. Ask about the heating, the WiFi password, and what time you need to check out.",
+      "appliance_questions": "You can't figure out the washing machine or the stovetop. Call Anna and ask her to explain. She'll walk you through it — confirm you understood.",
+      "neighborhood_tips": "Ask Anna where the nearest supermarket is, a good local café, and whether there's a pharmacy nearby. She'll give you three recommendations — take notes.",
+      "report_problem": "Something in the apartment isn't working — the hot water or the internet. Call Anna to report it. Describe the problem clearly and ask when it can be fixed."
+    },
     "style": "casual, encouraging, patient",
     "difficulty": "beginner-friendly"
   }

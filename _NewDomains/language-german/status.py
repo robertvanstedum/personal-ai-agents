@@ -29,6 +29,20 @@ def _latest_file(directory: Path, pattern: str = "*.json"):
     return files[-1] if files else None
 
 
+def _latest_reviewed_session(sessions_dir: Path):
+    if not sessions_dir.exists():
+        return None
+    reviewed = []
+    for p in sorted(sessions_dir.glob("*.json")):
+        try:
+            data = json.loads(p.read_text())
+            if data.get("reviewer_output") is not None:
+                reviewed.append(p)
+        except Exception:
+            continue
+    return reviewed[-1] if reviewed else None
+
+
 def _top_error(progress: dict) -> str:
     counts = progress.get("cumulative_error_counts", {})
     if not any(counts.values()):
@@ -52,7 +66,7 @@ def main():
     lessons_dir = base / "lessons"
 
     progress = _load_json(progress_path)
-    latest_session_path = _latest_file(sessions_dir)
+    latest_session_path = _latest_reviewed_session(sessions_dir)
     latest_session = _load_json(latest_session_path) if latest_session_path else None
     latest_lesson_path = _latest_file(lessons_dir)
     latest_lesson = _load_json(latest_lesson_path) if latest_lesson_path else None
@@ -91,7 +105,7 @@ def main():
         persona = latest_session.get("persona", "?")
         print(f"Last session ({date} · {persona}): not yet reviewed.")
     else:
-        print("Last session: none yet.")
+        print("No reviewed sessions yet.")
 
     # ── Next lesson ───────────────────────────────────────────
     print()

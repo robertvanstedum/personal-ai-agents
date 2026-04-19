@@ -240,22 +240,23 @@ def _generate_lesson_plan(reviewer_output: dict, session: dict, domain_cfg: dict
         v["german"] for v in reviewer_output.get("vocabulary_highlights", [])[:5]
     ]
 
-    # Build speaking prompt — richer when anchor persona repeats to keep it fresh
-    if next_persona["name"] == ANCHOR_PERSONA:
-        prompt_parts = [
-            f"You return to Frau Berger's Bäckerei."
-        ]
+    # Use scenario-specific prompt from personas.json if available
+    base_prompt = next_persona.get("speaking_prompts", {}).get(
+        next_scenario,
+        f"You walk into a scene with {next_persona['name']} ({next_persona['role']}). "
+        f"Scenario: {next_scenario.replace('_', ' ')}. Speak naturally."
+    )
+
+    # Anchor persona gets carry-forward and vocab layered on top
+    if next_persona["name"] == ANCHOR_PERSONA and (carry or vocab_targets):
+        extra = []
         if carry:
-            prompt_parts.append(f"Focus on fixing: {carry[0]}.")
+            extra.append(f"Focus on fixing: {carry[0]}.")
         if vocab_targets:
-            prompt_parts.append(f"Try to use: {', '.join(vocab_targets[:3])}.")
-        prompt_parts.append("Speak naturally — aim for complete sentences this time.")
-        speaking_prompt = " ".join(prompt_parts)
+            extra.append(f"Try to use: {', '.join(vocab_targets[:3])}.")
+        speaking_prompt = base_prompt + " " + " ".join(extra)
     else:
-        speaking_prompt = (
-            f"You walk into a scene with {next_persona['name']} ({next_persona['role']}). "
-            f"Scenario: {next_scenario.replace('_', ' ')}. Speak naturally."
-        )
+        speaking_prompt = base_prompt
 
     lesson = {
         "lesson_date": next_date,
