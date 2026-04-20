@@ -818,3 +818,19 @@ python3 curator_rss_v2.py --mode=xai
 - CLI history viewer
 - Telegram button integration
 
+
+
+## 2026-04-20 — Language Domain: Added 8 persona prompts, removed deprecated file
+
+Commits: n/a (changes in gitignored _NewDomains/ — not tracked)
+
+**Result:** Language-german domain now has 8 dedicated persona prompt files in _NewDomains/language-german/language/german/config/prompts/, replacing the old single-file approach.
+
+### What Was Built
+- Created directory: _NewDomains/language-german/language/german/config/prompts/
+- Added files: anna_airbnb.txt, dr_huber_museum.txt, frau_berger_bakery.txt, frau_novak_pharmacy.txt, herr_fischer_hotel.txt, klaus_restaurant.txt, maria_cafe.txt, stefan_ubahn.txt
+- Removed: config/grok_persona_prompt.txt (replaced by prompts/frau_berger_bakery.txt)
+
+### Open Items → Next Phase
+- Scaffold full language-german domain structure (e.g., scripts, config.json, integration with main pipeline)
+- Test persona prompts in a sample session
