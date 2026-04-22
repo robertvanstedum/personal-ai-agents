@@ -1,7 +1,8 @@
-GERMAN_SESSION_TRANSCRIPT
+---SESSION---
 Date: 2026-04-20
 Persona: Frau Berger
 Scenario: bakery_order
+Duration: 10
 
 Robert: Guten Morgen! Ich hätte gerne zwei Kipferln, bitte.
 Frau Berger: Natürlich! Frisch gebacken. Sonst noch etwas?
@@ -13,3 +14,4 @@ Robert: Danke schön. Das war sehr hilfreich!
 Frau Berger: Bitte sehr! Und 1,60 Euro zurück. Einen schönen Tag noch!
 Robert: Danke, Ihnen auch. Tschüss!
 Frau Berger: Auf Wiederschauen!
+---END---

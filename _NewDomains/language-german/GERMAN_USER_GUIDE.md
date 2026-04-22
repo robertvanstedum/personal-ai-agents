@@ -220,7 +220,7 @@ That's it. Everything else — Anki review, HTML page, writing exercise — is o
 
 | Feature | Status | When |
 |---|---|---|
-| Auto-trigger (no delimiter needed) | Step 1 in build plan | This week |
+| Auto-trigger (no delimiter needed) | ✅ Freeform fallback shipped | Done |
 | `!german start` persona menu | Step 2 in build plan | This week |
 | Session quality rating buttons | Step 3 in build plan | This week |
 | HTML session review page | Step 4 in build plan | This week |

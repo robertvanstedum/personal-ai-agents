@@ -21,7 +21,8 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, ContextTypes
+from telegram.ext import filters
 from telegram.error import NetworkError, TimedOut
 
 BASE_DIR = Path(__file__).parent
@@ -560,6 +561,170 @@ def run_send_mode():
     
     send_briefing(token, chat_id)
 
+# ─── German domain text handlers ─────────────────────────────────────────────
+
+ROBERT_CHAT_ID = 8379221702
+GERMAN_BASE = BASE_DIR / "_NewDomains" / "language-german"
+GERMAN_DIR  = GERMAN_BASE / "language" / "german"
+VENV_PYTHON = BASE_DIR / "venv" / "bin" / "python3"
+
+
+def _run(cmd, **kwargs):
+    """Run a subprocess, return (stdout, stderr, returncode)."""
+    result = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+    return result.stdout, result.stderr, result.returncode
+
+
+async def _handle_german_transcript(update: Update, text: str):
+    ts = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    inbox = GERMAN_DIR / "sessions" / "inbox"
+    inbox.mkdir(parents=True, exist_ok=True)
+    raw_path = inbox / f"raw_{ts}.txt"
+    raw_path.write_text(text)
+
+    await update.message.reply_text("📥 Transcript saved. Running pipeline…")
+
+    out, err, rc = _run(
+        [str(VENV_PYTHON), "parse_transcript.py", "--stdin", "--base-dir", "language/german/"],
+        input=text, cwd=str(GERMAN_BASE)
+    )
+    if rc != 0:
+        await update.message.reply_text(
+            f"❌ parse_transcript.py failed (exit {rc}):\n{err[:400]}\nFile: {raw_path}"
+        )
+        return
+
+    out, err, rc = _run(
+        [str(VENV_PYTHON), "reviewer.py", "--latest", "--base-dir", "language/german/"],
+        cwd=str(GERMAN_BASE)
+    )
+    if rc != 0:
+        await update.message.reply_text(
+            f"❌ reviewer.py failed (exit {rc}):\n{err[:400]}\nFile: {raw_path}"
+        )
+        return
+
+    out, err, rc = _run(
+        [str(VENV_PYTHON), "status.py", "--base-dir", "language/german/"],
+        cwd=str(GERMAN_BASE)
+    )
+    if rc != 0:
+        await update.message.reply_text(f"❌ status.py failed (exit {rc}):\n{err[:400]}")
+        return
+
+    await update.message.reply_text(f"<pre>{escape(out)}</pre>", parse_mode="HTML")
+
+
+async def _handle_german_command(update: Update, text: str):
+    parts = text.strip().split()
+    cmd = parts[1].lower() if len(parts) > 1 else ""
+
+    if cmd == "status":
+        out, err, rc = _run(
+            [str(VENV_PYTHON), "status.py", "--base-dir", "language/german/"],
+            cwd=str(GERMAN_BASE)
+        )
+        reply = out if rc == 0 else f"❌ status.py failed:\n{err[:400]}"
+        await update.message.reply_text(f"<pre>{escape(reply)}</pre>", parse_mode="HTML")
+
+    elif cmd == "progress":
+        p = GERMAN_DIR / "progress.json"
+        if not p.exists():
+            await update.message.reply_text("No progress.json yet — run a session first.")
+            return
+        d = json.loads(p.read_text())
+        counts = d.get("cumulative_error_counts", {})
+        top = max(counts.items(), key=lambda x: x[1], default=("none", 0))[0]
+        lines = [
+            f"Sessions: {d.get('total_sessions', 0)}",
+            f"Minutes: {d.get('total_minutes', 0)}",
+            f"Anki cards: {d.get('anki_cards_generated', 0)}",
+            f"Personas: {', '.join(d.get('personas_practiced', [])) or 'none'}",
+            f"Top error: {top}",
+        ]
+        await update.message.reply_text("\n".join(lines))
+
+    elif cmd == "today":
+        out, err, rc = _run(
+            [str(VENV_PYTHON), "reviewer.py", "--latest", "--base-dir", "language/german/"],
+            cwd=str(GERMAN_BASE)
+        )
+        reply = out if rc == 0 else f"❌ reviewer.py failed:\n{err[:400]}"
+        await update.message.reply_text(f"<pre>{escape(reply)}</pre>", parse_mode="HTML")
+
+    elif cmd == "next":
+        await update.message.reply_text(
+            "ℹ️ --next-only not yet implemented. Use !german status to see the next lesson."
+        )
+
+    elif cmd == "persona":
+        name = " ".join(parts[2:]) if len(parts) > 2 else ""
+        if not name:
+            await update.message.reply_text("Usage: !german persona [name]")
+            return
+        cfg_path = GERMAN_DIR / "config" / "domain.json"
+        cfg = json.loads(cfg_path.read_text())
+        cfg["active_persona"] = name
+        cfg_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False))
+        await update.message.reply_text(f"✅ active_persona set to: {name}")
+
+    elif cmd == "anki":
+        anki_dir = GERMAN_DIR / "anki"
+        csvs = sorted(anki_dir.glob("*.csv")) if anki_dir.exists() else []
+        if csvs:
+            await update.message.reply_text(f"Latest Anki CSV: {csvs[-1]}")
+        else:
+            await update.message.reply_text("No Anki CSV files yet.")
+
+    elif cmd == "debug":
+        lines = []
+        inbox = GERMAN_DIR / "sessions" / "inbox"
+        inboxfiles = sorted(inbox.glob("*.txt")) if inbox.exists() else []
+        if inboxfiles:
+            lines.append(f"Last inbox file: {inboxfiles[-1].name}")
+        sessions_dir = GERMAN_DIR / "sessions"
+        sessions = sorted(sessions_dir.glob("*.json")) if sessions_dir.exists() else []
+        if sessions:
+            data = json.loads(sessions[-1].read_text())
+            lines.append(f"Last session: {sessions[-1].name}")
+            lines.append(f"  persona: {data.get('persona')}")
+            lines.append(f"  scenario: {data.get('scenario')}")
+            lines.append(f"  reviewed: {data.get('reviewer_output') is not None}")
+        await update.message.reply_text(
+            "\n".join(lines) if lines else "Nothing in sessions/ or inbox/ yet."
+        )
+
+    else:
+        await update.message.reply_text(
+            "German commands:\n"
+            "  !german status\n"
+            "  !german progress\n"
+            "  !german today\n"
+            "  !german persona [name]\n"
+            "  !german anki\n"
+            "  !german debug"
+        )
+
+
+async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Route plain text messages — German transcript, !german commands, fallback."""
+    if not update.message or not update.message.text:
+        return
+    if update.message.chat_id != ROBERT_CHAT_ID:
+        return
+
+    text = update.message.text.strip()
+
+    if text.startswith("---SESSION---"):
+        await _handle_german_transcript(update, text)
+    elif text.lower().startswith("!german"):
+        await _handle_german_command(update, text)
+    else:
+        await update.message.reply_text(
+            "Got it — I hear you. Send !german status to test the pipeline."
+        )
+
+
 def run_bot_mode():
     """Run persistent bot for button callbacks and commands"""
     token = get_polling_token()
@@ -575,6 +740,7 @@ def run_bot_mode():
     app.add_handler(CommandHandler("run", cmd_run))
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("briefing", cmd_briefing))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
 
     async def error_handler(update, context):
         """Suppress noisy network errors — log one line instead of full traceback."""

@@ -178,7 +178,7 @@ _NewDomains/language-german/language/german/progress.json
 **What Robert sends** (Grok output + manual header prepended if needed):
 
 ```
-GERMAN_SESSION_TRANSCRIPT
+---SESSION---
 Date: 2026-04-20
 Persona: Frau Berger
 Scenario: bakery_order
@@ -188,14 +188,16 @@ Robert: Guten Morgen. Ich hätte gerne zwei Kipferln, bitte.
 Frau Berger: Natürlich! Sonst noch etwas?
 Robert: Nein danke. Was kostet das?
 Frau Berger: Das macht 2,40 Euro, bitte.
+---END---
 ```
 
 - `Duration` is an estimate in minutes. If omitted, parser records 0 — does not crash.
+- If the full `---SESSION---`/`---END---` block is absent, the parser treats the entire message as raw turns and defaults Date to today, Persona and Scenario from `domain.json`. Does not crash.
 - Speaker prefixes: `Robert:`, `You:`, and `User:` are all valid for Robert's turns. Unknown prefixes are appended to the prior turn rather than dropped.
 
 **What OpenClaw does on receipt:**
 
-1. Detects `GERMAN_SESSION_TRANSCRIPT` as the first line of any incoming Telegram message
+1. Detects `---SESSION---` as the first line of any incoming Telegram message
 2. Writes full message body to `sessions/inbox/raw_YYYY-MM-DD_HH-MM.txt`
 3. Calls `python parse_transcript.py --stdin --base-dir language/german/`
 4. On success: calls `python reviewer.py --latest --base-dir language/german/`

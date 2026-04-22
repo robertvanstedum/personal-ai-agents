@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
-parse_transcript.py — Convert raw GERMAN_SESSION_TRANSCRIPT text to session JSON.
+parse_transcript.py — Convert ---SESSION---/---END--- transcript text to session JSON.
 
 Standalone entry point. Works independently of OpenClaw.
+Freeform fallback: if no ---SESSION--- delimiter is present, treats the entire
+input as raw turns and defaults header fields from domain.json.
 
 Usage:
   python3 parse_transcript.py --input path/to/transcript.txt --base-dir language/german/
@@ -14,7 +16,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-TRIGGER = "GERMAN_SESSION_TRANSCRIPT"
+START_TRIGGER = "---SESSION---"
+END_TRIGGER = "---END---"
 HEADER_FIELDS = {"date", "persona", "scenario", "duration"}
 
 
@@ -53,18 +56,36 @@ def _parse_turns(lines: list) -> list:
     return turns
 
 
+def _load_domain_defaults(sessions_dir: Path) -> dict:
+    cfg = sessions_dir.parent / 'config/domain.json'
+    if cfg.exists():
+        return json.loads(cfg.read_text())
+    return {}
+
+
 def parse_transcript(raw_text: str, sessions_dir: Path) -> Path:
-    if TRIGGER not in raw_text:
-        raise ValueError(f"Trigger keyword '{TRIGGER}' not found in transcript.")
+    if START_TRIGGER in raw_text:
+        start = raw_text.index(START_TRIGGER) + len(START_TRIGGER)
+        end = raw_text.find(END_TRIGGER, start)
+        body = raw_text[start:end].strip() if end != -1 else raw_text[start:].strip()
+    else:
+        body = raw_text.strip()
 
-    # Split at trigger, take everything after
-    body = raw_text[raw_text.index(TRIGGER) + len(TRIGGER):].strip()
     sections = body.split("\n\n", 1)
-
     header_lines = sections[0].strip().splitlines()
     turn_lines = sections[1].strip().splitlines() if len(sections) > 1 else []
 
     header = _parse_header(header_lines)
+    if not header:
+        # No header found — all lines are turns; fall back to domain.json defaults
+        turn_lines = header_lines + turn_lines
+        domain_cfg = _load_domain_defaults(sessions_dir)
+        header = {
+            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "persona": domain_cfg.get("active_persona", "Unknown"),
+            "scenario": "unknown",
+            "duration": "0",
+        }
 
     date_str = header.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
     persona = header.get("persona", "Unknown")
