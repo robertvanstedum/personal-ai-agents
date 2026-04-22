@@ -1,21 +1,14 @@
 #!/bin/bash
 # Intelligence cron job — WS5 Phase A daily observation layer
-# Runs hourly via launchd StartInterval=3600, with idempotency check (6AM–6PM window).
+# Runs once daily at 6PM via launchd StartCalendarInterval.
 # Requires briefing to have run first — checks curator_latest.json is from today.
 
 PROJECT_DIR="$HOME/Projects/personal-ai-agents"
 cd "$PROJECT_DIR" || exit 1
 
-# ── Time gate: only run between 6AM and 6PM ──────────────────────────────────
-HOUR=$(date +%H)
-if [ "$HOUR" -lt 6 ] || [ "$HOUR" -ge 18 ]; then
-    echo "⏭  Outside 6AM–6PM window (hour=$HOUR) — skipping"
-    exit 0
-fi
-
 # ── Idempotency check: skip if intelligence already ran today ─────────────────
-TODAY=$(date +%Y-%m-%d)
-INTEL_FILE="$PROJECT_DIR/intelligence_${TODAY}.json"
+TODAY=$(date +%Y%m%d)
+INTEL_FILE="$HOME/.openclaw/workspace/intelligence_${TODAY}.json"
 if [ -f "$INTEL_FILE" ]; then
     echo "✅ Intelligence already ran today ($TODAY) — skipping"
     exit 0
