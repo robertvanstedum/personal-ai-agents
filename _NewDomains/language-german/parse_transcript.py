@@ -12,16 +12,13 @@ Usage:
 """
 import argparse
 import json
-import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 START_TRIGGER = "---SESSION---"
-START_TRIGGER_ALT = "\u2014SESSION\u2014"  # iPhone auto-corrects --- to em-dash
 END_TRIGGER = "---END---"
-END_TRIGGER_ALT = "\u2014END\u2014"
-HEADER_FIELDS = {"date", "persona", "scenario", "duration", "mode"}
+HEADER_FIELDS = {"date", "persona", "scenario", "duration"}
 
 
 def _next_session_id(date_str: str, sessions_dir: Path) -> str:
@@ -67,13 +64,10 @@ def _load_domain_defaults(sessions_dir: Path) -> dict:
 
 
 def parse_transcript(raw_text: str, sessions_dir: Path) -> Path:
-    trigger = START_TRIGGER if START_TRIGGER in raw_text else (START_TRIGGER_ALT if START_TRIGGER_ALT in raw_text.upper() else None)
-    if trigger:
-        start = raw_text.upper().index(trigger.upper()) + len(trigger)
-        end_pos = raw_text.upper().find(END_TRIGGER, start)
-        if end_pos == -1:
-            end_pos = raw_text.upper().find(END_TRIGGER_ALT, start)
-        body = raw_text[start:end_pos].strip() if end_pos != -1 else raw_text[start:].strip()
+    if START_TRIGGER in raw_text:
+        start = raw_text.index(START_TRIGGER) + len(START_TRIGGER)
+        end = raw_text.find(END_TRIGGER, start)
+        body = raw_text[start:end].strip() if end != -1 else raw_text[start:].strip()
     else:
         body = raw_text.strip()
 
@@ -96,12 +90,7 @@ def parse_transcript(raw_text: str, sessions_dir: Path) -> Path:
     date_str = header.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
     persona = header.get("persona", "Unknown")
     scenario = header.get("scenario", "unknown")
-    mode = header.get("mode", "voice").lower()
-    if "duration" in header:
-        m = re.search(r'\d+', header["duration"])
-        duration = int(m.group()) if m else None
-    else:
-        duration = None
+    duration = int(header["duration"]) if "duration" in header else None
 
     session_id = _next_session_id(date_str, sessions_dir)
 
@@ -113,7 +102,6 @@ def parse_transcript(raw_text: str, sessions_dir: Path) -> Path:
         "persona": persona,
         "scenario": scenario,
         "duration_estimate_min": duration,
-        "mode": mode,
         "source": "manual",
         "raw_transcript": turns,
         "reviewer_output": None,

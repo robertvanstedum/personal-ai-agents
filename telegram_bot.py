@@ -810,11 +810,7 @@ def run_webhook_mode():
                 elif 'text' in msg and msg['text'].startswith('/'):
                     handle_webhook_command(msg, token)
                 elif 'text' in msg:
-                    # Plain text — acknowledge so user knows the pipeline is working
-                    chat_id = str(msg['chat']['id'])
-                    send_message(token, chat_id,
-                        f"✅ Got it. Commands: /status /run /briefing\n"
-                        f"Or send a voice note to run curator commands.")
+                    handle_text_message(msg, token)
                 return jsonify({'ok': True})
 
             return jsonify({'ok': True})
@@ -864,6 +860,49 @@ def handle_webhook_callback(callback_query, token):
                     original + f"\n\n✅ {action.capitalize()}d!")
     else:
         answer_callback(token, query_id, f"❌ {result['message']}", alert=True)
+
+def handle_text_message(message, token):
+    """Route plain text — dispatch transcript or generic ack."""
+    chat_id = str(message['chat']['id'])
+    text = message.get('text', '')
+    if text.startswith('---SESSION---'):
+        threading.Thread(
+            target=_handle_german_transcript,
+            args=(text, chat_id, token),
+            daemon=True
+        ).start()
+    else:
+        send_message(token, chat_id,
+            "✅ Got it. Commands: /status /run /briefing\n"
+            "Or send a voice note to run curator commands.")
+
+
+def _handle_german_transcript(text, chat_id, token):
+    """Pass full message text to parse_transcript.py via subprocess."""
+    import tempfile
+    send_message(token, chat_id, "⏳ Parsing German session transcript...")
+    german_dir = BASE_DIR / '_NewDomains/language-german'
+    sessions_dir = german_dir / 'language/german/sessions'
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt',
+                                     delete=False, encoding='utf-8') as f:
+        f.write(text)
+        tmp = f.name
+    try:
+        result = subprocess.run(
+            ['python3', str(german_dir / 'parse_transcript.py'),
+             '--input', tmp,
+             '--base-dir', str(german_dir / 'language/german')],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            send_message(token, chat_id, f"✅ {result.stdout.strip()}")
+        else:
+            send_message(token, chat_id,
+                f"❌ Transcript parse failed:\n{result.stderr.strip()[:300]}")
+    finally:
+        Path(tmp).unlink(missing_ok=True)
+
 
 def handle_webhook_command(message, token):
     """Process commands from webhook"""
