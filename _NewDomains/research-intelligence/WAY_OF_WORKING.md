@@ -344,8 +344,8 @@ python agent/research.py --session-name verify-001 \
 
 | # | What to verify | How | Pass criteria |
 |---|---------------|-----|--------------|
-| 21 | Curator daily briefing still runs | `curl http://localhost:8765/` | Returns HTML; no 500 error |
-| 22 | Research routes still load | `curl http://localhost:8765/research/observe` | Returns 200 |
+| 21 | Curator daily briefing still runs | `curl http://localhost:8766/` | Returns HTML; no 500 error |
+| 22 | Research routes still load | `curl http://localhost:8766/research/observe` | Returns 200 |
 | 23 | research_routes.py not modified | `git diff HEAD~1 research_routes.py` (in personal-ai-agents repo) | No diff |
 
 ---

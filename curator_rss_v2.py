@@ -2442,7 +2442,7 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
         button.disabled = true;
         
         // Send to feedback server with full article data (POST)
-        fetch('http://localhost:8765/feedback', {
+        fetch('http://localhost:8766/feedback', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -2587,7 +2587,7 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
             diveBtn.style.opacity = '0.6';
             
             // Send to server with hash_id, interest and focus
-            var url = 'http://localhost:8765/deepdive?hash_id=' + hashId + '&interest=' + encodeURIComponent(interest);
+            var url = 'http://localhost:8766/deepdive?hash_id=' + hashId + '&interest=' + encodeURIComponent(interest);
             if (focus) {
                 url += '&focus=' + encodeURIComponent(focus);
             }
