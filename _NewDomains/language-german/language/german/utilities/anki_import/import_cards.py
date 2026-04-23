@@ -92,6 +92,9 @@ def main() -> None:
             print(f"  ⚠️  {csv_path.name}: no valid rows — skipping")
             continue
         added, dupes = add_notes(notes)
+        if added == 0 and dupes == 0:
+            print(f"  ❌ {csv_path.name}: AnkiConnect returned no results — deck may not exist. Not marked as imported.")
+            continue
         mark_imported(csv_path.name)
         total_files += 1
         total_added += added
