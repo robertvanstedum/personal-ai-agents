@@ -58,7 +58,7 @@ When finished, say to Grok:
 Date: YYYY-MM-DD
 Persona: [Persona Name]
 Scenario: [scenario_label]
-Duration: [your estimate in minutes]
+Duration: [number only, e.g. 12]
 
 [Persona Name]: [turn text]
 Robert: [turn text]
@@ -92,7 +92,7 @@ End session. Give me a clean transcript in this format:
 Date: YYYY-MM-DD
 Persona: [Persona Name]
 Scenario: [scenario_label]
-Duration: [your estimate in minutes]
+Duration: [number only, e.g. 12]
 
 [Persona Name]: [turn text]
 Robert: [turn text]

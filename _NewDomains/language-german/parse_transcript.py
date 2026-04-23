@@ -12,6 +12,7 @@ Usage:
 """
 import argparse
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -90,7 +91,11 @@ def parse_transcript(raw_text: str, sessions_dir: Path) -> Path:
     date_str = header.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
     persona = header.get("persona", "Unknown")
     scenario = header.get("scenario", "unknown")
-    duration = int(header["duration"]) if "duration" in header else None
+    if "duration" in header:
+        m = re.search(r'\d+', header["duration"])
+        duration = int(m.group()) if m else None
+    else:
+        duration = None
 
     session_id = _next_session_id(date_str, sessions_dir)
 
