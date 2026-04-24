@@ -321,3 +321,16 @@ decisions — patterns chosen, tradeoffs accepted, intentional behavior that sho
 be "fixed." Log a decision when the rationale would not be obvious from reading the
 code alone. What goes where table updated. First entry: DEC-001, filesystem
 reconciliation for deep dive URL resolution.
+
+**2026-04-24:** Testing rule added after regression. The writing-mode commit
+(c2b320e) changed `parse_transcript.py`, `reviewer.py`, and `status.py`, but
+acceptance tests only covered the new `Mode:` field. Voice mode pipeline output
+broke in production — raw JSON reached Telegram instead of the formatted summary —
+because Tests 1–5 didn't exercise the full end-to-end Telegram path. Fixed in
+commit d6102c3 (stderr redirect + output guard + Test 6).
+
+**Rule: When any feature in the German domain pipeline changes, run all acceptance
+tests (Tests 1–6), not just the tests for the feature that changed.** A change to
+parse_transcript.py can break reviewer.py output; a change to reviewer.py can break
+the Telegram summary. Tests are end-to-end for a reason — run the full suite every
+time.
