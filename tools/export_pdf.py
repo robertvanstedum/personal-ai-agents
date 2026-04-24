@@ -49,6 +49,30 @@ def _find_repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def _output_dir() -> Path:
+    """Resolve default output directory.
+
+    Priority: tools_config.json export_pdf_output_dir → script's own directory.
+    Creates the directory if it doesn't exist.
+    """
+    import json
+    config_path = Path(__file__).parent / "tools_config.json"
+    if config_path.exists():
+        try:
+            cfg = json.loads(config_path.read_text())
+            raw = cfg.get("export_pdf_output_dir", "")
+            if raw:
+                d = Path(raw).expanduser().resolve()
+                d.mkdir(parents=True, exist_ok=True)
+                return d
+        except Exception:
+            pass
+    # Fallback: same directory as this script
+    d = Path(__file__).parent.resolve()
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def _styles() -> dict:
     base = getSampleStyleSheet()
     # GitHub-flavored styling: dark charcoal text, light gray code bg, Helvetica sans-serif
@@ -199,8 +223,8 @@ def render_md_to_pdf(src: Path, out: Path, title: str = "") -> None:
 
 def _run_tests() -> None:
     repo_root = _find_repo_root()
-    downloads = Path.home() / "Downloads"
-    test_out = downloads / "export_pdf_test.pdf"
+    out_dir = _output_dir()
+    test_out = out_dir / "export_pdf_test.pdf"
     results = []
 
     # Test 1: Bundle resolution — at least one bundle has files that exist on disk
@@ -227,7 +251,7 @@ def _run_tests() -> None:
     except Exception as e:
         results.append(("Test 2 — Single file conversion", False, str(e)))
 
-    # Test 3: Output validation — file is in ~/Downloads/ and non-zero bytes
+    # Test 3: Output validation — file exists in output dir and is non-zero bytes
     try:
         if not converted:
             raise RuntimeError("Skipped — conversion failed in Test 2")
@@ -266,7 +290,7 @@ def main() -> None:
         epilog=__doc__,
     )
     parser.add_argument("file", nargs="?", help="Markdown file to export")
-    parser.add_argument("--out", help="Output PDF path (default: ~/Downloads/<name>.pdf)")
+    parser.add_argument("--out", help="Output PDF path (overrides configured output dir)")
     parser.add_argument("--bundle", choices=list(BUNDLES.keys()),
                         help="Export a predefined bundle of documents")
     parser.add_argument("--list-bundles", action="store_true",
@@ -279,23 +303,23 @@ def main() -> None:
         _run_tests()
         return
 
+    out_dir = _output_dir()
+    repo_root = _find_repo_root()
+
     if args.list_bundles:
         for name, entries in BUNDLES.items():
             print(f"\n  {name}:")
             for src_rel, out_name in entries:
-                print(f"    {src_rel}  →  ~/Downloads/{out_name}")
+                print(f"    {src_rel}  →  {out_dir}/{out_name}")
         print()
         return
-
-    downloads = Path.home() / "Downloads"
-    repo_root = _find_repo_root()
 
     if args.bundle:
         entries = BUNDLES[args.bundle]
         print(f"\nExporting bundle '{args.bundle}' ({len(entries)} files)…")
         for src_rel, out_name in entries:
             src = repo_root / src_rel
-            out = downloads / out_name
+            out = out_dir / out_name
             if not src.exists():
                 print(f"  ⚠️  Not found, skipping: {src_rel}")
                 continue
@@ -318,7 +342,7 @@ def main() -> None:
     if args.out:
         out = Path(args.out).expanduser()
     else:
-        out = downloads / (src.stem + ".pdf")
+        out = out_dir / (src.stem + ".pdf")
 
     render_md_to_pdf(src, out)
     print(f"✅ PDF saved: {out}")
