@@ -77,9 +77,15 @@ def main():
     # ── Summary line ──────────────────────────────────────────
     if progress:
         sessions = progress.get("total_sessions", 0)
+        voice = progress.get("voice_sessions", 0)
+        writing = progress.get("writing_sessions", 0)
         minutes = progress.get("total_minutes", 0)
         cards = progress.get("anki_cards_generated", 0)
-        print(f"Sessions: {sessions} | Minutes: {minutes} | Anki cards: {cards}")
+        if voice > 0 and writing > 0:
+            session_str = f"Sessions: {sessions} (voice: {voice} · writing: {writing})"
+        else:
+            session_str = f"Sessions: {sessions}"
+        print(f"{session_str} | Minutes: {minutes} | Anki cards: {cards}")
     else:
         print("No sessions yet — run reviewer.py after your first session.")
 

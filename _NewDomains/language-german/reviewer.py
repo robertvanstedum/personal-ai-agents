@@ -286,6 +286,8 @@ def _load_progress(progress_path: Path) -> dict:
         return json.loads(progress_path.read_text())
     return {
         "total_sessions": 0,
+        "voice_sessions": 0,
+        "writing_sessions": 0,
         "total_minutes": 0,
         "personas_practiced": [],
         "scenarios_covered": [],
@@ -300,6 +302,11 @@ def _load_progress(progress_path: Path) -> dict:
 def _update_progress(progress: dict, session: dict, reviewer_output: dict,
                       new_vocab_count: int) -> dict:
     progress["total_sessions"] += 1
+    mode = session.get("mode", "voice")
+    if mode == "writing":
+        progress["writing_sessions"] = progress.get("writing_sessions", 0) + 1
+    else:
+        progress["voice_sessions"] = progress.get("voice_sessions", 0) + 1
     progress["total_minutes"] += session.get("duration_estimate_min") or 0
     progress["personas_practiced"].append(session["persona"])
     progress["scenarios_covered"].append(session["scenario"])
