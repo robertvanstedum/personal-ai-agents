@@ -446,6 +446,13 @@ cd ~/Projects/personal-ai-agents && source venv/bin/activate && python3 setup_ke
 # X OAUTH STATUS
 cd ~/Projects/personal-ai-agents && source venv/bin/activate
 python x_oauth2_authorize.py --status
+
+# EXPORT DOCS TO PDF (saved to ~/Downloads/)
+cd ~/Projects/personal-ai-agents && source venv/bin/activate
+python tools/export_pdf.py --bundle curator   # README, ARCHITECTURE, OPERATIONS, ROADMAP, VISION
+python tools/export_pdf.py --bundle german    # GERMAN_USER_GUIDE, GERMAN_SPEC
+python tools/export_pdf.py README.md          # single file
+python tools/export_pdf.py --list-bundles     # see all bundles
 ```
 
 ---
@@ -457,6 +464,7 @@ python x_oauth2_authorize.py --status
 - `ROADMAP.md` — Build priorities and future work
 - `CHANGELOG.md` — Version history
 - `CREDENTIALS_SETUP.md` — Initial credential setup guide
+- `tools/export_pdf.py` — Export any markdown doc to PDF (`--bundle curator`, `--bundle german`, or single file)
 - This file (`OPERATIONS.md`) — Day-to-day operations
 
 **Repository:** https://github.com/robertvanstedum/personal-ai-agents
