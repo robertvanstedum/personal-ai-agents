@@ -135,8 +135,8 @@ def _parse_llm_response(text: str) -> tuple[dict, bool]:
             return json.loads(m.group(1)), True
         except json.JSONDecodeError:
             pass
-    print(f"⚠️  LLM response parse failed. Storing raw output for debugging.")
-    print(f"   Raw (first 300 chars): {text[:300]}")
+    print(f"⚠️  LLM response parse failed. Storing raw output for debugging.", file=sys.stderr)
+    print(f"   Raw (first 300 chars): {text[:300]}", file=sys.stderr)
     return _empty_reviewer_output(), False
 
 
@@ -262,7 +262,7 @@ def _generate_lesson_plan(reviewer_output: dict, session: dict, domain_cfg: dict
         "lesson_date": next_date,
         "lesson_number": lesson_number + 1,
         "persona": next_persona["name"],
-        "persona_role": next_persona["role"],
+        "persona_role": next_persona["role"],  # from personas.json, never from reviewer_output
         "scenario": next_scenario,
         "warm_up": f"Review top error from last session: {top_error.replace('_', ' ')}.",
         "focus": reviewer_output.get("next_focus", ""),

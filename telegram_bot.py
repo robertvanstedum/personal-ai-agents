@@ -612,6 +612,8 @@ async def _handle_german_transcript(update: Update, text: str):
         await update.message.reply_text(f"❌ status.py failed (exit {rc}):\n{err[:400]}")
         return
 
+    if not out or out.strip().startswith("{"):
+        out = "⚠️ Pipeline completed but status output was empty or unexpected.\nRun !german status to check."
     await update.message.reply_text(f"<pre>{escape(out)}</pre>", parse_mode="HTML")
 
 
@@ -715,7 +717,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     text = update.message.text.strip()
 
-    if text.startswith("---SESSION---"):
+    if text.startswith("---SESSION---") or text.lower().startswith("\u2014session\u2014"):
         await _handle_german_transcript(update, text)
     elif text.lower().startswith("!german"):
         await _handle_german_command(update, text)
