@@ -1,6 +1,6 @@
 # German Practice — User Guide
-**Version:** 1.0  
-**Date:** 2026-04-21  
+**Version:** 1.1  
+**Date:** 2026-04-24  
 **Author:** Robert van Stedum  
 **Status:** Living document — update as workflow evolves
 
@@ -143,6 +143,66 @@ Tap a rating — this is your feedback signal. It takes one second and matters f
 
 ---
 
+## Writing Sessions
+
+Writing sessions use the same personas, scenarios, and pipeline as voice sessions. Use them when Grok voice is unavailable, or to build a voice vs writing error comparison over time. The pipeline handles `Mode: writing` automatically — no other changes needed.
+
+### Option A — Request via OpenClaw (when command is live)
+
+Send to `minimoi_agent_bot`:
+
+```
+writing café Maria
+writing hotel Herr Fischer
+writing bakery Frau Berger
+```
+
+OpenClaw generates a writing-mode prompt file marked with `⌨️ WRITING SESSION` at the top and pre-fills `Mode: writing` in the transcript template. Everything else is the same as a normal session.
+
+### Option B — Run manually today (before OpenClaw command is live)
+
+1. Open **Claude.ai** or **Grok** in text mode (browser or app)
+2. Paste the persona prompt from `config/prompts/[persona].txt`
+3. Say: **"Start today's writing session"**
+4. Type your turns — no voice required. The persona will gently correct mistakes in-character.
+5. When finished, say:
+
+```
+End session. Give me a clean transcript in this format:
+
+---SESSION---
+Date: YYYY-MM-DD
+Persona: [Persona Name]
+Scenario: [scenario_label]
+Duration: [number only, e.g. 12]
+Mode: writing
+
+[Persona Name]: [turn text]
+Robert: [turn text]
+[continue alternating turns...]
+---END---
+```
+
+6. Copy the full block from `---SESSION---` to `---END---` inclusive
+7. **Before submitting:** confirm `Mode: writing` is in the header
+
+**Tip:** Turn off auto-correct before you start — the pipeline tracks your actual mistakes.
+
+### iPhone workflow for writing sessions
+
+1. Copy the persona prompt (from OpenClaw or the prompts folder)
+2. Open Claude.ai or Grok in a browser tab or app
+3. Paste the prompt → say "Start today's writing session"
+4. Type your responses in full sentences
+5. End with the transcript request above — include `Mode: writing` in the header
+6. Copy the block → paste to `minimoi_cmd_bot` as normal
+
+### Processing a writing transcript
+
+Same as voice — paste to **`minimoi_cmd_bot`**. The pipeline detects `Mode: writing` and increments your writing session count separately from voice. Everything else (Anki cards, lesson plan, reviewer feedback) is identical.
+
+---
+
 ## Anki Cards
 
 After each session, a CSV file is generated at:
@@ -274,4 +334,5 @@ _NewDomains/language-german/
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.1 | 2026-04-24 | Add Writing Sessions section — OpenClaw command, manual workflow, iPhone steps, pipeline note |
 | 1.0 | 2026-04-21 | Initial guide — covers current manual workflow and target automated workflow |
