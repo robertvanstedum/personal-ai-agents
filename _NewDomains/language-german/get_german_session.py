@@ -6,6 +6,7 @@ Usage:
   python get_german_session.py --base-dir language/german/
   python get_german_session.py --base-dir language/german/ --date 2026-04-25
   python get_german_session.py --base-dir language/german/ --dry-run
+  python get_german_session.py --base-dir language/german/ --send
 """
 import argparse
 import json
@@ -13,6 +14,32 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    import keyring
+    import requests
+except ImportError:
+    keyring = None
+    requests = None
+
+
+def _send_telegram(text: str) -> None:
+    if keyring is None or requests is None:
+        print("⚠️  keyring/requests not available — cannot send to Telegram.", file=sys.stderr)
+        sys.exit(1)
+    token = keyring.get_password("telegram", "polling_bot_token")
+    chat_id = keyring.get_password("telegram", "chat_id")
+    if not token or not chat_id:
+        print("⚠️  Telegram credentials not found in Keychain (telegram/polling_bot_token, telegram/chat_id).", file=sys.stderr)
+        sys.exit(1)
+    resp = requests.post(
+        f"https://api.telegram.org/bot{token}/sendMessage",
+        json={"chat_id": chat_id, "text": text, "disable_web_page_preview": True},
+        timeout=30,
+    )
+    if not resp.ok:
+        print(f"⚠️  Telegram send failed: {resp.status_code} {resp.text[:200]}", file=sys.stderr)
+        sys.exit(1)
 
 
 def _slug(name: str) -> str:
@@ -63,6 +90,7 @@ def main():
     parser.add_argument('--base-dir', default='language/german/', help='Path to language/german/ directory')
     parser.add_argument('--date', help='Override date (YYYY-MM-DD, for testing)')
     parser.add_argument('--dry-run', action='store_true', help='Print output without sending anywhere')
+    parser.add_argument('--send', action='store_true', help='Send session package to Telegram after printing')
     args = parser.parse_args()
 
     base = Path(args.base_dir)
@@ -150,7 +178,12 @@ def main():
         "Send transcript to @minimoi_cmd_bot to process.",
     ]
 
-    print('\n'.join(lines))
+    output = '\n'.join(lines)
+    print(output)
+
+    if args.send and not args.dry_run:
+        _send_telegram(output)
+        print("✅ Sent to Telegram.", file=sys.stderr)
 
 
 if __name__ == '__main__':
