@@ -647,6 +647,14 @@ async def _handle_german_command(update: Update, text: str):
         ]
         await update.message.reply_text("\n".join(lines))
 
+    elif cmd == "session":
+        out, err, rc = _run(
+            [str(VENV_PYTHON), "get_german_session.py", "--base-dir", "language/german/", "--send"],
+            cwd=str(GERMAN_BASE)
+        )
+        if rc != 0:
+            await update.message.reply_text(f"❌ get_german_session.py failed:\n{err[:400]}")
+
     elif cmd == "today":
         out, err, rc = _run(
             [str(VENV_PYTHON), "reviewer.py", "--latest", "--base-dir", "language/german/"],
@@ -700,6 +708,7 @@ async def _handle_german_command(update: Update, text: str):
     else:
         await update.message.reply_text(
             "German commands:\n"
+            "  !german session\n"
             "  !german status\n"
             "  !german progress\n"
             "  !german today\n"
@@ -718,10 +727,19 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     text = update.message.text.strip()
 
+    _SESSION_RE = re.compile(
+        r"(pull today.?s german session|what.?s my german session|"
+        r"give me today.?s german prompt|german session please|"
+        r"german session today|today.?s german session)",
+        re.I,
+    )
+
     if text.startswith("---SESSION---") or text.lower().startswith("\u2014session\u2014"):
         await _handle_german_transcript(update, text)
     elif text.lower().startswith("!german"):
         await _handle_german_command(update, text)
+    elif _SESSION_RE.search(text):
+        await _handle_german_command(update, "!german session")
     else:
         await update.message.reply_text(
             "Got it — I hear you. Send !german status to test the pipeline."
