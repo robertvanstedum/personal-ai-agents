@@ -83,6 +83,14 @@ def _tg_enabled(key: str) -> bool:
 
 # ─── File stability ───────────────────────────────────────────────────────────
 
+def _is_valid_utf8(path: Path) -> bool:
+    try:
+        path.read_text(encoding="utf-8")
+        return True
+    except (UnicodeDecodeError, OSError):
+        return False
+
+
 def _is_stable(path: Path, checks: int = 3, interval: float = 1.0) -> bool:
     sizes = []
     for _ in range(checks):
@@ -118,7 +126,6 @@ def _process(path: Path) -> None:
     )
     if rc != 0:
         _fail(name, "parse_transcript.py", err or out)
-        return
     logging.info(f"  parse OK: {out.strip()}")
 
     # Step 2 — review
@@ -128,7 +135,6 @@ def _process(path: Path) -> None:
     )
     if rc != 0:
         _fail(name, "reviewer.py", err or out)
-        return
     logging.info(f"  review OK")
 
     # Step 3 — Anki import (graceful degradation)
@@ -164,7 +170,6 @@ def _process(path: Path) -> None:
         )
         if rc != 0:
             _fail(name, "get_german_session.py", err or out)
-            return
         logging.info(f"  session prompt written to Dropbox + sent to Telegram")
     else:
         logging.info(f"  drill session {drill_session}/{drill_total} — skipping prompt rotation")
@@ -186,6 +191,7 @@ def _fail(name: str, step: str, error: str) -> None:
     logging.error(msg)
     if _tg_enabled("send_telegram_on_error"):
         _tg_send(msg)
+    raise RuntimeError(msg)
 
 # ─── Main loop ────────────────────────────────────────────────────────────────
 
@@ -203,12 +209,22 @@ def main() -> None:
         _tg_send(f"🟢 German watcher active — polling ~/Dropbox/German_Sessions every {POLL_INTERVAL}s")
 
     seen: set[str] = set()
+    failed: set[str] = set()
 
     while True:
         try:
+            all_files = [f for f in os.listdir(INBOX) if Path(f).suffix in EXTENSIONS]
+            for f in all_files:
+                if f.startswith("~$") and f not in seen:
+                    logging.info(f"Ignoring temp file: {f}")
+                    seen.add(f)
+                elif f in failed:
+                    logging.info(f"⚠️ Skipping previously failed file: {f}")
             candidates = [
-                INBOX / f for f in os.listdir(INBOX)
-                if Path(f).suffix in EXTENSIONS and f not in seen
+                INBOX / f for f in all_files
+                if not f.startswith("~$")
+                and f not in seen
+                and f not in failed
             ]
             for path in sorted(candidates):
                 seen.add(path.name)
@@ -216,10 +232,17 @@ def main() -> None:
                     logging.info(f"Skipping unstable file: {path.name}")
                     seen.discard(path.name)  # retry next poll
                     continue
+                if not _is_valid_utf8(path):
+                    msg = f"⚠️ File {path.name} has encoding issues — re-save as UTF-8"
+                    logging.warning(msg)
+                    _tg_send(msg)
+                    failed.add(path.name)
+                    continue
                 try:
                     _process(path)
                 except Exception as e:
                     _fail(path.name, "unexpected error", str(e))
+                    failed.add(path.name)
         except Exception as e:
             logging.error(f"Poll loop error: {e}")
 
