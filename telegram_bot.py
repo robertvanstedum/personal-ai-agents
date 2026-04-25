@@ -12,6 +12,7 @@ from html import escape
 import os
 import io
 import re
+import sys
 import json
 import threading
 import subprocess
@@ -734,7 +735,26 @@ def run_bot_mode():
     if not token:
         print("❌ No polling token found (keyring 'telegram/polling_bot_token' or TELEGRAM_POLLING_BOT_TOKEN)")
         return
-    
+
+    # Startup conflict check: fail fast if another process is already polling this token
+    try:
+        resp = requests.get(
+            f"https://api.telegram.org/bot{token}/getUpdates",
+            params={"timeout": 1},
+            timeout=5,
+        )
+        if resp.status_code == 409:
+            print(
+                "❌ FATAL: Another process is already polling this bot token.\n"
+                "Only one poller is allowed per token (see ARCHITECTURE.md).\n"
+                "Check for other running telegram_bot.py or OpenClaw processes.\n"
+                "Exiting.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    except requests.RequestException as e:
+        print(f"⚠️  Startup conflict check failed (network error): {e}", file=sys.stderr)
+
     print("🤖 Unified Telegram bot starting...")
     app = Application.builder().token(token).build()
     

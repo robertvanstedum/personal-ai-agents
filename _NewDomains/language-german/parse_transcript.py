@@ -47,7 +47,9 @@ def _parse_header(lines: list) -> dict:
 def _parse_turns(lines: list) -> list:
     turns = []
     for line in lines:
-        line = line.strip()
+        # Normalize em-dash and en-dash to hyphen; collapse Unicode whitespace
+        line = line.replace('\u2014', '-').replace('\u2013', '-')
+        line = ' '.join(line.split())
         if not line:
             continue
         if ":" in line:
@@ -67,7 +69,7 @@ def _load_domain_defaults(sessions_dir: Path) -> dict:
 
 
 def parse_transcript(raw_text: str, sessions_dir: Path) -> Path:
-    trigger = START_TRIGGER if START_TRIGGER in raw_text else (START_TRIGGER_ALT if START_TRIGGER_ALT in raw_text.upper() else None)
+    trigger = START_TRIGGER if START_TRIGGER in raw_text else (START_TRIGGER_ALT if START_TRIGGER_ALT in raw_text else None)
     if trigger:
         start = raw_text.upper().index(trigger.upper()) + len(trigger)
         end_pos = raw_text.upper().find(END_TRIGGER, start)
@@ -78,8 +80,25 @@ def parse_transcript(raw_text: str, sessions_dir: Path) -> Path:
         body = raw_text.strip()
 
     sections = body.split("\n\n", 1)
-    header_lines = sections[0].strip().splitlines()
-    turn_lines = sections[1].strip().splitlines() if len(sections) > 1 else []
+    if len(sections) == 2:
+        header_lines = sections[0].strip().splitlines()
+        turn_lines = sections[1].strip().splitlines()
+    else:
+        # No blank line separator (common in iPhone/Grok formatting) —
+        # split by detecting known header fields vs. speaker turns
+        header_lines = []
+        turn_lines = []
+        past_header = False
+        for line in body.splitlines():
+            if not line.strip():
+                continue
+            if not past_header and ":" in line:
+                key = line.partition(":")[0].strip().lower()
+                if key in HEADER_FIELDS:
+                    header_lines.append(line)
+                    continue
+            past_header = True
+            turn_lines.append(line)
 
     header = _parse_header(header_lines)
     if not header:
@@ -106,6 +125,9 @@ def parse_transcript(raw_text: str, sessions_dir: Path) -> Path:
     session_id = _next_session_id(date_str, sessions_dir)
 
     turns = _parse_turns(turn_lines)
+
+    if not turns and body:
+        print("⚠️  WARNING: raw_transcript is empty after parsing non-empty body. Check transcript format.", file=sys.stderr)
 
     session = {
         "session_id": session_id,

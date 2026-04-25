@@ -1,0 +1,17 @@
+—SESSION—
+Date: 2026-04-24
+Persona: Stefan
+Scenario: U-Bahn
+Duration: 12
+Stefan: Servus, Grüß Gott! Fahrschein bitte. Hast du einen gültigen Ticket?
+Robert: Nein, ich habe nicht.
+Stefan: Kein Ticket? Dann brauchst du einen. Wohin willst du eigentlich? Zum Prater oder zum Stephansdom?
+Robert: Was ist der Unterschied?
+Stefan: Zum Prater nimmst du die U1 Richtung Leopoldau, einfach einsteigen, keine Umsteigung. Zum Stephansdom gehst du direkt raus, der ist gleich oben.
+Robert: Ich möchte gern spazieren. Wo ist besser?
+Stefan: Der Prater ist viel besser zum Spazieren, da hast du den großen Park und den Wurstelprater mit dem Riesenrad. Nimm einfach die U1, zwei Stationen.
+Robert: Genau, ich nehme mich.
+Stefan: Nimmst die U1 Richtung Leopoldau, zwei Stationen, dann bist du schon im Prater. Servus und viel Spaß!
+Robert: Danke dir.
+Stefan: Gerne. Viel Spaß beim Spazieren im Prater! Servus.
+—END—
