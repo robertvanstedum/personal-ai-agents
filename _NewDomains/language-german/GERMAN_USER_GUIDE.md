@@ -1,6 +1,6 @@
 # German Practice — User Guide
-**Version:** 1.1  
-**Date:** 2026-04-24  
+**Version:** 1.2  
+**Date:** 2026-04-25  
 **Author:** Robert van Stedum  
 **Status:** Living document — update as workflow evolves
 
@@ -237,6 +237,8 @@ Cards include example sentences and tags for filtering by topic (food, hotel, di
 
 | Command | What it does |
 |---|---|
+| `!german session` | Generate today's session → send to Telegram + write to Dropbox |
+| `!german drill [persona] [scenario] [N]` | Generate N drill prompts → all written to Dropbox, first sent to Telegram |
 | `!german status` | Today's session summary + next lesson |
 | `!german progress` | Cumulative stats — sessions, minutes, cards, top errors |
 | `!german today` | Re-run reviewer on today's most recent session |
@@ -281,11 +283,103 @@ That's it. Everything else — Anki review, HTML page, writing exercise — is o
 | Feature | Status | When |
 |---|---|---|
 | Auto-trigger (no delimiter needed) | ✅ Freeform fallback shipped | Done |
-| `!german start` persona menu | Step 2 in build plan | This week |
-| Session quality rating buttons | Step 3 in build plan | This week |
-| HTML session review page | Step 4 in build plan | This week |
-| iCloud prompt file drop | Step 5 in build plan | This week |
-| Morning German reminder | Planned | This week |
+| Dropbox bridge + watcher | ✅ Shipped 2026-04-25 | Done |
+| Drill mode | ✅ Shipped 2026-04-25 | Done |
+| Anki auto-import via AnkiConnect | ✅ Shipped 2026-04-25 | Done |
+| Session quality rating buttons | Planned | Next |
+| HTML session review page | Planned | Next |
+| Morning German reminder | Planned | Next |
+
+---
+
+## Dropbox iPhone Workflow
+
+The Dropbox bridge lets you go from Telegram command to Grok practice without copy-pasting between apps. The watcher on your Mac fires the pipeline within 15 seconds of a transcript landing in the inbox.
+
+### Before practice
+
+1. In Telegram (either bot), send: `!german session` or `"Pull today's German session"`
+2. Pipeline generates today's prompt → sends to Telegram AND writes a `.txt` file to `~/Dropbox/German_Sessions/prompts/`
+3. On your iPhone, open the Dropbox app → navigate to `German_Sessions/prompts/`
+4. Open today's file → if Grok accepts `.txt` attachments, attach it directly; otherwise copy the text
+5. In Grok: paste (or attach) → say **"Start today's session"** → practice
+
+### After practice
+
+1. Say to Grok: **"End session. Give me a clean transcript."**
+2. Copy the full block from `---SESSION---` to `---END---` (inclusive)
+3. In the Dropbox app: navigate to `German_Sessions/transcripts/inbox/` → create a new `.txt` file → paste → save
+4. Done — the watcher detects the file within 15 seconds and fires the full pipeline
+
+### What the watcher does automatically
+
+1. Parses the transcript → creates session JSON
+2. Runs `reviewer.py` → error analysis + Anki cards
+3. Imports cards into Anki (if AnkiConnect is open on your Mac)
+4. Generates the next session prompt → writes to Dropbox + sends to Telegram
+5. Moves the transcript to `transcripts/processed/`
+
+**Fallback:** If the Dropbox inbox doesn't work, paste the transcript directly to `minimoi_cmd_bot` as before — the manual path is always available.
+
+---
+
+## Rapid-Drill Mode
+
+Use drill mode to repeat a scenario multiple times in quick succession — useful for cementing a specific skill (e.g. U-Bahn directions, ordering coffee) before Vienna.
+
+### How to trigger
+
+In Telegram:
+```
+!german drill Stefan ubahn 3
+!german drill Maria café 5
+!german drill Frau Novak pharmacy 2
+```
+
+Or natural language:
+- "Start German session in drill mode"
+- "Drill café Maria 3 times"
+- "3 drill sessions"
+
+### What happens
+
+1. Pipeline generates N prompt files → all written to Dropbox (`prompts/..._drill1.txt` through `..._drillN.txt`)
+2. The first session prompt is sent to Telegram immediately
+3. Each drill file includes a `Drill-Session: K of N` line in the end-session transcript template — **you don't need to type this manually**
+
+### Working through drills
+
+- Open each drill file from Dropbox in order, practice, drop transcript in inbox
+- After each non-final session: Anki cards are generated, but the lesson plan does **not** rotate — you stay on the same persona/scenario
+- After the final session (`K == N`): full pipeline runs, lesson rotates to the next one
+
+**Why drills don't advance the lesson:** Each mid-drill session generates Anki cards from your errors. The lesson rotation waits until you've done all N repetitions, so you're reinforcing the same material without disrupting the lesson sequence.
+
+---
+
+## Anki Auto-Import
+
+After each session, a CSV file is written to `language/german/anki/YYYY-MM-DD_anki.csv`.
+
+### Automatic import (when Anki is open)
+
+The watcher calls `import_cards.py` automatically. If Anki desktop is open and AnkiConnect is running, cards are imported immediately. If not, the pipeline continues and logs a warning — nothing breaks.
+
+**To enable AnkiConnect:** Install the AnkiConnect add-on in Anki (add-on code: `2055492159`). Leave Anki open on your Mac before dropping a transcript in the inbox.
+
+### Manual import
+
+1. Open Anki → File → Import
+2. Navigate to `_NewDomains/language-german/language/german/anki/`
+3. Select the most recent CSV → map fields: Front, Back, Tags → Import
+
+### What the cards contain
+
+- Front: German word or phrase (or fill-in-the-blank sentence)
+- Back: English translation + example sentence
+- Tags: session date, persona, error type (e.g. `word_order`, `gender`, `vocab`)
+
+Use Anki's tag browser to filter by error type and drill your weakest areas.
 
 ---
 
@@ -318,14 +412,25 @@ _NewDomains/language-german/
       domain.json          ← active persona, lesson counter, reviewer model
       personas.json        ← all 8 personas with speaking prompts
       prompts/             ← one .txt file per persona (paste into Grok)
+      sync_config.json     ← Dropbox paths + watcher settings
     sessions/              ← session JSONs (gitignored)
-      inbox/               ← raw transcripts drop here first
     anki/                  ← daily Anki CSVs (gitignored)
     lessons/               ← daily lesson plans (gitignored)
     progress.json          ← cumulative stats (gitignored)
   parse_transcript.py
   reviewer.py
+  watch_transcripts.py     ← Dropbox inbox watcher (run at startup)
+  get_german_session.py    ← session package generator
+  import_cards.py          ← Anki auto-import via AnkiConnect
   status.py
+
+~/Dropbox/German_Sessions/
+  prompts/                 ← generated session prompt files (.txt)
+  transcripts/
+    inbox/                 ← drop your transcript here after practice
+    processed/             ← watcher moves files here after pipeline runs
+  logs/
+    watcher.log            ← watcher activity log (rotates at 1MB)
 ```
 
 ---
@@ -334,5 +439,6 @@ _NewDomains/language-german/
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.2 | 2026-04-25 | Add Dropbox iPhone workflow, Rapid-Drill mode, Anki auto-import sections; update commands table + What's Not Built Yet |
 | 1.1 | 2026-04-24 | Add Writing Sessions section — OpenClaw command, manual workflow, iPhone steps, pipeline note |
 | 1.0 | 2026-04-21 | Initial guide — covers current manual workflow and target automated workflow |

@@ -21,7 +21,7 @@ START_TRIGGER = "---SESSION---"
 START_TRIGGER_ALT = "\u2014SESSION\u2014"  # iPhone auto-corrects --- to em-dash
 END_TRIGGER = "---END---"
 END_TRIGGER_ALT = "\u2014END\u2014"
-HEADER_FIELDS = {"date", "persona", "scenario", "duration", "mode"}
+HEADER_FIELDS = {"date", "persona", "scenario", "duration", "mode", "drill", "drill-session"}
 
 
 def _next_session_id(date_str: str, sessions_dir: Path) -> str:
@@ -122,6 +122,20 @@ def parse_transcript(raw_text: str, sessions_dir: Path) -> Path:
     else:
         duration = None
 
+    # Drill mode fields
+    drill_mode = header.get("drill", "").lower() == "true"
+    drill_session = 0
+    drill_total = 0
+    raw_ds = header.get("drill-session", "")  # e.g. "2 of 3"
+    if raw_ds:
+        parts = raw_ds.split("of")
+        if len(parts) == 2:
+            try:
+                drill_session = int(parts[0].strip())
+                drill_total   = int(parts[1].strip())
+            except ValueError:
+                pass
+
     session_id = _next_session_id(date_str, sessions_dir)
 
     turns = _parse_turns(turn_lines)
@@ -141,6 +155,9 @@ def parse_transcript(raw_text: str, sessions_dir: Path) -> Path:
         "reviewer_output": None,
         "anki_generated": False,
         "next_lesson_generated": False,
+        "drill_mode": drill_mode,
+        "drill_session": drill_session,
+        "drill_total": drill_total,
     }
 
     out_path = sessions_dir / f"{session_id}.json"

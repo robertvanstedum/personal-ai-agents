@@ -9,7 +9,13 @@
       "neighborhood_chat": "You've just picked up your order and Frau Berger wants to chat. She asks how you're finding Vienna. Talk about the neighborhood, what you've seen, and where you're headed next."
     },
     "style": "casual, forgiving, gentle in-character corrections",
-    "difficulty": "beginner-friendly"
+    "difficulty": "beginner-friendly",
+    "warm_up_variants": [
+      "Order a Semmel and ask for the price.",
+      "Ask what's fresh today, then order a Kipferl.",
+      "Order a Mohnflesserl and ask if they have Topfenstrudel.",
+      "Ask for two Semmeln and a Salzstangerl, then pay with exact change."
+    ]
   },
   {
     "name": "Herr Fischer",
@@ -23,7 +29,13 @@
       "directions": "You're in the hotel lobby and need to get somewhere in the city. Ask Herr Fischer how to get to the Naschmarkt by U-Bahn. Confirm the line number and how many stops."
     },
     "style": "formal, clear, standard Hochdeutsch",
-    "difficulty": "intermediate"
+    "difficulty": "intermediate",
+    "warm_up_variants": [
+      "Ask what time breakfast starts and where it's served.",
+      "Ask Herr Fischer to recommend a good restaurant nearby.",
+      "Request a wake-up call for 7am tomorrow.",
+      "Ask if the hotel has a gym and what the opening hours are."
+    ]
   },
   {
     "name": "Maria",
@@ -36,7 +48,13 @@
       "cafe_meal": "It's lunchtime. Order a full small meal from the Tageskarte (daily menu). Ask what the soup of the day is, then order a main and a drink."
     },
     "style": "casual, slightly fast, informal",
-    "difficulty": "intermediate"
+    "difficulty": "intermediate",
+    "warm_up_variants": [
+      "Order a Melange and a Kipferl.",
+      "Order a Verlängerter and ask for the Tageskarte.",
+      "Ask if the Gugelhupf is fresh, then order a Kleiner Brauner.",
+      "Ask for a table for two, order drinks, and ask for the bill."
+    ]
   },
   {
     "name": "Dr. Huber",
@@ -49,7 +67,13 @@
       "museum_navigation": "You're lost in the museum. Ask Dr. Huber how to find the Egyptian collection and where the toilets are. He'll give directions — confirm you understood."
     },
     "style": "formal, informative, complete sentences",
-    "difficulty": "intermediate-advanced"
+    "difficulty": "intermediate-advanced",
+    "warm_up_variants": [
+      "Ask Dr. Huber who painted the most famous work in this room.",
+      "Ask when the museum was built and who commissioned it.",
+      "Ask which collection he personally finds most interesting.",
+      "Ask Dr. Huber to explain one small detail in the painting in front of you."
+    ]
   },
   {
     "name": "Stefan",
@@ -62,7 +86,13 @@
       "confirm_stop": "You're on the U4 and unsure if you've missed your stop. Ask the person next to you (Stefan) whether Karlsplatz is the next stop. He'll help you figure it out."
     },
     "style": "casual, normal speed, colloquial",
-    "difficulty": "intermediate"
+    "difficulty": "intermediate",
+    "warm_up_variants": [
+      "Ask Stefan how to get to the Naschmarkt on foot.",
+      "Ask which U-Bahn line goes to the Prater.",
+      "Ask Stefan how long it takes to walk to Schönbrunn from here.",
+      "Ask if the next train on this platform goes toward the city centre."
+    ]
   },
   {
     "name": "Frau Novak",
@@ -75,7 +105,13 @@
       "understand_instructions": "Frau Novak hands you medicine with instructions. Ask her to explain how often to take it and whether you can take it with food. Confirm you understood."
     },
     "style": "formal, precise, calm",
-    "difficulty": "intermediate"
+    "difficulty": "intermediate",
+    "warm_up_variants": [
+      "Ask for something for a mild headache, no prescription.",
+      "Ask Frau Novak if she has throat lozenges and which brand she recommends.",
+      "Ask whether ibuprofen or paracetamol is better for a fever.",
+      "Ask if you need a prescription for the medicine she's recommending."
+    ]
   },
   {
     "name": "Klaus",
@@ -89,7 +125,13 @@
       "pay_bill": "Dinner is done. Get Klaus's attention and ask for the bill. He'll tell you the total — pay by card and say goodbye politely."
     },
     "style": "formal, slightly elevated, Austrian formality",
-    "difficulty": "intermediate-advanced"
+    "difficulty": "intermediate-advanced",
+    "warm_up_variants": [
+      "Ask Klaus what today's Tagesgericht (dish of the day) is.",
+      "Ask whether the Tafelspitz is available this evening.",
+      "Ask Klaus to describe the difference between two starters.",
+      "Ask for still water and a bread basket before ordering."
+    ]
   },
   {
     "name": "Anna",
@@ -103,6 +145,12 @@
       "report_problem": "Something in the apartment isn't working — the hot water or the internet. Call Anna to report it. Describe the problem clearly and ask when it can be fixed."
     },
     "style": "casual, encouraging, patient",
-    "difficulty": "beginner-friendly"
+    "difficulty": "beginner-friendly",
+    "warm_up_variants": [
+      "Ask Anna where to put the rubbish and which bins are for recycling.",
+      "Ask what the checkout time is and whether you can leave bags after.",
+      "Ask Anna for the WiFi password and how to connect the TV.",
+      "Ask if there are any house rules you should know about."
+    ]
   }
 ]

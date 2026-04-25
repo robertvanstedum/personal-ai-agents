@@ -649,11 +649,38 @@ async def _handle_german_command(update: Update, text: str):
 
     elif cmd == "session":
         out, err, rc = _run(
-            [str(VENV_PYTHON), "get_german_session.py", "--base-dir", "language/german/", "--send"],
+            [str(VENV_PYTHON), "get_german_session.py",
+             "--base-dir", "language/german/", "--dropbox", "--send"],
             cwd=str(GERMAN_BASE)
         )
         if rc != 0:
             await update.message.reply_text(f"❌ get_german_session.py failed:\n{err[:400]}")
+
+    elif cmd == "drill":
+        # Usage: !german drill [persona] [scenario] [N]
+        # e.g.  !german drill Stefan ubahn 3
+        # N defaults to 3 if omitted
+        drill_parts = parts[2:]  # everything after "drill"
+        drill_n = 3
+        if drill_parts:
+            try:
+                drill_n = int(drill_parts[-1])
+                drill_parts = drill_parts[:-1]
+            except ValueError:
+                pass
+        out, err, rc = _run(
+            [str(VENV_PYTHON), "get_german_session.py",
+             "--base-dir", "language/german/",
+             "--drill", str(drill_n),
+             "--dropbox", "--send"],
+            cwd=str(GERMAN_BASE)
+        )
+        if rc != 0:
+            await update.message.reply_text(f"❌ get_german_session.py (drill) failed:\n{err[:400]}")
+        else:
+            await update.message.reply_text(
+                f"✅ {drill_n} drill prompts written to Dropbox. Session 1 sent to Telegram."
+            )
 
     elif cmd == "today":
         out, err, rc = _run(
@@ -709,6 +736,7 @@ async def _handle_german_command(update: Update, text: str):
         await update.message.reply_text(
             "German commands:\n"
             "  !german session\n"
+            "  !german drill [persona] [scenario] [N]\n"
             "  !german status\n"
             "  !german progress\n"
             "  !german today\n"
@@ -733,11 +761,19 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         r"german session today|today.?s german session)",
         re.I,
     )
+    _DRILL_RE = re.compile(
+        r"(start german.{0,20}drill mode|drill.{0,30}german|german.{0,30}drill"
+        r"|drill (café|cafe|bakery|hotel|museum|pharmacy|restaurant|ubahn|u-bahn|transit|directions?)"
+        r"|\d+ drill sessions?)",
+        re.I,
+    )
 
     if text.startswith("---SESSION---") or text.lower().startswith("\u2014session\u2014"):
         await _handle_german_transcript(update, text)
     elif text.lower().startswith("!german"):
         await _handle_german_command(update, text)
+    elif _DRILL_RE.search(text):
+        await _handle_german_command(update, "!german drill 3")
     elif _SESSION_RE.search(text):
         await _handle_german_command(update, "!german session")
     else:

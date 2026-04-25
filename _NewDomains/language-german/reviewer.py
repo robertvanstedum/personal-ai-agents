@@ -384,13 +384,23 @@ def main():
     print(f"   Vocabulary highlights: {len(reviewer_output.get('vocabulary_highlights', []))}")
 
     # Step 3: Anki CSV + lesson plan
-    print("[3/4] Generating Anki CSV and lesson plan...")
-    new_vocab_count = _generate_anki_csv(reviewer_output, session, anki_dir, progress)
-    _generate_lesson_plan(reviewer_output, session, domain_cfg, personas, progress, lessons_dir)
+    drill_mode    = session.get("drill_mode", False)
+    drill_session = session.get("drill_session", 0)
+    drill_total   = session.get("drill_total", 0)
+    is_final_drill = drill_mode and drill_total > 0 and drill_session >= drill_total
+
+    if drill_mode and not is_final_drill:
+        print(f"[3/4] Drill session {drill_session}/{drill_total} — generating Anki CSV, skipping lesson rotation...")
+        new_vocab_count = _generate_anki_csv(reviewer_output, session, anki_dir, progress)
+        print(f"⏭️  Drill session {drill_session}/{drill_total} — skipping lesson rotation")
+    else:
+        print("[3/4] Generating Anki CSV and lesson plan...")
+        new_vocab_count = _generate_anki_csv(reviewer_output, session, anki_dir, progress)
+        _generate_lesson_plan(reviewer_output, session, domain_cfg, personas, progress, lessons_dir)
 
     # Mark session complete and save domain config (lesson counter incremented)
     session["anki_generated"] = True
-    session["next_lesson_generated"] = True
+    session["next_lesson_generated"] = not drill_mode or is_final_drill
     session_path.write_text(json.dumps(session, indent=2, ensure_ascii=False))
     domain_cfg_path.write_text(json.dumps(domain_cfg, indent=2, ensure_ascii=False))
 

@@ -1,0 +1,15 @@
+{
+  "sync_provider": "dropbox_local",
+  "base_path": "~/Dropbox/German_Sessions",
+  "prompts_dir": "prompts",
+  "transcripts_inbox_dir": "transcripts/inbox",
+  "transcripts_processed_dir": "transcripts/processed",
+  "watcher_mode": "poll",
+  "poll_interval_seconds": 15,
+  "supported_extensions": [".txt"],
+  "pipeline_base_dir": "_NewDomains/language-german/language/german",
+  "send_telegram_on_start": true,
+  "send_telegram_on_success": true,
+  "send_telegram_on_error": true,
+  "keep_history_days": 9999
+}
