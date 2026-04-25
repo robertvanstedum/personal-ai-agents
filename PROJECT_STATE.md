@@ -1,6 +1,6 @@
 # PROJECT_STATE.md
-**Last updated:** March 20, 2026
-**Updated by:** OpenClaw (Memory Agent)
+**Last updated:** April 18, 2026
+**Updated by:** Claude Code
 
 > **Read this first.** One page. All parties — Robert, OpenClaw, Claude Code, Claude.ai — read this at the start of every session before touching anything else.
 
@@ -9,7 +9,7 @@
 ## Current Status
 
 **Domain:** Geopolitics Curator
-**Version:** v1.0.2
+**Version:** v1.1.5
 **State:** ✅ Production — stable and running daily
 
 The geopolitics curator is in production. Daily briefings run at 7 AM via launchd, delivered to Telegram and web UI. All v1.0 workstreams complete.

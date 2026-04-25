@@ -278,7 +278,9 @@ def score_entry_mechanical(entry: Dict) -> Dict:
     if entry["published"]:
         age_hours = (datetime.now(timezone.utc) - entry["published"]).total_seconds() / 3600
         recency_score = max(0, 100 - (age_hours / 24) * 10)  # 10 points per day decay
-        raw_score += recency_score
+    else:
+        recency_score = 50  # treat unknown date as ~5 days old, neutral
+    raw_score += recency_score
     
     # Keyword matching score
     text = f"{entry['title']} {entry['summary']}".lower()
@@ -1414,7 +1416,7 @@ def _load_source_trust() -> dict:
     except Exception:
         return {}
 
-_TRUST_MULTIPLIERS = {'trusted': 1.5, 'neutral': 1.0, 'deprioritize': 0.5, 'probationary': 0.7}
+_TRUST_MULTIPLIERS = {'trusted': 1.5, 'neutral': 1.0, 'deprioritize': 0.5, 'probationary': 0.6}
 
 def _domain_from_url(url: str) -> str:
     try:
@@ -1703,8 +1705,11 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
             source_count = source_counts.get(source, 0)
             category_count = category_counts.get(category, 0)
             
-            # Source diversity penalty (existing logic)
-            source_penalty = (source_count ** 2) * 30 * diversity_weight
+            # Source diversity penalty (existing logic; halved for trusted-tier sources)
+            domain = _domain_from_url(entry.get('link', ''))
+            trust = _source_trust.get(domain, 'neutral') if _source_trust else 'neutral'
+            discount = 0.5 if trust == 'trusted' else 1.0
+            source_penalty = (source_count ** 2) * 30 * diversity_weight * discount
             
             # Category diversity penalty (NEW: avoid topic echo chambers)
             # Less aggressive than source penalty (we want some depth per topic)
