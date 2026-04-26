@@ -25,9 +25,6 @@ except ImportError:
     requests = None
 
 
-_TG_MAX = 4000  # Telegram hard limit is 4096; stay under with margin
-
-
 def _send_telegram(text: str) -> None:
     if keyring is None or requests is None:
         print("⚠️  keyring/requests not available — cannot send to Telegram.", file=sys.stderr)
@@ -37,16 +34,59 @@ def _send_telegram(text: str) -> None:
     if not token or not chat_id:
         print("⚠️  Telegram credentials not found in Keychain (telegram/polling_bot_token, telegram/chat_id).", file=sys.stderr)
         sys.exit(1)
-    chunks = [text[i:i + _TG_MAX] for i in range(0, len(text), _TG_MAX)]
-    for chunk in chunks:
-        resp = requests.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": chunk, "disable_web_page_preview": True},
-            timeout=30,
+    resp = requests.post(
+        f"https://api.telegram.org/bot{token}/sendMessage",
+        json={"chat_id": chat_id, "text": text, "disable_web_page_preview": True},
+        timeout=30,
+    )
+    if not resp.ok:
+        print(f"⚠️  Telegram send failed: {resp.status_code} {resp.text[:200]}", file=sys.stderr)
+        sys.exit(1)
+
+
+def _get_anthropic_client():
+    try:
+        import anthropic
+        import keyring as kr
+        api_key = kr.get_password("anthropic", "api_key") or ""
+        return anthropic.Anthropic(api_key=api_key)
+    except Exception as e:
+        raise RuntimeError(f"Cannot create Anthropic client: {e}")
+
+
+def _enforce_length(prompt: str, limit: int) -> str:
+    if len(prompt) <= limit:
+        return prompt
+    original_len = len(prompt)
+    try:
+        client = _get_anthropic_client()
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2000,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"The following German practice session prompt is {original_len} "
+                    f"characters, exceeding the {limit} character delivery limit. "
+                    f"Shorten it to under {limit} characters by:\n"
+                    f"1. Condensing the vocabulary list — keep the 5 most important "
+                    f"items, remove the rest\n"
+                    f"2. Shortening the persona description — keep name, role, key "
+                    f"traits; remove redundant detail\n"
+                    f"DO NOT touch: the === SESSION INSTRUCTIONS === block, the "
+                    f"=== HOW TO END === block, or the lesson metadata lines "
+                    f"(persona, scenario, carry-forward, warm-up, prompt).\n"
+                    f"Return only the revised prompt — no commentary.\n\n"
+                    f"{prompt}"
+                ),
+            }],
         )
-        if not resp.ok:
-            print(f"⚠️  Telegram send failed: {resp.status_code} {resp.text[:200]}", file=sys.stderr)
-            sys.exit(1)
+        revised = response.content[0].text.strip()
+        print(f"⚠️  Prompt revised by Haiku: {original_len} → {len(revised)} chars", file=sys.stderr)
+        return revised
+    except Exception as e:
+        print(f"⚠️  Haiku revision failed ({e}) — sending full prompt", file=sys.stderr)
+        return prompt
 
 
 def _load_sync_config() -> dict:
@@ -113,44 +153,52 @@ UNIVERSAL_HEADER = """\
 === SESSION INSTRUCTIONS — READ BEFORE STARTING ===
 
 You are playing a character in a German language practice session.
-Follow these rules exactly, regardless of any other instructions:
+These rules override everything else. Follow them exactly.
 
-1. GENDER: Play the character exactly as described below. Never switch gender.
-2. SCENARIO: Follow the scenario setup exactly. If it says phone call, answer
-   the phone. If it says I walk in, greet me as I arrive. Do not improvise
-   the setting.
-3. NO NAME PREFIX: Do not announce your name before each turn. Speak directly
-   and naturally as the character would in real life. Wrong: "Klaus: Guten
-   Abend!" Correct: "Guten Abend!"
-4. LANGUAGE: Always respond in German. Never switch to English unless I
+0. VOICE AND GENDER: You are playing the character exactly as described
+   below — including gender. If the character is male, use a male voice
+   and male mannerisms throughout. Never switch gender. Never use a female
+   voice for a male character. This is non-negotiable.
+
+1. SCENARIO AND MEDIUM: Follow the scenario setup exactly, including the
+   communication medium. If it says "phone call" or "making a reservation
+   by phone", you answer the phone — I am not standing in front of you.
+   If it says I walk in, greet me as I arrive in person. Never change the
+   setting or medium mid-session.
+
+2. NO NAME PREFIX: Do not announce your name before each turn. Speak
+   directly and naturally as the character would in real life.
+   Wrong: "Klaus: Guten Abend!"
+   Correct: "Guten Abend!"
+
+3. LANGUAGE: Always respond in German. Never switch to English unless I
    explicitly say "English please."
-5. CORRECTIONS: If I make a grammatical error, gently use the correct form
-   naturally in your response. Do not break character to explain.
-6. START TRIGGER: Do not begin the scenario until I say exactly:
+
+4. CORRECTIONS: If I make a grammatical error, gently use the correct
+   form naturally in your response. Do not break character to explain.
+
+5. START TRIGGER: Do not begin the scenario until I say exactly:
    "Start today's session."
-7. STAY IN CHARACTER: Do not comment on the exercise, the instructions, or
-   your role. You are the character. Respond only as the character would.
+
+6. STAY IN CHARACTER: Do not comment on the exercise, the instructions,
+   or your role. You are the character. Respond only as the character
+   would.
 
 === CHARACTER AND SCENARIO BELOW ===""".strip()
 
 UNIVERSAL_FOOTER = """\
 === HOW TO END THIS SESSION ===
 
-OPTION A — If ending by voice:
-Say out loud: "End session."
-Then switch to text mode and say: "Give me the transcript now."
+When the session is over, say: "End session."
 
-OPTION B — If ending by text:
-Type: "End session. Give me the transcript."
-
-In both cases, output ONLY the following block — nothing before, nothing
-after, no commentary:
+At that moment, switch to text and output ONLY the following block —
+nothing before it, nothing after it, no commentary:
 
 ---SESSION---
 Date: [today's date as YYYY-MM-DD]
 Persona: [character name]
 Scenario: [scenario_label]
-Duration: [your estimate in minutes, number only — e.g. 12]
+Duration: [number only — e.g. 12]
 Mode: voice
 
 [Character name]: [their exact words]
@@ -159,11 +207,10 @@ Robert: [your exact words]
 ---END---
 
 RULES FOR THE TRANSCRIPT:
-- Include every turn in order. Do not skip or summarize any turn.
-- Use --- (three hyphens) not em-dashes (—) for the SESSION and END markers.
-- Duration is a number only — no "minutes" or other text.
-- Do not add any text before ---SESSION--- or after ---END---.
-- If you are unsure of exact wording, write your best reconstruction.""".strip()
+- Include every turn in order. Do not skip or summarize.
+- Use --- (three hyphens) not em-dashes (—) for ---SESSION--- and ---END---.
+- Duration is a number only. No "minutes" or other text.
+- Nothing before ---SESSION---. Nothing after ---END---.""".strip()
 
 
 def _dropbox_filename(date_str: str, lesson_number: int, persona_name: str,
@@ -275,7 +322,8 @@ def main():
     persona_prompt = prompt_file.read_text(encoding='utf-8').strip()
     carry = _carry_forward(lesson or {}, progress)
 
-    sync_cfg = _load_sync_config() if args.dropbox else {}
+    sync_cfg = _load_sync_config()
+    max_chars = sync_cfg.get("max_prompt_chars", 4000)
 
     drill_total = args.drill or 0
 
@@ -294,6 +342,8 @@ def main():
                 wu, speaking_prompt, persona_prompt, carry,
                 drill_session=k, drill_total=drill_total,
             )
+            if not args.dry_run:
+                output = _enforce_length(output, max_chars)
             print(output)
             print()
 
@@ -315,6 +365,8 @@ def main():
             date_str, persona_name, persona_role, lesson_number, scenario,
             warm_up, speaking_prompt, persona_prompt, carry,
         )
+        if not args.dry_run:
+            output = _enforce_length(output, max_chars)
         print(output)
 
         if not args.dry_run and args.dropbox:
