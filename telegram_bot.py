@@ -618,9 +618,26 @@ async def _handle_german_transcript(update: Update, text: str):
     await update.message.reply_text(f"<pre>{escape(out)}</pre>", parse_mode="HTML")
 
 
+def _german_agent_mode() -> str:
+    cfg_path = GERMAN_DIR / "config" / "sync_config.json"
+    if cfg_path.exists():
+        try:
+            return json.loads(cfg_path.read_text()).get("agent_mode", "direct")
+        except Exception:
+            pass
+    return "direct"
+
+
 async def _handle_german_command(update: Update, text: str):
     parts = text.strip().split()
     cmd = parts[1].lower() if len(parts) > 1 else ""
+
+    # Respect agent_mode — openclaw mode means this bot only handles the pipeline
+    if _german_agent_mode() == "openclaw" and cmd in ("session", "drill", "writing"):
+        await update.message.reply_text(
+            "ℹ️ agent_mode is openclaw — send session commands to @minimoi_agent_bot."
+        )
+        return
 
     if cmd == "status":
         out, err, rc = _run(
@@ -706,6 +723,36 @@ async def _handle_german_command(update: Update, text: str):
         cfg_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False))
         await update.message.reply_text(f"✅ active_persona set to: {name}")
 
+    elif cmd == "writing":
+        out, err, rc = _run(
+            [str(VENV_PYTHON), "get_german_session.py",
+             "--base-dir", "language/german/", "--dropbox", "--send"],
+            cwd=str(GERMAN_BASE)
+        )
+        if rc != 0:
+            await update.message.reply_text(f"❌ get_german_session.py failed:\n{err[:400]}")
+        else:
+            await update.message.reply_text(
+                "⌨️ WRITING SESSION — Add Mode: writing to transcript header."
+            )
+
+    elif cmd == "watcher" and len(parts) > 2 and parts[2].lower() == "start":
+        import subprocess as _sp
+        script = str(GERMAN_BASE / "watch_transcripts.py")
+        _sp.Popen(
+            [str(VENV_PYTHON), script],
+            cwd=str(GERMAN_BASE),
+            start_new_session=True,
+        )
+        await update.message.reply_text("✅ Watcher started.")
+
+    elif cmd == "watcher" and len(parts) > 2 and parts[2].lower() == "stop":
+        out, err, rc = _run(["pkill", "-f", "watch_transcripts.py"])
+        if rc == 0:
+            await update.message.reply_text("✅ Watcher stopped.")
+        else:
+            await update.message.reply_text("ℹ️ Watcher was not running (or pkill failed).")
+
     elif cmd == "anki":
         anki_dir = GERMAN_DIR / "anki"
         csvs = sorted(anki_dir.glob("*.csv")) if anki_dir.exists() else []
@@ -736,11 +783,14 @@ async def _handle_german_command(update: Update, text: str):
         await update.message.reply_text(
             "German commands:\n"
             "  !german session\n"
+            "  !german writing\n"
             "  !german drill [persona] [scenario] [N]\n"
             "  !german status\n"
             "  !german progress\n"
             "  !german today\n"
             "  !german persona [name]\n"
+            "  !german watcher start\n"
+            "  !german watcher stop\n"
             "  !german anki\n"
             "  !german debug"
         )

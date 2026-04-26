@@ -14,5 +14,6 @@
   "send_telegram_on_success": true,
   "send_telegram_on_error": true,
   "keep_history_days": 9999,
-  "max_prompt_chars": 4000
+  "max_prompt_chars": 4000,
+  "agent_mode": "direct"
 }
