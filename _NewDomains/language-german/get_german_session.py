@@ -25,6 +25,9 @@ except ImportError:
     requests = None
 
 
+_TG_MAX = 4000  # Telegram hard limit is 4096; stay under with margin
+
+
 def _send_telegram(text: str) -> None:
     if keyring is None or requests is None:
         print("⚠️  keyring/requests not available — cannot send to Telegram.", file=sys.stderr)
@@ -34,14 +37,16 @@ def _send_telegram(text: str) -> None:
     if not token or not chat_id:
         print("⚠️  Telegram credentials not found in Keychain (telegram/polling_bot_token, telegram/chat_id).", file=sys.stderr)
         sys.exit(1)
-    resp = requests.post(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        json={"chat_id": chat_id, "text": text, "disable_web_page_preview": True},
-        timeout=30,
-    )
-    if not resp.ok:
-        print(f"⚠️  Telegram send failed: {resp.status_code} {resp.text[:200]}", file=sys.stderr)
-        sys.exit(1)
+    chunks = [text[i:i + _TG_MAX] for i in range(0, len(text), _TG_MAX)]
+    for chunk in chunks:
+        resp = requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": chunk, "disable_web_page_preview": True},
+            timeout=30,
+        )
+        if not resp.ok:
+            print(f"⚠️  Telegram send failed: {resp.status_code} {resp.text[:200]}", file=sys.stderr)
+            sys.exit(1)
 
 
 def _load_sync_config() -> dict:
@@ -104,6 +109,63 @@ def _carry_forward(lesson: dict, progress: dict) -> str:
     return f"{top_error} ({count} total)"
 
 
+UNIVERSAL_HEADER = """\
+=== SESSION INSTRUCTIONS — READ BEFORE STARTING ===
+
+You are playing a character in a German language practice session.
+Follow these rules exactly, regardless of any other instructions:
+
+1. GENDER: Play the character exactly as described below. Never switch gender.
+2. SCENARIO: Follow the scenario setup exactly. If it says phone call, answer
+   the phone. If it says I walk in, greet me as I arrive. Do not improvise
+   the setting.
+3. NO NAME PREFIX: Do not announce your name before each turn. Speak directly
+   and naturally as the character would in real life. Wrong: "Klaus: Guten
+   Abend!" Correct: "Guten Abend!"
+4. LANGUAGE: Always respond in German. Never switch to English unless I
+   explicitly say "English please."
+5. CORRECTIONS: If I make a grammatical error, gently use the correct form
+   naturally in your response. Do not break character to explain.
+6. START TRIGGER: Do not begin the scenario until I say exactly:
+   "Start today's session."
+7. STAY IN CHARACTER: Do not comment on the exercise, the instructions, or
+   your role. You are the character. Respond only as the character would.
+
+=== CHARACTER AND SCENARIO BELOW ===""".strip()
+
+UNIVERSAL_FOOTER = """\
+=== HOW TO END THIS SESSION ===
+
+OPTION A — If ending by voice:
+Say out loud: "End session."
+Then switch to text mode and say: "Give me the transcript now."
+
+OPTION B — If ending by text:
+Type: "End session. Give me the transcript."
+
+In both cases, output ONLY the following block — nothing before, nothing
+after, no commentary:
+
+---SESSION---
+Date: [today's date as YYYY-MM-DD]
+Persona: [character name]
+Scenario: [scenario_label]
+Duration: [your estimate in minutes, number only — e.g. 12]
+Mode: voice
+
+[Character name]: [their exact words]
+Robert: [your exact words]
+[continue alternating turns in order...]
+---END---
+
+RULES FOR THE TRANSCRIPT:
+- Include every turn in order. Do not skip or summarize any turn.
+- Use --- (three hyphens) not em-dashes (—) for the SESSION and END markers.
+- Duration is a number only — no "minutes" or other text.
+- Do not add any text before ---SESSION--- or after ---END---.
+- If you are unsure of exact wording, write your best reconstruction.""".strip()
+
+
 def _dropbox_filename(date_str: str, lesson_number: int, persona_name: str,
                       scenario: str, drill_session: int = 0, drill_total: int = 0) -> str:
     ts = datetime.now().strftime("%H%M")
@@ -134,35 +196,20 @@ def _build_package(date_str: str, persona_name: str, persona_role: str,
     if speaking_prompt:
         lines.append(f"Prompt: {speaking_prompt}")
 
+    footer = UNIVERSAL_FOOTER
+    if drill_mode:
+        footer = footer.replace(
+            "Mode: voice",
+            f"Mode: voice\nDrill: true\nDrill-Session: {drill_session} of {drill_total}",
+        )
+
     lines += [
         "",
-        "─── PASTE INTO GROK OR CLAUDE ───",
+        UNIVERSAL_HEADER,
         "",
         persona_prompt,
         "",
-        "─── HOW TO END THE SESSION ───",
-        "",
-        'When finished say: "End session. Give me a clean transcript."',
-        "",
-        "Format:",
-        "---SESSION---",
-        f"Date: {date_str}",
-        f"Persona: {persona_name}",
-        f"Scenario: {scenario}",
-        "Duration: [number only, e.g. 12]",
-        "Mode: voice",
-    ]
-    if drill_mode:
-        lines.append("Drill: true")
-        lines.append(f"Drill-Session: {drill_session} of {drill_total}")
-    lines += [
-        "",
-        f"{persona_name}: [turn text]",
-        "Robert: [turn text]",
-        "[continue alternating turns...]",
-        "---END---",
-        "",
-        "Send transcript to @minimoi_cmd_bot to process.",
+        footer,
     ]
     return '\n'.join(lines)
 
