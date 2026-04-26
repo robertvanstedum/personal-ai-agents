@@ -247,10 +247,16 @@ def _dropbox_filename(date_str: str, lesson_number: int, persona_name: str,
 def _build_package(date_str: str, persona_name: str, persona_role: str,
                    lesson_number: int, scenario: str, warm_up: str,
                    speaking_prompt: str, persona_prompt: str, carry: str,
-                   drill_session: int = 0, drill_total: int = 0) -> str:
+                   drill_session: int = 0, drill_total: int = 0,
+                   writing_mode: bool = False) -> str:
     drill_mode = drill_total > 0
 
-    lines = [
+    lines = []
+    if writing_mode:
+        lines.append("⌨️ WRITING SESSION — Add Mode: writing to transcript header.")
+        lines.append("")
+
+    lines += [
         f"📚 Today's German Session — Lesson {lesson_number}",
         f"Persona: {persona_name} — {persona_role}",
         f"Scenario: {scenario}",
@@ -264,6 +270,8 @@ def _build_package(date_str: str, persona_name: str, persona_role: str,
         lines.append(f"Prompt: {speaking_prompt}")
 
     footer = UNIVERSAL_FOOTER
+    if writing_mode:
+        footer = footer.replace("Mode: voice", "Mode: writing")
     if drill_mode:
         footer = footer.replace(
             "Mode: voice",
@@ -290,6 +298,7 @@ def main():
     parser.add_argument('--dropbox', action='store_true', help='Write prompt file(s) to Dropbox prompts dir')
     parser.add_argument('--drill', type=int, metavar='N', help='Generate N drill session prompts (one per session)')
     parser.add_argument('--drill-session', type=int, metavar='K', help='Generate prompt for drill session K only (requires --drill N)')
+    parser.add_argument('--writing', action='store_true', help='Writing session mode — sets Mode: writing in transcript footer')
     args = parser.parse_args()
 
     base = Path(args.base_dir)
@@ -361,6 +370,7 @@ def main():
                 date_str, persona_name, persona_role, lesson_number, scenario,
                 wu, speaking_prompt, persona_prompt, carry,
                 drill_session=k, drill_total=drill_total,
+                writing_mode=args.writing,
             )
             if not args.dry_run:
                 output = _enforce_length(output, max_chars, persona_name)
@@ -384,6 +394,7 @@ def main():
         output = _build_package(
             date_str, persona_name, persona_role, lesson_number, scenario,
             warm_up, speaking_prompt, persona_prompt, carry,
+            writing_mode=args.writing,
         )
         if not args.dry_run:
             output = _enforce_length(output, max_chars)

@@ -726,15 +726,11 @@ async def _handle_german_command(update: Update, text: str):
     elif cmd == "writing":
         out, err, rc = _run(
             [str(VENV_PYTHON), "get_german_session.py",
-             "--base-dir", "language/german/", "--dropbox", "--send"],
+             "--base-dir", "language/german/", "--dropbox", "--send", "--writing"],
             cwd=str(GERMAN_BASE)
         )
         if rc != 0:
             await update.message.reply_text(f"❌ get_german_session.py failed:\n{err[:400]}")
-        else:
-            await update.message.reply_text(
-                "⌨️ WRITING SESSION — Add Mode: writing to transcript header."
-            )
 
     elif cmd == "watcher" and len(parts) > 2 and parts[2].lower() == "start":
         import subprocess as _sp
