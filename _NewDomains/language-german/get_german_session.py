@@ -146,9 +146,14 @@ def _load_lesson(lessons_dir: Path, date_str: str) -> dict | None:
     return None
 
 
+def _strip_session_metadata(text: str) -> str:
+    """Remove trailing '— session YYYY-MM-DD ...' from carry-forward strings."""
+    return re.sub(r'\s*—\s*session\s+\d{4}-\d{2}-\d{2}.*$', '', text).strip()
+
+
 def _carry_forward(lesson: dict, progress: dict) -> str:
     if lesson.get('carry_forward_errors'):
-        return lesson['carry_forward_errors'][0]
+        return _strip_session_metadata(lesson['carry_forward_errors'][0])
 
     counts = progress.get('cumulative_error_counts', {})
     if not counts:
