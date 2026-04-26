@@ -782,17 +782,13 @@ async def _handle_german_command(update: Update, text: str):
     else:
         await update.message.reply_text(
             "German commands:\n"
-            "  !german session\n"
-            "  !german writing\n"
-            "  !german drill [persona] [scenario] [N]\n"
-            "  !german status\n"
-            "  !german progress\n"
-            "  !german today\n"
-            "  !german persona [name]\n"
-            "  !german watcher start\n"
-            "  !german watcher stop\n"
-            "  !german anki\n"
-            "  !german debug"
+            "  !german session       — get today's session prompt\n"
+            "  !german writing       — get today's writing session prompt\n"
+            "  !german drill [N]     — generate N drill sessions\n"
+            "  !german status        — current progress summary\n"
+            "  !german anki          — import Anki cards\n"
+            "  !german watcher start — start Dropbox transcript watcher\n"
+            "  !german watcher stop  — stop watcher"
         )
 
 
