@@ -54,7 +54,7 @@ def _get_anthropic_client():
         raise RuntimeError(f"Cannot create Anthropic client: {e}")
 
 
-def _enforce_length(prompt: str, limit: int) -> str:
+def _enforce_length(prompt: str, limit: int, persona_name: str = "") -> str:
     if len(prompt) <= limit:
         return prompt
     original_len = len(prompt)
@@ -83,10 +83,25 @@ def _enforce_length(prompt: str, limit: int) -> str:
         )
         revised = response.content[0].text.strip()
         print(f"⚠️  Prompt revised by Haiku: {original_len} → {len(revised)} chars", file=sys.stderr)
+        if len(revised) > limit:
+            _hard_fail_length(persona_name, limit)
         return revised
+    except RuntimeError:
+        raise
     except Exception as e:
         print(f"⚠️  Haiku revision failed ({e}) — sending full prompt", file=sys.stderr)
         return prompt
+
+
+def _hard_fail_length(persona_name: str, limit: int) -> None:
+    slug = f"config/prompts/{_slug(persona_name)}.txt" if persona_name else "config/prompts/[persona].txt"
+    msg = f"⚠️ Session prompt too long after revision — trim {slug} and try again."
+    print(f"❌ Prompt still over limit after all passes — not sent", file=sys.stderr)
+    try:
+        _send_telegram(msg)
+    except Exception:
+        pass
+    sys.exit(1)
 
 
 def _load_sync_config() -> dict:
@@ -343,7 +358,7 @@ def main():
                 drill_session=k, drill_total=drill_total,
             )
             if not args.dry_run:
-                output = _enforce_length(output, max_chars)
+                output = _enforce_length(output, max_chars, persona_name)
             print(output)
             print()
 
