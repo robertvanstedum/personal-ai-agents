@@ -210,11 +210,9 @@ UNIVERSAL_FOOTER = """\
 === HOW TO END THIS SESSION ===
 
 TO END THIS SESSION:
-1. Say: "End session."
-2. Switch to TEXT MODE (tap the keyboard icon)
-3. Type: "Give me the transcript"
-The transcript will be output as formatted text.
-DO NOT request the transcript while still in voice mode.
+1. Switch to TEXT MODE first (tap the keyboard icon)
+2. Type: "End session. Give me the transcript."
+Do NOT say "End session" while in voice mode.
 
 Output ONLY the following block —
 nothing before it, nothing after it, no commentary:
