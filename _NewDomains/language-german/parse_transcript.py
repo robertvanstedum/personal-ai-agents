@@ -23,6 +23,12 @@ END_TRIGGER = "---END---"
 END_TRIGGER_ALT = "\u2014END\u2014"
 HEADER_FIELDS = {"date", "persona", "scenario", "duration", "mode", "drill", "drill-session"}
 
+# Format 3: ##YYYY-MM-DD|persona|scenario|duration|mode
+_KEY_LINE_RE = re.compile(
+    r'^##(\d{4}-\d{2}-\d{2})\|([^|]+)\|([^|]+)\|(\d+)\|(\w+)$',
+    re.MULTILINE,
+)
+
 
 def _next_session_id(date_str: str, sessions_dir: Path) -> str:
     existing = sorted(sessions_dir.glob(f"{date_str}_*.json"))
@@ -84,7 +90,56 @@ def _load_domain_defaults(sessions_dir: Path) -> dict:
     return {}
 
 
+def _load_lesson_defaults(sessions_dir: Path) -> dict:
+    """Infer persona/scenario from most recent lesson file; fall back to domain.json."""
+    domain = _load_domain_defaults(sessions_dir)
+    defaults = {
+        "persona": domain.get("active_persona", "Unknown"),
+        "scenario": "unknown",
+    }
+    lessons_dir = sessions_dir.parent / "lessons"
+    if lessons_dir.exists():
+        lesson_files = sorted(lessons_dir.glob("*_lesson.json"))
+        if lesson_files:
+            lesson = json.loads(lesson_files[-1].read_text(encoding="utf-8"))
+            defaults["persona"] = lesson.get("persona", defaults["persona"])
+            defaults["scenario"] = lesson.get("scenario", defaults["scenario"])
+    return defaults
+
+
 def parse_transcript(raw_text: str, sessions_dir: Path) -> Path:
+    # --- Format 3: ##YYYY-MM-DD|persona|scenario|duration|mode key line ---
+    key_match = _KEY_LINE_RE.search(raw_text)
+    if key_match:
+        date_str, persona, scenario, dur_str, mode = key_match.groups()
+        persona = persona.strip()
+        scenario = scenario.strip()
+        mode = mode.strip().lower()
+        duration = int(dur_str)
+        # Turn lines are everything except the key line
+        turn_lines = [l for l in raw_text.splitlines() if not l.startswith("##")]
+        turns = _parse_turns(turn_lines)
+        if len(turns) < 2:
+            raise ValueError(
+                "⚠️ Couldn't parse a clear conversation (fewer than 2 turns found). "
+                "Paste again or upload the file directly — session not saved."
+            )
+        session_id = _next_session_id(date_str, sessions_dir)
+        session = {
+            "session_id": session_id, "date": date_str, "persona": persona,
+            "scenario": scenario, "duration_estimate_min": duration, "mode": mode,
+            "source": "manual", "raw_transcript": turns,
+            "reviewer_output": None, "anki_generated": False,
+            "next_lesson_generated": False, "drill_mode": False,
+            "drill_session": 0, "drill_total": 0,
+        }
+        out_path = sessions_dir / f"{session_id}.json"
+        out_path.write_text(json.dumps(session, indent=2, ensure_ascii=False))
+        print(f"✅ Session saved: {out_path}")
+        print(f"   Persona: {persona} | Scenario: {scenario} | Turns: {len(turns)}")
+        return out_path
+
+    # --- Formats 1 & 2: ---SESSION--- / —SESSION— delimited ---
     trigger = START_TRIGGER if START_TRIGGER in raw_text else (START_TRIGGER_ALT if START_TRIGGER_ALT in raw_text else None)
     if trigger:
         start = raw_text.upper().index(trigger.upper()) + len(trigger)
@@ -118,20 +173,24 @@ def parse_transcript(raw_text: str, sessions_dir: Path) -> Path:
 
     header = _parse_header(header_lines)
     if not header:
-        # No header found — all lines are turns; fall back to domain.json defaults
+        # No header found — fuzzy path: infer metadata from latest lesson file
         turn_lines = header_lines + turn_lines
-        domain_cfg = _load_domain_defaults(sessions_dir)
+        lesson_defaults = _load_lesson_defaults(sessions_dir)
         header = {
             "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-            "persona": domain_cfg.get("active_persona", "Unknown"),
-            "scenario": "unknown",
-            "duration": "0",
+            "persona": lesson_defaults["persona"],
+            "scenario": lesson_defaults["scenario"],
         }
 
     date_str = header.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
     persona = header.get("persona", "Unknown")
     scenario = header.get("scenario", "unknown")
     mode = header.get("mode", "voice").lower()
+
+    # Mode detection from content — fuzzy override when header didn't set it
+    if mode == "voice" and "mode: writing" in raw_text.lower():
+        mode = "writing"
+
     if "duration" in header:
         m = re.search(r'\d+', header["duration"])
         duration = int(m.group()) if m else None
@@ -156,8 +215,15 @@ def parse_transcript(raw_text: str, sessions_dir: Path) -> Path:
 
     turns = _parse_turns(turn_lines)
 
-    if not turns and body:
-        print("⚠️  WARNING: raw_transcript is empty after parsing non-empty body. Check transcript format.", file=sys.stderr)
+    # Estimate duration from turn count if not provided (≈ 0.5 min per turn)
+    if duration is None:
+        duration = max(1, len(turns) // 2)
+
+    if len(turns) < 2:
+        raise ValueError(
+            "⚠️ Couldn't parse a clear conversation (fewer than 2 turns found). "
+            "Paste again or upload the file directly — session not saved."
+        )
 
     session = {
         "session_id": session_id,
@@ -200,7 +266,11 @@ def main():
     else:
         raw = Path(args.input).read_text(encoding="utf-8")
 
-    parse_transcript(raw, sessions_dir)
+    try:
+        parse_transcript(raw, sessions_dir)
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
