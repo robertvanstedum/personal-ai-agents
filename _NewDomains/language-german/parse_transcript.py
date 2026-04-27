@@ -34,8 +34,24 @@ def _next_session_id(date_str: str, sessions_dir: Path) -> str:
 
 
 def _parse_header(lines: list) -> dict:
-    fields = {}
+    # Expand lines that contain multiple fields inline (e.g. Grok single-line format:
+    # "Date: 2026-04-26 Persona: Klaus Scenario: ..." all on one line)
+    field_re = re.compile(
+        r'\b(' + '|'.join(re.escape(f) for f in HEADER_FIELDS) + r')\s*:',
+        re.IGNORECASE,
+    )
+    expanded = []
     for line in lines:
+        matches = list(field_re.finditer(line))
+        if len(matches) <= 1:
+            expanded.append(line)
+        else:
+            for i, m in enumerate(matches):
+                end = matches[i + 1].start() if i + 1 < len(matches) else len(line)
+                expanded.append(line[m.start():end].strip())
+
+    fields = {}
+    for line in expanded:
         if ":" in line:
             key, _, val = line.partition(":")
             key = key.strip().lower()
