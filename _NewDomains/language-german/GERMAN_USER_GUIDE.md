@@ -1,7 +1,7 @@
 # German Practice — User Guide
-**Version:** 1.2  
-**Date:** 2026-04-25  
-**Author:** Robert van Stedum  
+**Version:** 1.3
+**Date:** 2026-04-26
+**Author:** Robert van Stedum
 **Status:** Living document — update as workflow evolves
 
 > This guide describes the daily German practice workflow end to end. It is the reference for Robert, OpenClaw, and any agent working on the language-german domain. When the workflow changes, update this document first.
@@ -12,76 +12,62 @@
 
 Daily German practice has three phases:
 
-1. **Get today's session** — ask OpenClaw, receive a combined prompt package
-2. **Practice** — paste into Grok on iPhone, have the conversation
-3. **Process** — paste transcript to pipeline bot, receive review and Anki cards
+1. **Get today's session** — send `!german session` to `@minimoi_cmd_bot`, receive prompt in Telegram and Dropbox
+2. **Practice** — open prompt in Grok on iPhone, have the conversation
+3. **Process** — drop transcript in Dropbox inbox (or paste to bot), receive review and Anki cards
 
 Everything else is optional or automated. These three steps are the daily minimum.
+
+> **Direct mode is now the default.** As of 2026-04-26, `telegram_bot.py` handles all `!german` commands directly. OpenClaw is not in the loop for session commands. Command routing logic lives in `_NewDomains/language-german/ORCHESTRATOR.md`.
 
 ---
 
 ## Phase 1 — Get Today's Session
 
-### On any device (laptop or iPhone via Telegram)
-
-Send to `minimoi_agent_bot`:
+### Send to `@minimoi_cmd_bot`
 
 ```
-Pull today's German session
+!german session
 ```
 
-Or any natural variation:
-- "What's my German session today?"
-- "Give me today's German prompt"
-- "German session please"
+The bot calls `get_german_session.py` directly, sends the full prompt to Telegram, and writes a `.txt` file to `~/Dropbox/German_Sessions/prompts/`. No OpenClaw involved.
 
-### What OpenClaw sends back
-
-A single combined message in this format:
+### What the prompt looks like
 
 ```
 📚 Today's German Session — Lesson N
 Persona: [Name] — [Role]
 Scenario: [scenario_label]
-Carry forward: [error or vocabulary from last session]
+Carry forward: [corrected phrase from last session]
+Warm-up: [warm-up instruction]
+Prompt: [speaking task for this session]
 
-─── PASTE THIS INTO GROK ───
+=== SESSION INSTRUCTIONS — READ BEFORE STARTING ===
+[universal behavioral rules for the AI — do not edit]
 
-[full persona prompt — copy everything in this section]
+=== CHARACTER AND SCENARIO BELOW ===
+[full persona prompt]
 
-─── HOW TO END THE SESSION ───
-
-When finished, say to Grok:
-"End session. Give me a clean transcript in this format:
-
----SESSION---
-Date: YYYY-MM-DD
-Persona: [Persona Name]
-Scenario: [scenario_label]
-Duration: [number only, e.g. 12]
-
-[Persona Name]: [turn text]
-Robert: [turn text]
-[continue alternating turns...]
----END---"
-
-Then copy everything between ---SESSION--- and ---END---
-and paste to minimoi_cmd_bot.
+=== HOW TO END THIS SESSION ===
+[transcript format instructions]
 ```
 
-### How OpenClaw finds this information
+The universal header (SESSION INSTRUCTIONS block) locks down model behavior — gender, scenario medium, no name prefix, language, correction style, start trigger. It works with any AI model (Grok, Claude, ChatGPT).
 
-- Today's lesson plan: `_NewDomains/language-german/language/german/lessons/` — most recent file
-- Persona prompt: `_NewDomains/language-german/language/german/config/prompts/[persona_name].txt`
-- If no lesson plan exists yet: use `domain.json → active_persona` and `bakery_order` as default scenario
+### How the pipeline finds this information
+
+- Today's lesson plan: `language/german/lessons/YYYY-MM-DD_lesson.json` — most recent file
+- Persona prompt: `language/german/config/prompts/[persona_name].txt`
+- If no lesson exists: falls back to `domain.json → active_persona` and `bakery_order`
 
 ---
 
 ## Phase 2 — Practice on iPhone
 
-1. Open Grok iOS → start a new chat
-2. Paste the full prompt from the `─── PASTE THIS INTO GROK ───` section
-3. Say: **"Start today's session"**
+1. Open Grok iOS → **start a new chat** (always a fresh chat — no carry-over context)
+2. Open the prompt file from `~/Dropbox/German_Sessions/prompts/` — or use the Telegram message
+3. Paste the full prompt into Grok
+4. Say: **"Start today's session"**
 4. Practice for 10–15 minutes — speak naturally, make mistakes, recover
 5. When finished, say the end phrase exactly:
 
@@ -104,9 +90,10 @@ Robert: [turn text]
 7. Copy everything from `---SESSION---` to `---END---` inclusive
 
 **Tips:**
-- Replace YYYY-MM-DD with today's date before saying the end phrase, or let Grok fill it in
+- Always start a new Grok chat — carrying context from a previous session causes wrong scenario or persona bleed
+- If Grok starts in the wrong scenario (in-person instead of phone call), say: "Stop. Reset. Start today's session." — the universal header takes effect on a fresh read
 - Duration is your rough estimate — 8, 10, 12 minutes — doesn't need to be exact
-- If Grok doesn't format it correctly, say: "Please reformat using exactly the template I gave you"
+- Grok may write the transcript header all on one line (e.g. `Date: 2026-04-26 Persona: Klaus ...`) — the pipeline handles this format correctly
 
 ---
 
@@ -145,27 +132,26 @@ Tap a rating — this is your feedback signal. It takes one second and matters f
 
 ## Writing Sessions
 
-Writing sessions use the same personas, scenarios, and pipeline as voice sessions. Use them when Grok voice is unavailable, or to build a voice vs writing error comparison over time. The pipeline handles `Mode: writing` automatically — no other changes needed.
+Writing sessions use the same personas, scenarios, and pipeline as voice sessions. Use them when Grok voice is unavailable, or to build a voice vs writing error comparison over time.
 
-### Option A — Request via OpenClaw (when command is live)
-
-Send to `minimoi_agent_bot`:
+### Request via `@minimoi_cmd_bot`
 
 ```
-writing café Maria
-writing hotel Herr Fischer
-writing bakery Frau Berger
+!german writing
 ```
 
-OpenClaw generates a writing-mode prompt file marked with `⌨️ WRITING SESSION` at the top and pre-fills `Mode: writing` in the transcript template. Everything else is the same as a normal session.
+The bot generates a writing-mode prompt — identical to `!german session` but with:
+- `⌨️ WRITING SESSION` header at the very top of the message
+- `Mode: writing` pre-filled in the transcript footer template
 
-### Option B — Run manually today (before OpenClaw command is live)
+### How to run a writing session
 
-1. Open **Claude.ai** or **Grok** in text mode (browser or app)
-2. Paste the persona prompt from `config/prompts/[persona].txt`
-3. Say: **"Start today's writing session"**
-4. Type your turns — no voice required. The persona will gently correct mistakes in-character.
-5. When finished, say:
+1. Send `!german writing` to `@minimoi_cmd_bot` → prompt arrives in Telegram and Dropbox
+2. Open **Claude.ai** or **Grok** in text mode (browser or app) → **new chat**
+3. Paste the full prompt
+4. Say: **"Start today's session"**
+5. Type your turns — no voice required. The persona corrects mistakes in-character.
+6. When finished, say:
 
 ```
 End session. Give me a clean transcript in this format:
@@ -183,8 +169,8 @@ Robert: [turn text]
 ---END---
 ```
 
-6. Copy the full block from `---SESSION---` to `---END---` inclusive
-7. **Before submitting:** confirm `Mode: writing` is in the header
+7. Copy the full block from `---SESSION---` to `---END---` inclusive
+8. **Before submitting:** confirm `Mode: writing` is in the header — the prompt pre-fills it, but verify Grok kept it
 
 **Tip:** Turn off auto-correct before you start — the pipeline tracks your actual mistakes.
 
@@ -233,18 +219,21 @@ Cards include example sentences and tags for filtering by topic (food, hotel, di
 
 ---
 
-## `!german` Commands (send to `minimoi_cmd_bot`)
+## `!german` Commands (send to `@minimoi_cmd_bot`)
+
+All commands are handled directly by `telegram_bot.py` in direct mode — no OpenClaw needed.
 
 | Command | What it does |
 |---|---|
 | `!german session` | Generate today's session → send to Telegram + write to Dropbox |
-| `!german drill [persona] [scenario] [N]` | Generate N drill prompts → all written to Dropbox, first sent to Telegram |
-| `!german status` | Today's session summary + next lesson |
-| `!german progress` | Cumulative stats — sessions, minutes, cards, top errors |
-| `!german today` | Re-run reviewer on today's most recent session |
-| `!german persona [name]` | Override tomorrow's persona |
+| `!german writing` | Generate writing-mode session → `⌨️` header at top, `Mode: writing` in footer |
+| `!german drill [N]` | Generate N drill prompts → all written to Dropbox, first sent to Telegram |
+| `!german status` | Current progress summary — sessions, minutes, Anki cards, next lesson |
 | `!german anki` | Path to today's Anki CSV |
-| `!german debug` | Dump last inbox file + last session header |
+| `!german watcher start` | Start the Dropbox transcript watcher in background |
+| `!german watcher stop` | Stop the watcher |
+
+Command routing logic is documented in `_NewDomains/language-german/ORCHESTRATOR.md`.
 
 ---
 
@@ -282,10 +271,14 @@ That's it. Everything else — Anki review, HTML page, writing exercise — is o
 
 | Feature | Status | When |
 |---|---|---|
-| Auto-trigger (no delimiter needed) | ✅ Freeform fallback shipped | Done |
+| Auto-trigger (no delimiter needed) | ✅ Shipped | Done |
 | Dropbox bridge + watcher | ✅ Shipped 2026-04-25 | Done |
 | Drill mode | ✅ Shipped 2026-04-25 | Done |
 | Anki auto-import via AnkiConnect | ✅ Shipped 2026-04-25 | Done |
+| Direct mode (`!german session` no OpenClaw) | ✅ Shipped 2026-04-26 | Done |
+| Universal session header (any AI model) | ✅ Shipped 2026-04-26 | Done |
+| Writing mode via `!german writing` | ✅ Shipped 2026-04-26 | Done |
+| 9-test acceptance suite | ✅ Shipped 2026-04-26 | Done |
 | Session quality rating buttons | Planned | Next |
 | HTML session review page | Planned | Next |
 | Morning German reminder | Planned | Next |
@@ -439,6 +432,7 @@ _NewDomains/language-german/
 
 | Version | Date | Changes |
 |---|---|---|
-| 1.2 | 2026-04-25 | Add Dropbox iPhone workflow, Rapid-Drill mode, Anki auto-import sections; update commands table + What's Not Built Yet |
-| 1.1 | 2026-04-24 | Add Writing Sessions section — OpenClaw command, manual workflow, iPhone steps, pipeline note |
-| 1.0 | 2026-04-21 | Initial guide — covers current manual workflow and target automated workflow |
+| 1.3 | 2026-04-26 | Direct mode default — `!german session` via `@minimoi_cmd_bot`; add `!german writing`, `!german watcher start/stop`; remove stale commands; universal header; Grok inline-header note; ORCHESTRATOR.md mention |
+| 1.2 | 2026-04-25 | Add Dropbox iPhone workflow, Rapid-Drill mode, Anki auto-import sections; update commands table |
+| 1.1 | 2026-04-24 | Add Writing Sessions section |
+| 1.0 | 2026-04-21 | Initial guide |

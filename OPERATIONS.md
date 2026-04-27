@@ -458,6 +458,67 @@ python tools/export_pdf.py --test             # verify tool is working
 
 ---
 
+## German Domain
+
+### Get a session
+
+```bash
+# Via Telegram (primary path)
+# Send to @minimoi_cmd_bot:  !german session
+
+# Or locally (dry-run to verify output without sending):
+cd ~/Projects/personal-ai-agents && source venv/bin/activate
+python _NewDomains/language-german/get_german_session.py \
+  --base-dir _NewDomains/language-german/language/german/ --dry-run
+```
+
+### Start / stop the Dropbox watcher
+
+```bash
+# Via Telegram:  !german watcher start  /  !german watcher stop
+
+# Or locally:
+cd ~/Projects/personal-ai-agents/_NewDomains/language-german
+source ../../venv/bin/activate
+python watch_transcripts.py &         # start in background
+pkill -f watch_transcripts.py         # stop
+```
+
+### Run the acceptance test suite
+
+```bash
+cd ~/Projects/personal-ai-agents/_NewDomains/language-german
+source ../../venv/bin/activate
+python run_tests.py                   # all 9 tests
+python run_tests.py --test 9          # single test
+```
+
+### Check pipeline status
+
+```bash
+# Via Telegram (recommended):  !german status
+
+# Or locally:
+cd ~/Projects/personal-ai-agents && source venv/bin/activate
+python _NewDomains/language-german/status.py \
+  --base-dir _NewDomains/language-german/language/german/
+```
+
+### Key file locations
+
+| Path | Purpose |
+|---|---|
+| `_NewDomains/language-german/ORCHESTRATOR.md` | Command routing reference for any orchestrating agent |
+| `_NewDomains/language-german/GERMAN_USER_GUIDE.md` | End-to-end practice workflow guide |
+| `_NewDomains/language-german/language/german/config/sync_config.json` | Dropbox paths, watcher settings, `agent_mode` |
+| `_NewDomains/language-german/language/german/config/prompts/` | Persona `.txt` files (one per persona) |
+| `_NewDomains/language-german/language/german/lessons/` | Daily lesson plan JSONs (gitignored) |
+| `_NewDomains/language-german/run_tests.py` | 9-test acceptance suite |
+| `~/Dropbox/German_Sessions/prompts/` | Generated session prompt files |
+| `~/Dropbox/German_Sessions/transcripts/inbox/` | Drop transcripts here after practice |
+
+---
+
 ## Documentation
 
 - `README.md` — Project overview and setup
