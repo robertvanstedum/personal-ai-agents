@@ -66,6 +66,29 @@ def _parse_header(lines: list) -> dict:
     return fields
 
 
+# Matches "Speaker Name:" at turn boundaries within a single-line dump.
+# Speaker names are 1-3 words, each word starts with a capital letter,
+# optionally prefixed with a title abbreviation ending in a period (e.g. Dr.).
+_INLINE_SPEAKER_RE = re.compile(
+    r'(?:^|(?<=\s))'
+    r'(?:(?:Dr|Frau|Herr|Prof)\.\s+)?'
+    r'(?:[A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)?)'
+    r':'
+)
+
+
+def _split_inline_turns(line: str) -> list:
+    """Split a single-line conversation dump on speaker-name boundaries."""
+    matches = list(_INLINE_SPEAKER_RE.finditer(line))
+    if len(matches) < 2:
+        return [line]
+    segments = []
+    for i, m in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(line)
+        segments.append(line[m.start():end].strip())
+    return segments
+
+
 def _parse_turns(lines: list) -> list:
     turns = []
     for line in lines:
@@ -74,12 +97,15 @@ def _parse_turns(lines: list) -> list:
         line = ' '.join(line.split())
         if not line:
             continue
-        if ":" in line:
-            speaker, _, text = line.partition(":")
-            speaker = speaker.strip()
-            text = text.strip()
-            if speaker and text:
-                turns.append({"speaker": speaker, "text": text})
+        # Detect single-line dump (multiple speaker prefixes on one line)
+        segments = _split_inline_turns(line)
+        for seg in segments:
+            if ":" in seg:
+                speaker, _, text = seg.partition(":")
+                speaker = speaker.strip()
+                text = text.strip()
+                if speaker and text:
+                    turns.append({"speaker": speaker, "text": text})
     return turns
 
 
