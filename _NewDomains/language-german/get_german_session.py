@@ -209,9 +209,14 @@ These rules override everything else. Follow them exactly.
 UNIVERSAL_FOOTER = """\
 === HOW TO END THIS SESSION ===
 
-When the session is over, say: "End session."
+TO END THIS SESSION:
+1. Say: "End session."
+2. Switch to TEXT MODE (tap the keyboard icon)
+3. Type: "Give me the transcript"
+The transcript will be output as formatted text.
+DO NOT request the transcript while still in voice mode.
 
-At that moment, switch to text and output ONLY the following block —
+Output ONLY the following block —
 nothing before it, nothing after it, no commentary:
 
 ---SESSION---
