@@ -569,6 +569,20 @@ GERMAN_BASE = BASE_DIR / "_NewDomains" / "language-german"
 GERMAN_DIR  = GERMAN_BASE / "language" / "german"
 VENV_PYTHON = BASE_DIR / "venv" / "bin" / "python3"
 
+_SESSION_RE = re.compile(
+    r"(pull today.?s german session|what.?s my german session|"
+    r"give me today.?s german prompt|german session please|"
+    r"german session today|today.?s german session|"
+    r"german session|next session|next lesson)",
+    re.I,
+)
+_DRILL_RE = re.compile(
+    r"(start german.{0,20}drill mode|drill.{0,30}german|german.{0,30}drill"
+    r"|drill (café|cafe|bakery|hotel|museum|pharmacy|restaurant|ubahn|u-bahn|transit|directions?)"
+    r"|\d+ drill sessions?)",
+    re.I,
+)
+
 
 def _run(cmd, **kwargs):
     """Run a subprocess, return (stdout, stderr, returncode)."""
@@ -797,19 +811,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     text = update.message.text.strip()
 
-    _SESSION_RE = re.compile(
-        r"(pull today.?s german session|what.?s my german session|"
-        r"give me today.?s german prompt|german session please|"
-        r"german session today|today.?s german session)",
-        re.I,
-    )
-    _DRILL_RE = re.compile(
-        r"(start german.{0,20}drill mode|drill.{0,30}german|german.{0,30}drill"
-        r"|drill (café|cafe|bakery|hotel|museum|pharmacy|restaurant|ubahn|u-bahn|transit|directions?)"
-        r"|\d+ drill sessions?)",
-        re.I,
-    )
-
     if text.startswith("---SESSION---") or text.lower().startswith("\u2014session\u2014"):
         await _handle_german_transcript(update, text)
     elif text.lower().startswith("!german"):
@@ -822,6 +823,41 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(
             "Got it — I hear you. Send !german status to test the pipeline."
         )
+
+
+async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle voice messages in polling mode: transcribe → echo → route."""
+    if not update.message or not update.message.voice:
+        return
+    if update.message.chat_id != ROBERT_CHAT_ID:
+        return
+
+    voice = update.message.voice
+    if voice.duration > 120:
+        await update.message.reply_text("⚠️ Voice note too long (>2 min). Ignored.")
+        return
+
+    try:
+        tg_file = await context.bot.get_file(voice.file_id)
+        audio_bytes = bytes(await tg_file.download_as_bytearray())
+        transcription = transcribe_voice(audio_bytes)
+    except Exception as e:
+        await update.message.reply_text(f"❌ Transcription failed: {e}")
+        return
+
+    await update.message.reply_text(f'🎙 "{transcription}"')
+
+    text = transcription.strip()
+    if text.startswith("---SESSION---") or text.lower().startswith("—session—"):
+        await _handle_german_transcript(update, text)
+    elif text.lower().startswith("!german"):
+        await _handle_german_command(update, text)
+    elif _DRILL_RE.search(text):
+        await _handle_german_command(update, "!german drill 3")
+    elif _SESSION_RE.search(text):
+        await _handle_german_command(update, "!german session")
+    else:
+        log_voice_note(transcription)
 
 
 def run_bot_mode():
@@ -859,6 +895,7 @@ def run_bot_mode():
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("briefing", cmd_briefing))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+    app.add_handler(MessageHandler(filters.VOICE, handle_voice_polling))
 
     async def error_handler(update, context):
         """Suppress noisy network errors — log one line instead of full traceback."""
