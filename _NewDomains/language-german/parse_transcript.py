@@ -176,6 +176,11 @@ def parse_transcript(raw_text: str, sessions_dir: Path) -> Path:
     else:
         body = raw_text.strip()
 
+    # Fix missing newline when a header value runs directly into the conversation body,
+    # e.g. "Mode: voiceDr. Huber: Guten Tag!" → "Mode: voice\nDr. Huber: Guten Tag!"
+    body = re.sub(r'(?i)(Mode:\s*(?:voice|writing))([A-ZÄÖÜ])', r'\1\n\2', body)
+    body = re.sub(r'(?i)(Duration:\s*\d+)([A-ZÄÖÜ])', r'\1\n\2', body)
+
     sections = body.split("\n\n", 1)
     if len(sections) == 2:
         header_lines = sections[0].strip().splitlines()
