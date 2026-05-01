@@ -140,7 +140,10 @@ def parse_transcript(raw_text: str, sessions_dir: Path) -> Path:
         date_str, persona, scenario, dur_str, mode = key_match.groups()
         persona = persona.strip()
         scenario = scenario.strip()
-        mode = mode.strip().lower()
+        raw_mode = mode.strip().lower()
+        mode = raw_mode if raw_mode in {"voice", "writing"} else "writing"
+        if raw_mode not in {"voice", "writing"}:
+            print(f"⚠️  Unrecognised mode value '{raw_mode}' — defaulting to 'writing'")
         duration = int(dur_str)
         # Turn lines are everything except the key line
         turn_lines = [l for l in raw_text.splitlines() if not l.startswith("##")]
@@ -176,10 +179,16 @@ def parse_transcript(raw_text: str, sessions_dir: Path) -> Path:
     else:
         body = raw_text.strip()
 
-    # Fix missing newline when a header value runs directly into the conversation body,
-    # e.g. "Mode: voiceDr. Huber: Guten Tag!" → "Mode: voice\nDr. Huber: Guten Tag!"
-    body = re.sub(r'(?i)(Mode:\s*(?:voice|writing))([A-ZÄÖÜ])', r'\1\n\2', body)
-    body = re.sub(r'(?i)(Duration:\s*\d+)([A-ZÄÖÜ])', r'\1\n\2', body)
+    # Fix missing newline when a scalar header value runs directly into the conversation.
+    # Only applied to fields whose values never contain uppercase letters themselves:
+    #   Mode:     one word  (voice / writing / anything else)
+    #   Duration: digits
+    #   Date:     ISO date
+    # Persona/Scenario are skipped — their values are mixed-case names.
+    # (?i) makes [A-ZÄÖÜ] case-insensitive too, so use explicit case for the field key.
+    body = re.sub(r'([Mm]ode:\s*\w+)([A-ZÄÖÜ])', r'\1\n\2', body)
+    body = re.sub(r'([Dd]uration:\s*\d+)([A-ZÄÖÜ])', r'\1\n\2', body)
+    body = re.sub(r'([Dd]ate:\s*\d{4}-\d{2}-\d{2})([A-ZÄÖÜ])', r'\1\n\2', body)
 
     sections = body.split("\n\n", 1)
     if len(sections) == 2:
@@ -216,10 +225,13 @@ def parse_transcript(raw_text: str, sessions_dir: Path) -> Path:
     date_str = header.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
     persona = header.get("persona", "Unknown")
     scenario = header.get("scenario", "unknown")
-    mode = header.get("mode", "voice").lower()
-
-    # Mode detection from content — fuzzy override when header didn't set it
-    if mode == "voice" and "mode: writing" in raw_text.lower():
+    _VALID_MODES = {"voice", "writing"}
+    raw_mode = header.get("mode", "").strip().lower()
+    if raw_mode in _VALID_MODES:
+        mode = raw_mode
+    else:
+        if raw_mode:
+            print(f"⚠️  Unrecognised mode value '{raw_mode}' — defaulting to 'writing'")
         mode = "writing"
 
     if "duration" in header:
