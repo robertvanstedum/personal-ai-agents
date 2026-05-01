@@ -70,7 +70,7 @@ def _parse_header(lines: list) -> dict:
 # Speaker names are 1-3 words, each word starts with a capital letter,
 # optionally prefixed with a title abbreviation ending in a period (e.g. Dr.).
 _INLINE_SPEAKER_RE = re.compile(
-    r'(?:^|(?<=\s))'
+    r'(?:^|(?<=[\s.?!]))'
     r'(?:(?:Dr|Frau|Herr|Prof)\.\s+)?'
     r'(?:[A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)?)'
     r':'
