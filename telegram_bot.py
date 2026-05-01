@@ -569,6 +569,12 @@ GERMAN_BASE = BASE_DIR / "_NewDomains" / "language-german"
 GERMAN_DIR  = GERMAN_BASE / "language" / "german"
 VENV_PYTHON = BASE_DIR / "venv" / "bin" / "python3"
 
+_WRITING_RE = re.compile(
+    r"(writing session|written session|"
+    r"session.{0,20}writing|writing.{0,20}session|"
+    r"next.{0,20}german.{0,20}writing|german.{0,20}writing)",
+    re.I,
+)
 _SESSION_RE = re.compile(
     r"(pull today.?s german session|what.?s my german session|"
     r"give me today.?s german prompt|german session please|"
@@ -817,6 +823,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await _handle_german_command(update, text)
     elif _DRILL_RE.search(text):
         await _handle_german_command(update, "!german drill 3")
+    elif _WRITING_RE.search(text):
+        await _handle_german_command(update, "!german writing")
     elif _SESSION_RE.search(text):
         await _handle_german_command(update, "!german session")
     else:
@@ -854,6 +862,8 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
         await _handle_german_command(update, text)
     elif _DRILL_RE.search(text):
         await _handle_german_command(update, "!german drill 3")
+    elif _WRITING_RE.search(text):
+        await _handle_german_command(update, "!german writing")
     elif _SESSION_RE.search(text):
         await _handle_german_command(update, "!german session")
     else:
