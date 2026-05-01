@@ -103,7 +103,7 @@ def _call_claude(session: dict, model: str) -> str:
     client = _get_anthropic_client()
     response = client.messages.create(
         model=model,
-        max_tokens=2048,
+        max_tokens=4096,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": _build_user_prompt(session)}],
     )
@@ -123,13 +123,23 @@ def _empty_reviewer_output() -> dict:
     }
 
 
+def _strip_llm_fences(text: str) -> str:
+    """Strip markdown code fences (```json ... ``` or ``` ... ```) from LLM output."""
+    raw = text.strip()
+    if raw.startswith("```"):
+        raw = re.sub(r'^```[a-z]*\n?', '', raw)
+        raw = re.sub(r'\n?```$', '', raw)
+    return raw.strip()
+
+
 def _parse_llm_response(text: str) -> tuple[dict, bool]:
     """Return (parsed_dict, success). On failure returns fallback struct."""
     try:
-        return json.loads(text.strip()), True
+        return json.loads(_strip_llm_fences(text)), True
     except json.JSONDecodeError:
         pass
-    m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    # Greedy match — .*? would stop at first } and miss nested structures
+    m = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.DOTALL)
     if m:
         try:
             return json.loads(m.group(1)), True
