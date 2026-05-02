@@ -912,7 +912,13 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif _WRITING_RE.search(text):
         await _handle_german_command(update, "!german writing")
     elif _SESSION_RE.search(text):
-        await _handle_german_command(update, "!german session")
+        # Keyword in same message takes priority over generic session trigger
+        intent = _resolve_keyword_intent(text, KEYWORD_MAP)
+        if intent:
+            persona_name, scenario = intent
+            await _start_keyword_session(update, persona_name, scenario)
+        else:
+            await _handle_german_command(update, "!german session")
     elif _AGAIN_RE.search(text):
         persona = _last_session_persona()
         if persona:
@@ -971,7 +977,13 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
     elif _WRITING_RE.search(text):
         await _handle_german_command(update, "!german writing")
     elif _SESSION_RE.search(text):
-        await _handle_german_command(update, "!german session")
+        # Keyword in same message takes priority over generic session trigger
+        intent = _resolve_keyword_intent(text, KEYWORD_MAP)
+        if intent:
+            persona_name, scenario = intent
+            await _start_keyword_session(update, persona_name, scenario)
+        else:
+            await _handle_german_command(update, "!german session")
     elif _AGAIN_RE.search(text):
         persona = _last_session_persona()
         if persona:
