@@ -1,6 +1,6 @@
 {
   "Maria": {
-    "trigger_words": ["café", "coffee", "Kaffee", "Maria"],
+    "trigger_words": ["café", "cafe", "coffee", "Kaffee", "Maria"],
     "default_scenario": "cafe_order",
     "recovery_phrase": "Einen Moment bitte — ich überlege kurz.",
     "scaffold_phrases": [
