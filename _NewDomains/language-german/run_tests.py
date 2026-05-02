@@ -247,29 +247,134 @@ def test_11():
 # Step 2 — Two-message delivery + scaffold (SKIP until Step 2 ships)
 # ---------------------------------------------------------------------------
 
+def _import_get_session():
+    sys.path.insert(0, str(PIPELINE_ROOT))
+    import importlib
+    return importlib.import_module("get_german_session")
+
+
+_SAMPLE_KEYWORD_MAP = {
+    "Klaus": {
+        "trigger_words": ["restaurant", "Klaus"],
+        "default_scenario": "restaurant_reservation",
+        "recovery_phrase": "Entschuldigung — einen Moment bitte.",
+        "scaffold_phrases": [
+            {"de": "Haben Sie einen Tisch für zwei Personen?", "en": "Do you have a table for two?", "type": "transaction"},
+            {"de": "Ich hätte gerne das Tagesmenu.", "en": "I'd like the daily menu.", "type": "transaction"},
+            {"de": "Was empfehlen Sie als Hauptspeise?", "en": "What do you recommend as a main course?", "type": "preference"},
+            {"de": "Wir möchten lieber draußen sitzen.", "en": "We'd prefer to sit outside.", "type": "preference"},
+            {"de": "Könnten Sie bitte die Speisekarte bringen?", "en": "Could you bring the menu please?", "type": "transaction"},
+            {"de": "Die Rechnung, bitte — zusammen.", "en": "The bill please — together.", "type": "transaction"},
+        ],
+    }
+}
+
+
 def test_12():
-    report(12, "get_german_session returns two messages, not one", None)
+    """_build_briefing and _build_ai_prompt produce structurally distinct messages."""
+    gs = _import_get_session()
+    briefing = gs._build_briefing(
+        "2026-05-01", "Klaus", "Waiter", 1, "restaurant_reservation",
+        "", "Order confidently", "None yet", "🧱 scaffold here",
+    )
+    ai_prompt = gs._build_ai_prompt("== PERSONA ==", gs.UNIVERSAL_FOOTER)
+    checks = {
+        "briefing has 📋 header": "📋 YOUR BRIEFING" in briefing,
+        "ai_prompt has SESSION INSTRUCTIONS": "SESSION INSTRUCTIONS" in ai_prompt,
+        "briefing != ai_prompt": briefing != ai_prompt,
+    }
+    ok = all(checks.values())
+    report(12, "get_german_session returns two messages, not one", ok,
+           "all checks pass" if ok else "failed: " + ", ".join(k for k, v in checks.items() if not v))
+
 
 def test_13():
-    report(13, "Message 1 contains scaffold block (🧱 header present)", None)
+    """Message 1 (briefing) contains scaffold block when scaffold is non-empty."""
+    gs = _import_get_session()
+    briefing = gs._build_briefing(
+        "2026-05-01", "Klaus", "Waiter", 1, "restaurant_reservation",
+        "", "", "None yet", "🧱 Today's scaffold — try to use these:\n   • Haben Sie einen Tisch?",
+    )
+    ok = "🧱" in briefing
+    report(13, "Message 1 contains scaffold block (🧱 header present)", ok,
+           "scaffold found" if ok else "🧱 missing from briefing")
+
 
 def test_14():
-    report(14, "Message 2 does not contain scaffold block", None)
+    """Message 2 (AI prompt) does not contain scaffold block."""
+    gs = _import_get_session()
+    ai_prompt = gs._build_ai_prompt("== PERSONA PROMPT ==", gs.UNIVERSAL_FOOTER)
+    ok = "🧱" not in ai_prompt
+    report(14, "Message 2 does not contain scaffold block", ok,
+           "clean" if ok else "🧱 found in ai_prompt — should not be there")
+
 
 def test_15():
-    report(15, "Message 2 does not contain carry-forward or warm-up metadata", None)
+    """Message 2 (AI prompt) does not contain carry-forward or warm-up metadata lines."""
+    gs = _import_get_session()
+    ai_prompt = gs._build_ai_prompt("== PERSONA PROMPT ==", gs.UNIVERSAL_FOOTER)
+    checks = {
+        "no 'Carry forward:'": "Carry forward:" not in ai_prompt,
+        "no 'Warm-up:'": "Warm-up:" not in ai_prompt,
+        "no '📋 YOUR BRIEFING'": "📋 YOUR BRIEFING" not in ai_prompt,
+    }
+    ok = all(checks.values())
+    report(15, "Message 2 does not contain carry-forward or warm-up metadata", ok,
+           "clean" if ok else "failed: " + ", ".join(k for k, v in checks.items() if not v))
+
 
 def test_16():
-    report(16, "scaffold_rotation_index advances by 2 after session", None)
+    """scaffold_rotation_index advances by 2 after _scaffold_block() is called."""
+    gs = _import_get_session()
+    with tempfile.TemporaryDirectory() as tmp:
+        pf = Path(tmp) / "progress.json"
+        progress = {"scaffold_rotation_index": {"Klaus": 0}}
+        pf.write_text(json.dumps(progress), encoding="utf-8")
+
+        gs._scaffold_block("Klaus", _SAMPLE_KEYWORD_MAP, progress, pf)
+
+        updated = json.loads(pf.read_text(encoding="utf-8"))
+        idx = updated.get("scaffold_rotation_index", {}).get("Klaus", -1)
+    ok = idx == 2
+    report(16, "scaffold_rotation_index advances by 2 after session", ok,
+           f"index={idx}" if not ok else "0→2")
+
 
 def test_17():
-    report(17, "scaffold_rotation_index resets to 0 after reaching 6", None)
+    """scaffold_rotation_index resets to 0 when it reaches 6."""
+    gs = _import_get_session()
+    with tempfile.TemporaryDirectory() as tmp:
+        pf = Path(tmp) / "progress.json"
+        progress = {"scaffold_rotation_index": {"Klaus": 4}}
+        pf.write_text(json.dumps(progress), encoding="utf-8")
+
+        gs._scaffold_block("Klaus", _SAMPLE_KEYWORD_MAP, progress, pf)
+
+        updated = json.loads(pf.read_text(encoding="utf-8"))
+        idx = updated.get("scaffold_rotation_index", {}).get("Klaus", -1)
+    ok = idx == 0
+    report(17, "scaffold_rotation_index resets to 0 after reaching 6", ok,
+           f"index={idx}" if not ok else "4→0")
+
 
 def test_18():
-    report(18, "persona missing scaffold_phrases → scaffold skipped, no crash", None)
+    """_scaffold_block returns '' for an unknown persona — no crash."""
+    gs = _import_get_session()
+    result = gs._scaffold_block("UnknownPersona", {}, {}, None)
+    ok = result == ""
+    report(18, "persona missing scaffold_phrases → scaffold skipped, no crash", ok,
+           "returned empty string" if ok else f"returned: {result!r}")
+
 
 def test_19():
-    report(19, "carry_forward_phrases from progress.json appears in Message 1", None)
+    """carry_forward_phrases from progress appears in _carry_forward result."""
+    gs = _import_get_session()
+    phrase = "Ich hätte gerne einen kleinen Brauner, bitte."
+    progress = {"carry_forward_phrases": [phrase]}
+    result = gs._carry_forward({}, progress)
+    ok = phrase in result
+    report(19, "carry_forward_phrases from progress.json appears in Message 1", ok,
+           "phrase present" if ok else f"result was: {result!r}")
 
 
 # ---------------------------------------------------------------------------

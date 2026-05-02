@@ -152,6 +152,12 @@ def _strip_session_metadata(text: str) -> str:
 
 
 def _carry_forward(lesson: dict, progress: dict) -> str:
+    # Explicit carry-forward phrases added manually take priority
+    phrases = progress.get('carry_forward_phrases', [])
+    if phrases:
+        raw = phrases[-1]
+        return _strip_session_metadata(raw)
+
     if lesson.get('carry_forward_errors'):
         return _strip_session_metadata(lesson['carry_forward_errors'][0])
 
@@ -167,6 +173,51 @@ def _carry_forward(lesson: dict, progress: dict) -> str:
         return f"vocabulary ({count} total, e.g. {vocab[-1]})"
 
     return f"{top_error} ({count} total)"
+
+
+def _load_keyword_map(base: Path) -> dict:
+    """Load keyword_map.json — returns empty dict if missing (graceful fallback)."""
+    path = base / 'config' / 'keyword_map.json'
+    if path.exists():
+        return json.loads(path.read_text(encoding='utf-8'))
+    return {}
+
+
+def _scaffold_block(persona_name: str, keyword_map: dict, progress: dict,
+                    progress_file: Path) -> str:
+    """
+    Select 2 scaffold phrases + fixed recovery phrase for the session briefing.
+    Rotation index advances by 2 per session, resets at 6. Per-persona tracking.
+    Returns empty string if scaffold data is missing — never crashes.
+    """
+    persona_data = keyword_map.get(persona_name, {})
+    phrases = persona_data.get('scaffold_phrases', [])
+    recovery = persona_data.get('recovery_phrase', None)
+
+    if not phrases or not recovery:
+        return ""
+
+    rotation = progress.get('scaffold_rotation_index', {})
+    idx = rotation.get(persona_name, 0) % 6
+
+    phrase1 = phrases[idx % len(phrases)]
+    phrase2 = phrases[(idx + 1) % len(phrases)]
+
+    # Advance and persist rotation index
+    rotation[persona_name] = (idx + 2) % 6
+    progress['scaffold_rotation_index'] = rotation
+    if progress_file and progress_file.exists():
+        progress_file.write_text(
+            json.dumps(progress, indent=2, ensure_ascii=False), encoding='utf-8'
+        )
+
+    lines = [
+        "🧱 Today's scaffold — try to use these:",
+        f"   • {phrase1['de']}",
+        f"   • {phrase2['de']}",
+        f"   • 🆘 If you freeze: {recovery}",
+    ]
+    return '\n'.join(lines)
 
 
 UNIVERSAL_HEADER = """\
@@ -247,11 +298,48 @@ def _dropbox_filename(date_str: str, lesson_number: int, persona_name: str,
     return f"{base}.txt"
 
 
+def _build_briefing(date_str: str, persona_name: str, persona_role: str,
+                    lesson_number: int, scenario: str, warm_up: str,
+                    speaking_prompt: str, carry: str, scaffold: str,
+                    drill_session: int = 0, drill_total: int = 0,
+                    writing_mode: bool = False) -> str:
+    """Message 1 — YOUR BRIEFING. Read this; do not paste into Grok."""
+    drill_mode = drill_total > 0
+
+    lines = ["📋 YOUR BRIEFING — read this, do not paste into Grok", ""]
+
+    if writing_mode:
+        lines += ["⌨️ WRITING SESSION — Type at your own pace.", ""]
+
+    lines += [
+        f"📚 Lesson {lesson_number} — {persona_name} / {scenario.replace('_', ' ').title()}",
+        f"Carry forward: {carry}",
+    ]
+    if drill_mode:
+        lines.append(f"Drill: {drill_session} of {drill_total}")
+    if warm_up:
+        lines.append(f"Warm-up: {warm_up}")
+    if speaking_prompt:
+        lines.append(f"Goal: {speaking_prompt}")
+
+    if scaffold:
+        lines += ["", scaffold]
+
+    return '\n'.join(lines)
+
+
+def _build_ai_prompt(persona_prompt: str, footer: str) -> str:
+    """Message 2 — AI prompt. Paste this into Grok or Claude."""
+    return '\n'.join([UNIVERSAL_HEADER, "", persona_prompt, "", footer])
+
+
 def _build_package(date_str: str, persona_name: str, persona_role: str,
                    lesson_number: int, scenario: str, warm_up: str,
                    speaking_prompt: str, persona_prompt: str, carry: str,
                    drill_session: int = 0, drill_total: int = 0,
-                   writing_mode: bool = False) -> str:
+                   writing_mode: bool = False,
+                   scaffold: str = "") -> str:
+    """Single-message fallback (dry-run, Dropbox file). Combines briefing + AI prompt."""
     drill_mode = drill_total > 0
 
     lines = []
@@ -271,6 +359,8 @@ def _build_package(date_str: str, persona_name: str, persona_role: str,
         lines.append(f"Warm-up: {warm_up}")
     if speaking_prompt:
         lines.append(f"Prompt: {speaking_prompt}")
+    if scaffold:
+        lines += ["", scaffold]
 
     footer = UNIVERSAL_FOOTER
     if writing_mode:
@@ -354,26 +444,44 @@ def main():
     persona_prompt = prompt_file.read_text(encoding='utf-8').strip()
     carry = _carry_forward(lesson or {}, progress)
 
+    keyword_map = _load_keyword_map(base)
+    scaffold = _scaffold_block(persona_name, keyword_map, progress,
+                               progress_file if not args.dry_run else None)
+
+    footer = UNIVERSAL_FOOTER
+    if args.writing:
+        footer = footer.replace("Mode: voice", "Mode: writing")
+
     sync_cfg = _load_sync_config()
     max_chars = sync_cfg.get("max_prompt_chars", 4000)
 
     drill_total = args.drill or 0
 
     if drill_total > 0:
-        # Determine which session numbers to generate
         if args.drill_session:
             sessions_to_generate = [args.drill_session]
         else:
             sessions_to_generate = list(range(1, drill_total + 1))
 
-        first_output = None
+        first_briefing = None
+        first_ai_prompt = None
         for k in sessions_to_generate:
             wu = random.choice(warm_up_variants) if warm_up_variants else warm_up
+            drill_footer = footer.replace(
+                "Mode: voice" if not args.writing else "Mode: writing",
+                f"{'Mode: writing' if args.writing else 'Mode: voice'}\nDrill: true\nDrill-Session: {k} of {drill_total}",
+            )
+            briefing = _build_briefing(
+                date_str, persona_name, persona_role, lesson_number, scenario,
+                wu, speaking_prompt, carry, scaffold,
+                drill_session=k, drill_total=drill_total, writing_mode=args.writing,
+            )
+            ai_prompt = _build_ai_prompt(persona_prompt, drill_footer)
             output = _build_package(
                 date_str, persona_name, persona_role, lesson_number, scenario,
                 wu, speaking_prompt, persona_prompt, carry,
                 drill_session=k, drill_total=drill_total,
-                writing_mode=args.writing,
+                writing_mode=args.writing, scaffold=scaffold,
             )
             if not args.dry_run:
                 output = _enforce_length(output, max_chars, persona_name)
@@ -385,19 +493,27 @@ def main():
                 dest = _write_dropbox(sync_cfg, fname, output)
                 print(f"✅ Drill {k}/{drill_total} written to Dropbox: {dest.name}", file=sys.stderr)
 
-            if first_output is None:
-                first_output = output
+            if first_briefing is None:
+                first_briefing = briefing
+                first_ai_prompt = ai_prompt
 
-        # Send only the first drill session to Telegram
-        if args.send and not args.dry_run and first_output:
-            _send_telegram(first_output)
-            print(f"✅ Drill 1/{drill_total} sent to Telegram.", file=sys.stderr)
+        if args.send and not args.dry_run and first_briefing:
+            import time
+            _send_telegram(first_briefing)
+            time.sleep(1)
+            _send_telegram(first_ai_prompt)
+            print(f"✅ Drill 1/{drill_total} sent to Telegram (2 messages).", file=sys.stderr)
 
     else:
+        briefing = _build_briefing(
+            date_str, persona_name, persona_role, lesson_number, scenario,
+            warm_up, speaking_prompt, carry, scaffold, writing_mode=args.writing,
+        )
+        ai_prompt = _build_ai_prompt(persona_prompt, footer)
         output = _build_package(
             date_str, persona_name, persona_role, lesson_number, scenario,
             warm_up, speaking_prompt, persona_prompt, carry,
-            writing_mode=args.writing,
+            writing_mode=args.writing, scaffold=scaffold,
         )
         if not args.dry_run:
             output = _enforce_length(output, max_chars)
@@ -409,8 +525,11 @@ def main():
             print(f"✅ Written to Dropbox: {dest.name}", file=sys.stderr)
 
         if args.send and not args.dry_run:
-            _send_telegram(output)
-            print("✅ Sent to Telegram.", file=sys.stderr)
+            import time
+            _send_telegram(briefing)
+            time.sleep(1)
+            _send_telegram(ai_prompt)
+            print("✅ Sent to Telegram (2 messages).", file=sys.stderr)
 
 
 if __name__ == '__main__':

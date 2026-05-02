@@ -1,0 +1,106 @@
+{
+  "Maria": {
+    "trigger_words": ["café", "coffee", "Kaffee", "Maria"],
+    "default_scenario": "cafe_order",
+    "recovery_phrase": "Einen Moment bitte — ich überlege kurz.",
+    "scaffold_phrases": [
+      {"de": "Ich hätte gerne einen kleinen Brauner, bitte.", "en": "I'd like a small Viennese coffee, please.", "type": "transaction"},
+      {"de": "Was empfehlen Sie heute?", "en": "What do you recommend today?", "type": "preference"},
+      {"de": "Wir möchten gerne bestellen.", "en": "We'd like to order.", "type": "transaction"},
+      {"de": "Könnte ich bitte die Rechnung haben?", "en": "Could I have the bill please?", "type": "transaction"},
+      {"de": "Ich möchte lieber einen Tee.", "en": "I'd prefer a tea.", "type": "preference"},
+      {"de": "Meine Frau hätte gerne den Apfelstrudel.", "en": "My wife would like the apple strudel.", "type": "transaction"}
+    ]
+  },
+  "Herr Fischer": {
+    "trigger_words": ["hotel", "Fischer", "check in", "checkout"],
+    "default_scenario": "hotel_checkin",
+    "recovery_phrase": "Entschuldigung — könnten Sie das bitte wiederholen?",
+    "scaffold_phrases": [
+      {"de": "Ich habe eine Reservierung auf den Namen Van Stedum.", "en": "I have a reservation under the name Van Stedum.", "type": "transaction"},
+      {"de": "Wann ist der Check-out?", "en": "When is check-out?", "type": "transaction"},
+      {"de": "Ich möchte lieber ein ruhiges Zimmer.", "en": "I'd prefer a quiet room.", "type": "preference"},
+      {"de": "Könnten Sie uns ein Taxi rufen?", "en": "Could you call us a taxi?", "type": "transaction"},
+      {"de": "Gibt es WLAN im Zimmer?", "en": "Is there WiFi in the room?", "type": "transaction"},
+      {"de": "Ich hätte gerne einen späteren Check-out, wenn möglich.", "en": "I'd like a later check-out if possible.", "type": "preference"}
+    ]
+  },
+  "Anna": {
+    "trigger_words": ["Airbnb", "apartment", "Anna", "keys"],
+    "default_scenario": "apartment_handoff",
+    "recovery_phrase": "Wie sagt man das auf Deutsch — einen Moment.",
+    "scaffold_phrases": [
+      {"de": "Wo finde ich den Schlüssel?", "en": "Where do I find the key?", "type": "transaction"},
+      {"de": "Wie funktioniert die Heizung?", "en": "How does the heating work?", "type": "transaction"},
+      {"de": "Ich hätte gerne die WLAN-Daten.", "en": "I'd like the WiFi details.", "type": "transaction"},
+      {"de": "Wir möchten lieber früh einchecken.", "en": "We'd prefer to check in early.", "type": "preference"},
+      {"de": "Gibt es einen Schlüssel für das Fahrrad?", "en": "Is there a key for the bicycle?", "type": "transaction"},
+      {"de": "Wo sind die nächsten Supermärkte?", "en": "Where are the nearest supermarkets?", "type": "transaction"}
+    ]
+  },
+  "Dr. Huber": {
+    "trigger_words": ["museum", "Huber", "art", "exhibition"],
+    "default_scenario": "museum_navigation",
+    "recovery_phrase": "Entschuldigung — ich suche die richtigen Worte.",
+    "scaffold_phrases": [
+      {"de": "Was empfehlen Sie uns zu sehen?", "en": "What do you recommend we see?", "type": "preference"},
+      {"de": "Wie lange dauert die Führung?", "en": "How long does the tour last?", "type": "transaction"},
+      {"de": "Ich hätte gerne zwei Eintrittskarten.", "en": "I'd like two tickets.", "type": "transaction"},
+      {"de": "Wo ist die ägyptische Sammlung?", "en": "Where is the Egyptian collection?", "type": "transaction"},
+      {"de": "Wir möchten lieber selbst durch das Museum gehen.", "en": "We'd prefer to walk through the museum ourselves.", "type": "preference"},
+      {"de": "Was ist Ihr persönlicher Tipp?", "en": "What is your personal recommendation?", "type": "preference"}
+    ]
+  },
+  "Stefan": {
+    "trigger_words": ["U-Bahn", "subway", "Stefan", "directions"],
+    "default_scenario": "ubahn_directions",
+    "recovery_phrase": "Einen Moment — ich verstehe, aber ich suche das Wort.",
+    "scaffold_phrases": [
+      {"de": "Wie komme ich zum Naschmarkt?", "en": "How do I get to the Naschmarkt?", "type": "transaction"},
+      {"de": "Welche Linie fährt dorthin?", "en": "Which line goes there?", "type": "transaction"},
+      {"de": "Wie viele Stationen sind es?", "en": "How many stops is it?", "type": "transaction"},
+      {"de": "Ich möchte lieber zu Fuß gehen.", "en": "I'd prefer to walk.", "type": "preference"},
+      {"de": "Wo kaufe ich eine Fahrkarte?", "en": "Where do I buy a ticket?", "type": "transaction"},
+      {"de": "Ist es weit von hier?", "en": "Is it far from here?", "type": "transaction"}
+    ]
+  },
+  "Frau Novak": {
+    "trigger_words": ["pharmacy", "Apotheke", "Novak", "medicine"],
+    "default_scenario": "pharmacy_medicine",
+    "recovery_phrase": "Entschuldigung — wie sagt man das auf Deutsch?",
+    "scaffold_phrases": [
+      {"de": "Ich habe Kopfschmerzen.", "en": "I have a headache.", "type": "transaction"},
+      {"de": "Haben Sie etwas gegen Husten?", "en": "Do you have something for a cough?", "type": "transaction"},
+      {"de": "Ich hätte gerne etwas gegen Magenschmerzen.", "en": "I'd like something for a stomach ache.", "type": "transaction"},
+      {"de": "Ich möchte lieber etwas ohne Rezept.", "en": "I'd prefer something without a prescription.", "type": "preference"},
+      {"de": "Wie oft soll ich das nehmen?", "en": "How often should I take this?", "type": "transaction"},
+      {"de": "Meine Frau ist allergisch gegen Penicillin.", "en": "My wife is allergic to penicillin.", "type": "transaction"}
+    ]
+  },
+  "Klaus": {
+    "trigger_words": ["restaurant", "Klaus", "dinner", "reservation"],
+    "default_scenario": "restaurant_reservation",
+    "recovery_phrase": "Entschuldigung — einen Moment bitte.",
+    "scaffold_phrases": [
+      {"de": "Haben Sie einen Tisch für zwei Personen?", "en": "Do you have a table for two?", "type": "transaction"},
+      {"de": "Ich hätte gerne das Tagesmenu.", "en": "I'd like the daily menu.", "type": "transaction"},
+      {"de": "Was empfehlen Sie als Hauptspeise?", "en": "What do you recommend as a main course?", "type": "preference"},
+      {"de": "Wir möchten lieber draußen sitzen.", "en": "We'd prefer to sit outside.", "type": "preference"},
+      {"de": "Könnten Sie bitte die Speisekarte bringen?", "en": "Could you bring the menu please?", "type": "transaction"},
+      {"de": "Die Rechnung, bitte — zusammen.", "en": "The bill please — together.", "type": "transaction"}
+    ]
+  },
+  "Frau Berger": {
+    "trigger_words": ["bakery", "Bäckerei", "Berger", "bread"],
+    "default_scenario": "bakery_order",
+    "recovery_phrase": "Einen Moment — ich überlege noch.",
+    "scaffold_phrases": [
+      {"de": "Ich hätte gerne zwei Kipferl, bitte.", "en": "I'd like two croissants, please.", "type": "transaction"},
+      {"de": "Was ist frisch heute?", "en": "What is fresh today?", "type": "preference"},
+      {"de": "Ich möchte lieber das dunkle Brot.", "en": "I'd prefer the dark bread.", "type": "preference"},
+      {"de": "Haben Sie Nussstrudel?", "en": "Do you have nut strudel?", "type": "transaction"},
+      {"de": "Das wäre alles, danke.", "en": "That would be all, thank you.", "type": "transaction"},
+      {"de": "Könnte ich bitte eine Tüte haben?", "en": "Could I have a bag please?", "type": "transaction"}
+    ]
+  }
+}
