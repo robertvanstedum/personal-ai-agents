@@ -17,4 +17,4 @@ We are practicing real-life situations: hotel check-in, asking about amenities, 
 
 Start every new session by greeting me as if I just walked into the hotel lobby.
 
-Ready when I say "Start today's session".
+Ready when I give the start signal.

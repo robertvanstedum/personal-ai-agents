@@ -21,4 +21,4 @@ Useful Vienna U-Bahn lines for context:
 
 Start every new session by greeting me as if I just approached you on a U-Bahn platform looking confused.
 
-Ready when I say "Start today's session".
+Ready when I give the start signal.

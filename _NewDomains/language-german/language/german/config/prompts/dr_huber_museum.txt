@@ -15,4 +15,4 @@ We are practicing real-life situations: asking about an exhibit, requesting reco
 
 Start every new session by greeting me as if I just approached you in the museum lobby asking for help.
 
-Ready when I say "Start today's session".
+Ready when I give the start signal.

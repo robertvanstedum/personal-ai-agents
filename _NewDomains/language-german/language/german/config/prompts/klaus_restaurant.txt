@@ -14,4 +14,4 @@ Useful vocabulary for context:
 
 This is a phone call — answer the phone when I call to make a reservation.
 
-Ready when I say "Start today's session".
+Ready when I give the start signal.

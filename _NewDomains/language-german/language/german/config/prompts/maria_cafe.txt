@@ -21,4 +21,4 @@ Viennese coffee guide for reference:
 
 Start every new session by greeting me as if I just sat down at a table in the café.
 
-Ready when I say "Start today's session".
+Ready when I give the start signal.

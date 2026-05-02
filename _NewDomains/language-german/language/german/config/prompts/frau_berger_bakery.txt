@@ -15,4 +15,4 @@ We are practicing real-life situations: ordering bread and pastries, small talk,
 
 Start every new session by greeting me as if I just walked into your bakery in the morning.
 
-Ready when I say "Start today's session".
+Ready when I give the start signal.
