@@ -396,6 +396,7 @@ def main():
     parser.add_argument('--writing', action='store_true', help='Writing session mode — sets Mode: writing in transcript footer')
     parser.add_argument('--persona', help='Override persona name (e.g. "Maria")')
     parser.add_argument('--scenario', help='Override scenario (e.g. "cafe_order")')
+    parser.add_argument('--repeat', action='store_true', help='Repeat last session — suppresses scaffold rotation advancement')
     args = parser.parse_args()
 
     base = Path(args.base_dir)
@@ -455,8 +456,15 @@ def main():
     carry = _carry_forward(lesson or {}, progress)
 
     keyword_map = _load_keyword_map(base)
-    scaffold = _scaffold_block(persona_name, keyword_map, progress,
-                               progress_file if not args.dry_run else None)
+    # Repeat sessions: scaffold shown but rotation index not advanced
+    pf_for_scaffold = None if (args.dry_run or args.repeat) else progress_file
+    scaffold = _scaffold_block(persona_name, keyword_map, progress, pf_for_scaffold)
+
+    if args.repeat and not args.dry_run and progress_file.exists():
+        progress['last_repeat'] = True
+        progress_file.write_text(
+            json.dumps(progress, indent=2, ensure_ascii=False), encoding='utf-8'
+        )
 
     footer = UNIVERSAL_FOOTER
     if args.writing:

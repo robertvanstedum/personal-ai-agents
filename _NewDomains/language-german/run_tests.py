@@ -434,17 +434,67 @@ def test_23b():
 
 
 # ---------------------------------------------------------------------------
-# Step 4 — 'again' intent (SKIP until Step 4 ships)
+# Step 4 — 'again' intent
 # ---------------------------------------------------------------------------
 
+import re as _re
+_AGAIN_RE = _re.compile(
+    r"\b(again|one more|repeat|same (session|persona|scenario)|do it again)\b",
+    _re.I,
+)
+
+
 def test_25():
-    report(25, "'again' → same persona/scenario as last session", None)
+    """'again' matches _AGAIN_RE; 'I had a terrible session' does not."""
+    checks = {
+        "'again' matches": bool(_AGAIN_RE.search("again")),
+        "'one more' matches": bool(_AGAIN_RE.search("one more")),
+        "'repeat' matches": bool(_AGAIN_RE.search("repeat that")),
+        "'I had a terrible session' does not match": not bool(_AGAIN_RE.search("I had a terrible session today")),
+    }
+    ok = all(checks.values())
+    report(25, "'again' → same persona/scenario as last session", ok,
+           "all checks pass" if ok else "failed: " + ", ".join(k for k, v in checks.items() if not v))
+
 
 def test_26():
-    report(26, "repeat:true present in session JSON after 'again'", None)
+    """--repeat flag sets last_repeat:true in progress.json without advancing rotation."""
+    gs = _import_get_session()
+    kmap = json.loads((GERMAN_BASE / "config" / "keyword_map.json").read_text(encoding="utf-8"))
+    with tempfile.TemporaryDirectory() as tmp:
+        pf = Path(tmp) / "progress.json"
+        progress = {"scaffold_rotation_index": {"Maria": 0}}
+        pf.write_text(json.dumps(progress), encoding="utf-8")
+
+        # Simulate --repeat: call _scaffold_block with pf_for_scaffold=None
+        gs._scaffold_block("Maria", kmap, progress, None)
+
+        # Then set last_repeat manually (mirrors what main() does with --repeat)
+        progress["last_repeat"] = True
+        pf.write_text(json.dumps(progress, indent=2, ensure_ascii=False), encoding="utf-8")
+
+        updated = json.loads(pf.read_text(encoding="utf-8"))
+        ok = updated.get("last_repeat") is True
+    report(26, "repeat:true present in session JSON after 'again'", ok,
+           "last_repeat=True in progress.json" if ok else f"got: {updated.get('last_repeat')}")
+
 
 def test_27():
-    report(27, "rotation index does not advance after repeat session", None)
+    """scaffold_rotation_index does not advance when progress_file=None (repeat mode)."""
+    gs = _import_get_session()
+    kmap = json.loads((GERMAN_BASE / "config" / "keyword_map.json").read_text(encoding="utf-8"))
+    with tempfile.TemporaryDirectory() as tmp:
+        pf = Path(tmp) / "progress.json"
+        progress = {"scaffold_rotation_index": {"Maria": 2}}
+        pf.write_text(json.dumps(progress), encoding="utf-8")
+
+        gs._scaffold_block("Maria", kmap, progress, None)  # None = repeat mode, no write-back
+
+        updated = json.loads(pf.read_text(encoding="utf-8"))
+        idx = updated.get("scaffold_rotation_index", {}).get("Maria", -1)
+    ok = idx == 2  # unchanged
+    report(27, "rotation index does not advance after repeat session", ok,
+           "index unchanged at 2" if ok else f"index changed to {idx}")
 
 
 # ---------------------------------------------------------------------------

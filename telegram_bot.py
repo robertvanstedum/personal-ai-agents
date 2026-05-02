@@ -591,6 +591,12 @@ _DRILL_RE = re.compile(
 )
 
 
+_AGAIN_RE = re.compile(
+    r"\b(again|one more|repeat|same (session|persona|scenario)|do it again)\b",
+    re.I,
+)
+
+
 def _load_keyword_map_bot() -> dict:
     """Load keyword_map.json for bot routing — returns {} if missing."""
     path = GERMAN_DIR / "config" / "keyword_map.json"
@@ -622,6 +628,21 @@ def _resolve_keyword_intent(text: str, keyword_map: dict) -> tuple[str, str] | N
                 return (persona_name, data.get("default_scenario", ""))
 
     return None
+
+
+def _last_session_persona() -> str | None:
+    """Return persona name from the most recent session JSON, or None."""
+    sessions_dir = GERMAN_DIR / "sessions"
+    if not sessions_dir.exists():
+        return None
+    sessions = sorted(sessions_dir.glob("*.json"))
+    if not sessions:
+        return None
+    try:
+        data = json.loads(sessions[-1].read_text(encoding="utf-8"))
+        return data.get("persona")
+    except Exception:
+        return None
 
 
 KEYWORD_MAP = _load_keyword_map_bot()
@@ -845,6 +866,20 @@ async def _handle_german_command(update: Update, text: str):
         )
 
 
+async def _start_repeat_session(update, persona_name: str, scenario: str) -> None:
+    """Repeat last session persona/scenario — rotation index does not advance."""
+    extra = ["--persona", persona_name, "--repeat"]
+    if scenario:
+        extra += ["--scenario", scenario]
+    out, err, rc = _run(
+        [str(VENV_PYTHON), "get_german_session.py",
+         "--base-dir", "language/german/", "--dropbox", "--send"] + extra,
+        cwd=str(GERMAN_BASE)
+    )
+    if rc != 0:
+        await update.message.reply_text(f"❌ get_german_session.py failed:\n{err[:400]}")
+
+
 async def _start_keyword_session(update, persona_name: str, scenario: str) -> None:
     """Run get_german_session.py with persona/scenario override from keyword intent."""
     extra = ["--persona", persona_name]
@@ -878,6 +913,13 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await _handle_german_command(update, "!german writing")
     elif _SESSION_RE.search(text):
         await _handle_german_command(update, "!german session")
+    elif _AGAIN_RE.search(text):
+        persona = _last_session_persona()
+        if persona:
+            scenario = (KEYWORD_MAP.get(persona, {}).get("default_scenario", "") or "")
+            await _start_repeat_session(update, persona, scenario)
+        else:
+            await update.message.reply_text("⚠️ No previous session found to repeat.")
     else:
         intent = _resolve_keyword_intent(text, KEYWORD_MAP)
         if intent:
@@ -930,6 +972,13 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
         await _handle_german_command(update, "!german writing")
     elif _SESSION_RE.search(text):
         await _handle_german_command(update, "!german session")
+    elif _AGAIN_RE.search(text):
+        persona = _last_session_persona()
+        if persona:
+            scenario = (KEYWORD_MAP.get(persona, {}).get("default_scenario", "") or "")
+            await _start_repeat_session(update, persona, scenario)
+        else:
+            log_voice_note(transcription)
     else:
         intent = _resolve_keyword_intent(text, KEYWORD_MAP)
         if intent:
