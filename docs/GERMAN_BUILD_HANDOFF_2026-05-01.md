@@ -315,4 +315,75 @@ Report findings before starting Step 1. If anything conflicts with this document
 
 ---
 
+## Section 9 — Test Plan
+
+Tests live in `run_tests.py` (custom runner, not pytest). New tests use a `SKIP` status — visible in output, excluded from pass count — and are unskipped as each step ships. Existing tests 1–9 are untouched throughout.
+
+**Skip pattern:** Each new test function checks a `SKIPPED` flag at the top and calls `report(n, label, None)` (skip) instead of running. When the step ships, the flag is removed.
+
+**Test 10 scope note:** `.txt` upload tests call the content pipeline path directly (file bytes → `_handle_german_transcript`), not the Telegram handler registration. Handler registration is verified by manual smoke test when Step 1 ships.
+
+---
+
+### Tests 10–11 — Step 1: .txt File Upload
+*(Start: SKIP. Unskip after Step 1 commit.)*
+
+| # | Description |
+|---|---|
+| 10 | `.txt` content fed to pipeline → session saved, turns > 0 |
+| 11 | Content over 50KB → error message returned, session not saved |
+
+---
+
+### Tests 12–19 — Step 2: Two-Message Delivery + Scaffold
+*(Start: SKIP. Unskip after Step 2 commit.)*
+
+| # | Description |
+|---|---|
+| 12 | `get_german_session.py` returns two messages, not one |
+| 13 | Message 1 contains scaffold block (`🧱` header present) |
+| 14 | Message 2 does not contain scaffold block |
+| 15 | Message 2 does not contain carry-forward or warm-up metadata |
+| 16 | `scaffold_rotation_index` advances by 2 in `progress.json` after session |
+| 17 | `scaffold_rotation_index` resets to 0 after reaching 6 |
+| 18 | Persona missing `scaffold_phrases` → scaffold block skipped, no crash |
+| 19 | `carry_forward_phrases` from `progress.json` appears in Message 1 |
+
+---
+
+### Tests 20–23 — Step 3: NL Intent + Safety
+*(Start: SKIP. Unskip after Step 3 commit.)*
+
+| # | Description |
+|---|---|
+| 20 | "café session" → intent resolves to Maria / cafe_order |
+| 21 | "hotel" → intent resolves to Herr Fischer / hotel_checkin |
+| 22 | "I had a terrible session today" → no trigger fired (standalone word safety) |
+| 23 | Unknown intent → helpful fallback message, no crash |
+| 23b | `keyword_map.json` missing → falls back to `!german` only, no crash |
+
+---
+
+### Tests 24–26 — Step 4: 'again' Intent
+*(Start: SKIP. Unskip after Step 4 commit.)*
+
+| # | Description |
+|---|---|
+| 24 | "again" → same persona/scenario as last session |
+| 25 | `repeat: true` present in session JSON after 'again' |
+| 26 | Rotation index does not advance after repeat session |
+
+---
+
+### Test Gate Summary
+
+| After step | Tests that must be green |
+|---|---|
+| Step 1 | 1–9 pass, 10–11 unskipped and pass, 12–26 still SKIP |
+| Step 2 | 1–19 pass, 20–26 still SKIP |
+| Step 3 | 1–23 pass, 24–26 still SKIP |
+| Step 4 | 1–26 all pass |
+
+---
+
 *mini-moi German Domain — Complete Build Handoff v1.0 — 2026-05-01 — Robert van Stedum + Claude.ai + Grok*

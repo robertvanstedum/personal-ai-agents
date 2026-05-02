@@ -33,7 +33,11 @@ sys.path.insert(0, str(PIPELINE_ROOT))
 results = []
 
 
-def report(n: int, label: str, passed: bool, detail: str = ""):
+def report(n: int, label: str, passed, detail: str = ""):
+    if passed is None:
+        print(f"Test {n:2d} — {label}: SKIP")
+        results.append((n, label, None))
+        return
     status = "PASS" if passed else "FAIL"
     suffix = f" — {detail}" if detail else ""
     print(f"Test {n:2d} — {label}: {status}{suffix}")
@@ -190,11 +194,92 @@ def test_9():
 
 
 # ---------------------------------------------------------------------------
+# Step 1 — .txt file upload (SKIP until Step 1 ships)
+# ---------------------------------------------------------------------------
+
+def test_10():
+    report(10, ".txt content fed to pipeline → session saved", None)
+
+def test_11():
+    report(11, "content over 50KB → error message, session not saved", None)
+
+
+# ---------------------------------------------------------------------------
+# Step 2 — Two-message delivery + scaffold (SKIP until Step 2 ships)
+# ---------------------------------------------------------------------------
+
+def test_12():
+    report(12, "get_german_session returns two messages, not one", None)
+
+def test_13():
+    report(13, "Message 1 contains scaffold block (🧱 header present)", None)
+
+def test_14():
+    report(14, "Message 2 does not contain scaffold block", None)
+
+def test_15():
+    report(15, "Message 2 does not contain carry-forward or warm-up metadata", None)
+
+def test_16():
+    report(16, "scaffold_rotation_index advances by 2 after session", None)
+
+def test_17():
+    report(17, "scaffold_rotation_index resets to 0 after reaching 6", None)
+
+def test_18():
+    report(18, "persona missing scaffold_phrases → scaffold skipped, no crash", None)
+
+def test_19():
+    report(19, "carry_forward_phrases from progress.json appears in Message 1", None)
+
+
+# ---------------------------------------------------------------------------
+# Step 3 — NL intent + standalone word safety (SKIP until Step 3 ships)
+# ---------------------------------------------------------------------------
+
+def test_20():
+    report(20, "'café session' → intent resolves to Maria / cafe_order", None)
+
+def test_21():
+    report(21, "'hotel' → intent resolves to Herr Fischer / hotel_checkin", None)
+
+def test_22():
+    report(22, "'I had a terrible session today' → no trigger fired", None)
+
+def test_23():
+    report(23, "unknown intent → helpful fallback message, no crash", None)
+
+def test_23b():
+    report(24, "keyword_map.json missing → falls back to !german only, no crash", None)
+
+
+# ---------------------------------------------------------------------------
+# Step 4 — 'again' intent (SKIP until Step 4 ships)
+# ---------------------------------------------------------------------------
+
+def test_25():
+    report(25, "'again' → same persona/scenario as last session", None)
+
+def test_26():
+    report(26, "repeat:true present in session JSON after 'again'", None)
+
+def test_27():
+    report(27, "rotation index does not advance after repeat session", None)
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
-TESTS = {1: test_1, 2: test_2, 3: test_3, 4: test_4, 5: test_5,
-         6: test_6, 7: test_7, 8: test_8, 9: test_9}
+TESTS = {
+    1: test_1, 2: test_2, 3: test_3, 4: test_4, 5: test_5,
+    6: test_6, 7: test_7, 8: test_8, 9: test_9,
+    10: test_10, 11: test_11,
+    12: test_12, 13: test_13, 14: test_14, 15: test_15,
+    16: test_16, 17: test_17, 18: test_18, 19: test_19,
+    20: test_20, 21: test_21, 22: test_22, 23: test_23, 24: test_23b,
+    25: test_25, 26: test_26, 27: test_27,
+}
 
 
 def main():
@@ -210,9 +295,11 @@ def main():
         TESTS[n]()
 
     print()
-    passed = sum(1 for _, _, ok in results if ok)
-    total = len(results)
-    print(f"{passed}/{total} tests passed.")
+    passed = sum(1 for _, _, ok in results if ok is True)
+    skipped = sum(1 for _, _, ok in results if ok is None)
+    total = len(results) - skipped
+    skip_note = f" ({skipped} skipped)" if skipped else ""
+    print(f"{passed}/{total} tests passed.{skip_note}")
     sys.exit(0 if passed == total else 1)
 
 
