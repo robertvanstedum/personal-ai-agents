@@ -1,0 +1,29 @@
+{
+  "core": {
+    "verbs": ["können", "möchten", "haben", "sein", "nehmen", "fahren",
+              "gehen", "empfehlen", "brauchen", "zahlen"],
+    "nouns": [
+      {"de": "Schlüssel", "article": "der", "en": "key",     "scenes": ["hotel", "airbnb"]},
+      {"de": "Zimmer",    "article": "das", "en": "room",    "scenes": ["hotel"]},
+      {"de": "Rechnung",  "article": "die", "en": "bill",    "scenes": ["hotel", "restaurant", "cafe"]},
+      {"de": "Gepäck",    "article": "das", "en": "luggage", "scenes": ["hotel"]},
+      {"de": "U-Bahn",    "article": "die", "en": "subway",  "scenes": ["transit"]},
+      {"de": "Bus",       "article": "der", "en": "bus",     "scenes": ["transit"]},
+      {"de": "Museum",    "article": "das", "en": "museum",  "scenes": ["museum"]},
+      {"de": "Kaffee",    "article": "der", "en": "coffee",  "scenes": ["cafe"]},
+      {"de": "Nacht",     "article": "die", "en": "night",   "scenes": ["hotel"]},
+      {"de": "Nummer",    "article": "die", "en": "number",  "scenes": ["hotel", "general"]}
+    ],
+    "patterns": [
+      {"label": "der die das — nominative/accusative/dative", "type": "article_case_grid"},
+      {"label": "Viennese café orders — nominalized adjectives", "type": "cafe_adjectives"}
+    ]
+  },
+  "session_fed": {
+    "pending": [],
+    "approved": []
+  },
+  "on_demand": {
+    "log": []
+  }
+}

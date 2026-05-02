@@ -498,6 +498,100 @@ def test_27():
 
 
 # ---------------------------------------------------------------------------
+# Steps 1-2 — Georg persona + persona_answers block + scaffold_delivered bridge
+# ---------------------------------------------------------------------------
+
+def test_28():
+    """Georg trigger words resolve correctly."""
+    kmap = json.loads((GERMAN_BASE / "config" / "keyword_map.json").read_text(encoding="utf-8"))
+    checks = {
+        "'georg session' → Georg": _resolve_keyword_intent("german georg session", kmap) == ("Georg", "local_smalltalk"),
+        "'heuriger session' → Georg": _resolve_keyword_intent("german heuriger visit", kmap) == ("Georg", "local_smalltalk"),
+        "'casual session' → Georg": _resolve_keyword_intent("casual german session", kmap) == ("Georg", "local_smalltalk"),
+        "'chat session' → Georg": _resolve_keyword_intent("german chat session", kmap) == ("Georg", "local_smalltalk"),
+    }
+    ok = all(checks.values())
+    report(28, "Georg trigger words resolve to Georg / local_smalltalk", ok,
+           "all checks pass" if ok else "failed: " + ", ".join(k for k, v in checks.items() if not v))
+
+
+def test_29():
+    """Georg briefing contains 💬 Ready answers block; non-Georg briefing does not."""
+    gs = _import_get_session()
+    kmap = json.loads((GERMAN_BASE / "config" / "keyword_map.json").read_text(encoding="utf-8"))
+    with tempfile.TemporaryDirectory() as tmp:
+        pf = Path(tmp) / "progress.json"
+        progress = {}
+        pf.write_text(json.dumps(progress), encoding="utf-8")
+
+        scaffold_georg = gs._scaffold_block("Georg", kmap, progress, None)
+        answers_georg = gs._persona_answers_block("Georg", kmap)
+        briefing_georg = gs._build_briefing(
+            "2026-05-02", "Georg", "Friendly local", 1, "local_smalltalk",
+            "", "", "None yet", scaffold_georg, persona_answers=answers_georg,
+        )
+
+        scaffold_maria = gs._scaffold_block("Maria", kmap, progress, None)
+        answers_maria = gs._persona_answers_block("Maria", kmap)
+        briefing_maria = gs._build_briefing(
+            "2026-05-02", "Maria", "Café server", 1, "cafe_order",
+            "", "", "None yet", scaffold_maria, persona_answers=answers_maria,
+        )
+
+    georg_has_answers = "💬 Ready answers:" in briefing_georg
+    georg_has_qa = "Woher kommen Sie?" in briefing_georg
+    maria_no_answers = "💬 Ready answers:" not in briefing_maria
+
+    ok = georg_has_answers and georg_has_qa and maria_no_answers
+    detail = (
+        "Georg has answers block and Q→A" if ok
+        else f"georg_has_answers={georg_has_answers} georg_has_qa={georg_has_qa} maria_no_answers={maria_no_answers}"
+    )
+    report(29, "Georg briefing has 💬 Ready answers block; Maria briefing does not", ok, detail)
+
+
+def test_30():
+    """last_scaffold_delivered written to progress.json after _scaffold_block."""
+    gs = _import_get_session()
+    kmap = json.loads((GERMAN_BASE / "config" / "keyword_map.json").read_text(encoding="utf-8"))
+    with tempfile.TemporaryDirectory() as tmp:
+        pf = Path(tmp) / "progress.json"
+        progress = {"scaffold_rotation_index": {"Maria": 0}}
+        pf.write_text(json.dumps(progress), encoding="utf-8")
+
+        gs._scaffold_block("Maria", kmap, progress, pf)
+
+        updated = json.loads(pf.read_text(encoding="utf-8"))
+        delivered = updated.get("last_scaffold_delivered", [])
+
+    ok = isinstance(delivered, list) and len(delivered) == 3 and all(isinstance(s, str) for s in delivered)
+    report(30, "last_scaffold_delivered written to progress.json (3 strings)", ok,
+           f"got {delivered!r}" if not ok else f"3 strings: {delivered}")
+
+
+def test_31():
+    """drill_pool.json exists and has correct structure."""
+    pool_path = GERMAN_BASE / "config" / "drill_pool.json"
+    ok_exists = pool_path.exists()
+    if not ok_exists:
+        report(31, "drill_pool.json exists with correct structure", False, "file not found")
+        return
+    pool = json.loads(pool_path.read_text(encoding="utf-8"))
+    checks = {
+        "has 'core'": "core" in pool,
+        "core.verbs is list": isinstance(pool.get("core", {}).get("verbs"), list),
+        "core.nouns is list": isinstance(pool.get("core", {}).get("nouns"), list),
+        "nouns have article field": all("article" in n for n in pool.get("core", {}).get("nouns", [])),
+        "has session_fed": "session_fed" in pool,
+        "has on_demand.log": isinstance(pool.get("on_demand", {}).get("log"), list),
+        "mixed genders in nouns": len({n["article"] for n in pool.get("core", {}).get("nouns", [])}) == 3,
+    }
+    ok = all(checks.values())
+    report(31, "drill_pool.json exists with correct structure", ok,
+           "all checks pass" if ok else "failed: " + ", ".join(k for k, v in checks.items() if not v))
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -509,6 +603,7 @@ TESTS = {
     16: test_16, 17: test_17, 18: test_18, 19: test_19,
     20: test_20, 21: test_21, 22: test_22, 23: test_23, 24: test_23b,
     25: test_25, 26: test_26, 27: test_27,
+    28: test_28, 29: test_29, 30: test_30, 31: test_31,
 }
 
 
