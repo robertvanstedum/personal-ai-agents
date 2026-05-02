@@ -579,8 +579,9 @@ _SESSION_RE = re.compile(
     r"(pull today.?s german session|what.?s my german session|"
     r"give me today.?s german prompt|german session please|"
     r"german session today|today.?s german session|"
-    r"german session|next session|next lesson|"
-    r"start.{0,20}german.{0,20}session|let.{0,10}s.{0,10}german)",
+    r"german session|session german|next session|next lesson|"
+    r"start.{0,30}german|start.{0,30}session.{0,30}german|"
+    r"let.{0,10}s.{0,10}german)",
     re.I,
 )
 _DRILL_RE = re.compile(
