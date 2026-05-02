@@ -1,6 +1,6 @@
 {
   "Maria": {
-    "trigger_words": ["café", "cafe", "coffee", "Kaffee", "Maria"],
+    "trigger_words": ["café", "cafe", "coffee", "kaffee", "Kaffee", "cake", "strudel", "Maria"],
     "default_scenario": "cafe_order",
     "recovery_phrase": "Einen Moment bitte — ich überlege kurz.",
     "scaffold_phrases": [
@@ -13,7 +13,7 @@
     ]
   },
   "Herr Fischer": {
-    "trigger_words": ["hotel", "Fischer", "check in", "checkout"],
+    "trigger_words": ["hotel", "room", "checkout", "check out", "checkin", "check in", "receptionist", "Fischer"],
     "default_scenario": "hotel_checkin",
     "recovery_phrase": "Entschuldigung — könnten Sie das bitte wiederholen?",
     "scaffold_phrases": [
@@ -26,7 +26,7 @@
     ]
   },
   "Anna": {
-    "trigger_words": ["Airbnb", "apartment", "Anna", "keys"],
+    "trigger_words": ["airbnb", "Airbnb", "apartment", "flat", "keys", "Anna"],
     "default_scenario": "apartment_handoff",
     "recovery_phrase": "Wie sagt man das auf Deutsch — einen Moment.",
     "scaffold_phrases": [
@@ -39,7 +39,7 @@
     ]
   },
   "Dr. Huber": {
-    "trigger_words": ["museum", "Huber", "art", "exhibition"],
+    "trigger_words": ["museum", "painting", "exhibit", "exhibition", "art", "ticket", "Huber"],
     "default_scenario": "museum_navigation",
     "recovery_phrase": "Entschuldigung — ich suche die richtigen Worte.",
     "scaffold_phrases": [
@@ -52,7 +52,7 @@
     ]
   },
   "Stefan": {
-    "trigger_words": ["U-Bahn", "subway", "Stefan", "directions"],
+    "trigger_words": ["U-Bahn", "ubahn", "subway", "metro", "directions", "train", "Stefan"],
     "default_scenario": "ubahn_directions",
     "recovery_phrase": "Einen Moment — ich verstehe, aber ich suche das Wort.",
     "scaffold_phrases": [
@@ -65,7 +65,7 @@
     ]
   },
   "Frau Novak": {
-    "trigger_words": ["pharmacy", "Apotheke", "Novak", "medicine"],
+    "trigger_words": ["pharmacy", "Apotheke", "apotheke", "medicine", "sick", "headache", "Novak"],
     "default_scenario": "pharmacy_medicine",
     "recovery_phrase": "Entschuldigung — wie sagt man das auf Deutsch?",
     "scaffold_phrases": [
@@ -78,7 +78,7 @@
     ]
   },
   "Klaus": {
-    "trigger_words": ["restaurant", "Klaus", "dinner", "reservation"],
+    "trigger_words": ["restaurant", "dinner", "reservation", "lunch", "Klaus"],
     "default_scenario": "restaurant_reservation",
     "recovery_phrase": "Entschuldigung — einen Moment bitte.",
     "scaffold_phrases": [
@@ -91,7 +91,7 @@
     ]
   },
   "Frau Berger": {
-    "trigger_words": ["bakery", "Bäckerei", "Berger", "bread"],
+    "trigger_words": ["bakery", "Bäckerei", "bread", "pastry", "croissant", "Berger"],
     "default_scenario": "bakery_order",
     "recovery_phrase": "Einen Moment — ich überlege noch.",
     "scaffold_phrases": [
