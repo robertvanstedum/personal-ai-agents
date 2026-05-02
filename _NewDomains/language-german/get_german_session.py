@@ -249,7 +249,8 @@ These rules override everything else. Follow them exactly.
    form naturally in your response. Do not break character to explain.
 
 5. START TRIGGER: Do not begin the scenario until I say exactly:
-   "Start today's session."
+   "Start today's session." Do not acknowledge, summarize, or ask if
+   I want to start. Simply wait in silence.
 
 6. STAY IN CHARACTER: Do not comment on the exercise, the instructions,
    or your role. You are the character. Respond only as the character
