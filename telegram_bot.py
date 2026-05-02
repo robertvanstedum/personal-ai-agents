@@ -870,6 +870,44 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
         log_voice_note(transcription)
 
 
+MAX_UPLOAD_BYTES = 50 * 1024  # 50KB
+
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle .txt file uploads — read content, enforce 50KB limit, feed transcript pipeline."""
+    if not update.message or not update.message.document:
+        return
+    if update.message.chat_id != ROBERT_CHAT_ID:
+        return
+
+    doc = update.message.document
+    if doc.file_size and doc.file_size > MAX_UPLOAD_BYTES:
+        await update.message.reply_text(
+            "⚠️ File too large (max 50KB). Paste the text directly instead."
+        )
+        return
+
+    try:
+        tg_file = await context.bot.get_file(doc.file_id)
+        raw_bytes = bytes(await tg_file.download_as_bytearray())
+    except Exception as e:
+        await update.message.reply_text(f"❌ Could not download file: {e}")
+        return
+
+    if len(raw_bytes) > MAX_UPLOAD_BYTES:
+        await update.message.reply_text(
+            "⚠️ File too large (max 50KB). Paste the text directly instead."
+        )
+        return
+
+    try:
+        text = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        await update.message.reply_text("⚠️ File must be UTF-8 encoded plain text.")
+        return
+
+    await _handle_german_transcript(update, text)
+
+
 def run_bot_mode():
     """Run persistent bot for button callbacks and commands"""
     token = get_polling_token()
@@ -906,6 +944,7 @@ def run_bot_mode():
     app.add_handler(CommandHandler("briefing", cmd_briefing))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice_polling))
+    app.add_handler(MessageHandler(filters.Document.TXT, handle_document))
 
     async def error_handler(update, context):
         """Suppress noisy network errors — log one line instead of full traceback."""
