@@ -9,5 +9,15 @@
   "reviewer_model": "claude-sonnet-4-6",
   "sessions_dir": "sessions",
   "anki_dir": "anki",
-  "lessons_dir": "lessons"
+  "lessons_dir": "lessons",
+  "drill": {
+    "promotion_threshold": 2,
+    "root_match_min_length": 6,
+    "fast_mode_default_case": "accusative",
+    "drill_sessions_dir": "drill_sessions/"
+  },
+  "scaffold": {
+    "phrases_per_session": 2,
+    "always_include_recovery": true
+  }
 }

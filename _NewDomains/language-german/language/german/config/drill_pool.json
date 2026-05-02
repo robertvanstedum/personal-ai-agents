@@ -1,7 +1,117 @@
 {
   "core": {
-    "verbs": ["können", "möchten", "haben", "sein", "nehmen", "fahren",
-              "gehen", "empfehlen", "brauchen", "zahlen"],
+    "verbs": [
+      {
+        "verb": "können",
+        "english": "can / to be able to",
+        "priority": "HIGH",
+        "scenes": ["hotel", "cafe", "pharmacy", "directions"],
+        "conjugations": {
+          "ich": "kann",    "wir": "können",
+          "du": "kannst",   "ihr": "könnt",
+          "er": "kann",     "sie": "können"
+        }
+      },
+      {
+        "verb": "möchten",
+        "english": "would like to",
+        "priority": "HIGH",
+        "scenes": ["cafe", "restaurant", "hotel", "bakery"],
+        "conjugations": {
+          "ich": "möchte",    "wir": "möchten",
+          "du": "möchtest",   "ihr": "möchtet",
+          "er": "möchte",     "sie": "möchten"
+        }
+      },
+      {
+        "verb": "haben",
+        "english": "to have",
+        "priority": "HIGH",
+        "scenes": ["general", "hotel", "pharmacy"],
+        "conjugations": {
+          "ich": "habe",    "wir": "haben",
+          "du": "hast",     "ihr": "habt",
+          "er": "hat",      "sie": "haben"
+        }
+      },
+      {
+        "verb": "sein",
+        "english": "to be",
+        "priority": "HIGH",
+        "scenes": ["general"],
+        "conjugations": {
+          "ich": "bin",     "wir": "sind",
+          "du": "bist",     "ihr": "seid",
+          "er": "ist",      "sie": "sind"
+        }
+      },
+      {
+        "verb": "nehmen",
+        "english": "to take",
+        "priority": "MEDIUM",
+        "scenes": ["cafe", "restaurant", "transit"],
+        "conjugations": {
+          "ich": "nehme",    "wir": "nehmen",
+          "du": "nimmst",    "ihr": "nehmt",
+          "er": "nimmt",     "sie": "nehmen"
+        }
+      },
+      {
+        "verb": "fahren",
+        "english": "to drive / to travel",
+        "priority": "MEDIUM",
+        "scenes": ["transit", "directions"],
+        "conjugations": {
+          "ich": "fahre",    "wir": "fahren",
+          "du": "fährst",    "ihr": "fahrt",
+          "er": "fährt",     "sie": "fahren"
+        }
+      },
+      {
+        "verb": "gehen",
+        "english": "to go / to walk",
+        "priority": "MEDIUM",
+        "scenes": ["directions", "general"],
+        "conjugations": {
+          "ich": "gehe",    "wir": "gehen",
+          "du": "gehst",    "ihr": "geht",
+          "er": "geht",     "sie": "gehen"
+        }
+      },
+      {
+        "verb": "empfehlen",
+        "english": "to recommend",
+        "priority": "HIGH",
+        "scenes": ["cafe", "restaurant", "museum", "hotel"],
+        "conjugations": {
+          "ich": "empfehle",     "wir": "empfehlen",
+          "du": "empfiehlst",    "ihr": "empfehlt",
+          "er": "empfiehlt",     "sie": "empfehlen"
+        }
+      },
+      {
+        "verb": "brauchen",
+        "english": "to need",
+        "priority": "MEDIUM",
+        "scenes": ["hotel", "pharmacy", "general"],
+        "conjugations": {
+          "ich": "brauche",    "wir": "brauchen",
+          "du": "brauchst",    "ihr": "braucht",
+          "er": "braucht",     "sie": "brauchen"
+        }
+      },
+      {
+        "verb": "zahlen",
+        "english": "to pay",
+        "priority": "HIGH",
+        "scenes": ["cafe", "restaurant", "hotel", "bakery"],
+        "conjugations": {
+          "ich": "zahle",    "wir": "zahlen",
+          "du": "zahlst",    "ihr": "zahlt",
+          "er": "zahlt",     "sie": "zahlen"
+        }
+      }
+    ],
     "nouns": [
       {"de": "Schlüssel", "article": "der", "en": "key",     "scenes": ["hotel", "airbnb"]},
       {"de": "Zimmer",    "article": "das", "en": "room",    "scenes": ["hotel"]},
