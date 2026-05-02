@@ -7,13 +7,13 @@ Usage:
   python tools/export_pdf.py --bundle curator
   python tools/export_pdf.py --bundle german
   python tools/export_pdf.py --list-bundles
-  python tools/export_pdf.py --test
 """
 import argparse
 import sys
 from pathlib import Path
 
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
@@ -49,45 +49,25 @@ def _find_repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def _output_dir() -> Path:
-    """Resolve default output directory.
-
-    Priority: tools_config.json export_pdf_output_dir → script's own directory.
-    Creates the directory if it doesn't exist.
-    """
-    import json
-    config_path = Path(__file__).parent / "tools_config.json"
-    if config_path.exists():
-        try:
-            cfg = json.loads(config_path.read_text())
-            raw = cfg.get("export_pdf_output_dir", "")
-            if raw:
-                d = Path(raw).expanduser().resolve()
-                d.mkdir(parents=True, exist_ok=True)
-                return d
-        except Exception:
-            pass
-    # Fallback: same directory as this script
-    d = Path(__file__).parent.resolve()
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
 def _styles() -> dict:
     base = getSampleStyleSheet()
     # GitHub-flavored styling: dark charcoal text, light gray code bg, Helvetica sans-serif
+    body_font = "Helvetica"
     text_color = colors.HexColor("#1f2328")
     muted_color = colors.HexColor("#636c76")
     code_bg = colors.HexColor("#f6f8fa")
     border_color = colors.HexColor("#d0d7de")
 
     body = ParagraphStyle("Body", parent=base["Normal"], fontSize=10,
-                          fontName="Helvetica", spaceAfter=6, leading=15,
+                          fontName=body_font, spaceAfter=6, leading=15,
                           textColor=text_color)
     return {
         "h1": ParagraphStyle("H1", parent=base["Heading1"], fontSize=18,
                              fontName="Helvetica-Bold", spaceAfter=10,
-                             spaceBefore=4, textColor=text_color),
+                             spaceBefore=4, textColor=text_color,
+                             borderPadding=(0, 0, 6, 0),
+                             borderColor=border_color, borderWidth=0,
+                             underlineWidth=0),
         "h2": ParagraphStyle("H2", parent=base["Heading2"], fontSize=14,
                              fontName="Helvetica-Bold", spaceAfter=8,
                              spaceBefore=18, textColor=text_color),
@@ -105,7 +85,10 @@ def _styles() -> dict:
         "meta": ParagraphStyle("Meta", parent=body, fontSize=9,
                                textColor=muted_color),
         "bq": ParagraphStyle("BQ", parent=body, fontSize=10, leftIndent=16,
-                             textColor=muted_color),
+                             textColor=muted_color,
+                             borderPadding=(0, 0, 0, 8),
+                             borderColor=border_color, borderWidth=3,
+                             borderLeftPadding=8),
     }
 
 
@@ -221,68 +204,6 @@ def render_md_to_pdf(src: Path, out: Path, title: str = "") -> None:
     doc.build(story)
 
 
-def _run_tests() -> None:
-    repo_root = _find_repo_root()
-    out_dir = _output_dir()
-    test_out = out_dir / "export_pdf_test.pdf"
-    results = []
-
-    # Test 1: Bundle resolution — at least one bundle has files that exist on disk
-    try:
-        found = False
-        for bundle_name in ("curator", "german"):
-            entries = BUNDLES.get(bundle_name, [])
-            if any((repo_root / src_rel).exists() for src_rel, _ in entries):
-                found = True
-                break
-        results.append(("Test 1 — Bundle resolution", found, None))
-    except Exception as e:
-        results.append(("Test 1 — Bundle resolution", False, str(e)))
-
-    # Test 2: Single file conversion — README.md converts without error
-    readme = repo_root / "README.md"
-    converted = False
-    try:
-        if not readme.exists():
-            raise FileNotFoundError(f"README.md not found at {readme}")
-        render_md_to_pdf(readme, test_out)
-        converted = True
-        results.append(("Test 2 — Single file conversion", True, None))
-    except Exception as e:
-        results.append(("Test 2 — Single file conversion", False, str(e)))
-
-    # Test 3: Output validation — file exists in output dir and is non-zero bytes
-    try:
-        if not converted:
-            raise RuntimeError("Skipped — conversion failed in Test 2")
-        size = test_out.stat().st_size if test_out.exists() else 0
-        ok = test_out.exists() and size > 0
-        results.append(("Test 3 — Output non-zero bytes", ok,
-                        None if ok else f"size={size}, exists={test_out.exists()}"))
-    except Exception as e:
-        results.append(("Test 3 — Output non-zero bytes", False, str(e)))
-    finally:
-        if test_out.exists():
-            test_out.unlink()
-
-    print()
-    all_pass = True
-    for label, passed, detail in results:
-        status = "PASS" if passed else "FAIL"
-        print(f"{label + ':':<42} {status}")
-        if not passed and detail:
-            print(f"         {detail}")
-        if not passed:
-            all_pass = False
-
-    print()
-    if all_pass:
-        print("All tests passed.")
-    else:
-        print("One or more tests FAILED.")
-        sys.exit(1)
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Export markdown files to PDF.",
@@ -290,36 +211,30 @@ def main() -> None:
         epilog=__doc__,
     )
     parser.add_argument("file", nargs="?", help="Markdown file to export")
-    parser.add_argument("--out", help="Output PDF path (overrides configured output dir)")
+    parser.add_argument("--out", help="Output PDF path (default: ~/Downloads/<name>.pdf)")
     parser.add_argument("--bundle", choices=list(BUNDLES.keys()),
                         help="Export a predefined bundle of documents")
     parser.add_argument("--list-bundles", action="store_true",
                         help="List available bundles and their contents")
-    parser.add_argument("--test", action="store_true",
-                        help="Run self-tests and report results")
     args = parser.parse_args()
-
-    if args.test:
-        _run_tests()
-        return
-
-    out_dir = _output_dir()
-    repo_root = _find_repo_root()
 
     if args.list_bundles:
         for name, entries in BUNDLES.items():
             print(f"\n  {name}:")
             for src_rel, out_name in entries:
-                print(f"    {src_rel}  →  {out_dir}/{out_name}")
+                print(f"    {src_rel}  →  ~/Downloads/{out_name}")
         print()
         return
+
+    downloads = Path.home() / "Downloads"
+    repo_root = _find_repo_root()
 
     if args.bundle:
         entries = BUNDLES[args.bundle]
         print(f"\nExporting bundle '{args.bundle}' ({len(entries)} files)…")
         for src_rel, out_name in entries:
             src = repo_root / src_rel
-            out = out_dir / out_name
+            out = downloads / out_name
             if not src.exists():
                 print(f"  ⚠️  Not found, skipping: {src_rel}")
                 continue
@@ -342,7 +257,7 @@ def main() -> None:
     if args.out:
         out = Path(args.out).expanduser()
     else:
-        out = out_dir / (src.stem + ".pdf")
+        out = downloads / (src.stem + ".pdf")
 
     render_md_to_pdf(src, out)
     print(f"✅ PDF saved: {out}")
