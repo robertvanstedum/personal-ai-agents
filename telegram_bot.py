@@ -591,6 +591,42 @@ _DRILL_RE = re.compile(
 )
 
 
+def _load_keyword_map_bot() -> dict:
+    """Load keyword_map.json for bot routing — returns {} if missing."""
+    path = GERMAN_DIR / "config" / "keyword_map.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except Exception:
+        return {}
+
+
+def _resolve_keyword_intent(text: str, keyword_map: dict) -> tuple[str, str] | None:
+    """
+    Match trigger words from keyword_map against text.
+    Returns (persona_name, scenario) or None.
+
+    Safety rule: a lone trigger word with no surrounding context does not fire.
+    The message must have >=2 words OR contain 'german'/'session' alongside the keyword.
+    """
+    if not keyword_map:
+        return None
+
+    words = text.lower().split()
+    if len(words) < 2:
+        return None
+
+    for persona_name, data in keyword_map.items():
+        for trigger in data.get("trigger_words", []):
+            trigger_lower = trigger.lower()
+            if trigger_lower in text.lower():
+                return (persona_name, data.get("default_scenario", ""))
+
+    return None
+
+
+KEYWORD_MAP = _load_keyword_map_bot()
+
+
 def _run(cmd, **kwargs):
     """Run a subprocess, return (stdout, stderr, returncode)."""
     result = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
@@ -809,6 +845,20 @@ async def _handle_german_command(update: Update, text: str):
         )
 
 
+async def _start_keyword_session(update, persona_name: str, scenario: str) -> None:
+    """Run get_german_session.py with persona/scenario override from keyword intent."""
+    extra = ["--persona", persona_name]
+    if scenario:
+        extra += ["--scenario", scenario]
+    out, err, rc = _run(
+        [str(VENV_PYTHON), "get_german_session.py",
+         "--base-dir", "language/german/", "--dropbox", "--send"] + extra,
+        cwd=str(GERMAN_BASE)
+    )
+    if rc != 0:
+        await update.message.reply_text(f"❌ get_german_session.py failed:\n{err[:400]}")
+
+
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Route plain text messages — German transcript, !german commands, fallback."""
     if not update.message or not update.message.text:
@@ -829,9 +879,22 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif _SESSION_RE.search(text):
         await _handle_german_command(update, "!german session")
     else:
-        await update.message.reply_text(
-            "Got it — I hear you. Send !german status to test the pipeline."
-        )
+        intent = _resolve_keyword_intent(text, KEYWORD_MAP)
+        if intent:
+            persona_name, scenario = intent
+            await _start_keyword_session(update, persona_name, scenario)
+        elif KEYWORD_MAP:
+            personas_list = ", ".join(KEYWORD_MAP.keys())
+            await update.message.reply_text(
+                f"Not sure what you mean. Try:\n"
+                f"  • 'german session' — next scheduled lesson\n"
+                f"  • 'german café session' — jump to a specific persona\n"
+                f"Available: {personas_list}"
+            )
+        else:
+            await update.message.reply_text(
+                "Got it — I hear you. Send !german status to test the pipeline."
+            )
 
 
 async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -868,7 +931,12 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
     elif _SESSION_RE.search(text):
         await _handle_german_command(update, "!german session")
     else:
-        log_voice_note(transcription)
+        intent = _resolve_keyword_intent(text, KEYWORD_MAP)
+        if intent:
+            persona_name, scenario = intent
+            await _start_keyword_session(update, persona_name, scenario)
+        else:
+            log_voice_note(transcription)
 
 
 MAX_UPLOAD_BYTES = 50 * 1024  # 50KB

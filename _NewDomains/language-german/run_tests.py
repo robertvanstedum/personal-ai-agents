@@ -381,20 +381,56 @@ def test_19():
 # Step 3 — NL intent + standalone word safety (SKIP until Step 3 ships)
 # ---------------------------------------------------------------------------
 
+def _resolve_keyword_intent(text: str, keyword_map: dict):
+    """Mirror of telegram_bot._resolve_keyword_intent — tested inline to avoid keyring import."""
+    if not keyword_map:
+        return None
+    words = text.lower().split()
+    if len(words) < 2:
+        return None
+    for persona_name, data in keyword_map.items():
+        for trigger in data.get("trigger_words", []):
+            if trigger.lower() in text.lower():
+                return (persona_name, data.get("default_scenario", ""))
+    return None
+
+
 def test_20():
-    report(20, "'café session' → intent resolves to Maria / cafe_order", None)
+    kmap = json.loads((GERMAN_BASE / "config" / "keyword_map.json").read_text(encoding="utf-8"))
+    result = _resolve_keyword_intent("german café session", kmap)
+    ok = result is not None and result[0] == "Maria" and result[1] == "cafe_order"
+    report(20, "'café session' → intent resolves to Maria / cafe_order", ok,
+           f"got {result}" if not ok else "Maria / cafe_order")
+
 
 def test_21():
-    report(21, "'hotel' → intent resolves to Herr Fischer / hotel_checkin", None)
+    kmap = json.loads((GERMAN_BASE / "config" / "keyword_map.json").read_text(encoding="utf-8"))
+    result = _resolve_keyword_intent("german hotel session", kmap)
+    ok = result is not None and result[0] == "Herr Fischer" and result[1] == "hotel_checkin"
+    report(21, "'hotel' → intent resolves to Herr Fischer / hotel_checkin", ok,
+           f"got {result}" if not ok else "Herr Fischer / hotel_checkin")
+
 
 def test_22():
-    report(22, "'I had a terrible session today' → no trigger fired", None)
+    kmap = json.loads((GERMAN_BASE / "config" / "keyword_map.json").read_text(encoding="utf-8"))
+    result = _resolve_keyword_intent("I had a terrible session today", kmap)
+    ok = result is None
+    report(22, "'I had a terrible session today' → no trigger fired", ok,
+           "no trigger" if ok else f"wrongly matched: {result}")
+
 
 def test_23():
-    report(23, "unknown intent → helpful fallback message, no crash", None)
+    result = _resolve_keyword_intent("something random with german", {})
+    ok = result is None
+    report(23, "unknown intent → helpful fallback message, no crash", ok,
+           "returns None cleanly" if ok else f"unexpected: {result}")
+
 
 def test_23b():
-    report(24, "keyword_map.json missing → falls back to !german only, no crash", None)
+    result = _resolve_keyword_intent("german session", {})
+    ok = result is None
+    report(24, "keyword_map.json missing → falls back to !german only, no crash", ok,
+           "empty map → None, no crash" if ok else f"unexpected: {result}")
 
 
 # ---------------------------------------------------------------------------

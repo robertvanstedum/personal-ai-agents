@@ -394,6 +394,8 @@ def main():
     parser.add_argument('--drill', type=int, metavar='N', help='Generate N drill session prompts (one per session)')
     parser.add_argument('--drill-session', type=int, metavar='K', help='Generate prompt for drill session K only (requires --drill N)')
     parser.add_argument('--writing', action='store_true', help='Writing session mode — sets Mode: writing in transcript footer')
+    parser.add_argument('--persona', help='Override persona name (e.g. "Maria")')
+    parser.add_argument('--scenario', help='Override scenario (e.g. "cafe_order")')
     args = parser.parse_args()
 
     base = Path(args.base_dir)
@@ -432,6 +434,12 @@ def main():
         scenario = lesson.get('scenario', 'bakery_order')
         warm_up = lesson.get('warm_up', '')
         speaking_prompt = lesson.get('speaking_prompt', '')
+
+    if args.persona:
+        persona_name = args.persona
+        scenario = args.scenario or scenario
+        warm_up = ''
+        speaking_prompt = ''
 
     persona_obj = next((p for p in personas if p['name'] == persona_name), {})
     persona_role = persona_obj.get('role', 'Unknown')
