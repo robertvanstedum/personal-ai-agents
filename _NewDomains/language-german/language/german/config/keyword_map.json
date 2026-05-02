@@ -102,5 +102,26 @@
       {"de": "Das wäre alles, danke.", "en": "That would be all, thank you.", "type": "transaction"},
       {"de": "Könnte ich bitte eine Tüte haben?", "en": "Could I have a bag please?", "type": "transaction"}
     ]
+  },
+  "Georg": {
+    "trigger_words": ["local", "georg", "Georg", "chat", "small talk", "smalltalk", "conversation", "heuriger", "würstelstand", "wurstelstand", "casual"],
+    "default_scenario": "local_smalltalk",
+    "recovery_phrase": "Entschuldigung — ich verstehe, aber ich suche die Antwort auf Deutsch.",
+    "scaffold_phrases": [
+      {"de": "Ich komme aus Chicago — kennen Sie die Stadt?", "en": "I'm from Chicago — do you know the city?", "type": "transaction"},
+      {"de": "Ich möchte lieber etwas sehen, was Touristen nicht kennen.", "en": "I'd prefer to see something tourists don't know.", "type": "preference"},
+      {"de": "Was empfehlen Sie für einen Samstagmorgen?", "en": "What do you recommend for a Saturday morning?", "type": "preference"},
+      {"de": "Wir sind länger in Wien — nicht nur ein Tag.", "en": "We're in Vienna for a while — not just one day.", "type": "transaction"},
+      {"de": "Ich lerne Deutsch — bitte sprechen Sie ruhig normal.", "en": "I'm learning German — please just speak normally.", "type": "transaction"},
+      {"de": "Das klingt wunderbar — wo genau ist das?", "en": "That sounds wonderful — where exactly is that?", "type": "preference"}
+    ],
+    "carry_forward_phrases": [
+      {"q": "Woher kommen Sie?", "a": "Ich komme aus Chicago — aus den USA."},
+      {"q": "Was machen Sie beruflich?", "a": "Ich bin Produktmanager — Technologie und Telekommunikation."},
+      {"q": "Wie lange bleiben Sie in Wien?", "a": "Wir bleiben etwa eine Woche."},
+      {"q": "Ist das Ihr erster Besuch?", "a": "Nein, ich war schon einmal hier — aber das ist lange her."},
+      {"q": "Sprechen Sie Deutsch?", "a": "Ein bisschen — ich lerne noch. Aber ich versuche es gerne."},
+      {"q": "Reisen Sie oft?", "a": "Ja, ich reise sehr gern — Brasilien, Dubai, viele Länder."}
+    ]
   }
 }

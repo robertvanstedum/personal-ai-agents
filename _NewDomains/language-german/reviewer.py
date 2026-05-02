@@ -158,6 +158,119 @@ def _save_reviewer_output(session: dict, session_path: Path, reviewer_output: di
     session_path.write_text(json.dumps(session, indent=2, ensure_ascii=False))
 
 
+# ── Step 2b: Scaffold tracking ───────────────────────────────────────────────
+
+def _robert_text(session: dict) -> str:
+    """Concatenate all of Robert's turns, lowercased."""
+    return " ".join(
+        t["text"] for t in session.get("raw_transcript", [])
+        if t.get("speaker", "").lower() == "robert"
+    ).lower()
+
+
+def _phrase_matched(phrase: str, robert_lower: str, min_root_len: int) -> bool:
+    """Return True if phrase is found in Robert's text (exact or word-root match)."""
+    if phrase.lower() in robert_lower:
+        return True
+    # Word-by-word root match: each content word ≥ min_root_len chars
+    for word in re.sub(r'[^\w\s]', '', phrase).split():
+        if len(word) >= min_root_len:
+            root = word[:min_root_len].lower()
+            if any(w.startswith(root) for w in robert_lower.split()):
+                return True
+    return False
+
+
+def _scaffold_analysis(session: dict, session_path: Path, sessions_dir: Path,
+                        progress: dict, domain_cfg: dict, drill_pool_path: Path):
+    """Populate scaffold_delivered/used/avoided in session JSON. Promote avoided phrases."""
+    delivered = progress.get("last_scaffold_delivered", [])
+
+    session["scaffold_delivered"] = delivered
+    session["scaffold_used"] = []
+    session["scaffold_avoided"] = []
+    session["scaffold_deployment_rate"] = "0/0 scaffold phrases tracked"
+
+    if not delivered:
+        session_path.write_text(json.dumps(session, indent=2, ensure_ascii=False))
+        return
+
+    min_root = domain_cfg.get("drill", {}).get("root_match_min_length", 6)
+    robert = _robert_text(session)
+
+    used, avoided = [], []
+    for phrase in delivered:
+        (used if _phrase_matched(phrase, robert, min_root) else avoided).append(phrase)
+
+    session["scaffold_used"] = used
+    session["scaffold_avoided"] = avoided
+    total = len(delivered)
+    session["scaffold_deployment_rate"] = f"{len(used)}/{total} scaffold phrases used"
+    session_path.write_text(json.dumps(session, indent=2, ensure_ascii=False))
+
+    # Print scaffold block for Telegram
+    print(f"\n── Scaffold {'─' * 36}")
+    print(f"   {len(used)}/{total} scaffold phrases used")
+    if used:
+        for p in used:
+            print(f"   ✅ {p}")
+    if avoided:
+        for p in avoided:
+            print(f"   ⭐ Avoided (Anki candidate): {p}")
+
+    if not avoided or not drill_pool_path.exists():
+        return
+
+    # Promote to drill_pool pending if avoided in ≥ threshold consecutive voice/writing sessions
+    persona = session.get("persona", "")
+    threshold = domain_cfg.get("drill", {}).get("promotion_threshold", 2)
+
+    prior = sorted(sessions_dir.glob("*.json"), reverse=True)
+    streak = []
+    for p in prior:
+        if p == session_path:
+            continue
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if data.get("mode") in ("voice", "writing") and data.get("persona") == persona:
+            streak.append(data)
+        if len(streak) >= threshold - 1:
+            break
+
+    to_promote = []
+    for phrase in avoided:
+        count = 1  # current session
+        for s in streak:
+            if phrase in s.get("scaffold_avoided", []):
+                count += 1
+            else:
+                break
+        if count >= threshold:
+            to_promote.append(phrase)
+
+    if not to_promote:
+        return
+
+    pool = json.loads(drill_pool_path.read_text(encoding="utf-8"))
+    pending = pool.get("session_fed", {}).get("pending", [])
+    existing = {e.get("phrase") for e in pending}
+    added = 0
+    for phrase in to_promote:
+        if phrase not in existing:
+            pending.append({
+                "phrase": phrase,
+                "persona": persona,
+                "promoted_date": session.get("date", ""),
+            })
+            added += 1
+    if added:
+        pool["session_fed"]["pending"] = pending
+        drill_pool_path.write_text(json.dumps(pool, indent=2, ensure_ascii=False))
+        print(f"   📥 {added} phrase(s) promoted to drill_pool.json pending")
+
+
 # ── Step 3a: Generate Anki CSV ────────────────────────────────────────────────
 
 def _generate_anki_csv(reviewer_output: dict, session: dict,
@@ -358,6 +471,7 @@ def main():
     progress_path = base / "progress.json"
     domain_cfg_path = base / "config" / "domain.json"
     personas_path = base / "config" / "personas.json"
+    drill_pool_path = base / "config" / "drill_pool.json"
 
     for d in (anki_dir, lessons_dir):
         d.mkdir(parents=True, exist_ok=True)
@@ -392,6 +506,9 @@ def main():
     ) or "none"
     print(f"   Errors: {err_summary}")
     print(f"   Vocabulary highlights: {len(reviewer_output.get('vocabulary_highlights', []))}")
+
+    # Step 2b: Scaffold tracking
+    _scaffold_analysis(session, session_path, sessions_dir, progress, domain_cfg, drill_pool_path)
 
     # Step 3: Anki CSV + lesson plan
     drill_mode    = session.get("drill_mode", False)

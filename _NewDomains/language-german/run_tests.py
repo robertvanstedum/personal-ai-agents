@@ -498,6 +498,312 @@ def test_27():
 
 
 # ---------------------------------------------------------------------------
+# Steps 1-2 — Georg persona + persona_answers block + scaffold_delivered bridge
+# ---------------------------------------------------------------------------
+
+def test_28():
+    """Georg trigger words resolve correctly."""
+    kmap = json.loads((GERMAN_BASE / "config" / "keyword_map.json").read_text(encoding="utf-8"))
+    checks = {
+        "'georg session' → Georg": _resolve_keyword_intent("german georg session", kmap) == ("Georg", "local_smalltalk"),
+        "'heuriger session' → Georg": _resolve_keyword_intent("german heuriger visit", kmap) == ("Georg", "local_smalltalk"),
+        "'casual session' → Georg": _resolve_keyword_intent("casual german session", kmap) == ("Georg", "local_smalltalk"),
+        "'chat session' → Georg": _resolve_keyword_intent("german chat session", kmap) == ("Georg", "local_smalltalk"),
+    }
+    ok = all(checks.values())
+    report(28, "Georg trigger words resolve to Georg / local_smalltalk", ok,
+           "all checks pass" if ok else "failed: " + ", ".join(k for k, v in checks.items() if not v))
+
+
+def test_29():
+    """Georg briefing contains 💬 Ready answers block; non-Georg briefing does not."""
+    gs = _import_get_session()
+    kmap = json.loads((GERMAN_BASE / "config" / "keyword_map.json").read_text(encoding="utf-8"))
+    with tempfile.TemporaryDirectory() as tmp:
+        pf = Path(tmp) / "progress.json"
+        progress = {}
+        pf.write_text(json.dumps(progress), encoding="utf-8")
+
+        scaffold_georg = gs._scaffold_block("Georg", kmap, progress, None)
+        answers_georg = gs._persona_answers_block("Georg", kmap)
+        briefing_georg = gs._build_briefing(
+            "2026-05-02", "Georg", "Friendly local", 1, "local_smalltalk",
+            "", "", "None yet", scaffold_georg, persona_answers=answers_georg,
+        )
+
+        scaffold_maria = gs._scaffold_block("Maria", kmap, progress, None)
+        answers_maria = gs._persona_answers_block("Maria", kmap)
+        briefing_maria = gs._build_briefing(
+            "2026-05-02", "Maria", "Café server", 1, "cafe_order",
+            "", "", "None yet", scaffold_maria, persona_answers=answers_maria,
+        )
+
+    georg_has_answers = "💬 Ready answers:" in briefing_georg
+    georg_has_qa = "Woher kommen Sie?" in briefing_georg
+    maria_no_answers = "💬 Ready answers:" not in briefing_maria
+
+    ok = georg_has_answers and georg_has_qa and maria_no_answers
+    detail = (
+        "Georg has answers block and Q→A" if ok
+        else f"georg_has_answers={georg_has_answers} georg_has_qa={georg_has_qa} maria_no_answers={maria_no_answers}"
+    )
+    report(29, "Georg briefing has 💬 Ready answers block; Maria briefing does not", ok, detail)
+
+
+def test_30():
+    """last_scaffold_delivered written to progress.json after _scaffold_block."""
+    gs = _import_get_session()
+    kmap = json.loads((GERMAN_BASE / "config" / "keyword_map.json").read_text(encoding="utf-8"))
+    with tempfile.TemporaryDirectory() as tmp:
+        pf = Path(tmp) / "progress.json"
+        progress = {"scaffold_rotation_index": {"Maria": 0}}
+        pf.write_text(json.dumps(progress), encoding="utf-8")
+
+        gs._scaffold_block("Maria", kmap, progress, pf)
+
+        updated = json.loads(pf.read_text(encoding="utf-8"))
+        delivered = updated.get("last_scaffold_delivered", [])
+
+    ok = isinstance(delivered, list) and len(delivered) == 3 and all(isinstance(s, str) for s in delivered)
+    report(30, "last_scaffold_delivered written to progress.json (3 strings)", ok,
+           f"got {delivered!r}" if not ok else f"3 strings: {delivered}")
+
+
+# ---------------------------------------------------------------------------
+# Step 3 — scaffold tracking in reviewer.py
+# ---------------------------------------------------------------------------
+
+def _import_reviewer():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "reviewer", PIPELINE_ROOT / "reviewer.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_32():
+    """scaffold_used populated when phrase appears in Robert's turns (exact match)."""
+    rv = _import_reviewer()
+    domain_cfg = {"drill": {"root_match_min_length": 6}}
+    session = {
+        "persona": "Maria",
+        "mode": "voice",
+        "date": "2026-05-02",
+        "scaffold_delivered": [],
+        "raw_transcript": [
+            {"speaker": "Maria", "text": "Guten Morgen!"},
+            {"speaker": "Robert", "text": "Ich hätte gerne einen kleinen Brauner, bitte."},
+            {"speaker": "Maria", "text": "Sehr gerne."},
+        ],
+    }
+    progress = {
+        "last_scaffold_delivered": [
+            "Ich hätte gerne einen kleinen Brauner, bitte.",
+            "Was empfehlen Sie heute?",
+            "Einen Moment bitte — ich überlege kurz.",
+        ]
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        td = Path(tmp)
+        sp = td / "session.json"
+        sp.write_text(json.dumps(session), encoding="utf-8")
+        dp = td / "drill_pool.json"
+        dp.write_text(json.dumps({"session_fed": {"pending": []}, "on_demand": {"log": []}}))
+        rv._scaffold_analysis(session, sp, td, progress, domain_cfg, dp)
+    ok = "Ich hätte gerne einen kleinen Brauner, bitte." in session["scaffold_used"]
+    report(32, "scaffold_used populated when phrase in Robert's turns (exact)", ok,
+           f"scaffold_used={session['scaffold_used']}" if not ok else "exact match found")
+
+
+def test_33():
+    """scaffold_used populated via word-root match (regular verb inflection).
+
+    'brauchen' (scaffold) root = 'brauch' — matches 'braucht' in Robert's turn.
+    Note: vowel-shift strong verbs (empfehlen→empfiehlt) are a known limitation
+    documented in the decision memo and are not expected to match.
+    """
+    rv = _import_reviewer()
+    domain_cfg = {"drill": {"root_match_min_length": 6}}
+    session = {
+        "persona": "Frau Novak",
+        "mode": "voice",
+        "date": "2026-05-02",
+        "scaffold_delivered": [],
+        "raw_transcript": [
+            {"speaker": "Frau Novak", "text": "Kann ich Ihnen helfen?"},
+            # Robert uses 'braucht' — root 'brauch' (first 6 of 'brauchen') matches
+            {"speaker": "Robert", "text": "Meine Frau braucht etwas gegen Kopfschmerzen."},
+        ],
+    }
+    progress = {
+        "last_scaffold_delivered": [
+            "Ich brauchen etwas gegen Husten.",
+            "Einen Moment bitte — ich überlege kurz.",
+        ]
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        td = Path(tmp)
+        sp = td / "session.json"
+        sp.write_text(json.dumps(session), encoding="utf-8")
+        dp = td / "drill_pool.json"
+        dp.write_text(json.dumps({"session_fed": {"pending": []}, "on_demand": {"log": []}}))
+        rv._scaffold_analysis(session, sp, td, progress, domain_cfg, dp)
+    ok = "Ich brauchen etwas gegen Husten." in session["scaffold_used"]
+    report(33, "scaffold_used via root match — 'braucht' matches root of 'brauchen'", ok,
+           f"scaffold_used={session['scaffold_used']}" if not ok else "root match found")
+
+
+def test_34():
+    """scaffold_avoided populated when phrase not deployed."""
+    rv = _import_reviewer()
+    domain_cfg = {"drill": {"root_match_min_length": 6}}
+    session = {
+        "persona": "Maria",
+        "mode": "voice",
+        "date": "2026-05-02",
+        "scaffold_delivered": [],
+        "raw_transcript": [
+            {"speaker": "Maria", "text": "Guten Morgen!"},
+            {"speaker": "Robert", "text": "Guten Morgen. Einen Kaffee bitte."},
+        ],
+    }
+    progress = {
+        "last_scaffold_delivered": [
+            "Ich hätte gerne einen kleinen Brauner, bitte.",
+            "Was empfehlen Sie heute?",
+        ]
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        td = Path(tmp)
+        sp = td / "session.json"
+        sp.write_text(json.dumps(session), encoding="utf-8")
+        dp = td / "drill_pool.json"
+        dp.write_text(json.dumps({"session_fed": {"pending": []}, "on_demand": {"log": []}}))
+        rv._scaffold_analysis(session, sp, td, progress, domain_cfg, dp)
+    ok = (len(session["scaffold_avoided"]) == 2 and
+          "Ich hätte gerne einen kleinen Brauner, bitte." in session["scaffold_avoided"])
+    report(34, "scaffold_avoided populated when phrase not deployed", ok,
+           f"avoided={session['scaffold_avoided']}" if not ok else "2 phrases avoided")
+
+
+def test_35():
+    """scaffold_avoided × 2 consecutive same-persona sessions → promoted to drill_pool pending."""
+    rv = _import_reviewer()
+    domain_cfg = {"drill": {"root_match_min_length": 6, "promotion_threshold": 2}}
+    phrase = "Was empfehlen Sie heute?"
+    with tempfile.TemporaryDirectory() as tmp:
+        td = Path(tmp)
+        # Create a prior session for Maria where same phrase was avoided
+        prior = {
+            "persona": "Maria", "mode": "voice", "date": "2026-05-01",
+            "scaffold_avoided": [phrase], "scaffold_delivered": [phrase],
+        }
+        (td / "2026-05-01_001.json").write_text(json.dumps(prior), encoding="utf-8")
+
+        # Current session — same phrase avoided again
+        session = {
+            "persona": "Maria", "mode": "voice", "date": "2026-05-02",
+            "scaffold_delivered": [],
+            "raw_transcript": [
+                {"speaker": "Robert", "text": "Guten Morgen. Einen Kaffee bitte."},
+            ],
+        }
+        sp = td / "2026-05-02_001.json"
+        sp.write_text(json.dumps(session), encoding="utf-8")
+
+        dp = td / "drill_pool.json"
+        dp.write_text(json.dumps({"session_fed": {"pending": []}, "on_demand": {"log": []}}))
+
+        progress = {"last_scaffold_delivered": [phrase]}
+        rv._scaffold_analysis(session, sp, td, progress, domain_cfg, dp)
+
+        pool = json.loads(dp.read_text(encoding="utf-8"))
+        pending_phrases = [e["phrase"] for e in pool["session_fed"]["pending"]]
+
+    ok = phrase in pending_phrases
+    report(35, "scaffold_avoided × 2 consecutive sessions → promoted to drill_pool pending", ok,
+           f"pending={pending_phrases}" if not ok else f"promoted: {phrase}")
+
+
+def test_36():
+    """Old session JSON without scaffold_delivered → no crash, fields default to empty."""
+    rv = _import_reviewer()
+    domain_cfg = {"drill": {"root_match_min_length": 6}}
+    session = {
+        "persona": "Maria", "mode": "voice", "date": "2026-05-02",
+        "raw_transcript": [{"speaker": "Robert", "text": "Guten Morgen."}],
+    }
+    progress = {}  # no last_scaffold_delivered
+    with tempfile.TemporaryDirectory() as tmp:
+        td = Path(tmp)
+        sp = td / "session.json"
+        sp.write_text(json.dumps(session), encoding="utf-8")
+        dp = td / "drill_pool.json"
+        dp.write_text(json.dumps({"session_fed": {"pending": []}}))
+        try:
+            rv._scaffold_analysis(session, sp, td, progress, domain_cfg, dp)
+            ok = session.get("scaffold_delivered") == [] and session.get("scaffold_used") == []
+        except Exception as e:
+            ok = False
+            report(36, "old session without scaffold_delivered → no crash", ok, f"crashed: {e}")
+            return
+    report(36, "old session without scaffold_delivered → no crash, empty fields", ok,
+           "no crash, empty lists" if ok else f"unexpected state: {session.get('scaffold_delivered')}")
+
+
+def test_37():
+    """Telegram output contains scaffold deployment rate string."""
+    rv = _import_reviewer()
+    domain_cfg = {"drill": {"root_match_min_length": 6}}
+    session = {
+        "persona": "Maria", "mode": "voice", "date": "2026-05-02",
+        "scaffold_delivered": [],
+        "raw_transcript": [
+            {"speaker": "Robert", "text": "Ich hätte gerne einen kleinen Brauner, bitte."},
+        ],
+    }
+    progress = {"last_scaffold_delivered": ["Ich hätte gerne einen kleinen Brauner, bitte.", "Was empfehlen Sie heute?"]}
+    import io, contextlib
+    with tempfile.TemporaryDirectory() as tmp:
+        td = Path(tmp)
+        sp = td / "session.json"
+        sp.write_text(json.dumps(session), encoding="utf-8")
+        dp = td / "drill_pool.json"
+        dp.write_text(json.dumps({"session_fed": {"pending": []}}))
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rv._scaffold_analysis(session, sp, td, progress, domain_cfg, dp)
+    output = buf.getvalue()
+    ok = "scaffold phrases used" in output and session["scaffold_deployment_rate"] == "1/2 scaffold phrases used"
+    report(37, "Telegram output contains scaffold deployment rate string", ok,
+           f"rate={session.get('scaffold_deployment_rate')} output_snippet={output[:80]!r}" if not ok else "rate in output")
+
+
+def test_31():
+    """drill_pool.json exists and has correct structure."""
+    pool_path = GERMAN_BASE / "config" / "drill_pool.json"
+    ok_exists = pool_path.exists()
+    if not ok_exists:
+        report(31, "drill_pool.json exists with correct structure", False, "file not found")
+        return
+    pool = json.loads(pool_path.read_text(encoding="utf-8"))
+    checks = {
+        "has 'core'": "core" in pool,
+        "core.verbs is list": isinstance(pool.get("core", {}).get("verbs"), list),
+        "core.nouns is list": isinstance(pool.get("core", {}).get("nouns"), list),
+        "nouns have article field": all("article" in n for n in pool.get("core", {}).get("nouns", [])),
+        "has session_fed": "session_fed" in pool,
+        "has on_demand.log": isinstance(pool.get("on_demand", {}).get("log"), list),
+        "mixed genders in nouns": len({n["article"] for n in pool.get("core", {}).get("nouns", [])}) == 3,
+    }
+    ok = all(checks.values())
+    report(31, "drill_pool.json exists with correct structure", ok,
+           "all checks pass" if ok else "failed: " + ", ".join(k for k, v in checks.items() if not v))
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -509,6 +815,8 @@ TESTS = {
     16: test_16, 17: test_17, 18: test_18, 19: test_19,
     20: test_20, 21: test_21, 22: test_22, 23: test_23, 24: test_23b,
     25: test_25, 26: test_26, 27: test_27,
+    28: test_28, 29: test_29, 30: test_30, 31: test_31,
+    32: test_32, 33: test_33, 34: test_34, 35: test_35, 36: test_36, 37: test_37,
 }
 
 

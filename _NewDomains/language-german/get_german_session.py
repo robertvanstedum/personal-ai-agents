@@ -211,12 +211,30 @@ def _scaffold_block(persona_name: str, keyword_map: dict, progress: dict,
             json.dumps(progress, indent=2, ensure_ascii=False), encoding='utf-8'
         )
 
+    delivered = [phrase1['de'], phrase2['de'], recovery]
+    if progress_file and progress_file.exists():
+        progress['last_scaffold_delivered'] = delivered
+        progress_file.write_text(
+            json.dumps(progress, indent=2, ensure_ascii=False), encoding='utf-8'
+        )
+
     lines = [
         "🧱 Today's scaffold — try to use these:",
         f"   • {phrase1['de']}",
         f"   • {phrase2['de']}",
         f"   • 🆘 If you freeze: {recovery}",
     ]
+    return '\n'.join(lines)
+
+
+def _persona_answers_block(persona_name: str, keyword_map: dict) -> str:
+    """Return formatted Q→A cheat-sheet for personas that have carry_forward_phrases."""
+    pairs = keyword_map.get(persona_name, {}).get('carry_forward_phrases', [])
+    if not pairs:
+        return ""
+    lines = ["💬 Ready answers:"]
+    for pair in pairs:
+        lines.append(f"   {pair['q']} → {pair['a']}")
     return '\n'.join(lines)
 
 
@@ -304,7 +322,7 @@ def _build_briefing(date_str: str, persona_name: str, persona_role: str,
                     lesson_number: int, scenario: str, warm_up: str,
                     speaking_prompt: str, carry: str, scaffold: str,
                     drill_session: int = 0, drill_total: int = 0,
-                    writing_mode: bool = False) -> str:
+                    writing_mode: bool = False, persona_answers: str = "") -> str:
     """Message 1 — YOUR BRIEFING. Read this; do not paste into Grok."""
     drill_mode = drill_total > 0
 
@@ -326,6 +344,8 @@ def _build_briefing(date_str: str, persona_name: str, persona_role: str,
 
     if scaffold:
         lines += ["", scaffold]
+    if persona_answers:
+        lines += ["", persona_answers]
 
     return '\n'.join(lines)
 
@@ -459,6 +479,7 @@ def main():
     # Repeat sessions: scaffold shown but rotation index not advanced
     pf_for_scaffold = None if (args.dry_run or args.repeat) else progress_file
     scaffold = _scaffold_block(persona_name, keyword_map, progress, pf_for_scaffold)
+    persona_answers = _persona_answers_block(persona_name, keyword_map)
 
     if args.repeat and not args.dry_run and progress_file.exists():
         progress['last_repeat'] = True
@@ -493,6 +514,7 @@ def main():
                 date_str, persona_name, persona_role, lesson_number, scenario,
                 wu, speaking_prompt, carry, scaffold,
                 drill_session=k, drill_total=drill_total, writing_mode=args.writing,
+                persona_answers=persona_answers,
             )
             ai_prompt = _build_ai_prompt(persona_prompt, drill_footer)
             output = _build_package(
@@ -526,6 +548,7 @@ def main():
         briefing = _build_briefing(
             date_str, persona_name, persona_role, lesson_number, scenario,
             warm_up, speaking_prompt, carry, scaffold, writing_mode=args.writing,
+            persona_answers=persona_answers,
         )
         ai_prompt = _build_ai_prompt(persona_prompt, footer)
         output = _build_package(
