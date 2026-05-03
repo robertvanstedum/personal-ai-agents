@@ -303,25 +303,20 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"⚠️  Could not send error callback: {e}")
 
 def record_feedback(action, rank, article_data):
-    """Call curator_feedback.py in workspace with article data"""
-    workspace = Path.home() / '.openclaw' / 'workspace'
-    feedback_script = workspace / 'curator_feedback.py'
-    
+    """Call repo's curator_feedback.py via venv Python to record feedback"""
+    venv_python = BASE_DIR / 'venv' / 'bin' / 'python'
+    python_bin = str(venv_python) if venv_python.exists() else 'python3'
+    feedback_script = BASE_DIR / 'curator_feedback.py'
+
     if not feedback_script.exists():
         return {'success': False, 'message': f'curator_feedback.py not found at {feedback_script}'}
-    
-    # Prepare JSON payload with article data
-    payload = {
-        'article': article_data,
-        'your_words': f'{action}d from Telegram'
-    }
-    
+
     try:
         result = subprocess.run(
-            ['python3', str(feedback_script), action, str(rank), '--channel', 'telegram'],
-            input=json.dumps(payload).encode(),
+            [python_bin, str(feedback_script), action, str(rank),
+             '--channel', 'telegram', '--text', f'{action}d from Telegram'],
             capture_output=True,
-            cwd=workspace,
+            cwd=str(BASE_DIR),
             timeout=30
         )
         if result.returncode == 0:
