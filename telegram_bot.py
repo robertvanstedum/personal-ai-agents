@@ -1112,9 +1112,34 @@ async def _handle_conjugate(update, verb: str) -> None:
 
 # ─── Drill engine (Level 1 + Level 2) ───────────────────────────────────────
 
-_active_drills: dict = {}  # chat_id → drill state; lost on restart (acceptable)
+_active_drills: dict = {}  # chat_id → drill state; persisted to disk across restarts
 _last_drills: dict = {}   # chat_id → {verb, level, english} snapshot after completion
 _drill_list_state: dict = {}  # chat_id → {verbs: list, offset: int} for paginated listing
+
+_DRILL_STATE_FILE = BASE_DIR / "_active_drill_state.json"
+
+
+def _save_drill_state() -> None:
+    try:
+        with open(_DRILL_STATE_FILE, "w") as f:
+            import json as _json
+            _json.dump({str(k): v for k, v in _active_drills.items()}, f)
+    except Exception as e:
+        print(f"⚠️  Could not save drill state: {e}")
+
+
+def _load_drill_state() -> None:
+    if not _DRILL_STATE_FILE.exists():
+        return
+    try:
+        import json as _json
+        with open(_DRILL_STATE_FILE) as f:
+            data = _json.load(f)
+        _active_drills.update({int(k): v for k, v in data.items()})
+        if _active_drills:
+            print(f"♻️  Restored {len(_active_drills)} active drill(s) from disk.")
+    except Exception as e:
+        print(f"⚠️  Could not restore drill state: {e}")
 
 _DRILL_PERSONS = ["ich", "du", "er", "wir", "ihr", "sie"]
 
@@ -1185,6 +1210,7 @@ async def _handle_drill_l1_start(update, target_lower: str) -> None:
     state = _start_drill_state(entry)
     state["level"] = 1
     _active_drills[update.message.chat_id] = state
+    _save_drill_state()
     await update.message.reply_text(
         f"Conjugation drill. Type 'end drill' to stop.\n\n" + _drill_prompt(state)
     )
@@ -1214,6 +1240,7 @@ async def _handle_drill_l2_start(update, target_lower: str) -> None:
         "retry": False,
     }
     _active_drills[update.message.chat_id] = state
+    _save_drill_state()
     await update.message.reply_text(
         f"Translation drill: {entry['verb']} ({entry.get('english','')}). Type 'end drill' to stop.\n\n"
         + _l2_prompt(state)
@@ -1230,6 +1257,7 @@ async def _handle_drill_answer(update, text: str) -> None:
         await _handle_drill_l2_answer(update, text, chat_id, state)
     else:
         await _handle_drill_l1_answer(update, text, chat_id, state)
+    _save_drill_state()
 
 
 async def _handle_drill_l2_answer(update, text: str, chat_id: int, state: dict) -> None:
@@ -1681,6 +1709,7 @@ def run_bot_mode():
 
     app.add_error_handler(error_handler)
 
+    _load_drill_state()
     print("✅ Listening for callbacks and commands...")
     app.run_polling()
 
