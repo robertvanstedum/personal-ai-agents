@@ -1064,9 +1064,9 @@ async def _resolve_phrases(update, entry: dict) -> list:
 
 def _normalize_answer(text: str) -> str:
     """Lowercase, strip punctuation, collapse whitespace."""
-    import unicodedata
+    import re
     text = text.lower().strip()
-    text = "".join(c for c in text if unicodedata.category(c) not in ("Po", "Ps", "Pe", "Pi", "Pf", "Pd"))
+    text = re.sub(r'[^\w\s]', ' ', text)
     return " ".join(text.split())
 
 
