@@ -1023,30 +1023,48 @@ async def _handle_drill_answer(update, text: str) -> None:
             )
         return
 
-    if answer == expected:
-        state["score"] += 1
-        state["total"] += 1
-        state["retry"] = False
+    def _advance(reveal_prefix: str) -> str:
         state["pos"] += 1
         if state["pos"] >= len(state["queue"]):
             score = state["score"]
             total = state["total"]
             del _active_drills[chat_id]
-            await update.message.reply_text(
-                f"✅ {person} {expected}\n\nDrill complete! {score}/{total} correct."
-            )
+            return f"{reveal_prefix}\n\nDrill complete! {score}/{total} correct."
         else:
             state["current"] = state["queue"][state["pos"]]
-            await update.message.reply_text(
-                f"✅ {person} {expected}\n\n" + _drill_prompt(state)
-            )
+            return f"{reveal_prefix}\n\n" + _drill_prompt(state)
+
+    if answer == expected:
+        state["score"] += 1
+        state["total"] += 1
+        state["retry"] = False
+        await update.message.reply_text(_advance(f"✅ {person} {expected}"))
     else:
+        from difflib import SequenceMatcher
+        similarity = SequenceMatcher(None, answer, expected).ratio()
+        is_close = similarity >= 0.7
+
+        state.setdefault("wrong_count", 0)
         if not state["retry"]:
             state["total"] += 1
             state["retry"] = True
-        await update.message.reply_text(
-            f"❌ Try again — {person} ___?  (or: hint / skip)"
-        )
+        state["wrong_count"] = state.get("wrong_count", 0) + 1
+
+        if state["wrong_count"] >= 3:
+            # Auto-reveal after 3 wrong attempts
+            state["retry"] = False
+            state["wrong_count"] = 0
+            await update.message.reply_text(
+                _advance(f"→ {person} {expected}  (auto-revealed)")
+            )
+        elif is_close:
+            await update.message.reply_text(
+                f"Almost — check spelling.  {person} ___?"
+            )
+        else:
+            await update.message.reply_text(
+                f"❌ {person} ___?  (hint / skip)"
+            )
 
 
 async def _handle_drill_control(update, word: str) -> None:
