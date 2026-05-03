@@ -593,6 +593,8 @@ _DRILL_RE = re.compile(
 _DRILL_L2_RE = re.compile(r'\b(?:level\s*2|l2|translate|phrase|2)\b', re.I)
 _DRILL_CTL_RE = re.compile(r'\bend\s+drill\b', re.I)
 _DRILL_AGAIN_RE = re.compile(r'\b(?:again|repeat|once more|one more)\b', re.I)
+_DRILL_LIST_RE = re.compile(r'\b(?:drill\s+list|list\s+(?:drills?|verbs?)|verbs?\s+list|show\s+verbs?|what\s+verbs?)\b', re.I)
+_DRILL_MORE_RE = re.compile(r'\b(?:more|next)\b', re.I)
 
 
 _AGAIN_RE = re.compile(
@@ -1112,6 +1114,7 @@ async def _handle_conjugate(update, verb: str) -> None:
 
 _active_drills: dict = {}  # chat_id → drill state; lost on restart (acceptable)
 _last_drills: dict = {}   # chat_id → {verb, level, english} snapshot after completion
+_drill_list_state: dict = {}  # chat_id → {verbs: list, offset: int} for paginated listing
 
 _DRILL_PERSONS = ["ich", "du", "er", "wir", "ihr", "sie"]
 
@@ -1390,6 +1393,49 @@ async def _restart_last_drill(update) -> None:
         await _handle_drill_l1_start(update, snap["verb"])
 
 
+def _drill_list_page(verbs: list, offset: int, page_size: int = 10) -> str:
+    """Format one page of the verb list."""
+    page = verbs[offset:offset + page_size]
+    total = len(verbs)
+    lines = [f"Verb pool ({total} total):\n"]
+    for i, v in enumerate(page, start=offset + 1):
+        priority = v.get("priority", "")
+        tag = " ★" if priority == "HIGH" else ""
+        lines.append(f"  {i}. {v['verb']} — {v.get('english', '')}{tag}")
+    remaining = total - (offset + len(page))
+    if remaining > 0:
+        lines.append(f"\n(say 'more' for next {min(remaining, page_size)})")
+    else:
+        lines.append("\n(say 'drill <verb>' to start)")
+    return "\n".join(lines)
+
+
+async def _handle_drill_list(update) -> None:
+    chat_id = update.message.chat_id
+    pool = _load_drill_pool()
+    verbs = _all_verb_entries(pool)
+    if not verbs:
+        await update.message.reply_text("No verbs in drill pool yet.")
+        return
+    _drill_list_state[chat_id] = {"verbs": verbs, "offset": 10}
+    await update.message.reply_text(_drill_list_page(verbs, 0))
+
+
+async def _handle_drill_list_more(update) -> None:
+    chat_id = update.message.chat_id
+    ls = _drill_list_state.get(chat_id)
+    if not ls:
+        return
+    offset = ls["offset"]
+    verbs = ls["verbs"]
+    if offset >= len(verbs):
+        await update.message.reply_text("That's the full list.")
+        del _drill_list_state[chat_id]
+        return
+    ls["offset"] = offset + 10
+    await update.message.reply_text(_drill_list_page(verbs, offset))
+
+
 async def _handle_drill_control(update, word: str) -> None:
     """Handle 'end drill' — show score and exit."""
     chat_id = update.message.chat_id
@@ -1435,6 +1481,10 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await _start_keyword_session(update, persona_name, scenario)
         else:
             await _handle_german_command(update, "!german session")
+    elif _DRILL_LIST_RE.search(text):
+        await _handle_drill_list(update)
+    elif _DRILL_MORE_RE.search(text) and update.message.chat_id in _drill_list_state:
+        await _handle_drill_list_more(update)
     elif _DRILL_AGAIN_RE.search(text) and update.message.chat_id in _last_drills:
         await _restart_last_drill(update)
     elif _AGAIN_RE.search(text):
@@ -1516,6 +1566,10 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
             await _start_keyword_session(update, persona_name, scenario)
         else:
             await _handle_german_command(update, "!german session")
+    elif _DRILL_LIST_RE.search(text):
+        await _handle_drill_list(update)
+    elif _DRILL_MORE_RE.search(text) and update.message.chat_id in _drill_list_state:
+        await _handle_drill_list_more(update)
     elif _DRILL_AGAIN_RE.search(text) and update.message.chat_id in _last_drills:
         await _restart_last_drill(update)
     elif _AGAIN_RE.search(text):
