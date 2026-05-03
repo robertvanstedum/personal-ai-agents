@@ -929,18 +929,106 @@ async def _handle_conjugate(update, verb: str) -> None:
     await update.message.reply_text(msg)
 
 
+# ─── Drill engine (Level 1 Lock) ─────────────────────────────────────────────
+
+_active_drills: dict = {}  # chat_id → drill state; lost on restart (acceptable)
+
+_DRILL_PERSONS = ["ich", "du", "er", "wir", "ihr", "sie"]
+
+
+def _drill_prompt(state: dict) -> str:
+    person = state["current"]
+    verb = state["verb"]
+    english = state["english"]
+    done = state["total"]
+    total = len(state["queue"])
+    return f"{verb} ({english}) — {done+1}/{total}\n\n{person} ___?"
+
+
+def _start_drill_state(entry: dict) -> dict:
+    import random
+    queue = random.sample(_DRILL_PERSONS, len(_DRILL_PERSONS))
+    return {
+        "verb": entry["verb"],
+        "english": entry.get("english", ""),
+        "conjugations": entry.get("conjugations", {}),
+        "queue": queue,
+        "pos": 0,
+        "current": queue[0],
+        "score": 0,
+        "total": 0,
+        "retry": False,
+    }
+
+
 async def _handle_drill(update, target: str) -> None:
-    """Placeholder for Level 1/2 drill engine (Step 5)."""
+    """Start a Level 1 drill — targeted verb or random from core list."""
+    pool = _load_drill_pool()
+    verbs = [v for v in pool.get("core", {}).get("verbs", []) if isinstance(v, dict) and "verb" in v]
+    if not verbs:
+        await update.message.reply_text("No verbs in drill pool yet — add some to drill_pool.json.")
+        return
+    target_lower = target.lower()
+    entry = next((v for v in verbs if v["verb"].lower() in target_lower), None)
+    if not entry:
+        import random
+        entry = random.choice(verbs)
+    state = _start_drill_state(entry)
+    _active_drills[update.message.chat_id] = state
     await update.message.reply_text(
-        f"Drill mode coming soon.\nYou entered: \"{target.strip()}\""
+        f"Drill started. Type 'end drill' to stop.\n\n" + _drill_prompt(state)
     )
+
+
+async def _handle_drill_answer(update, text: str) -> None:
+    """Check a drill answer and advance or retry."""
+    chat_id = update.message.chat_id
+    state = _active_drills.get(chat_id)
+    if not state:
+        return
+
+    person = state["current"]
+    expected = state["conjugations"].get(person, "").strip().lower()
+    answer = text.strip().lower()
+
+    if answer == expected:
+        state["score"] += 1
+        state["total"] += 1
+        state["retry"] = False
+        state["pos"] += 1
+        if state["pos"] >= len(state["queue"]):
+            score = state["score"]
+            total = state["total"]
+            del _active_drills[chat_id]
+            await update.message.reply_text(
+                f"✅ {person} {expected}\n\nDrill complete! {score}/{total} correct."
+            )
+        else:
+            state["current"] = state["queue"][state["pos"]]
+            await update.message.reply_text(
+                f"✅ {person} {expected}\n\n" + _drill_prompt(state)
+            )
+    else:
+        if not state["retry"]:
+            state["total"] += 1
+            state["retry"] = True
+        await update.message.reply_text(
+            f"❌ Try again — {person} ___?"
+        )
 
 
 async def _handle_drill_control(update, word: str) -> None:
-    """Placeholder drill control (stop/next/etc) — active once drill engine is live."""
-    await update.message.reply_text(
-        f"(Drill control '{word}' noted — drill engine coming in Step 5.)"
-    )
+    """Handle 'end drill' — show score and exit."""
+    chat_id = update.message.chat_id
+    state = _active_drills.pop(chat_id, None)
+    if state:
+        score = state["score"]
+        total = state["total"]
+        await update.message.reply_text(
+            f"Drill ended. {score}/{total} correct."
+        )
+    else:
+        await update.message.reply_text("No active drill.")
 
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -951,6 +1039,14 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     text = update.message.text.strip()
+
+    # Active drill intercepts all input (except "end drill" which closes it)
+    if update.message.chat_id in _active_drills:
+        if _DRILL_CTL_RE.search(text):
+            await _handle_drill_control(update, text)
+        else:
+            await _handle_drill_answer(update, text)
+        return
 
     if text.startswith("---SESSION---") or text.lower().startswith("\u2014session\u2014"):
         await _handle_german_transcript(update, text)
@@ -1022,6 +1118,15 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.message.reply_text(f'🎙 "{transcription}"')
 
     text = transcription.strip()
+
+    # Active drill intercepts voice answers too
+    if update.message.chat_id in _active_drills:
+        if _DRILL_CTL_RE.search(text):
+            await _handle_drill_control(update, text)
+        else:
+            await _handle_drill_answer(update, text)
+        return
+
     if text.startswith("---SESSION---") or text.lower().startswith("—session—"):
         await _handle_german_transcript(update, text)
     elif text.lower().startswith("!german"):
