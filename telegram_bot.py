@@ -981,7 +981,7 @@ async def _handle_drill(update, target: str) -> None:
 
 
 async def _handle_drill_answer(update, text: str) -> None:
-    """Check a drill answer and advance or retry."""
+    """Check a drill answer; 'hint' or 'skip' are escape hatches."""
     chat_id = update.message.chat_id
     state = _active_drills.get(chat_id)
     if not state:
@@ -990,6 +990,29 @@ async def _handle_drill_answer(update, text: str) -> None:
     person = state["current"]
     expected = state["conjugations"].get(person, "").strip().lower()
     answer = text.strip().lower()
+
+    if answer == "hint":
+        hint = expected[:2] + "…" if len(expected) > 2 else expected
+        await update.message.reply_text(f"💡 {person} {hint}")
+        return
+
+    if answer == "skip":
+        state["total"] += 1
+        state["retry"] = False
+        state["pos"] += 1
+        if state["pos"] >= len(state["queue"]):
+            score = state["score"]
+            total = state["total"]
+            del _active_drills[chat_id]
+            await update.message.reply_text(
+                f"→ {person} {expected}\n\nDrill complete! {score}/{total} correct."
+            )
+        else:
+            state["current"] = state["queue"][state["pos"]]
+            await update.message.reply_text(
+                f"→ {person} {expected}\n\n" + _drill_prompt(state)
+            )
+        return
 
     if answer == expected:
         state["score"] += 1
@@ -1013,7 +1036,7 @@ async def _handle_drill_answer(update, text: str) -> None:
             state["total"] += 1
             state["retry"] = True
         await update.message.reply_text(
-            f"❌ Try again — {person} ___?"
+            f"❌ Try again — {person} ___?  (or: hint / skip)"
         )
 
 
