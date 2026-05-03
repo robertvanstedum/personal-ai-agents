@@ -1085,13 +1085,11 @@ def run_bot_mode():
 
     async def error_handler(update, context):
         """Suppress noisy network errors — log one line instead of full traceback."""
-        import traceback
         err = context.error
         if isinstance(err, (NetworkError, TimedOut)):
             print(f"⚠️  Network error (will retry): {err.__class__.__name__}: {err}")
         else:
             print(f"❌ Bot error: {err.__class__.__name__}: {err}")
-            traceback.print_exception(type(err), err, err.__traceback__)
 
     app.add_error_handler(error_handler)
 
@@ -1153,7 +1151,7 @@ def run_webhook_mode():
                 elif 'text' in msg and msg['text'].startswith('/'):
                     handle_webhook_command(msg, token)
                 elif 'text' in msg:
-                    handle_text_message(msg, token)
+                    handle_webhook_text_message(msg, token)
                 return jsonify({'ok': True})
 
             return jsonify({'ok': True})
@@ -1204,7 +1202,7 @@ def handle_webhook_callback(callback_query, token):
     else:
         answer_callback(token, query_id, f"❌ {result['message']}", alert=True)
 
-def handle_text_message(message, token):
+def handle_webhook_text_message(message, token):
     """Route plain text — dispatch transcript or generic ack."""
     chat_id = str(message['chat']['id'])
     text = message.get('text', '')
