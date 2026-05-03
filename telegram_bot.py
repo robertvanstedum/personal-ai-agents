@@ -940,9 +940,8 @@ def _drill_prompt(state: dict) -> str:
     person = state["current"]
     verb = state["verb"]
     english = state["english"]
-    done = state["total"]
     total = len(state["queue"])
-    return f"{verb} ({english}) — {done+1}/{total}\n\n{person} ___?"
+    return f"{verb} ({english}) — {state['pos']+1}/{total}\n\n{person} ___?"
 
 
 def _start_drill_state(entry: dict) -> dict:
