@@ -590,12 +590,9 @@ _SESSION_RE = re.compile(
     r"let.{0,10}s.{0,10}german)",
     re.I,
 )
-_DRILL_RE = re.compile(
-    r"(start german.{0,20}drill mode|drill.{0,30}german|german.{0,30}drill"
-    r"|drill (café|cafe|bakery|hotel|museum|pharmacy|restaurant|ubahn|u-bahn|transit|directions?)"
-    r"|\d+ drill sessions?)",
-    re.I,
-)
+_CONJUGATE_RE = re.compile(r'\bconjugate\s+(\w+)\b', re.I)
+_DRILL_RE = re.compile(r'\bdrill\s+(.*)', re.I)
+_DRILL_CTL_RE = re.compile(r'\b(enough|got it|next|done|stop|end drill)\b', re.I)
 
 
 _AGAIN_RE = re.compile(
@@ -903,6 +900,51 @@ async def _start_keyword_session(update, persona_name: str, scenario: str) -> No
         await update.message.reply_text(f"❌ get_german_session.py failed:\n{err[:400]}")
 
 
+def _load_drill_pool() -> dict:
+    pool_path = GERMAN_DIR / "config" / "drill_pool.json"
+    if pool_path.exists():
+        try:
+            return json.loads(pool_path.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+async def _handle_conjugate(update, verb: str) -> None:
+    """Level 0 conjugate flashcard — reads from drill_pool.json core.verbs."""
+    pool = _load_drill_pool()
+    verbs = {v["verb"]: v for v in pool.get("core", {}).get("verbs", []) if isinstance(v, dict) and "verb" in v}
+    verb_lower = verb.lower()
+    if verb_lower not in verbs:
+        await update.message.reply_text(
+            f"Conjugation for '{verb}' not in core list — add it to drill_pool.json to drill it."
+        )
+        return
+    entry = verbs[verb_lower]
+    c = entry.get("conjugations", {})
+    msg = (
+        f"{verb_lower} ({entry.get('english', '?')}) — fill in all persons:\n\n"
+        f"ich {c.get('ich','___')}    wir {c.get('wir','___')}\n"
+        f"du {c.get('du','___')}     ihr {c.get('ihr','___')}\n"
+        f"er {c.get('er','___')}     sie/Sie {c.get('sie','___')}"
+    )
+    await update.message.reply_text(msg)
+
+
+async def _handle_drill(update, target: str) -> None:
+    """Placeholder for Level 1/2 drill engine (Step 5)."""
+    await update.message.reply_text(
+        f"Drill mode coming soon.\nYou entered: \"{target.strip()}\""
+    )
+
+
+async def _handle_drill_control(update, word: str) -> None:
+    """Placeholder drill control (stop/next/etc) — active once drill engine is live."""
+    await update.message.reply_text(
+        f"(Drill control '{word}' noted — drill engine coming in Step 5.)"
+    )
+
+
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Route plain text messages — German transcript, !german commands, fallback."""
     if not update.message or not update.message.text:
@@ -916,8 +958,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await _handle_german_transcript(update, text)
     elif text.lower().startswith("!german"):
         await _handle_german_command(update, text)
-    elif _DRILL_RE.search(text):
-        await _handle_german_command(update, "!german drill 3")
     elif _WRITING_RE.search(text):
         await _handle_german_command(update, "!german writing")
     elif _SESSION_RE.search(text):
@@ -935,6 +975,15 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await _start_repeat_session(update, persona, scenario)
         else:
             await update.message.reply_text("⚠️ No previous session found to repeat.")
+    elif _CONJUGATE_RE.search(text):
+        verb = _CONJUGATE_RE.search(text).group(1)
+        await _handle_conjugate(update, verb)
+    elif _DRILL_RE.search(text):
+        target = _DRILL_RE.search(text).group(1)
+        await _handle_drill(update, target)
+    elif _DRILL_CTL_RE.search(text):
+        word = _DRILL_CTL_RE.search(text).group(1)
+        await _handle_drill_control(update, word)
     else:
         intent = _resolve_keyword_intent(text, KEYWORD_MAP)
         if intent:
@@ -981,8 +1030,6 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
         await _handle_german_transcript(update, text)
     elif text.lower().startswith("!german"):
         await _handle_german_command(update, text)
-    elif _DRILL_RE.search(text):
-        await _handle_german_command(update, "!german drill 3")
     elif _WRITING_RE.search(text):
         await _handle_german_command(update, "!german writing")
     elif _SESSION_RE.search(text):
@@ -1000,6 +1047,15 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
             await _start_repeat_session(update, persona, scenario)
         else:
             log_voice_note(transcription)
+    elif _CONJUGATE_RE.search(text):
+        verb = _CONJUGATE_RE.search(text).group(1)
+        await _handle_conjugate(update, verb)
+    elif _DRILL_RE.search(text):
+        target = _DRILL_RE.search(text).group(1)
+        await _handle_drill(update, target)
+    elif _DRILL_CTL_RE.search(text):
+        word = _DRILL_CTL_RE.search(text).group(1)
+        await _handle_drill_control(update, word)
     else:
         intent = _resolve_keyword_intent(text, KEYWORD_MAP)
         if intent:
