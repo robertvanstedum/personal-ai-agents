@@ -592,6 +592,7 @@ _DRILL_RE = re.compile(
 )
 _DRILL_L2_RE = re.compile(r'\b(?:level\s*2|l2|translate|phrase|2)\b', re.I)
 _DRILL_CTL_RE = re.compile(r'\bend\s+drill\b', re.I)
+_DRILL_AGAIN_RE = re.compile(r'\b(?:again|repeat|once more|one more)\b', re.I)
 
 
 _AGAIN_RE = re.compile(
@@ -1110,6 +1111,7 @@ async def _handle_conjugate(update, verb: str) -> None:
 # ─── Drill engine (Level 1 + Level 2) ───────────────────────────────────────
 
 _active_drills: dict = {}  # chat_id → drill state; lost on restart (acceptable)
+_last_drills: dict = {}   # chat_id → {verb, level, english} snapshot after completion
 
 _DRILL_PERSONS = ["ich", "du", "er", "wir", "ihr", "sie"]
 
@@ -1246,8 +1248,9 @@ async def _handle_drill_l2_answer(update, text: str, chat_id: int, state: dict) 
         state["pos"] += 1
         if state["pos"] >= len(state["queue"]):
             score, total = state["score"], state["total"]
+            _last_drills[chat_id] = {"verb": state["verb"], "level": 2, "english": state.get("english", "")}
             del _active_drills[chat_id]
-            await update.message.reply_text(f"→ {expected_raw}\n\nDrill complete! {score}/{total} correct.")
+            await update.message.reply_text(f"→ {expected_raw}\n\nDrill complete! {score}/{total} correct.  (say 'again' to repeat)")
         else:
             await update.message.reply_text(f"→ {expected_raw}\n\n" + _l2_prompt(state))
         return
@@ -1260,8 +1263,9 @@ async def _handle_drill_l2_answer(update, text: str, chat_id: int, state: dict) 
         state["pos"] += 1
         if state["pos"] >= len(state["queue"]):
             score, total = state["score"], state["total"]
+            _last_drills[chat_id] = {"verb": state["verb"], "level": 2, "english": state.get("english", "")}
             del _active_drills[chat_id]
-            await update.message.reply_text(f"✅ {expected_raw}\n\nDrill complete! {score}/{total} correct.")
+            await update.message.reply_text(f"✅ {expected_raw}\n\nDrill complete! {score}/{total} correct.  (say 'again' to repeat)")
         else:
             await update.message.reply_text(f"✅ {expected_raw}\n\n" + _l2_prompt(state))
         return
@@ -1278,8 +1282,9 @@ async def _handle_drill_l2_answer(update, text: str, chat_id: int, state: dict) 
         state["pos"] += 1
         if state["pos"] >= len(state["queue"]):
             score, total = state["score"], state["total"]
+            _last_drills[chat_id] = {"verb": state["verb"], "level": 2, "english": state.get("english", "")}
             del _active_drills[chat_id]
-            await update.message.reply_text(f"→ {expected_raw}  (auto-revealed)\n\nDrill complete! {score}/{total} correct.")
+            await update.message.reply_text(f"→ {expected_raw}  (auto-revealed)\n\nDrill complete! {score}/{total} correct.  (say 'again' to repeat)")
         else:
             await update.message.reply_text(f"→ {expected_raw}  (auto-revealed)\n\n" + _l2_prompt(state))
         return
@@ -1315,9 +1320,10 @@ async def _handle_drill_l1_answer(update, text: str, chat_id: int, state: dict) 
         if state["pos"] >= len(state["queue"]):
             score = state["score"]
             total = state["total"]
+            _last_drills[chat_id] = {"verb": state["verb"], "level": 1, "english": state.get("english", "")}
             del _active_drills[chat_id]
             await update.message.reply_text(
-                f"→ {person} {expected}\n\nDrill complete! {score}/{total} correct."
+                f"→ {person} {expected}\n\nDrill complete! {score}/{total} correct.  (say 'again' to repeat)"
             )
         else:
             state["current"] = state["queue"][state["pos"]]
@@ -1331,8 +1337,9 @@ async def _handle_drill_l1_answer(update, text: str, chat_id: int, state: dict) 
         if state["pos"] >= len(state["queue"]):
             score = state["score"]
             total = state["total"]
+            _last_drills[chat_id] = {"verb": state["verb"], "level": 1, "english": state.get("english", "")}
             del _active_drills[chat_id]
-            return f"{reveal_prefix}\n\nDrill complete! {score}/{total} correct."
+            return f"{reveal_prefix}\n\nDrill complete! {score}/{total} correct.  (say 'again' to repeat)"
         else:
             state["current"] = state["queue"][state["pos"]]
             return f"{reveal_prefix}\n\n" + _drill_prompt(state)
@@ -1368,6 +1375,19 @@ async def _handle_drill_l1_answer(update, text: str, chat_id: int, state: dict) 
             await update.message.reply_text(
                 f"❌ {person} ___?  (hint / skip)"
             )
+
+
+async def _restart_last_drill(update) -> None:
+    """Restart the most recently completed drill for this chat."""
+    chat_id = update.message.chat_id
+    snap = _last_drills.get(chat_id)
+    if not snap:
+        await update.message.reply_text("No recent drill to repeat.")
+        return
+    if snap["level"] == 2:
+        await _handle_drill_l2_start(update, snap["verb"])
+    else:
+        await _handle_drill_l1_start(update, snap["verb"])
 
 
 async def _handle_drill_control(update, word: str) -> None:
@@ -1415,6 +1435,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await _start_keyword_session(update, persona_name, scenario)
         else:
             await _handle_german_command(update, "!german session")
+    elif _DRILL_AGAIN_RE.search(text) and update.message.chat_id in _last_drills:
+        await _restart_last_drill(update)
     elif _AGAIN_RE.search(text):
         persona = _last_session_persona()
         if persona:
@@ -1494,6 +1516,8 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
             await _start_keyword_session(update, persona_name, scenario)
         else:
             await _handle_german_command(update, "!german session")
+    elif _DRILL_AGAIN_RE.search(text) and update.message.chat_id in _last_drills:
+        await _restart_last_drill(update)
     elif _AGAIN_RE.search(text):
         persona = _last_session_persona()
         if persona:
