@@ -680,15 +680,17 @@ async def _handle_german_transcript(update: Update, text: str):
         )
         return
 
-    out, err, rc = _run(
+    reviewer_out, reviewer_err, rc = _run(
         [str(VENV_PYTHON), "reviewer.py", "--latest", "--base-dir", "language/german/"],
         cwd=str(GERMAN_BASE)
     )
     if rc != 0:
         await update.message.reply_text(
-            f"❌ reviewer.py failed (exit {rc}):\n{err[:400]}\nFile: {raw_path}"
+            f"❌ reviewer.py failed (exit {rc}):\n{reviewer_err[:400]}\nFile: {raw_path}"
         )
         return
+    if reviewer_out and reviewer_out.strip():
+        await update.message.reply_text(f"<pre>{escape(reviewer_out.strip())}</pre>", parse_mode="HTML")
 
     out, err, rc = _run(
         [str(VENV_PYTHON), "status.py", "--base-dir", "language/german/"],
@@ -1085,13 +1087,11 @@ def run_bot_mode():
 
     async def error_handler(update, context):
         """Suppress noisy network errors — log one line instead of full traceback."""
-        import traceback
         err = context.error
         if isinstance(err, (NetworkError, TimedOut)):
             print(f"⚠️  Network error (will retry): {err.__class__.__name__}: {err}")
         else:
             print(f"❌ Bot error: {err.__class__.__name__}: {err}")
-            traceback.print_exception(type(err), err, err.__traceback__)
 
     app.add_error_handler(error_handler)
 
