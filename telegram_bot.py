@@ -591,8 +591,11 @@ _SESSION_RE = re.compile(
     re.I,
 )
 _CONJUGATE_RE = re.compile(r'\bconjugate\s+(\w+)\b', re.I)
-_DRILL_RE = re.compile(r'\bdrill\s+(.*)', re.I)
-_DRILL_CTL_RE = re.compile(r'\b(enough|got it|next|done|stop|end drill)\b', re.I)
+_DRILL_RE = re.compile(
+    r'(german\s+drill|drill\s+german|drill\s+mode|start\s+drill|drill\s+(?:verb|noun|word|vocab|my\s+mistakes|errors?))',
+    re.I,
+)
+_DRILL_CTL_RE = re.compile(r'\bend\s+drill\b', re.I)
 
 
 _AGAIN_RE = re.compile(
@@ -979,11 +982,9 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         verb = _CONJUGATE_RE.search(text).group(1)
         await _handle_conjugate(update, verb)
     elif _DRILL_RE.search(text):
-        target = _DRILL_RE.search(text).group(1)
-        await _handle_drill(update, target)
+        await _handle_drill(update, text)
     elif _DRILL_CTL_RE.search(text):
-        word = _DRILL_CTL_RE.search(text).group(1)
-        await _handle_drill_control(update, word)
+        await _handle_drill_control(update, text)
     else:
         intent = _resolve_keyword_intent(text, KEYWORD_MAP)
         if intent:
@@ -1051,11 +1052,9 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
         verb = _CONJUGATE_RE.search(text).group(1)
         await _handle_conjugate(update, verb)
     elif _DRILL_RE.search(text):
-        target = _DRILL_RE.search(text).group(1)
-        await _handle_drill(update, target)
+        await _handle_drill(update, text)
     elif _DRILL_CTL_RE.search(text):
-        word = _DRILL_CTL_RE.search(text).group(1)
-        await _handle_drill_control(update, word)
+        await _handle_drill_control(update, text)
     else:
         intent = _resolve_keyword_intent(text, KEYWORD_MAP)
         if intent:
