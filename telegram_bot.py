@@ -1070,24 +1070,24 @@ def _normalize_answer(text: str) -> str:
     return " ".join(text.split())
 
 
-def _spell_feedback(answer: str) -> str | None:
-    """Return feedback string if any German words look misspelled, else None."""
+def _spell_feedback(normalized_answer: str) -> str | None:
+    """Return feedback for misspelled German words. Input must already be normalized (no punctuation, lowercase)."""
     try:
         from spellchecker import SpellChecker
+        from difflib import SequenceMatcher
         checker = SpellChecker(language="de")
-        words = answer.split()
+        words = normalized_answer.split()
         unknown = checker.unknown(words)
         if not unknown:
             return None
         parts = []
         for w in unknown:
             candidates = checker.candidates(w) or set()
-            best = next(iter(candidates), None)
-            if best:
+            # Only suggest a correction if it's actually close (avoids 'danube' → 'laube')
+            best = max(candidates, key=lambda c: SequenceMatcher(None, w, c).ratio(), default=None)
+            if best and SequenceMatcher(None, w, best).ratio() >= 0.80:
                 parts.append(f"'{w}' → '{best}'?")
-            else:
-                parts.append(f"'{w}' not recognised")
-        return "Check spelling: " + ", ".join(parts)
+        return ("Check spelling: " + ", ".join(parts)) if parts else None
     except Exception:
         return None
 
@@ -1286,7 +1286,7 @@ async def _handle_drill_l2_answer(update, text: str, chat_id: int, state: dict) 
 
     from difflib import SequenceMatcher
     similarity = SequenceMatcher(None, answer, expected).ratio()
-    spell_note = _spell_feedback(text)
+    spell_note = _spell_feedback(answer)  # answer is already normalized
 
     if spell_note:
         await update.message.reply_text(f"{spell_note}\n\nTry again:  (hint / skip)")
