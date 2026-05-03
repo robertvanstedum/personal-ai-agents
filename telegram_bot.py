@@ -971,6 +971,15 @@ async def _handle_drill(update, target: str) -> None:
     target_lower = target.lower()
     entry = next((v for v in verbs if v["verb"].lower() in target_lower), None)
     if not entry:
+        # Check if user named a specific verb not in the list
+        words = [w for w in target_lower.split() if w not in ("drill", "german", "mode", "start", "verb", "my", "errors", "mistakes")]
+        named = next((w for w in words if len(w) > 3), None)
+        if named:
+            await update.message.reply_text(
+                f"'{named}' not in drill pool yet — add it to drill_pool.json.\n"
+                f"Available: {', '.join(v['verb'] for v in verbs)}"
+            )
+            return
         import random
         entry = random.choice(verbs)
     state = _start_drill_state(entry)
