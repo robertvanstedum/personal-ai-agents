@@ -1135,9 +1135,11 @@ def _load_drill_state() -> None:
         import json as _json
         with open(_DRILL_STATE_FILE) as f:
             data = _json.load(f)
+        before = set(_active_drills)
         _active_drills.update({int(k): v for k, v in data.items()})
-        if _active_drills:
-            print(f"♻️  Restored {len(_active_drills)} active drill(s) from disk.")
+        new_keys = set(_active_drills) - before
+        if new_keys:
+            print(f"♻️  Restored {len(new_keys)} drill(s) from disk: {new_keys}")
     except Exception as e:
         print(f"⚠️  Could not restore drill state: {e}")
 
@@ -1610,6 +1612,9 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = update.message.text.strip()
 
     # Active drill intercepts all input (except "end drill" which closes it)
+    # Lazy reload from disk in case bot restarted after state was saved but before this message arrived.
+    if update.message.chat_id not in _active_drills:
+        _load_drill_state()
     if update.message.chat_id in _active_drills:
         if _DRILL_CTL_RE.search(text):
             await _handle_drill_control(update, text)
@@ -1694,7 +1699,9 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
 
     text = transcription.strip()
 
-    # Active drill intercepts voice answers too
+    # Active drill intercepts voice answers too; lazy reload handles bot-restart state loss.
+    if update.message.chat_id not in _active_drills:
+        _load_drill_state()
     if update.message.chat_id in _active_drills:
         if _DRILL_CTL_RE.search(text):
             await _handle_drill_control(update, text)
