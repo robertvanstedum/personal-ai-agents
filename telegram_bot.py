@@ -334,6 +334,8 @@ def record_feedback(action, rank, article_data):
 
 async def cmd_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /run — trigger the curator manually"""
+    if not update.message:
+        return
     await update.message.reply_text("⏳ Running curator now, this takes a few minutes...")
     
     result = subprocess.run(
@@ -353,6 +355,8 @@ async def cmd_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /status — show last run info"""
+    if not update.message:
+        return
     log = BASE_DIR / 'logs' / 'curator_launchd.log'
     if log.exists():
         lines = log.read_text().splitlines()
@@ -363,6 +367,8 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_briefing(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /briefing — resend today's briefing"""
+    if not update.message:
+        return
     token = get_token()
     chat_id = get_chat_id() or str(update.message.chat_id)
     send_briefing(token, chat_id)
@@ -1051,7 +1057,7 @@ def run_bot_mode():
     try:
         resp = requests.get(
             f"https://api.telegram.org/bot{token}/getUpdates",
-            params={"timeout": 1},
+            params={"timeout": 0},
             timeout=5,
         )
         if resp.status_code == 409:
