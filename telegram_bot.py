@@ -908,20 +908,81 @@ def _load_drill_pool() -> dict:
     return {}
 
 
-async def _handle_conjugate(update, verb: str) -> None:
-    """Level 0 conjugate flashcard — reads from drill_pool.json core.verbs."""
-    pool = _load_drill_pool()
-    verbs = {v["verb"]: v for v in pool.get("core", {}).get("verbs", []) if isinstance(v, dict) and "verb" in v}
-    verb_lower = verb.lower()
-    if verb_lower not in verbs:
-        await update.message.reply_text(
-            f"Conjugation for '{verb}' not in core list — add it to drill_pool.json to drill it."
+def _save_drill_pool(pool: dict) -> None:
+    pool_path = GERMAN_DIR / "config" / "drill_pool.json"
+    pool_path.write_text(json.dumps(pool, indent=2, ensure_ascii=False))
+
+
+def _all_verb_entries(pool: dict) -> list:
+    """Return all verb entries from core + on_demand, core takes precedence."""
+    core = [v for v in pool.get("core", {}).get("verbs", []) if isinstance(v, dict) and "verb" in v]
+    on_demand = [v for v in pool.get("on_demand", {}).get("verbs", []) if isinstance(v, dict) and "verb" in v]
+    core_names = {v["verb"].lower() for v in core}
+    return core + [v for v in on_demand if v["verb"].lower() not in core_names]
+
+
+def _lookup_verb(pool: dict, verb_lower: str) -> dict | None:
+    return next((v for v in _all_verb_entries(pool) if v["verb"].lower() == verb_lower), None)
+
+
+def _fetch_conjugations_via_claude(verb: str) -> dict | None:
+    """Call Claude to get present-tense conjugations for any German verb. Returns entry dict or None."""
+    try:
+        api_key = keyring.get_password("anthropic", "api_key")
+        if not api_key:
+            return None
+        import anthropic as _anthropic
+        client = _anthropic.Anthropic(api_key=api_key)
+        prompt = (
+            f'Give me the present-tense conjugations of the German verb "{verb}" '
+            f'for these persons: ich, du, er, wir, ihr, sie. '
+            f'Also give a short English translation (infinitive). '
+            f'Reply ONLY with a JSON object in this exact format, no extra text:\n'
+            f'{{"verb":"{verb}","english":"...","conjugations":{{"ich":"...","du":"...","er":"...","wir":"...","ihr":"...","sie":"..."}}}}'
         )
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=200,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = msg.content[0].text.strip()
+        # Strip markdown code fences if present
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        return json.loads(raw.strip())
+    except Exception as e:
+        print(f"⚠️  Claude conjugation lookup failed for '{verb}': {e}")
+        return None
+
+
+async def _resolve_verb(update, verb_lower: str) -> dict | None:
+    """Find verb in pool or fetch via Claude and cache it. Returns entry or None."""
+    pool = _load_drill_pool()
+    entry = _lookup_verb(pool, verb_lower)
+    if entry:
+        return entry
+    await update.message.reply_text(f"Looking up '{verb_lower}'…")
+    entry = _fetch_conjugations_via_claude(verb_lower)
+    if not entry:
+        await update.message.reply_text(f"Couldn't look up '{verb_lower}' — check spelling.")
+        return None
+    # Cache in on_demand
+    on_demand_verbs = pool.setdefault("on_demand", {}).setdefault("verbs", [])
+    on_demand_verbs.append(entry)
+    _save_drill_pool(pool)
+    return entry
+
+
+async def _handle_conjugate(update, verb: str) -> None:
+    """Level 0 conjugate flashcard — any verb, looks up via Claude if needed."""
+    entry = await _resolve_verb(update, verb.lower())
+    if not entry:
         return
-    entry = verbs[verb_lower]
     c = entry.get("conjugations", {})
     msg = (
-        f"{verb_lower} ({entry.get('english', '?')}) — fill in all persons:\n\n"
+        f"{entry['verb']} ({entry.get('english', '?')}) — present tense:\n\n"
         f"ich {c.get('ich','___')}    wir {c.get('wir','___')}\n"
         f"du {c.get('du','___')}     ihr {c.get('ihr','___')}\n"
         f"er {c.get('er','___')}     sie/Sie {c.get('sie','___')}"
@@ -961,26 +1022,30 @@ def _start_drill_state(entry: dict) -> dict:
 
 
 async def _handle_drill(update, target: str) -> None:
-    """Start a Level 1 drill — targeted verb or random from core list."""
+    """Start a Level 1 drill — any verb, random if none specified."""
     pool = _load_drill_pool()
-    verbs = [v for v in pool.get("core", {}).get("verbs", []) if isinstance(v, dict) and "verb" in v]
-    if not verbs:
-        await update.message.reply_text("No verbs in drill pool yet — add some to drill_pool.json.")
-        return
+    all_verbs = _all_verb_entries(pool)
     target_lower = target.lower()
-    entry = next((v for v in verbs if v["verb"].lower() in target_lower), None)
+
+    # Try to find a named verb in the trigger text
+    entry = next((v for v in all_verbs if v["verb"].lower() in target_lower), None)
+
     if not entry:
-        # Check if user named a specific verb not in the list
-        words = [w for w in target_lower.split() if w not in ("drill", "german", "mode", "start", "verb", "my", "errors", "mistakes")]
-        named = next((w for w in words if len(w) > 3), None)
-        if named:
-            await update.message.reply_text(
-                f"'{named}' not in drill pool yet — add it to drill_pool.json.\n"
-                f"Available: {', '.join(v['verb'] for v in verbs)}"
-            )
-            return
-        import random
-        entry = random.choice(verbs)
+        stop_words = {"drill", "german", "mode", "start", "verb", "my", "errors", "mistakes"}
+        words = [w for w in target_lower.split() if w not in stop_words and len(w) > 3]
+        if words:
+            # User named a specific verb — look it up (Claude if needed)
+            entry = await _resolve_verb(update, words[0])
+            if not entry:
+                return
+        else:
+            # No verb named — pick random from pool
+            import random
+            entry = random.choice(all_verbs) if all_verbs else None
+            if not entry:
+                await update.message.reply_text("No verbs in drill pool yet.")
+                return
+
     state = _start_drill_state(entry)
     _active_drills[update.message.chat_id] = state
     await update.message.reply_text(
