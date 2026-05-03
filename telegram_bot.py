@@ -587,9 +587,10 @@ _SESSION_RE = re.compile(
 )
 _CONJUGATE_RE = re.compile(r'\bconjugate\s+(\w+)\b', re.I)
 _DRILL_RE = re.compile(
-    r'(german\s+drill|drill\s+german|drill\s+mode|start\s+drill|drill\s+(?:verb|noun|word|vocab|my\s+mistakes|errors?))',
+    r'(german\s+drill|drill\s+german|drill\s+mode|start\s+drill|drill\s+(?:level\s*2|l2|translate|verb|noun|word|vocab|my\s+mistakes|errors?))',
     re.I,
 )
+_DRILL_L2_RE = re.compile(r'\b(?:level\s*2|l2|translate)\b', re.I)
 _DRILL_CTL_RE = re.compile(r'\bend\s+drill\b', re.I)
 
 
@@ -1017,6 +1018,80 @@ async def _resolve_verb(update, verb_lower: str) -> dict | None:
     return entry
 
 
+def _fetch_phrases(verb: str, english: str) -> list:
+    """Generate translation phrases for a verb via LLM. Returns list of {english, german} dicts."""
+    prompt = (
+        f'Generate 6 natural German phrases using the verb "{verb}" ({english}). '
+        f'Mix informal (du/ich) and formal (Sie). Vienna-relevant contexts (café, hotel, transport, small talk). '
+        f'Reply ONLY with a JSON array, no extra text:\n'
+        f'[{{"english":"...","german":"..."}},{{"english":"...","german":"..."}}]'
+    )
+    raw = _call_llm(prompt, max_tokens=400)
+    if not raw:
+        return []
+    try:
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        result = json.loads(raw.strip())
+        return [p for p in result if isinstance(p, dict) and "english" in p and "german" in p]
+    except Exception as e:
+        print(f"⚠️  Failed to parse phrases JSON for '{verb}': {e}\nRaw: {raw[:100]}")
+        return []
+
+
+async def _resolve_phrases(update, entry: dict) -> list:
+    """Return cached phrases for a verb entry, or fetch+cache via LLM."""
+    if entry.get("phrases"):
+        return entry["phrases"]
+    await update.message.reply_text(f"Generating phrases for {entry['verb']}…")
+    phrases = _fetch_phrases(entry["verb"], entry.get("english", ""))
+    if not phrases:
+        await update.message.reply_text(f"Couldn't generate phrases for '{entry['verb']}'.")
+        return []
+    # Cache phrases back into the entry in drill_pool.json
+    pool = _load_drill_pool()
+    for section in (pool.get("core", {}).get("verbs", []), pool.get("on_demand", {}).get("verbs", [])):
+        for v in section:
+            if isinstance(v, dict) and v.get("verb", "").lower() == entry["verb"].lower():
+                v["phrases"] = phrases
+                break
+    _save_drill_pool(pool)
+    entry["phrases"] = phrases
+    return phrases
+
+
+def _normalize_answer(text: str) -> str:
+    """Lowercase, strip punctuation, collapse whitespace."""
+    import unicodedata
+    text = text.lower().strip()
+    text = "".join(c for c in text if unicodedata.category(c) not in ("Po", "Ps", "Pe", "Pi", "Pf", "Pd"))
+    return " ".join(text.split())
+
+
+def _spell_feedback(answer: str) -> str | None:
+    """Return feedback string if any German words look misspelled, else None."""
+    try:
+        from spellchecker import SpellChecker
+        checker = SpellChecker(language="de")
+        words = answer.split()
+        unknown = checker.unknown(words)
+        if not unknown:
+            return None
+        parts = []
+        for w in unknown:
+            candidates = checker.candidates(w) or set()
+            best = next(iter(candidates), None)
+            if best:
+                parts.append(f"'{w}' → '{best}'?")
+            else:
+                parts.append(f"'{w}' not recognised")
+        return "Check spelling: " + ", ".join(parts)
+    except Exception:
+        return None
+
+
 async def _handle_conjugate(update, verb: str) -> None:
     """Level 0 conjugate flashcard — any verb, looks up via Claude if needed."""
     entry = await _resolve_verb(update, verb.lower())
@@ -1032,7 +1107,7 @@ async def _handle_conjugate(update, verb: str) -> None:
     await update.message.reply_text(msg)
 
 
-# ─── Drill engine (Level 1 Lock) ─────────────────────────────────────────────
+# ─── Drill engine (Level 1 + Level 2) ───────────────────────────────────────
 
 _active_drills: dict = {}  # chat_id → drill state; lost on restart (acceptable)
 
@@ -1040,11 +1115,20 @@ _DRILL_PERSONS = ["ich", "du", "er", "wir", "ihr", "sie"]
 
 
 def _drill_prompt(state: dict) -> str:
+    """Level 1 prompt: person fill-in."""
     person = state["current"]
     verb = state["verb"]
     english = state["english"]
     total = len(state["queue"])
     return f"{verb} ({english}) — {state['pos']+1}/{total}\n\n{person} ___?"
+
+
+def _l2_prompt(state: dict) -> str:
+    """Level 2 prompt: translate this phrase."""
+    idx = state["queue"][state["pos"]]
+    phrase = state["phrases"][idx]
+    total = len(state["queue"])
+    return f"{state['pos']+1}/{total}\n\nHow do you say:\n\"{phrase['english']}\""
 
 
 def _start_drill_state(entry: dict) -> dict:
@@ -1063,44 +1147,157 @@ def _start_drill_state(entry: dict) -> dict:
     }
 
 
-async def _handle_drill(update, target: str) -> None:
-    """Start a Level 1 drill — any verb, random if none specified."""
+async def _resolve_drill_verb(update, target_lower: str) -> dict | None:
+    """Extract verb from trigger text, look up or fetch. Returns entry or None."""
     pool = _load_drill_pool()
     all_verbs = _all_verb_entries(pool)
-    target_lower = target.lower()
-
-    # Try to find a named verb in the trigger text
     entry = next((v for v in all_verbs if v["verb"].lower() in target_lower), None)
+    if entry:
+        return entry
+    stop_words = {"drill", "german", "mode", "start", "verb", "my", "errors", "mistakes", "level", "translate", "l2"}
+    words = [w for w in target_lower.split() if w not in stop_words and len(w) > 3 and not w.isdigit()]
+    if words:
+        return await _resolve_verb(update, words[0])
+    import random
+    return random.choice(all_verbs) if all_verbs else None
 
+
+async def _handle_drill(update, target: str) -> None:
+    """Route to Level 1 or Level 2 drill based on trigger text."""
+    target_lower = target.lower()
+    if _DRILL_L2_RE.search(target_lower):
+        await _handle_drill_l2_start(update, target_lower)
+    else:
+        await _handle_drill_l1_start(update, target_lower)
+
+
+async def _handle_drill_l1_start(update, target_lower: str) -> None:
+    """Start a Level 1 conjugation drill — any verb, random if none specified."""
+    entry = await _resolve_drill_verb(update, target_lower)
     if not entry:
-        stop_words = {"drill", "german", "mode", "start", "verb", "my", "errors", "mistakes"}
-        words = [w for w in target_lower.split() if w not in stop_words and len(w) > 3]
-        if words:
-            # User named a specific verb — look it up (Claude if needed)
-            entry = await _resolve_verb(update, words[0])
-            if not entry:
-                return
-        else:
-            # No verb named — pick random from pool
-            import random
-            entry = random.choice(all_verbs) if all_verbs else None
-            if not entry:
-                await update.message.reply_text("No verbs in drill pool yet.")
-                return
-
+        await update.message.reply_text("No verbs in drill pool yet.")
+        return
     state = _start_drill_state(entry)
+    state["level"] = 1
     _active_drills[update.message.chat_id] = state
     await update.message.reply_text(
-        f"Drill started. Type 'end drill' to stop.\n\n" + _drill_prompt(state)
+        f"Conjugation drill. Type 'end drill' to stop.\n\n" + _drill_prompt(state)
+    )
+
+
+async def _handle_drill_l2_start(update, target_lower: str) -> None:
+    """Start a Level 2 translation drill — any verb, random if none specified."""
+    entry = await _resolve_drill_verb(update, target_lower)
+    if not entry:
+        await update.message.reply_text("No verbs in drill pool yet.")
+        return
+    phrases = await _resolve_phrases(update, entry)
+    if not phrases:
+        return
+    import random
+    queue = random.sample(range(len(phrases)), len(phrases))
+    state = {
+        "level": 2,
+        "verb": entry["verb"],
+        "english": entry.get("english", ""),
+        "phrases": phrases,
+        "queue": queue,
+        "pos": 0,
+        "score": 0,
+        "total": 0,
+        "wrong_count": 0,
+        "retry": False,
+    }
+    _active_drills[update.message.chat_id] = state
+    await update.message.reply_text(
+        f"Translation drill: {entry['verb']} ({entry.get('english','')}). Type 'end drill' to stop.\n\n"
+        + _l2_prompt(state)
     )
 
 
 async def _handle_drill_answer(update, text: str) -> None:
-    """Check a drill answer; 'hint' or 'skip' are escape hatches."""
+    """Route to L1 or L2 answer handler based on active drill level."""
     chat_id = update.message.chat_id
     state = _active_drills.get(chat_id)
     if not state:
         return
+    if state.get("level", 1) == 2:
+        await _handle_drill_l2_answer(update, text, chat_id, state)
+    else:
+        await _handle_drill_l1_answer(update, text, chat_id, state)
+
+
+async def _handle_drill_l2_answer(update, text: str, chat_id: int, state: dict) -> None:
+    """Check a Level 2 translation answer."""
+    idx = state["queue"][state["pos"]]
+    phrase = state["phrases"][idx]
+    expected_raw = phrase["german"]
+    expected = _normalize_answer(expected_raw)
+    answer = _normalize_answer(text)
+
+    if answer in ("hint", "skip"):
+        if answer == "hint":
+            words = expected_raw.split()
+            hint = " ".join(w[:2] + "…" for w in words)
+            await update.message.reply_text(f"💡 {hint}")
+            return
+        # skip
+        state["total"] += 1
+        state["pos"] += 1
+        if state["pos"] >= len(state["queue"]):
+            score, total = state["score"], state["total"]
+            del _active_drills[chat_id]
+            await update.message.reply_text(f"→ {expected_raw}\n\nDrill complete! {score}/{total} correct.")
+        else:
+            await update.message.reply_text(f"→ {expected_raw}\n\n" + _l2_prompt(state))
+        return
+
+    if answer == expected:
+        state["score"] += 1
+        state["total"] += 1
+        state["wrong_count"] = 0
+        state["retry"] = False
+        state["pos"] += 1
+        if state["pos"] >= len(state["queue"]):
+            score, total = state["score"], state["total"]
+            del _active_drills[chat_id]
+            await update.message.reply_text(f"✅ {expected_raw}\n\nDrill complete! {score}/{total} correct.")
+        else:
+            await update.message.reply_text(f"✅ {expected_raw}\n\n" + _l2_prompt(state))
+        return
+
+    # Wrong answer
+    if not state["retry"]:
+        state["total"] += 1
+        state["retry"] = True
+    state["wrong_count"] = state.get("wrong_count", 0) + 1
+
+    if state["wrong_count"] >= 3:
+        state["wrong_count"] = 0
+        state["retry"] = False
+        state["pos"] += 1
+        if state["pos"] >= len(state["queue"]):
+            score, total = state["score"], state["total"]
+            del _active_drills[chat_id]
+            await update.message.reply_text(f"→ {expected_raw}  (auto-revealed)\n\nDrill complete! {score}/{total} correct.")
+        else:
+            await update.message.reply_text(f"→ {expected_raw}  (auto-revealed)\n\n" + _l2_prompt(state))
+        return
+
+    from difflib import SequenceMatcher
+    similarity = SequenceMatcher(None, answer, expected).ratio()
+    spell_note = _spell_feedback(text)
+
+    if spell_note:
+        await update.message.reply_text(f"{spell_note}\n\nTry again:  (hint / skip)")
+    elif similarity >= 0.7:
+        await update.message.reply_text("Almost — check spelling.  (hint / skip)")
+    else:
+        await update.message.reply_text(f"❌ Try again.  (hint / skip)")
+
+
+async def _handle_drill_l1_answer(update, text: str, chat_id: int, state: dict) -> None:
+    """Check a Level 1 conjugation answer; 'hint' or 'skip' are escape hatches."""
 
     person = state["current"]
     expected = state["conjugations"].get(person, "").strip().lower()
