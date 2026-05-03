@@ -925,35 +925,77 @@ def _lookup_verb(pool: dict, verb_lower: str) -> dict | None:
     return next((v for v in _all_verb_entries(pool) if v["verb"].lower() == verb_lower), None)
 
 
-def _fetch_conjugations_via_claude(verb: str) -> dict | None:
-    """Call Claude to get present-tense conjugations for any German verb. Returns entry dict or None."""
+# LLM providers tried in order — reorder to change preference, no key changes needed
+_LLM_PROVIDERS = [
+    {"name": "grok-mini",     "type": "xai",       "model": "grok-3-mini"},
+    {"name": "claude-haiku",  "type": "anthropic",  "model": "claude-haiku-4-5-20251001"},
+    {"name": "ollama-gemma",  "type": "ollama",     "model": "gemma3:1b"},
+]
+
+
+def _call_llm(prompt: str, max_tokens: int = 300) -> str | None:
+    """Call LLM providers in order, return text response or None if all fail."""
+    for provider in _LLM_PROVIDERS:
+        try:
+            if provider["type"] == "xai":
+                api_key = keyring.get_password("xai", "api_key")
+                if not api_key:
+                    continue
+                from openai import OpenAI as _OpenAI
+                client = _OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
+                resp = client.chat.completions.create(
+                    model=provider["model"],
+                    max_tokens=max_tokens,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                return resp.choices[0].message.content.strip()
+            elif provider["type"] == "anthropic":
+                api_key = keyring.get_password("anthropic", "api_key")
+                if not api_key:
+                    continue
+                import anthropic as _anthropic
+                client = _anthropic.Anthropic(api_key=api_key)
+                msg = client.messages.create(
+                    model=provider["model"],
+                    max_tokens=max_tokens,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                return msg.content[0].text.strip()
+            elif provider["type"] == "ollama":
+                from openai import OpenAI as _OpenAI
+                client = _OpenAI(api_key="ollama", base_url="http://localhost:11434/v1")
+                resp = client.chat.completions.create(
+                    model=provider["model"],
+                    max_tokens=max_tokens,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                return resp.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"⚠️  LLM provider '{provider['name']}' failed: {e}")
+            continue
+    return None
+
+
+def _fetch_conjugations(verb: str) -> dict | None:
+    """Fetch present-tense conjugations for any German verb via LLM, with fallback."""
+    prompt = (
+        f'Give me the present-tense conjugations of the German verb "{verb}" '
+        f'for these persons: ich, du, er, wir, ihr, sie. '
+        f'Also give a short English translation (infinitive). '
+        f'Reply ONLY with a JSON object in this exact format, no extra text:\n'
+        f'{{"verb":"{verb}","english":"...","conjugations":{{"ich":"...","du":"...","er":"...","wir":"...","ihr":"...","sie":"..."}}}}'
+    )
+    raw = _call_llm(prompt, max_tokens=200)
+    if not raw:
+        return None
     try:
-        api_key = keyring.get_password("anthropic", "api_key")
-        if not api_key:
-            return None
-        import anthropic as _anthropic
-        client = _anthropic.Anthropic(api_key=api_key)
-        prompt = (
-            f'Give me the present-tense conjugations of the German verb "{verb}" '
-            f'for these persons: ich, du, er, wir, ihr, sie. '
-            f'Also give a short English translation (infinitive). '
-            f'Reply ONLY with a JSON object in this exact format, no extra text:\n'
-            f'{{"verb":"{verb}","english":"...","conjugations":{{"ich":"...","du":"...","er":"...","wir":"...","ihr":"...","sie":"..."}}}}'
-        )
-        msg = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=200,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        raw = msg.content[0].text.strip()
-        # Strip markdown code fences if present
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
         return json.loads(raw.strip())
     except Exception as e:
-        print(f"⚠️  Claude conjugation lookup failed for '{verb}': {e}")
+        print(f"⚠️  Failed to parse conjugation JSON for '{verb}': {e}\nRaw: {raw[:100]}")
         return None
 
 
@@ -964,7 +1006,7 @@ async def _resolve_verb(update, verb_lower: str) -> dict | None:
     if entry:
         return entry
     await update.message.reply_text(f"Looking up '{verb_lower}'…")
-    entry = _fetch_conjugations_via_claude(verb_lower)
+    entry = _fetch_conjugations(verb_lower)
     if not entry:
         await update.message.reply_text(f"Couldn't look up '{verb_lower}' — check spelling.")
         return None
