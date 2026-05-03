@@ -1085,11 +1085,13 @@ def run_bot_mode():
 
     async def error_handler(update, context):
         """Suppress noisy network errors — log one line instead of full traceback."""
+        import traceback
         err = context.error
         if isinstance(err, (NetworkError, TimedOut)):
             print(f"⚠️  Network error (will retry): {err.__class__.__name__}: {err}")
         else:
             print(f"❌ Bot error: {err.__class__.__name__}: {err}")
+            traceback.print_exception(type(err), err, err.__traceback__)
 
     app.add_error_handler(error_handler)
 
