@@ -590,7 +590,7 @@ _DRILL_RE = re.compile(
     r'(german\s+drill|drill\s+german|drill\s+mode|start\s+drill|drill\s+(?:level\s*2|l2|translate|verb|noun|word|vocab|my\s+mistakes|errors?))',
     re.I,
 )
-_DRILL_L2_RE = re.compile(r'\b(?:level\s*2|l2|translate)\b', re.I)
+_DRILL_L2_RE = re.compile(r'\b(?:level\s*2|l2|translate|phrase|2)\b', re.I)
 _DRILL_CTL_RE = re.compile(r'\bend\s+drill\b', re.I)
 
 
