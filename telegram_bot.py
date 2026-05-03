@@ -347,7 +347,7 @@ async def cmd_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if result.returncode == 0:
         await update.message.reply_text("✅ Curator run complete. Sending briefing...")
-        token = get_token()
+        token = get_polling_token()
         chat_id = get_chat_id() or str(update.message.chat_id)
         send_briefing(token, chat_id)
     else:
@@ -369,7 +369,7 @@ async def cmd_briefing(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /briefing — resend today's briefing"""
     if not update.message:
         return
-    token = get_token()
+    token = get_polling_token()
     chat_id = get_chat_id() or str(update.message.chat_id)
     send_briefing(token, chat_id)
 
@@ -559,13 +559,13 @@ def handle_voice_message(message, token):
 
 def run_send_mode():
     """Called by cron/launchd: just send the briefing and exit"""
-    token = get_token()
+    token = get_polling_token()
     chat_id = get_chat_id()
-    
+
     if not token or not chat_id:
-        print("❌ Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID")
+        print("❌ Missing polling token or TELEGRAM_CHAT_ID")
         return
-    
+
     send_briefing(token, chat_id)
 
 # ─── German domain text handlers ─────────────────────────────────────────────
