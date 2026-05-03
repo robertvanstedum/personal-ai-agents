@@ -1208,7 +1208,7 @@ def handle_webhook_text_message(message, token):
     text = message.get('text', '')
     if text.startswith('---SESSION---'):
         threading.Thread(
-            target=_handle_german_transcript,
+            target=_handle_webhook_german_transcript,
             args=(text, chat_id, token),
             daemon=True
         ).start()
@@ -1218,8 +1218,8 @@ def handle_webhook_text_message(message, token):
             "Or send a voice note to run curator commands.")
 
 
-def _handle_german_transcript(text, chat_id, token):
-    """Pass full message text to parse_transcript.py via subprocess."""
+def _handle_webhook_german_transcript(text, chat_id, token):
+    """Pass full message text to parse_transcript.py via subprocess (webhook mode)."""
     import tempfile
     send_message(token, chat_id, "⏳ Parsing German session transcript...")
     german_dir = BASE_DIR / '_NewDomains/language-german'
