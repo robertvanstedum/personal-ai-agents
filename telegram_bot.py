@@ -587,7 +587,7 @@ _SESSION_RE = re.compile(
 )
 _CONJUGATE_RE = re.compile(r'\bconjugate\s+(\w+)\b', re.I)
 _DRILL_RE = re.compile(
-    r'(german\s+drill|drill\s+german|drill\s+mode|start\s+drill|drill\s+(?:level\s*2|l2|translate|verb|noun|word|vocab|my\s+mistakes|errors?))',
+    r'(german\s+drill|drill\s+german|drill\s+mode|start\s+drill|drill\s+(?:level\s*2|l2|translate|verb|noun|word|vocab|my\s+mistakes|errors?|[a-zäöüß]{3,}))',
     re.I,
 )
 _DRILL_L2_RE = re.compile(r'\b(?:level\s*2|l2|translate|phrase|2)\b', re.I)
