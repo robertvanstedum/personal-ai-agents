@@ -591,7 +591,7 @@ _DRILL_RE = re.compile(
     re.I,
 )
 _DRILL_L2_RE = re.compile(r'\b(?:level\s*2|l2|translate|phrase|2)\b', re.I)
-_DRILL_CTL_RE = re.compile(r'\bend\s+drill\b', re.I)
+_DRILL_CTL_RE = re.compile(r'\b(?:end\s+drill|done|stop|quit|enough)\b', re.I)
 _DRILL_AGAIN_RE = re.compile(r'\b(?:again|repeat|once more|one more)\b', re.I)
 _DRILL_LIST_RE = re.compile(r'\b(?:drill\s+list|list\s+(?:drills?|verbs?)|verbs?\s+list|show\s+verbs?|what\s+verbs?)\b', re.I)
 _DRILL_MORE_RE = re.compile(r'\b(?:more|next)\b', re.I)
@@ -1143,6 +1143,73 @@ def _load_drill_state() -> None:
 
 _DRILL_PERSONS = ["ich", "du", "er", "wir", "ihr", "sie"]
 
+_PERSONS_DISPLAY = ["ich", "du", "er/sie/es", "wir", "ihr", "sie/Sie"]
+_PERSONS_POOL    = ["ich", "du", "er",         "wir", "ihr", "sie"]
+
+
+def _item_tag(wrong_count: int, hint_used: bool, auto_revealed: bool) -> str:
+    if auto_revealed or hint_used or wrong_count >= 2:
+        return "needs-practice"
+    if wrong_count == 1:
+        return "drill-reinforced"
+    return "drill-clean"
+
+
+def _write_drill_anki(state: dict) -> int:
+    """Append friction items from completed drill to vienna_deck.csv. Returns card count written."""
+    import csv as _csv
+    vienna_csv = GERMAN_DIR / "anki" / "vienna_deck.csv"
+    items = state.get("items", [])
+    friction = [it for it in items if it["result"] != "drill-clean"]
+    if not friction:
+        return 0
+
+    existing_fronts: set[str] = set()
+    if vienna_csv.exists():
+        try:
+            with open(vienna_csv, newline="", encoding="utf-8") as f:
+                for row in _csv.DictReader(f):
+                    existing_fronts.add(row.get("Front", "").strip())
+        except Exception:
+            pass
+
+    write_header = not vienna_csv.exists()
+    written = 0
+    try:
+        with open(vienna_csv, "a", newline="", encoding="utf-8") as f:
+            writer = _csv.writer(f, quoting=_csv.QUOTE_ALL)
+            if write_header:
+                writer.writerow(["Front", "Back", "Tags"])
+            for it in friction:
+                if it["front"].strip() in existing_fronts:
+                    continue
+                writer.writerow([it["front"], it["back"], it["tags"]])
+                existing_fronts.add(it["front"].strip())
+                written += 1
+    except Exception as e:
+        print(f"⚠️  Could not write drill Anki cards: {e}")
+    return written
+
+
+def _drill_completion_message(state: dict, reveal_line: str) -> str:
+    """Build completion message with Anki summary. Writes cards as side effect."""
+    score, total = state["score"], state["total"]
+    written = _write_drill_anki(state)
+    counts = {"drill-clean": 0, "drill-reinforced": 0, "needs-practice": 0}
+    for it in state.get("items", []):
+        counts[it["result"]] = counts.get(it["result"], 0) + 1
+    lines = [f"{reveal_line}\n\nDrill complete! {score}/{total} correct."]
+    if counts["drill-clean"] or counts["drill-reinforced"] or counts["needs-practice"]:
+        lines.append(
+            f"  ✅ Clean: {counts['drill-clean']}  "
+            f"📝 Reinforced: {counts['drill-reinforced']}  "
+            f"⚠️ Needs practice: {counts['needs-practice']}"
+        )
+    if written:
+        lines.append(f"  {written} card(s) added to vienna_deck.csv — reimport Anki to sync to phone.")
+    lines.append("(say 'again' to repeat)")
+    return "\n".join(lines)
+
 
 def _drill_prompt(state: dict) -> str:
     """Level 1 prompt: person fill-in."""
@@ -1174,7 +1241,47 @@ def _start_drill_state(entry: dict) -> dict:
         "score": 0,
         "total": 0,
         "retry": False,
+        "items": [],
+        "hint_used_current": False,
+        "l1_worst_tag": "drill-clean",
     }
+
+
+def _record_l2_item(state: dict, phrase: dict, wrong_count: int, auto_revealed: bool) -> None:
+    tag = _item_tag(wrong_count, state.get("hint_used_current", False), auto_revealed)
+    state["items"].append({
+        "front": phrase["english"],
+        "back": phrase["german"],
+        "result": tag,
+        "tags": f"{tag} Vienna phrase {state['verb']}",
+    })
+    state["hint_used_current"] = False
+
+
+def _record_l1_person(state: dict, wrong_count: int, auto_revealed: bool) -> None:
+    tag = _item_tag(wrong_count, state.get("hint_used_current", False), auto_revealed)
+    priority = {"drill-clean": 0, "drill-reinforced": 1, "needs-practice": 2}
+    if priority.get(tag, 0) > priority.get(state.get("l1_worst_tag", "drill-clean"), 0):
+        state["l1_worst_tag"] = tag
+    state["hint_used_current"] = False
+
+
+def _finalize_l1_items(state: dict) -> None:
+    """Convert l1_worst_tag into one Anki item if any friction occurred."""
+    tag = state.get("l1_worst_tag", "drill-clean")
+    if tag == "drill-clean":
+        return
+    conj = state.get("conjugations", {})
+    table = " / ".join(
+        f"{dp} {conj.get(pp, '?')}"
+        for dp, pp in zip(_PERSONS_DISPLAY, _PERSONS_POOL)
+    )
+    state["items"].append({
+        "front": f"{state['verb']} — {state.get('english', '')}",
+        "back": table,
+        "result": tag,
+        "tags": f"{tag} Vienna conjugation",
+    })
 
 
 async def _resolve_drill_verb(update, target_lower: str) -> dict | None:
@@ -1238,6 +1345,8 @@ async def _handle_drill_l2_start(update, target_lower: str) -> None:
         "total": 0,
         "wrong_count": 0,
         "retry": False,
+        "items": [],
+        "hint_used_current": False,
     }
     _active_drills[update.message.chat_id] = state
     _save_drill_state()
@@ -1272,31 +1381,36 @@ async def _handle_drill_l2_answer(update, text: str, chat_id: int, state: dict) 
         if answer == "hint":
             words = expected_raw.split()
             hint = " ".join(w[:2] + "…" for w in words)
+            state["hint_used_current"] = True
             await update.message.reply_text(f"💡 {hint}")
             return
-        # skip
+        # skip — treat as friction
+        _record_l2_item(state, phrase, state.get("wrong_count", 0), auto_revealed=True)
         state["total"] += 1
+        state["wrong_count"] = 0
         state["pos"] += 1
         if state["pos"] >= len(state["queue"]):
-            score, total = state["score"], state["total"]
             _last_drills[chat_id] = {"verb": state["verb"], "level": 2, "english": state.get("english", "")}
+            msg = _drill_completion_message(state, f"→ {expected_raw}")
             del _active_drills[chat_id]
-            await update.message.reply_text(f"→ {expected_raw}\n\nDrill complete! {score}/{total} correct.  (say 'again' to repeat)")
+            await update.message.reply_text(msg)
         else:
             await update.message.reply_text(f"→ {expected_raw}\n\n" + _l2_prompt(state))
         return
 
     if answer == expected:
+        wc = state.get("wrong_count", 0)
         state["score"] += 1
         state["total"] += 1
         state["wrong_count"] = 0
         state["retry"] = False
+        _record_l2_item(state, phrase, wc, auto_revealed=False)
         state["pos"] += 1
         if state["pos"] >= len(state["queue"]):
-            score, total = state["score"], state["total"]
             _last_drills[chat_id] = {"verb": state["verb"], "level": 2, "english": state.get("english", "")}
+            msg = _drill_completion_message(state, f"✅ {expected_raw}")
             del _active_drills[chat_id]
-            await update.message.reply_text(f"✅ {expected_raw}\n\nDrill complete! {score}/{total} correct.  (say 'again' to repeat)")
+            await update.message.reply_text(msg)
         else:
             await update.message.reply_text(f"✅ {expected_raw}\n\n" + _l2_prompt(state))
         return
@@ -1308,14 +1422,15 @@ async def _handle_drill_l2_answer(update, text: str, chat_id: int, state: dict) 
     state["wrong_count"] = state.get("wrong_count", 0) + 1
 
     if state["wrong_count"] >= 3:
+        _record_l2_item(state, phrase, state["wrong_count"], auto_revealed=True)
         state["wrong_count"] = 0
         state["retry"] = False
         state["pos"] += 1
         if state["pos"] >= len(state["queue"]):
-            score, total = state["score"], state["total"]
             _last_drills[chat_id] = {"verb": state["verb"], "level": 2, "english": state.get("english", "")}
+            msg = _drill_completion_message(state, f"→ {expected_raw}  (auto-revealed)")
             del _active_drills[chat_id]
-            await update.message.reply_text(f"→ {expected_raw}  (auto-revealed)\n\nDrill complete! {score}/{total} correct.  (say 'again' to repeat)")
+            await update.message.reply_text(msg)
         else:
             await update.message.reply_text(f"→ {expected_raw}  (auto-revealed)\n\n" + _l2_prompt(state))
         return
@@ -1341,44 +1456,46 @@ async def _handle_drill_l1_answer(update, text: str, chat_id: int, state: dict) 
 
     if answer == "hint":
         hint = expected[:2] + "…" if len(expected) > 2 else expected
+        state["hint_used_current"] = True
         await update.message.reply_text(f"💡 {person} {hint}")
         return
 
     if answer == "skip":
+        _record_l1_person(state, state.get("wrong_count", 0), auto_revealed=True)
         state["total"] += 1
         state["retry"] = False
+        state["wrong_count"] = 0
         state["pos"] += 1
         if state["pos"] >= len(state["queue"]):
-            score = state["score"]
-            total = state["total"]
+            _finalize_l1_items(state)
             _last_drills[chat_id] = {"verb": state["verb"], "level": 1, "english": state.get("english", "")}
+            msg = _drill_completion_message(state, f"→ {person} {expected}")
             del _active_drills[chat_id]
-            await update.message.reply_text(
-                f"→ {person} {expected}\n\nDrill complete! {score}/{total} correct.  (say 'again' to repeat)"
-            )
+            await update.message.reply_text(msg)
         else:
             state["current"] = state["queue"][state["pos"]]
-            await update.message.reply_text(
-                f"→ {person} {expected}\n\n" + _drill_prompt(state)
-            )
+            await update.message.reply_text(f"→ {person} {expected}\n\n" + _drill_prompt(state))
         return
 
     def _advance(reveal_prefix: str) -> str:
         state["pos"] += 1
         if state["pos"] >= len(state["queue"]):
-            score = state["score"]
-            total = state["total"]
+            _finalize_l1_items(state)
             _last_drills[chat_id] = {"verb": state["verb"], "level": 1, "english": state.get("english", "")}
+            msg = _drill_completion_message(state, reveal_prefix)
             del _active_drills[chat_id]
-            return f"{reveal_prefix}\n\nDrill complete! {score}/{total} correct.  (say 'again' to repeat)"
+            return msg
         else:
             state["current"] = state["queue"][state["pos"]]
             return f"{reveal_prefix}\n\n" + _drill_prompt(state)
 
     if answer == expected:
+        wc = state.get("wrong_count", 0)
         state["score"] += 1
         state["total"] += 1
         state["retry"] = False
+        state["wrong_count"] = 0
+        _record_l1_person(state, wc, auto_revealed=False)
         await update.message.reply_text(_advance(f"✅ {person} {expected}"))
     else:
         from difflib import SequenceMatcher
@@ -1392,20 +1509,14 @@ async def _handle_drill_l1_answer(update, text: str, chat_id: int, state: dict) 
         state["wrong_count"] = state.get("wrong_count", 0) + 1
 
         if state["wrong_count"] >= 3:
-            # Auto-reveal after 3 wrong attempts
+            _record_l1_person(state, state["wrong_count"], auto_revealed=True)
             state["retry"] = False
             state["wrong_count"] = 0
-            await update.message.reply_text(
-                _advance(f"→ {person} {expected}  (auto-revealed)")
-            )
+            await update.message.reply_text(_advance(f"→ {person} {expected}  (auto-revealed)"))
         elif is_close:
-            await update.message.reply_text(
-                f"Almost — check spelling.  {person} ___?"
-            )
+            await update.message.reply_text(f"Almost — check spelling.  {person} ___?")
         else:
-            await update.message.reply_text(
-                f"❌ {person} ___?  (hint / skip)"
-            )
+            await update.message.reply_text(f"❌ {person} ___?  (hint / skip)")
 
 
 async def _restart_last_drill(update) -> None:
@@ -1465,17 +1576,28 @@ async def _handle_drill_list_more(update) -> None:
 
 
 async def _handle_drill_control(update, word: str) -> None:
-    """Handle 'end drill' — show score and exit."""
+    """Handle end-drill words — write Anki friction cards then exit."""
     chat_id = update.message.chat_id
-    state = _active_drills.pop(chat_id, None)
-    if state:
-        score = state["score"]
-        total = state["total"]
-        await update.message.reply_text(
-            f"Drill ended. {score}/{total} correct."
-        )
-    else:
+    state = _active_drills.get(chat_id)
+    if not state:
         await update.message.reply_text("No active drill.")
+        return
+    if state.get("level", 1) == 1:
+        _finalize_l1_items(state)
+    score, total = state["score"], state["total"]
+    written = _write_drill_anki(state)
+    counts = {"drill-clean": 0, "drill-reinforced": 0, "needs-practice": 0}
+    for it in state.get("items", []):
+        counts[it["result"]] = counts.get(it["result"], 0) + 1
+    _last_drills[chat_id] = {"verb": state["verb"], "level": state.get("level", 1), "english": state.get("english", "")}
+    del _active_drills[chat_id]
+    lines = [f"Drill ended — {score}/{total} correct so far."]
+    if any(counts.values()):
+        lines.append(f"  ✅ Clean: {counts['drill-clean']}  📝 Reinforced: {counts['drill-reinforced']}  ⚠️ Needs practice: {counts['needs-practice']}")
+    if written:
+        lines.append(f"  {written} card(s) added to vienna_deck.csv — reimport Anki to sync to phone.")
+    lines.append("(say 'again' to repeat)")
+    await update.message.reply_text("\n".join(lines))
 
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
