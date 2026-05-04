@@ -6,8 +6,7 @@ A personal AI agent system. Local memory, local model, swappable LLMs
 when you need them — not the other way around. The goal is an agent that
 knows you, challenges you, and gets better with you over time.
 
-The first domain: geopolitics and finance. Health, language learning,
-and others to follow. The architecture is designed to reuse across all of them.
+The first domain is geopolitics and finance (v1.1, daily use since February 2026). The second domain is German language learning (v0.9 beta). It uses the same local-first, model-agnostic pipeline for spoken practice in real Viennese scenes — with scaffold phrases, focused drill mode, and Anki cards earned only from actual friction. Language and Jobs are next.
 
 Learns from your history and preferences, with deliberate friction built
 in. Not a curated feed that confirms what you already think — an agent
@@ -252,6 +251,6 @@ All three emerged from building and operating this system.
 
 ---
 
-**Status:** v1.1 — Research Intelligence — March 29, 2026
+**Status:** v1.1 — Research Intelligence (March 2026) · v0.9 — Language Learning beta (May 2026)
 **Author:** Robert van Stedum
 **Release notes:** [docs/releases/RELEASE_v1.1_2026-03-29.md](docs/releases/RELEASE_v1.1_2026-03-29.md)
