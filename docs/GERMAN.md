@@ -178,7 +178,7 @@ A detailed case study documents how the domain evolved from a simple
 transcript parser to a three-layer learning loop across four weeks of
 daily use — including the design changes that only emerged from real use.
 
-See: [docs/GERMAN_CASE_STUDY_DRAFT_2026-05-02.md](docs/GERMAN_CASE_STUDY_DRAFT_2026-05-02.md)  
+See: [GERMAN_CASE_STUDY_DRAFT_2026-05-02.md](GERMAN_CASE_STUDY_DRAFT_2026-05-02.md)  
 Epilogue to be written after Vienna.
 
 ---
