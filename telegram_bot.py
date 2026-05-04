@@ -1455,6 +1455,11 @@ async def _handle_drill_l1_answer(update, text: str, chat_id: int, state: dict) 
     person = state["current"]
     expected = state["conjugations"].get(person, "").strip().lower()
     answer = text.strip().lower()
+    # Accept "ich nehme" as "nehme" — strip leading pronoun if user included it
+    _pronouns = {"ich", "du", "er", "sie", "es", "wir", "ihr", "sie/sie"}
+    parts = answer.split(None, 1)
+    if len(parts) == 2 and parts[0] in _pronouns:
+        answer = parts[1]
 
     if answer == "hint":
         hint = expected[:2] + "…" if len(expected) > 2 else expected
