@@ -6,7 +6,7 @@ A personal AI agent system. Local memory, local model, swappable LLMs
 when you need them — not the other way around. The goal is an agent that
 knows you, challenges you, and gets better with you over time.
 
-The first domain is geopolitics and finance (v1.1, daily use since February 2026). The second domain is German language learning (v0.9 beta). It uses the same local-first, model-agnostic pipeline for spoken practice in real Viennese scenes — with scaffold phrases, focused drill mode, and Anki cards earned only from actual friction. Language and Jobs are next.
+The first domain is geopolitics and finance (v1.1, daily use since February 2026). The second domain is German language learning (v0.9 beta). It uses the same local-first, model-agnostic pipeline for spoken practice in real Viennese scenes — with scaffold phrases, focused drill mode, and Anki cards earned only from actual friction. Health and Jobs are next.
 
 Learns from your history and preferences, with deliberate friction built
 in. Not a curated feed that confirms what you already think — an agent
@@ -190,7 +190,7 @@ mini-moi uses a three-agent workflow with strict separation of concerns:
 One agent is active on the repository at a time. Robert is the decision
 point between them. New domains and features stage in `_NewDomains/`
 before graduating to the main repo on release — Research Intelligence
-followed this path. Language and Jobs are next.
+followed this path. Health and Jobs are next.
 
 ### Cost baseline (build phase)
 
