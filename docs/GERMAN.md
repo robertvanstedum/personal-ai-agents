@@ -183,5 +183,17 @@ Epilogue to be written after Vienna.
 
 ---
 
+## Screenshots
+
+| Telegram delivers the AI prompt | Dr. Huber responds in Austrian German |
+|---|---|
+| ![Scene prompt delivered via Telegram](screenshots/German_Scene_Prompt.png) | ![Live session — museum conversation](screenshots/German_Session_Start.png) |
+
+| Real conversation — asking for a recommendation |
+|---|
+| ![Können Sie mir etwas empfehlen?](screenshots/German_Session_Conversation.png) |
+
+---
+
 *mini-moi German Domain — v0.9 beta — May 2026 — Robert van Stedum*  
 *[github.com/robertvanstedum/personal-ai-agents](https://github.com/robertvanstedum/personal-ai-agents)*
