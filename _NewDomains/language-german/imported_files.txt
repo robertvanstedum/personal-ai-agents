@@ -4,3 +4,12 @@
 2026-04-23_anki.csv
 2026-04-24_anki.csv
 2026-04-25 Persona: Frau Novak Scenario: ask_medicine Duration: 14 Mode: voice_anki.csv
+2026-04-25 Persona: Frau Novak Scenario: ask_medicine Duration: 18 Mode: voice_anki.csv
+2026-04-26 Persona: Klaus Scenario: restaurant_reservation Duration: 8 Mode: voice_anki.csv
+2026-04-26 Persona: Klaus Scenario: restaurant_reservation Duration: 8 Mode: writing_anki.csv
+2026-04-26_anki.csv
+2026-04-27_anki.csv
+2026-04-29_anki.csv
+2026-04-30_anki.csv
+2026-05-01_anki.csv
+2026-05-01_manual_anki.csv

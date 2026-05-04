@@ -70,3 +70,15 @@ agent_active: false
 | 2026-03-29 | taiwan-003 | 1min | $0.00 | $0.08 | taiwan-003: 12 triaged, top find: Porcupine or Honey Badger?: The “Overall Defense Concept” an |
 
 | 2026-03-29 | hellscape-taiwan-porcupine-003 | 1min | $0.00 | $0.08 | hellscape-taiwan-porcupine-003: 12 triaged, top find: Porcupine or Honey Badger?: The “Overall Defense Concept” an |
+
+| 2026-03-29 | uat-100-a | 1min | $0.00 | $0.08 | uat-100-a: 12 triaged, top find: Porcupine or Honey Badger?: The “Overall Defense Concept” an |
+
+| 2026-03-29 | uat-100-b | 1min | $0.00 | $0.08 | uat-100-b: 12 triaged, top find: Porcupine or Honey Badger?: The “Overall Defense Concept” an |
+
+| 2026-03-29 | uat-100-c | 1min | $0.00 | $0.08 | uat-100-c: 12 triaged, top find: Institute for National Defense and Security Research-Defense |
+
+| 2026-03-29 | uat-debug | 1min | $0.00 | $0.08 | uat-debug: 12 triaged, top find: Porcupine or Honey Badger?: The “Overall Defense Concept” an |
+
+| 2026-03-29 | hellscape-taiwan-porcupine-004 | 1min | $0.00 | $0.08 | hellscape-taiwan-porcupine-004: 12 triaged, top find: Porcupine or Honey Badger?: The “Overall Defense Concept” an |
+
+| 2026-03-29 | gold-geopolitics-001 | 1min | $0.00 | $0.08 | gold-geopolitics-001: 12 triaged, top find: The Bretton Woods System | World Gold Council |

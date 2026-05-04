@@ -1,0 +1,41 @@
+---SESSION---
+Date: 2026-04-30
+Persona: Maria
+Scenario: cafe_bill
+Duration: 11
+Mode: writing
+
+Maria: Guten Tag! Schön, dass Sie wieder da sind. Haben Sie alles gut genossen? Möchten Sie jetzt zahlen?
+
+Robert: Ich möchte noch einen kleinen Brauner, bitte.
+
+Maria: Sehr gerne, der Herr. Einen kleinen Brauner kommt sofort. Möchten Sie für Ihre Frau auch noch etwas? Oder soll ich gleich die Rechnung vorbereiten, wenn Sie fertig sind?
+
+Robert: Meine Frau möchte etwas sußes probieren.
+
+Maria: Gerne, der Herr. Ihre Frau möchte also etwas Süßes probieren. Wir haben heute einen sehr guten Apfelstrudel mit Vanilleeis oder die klassische Sachertorte. Was darf ich Ihrer Frau bringen? Und möchten Sie dann gleich zusammen zahlen, oder soll ich später die Rechnung bringen?
+
+Robert: Ich spreche eine moment mit sie.
+
+Maria: Gerne, der Herr. Sprechen Sie ruhig einen Moment mit Ihrer Frau. Ich komme gleich wieder, wenn Sie so weit sind. Lassen Sie sich Zeit.
+
+Robert: Fertig. Meine Frau geht mit Apfelstrudl.
+
+Maria: Sehr gerne, der Herr. Ihre Frau nimmt also den Apfelstrudel. Ausgezeichnet! Dann hätten wir: einen kleinen Brauner für Sie und einen Apfelstrudel für Ihre Frau. Möchten Sie beides zusammen auf eine Rechnung? Ich bringe es gleich. Soll ich die Rechnung schon vorbereiten?
+
+Robert: Ja, aber können wir langer hier sitzen?
+
+Maria: Selbstverständlich, der Herr. Sie dürfen gerne noch länger hier sitzen bleiben. Kein Problem! Bei uns gibt es keine Zeitbeschränkung. Genießen Sie Ihren Kaffee und den Apfelstrudel in Ruhe. Hier bitte: ein kleiner Brauner und ein Apfelstrudel mit Vanilleeis. Guten Appetit! Soll ich die Rechnung jetzt schon bringen oder erst später, wenn Sie fertig sind?
+
+Robert: erst später
+
+Maria: Sehr gerne, der Herr. Die Rechnung bringe ich Ihnen erst später, wenn Sie fertig sind. Lassen Sie sich Zeit und genießen Sie in Ruhe. Falls Sie zwischendurch etwas brauchen — einfach winken oder rufen. Guten Appetit!
+
+Robert: Der kuchen shmecht leker. Es gefält sie viel. Wollen uns jetz die Rechnung.
+
+Maria: Vielen Dank, der Herr! Schön zu hören, dass der Kuchen Ihnen und Ihrer Frau schmeckt und dass er ihr sehr gefällt. Dann bringe ich Ihnen jetzt die Rechnung. Einen kleinen Moment bitte. So, bitte sehr. Zusammen macht das 18,80 Euro. Möchten Sie bar zahlen oder mit Karte? Und falls Sie Trinkgeld geben möchten — das ist natürlich sehr willkommen. Wie möchten Sie zahlen?
+
+Robert: Heir is zwei und zwansig Euro. Spazieren uns jetz nach Wien.
+
+Maria: Vielen Dank, der Herr! Hier sind zweiundzwanzig Euro. Das passt perfekt — 18,80 Euro für die Rechnung und ein schönes Trinkgeld. Vielen Dank! Es freut mich sehr, dass Ihnen der Apfelstrudel geschmeckt hat und dass er Ihrer Frau so gut gefallen hat. Genießen Sie Ihren Spaziergang in Wien! Auf Wiedersehen und einen wunderbaren Abend noch für Sie und Ihre Frau. Kommen Sie gerne wieder!
+---END---

@@ -18,7 +18,33 @@
           "ihr": "könnt",
           "er": "kann",
           "sie": "können"
-        }
+        },
+        "phrases": [
+          {
+            "english": "Can you recommend a good coffee house in Vienna?",
+            "german": "Können Sie mir ein gutes Kaffeehaus in Wien empfehlen?"
+          },
+          {
+            "english": "I can take the U-Bahn to the city center.",
+            "german": "Ich kann mit der U-Bahn ins Zentrum fahren."
+          },
+          {
+            "english": "Can we get a table by the window?",
+            "german": "Können wir einen Tisch am Fenster bekommen?"
+          },
+          {
+            "english": "You can try the Sachertorte here, it's delicious.",
+            "german": "Du kannst hier die Sachertorte probieren, sie ist köstlich."
+          },
+          {
+            "english": "Can I help you with your luggage at the hotel?",
+            "german": "Kann ich dir mit deinem Gepäck im Hotel helfen?"
+          },
+          {
+            "english": "We can walk along the Danube if you'd like.",
+            "german": "Wir können an der Donau spazieren gehen, wenn du möchtest."
+          }
+        ]
       },
       {
         "verb": "möchten",

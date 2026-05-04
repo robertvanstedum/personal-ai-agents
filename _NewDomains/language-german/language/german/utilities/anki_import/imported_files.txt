@@ -1,0 +1,6 @@
+2026-04-19_anki.csv
+2026-04-20_anki.csv
+2026-04-21_anki.csv
+2026-04-23_anki.csv
+2026-04-24_anki.csv
+2026-04-25 Persona: Frau Novak Scenario: ask_medicine Duration: 14 Mode: voice_anki.csv

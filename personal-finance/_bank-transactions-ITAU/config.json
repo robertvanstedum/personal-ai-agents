@@ -1,0 +1,46 @@
+{
+  "tax_year": 2025,
+  "account_label": "Itaú Conta Corrente — Rio de Janeiro",
+  "usd_brl_annual_avg": null,
+  "category_rules": {
+    "Impostos Governo (IPTU/Taxas)": ["IPTU", "MARAU PREFE", "PREFEITURA", "RIO DE JANEI 324661", "CBMERJ", "TAXA INCENDIO", "DATI-"],
+    "Condomínio": ["BELLAMAR", "CONDOM", "MOBILEPAG TIT 9724", "MOBILE PAG TIT 972", "PAG BOLETO  PAG TIT 9724", "PAG BOLETO PAG TIT 972", "INT PAG TIT  97247", "PARCELA EXPRESS"],
+    "Utilidades - Luz (Light)": ["LIGHT"],
+    "Utilidades - Gás (CEG)": ["* CEG *", "INT /CEG", "CIA. DISTRI"],
+    "Utilidades - Tel/Internet (Vivo)": ["TELEFONICA", "VIVO", "VIVO-RJ"],
+    "Seguros": ["SEGURO", "ITAUPORTOSEGUR", "CARD PROTECT"],
+    "Despesas Capital - Apartamento": ["GRUPO CASAS", "ELIZABE"],
+    "Pagamentos Pessoas (Adm/Manutenção)": ["MARIA A", "TECER C", "EUGENIO", "YAN YAN", "ISABELL", "GUILHER", "LUCIANO", "MARLEID"],
+    "Transferências Banco Itaú": ["BANCO I"],
+    "Outras Receitas": ["DEV PIX", "DEMERGE", "ANFITRI"],
+    "Compras": ["AMAZON", "LG ELECTRON"]
+  },
+  "category_order_expense": [
+    "Impostos Governo (IPTU/Taxas)",
+    "Condomínio",
+    "Utilidades - Luz (Light)",
+    "Utilidades - Gás (CEG)",
+    "Utilidades - Tel/Internet (Vivo)",
+    "Seguros",
+    "Pagamentos Pessoas (Adm/Manutenção)",
+    "Despesas Capital - Apartamento",
+    "Compras",
+    "Outros"
+  ],
+  "category_order_income": [
+    "Transferências Banco Itaú",
+    "Outras Receitas"
+  ],
+  "us_tax_notes": {
+    "Impostos Governo (IPTU/Taxas)": "Real estate taxes — deductible Schedule E / Form 1116",
+    "Condomínio": "HOA / condo fees — deductible Schedule E",
+    "Utilidades - Luz (Light)": "Electricity — deductible if rental property",
+    "Utilidades - Gás (CEG)": "Gas — deductible if rental property",
+    "Utilidades - Tel/Internet (Vivo)": "Phone/Internet — partial deduction possible",
+    "Seguros": "Insurance premiums — deductible Schedule E",
+    "Pagamentos Pessoas (Adm/Manutenção)": "Mgmt / maintenance payments to individuals",
+    "Despesas Capital - Apartamento": "Capital expenditures — depreciate, not expense",
+    "Compras": "Purchases (verify deductibility)",
+    "Outros": "Other / miscellaneous"
+  }
+}
