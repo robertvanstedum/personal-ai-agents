@@ -183,6 +183,25 @@ def _load_keyword_map(base: Path) -> dict:
     return {}
 
 
+_DU_PATTERNS = re.compile(
+    r'\b(du\b|dich\b|dir\b|dein[emrs]?\b|hast\b|bist\b|kannst\b|machst\b|gehst\b|weißt\b|willst\b)',
+    re.IGNORECASE,
+)
+
+
+def _validate_register_consistency(keyword_map: dict) -> list[str]:
+    """Return a list of violation strings for any formal_sie persona with du-form scaffold phrases."""
+    violations = []
+    for name, data in keyword_map.items():
+        if data.get('register') != 'formal_sie':
+            continue
+        for phrase in data.get('scaffold_phrases', []):
+            de = phrase.get('de', '')
+            if _DU_PATTERNS.search(de):
+                violations.append(f"{name}: informal phrase detected — {de!r}")
+    return violations
+
+
 def _scaffold_block(persona_name: str, keyword_map: dict, progress: dict,
                     progress_file: Path) -> str:
     """
@@ -190,6 +209,10 @@ def _scaffold_block(persona_name: str, keyword_map: dict, progress: dict,
     Rotation index advances by 2 per session, resets at 6. Per-persona tracking.
     Returns empty string if scaffold data is missing — never crashes.
     """
+    violations = _validate_register_consistency(keyword_map)
+    for v in violations:
+        print(f"⚠️  Register violation: {v}", file=__import__('sys').stderr)
+
     persona_data = keyword_map.get(persona_name, {})
     phrases = persona_data.get('scaffold_phrases', [])
     recovery = persona_data.get('recovery_phrase', None)
