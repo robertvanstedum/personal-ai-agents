@@ -1,6 +1,7 @@
 {
   "Maria": {
     "trigger_words": ["café", "cafe", "coffee", "kaffee", "Kaffee", "cake", "strudel", "Maria"],
+    "register": "formal_sie",
     "default_scenario": "cafe_order",
     "recovery_phrase": "Einen Moment bitte — ich überlege kurz.",
     "scaffold_phrases": [
@@ -14,6 +15,7 @@
   },
   "Herr Fischer": {
     "trigger_words": ["hotel", "room", "checkout", "check out", "checkin", "check in", "receptionist", "Fischer"],
+    "register": "formal_sie",
     "default_scenario": "hotel_checkin",
     "recovery_phrase": "Entschuldigung — könnten Sie das bitte wiederholen?",
     "scaffold_phrases": [
@@ -27,6 +29,7 @@
   },
   "Anna": {
     "trigger_words": ["airbnb", "Airbnb", "apartment", "flat", "keys", "Anna"],
+    "register": "formal_sie",
     "default_scenario": "apartment_handoff",
     "recovery_phrase": "Wie sagt man das auf Deutsch — einen Moment.",
     "scaffold_phrases": [
@@ -40,6 +43,7 @@
   },
   "Dr. Huber": {
     "trigger_words": ["museum", "painting", "exhibit", "exhibition", "art", "ticket", "Huber"],
+    "register": "formal_sie",
     "default_scenario": "museum_navigation",
     "recovery_phrase": "Entschuldigung — ich suche die richtigen Worte.",
     "scaffold_phrases": [
@@ -53,6 +57,7 @@
   },
   "Stefan": {
     "trigger_words": ["U-Bahn", "ubahn", "subway", "metro", "directions", "train", "Stefan"],
+    "register": "formal_sie",
     "default_scenario": "ubahn_directions",
     "recovery_phrase": "Einen Moment — ich verstehe, aber ich suche das Wort.",
     "scaffold_phrases": [
@@ -66,6 +71,7 @@
   },
   "Frau Novak": {
     "trigger_words": ["pharmacy", "Apotheke", "apotheke", "medicine", "sick", "headache", "Novak"],
+    "register": "formal_sie",
     "default_scenario": "pharmacy_medicine",
     "recovery_phrase": "Entschuldigung — wie sagt man das auf Deutsch?",
     "scaffold_phrases": [
@@ -79,6 +85,7 @@
   },
   "Klaus": {
     "trigger_words": ["restaurant", "dinner", "reservation", "lunch", "Klaus"],
+    "register": "formal_sie",
     "default_scenario": "restaurant_reservation",
     "recovery_phrase": "Entschuldigung — einen Moment bitte.",
     "scaffold_phrases": [
@@ -92,6 +99,7 @@
   },
   "Frau Berger": {
     "trigger_words": ["bakery", "Bäckerei", "bread", "pastry", "croissant", "Berger"],
+    "register": "formal_sie",
     "default_scenario": "bakery_order",
     "recovery_phrase": "Einen Moment — ich überlege noch.",
     "scaffold_phrases": [
@@ -105,6 +113,7 @@
   },
   "Georg": {
     "trigger_words": ["local", "georg", "Georg", "chat", "small talk", "smalltalk", "conversation", "heuriger", "würstelstand", "wurstelstand", "casual"],
+    "register": "formal_sie",
     "default_scenario": "local_smalltalk",
     "recovery_phrase": "Entschuldigung — ich verstehe, aber ich suche die Antwort auf Deutsch.",
     "scaffold_phrases": [
