@@ -654,10 +654,13 @@ def _last_session_persona() -> str | None:
 KEYWORD_MAP = _load_keyword_map_bot()
 
 
-def _run(cmd, **kwargs):
+def _run(cmd, timeout=120, **kwargs):
     """Run a subprocess, return (stdout, stderr, returncode)."""
-    result = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
-    return result.stdout, result.stderr, result.returncode
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, **kwargs)
+        return result.stdout, result.stderr, result.returncode
+    except subprocess.TimeoutExpired:
+        return "", f"⏱ Timed out after {timeout}s", 1
 
 
 async def _handle_german_transcript(update: Update, text: str):

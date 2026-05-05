@@ -322,7 +322,8 @@ def _build_briefing(date_str: str, persona_name: str, persona_role: str,
                     lesson_number: int, scenario: str, warm_up: str,
                     speaking_prompt: str, carry: str, scaffold: str,
                     drill_session: int = 0, drill_total: int = 0,
-                    writing_mode: bool = False, persona_answers: str = "") -> str:
+                    writing_mode: bool = False, persona_answers: str = "",
+                    register: str = "") -> str:
     """Message 1 — YOUR BRIEFING. Read this; do not paste into Grok."""
     drill_mode = drill_total > 0
 
@@ -331,8 +332,9 @@ def _build_briefing(date_str: str, persona_name: str, persona_role: str,
     if writing_mode:
         lines += ["⌨️ WRITING SESSION — Type at your own pace.", ""]
 
+    register_label = f" [use {register}]" if register else ""
     lines += [
-        f"📚 Lesson {lesson_number} — {persona_name} / {scenario.replace('_', ' ').title()}",
+        f"📚 Lesson {lesson_number} — {persona_name} / {scenario.replace('_', ' ').title()}{register_label}",
         f"Carry forward: {carry}",
     ]
     if drill_mode:
@@ -464,6 +466,7 @@ def main():
 
     persona_obj = next((p for p in personas if p['name'] == persona_name), {})
     persona_role = persona_obj.get('role', 'Unknown')
+    persona_register = persona_obj.get('register', '')
     warm_up_variants = persona_obj.get('warm_up_variants', [])
 
     prompt_file = _find_prompt_file(prompts_dir, persona_name)
@@ -514,7 +517,7 @@ def main():
                 date_str, persona_name, persona_role, lesson_number, scenario,
                 wu, speaking_prompt, carry, scaffold,
                 drill_session=k, drill_total=drill_total, writing_mode=args.writing,
-                persona_answers=persona_answers,
+                persona_answers=persona_answers, register=persona_register,
             )
             ai_prompt = _build_ai_prompt(persona_prompt, drill_footer)
             output = _build_package(
@@ -548,7 +551,7 @@ def main():
         briefing = _build_briefing(
             date_str, persona_name, persona_role, lesson_number, scenario,
             warm_up, speaking_prompt, carry, scaffold, writing_mode=args.writing,
-            persona_answers=persona_answers,
+            persona_answers=persona_answers, register=persona_register,
         )
         ai_prompt = _build_ai_prompt(persona_prompt, footer)
         output = _build_package(
