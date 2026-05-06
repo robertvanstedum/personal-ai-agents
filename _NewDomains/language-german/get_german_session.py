@@ -418,6 +418,7 @@ def main():
     parser.add_argument('--persona', help='Override persona name (e.g. "Maria")')
     parser.add_argument('--scenario', help='Override scenario (e.g. "cafe_order")')
     parser.add_argument('--repeat', action='store_true', help='Repeat last session — suppresses scaffold rotation advancement')
+    parser.add_argument('--skip', action='store_true', help='Skip current lesson — advances rotation to next persona/scenario without generating a session prompt')
     args = parser.parse_args()
 
     base = Path(args.base_dir)
@@ -462,6 +463,74 @@ def main():
         scenario = args.scenario or scenario
         warm_up = ''
         speaking_prompt = ''
+        # When an explicit persona is requested and today's lesson file doesn't exist, write it
+        # so that subsequent fallback calls find the right persona instead of the alphabetically-last file.
+        if not args.dry_run and not (lessons_dir / f"{date_str}_lesson.json").exists():
+            persona_obj_tmp = next((p for p in personas if p['name'] == persona_name), {})
+            lesson_number_tmp = domain.get('current_lesson_number', 1)
+            explicit_lesson = {
+                "lesson_date": date_str,
+                "lesson_number": lesson_number_tmp,
+                "persona": persona_name,
+                "persona_role": persona_obj_tmp.get('role', ''),
+                "scenario": scenario,
+                "warm_up": '',
+                "focus": '',
+                "speaking_prompt": '',
+                "vocabulary_targets": [],
+                "carry_forward_errors": [],
+            }
+            (lessons_dir / f"{date_str}_lesson.json").write_text(
+                json.dumps(explicit_lesson, indent=2, ensure_ascii=False), encoding='utf-8'
+            )
+
+    if args.skip:
+        # Import reviewer helpers here to avoid circular deps at module level
+        import sys as _sys
+        _reviewer_dir = Path(__file__).parent
+        if str(_reviewer_dir) not in _sys.path:
+            _sys.path.insert(0, str(_reviewer_dir))
+        from reviewer import _pick_next_persona, _pick_next_scenario, _generate_lesson_plan, _empty_reviewer_output
+
+        current_persona_name = persona_name
+        current_scenario = scenario
+
+        # Write a minimal skipped session JSON so the session log stays coherent
+        sessions_dir = base / 'sessions'
+        sessions_dir.mkdir(exist_ok=True)
+        existing = sorted(sessions_dir.glob(f"{date_str}_*.json"))
+        n = int(existing[-1].stem.split("_")[-1]) + 1 if existing else 1
+        session_id = f"{date_str}_{n:03d}"
+        skipped_session = {
+            "date": date_str,
+            "session_id": session_id,
+            "persona": current_persona_name,
+            "scenario": current_scenario,
+            "mode": "skipped",
+            "skipped": True,
+            "duration_estimate_min": 0,
+            "raw_transcript": [],
+        }
+        (sessions_dir / f"{session_id}.json").write_text(
+            json.dumps(skipped_session, indent=2, ensure_ascii=False), encoding='utf-8'
+        )
+
+        # Advance rotation: record current persona/scenario in progress so _pick_next skips them
+        progress.setdefault("personas_practiced", []).append(current_persona_name)
+        progress.setdefault("scenarios_covered", []).append(current_scenario)
+        progress_file.write_text(json.dumps(progress, indent=2, ensure_ascii=False), encoding='utf-8')
+
+        # Generate next lesson plan (writes {today}_lesson.json, increments lesson counter)
+        _generate_lesson_plan(_empty_reviewer_output(), skipped_session, domain, personas, progress, lessons_dir)
+        domain_file.write_text(json.dumps(domain, indent=2, ensure_ascii=False), encoding='utf-8')
+
+        # Read back what was just written to report to user
+        next_lesson_path = lessons_dir / f"{date_str}_lesson.json"
+        next_lesson = json.loads(next_lesson_path.read_text(encoding='utf-8'))
+        next_persona = next_lesson.get('persona', '?')
+        next_scenario_str = next_lesson.get('scenario', '').replace('_', ' ')
+        print(f"⏭ Skipped {current_persona_name}. Next up: {next_persona} — {next_scenario_str}. Say 'next session' to start.")
+        sys.exit(0)
 
     persona_obj = next((p for p in personas if p['name'] == persona_name), {})
     persona_role = persona_obj.get('role', 'Unknown')

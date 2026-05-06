@@ -594,6 +594,10 @@ _DRILL_CTL_RE = re.compile(r'\b(?:end\s+drill|done|stop|quit|enough)\b', re.I)
 _DRILL_AGAIN_RE = re.compile(r'\b(?:again|repeat|once more|one more)\b', re.I)
 _DRILL_LIST_RE = re.compile(r'\b(?:drill\s+list|list\s+(?:drills?|verbs?)|verbs?\s+list|show\s+verbs?|what\s+verbs?)\b', re.I)
 _DRILL_MORE_RE = re.compile(r'\b(?:more|next)\b', re.I)
+_SKIP_LESSON_RE = re.compile(
+    r'\b(?:skip\s+(?:lesson|session|this\s+one)|next\s+one|different\s+scene)\b',
+    re.I,
+)
 
 
 _AGAIN_RE = re.compile(
@@ -908,6 +912,20 @@ async def _start_keyword_session(update, persona_name: str, scenario: str) -> No
     )
     if rc != 0:
         await update.message.reply_text(f"❌ get_german_session.py failed:\n{err[:400]}")
+
+
+async def _handle_skip_lesson(update) -> None:
+    """Skip the current lesson and advance the rotation to the next persona/scenario."""
+    out, err, rc = await _arun(
+        [str(VENV_PYTHON), "get_german_session.py",
+         "--base-dir", "language/german/", "--skip"],
+        timeout=60, cwd=str(GERMAN_BASE)
+    )
+    if rc != 0:
+        await update.message.reply_text(f"❌ Skip failed:\n{err[:400]}")
+    else:
+        confirmation = out.strip() or "⏭ Lesson skipped. Say 'next session' to start the next one."
+        await update.message.reply_text(confirmation)
 
 
 def _load_drill_pool() -> dict:
@@ -1661,6 +1679,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await _handle_drill_list(update)
         elif _DRILL_RE.search(text):
             await _handle_drill(update, text)
+        elif _SKIP_LESSON_RE.search(text):
+            await _handle_skip_lesson(update)
         else:
             await _handle_drill_answer(update, text)
         return
@@ -1685,6 +1705,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await _handle_drill_list_more(update)
     elif _DRILL_AGAIN_RE.search(text) and update.message.chat_id in _last_drills:
         await _restart_last_drill(update)
+    elif _SKIP_LESSON_RE.search(text):
+        await _handle_skip_lesson(update)
     elif _AGAIN_RE.search(text):
         persona = _last_session_persona()
         if persona:
@@ -1756,6 +1778,8 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
             await _handle_drill_list(update)
         elif _DRILL_RE.search(text):
             await _handle_drill(update, text)
+        elif _SKIP_LESSON_RE.search(text):
+            await _handle_skip_lesson(update)
         else:
             await _handle_drill_answer(update, text)
         return
@@ -1780,6 +1804,8 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
         await _handle_drill_list_more(update)
     elif _DRILL_AGAIN_RE.search(text) and update.message.chat_id in _last_drills:
         await _restart_last_drill(update)
+    elif _SKIP_LESSON_RE.search(text):
+        await _handle_skip_lesson(update)
     elif _AGAIN_RE.search(text):
         persona = _last_session_persona()
         if persona:
