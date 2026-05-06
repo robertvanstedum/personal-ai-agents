@@ -178,50 +178,6 @@
         ]
       },
       {
-        "verb": "nehmen",
-        "english": "to take",
-        "priority": "MEDIUM",
-        "scenes": [
-          "cafe",
-          "restaurant",
-          "transit"
-        ],
-        "conjugations": {
-          "ich": "nehme",
-          "wir": "nehmen",
-          "du": "nimmst",
-          "ihr": "nehmt",
-          "er": "nimmt",
-          "sie": "nehmen"
-        },
-        "phrases": [
-          {
-            "english": "I'll take a coffee with milk, please.",
-            "german": "Ich nehme einen Kaffee mit Milch, bitte."
-          },
-          {
-            "english": "Do you take the tram U6 to get to Schönbrunn?",
-            "german": "Nimmst du die Straßenbahn U6, um nach Schönbrunn zu fahren?"
-          },
-          {
-            "english": "Would you take a room with a view of the Danube?",
-            "german": "Würden Sie ein Zimmer mit Blick auf die Donau nehmen?"
-          },
-          {
-            "english": "I'll take two Apfelstrudels, one for here and one to go.",
-            "german": "Ich nehme zwei Apfelstrudel, einen hier und einen zum Mitnehmen."
-          },
-          {
-            "english": "Which route do you usually take through the Stephansplatz?",
-            "german": "Welche Route nimmst du normalerweise durch den Stephansplatz?"
-          },
-          {
-            "english": "May I take your coat, sir?",
-            "german": "Darf ich Ihren Mantel nehmen, mein Herr?"
-          }
-        ]
-      },
-      {
         "verb": "fahren",
         "english": "to drive / to travel",
         "priority": "MEDIUM",
@@ -484,6 +440,230 @@
             "german": "Das System arbeitet nicht."
           }
         ]
+      },
+      {
+        "verb": "wissen",
+        "english": "to know (a fact)",
+        "priority": "HIGH",
+        "scenes": [
+          "directions",
+          "hotel",
+          "cafe",
+          "museum"
+        ],
+        "conjugations": {
+          "ich": "weiß",
+          "wir": "wissen",
+          "du": "weißt",
+          "ihr": "wisst",
+          "er": "weiß",
+          "sie": "wissen"
+        },
+        "phrases": [
+          {
+            "english": "Do you know where the nearest U-Bahn station is?",
+            "german": "Wissen Sie, wo die nächste U-Bahn-Station ist?"
+          },
+          {
+            "english": "I don't know if the museum is open on Sundays.",
+            "german": "Ich weiß nicht, ob das Museum sonntags geöffnet ist."
+          },
+          {
+            "english": "Do you know a good Heuriger in Grinzing?",
+            "german": "Wissen Sie einen guten Heurigen in Grinzing?"
+          },
+          {
+            "english": "We know that the Naschmarkt closes early on weekdays.",
+            "german": "Wir wissen, dass der Naschmarkt wochentags früh schließt."
+          },
+          {
+            "english": "I know — the Ringstraße is the fastest way on foot.",
+            "german": "Ich weiß — die Ringstraße ist zu Fuß am schnellsten."
+          },
+          {
+            "english": "Do you know when the next tram arrives?",
+            "german": "Wissen Sie, wann die nächste Straßenbahn kommt?"
+          }
+        ]
+      },
+      {
+        "verb": "kommen",
+        "english": "to come",
+        "priority": "HIGH",
+        "scenes": [
+          "hotel",
+          "cafe",
+          "transit",
+          "directions"
+        ],
+        "conjugations": {
+          "ich": "komme",
+          "wir": "kommen",
+          "du": "kommst",
+          "ihr": "kommt",
+          "er": "kommt",
+          "sie": "kommen"
+        },
+        "phrases": [
+          {
+            "english": "I come from Chicago — this is my first time in Vienna.",
+            "german": "Ich komme aus Chicago — ich bin zum ersten Mal in Wien."
+          },
+          {
+            "english": "When does the next U4 come?",
+            "german": "Wann kommt die nächste U4?"
+          },
+          {
+            "english": "Does the waiter come soon? We've been waiting a while.",
+            "german": "Kommt der Kellner bald? Wir warten schon eine Weile."
+          },
+          {
+            "english": "Where do you come from originally?",
+            "german": "Woher kommen Sie ursprünglich?"
+          },
+          {
+            "english": "The breakfast comes with the room price.",
+            "german": "Das Frühstück kommt mit dem Zimmerpreis."
+          },
+          {
+            "english": "We come here every Saturday morning.",
+            "german": "Wir kommen jeden Samstagmorgen hierher."
+          }
+        ]
+      },
+      {
+        "verb": "bleiben",
+        "english": "to stay / to remain",
+        "priority": "HIGH",
+        "scenes": [
+          "hotel",
+          "cafe",
+          "directions"
+        ],
+        "conjugations": {
+          "ich": "bleibe",
+          "wir": "bleiben",
+          "du": "bleibst",
+          "ihr": "bleibt",
+          "er": "bleibt",
+          "sie": "bleiben"
+        },
+        "phrases": [
+          {
+            "english": "I'm staying in Vienna for five days.",
+            "german": "Ich bleibe fünf Tage in Wien."
+          },
+          {
+            "english": "Can we stay a little longer? The atmosphere is wonderful.",
+            "german": "Können wir noch etwas bleiben? Die Atmosphäre ist wunderbar."
+          },
+          {
+            "english": "Stay on this street until you reach the cathedral.",
+            "german": "Bleiben Sie auf dieser Straße, bis Sie zum Dom kommen."
+          },
+          {
+            "english": "He stays at the Sacher — classic choice.",
+            "german": "Er bleibt im Sacher — klassische Wahl."
+          },
+          {
+            "english": "We're staying in the 7th district, near Neubau.",
+            "german": "Wir bleiben im siebten Bezirk, nahe dem Neubau."
+          },
+          {
+            "english": "The café stays open until midnight.",
+            "german": "Das Café bleibt bis Mitternacht geöffnet."
+          }
+        ]
+      },
+      {
+        "verb": "sprechen",
+        "english": "to speak",
+        "priority": "MEDIUM",
+        "scenes": [
+          "hotel",
+          "cafe",
+          "directions",
+          "pharmacy"
+        ],
+        "conjugations": {
+          "ich": "spreche",
+          "wir": "sprechen",
+          "du": "sprichst",
+          "ihr": "sprecht",
+          "er": "spricht",
+          "sie": "sprechen"
+        },
+        "phrases": [
+          {
+            "english": "Do you speak English?",
+            "german": "Sprechen Sie Englisch?"
+          },
+          {
+            "english": "I'm learning German — please speak slowly.",
+            "german": "Ich lerne Deutsch — bitte sprechen Sie langsam."
+          },
+          {
+            "english": "She speaks beautiful Viennese dialect.",
+            "german": "Sie spricht wunderschönen Wiener Dialekt."
+          },
+          {
+            "english": "Can I speak to the manager?",
+            "german": "Kann ich mit dem Manager sprechen?"
+          },
+          {
+            "english": "We speak a little German but prefer simple sentences.",
+            "german": "Wir sprechen ein bisschen Deutsch, aber bevorzugen einfache Sätze."
+          },
+          {
+            "english": "He speaks so fast I can barely understand him.",
+            "german": "Er spricht so schnell, dass ich ihn kaum verstehe."
+          }
+        ]
+      },
+      {
+        "verb": "verstehen",
+        "english": "to understand",
+        "priority": "MEDIUM",
+        "scenes": [
+          "hotel",
+          "cafe",
+          "transit",
+          "pharmacy"
+        ],
+        "conjugations": {
+          "ich": "verstehe",
+          "wir": "verstehen",
+          "du": "verstehst",
+          "ihr": "versteht",
+          "er": "versteht",
+          "sie": "verstehen"
+        },
+        "phrases": [
+          {
+            "english": "I don't understand — could you repeat that?",
+            "german": "Ich verstehe nicht — könnten Sie das wiederholen?"
+          },
+          {
+            "english": "Do you understand the menu? I can help translate.",
+            "german": "Verstehen Sie die Speisekarte? Ich kann helfen zu übersetzen."
+          },
+          {
+            "english": "I understand a little Austrian German but speaking is harder.",
+            "german": "Ich verstehe ein bisschen Österreichisch, aber Sprechen ist schwerer."
+          },
+          {
+            "english": "He understands English but prefers to answer in German.",
+            "german": "Er versteht Englisch, antwortet aber lieber auf Deutsch."
+          },
+          {
+            "english": "Sorry, I didn't understand the price — could you write it down?",
+            "german": "Entschuldigung, ich habe den Preis nicht verstanden — könnten Sie ihn aufschreiben?"
+          },
+          {
+            "english": "We understand — the kitchen closes at ten.",
+            "german": "Wir verstehen — die Küche schließt um zehn."
+          }
+        ]
       }
     ],
     "nouns": [
@@ -594,6 +774,11 @@
         "phrase": "Was empfehlen Sie heute?",
         "persona": "Maria",
         "promoted_date": "2026-05-02"
+      },
+      {
+        "phrase": "Ich komme aus Chicago — kennen Sie die Stadt?",
+        "persona": "Maria",
+        "promoted_date": "2026-05-06"
       }
     ],
     "approved": []
