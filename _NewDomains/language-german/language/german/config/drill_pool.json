@@ -63,7 +63,33 @@
           "ihr": "möchtet",
           "er": "möchte",
           "sie": "möchten"
-        }
+        },
+        "phrases": [
+          {
+            "english": "I would like a Melange, please.",
+            "german": "Ich möchte einen Melange, bitte."
+          },
+          {
+            "english": "We would like to sit outside.",
+            "german": "Wir möchten gerne draußen sitzen."
+          },
+          {
+            "english": "I would like to check in.",
+            "german": "Ich möchte gerne einchecken."
+          },
+          {
+            "english": "Would you like to order now?",
+            "german": "Möchten Sie jetzt bestellen?"
+          },
+          {
+            "english": "I would like a quiet room.",
+            "german": "Ich möchte lieber ein ruhiges Zimmer."
+          },
+          {
+            "english": "I would like to pay.",
+            "german": "Ich möchte gerne zahlen."
+          }
+        ]
       },
       {
         "verb": "haben",
@@ -81,7 +107,33 @@
           "ihr": "habt",
           "er": "hat",
           "sie": "haben"
-        }
+        },
+        "phrases": [
+          {
+            "english": "I have a reservation for two.",
+            "german": "Ich habe eine Reservierung für zwei Personen."
+          },
+          {
+            "english": "Do you have a table near the window?",
+            "german": "Haben Sie einen Tisch beim Fenster?"
+          },
+          {
+            "english": "We have one more night.",
+            "german": "Wir haben noch eine Nacht."
+          },
+          {
+            "english": "Do you have something for a headache?",
+            "german": "Haben Sie etwas gegen Kopfschmerzen?"
+          },
+          {
+            "english": "I have a question about the bill.",
+            "german": "Ich habe eine Frage zur Rechnung."
+          },
+          {
+            "english": "She has already ordered.",
+            "german": "Sie hat schon bestellt."
+          }
+        ]
       },
       {
         "verb": "sein",
@@ -97,7 +149,33 @@
           "ihr": "seid",
           "er": "ist",
           "sie": "sind"
-        }
+        },
+        "phrases": [
+          {
+            "english": "Is this table free?",
+            "german": "Ist dieser Tisch frei?"
+          },
+          {
+            "english": "We are from Chicago.",
+            "german": "Wir sind aus Chicago."
+          },
+          {
+            "english": "Where is the nearest U-Bahn station?",
+            "german": "Wo ist die nächste U-Bahn-Station?"
+          },
+          {
+            "english": "The room is too loud.",
+            "german": "Das Zimmer ist zu laut."
+          },
+          {
+            "english": "It is our first time in Vienna.",
+            "german": "Es ist unser erstes Mal in Wien."
+          },
+          {
+            "english": "Are you ready to order?",
+            "german": "Sind Sie bereit zu bestellen?"
+          }
+        ]
       },
       {
         "verb": "nehmen",
@@ -115,7 +193,33 @@
           "ihr": "nehmt",
           "er": "nimmt",
           "sie": "nehmen"
-        }
+        },
+        "phrases": [
+          {
+            "english": "I'll take a coffee with milk, please.",
+            "german": "Ich nehme einen Kaffee mit Milch, bitte."
+          },
+          {
+            "english": "Do you take the tram U6 to get to Schönbrunn?",
+            "german": "Nimmst du die Straßenbahn U6, um nach Schönbrunn zu fahren?"
+          },
+          {
+            "english": "Would you take a room with a view of the Danube?",
+            "german": "Würden Sie ein Zimmer mit Blick auf die Donau nehmen?"
+          },
+          {
+            "english": "I'll take two Apfelstrudels, one for here and one to go.",
+            "german": "Ich nehme zwei Apfelstrudel, einen hier und einen zum Mitnehmen."
+          },
+          {
+            "english": "Which route do you usually take through the Stephansplatz?",
+            "german": "Welche Route nimmst du normalerweise durch den Stephansplatz?"
+          },
+          {
+            "english": "May I take your coat, sir?",
+            "german": "Darf ich Ihren Mantel nehmen, mein Herr?"
+          }
+        ]
       },
       {
         "verb": "fahren",
@@ -132,7 +236,33 @@
           "ihr": "fahrt",
           "er": "fährt",
           "sie": "fahren"
-        }
+        },
+        "phrases": [
+          {
+            "english": "Which line goes to the Westbahnhof?",
+            "german": "Welche Linie fährt zum Westbahnhof?"
+          },
+          {
+            "english": "Does this tram go to the Ringstraße?",
+            "german": "Fährt diese Straßenbahn zur Ringstraße?"
+          },
+          {
+            "english": "We are traveling to Salzburg tomorrow.",
+            "german": "Wir fahren morgen nach Salzburg."
+          },
+          {
+            "english": "How long does the journey take?",
+            "german": "Wie lange fährt man dorthin?"
+          },
+          {
+            "english": "I would prefer to go by bus.",
+            "german": "Ich fahre lieber mit dem Bus."
+          },
+          {
+            "english": "Does this train stop at the Naschmarkt?",
+            "german": "Hält dieser Zug am Naschmarkt?"
+          }
+        ]
       },
       {
         "verb": "gehen",
@@ -149,7 +279,33 @@
           "ihr": "geht",
           "er": "geht",
           "sie": "gehen"
-        }
+        },
+        "phrases": [
+          {
+            "english": "How do I get to the Stephansdom?",
+            "german": "Wie komme ich zum Stephansdom?"
+          },
+          {
+            "english": "Shall we go to the Prater?",
+            "german": "Gehen wir in den Prater?"
+          },
+          {
+            "english": "Can you walk from here?",
+            "german": "Kann man von hier zu Fuß gehen?"
+          },
+          {
+            "english": "I would prefer to walk.",
+            "german": "Ich gehe lieber zu Fuß."
+          },
+          {
+            "english": "Everything is going well, thank you.",
+            "german": "Es geht mir gut, danke."
+          },
+          {
+            "english": "How are you?",
+            "german": "Wie geht es Ihnen?"
+          }
+        ]
       },
       {
         "verb": "empfehlen",
@@ -168,7 +324,33 @@
           "ihr": "empfehlt",
           "er": "empfiehlt",
           "sie": "empfehlen"
-        }
+        },
+        "phrases": [
+          {
+            "english": "What do you recommend today?",
+            "german": "Was empfehlen Sie heute?"
+          },
+          {
+            "english": "Can you recommend a good restaurant nearby?",
+            "german": "Können Sie ein gutes Restaurant in der Nähe empfehlen?"
+          },
+          {
+            "english": "What do you personally recommend?",
+            "german": "Was empfehlen Sie persönlich?"
+          },
+          {
+            "english": "I would recommend the Tafelspitz.",
+            "german": "Ich empfehle den Tafelspitz."
+          },
+          {
+            "english": "Would you recommend the Grüner Veltliner?",
+            "german": "Würden Sie den Grüner Veltliner empfehlen?"
+          },
+          {
+            "english": "What do you recommend for a Saturday morning?",
+            "german": "Was empfehlen Sie für einen Samstagmorgen?"
+          }
+        ]
       },
       {
         "verb": "brauchen",
@@ -186,7 +368,33 @@
           "ihr": "braucht",
           "er": "braucht",
           "sie": "brauchen"
-        }
+        },
+        "phrases": [
+          {
+            "english": "I need a map of the city.",
+            "german": "Ich brauche einen Stadtplan."
+          },
+          {
+            "english": "Do I need a ticket for this?",
+            "german": "Brauche ich dafür eine Fahrkarte?"
+          },
+          {
+            "english": "We need a table for three.",
+            "german": "Wir brauchen einen Tisch für drei Personen."
+          },
+          {
+            "english": "Do you need anything else?",
+            "german": "Brauchen Sie noch etwas?"
+          },
+          {
+            "english": "How long does the tour take?",
+            "german": "Wie lange braucht man für die Führung?"
+          },
+          {
+            "english": "I need to make a phone call.",
+            "german": "Ich brauche kurz das Telefon."
+          }
+        ]
       },
       {
         "verb": "zahlen",
@@ -205,7 +413,33 @@
           "ihr": "zahlt",
           "er": "zahlt",
           "sie": "zahlen"
-        }
+        },
+        "phrases": [
+          {
+            "english": "I'll pay for the coffee.",
+            "german": "Ich zahle für den Kaffee."
+          },
+          {
+            "english": "Can you pay the hotel bill, please?",
+            "german": "Kannst du die Hotelrechnung zahlen, bitte?"
+          },
+          {
+            "english": "How much do I have to pay for the tram ticket?",
+            "german": "Wie viel muss ich für die Straßenbahnkarte zahlen?"
+          },
+          {
+            "english": "Do you pay with card here in Vienna?",
+            "german": "Zahlt man hier in Wien mit Karte?"
+          },
+          {
+            "english": "Shall I pay now or later?",
+            "german": "Soll ich jetzt oder später zahlen?"
+          },
+          {
+            "english": "We always pay cash at the Würstelstand.",
+            "german": "Wir zahlen immer bar am Würstelstand."
+          }
+        ]
       },
       {
         "verb": "arbeiten",
@@ -223,7 +457,33 @@
           "ihr": "arbeitet",
           "er": "arbeitet",
           "sie": "arbeiten"
-        }
+        },
+        "phrases": [
+          {
+            "english": "I work in project management.",
+            "german": "Ich arbeite im Projektmanagement."
+          },
+          {
+            "english": "Do you work near here?",
+            "german": "Arbeiten Sie hier in der Nähe?"
+          },
+          {
+            "english": "We are working in Vienna for a week.",
+            "german": "Wir arbeiten eine Woche in Wien."
+          },
+          {
+            "english": "The reception is staffed around the clock.",
+            "german": "Die Rezeption arbeitet rund um die Uhr."
+          },
+          {
+            "english": "I work in technology and product.",
+            "german": "Ich arbeite in Technologie und Produktentwicklung."
+          },
+          {
+            "english": "The system is not working.",
+            "german": "Das System arbeitet nicht."
+          }
+        ]
       }
     ],
     "nouns": [
@@ -339,6 +599,20 @@
     "approved": []
   },
   "on_demand": {
-    "log": []
+    "log": [],
+    "verbs": [
+      {
+        "verb": "nahmen",
+        "english": "to take",
+        "conjugations": {
+          "ich": "nehme",
+          "du": "nimmst",
+          "er": "nimmt",
+          "wir": "nehmen",
+          "ihr": "nehmt",
+          "sie": "nehmen"
+        }
+      }
+    ]
   }
 }
