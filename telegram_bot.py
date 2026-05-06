@@ -9,6 +9,7 @@ Handles:
 """
 
 from html import escape
+import asyncio
 import os
 import io
 import re
@@ -16,6 +17,7 @@ import sys
 import json
 import threading
 import subprocess
+from functools import partial
 import keyring
 import requests
 import argparse
@@ -332,21 +334,18 @@ async def cmd_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
     await update.message.reply_text("⏳ Running curator now, this takes a few minutes...")
-    
-    result = subprocess.run(
+    out, err, rc = await _arun(
         [str(BASE_DIR / 'run_curator_cron.sh')],
-        capture_output=True,
-        cwd=BASE_DIR,
-        timeout=600
+        timeout=600,
+        cwd=str(BASE_DIR),
     )
-    
-    if result.returncode == 0:
+    if rc == 0:
         await update.message.reply_text("✅ Curator run complete. Sending briefing...")
         token = get_polling_token()
         chat_id = get_chat_id() or str(update.message.chat_id)
         send_briefing(token, chat_id)
     else:
-        await update.message.reply_text(f"❌ Curator failed:\n{result.stderr.decode()[:300]}")
+        await update.message.reply_text(f"❌ Curator failed:\n{err[:300]}")
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /status — show last run info"""
@@ -663,6 +662,12 @@ def _run(cmd, timeout=120, **kwargs):
         return "", f"⏱ Timed out after {timeout}s", 1
 
 
+async def _arun(cmd, timeout=120, **kwargs):
+    """Async-safe subprocess wrapper — runs _run() in a thread pool so the event loop stays free."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, partial(_run, cmd, timeout, **kwargs))
+
+
 async def _handle_german_transcript(update: Update, text: str):
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M")
     inbox = GERMAN_DIR / "sessions" / "inbox"
@@ -672,7 +677,7 @@ async def _handle_german_transcript(update: Update, text: str):
 
     await update.message.reply_text("📥 Transcript saved. Running pipeline…")
 
-    out, err, rc = _run(
+    out, err, rc = await _arun(
         [str(VENV_PYTHON), "parse_transcript.py", "--stdin", "--base-dir", "language/german/"],
         input=text, cwd=str(GERMAN_BASE)
     )
@@ -682,7 +687,7 @@ async def _handle_german_transcript(update: Update, text: str):
         )
         return
 
-    reviewer_out, reviewer_err, rc = _run(
+    reviewer_out, reviewer_err, rc = await _arun(
         [str(VENV_PYTHON), "reviewer.py", "--latest", "--base-dir", "language/german/"],
         cwd=str(GERMAN_BASE)
     )
@@ -694,7 +699,7 @@ async def _handle_german_transcript(update: Update, text: str):
     if reviewer_out and reviewer_out.strip():
         await update.message.reply_text(f"<pre>{escape(reviewer_out.strip())}</pre>", parse_mode="HTML")
 
-    out, err, rc = _run(
+    out, err, rc = await _arun(
         [str(VENV_PYTHON), "status.py", "--base-dir", "language/german/"],
         cwd=str(GERMAN_BASE)
     )
@@ -729,7 +734,7 @@ async def _handle_german_command(update: Update, text: str):
         return
 
     if cmd == "status":
-        out, err, rc = _run(
+        out, err, rc = await _arun(
             [str(VENV_PYTHON), "status.py", "--base-dir", "language/german/"],
             cwd=str(GERMAN_BASE)
         )
@@ -754,10 +759,10 @@ async def _handle_german_command(update: Update, text: str):
         await update.message.reply_text("\n".join(lines))
 
     elif cmd == "session":
-        out, err, rc = _run(
+        out, err, rc = await _arun(
             [str(VENV_PYTHON), "get_german_session.py",
              "--base-dir", "language/german/", "--dropbox", "--send"],
-            cwd=str(GERMAN_BASE)
+            timeout=300, cwd=str(GERMAN_BASE)
         )
         if rc != 0:
             await update.message.reply_text(f"❌ get_german_session.py failed:\n{err[:400]}")
@@ -774,12 +779,12 @@ async def _handle_german_command(update: Update, text: str):
                 drill_parts = drill_parts[:-1]
             except ValueError:
                 pass
-        out, err, rc = _run(
+        out, err, rc = await _arun(
             [str(VENV_PYTHON), "get_german_session.py",
              "--base-dir", "language/german/",
              "--drill", str(drill_n),
              "--dropbox", "--send"],
-            cwd=str(GERMAN_BASE)
+            timeout=300, cwd=str(GERMAN_BASE)
         )
         if rc != 0:
             await update.message.reply_text(f"❌ get_german_session.py (drill) failed:\n{err[:400]}")
@@ -789,7 +794,7 @@ async def _handle_german_command(update: Update, text: str):
             )
 
     elif cmd == "today":
-        out, err, rc = _run(
+        out, err, rc = await _arun(
             [str(VENV_PYTHON), "reviewer.py", "--latest", "--base-dir", "language/german/"],
             cwd=str(GERMAN_BASE)
         )
@@ -813,10 +818,10 @@ async def _handle_german_command(update: Update, text: str):
         await update.message.reply_text(f"✅ active_persona set to: {name}")
 
     elif cmd == "writing":
-        out, err, rc = _run(
+        out, err, rc = await _arun(
             [str(VENV_PYTHON), "get_german_session.py",
              "--base-dir", "language/german/", "--dropbox", "--send", "--writing"],
-            cwd=str(GERMAN_BASE)
+            timeout=300, cwd=str(GERMAN_BASE)
         )
         if rc != 0:
             await update.message.reply_text(f"❌ get_german_session.py failed:\n{err[:400]}")
@@ -832,7 +837,7 @@ async def _handle_german_command(update: Update, text: str):
         await update.message.reply_text("✅ Watcher started.")
 
     elif cmd == "watcher" and len(parts) > 2 and parts[2].lower() == "stop":
-        out, err, rc = _run(["pkill", "-f", "watch_transcripts.py"])
+        out, err, rc = await _arun(["pkill", "-f", "watch_transcripts.py"])
         if rc == 0:
             await update.message.reply_text("✅ Watcher stopped.")
         else:
@@ -882,10 +887,10 @@ async def _start_repeat_session(update, persona_name: str, scenario: str) -> Non
     extra = ["--persona", persona_name, "--repeat"]
     if scenario:
         extra += ["--scenario", scenario]
-    out, err, rc = _run(
+    out, err, rc = await _arun(
         [str(VENV_PYTHON), "get_german_session.py",
          "--base-dir", "language/german/", "--dropbox", "--send"] + extra,
-        cwd=str(GERMAN_BASE)
+        timeout=300, cwd=str(GERMAN_BASE)
     )
     if rc != 0:
         await update.message.reply_text(f"❌ get_german_session.py failed:\n{err[:400]}")
@@ -896,10 +901,10 @@ async def _start_keyword_session(update, persona_name: str, scenario: str) -> No
     extra = ["--persona", persona_name]
     if scenario:
         extra += ["--scenario", scenario]
-    out, err, rc = _run(
+    out, err, rc = await _arun(
         [str(VENV_PYTHON), "get_german_session.py",
          "--base-dir", "language/german/", "--dropbox", "--send"] + extra,
-        cwd=str(GERMAN_BASE)
+        timeout=300, cwd=str(GERMAN_BASE)
     )
     if rc != 0:
         await update.message.reply_text(f"❌ get_german_session.py failed:\n{err[:400]}")
@@ -1068,21 +1073,43 @@ async def _resolve_phrases(update, entry: dict) -> list:
     return phrases
 
 
+_DE_CONTRACTIONS = {
+    "beim": "bei dem",
+    "im": "in dem",
+    "am": "an dem",
+    "vom": "von dem",
+    "zum": "zu dem",
+    "zur": "zu der",
+    "ans": "an das",
+    "ins": "in das",
+    "aufs": "auf das",
+    "ums": "um das",
+}
+_DE_CONTRACTION_RE = re.compile(
+    r'\b(' + '|'.join(re.escape(k) for k in _DE_CONTRACTIONS) + r')\b', re.IGNORECASE
+)
+
+def _expand_contractions(text: str) -> str:
+    """Expand German preposition+article contractions to canonical long form."""
+    return _DE_CONTRACTION_RE.sub(lambda m: _DE_CONTRACTIONS[m.group(0).lower()], text)
+
 def _normalize_answer(text: str) -> str:
-    """Lowercase, strip punctuation, collapse whitespace."""
-    import re
+    """Lowercase, strip punctuation, expand contractions, collapse whitespace."""
     text = text.lower().strip()
     text = re.sub(r'[^\w\s]', ' ', text)
+    text = _expand_contractions(text)
     return " ".join(text.split())
 
 
-def _spell_feedback(normalized_answer: str) -> str | None:
-    """Return feedback for misspelled German words. Input must already be normalized (no punctuation, lowercase)."""
+def _spell_feedback(normalized_answer: str, expected: str = "") -> str | None:
+    """Return feedback for misspelled German words. Input must already be normalized (no punctuation, lowercase).
+    If expected is given, only suggest corrections that appear in the expected answer."""
     try:
         from spellchecker import SpellChecker
         from difflib import SequenceMatcher
         checker = SpellChecker(language="de")
-        words = normalized_answer.split()
+        expected_words = set(expected.split()) if expected else set()
+        words = [w for w in normalized_answer.split() if len(w) >= 3]
         unknown = checker.unknown(words)
         if not unknown:
             return None
@@ -1091,8 +1118,12 @@ def _spell_feedback(normalized_answer: str) -> str | None:
             candidates = checker.candidates(w) or set()
             # Only suggest a correction if it's actually close (avoids 'danube' → 'laube')
             best = max(candidates, key=lambda c: SequenceMatcher(None, w, c).ratio(), default=None)
-            if best and SequenceMatcher(None, w, best).ratio() >= 0.80:
-                parts.append(f"'{w}' → '{best}'?")
+            if not best or SequenceMatcher(None, w, best).ratio() < 0.80:
+                continue
+            # If expected is known, skip suggestions that don't appear in the expected answer
+            if expected_words and best not in expected_words:
+                continue
+            parts.append(f"'{w}' → '{best}'?")
         return ("Check spelling: " + ", ".join(parts)) if parts else None
     except Exception:
         return None
@@ -1442,7 +1473,7 @@ async def _handle_drill_l2_answer(update, text: str, chat_id: int, state: dict) 
 
     from difflib import SequenceMatcher
     similarity = SequenceMatcher(None, answer, expected).ratio()
-    spell_note = _spell_feedback(answer)  # answer is already normalized
+    spell_note = _spell_feedback(answer, expected=expected)
 
     if spell_note:
         await update.message.reply_text(f"{spell_note}\n\nTry again:  (hint / skip)")
@@ -1619,13 +1650,17 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     text = update.message.text.strip()
 
-    # Active drill intercepts all input (except "end drill" which closes it)
+    # Active drill intercepts all input (except control words, list commands, and new drill starts)
     # Lazy reload from disk in case bot restarted after state was saved but before this message arrived.
     if update.message.chat_id not in _active_drills:
         _load_drill_state()
     if update.message.chat_id in _active_drills:
         if _DRILL_CTL_RE.search(text):
             await _handle_drill_control(update, text)
+        elif _DRILL_LIST_RE.search(text):
+            await _handle_drill_list(update)
+        elif _DRILL_RE.search(text):
+            await _handle_drill(update, text)
         else:
             await _handle_drill_answer(update, text)
         return
@@ -1707,12 +1742,20 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
 
     text = transcription.strip()
 
+    # Send early acknowledgment for commands that run slow subprocesses (session generation takes 30–120s)
+    if _SESSION_RE.search(text) or _WRITING_RE.search(text) or text.lower().startswith("!german session"):
+        await update.message.reply_text("⏳ Building your session — hang on…")
+
     # Active drill intercepts voice answers too; lazy reload handles bot-restart state loss.
     if update.message.chat_id not in _active_drills:
         _load_drill_state()
     if update.message.chat_id in _active_drills:
         if _DRILL_CTL_RE.search(text):
             await _handle_drill_control(update, text)
+        elif _DRILL_LIST_RE.search(text):
+            await _handle_drill_list(update)
+        elif _DRILL_RE.search(text):
+            await _handle_drill(update, text)
         else:
             await _handle_drill_answer(update, text)
         return
