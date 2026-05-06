@@ -519,6 +519,11 @@ def main():
 
     sync_cfg = _load_sync_config()
     max_chars = sync_cfg.get("max_prompt_chars", 4000)
+    max_assembled_chars = sync_cfg.get("max_assembled_chars", 7000)
+
+    # Tier 1: enforce content budget against persona .txt only — Haiku trims here if needed
+    if not args.dry_run and len(persona_prompt) > max_chars:
+        persona_prompt = _enforce_length(persona_prompt, max_chars, persona_name)
 
     drill_total = args.drill or 0
 
@@ -549,8 +554,9 @@ def main():
                 drill_session=k, drill_total=drill_total,
                 writing_mode=args.writing, scaffold=scaffold,
             )
-            if not args.dry_run:
-                output = _enforce_length(output, max_chars, persona_name)
+            # Tier 2: hard ceiling on assembled output — no Haiku, just fail fast
+            if not args.dry_run and len(output) > max_assembled_chars:
+                _hard_fail_length(persona_name, max_assembled_chars)
             print(output)
             print()
 
@@ -582,8 +588,9 @@ def main():
             warm_up, speaking_prompt, persona_prompt, carry,
             writing_mode=args.writing, scaffold=scaffold,
         )
-        if not args.dry_run:
-            output = _enforce_length(output, max_chars)
+        # Tier 2: hard ceiling on assembled output — no Haiku, just fail fast
+        if not args.dry_run and len(output) > max_assembled_chars:
+            _hard_fail_length(persona_name, max_assembled_chars)
         print(output)
 
         if not args.dry_run and args.dropbox:
