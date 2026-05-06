@@ -178,6 +178,51 @@
         ]
       },
       {
+        "verb": "nehmen",
+        "english": "to take",
+        "priority": "HIGH",
+        "scenes": [
+          "cafe",
+          "restaurant",
+          "transit",
+          "hotel"
+        ],
+        "conjugations": {
+          "ich": "nehme",
+          "du": "nimmst",
+          "er": "nimmt",
+          "wir": "nehmen",
+          "ihr": "nehmt",
+          "sie": "nehmen"
+        },
+        "phrases": [
+          {
+            "english": "We're taking the subway.",
+            "german": "Wir nehmen die U-Bahn."
+          },
+          {
+            "english": "I'll take the room.",
+            "german": "Ich nehme das Zimmer."
+          },
+          {
+            "english": "Please have a seat.",
+            "german": "Nehmen Sie Platz, bitte."
+          },
+          {
+            "english": "Can we take a taxi?",
+            "german": "Können wir ein Taxi nehmen?"
+          },
+          {
+            "english": "I'll have a small coffee.",
+            "german": "Ich nehme einen kleinen Brauner."
+          },
+          {
+            "english": "Which line should we take?",
+            "german": "Welche Linie sollen wir nehmen?"
+          }
+        ]
+      },
+      {
         "verb": "fahren",
         "english": "to drive / to travel",
         "priority": "MEDIUM",
