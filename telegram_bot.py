@@ -1348,7 +1348,20 @@ async def _resolve_drill_verb(update, target_lower: str) -> dict | None:
     stop_words = {"drill", "german", "mode", "start", "verb", "my", "errors", "mistakes", "level", "translate", "l2"}
     words = [w for w in target_lower.split() if w not in stop_words and len(w) > 3 and not w.isdigit()]
     if words:
-        return await _resolve_verb(update, words[0])
+        word = words[0]
+        # Check if word matches a scene tag — don't send nouns/scenes to LLM for conjugation.
+        # Pick a random verb from that scene instead.
+        all_scenes = {s for v in all_verbs for s in v.get("scenes", [])}
+        if word in all_scenes:
+            import random
+            scene_verbs = [v for v in all_verbs if word in v.get("scenes", [])]
+            if scene_verbs:
+                chosen = random.choice(scene_verbs)
+                await update.message.reply_text(
+                    f"'{word}' is a scene, not a verb — picking {chosen['verb']} ({chosen.get('english','')}) from that scene."
+                )
+                return chosen
+        return await _resolve_verb(update, word)
     import random
     return random.choice(all_verbs) if all_verbs else None
 
@@ -1675,6 +1688,16 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if update.message.chat_id in _active_drills:
         if _DRILL_CTL_RE.search(text):
             await _handle_drill_control(update, text)
+        elif _SESSION_RE.search(text):
+            # Session request exits the drill and starts a new session
+            _active_drills.pop(update.message.chat_id, None)
+            _save_drill_state()
+            intent = _resolve_keyword_intent(text, KEYWORD_MAP)
+            if intent:
+                persona_name, scenario = intent
+                await _start_keyword_session(update, persona_name, scenario)
+            else:
+                await _handle_german_command(update, "!german session")
         elif _DRILL_LIST_RE.search(text):
             await _handle_drill_list(update)
         elif _DRILL_RE.search(text):
@@ -1774,6 +1797,16 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
     if update.message.chat_id in _active_drills:
         if _DRILL_CTL_RE.search(text):
             await _handle_drill_control(update, text)
+        elif _SESSION_RE.search(text):
+            # Session request exits the drill and starts a new session
+            _active_drills.pop(update.message.chat_id, None)
+            _save_drill_state()
+            intent = _resolve_keyword_intent(text, KEYWORD_MAP)
+            if intent:
+                persona_name, scenario = intent
+                await _start_keyword_session(update, persona_name, scenario)
+            else:
+                await _handle_german_command(update, "!german session")
         elif _DRILL_LIST_RE.search(text):
             await _handle_drill_list(update)
         elif _DRILL_RE.search(text):
