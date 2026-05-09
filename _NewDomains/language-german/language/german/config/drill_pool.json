@@ -25,20 +25,20 @@
             "german": "Können Sie mir ein gutes Kaffeehaus in Wien empfehlen?"
           },
           {
-            "english": "I can take the U-Bahn to the city center.",
-            "german": "Ich kann mit der U-Bahn ins Zentrum fahren."
+            "english": "Can you show me where the U-Bahn is?",
+            "german": "Können Sie mir zeigen, wo die U-Bahn ist?"
           },
           {
             "english": "Can we get a table by the window?",
             "german": "Können wir einen Tisch am Fenster bekommen?"
           },
           {
-            "english": "You can try the Sachertorte here, it's delicious.",
-            "german": "Du kannst hier die Sachertorte probieren, sie ist köstlich."
+            "english": "Can I try the Sachertorte?",
+            "german": "Kann ich die Sachertorte probieren?"
           },
           {
-            "english": "Can I help you with your luggage at the hotel?",
-            "german": "Kann ich dir mit deinem Gepäck im Hotel helfen?"
+            "english": "Can you tell me how to get to the Belvedere?",
+            "german": "Können Sie mir sagen, wie ich zum Belvedere komme?"
           },
           {
             "english": "We can walk along the Danube if you'd like.",
@@ -78,8 +78,8 @@
             "german": "Ich möchte gerne einchecken."
           },
           {
-            "english": "Would you like to order now?",
-            "german": "Möchten Sie jetzt bestellen?"
+            "english": "I would like a receipt, please.",
+            "german": "Ich möchte gerne eine Quittung, bitte."
           },
           {
             "english": "I would like a quiet room.",
@@ -118,8 +118,8 @@
             "german": "Haben Sie einen Tisch beim Fenster?"
           },
           {
-            "english": "We have one more night.",
-            "german": "Wir haben noch eine Nacht."
+            "english": "Do you have a room with a street view?",
+            "german": "Haben Sie ein Zimmer mit Blick auf die Straße?"
           },
           {
             "english": "Do you have something for a headache?",
@@ -130,8 +130,8 @@
             "german": "Ich habe eine Frage zur Rechnung."
           },
           {
-            "english": "She has already ordered.",
-            "german": "Sie hat schon bestellt."
+            "english": "Do you have a map of Vienna?",
+            "german": "Haben Sie eine Karte von Wien?"
           }
         ]
       },
@@ -172,8 +172,8 @@
             "german": "Es ist unser erstes Mal in Wien."
           },
           {
-            "english": "Are you ready to order?",
-            "german": "Sind Sie bereit zu bestellen?"
+            "english": "Is the tip included?",
+            "german": "Ist das Trinkgeld inbegriffen?"
           }
         ]
       },
@@ -205,12 +205,12 @@
             "german": "Ich nehme das Zimmer."
           },
           {
-            "english": "Please have a seat.",
-            "german": "Nehmen Sie Platz, bitte."
+            "english": "Do we take line 1 or line 2?",
+            "german": "Nehmen wir die Linie 1 oder die 2?"
           },
           {
-            "english": "Can we take a taxi?",
-            "german": "Können wir ein Taxi nehmen?"
+            "english": "Which line should we take to the Naschmarkt?",
+            "german": "Welche Linie sollen wir zum Naschmarkt nehmen?"
           },
           {
             "english": "I'll have a small coffee.",
@@ -260,8 +260,8 @@
             "german": "Ich fahre lieber mit dem Bus."
           },
           {
-            "english": "Does this train stop at the Naschmarkt?",
-            "german": "Hält dieser Zug am Naschmarkt?"
+            "english": "Does the bus go directly to the Kunsthistorisches Museum?",
+            "german": "Fährt der Bus direkt zum Kunsthistorischen Museum?"
           }
         ]
       },
@@ -299,12 +299,12 @@
             "german": "Ich gehe lieber zu Fuß."
           },
           {
-            "english": "Everything is going well, thank you.",
-            "german": "Es geht mir gut, danke."
+            "english": "Shall we go to the first district first?",
+            "german": "Gehen wir zuerst in den ersten Bezirk?"
           },
           {
-            "english": "How are you?",
-            "german": "Wie geht es Ihnen?"
+            "english": "How long does it take to walk from the hotel to the Stephansdom?",
+            "german": "Wie lange geht man zu Fuß vom Hotel zum Stephansdom?"
           }
         ]
       },
@@ -340,8 +340,8 @@
             "german": "Was empfehlen Sie persönlich?"
           },
           {
-            "english": "I would recommend the Tafelspitz.",
-            "german": "Ich empfehle den Tafelspitz."
+            "english": "What do you recommend from the lunch menu?",
+            "german": "Was empfehlen Sie vom Mittagsmenü?"
           },
           {
             "english": "Would you recommend the Grüner Veltliner?",
@@ -384,12 +384,12 @@
             "german": "Wir brauchen einen Tisch für drei Personen."
           },
           {
-            "english": "Do you need anything else?",
-            "german": "Brauchen Sie noch etwas?"
+            "english": "Do I need a reservation for dinner?",
+            "german": "Brauche ich eine Reservierung für das Abendessen?"
           },
           {
-            "english": "How long does the tour take?",
-            "german": "Wie lange braucht man für die Führung?"
+            "english": "Do I need a ticket for the tram?",
+            "german": "Brauche ich ein Ticket für die Straßenbahn?"
           },
           {
             "english": "I need to make a phone call.",
@@ -421,8 +421,8 @@
             "german": "Ich zahle für den Kaffee."
           },
           {
-            "english": "Can you pay the hotel bill, please?",
-            "german": "Kannst du die Hotelrechnung zahlen, bitte?"
+            "english": "Are we paying together or separately?",
+            "german": "Zahlen wir zusammen oder getrennt?"
           },
           {
             "english": "How much do I have to pay for the tram ticket?",
@@ -465,24 +465,24 @@
             "german": "Ich arbeite im Projektmanagement."
           },
           {
-            "english": "Do you work near here?",
-            "german": "Arbeiten Sie hier in der Nähe?"
+            "english": "I work in technology — and you?",
+            "german": "Ich arbeite im Technologiebereich — und Sie?"
           },
           {
-            "english": "We are working in Vienna for a week.",
-            "german": "Wir arbeiten eine Woche in Wien."
+            "english": "I normally work in Chicago.",
+            "german": "Ich arbeite normalerweise in Chicago."
           },
           {
-            "english": "The reception is staffed around the clock.",
-            "german": "Die Rezeption arbeitet rund um die Uhr."
+            "english": "I also work a lot while travelling.",
+            "german": "Ich arbeite auch viel auf Reisen."
           },
           {
             "english": "I work in technology and product.",
             "german": "Ich arbeite in Technologie und Produktentwicklung."
           },
           {
-            "english": "The system is not working.",
-            "german": "Das System arbeitet nicht."
+            "english": "I have worked in telecommunications for twenty years.",
+            "german": "Ich arbeite seit zwanzig Jahren in der Telekommunikation."
           }
         ]
       },
@@ -518,12 +518,12 @@
             "german": "Wissen Sie einen guten Heurigen in Grinzing?"
           },
           {
-            "english": "We know that the Naschmarkt closes early on weekdays.",
-            "german": "Wir wissen, dass der Naschmarkt wochentags früh schließt."
+            "english": "Do you know if you can pay by card here?",
+            "german": "Wissen Sie, ob man hier mit Karte zahlen kann?"
           },
           {
-            "english": "I know — the Ringstraße is the fastest way on foot.",
-            "german": "Ich weiß — die Ringstraße ist zu Fuß am schnellsten."
+            "english": "I'm not sure — can you help me?",
+            "german": "Ich weiß nicht genau — können Sie mir helfen?"
           },
           {
             "english": "Do you know when the next tram arrives?",
@@ -559,20 +559,20 @@
             "german": "Wann kommt die nächste U4?"
           },
           {
-            "english": "Does the waiter come soon? We've been waiting a while.",
-            "german": "Kommt der Kellner bald? Wir warten schon eine Weile."
+            "english": "When are the drinks coming, please?",
+            "german": "Wann kommen die Getränke, bitte?"
           },
           {
             "english": "Where do you come from originally?",
             "german": "Woher kommen Sie ursprünglich?"
           },
           {
-            "english": "The breakfast comes with the room price.",
-            "german": "Das Frühstück kommt mit dem Zimmerpreis."
+            "english": "We are coming to Vienna for the first time.",
+            "german": "Wir kommen zum ersten Mal nach Wien."
           },
           {
-            "english": "We come here every Saturday morning.",
-            "german": "Wir kommen jeden Samstagmorgen hierher."
+            "english": "I come from Chicago — do you know the city?",
+            "german": "Ich komme aus Chicago — kennen Sie die Stadt?"
           }
         ]
       },
@@ -603,20 +603,20 @@
             "german": "Können wir noch etwas bleiben? Die Atmosphäre ist wunderbar."
           },
           {
-            "english": "Stay on this street until you reach the cathedral.",
-            "german": "Bleiben Sie auf dieser Straße, bis Sie zum Dom kommen."
+            "english": "We are staying three more days — what should we definitely see?",
+            "german": "Wir bleiben noch drei Tage — was sollten wir unbedingt sehen?"
           },
           {
-            "english": "He stays at the Sacher — classic choice.",
-            "german": "Er bleibt im Sacher — klassische Wahl."
+            "english": "We are staying in a hotel near the Ringstraße.",
+            "german": "Wir bleiben in einem Hotel nahe der Ringstraße."
           },
           {
             "english": "We're staying in the 7th district, near Neubau.",
             "german": "Wir bleiben im siebten Bezirk, nahe dem Neubau."
           },
           {
-            "english": "The café stays open until midnight.",
-            "german": "Das Café bleibt bis Mitternacht geöffnet."
+            "english": "Are you staying the whole week in Vienna too?",
+            "german": "Bleiben Sie auch die ganze Woche in Wien?"
           }
         ]
       },
@@ -640,16 +640,16 @@
         },
         "phrases": [
           {
-            "english": "Do you speak English?",
-            "german": "Sprechen Sie Englisch?"
+            "english": "Please speak a little slower — I'm still learning.",
+            "german": "Sprechen Sie bitte etwas langsamer — ich lerne noch."
           },
           {
             "english": "I'm learning German — please speak slowly.",
             "german": "Ich lerne Deutsch — bitte sprechen Sie langsam."
           },
           {
-            "english": "She speaks beautiful Viennese dialect.",
-            "german": "Sie spricht wunderschönen Wiener Dialekt."
+            "english": "I speak a little German, but English is easier for me.",
+            "german": "Ich spreche ein bisschen Deutsch, aber Englisch ist leichter für mich."
           },
           {
             "english": "Can I speak to the manager?",
@@ -660,8 +660,8 @@
             "german": "Wir sprechen ein bisschen Deutsch, aber bevorzugen einfache Sätze."
           },
           {
-            "english": "He speaks so fast I can barely understand him.",
-            "german": "Er spricht so schnell, dass ich ihn kaum verstehe."
+            "english": "I also speak Portuguese and Spanish — German is harder!",
+            "german": "Ich spreche auch Portugiesisch und Spanisch — Deutsch ist schwieriger!"
           }
         ]
       },
@@ -689,16 +689,16 @@
             "german": "Ich verstehe nicht — könnten Sie das wiederholen?"
           },
           {
-            "english": "Do you understand the menu? I can help translate.",
-            "german": "Verstehen Sie die Speisekarte? Ich kann helfen zu übersetzen."
+            "english": "I don't quite understand the menu — can you help?",
+            "german": "Ich verstehe die Speisekarte nicht ganz — können Sie helfen?"
           },
           {
             "english": "I understand a little Austrian German but speaking is harder.",
             "german": "Ich verstehe ein bisschen Österreichisch, aber Sprechen ist schwerer."
           },
           {
-            "english": "He understands English but prefers to answer in German.",
-            "german": "Er versteht Englisch, antwortet aber lieber auf Deutsch."
+            "english": "I understand you well, but I answer slowly.",
+            "german": "Ich verstehe Sie gut, aber ich antworte langsam."
           },
           {
             "english": "Sorry, I didn't understand the price — could you write it down?",
@@ -733,24 +733,24 @@
             "german": "Könnten Sie die Betten zusammenschieben lassen?"
           },
           {
-            "english": "I'm pushing the table to the window.",
-            "german": "Ich schiebe den Tisch ans Fenster."
+            "english": "Can you push the table to the side a bit?",
+            "german": "Können Sie den Tisch etwas zur Seite schieben?"
           },
           {
             "english": "Can we push the chairs together?",
             "german": "Können wir die Stühle zusammenschieben?"
           },
           {
-            "english": "He pushes the suitcase under the bed.",
-            "german": "Er schiebt den Koffer unter das Bett."
+            "english": "May I move the chair a little?",
+            "german": "Darf ich den Stuhl etwas schieben?"
           },
           {
             "english": "Please push the armchair to the side.",
             "german": "Schieben Sie bitte den Sessel zur Seite."
           },
           {
-            "english": "The beds were pushed together.",
-            "german": "Die Betten wurden zusammengeschoben."
+            "english": "Could you please move the pushchair to the side?",
+            "german": "Könnten Sie bitte den Kinderwagen zur Seite schieben?"
           }
         ]
       },
