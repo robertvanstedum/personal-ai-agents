@@ -1928,7 +1928,14 @@ def run_bot_mode():
         print(f"⚠️  Startup conflict check failed (network error): {e}", file=sys.stderr)
 
     print("🤖 Unified Telegram bot starting...")
-    app = Application.builder().token(token).build()
+    from telegram.request import HTTPXRequest
+    request = HTTPXRequest(
+        connect_timeout=30.0,   # wait up to 30s for DNS + TCP (default is 5s)
+        read_timeout=30.0,
+        write_timeout=30.0,
+        pool_timeout=10.0,
+    )
+    app = Application.builder().token(token).request(request).get_updates_request(request).build()
     
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(CommandHandler("run", cmd_run))
