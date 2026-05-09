@@ -709,6 +709,95 @@
             "german": "Wir verstehen — die Küche schließt um zehn."
           }
         ]
+      },
+      {
+        "verb": "schieben",
+        "english": "to push / to slide",
+        "priority": "MEDIUM",
+        "scenes": [
+          "hotel",
+          "restaurant",
+          "cafe"
+        ],
+        "conjugations": {
+          "ich": "schiebe",
+          "du": "schiebst",
+          "er": "schiebt",
+          "wir": "schieben",
+          "ihr": "schiebt",
+          "sie": "schieben"
+        },
+        "phrases": [
+          {
+            "english": "Could you have the beds pushed together?",
+            "german": "Könnten Sie die Betten zusammenschieben lassen?"
+          },
+          {
+            "english": "I'm pushing the table to the window.",
+            "german": "Ich schiebe den Tisch ans Fenster."
+          },
+          {
+            "english": "Can we push the chairs together?",
+            "german": "Können wir die Stühle zusammenschieben?"
+          },
+          {
+            "english": "He pushes the suitcase under the bed.",
+            "german": "Er schiebt den Koffer unter das Bett."
+          },
+          {
+            "english": "Please push the armchair to the side.",
+            "german": "Schieben Sie bitte den Sessel zur Seite."
+          },
+          {
+            "english": "The beds were pushed together.",
+            "german": "Die Betten wurden zusammengeschoben."
+          }
+        ]
+      },
+      {
+        "verb": "lassen",
+        "english": "to let / to have (something done)",
+        "priority": "HIGH",
+        "scenes": [
+          "hotel",
+          "cafe",
+          "restaurant",
+          "directions"
+        ],
+        "conjugations": {
+          "ich": "lasse",
+          "du": "lässt",
+          "er": "lässt",
+          "wir": "lassen",
+          "ihr": "lasst",
+          "sie": "lassen"
+        },
+        "phrases": [
+          {
+            "english": "Could you have the beds pushed together?",
+            "german": "Könnten Sie die Betten zusammenschieben lassen?"
+          },
+          {
+            "english": "I'll have that wrapped.",
+            "german": "Ich lasse das einpacken."
+          },
+          {
+            "english": "Let me think for a moment.",
+            "german": "Lassen Sie mich kurz überlegen."
+          },
+          {
+            "english": "Can you leave it like that?",
+            "german": "Können Sie das so lassen?"
+          },
+          {
+            "english": "I'll have that explained to me.",
+            "german": "Ich lasse mir das erklären."
+          },
+          {
+            "english": "Let me try that.",
+            "german": "Lassen Sie mich das versuchen."
+          }
+        ]
       }
     ],
     "nouns": [
@@ -824,6 +913,11 @@
         "phrase": "Ich komme aus Chicago — kennen Sie die Stadt?",
         "persona": "Maria",
         "promoted_date": "2026-05-06"
+      },
+      {
+        "phrase": "Einen Moment bitte — ich überlege kurz.",
+        "persona": "Georg",
+        "promoted_date": "2026-05-07"
       }
     ],
     "approved": []
@@ -841,6 +935,30 @@
           "wir": "nehmen",
           "ihr": "nehmt",
           "sie": "nehmen"
+        }
+      },
+      {
+        "verb": "hotel",
+        "english": "to hotel",
+        "conjugations": {
+          "ich": "hotle",
+          "du": "hotlest",
+          "er": "hotelt",
+          "wir": "hoteln",
+          "ihr": "hotelt",
+          "sie": "hoteln"
+        }
+      },
+      {
+        "verb": "herr",
+        "english": "to rule",
+        "conjugations": {
+          "ich": "herre",
+          "du": "herrst",
+          "er": "herrt",
+          "wir": "herren",
+          "ihr": "herrt",
+          "sie": "herren"
         }
       }
     ]
