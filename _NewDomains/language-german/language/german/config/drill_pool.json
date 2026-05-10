@@ -924,43 +924,6 @@
   },
   "on_demand": {
     "log": [],
-    "verbs": [
-      {
-        "verb": "nahmen",
-        "english": "to take",
-        "conjugations": {
-          "ich": "nehme",
-          "du": "nimmst",
-          "er": "nimmt",
-          "wir": "nehmen",
-          "ihr": "nehmt",
-          "sie": "nehmen"
-        }
-      },
-      {
-        "verb": "hotel",
-        "english": "to hotel",
-        "conjugations": {
-          "ich": "hotle",
-          "du": "hotlest",
-          "er": "hotelt",
-          "wir": "hoteln",
-          "ihr": "hotelt",
-          "sie": "hoteln"
-        }
-      },
-      {
-        "verb": "herr",
-        "english": "to rule",
-        "conjugations": {
-          "ich": "herre",
-          "du": "herrst",
-          "er": "herrt",
-          "wir": "herren",
-          "ihr": "herrt",
-          "sie": "herren"
-        }
-      }
-    ]
+    "verbs": []
   }
 }
