@@ -1636,6 +1636,8 @@ async def _handle_drill_list_more(update) -> None:
     chat_id = update.message.chat_id
     ls = _drill_list_state.get(chat_id)
     if not ls:
+        # State was lost (bot restart) — restart list from beginning
+        await _handle_drill_list(update)
         return
     offset = ls["offset"]
     verbs = ls["verbs"]
@@ -1700,7 +1702,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await _handle_german_command(update, "!german session")
         elif _DRILL_LIST_RE.search(text):
             await _handle_drill_list(update)
-        elif _DRILL_MORE_RE.search(text) and update.message.chat_id in _drill_list_state:
+        elif _DRILL_MORE_RE.search(text):
             await _handle_drill_list_more(update)
         elif _DRILL_RE.search(text):
             await _handle_drill(update, text)
@@ -1726,7 +1728,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await _handle_german_command(update, "!german session")
     elif _DRILL_LIST_RE.search(text):
         await _handle_drill_list(update)
-    elif _DRILL_MORE_RE.search(text) and update.message.chat_id in _drill_list_state:
+    elif _DRILL_MORE_RE.search(text):
         await _handle_drill_list_more(update)
     elif _DRILL_AGAIN_RE.search(text) and update.message.chat_id in _last_drills:
         await _restart_last_drill(update)
@@ -1811,7 +1813,7 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
                 await _handle_german_command(update, "!german session")
         elif _DRILL_LIST_RE.search(text):
             await _handle_drill_list(update)
-        elif _DRILL_MORE_RE.search(text) and update.message.chat_id in _drill_list_state:
+        elif _DRILL_MORE_RE.search(text):
             await _handle_drill_list_more(update)
         elif _DRILL_RE.search(text):
             await _handle_drill(update, text)
@@ -1837,7 +1839,7 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
             await _handle_german_command(update, "!german session")
     elif _DRILL_LIST_RE.search(text):
         await _handle_drill_list(update)
-    elif _DRILL_MORE_RE.search(text) and update.message.chat_id in _drill_list_state:
+    elif _DRILL_MORE_RE.search(text):
         await _handle_drill_list_more(update)
     elif _DRILL_AGAIN_RE.search(text) and update.message.chat_id in _last_drills:
         await _restart_last_drill(update)
