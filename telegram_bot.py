@@ -589,7 +589,7 @@ _DRILL_RE = re.compile(
     r'(german\s+drill|drill\s+german|drill\s+mode|start\s+drill|drill\s+(?:level\s*2|l2|translate|verb|noun|word|vocab|my\s+mistakes|errors?|\d+\s+[a-zäöüß]{3,}|[a-zäöüß]{3,}))',
     re.I,
 )
-_DRILL_L2_RE = re.compile(r'\b(?:level\s*2|l2|translate|phrase|2)\b', re.I)
+_DRILL_L2_RE = re.compile(r'\b(?:level\s*2|l2|translate|phrases?|2)\b', re.I)
 _DRILL_CTL_RE = re.compile(r'\b(?:end\s+drill|done|stop|quit|enough)\b', re.I)
 _DRILL_AGAIN_RE = re.compile(r'\b(?:again|repeat|once more|one more)\b', re.I)
 _DRILL_LIST_RE = re.compile(r'\b(?:drill\s+(?:\w+\s+)?list|list\s+(?:drills?|verbs?)|verbs?\s+list|show\s+verbs?|what\s+verbs?)\b', re.I)
