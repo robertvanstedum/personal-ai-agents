@@ -1345,7 +1345,7 @@ async def _resolve_drill_verb(update, target_lower: str) -> dict | None:
     entry = next((v for v in all_verbs if v["verb"].lower() in target_lower), None)
     if entry:
         return entry
-    stop_words = {"drill", "german", "mode", "start", "verb", "my", "errors", "mistakes", "level", "translate", "l2"}
+    stop_words = {"drill", "german", "mode", "start", "verb", "my", "errors", "mistakes", "level", "translate", "l2", "phrase", "phrases"}
     words = [w for w in target_lower.split() if w not in stop_words and len(w) > 3 and not w.isdigit()]
     if words:
         word = words[0]
