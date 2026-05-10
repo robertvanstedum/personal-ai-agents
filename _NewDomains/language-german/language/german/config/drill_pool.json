@@ -924,45 +924,6 @@
   },
   "on_demand": {
     "log": [],
-    "verbs": [
-      {
-        "verb": "maria",
-        "english": "to grind",
-        "conjugations": {
-          "ich": "mahle",
-          "du": "mahlst",
-          "er": "mahlt",
-          "wir": "mahlen",
-          "ihr": "mahlt",
-          "sie": "mahlen"
-        },
-        "phrases": [
-          {
-            "english": "I'm just grinding the coffee fresh.",
-            "german": "Ich mahle den Kaffee gerade frisch."
-          },
-          {
-            "english": "Would you grind the coffee for me?",
-            "german": "Würden Sie den Kaffee für mich mahlen?"
-          },
-          {
-            "english": "You ground the coffee, right?",
-            "german": "Du hast den Kaffee gemahlen, oder?"
-          },
-          {
-            "english": "Can you show me how to grind coffee?",
-            "german": "Können Sie mir zeigen, wie man Kaffee mahlt?"
-          },
-          {
-            "english": "I always grind my coffee before the trip.",
-            "german": "Ich mahle immer meinen Kaffee vor der Fahrt."
-          },
-          {
-            "english": "Do you grind your own coffee?",
-            "german": "Mahlen Sie Ihren Kaffee selbst?"
-          }
-        ]
-      }
-    ]
+    "verbs": []
   }
 }
