@@ -1809,6 +1809,8 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
                 await _handle_german_command(update, "!german session")
         elif _DRILL_LIST_RE.search(text):
             await _handle_drill_list(update)
+        elif _DRILL_MORE_RE.search(text) and update.message.chat_id in _drill_list_state:
+            await _handle_drill_list_more(update)
         elif _DRILL_RE.search(text):
             await _handle_drill(update, text)
         elif _SKIP_LESSON_RE.search(text):
