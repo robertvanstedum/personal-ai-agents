@@ -592,7 +592,7 @@ _DRILL_RE = re.compile(
 _DRILL_L2_RE = re.compile(r'\b(?:level\s*2|l2|translate|phrase|2)\b', re.I)
 _DRILL_CTL_RE = re.compile(r'\b(?:end\s+drill|done|stop|quit|enough)\b', re.I)
 _DRILL_AGAIN_RE = re.compile(r'\b(?:again|repeat|once more|one more)\b', re.I)
-_DRILL_LIST_RE = re.compile(r'\b(?:drill\s+list|list\s+(?:drills?|verbs?)|verbs?\s+list|show\s+verbs?|what\s+verbs?)\b', re.I)
+_DRILL_LIST_RE = re.compile(r'\b(?:drill\s+(?:\w+\s+)?list|list\s+(?:drills?|verbs?)|verbs?\s+list|show\s+verbs?|what\s+verbs?)\b', re.I)
 _DRILL_MORE_RE = re.compile(r'\b(?:more|next)\b', re.I)
 _SKIP_LESSON_RE = re.compile(
     r'\b(?:skip\s+(?:lesson|session|this\s+one)|next\s+one|different\s+scene)\b',
