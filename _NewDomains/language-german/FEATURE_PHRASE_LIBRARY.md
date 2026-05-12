@@ -1,6 +1,6 @@
 # Feature: German Phrase Library
 
-**Status:** Approved, not yet built  
+**Status:** Shipped — 2026-05-12  
 **Created:** 2026-05-12  
 **Author:** Robert + Claude Code  
 **Read by:** Claude Code (build) · OpenClaw (context)
@@ -312,4 +312,65 @@ The verb drill system (Level 1 conjugation, Level 2 translation) is for systemat
 
 ---
 
-*Feature spec written 2026-05-12. Ready to build — waiting for Robert's go-ahead.*
+*Feature spec written 2026-05-12. Shipped 2026-05-12. 49/49 tests passing.*
+
+---
+
+## Amendment 1 — Correction + Confirmation Before Save
+
+**Status: Shipped — 2026-05-12**
+
+Original design saved the phrase as-entered. Field use revealed that voice capture and fast mobile typing produce errors. Amendment adds an LLM correction step before saving:
+
+1. User submits phrase (text or voice)
+2. Bot sends LLM-corrected version back: `Did you mean: 🇩🇪 [corrected] / 🇺🇸 [translation]?`
+3. User confirms (ja/yes/✓) or rejects — only confirmed phrases are saved
+
+This keeps the library clean without adding friction to the capture moment.
+
+---
+
+## Amendment 2 — Two-Step Voice Phrase Capture
+
+**Status: Shipped — 2026-05-12**
+
+Original design was text-only. Amendment adds full voice capture (zero typing):
+
+1. Send voice note with the German phrase
+2. Bot transcribes, LLM-corrects, sends confirmation prompt
+3. User replies with a second voice note (or text) to confirm
+
+Command consistency: text and voice commands work identically across all `phrase` subcommands.
+
+---
+
+## Post-Vienna Field Testing — UX Fixes (2026-05-12)
+
+The following changes came directly from live field use in Vienna. All shipped in the same session as voice capture.
+
+**Command consistency** — Text and voice commands now work identically:
+
+| Command | Does |
+|---------|------|
+| `phrase add german \| english` | Save with both sides |
+| `phrase add` | Two-step: bot prompts, LLM translates |
+| `phrase list` | Last 10 phrases, newest first |
+| `phrase more` | Next 10 (paginated) |
+| `phrase practice` | Drill least-practiced phrase |
+| `phrase practice 003` / `phrase practice three` | Drill specific phrase by ID |
+
+**Auto-detect practice** — Typing or saying a German phrase that closely matches a library entry is scored automatically without opening a practice session.
+
+**Paginated list** — `phrase list` shows last 10; `phrase more` pages through the rest.
+
+**Drill exits on capture trigger** — If a verb drill is active when capture mode is triggered, the drill exits cleanly.
+
+**Transcription noise tolerance** — Added regex variants for common misrecognitions: "Ad phrase" → add, "phase practice" → phrase practice, both word orders.
+
+**Confirm set expanded** — Added Austrian/informal affirmatives.
+
+**Practice hint** — `phrase list` footer now shows the next-step command.
+
+**Stricter spelling match** — Fuzzy threshold raised 0.85 → 0.92. Single-character verb-ending differences now count as wrong.
+
+**Bug fixed: Drill state not persisted on end** — `_finish_drill` was removing the drill from memory but not writing to disk. Fixed by adding `_save_drill_state()` to `_finish_drill`.
