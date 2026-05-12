@@ -997,7 +997,7 @@ _phrase_capture_mode: dict = {}  # chat_id → {"retries": int}; waiting for sec
 
 _PHRASE_CAPTURE_RE = re.compile(
     r'\b(?:save\s+(?:a\s+)?phrase|capture\s+(?:this|a\s+phrase|phrase)|'
-    r'add\s+(?:a\s+)?phrase|phrase\s+(?:add|capture|merken|speichern)|'
+    r'add?\s+(?:a\s+)?phrase|phrase\s+(?:add|capture|merken|speichern)|'
     r'new\s+phrase|start\s+phrase\s+capture|neue\s+phrase|das\s+merken)\b',
     re.I
 )
