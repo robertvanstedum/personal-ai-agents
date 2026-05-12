@@ -1768,7 +1768,7 @@ async def _handle_drill_control(update, word: str) -> None:
     await update.message.reply_text("\n".join(lines))
 
 
-_PHRASE_SUBS = {"list", "practice", "drill", "help", "more"}
+_PHRASE_SUBS = {"list", "practice", "drill", "help", "more", "add", "capture"}
 
 
 async def _handle_phrase_command(update: Update, text: str) -> None:
@@ -1787,13 +1787,16 @@ async def _handle_phrase_command(update: Update, text: str) -> None:
             await _handle_phrase_practice(update, args)
         elif sub == "drill":
             await _handle_phrase_to_drill(update, args)
+        elif sub in {"add", "capture"}:
+            await _handle_phrase_save(update, args)
         else:
             await update.message.reply_text(
-                "!phrase commands:\n"
-                "  !phrase german | english   — save a captured phrase\n"
-                "  !phrase list [N]           — show recent phrases\n"
-                "  !phrase practice [id]      — spelling check\n"
-                "  !phrase drill [id]         — promote to verb drill"
+                "phrase commands:\n"
+                "  phrase add german | english  — save a phrase\n"
+                "  phrase list                  — show recent phrases\n"
+                "  phrase more                  — next page\n"
+                "  phrase practice [id]         — spelling check\n"
+                "  phrase drill [id]            — promote to verb drill"
             )
     else:
         await _handle_phrase_save(update, rest)
@@ -1803,8 +1806,8 @@ async def _handle_phrase_save(update: Update, raw: str) -> None:
     pipe_parts = [p.strip() for p in raw.split("|")]
     if len(pipe_parts) != 2 or not pipe_parts[0] or not pipe_parts[1]:
         await update.message.reply_text(
-            "Usage: !phrase german | english\n"
-            "Example: !phrase Nein danke, ich schaue nur. | No thanks, I'm just looking."
+            "Usage: phrase add german | english\n"
+            "Example: phrase add Nein danke, ich schaue nur. | No thanks, I'm just looking."
         )
         return
     german_submitted, english = pipe_parts
@@ -2113,7 +2116,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await _handle_phrase_practice_answer(update, text)
         return
 
-    # Text triggers for phrase list / more / practice (mirrors voice routing)
+    # Text triggers for phrase commands (mirrors voice routing)
     if _PHRASE_LIST_VOICE_RE.search(text):
         _phrase_list_offset[update.message.chat_id] = 0
         await _handle_phrase_list(update, "")
@@ -2123,6 +2126,17 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     if _PHRASE_PRACTICE_VOICE_RE.search(text):
         await _handle_phrase_practice(update, "")
+        return
+    if _PHRASE_CAPTURE_RE.search(text):
+        # Typed trigger: if args follow the pipe syntax, save directly; otherwise show usage
+        rest = _PHRASE_CAPTURE_RE.sub("", text).strip().lstrip("-—:").strip()
+        if "|" in rest:
+            await _handle_phrase_save(update, rest)
+        else:
+            await update.message.reply_text(
+                "Usage: phrase add german | english\n"
+                "Example: phrase add Nein danke, ich schaue nur. | No thanks, I'm just looking."
+            )
         return
 
     # Active drill intercepts all input (except control words, list commands, and new drill starts)
