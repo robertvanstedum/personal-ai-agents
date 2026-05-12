@@ -996,7 +996,7 @@ _phrase_capture_mode: dict = {}  # chat_id → {"retries": int}; waiting for sec
                                  # in-memory only — gap between trigger and phrase note is seconds; restart cost is re-triggering
 
 _PHRASE_CAPTURE_RE = re.compile(
-    r'\b(?:save\s+(?:a\s+)?phrase|capture\s+(?:this|a\s+phrase)|'
+    r'\b(?:save\s+(?:a\s+)?phrase|capture\s+(?:this|a\s+phrase|phrase)|'
     r'new\s+phrase|phrase\s+(?:capture|merken|speichern)|'
     r'start\s+phrase\s+capture|neue\s+phrase|das\s+merken)\b',
     re.I

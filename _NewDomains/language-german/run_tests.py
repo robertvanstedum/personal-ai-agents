@@ -1012,7 +1012,7 @@ def test_45():
 def _make_phrase_capture_re():
     import re
     return re.compile(
-        r'\b(?:save\s+(?:a\s+)?phrase|capture\s+(?:this|a\s+phrase)|'
+        r'\b(?:save\s+(?:a\s+)?phrase|capture\s+(?:this|a\s+phrase|phrase)|'
         r'new\s+phrase|phrase\s+(?:capture|merken|speichern)|'
         r'start\s+phrase\s+capture|neue\s+phrase|das\s+merken)\b',
         re.I
@@ -1027,6 +1027,7 @@ def test_46():
         ("save phrase", True),
         ("capture this", True),
         ("capture a phrase", True),
+        ("capture phrase", True),          # transcription order: "Capture Phrase."
         ("new phrase", True),
         ("phrase capture", True),
         ("start phrase capture", True),
