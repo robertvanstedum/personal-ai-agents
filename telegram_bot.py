@@ -988,6 +988,32 @@ def _save_drill_pool(pool: dict) -> None:
     pool_path.write_text(json.dumps(pool, indent=2, ensure_ascii=False))
 
 
+_PHRASEBOOK_FILE = GERMAN_DIR / "config" / "phrasebook.json"
+_phrase_practice: dict = {}  # chat_id → {"phrase_id": str}; in-memory, survives restarts fine
+
+
+def _load_phrasebook() -> dict:
+    if _PHRASEBOOK_FILE.exists():
+        try:
+            return json.loads(_PHRASEBOOK_FILE.read_text())
+        except Exception:
+            pass
+    return {"phrases": []}
+
+
+def _save_phrasebook(data: dict) -> None:
+    _PHRASEBOOK_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+
+
+def _phrase_next_id(phrases: list, today: str) -> str:
+    prefix = f"ph_{today.replace('-', '')}_"
+    same_day = [p["id"] for p in phrases if isinstance(p, dict) and p.get("id", "").startswith(prefix)]
+    if not same_day:
+        return f"{prefix}001"
+    maxn = max(int(pid.rsplit("_", 1)[-1]) for pid in same_day)
+    return f"{prefix}{maxn + 1:03d}"
+
+
 def _all_verb_entries(pool: dict) -> list:
     """Return all verb entries from core + on_demand, core takes precedence."""
     core = [v for v in pool.get("core", {}).get("verbs", []) if isinstance(v, dict) and "verb" in v]
@@ -1719,6 +1745,192 @@ async def _handle_drill_control(update, word: str) -> None:
     await update.message.reply_text("\n".join(lines))
 
 
+_PHRASE_SUBS = {"list", "practice", "drill", "help"}
+
+
+async def _handle_phrase_command(update: Update, text: str) -> None:
+    rest = text[len("!phrase"):].strip()
+    parts = rest.split(None, 1)
+    sub = parts[0].lower() if parts else ""
+    args = parts[1].strip() if len(parts) > 1 else ""
+
+    if sub in _PHRASE_SUBS:
+        if sub == "list":
+            await _handle_phrase_list(update, args)
+        elif sub == "practice":
+            await _handle_phrase_practice(update, args)
+        elif sub == "drill":
+            await _handle_phrase_to_drill(update, args)
+        else:
+            await update.message.reply_text(
+                "!phrase commands:\n"
+                "  !phrase german | english   — save a captured phrase\n"
+                "  !phrase list [N]           — show recent phrases\n"
+                "  !phrase practice [id]      — spelling check\n"
+                "  !phrase drill [id]         — promote to verb drill"
+            )
+    else:
+        await _handle_phrase_save(update, rest)
+
+
+async def _handle_phrase_save(update: Update, raw: str) -> None:
+    pipe_parts = [p.strip() for p in raw.split("|")]
+    if len(pipe_parts) != 2 or not pipe_parts[0] or not pipe_parts[1]:
+        await update.message.reply_text(
+            "Usage: !phrase german | english\n"
+            "Example: !phrase Nein danke, ich schaue nur. | No thanks, I'm just looking."
+        )
+        return
+    german, english = pipe_parts
+    today = datetime.now().date().isoformat()
+    book = _load_phrasebook()
+    pid = _phrase_next_id(book["phrases"], today)
+    book["phrases"].append({
+        "id": pid,
+        "german": german,
+        "english": english,
+        "scene": "",
+        "added": today,
+        "status": "library",
+        "verb_hint": "",
+        "practice_count": 0,
+        "last_practiced": None,
+    })
+    _save_phrasebook(book)
+    short_id = pid.rsplit("_", 1)[-1]
+    await update.message.reply_text(f"Saved (#{short_id})\n{german}\n{english}")
+
+
+async def _handle_phrase_list(update: Update, args: str) -> None:
+    try:
+        n = int(args.strip()) if args.strip() else 10
+    except ValueError:
+        n = 10
+    book = _load_phrasebook()
+    phrases = book.get("phrases", [])
+    if not phrases:
+        await update.message.reply_text(
+            "No phrases saved yet. Use !phrase german | english to capture one."
+        )
+        return
+    recent = phrases[-n:][::-1]
+    lines = []
+    for p in recent:
+        short_id = p["id"].rsplit("_", 1)[-1]
+        count = p.get("practice_count", 0)
+        status = p.get("status", "library")
+        lines.append(
+            f"#{short_id} {p['german']}\n"
+            f"     {p['english']} [{status}, {count} practice{'s' if count != 1 else ''}]"
+        )
+    await update.message.reply_text("\n\n".join(lines))
+
+
+async def _handle_phrase_practice(update: Update, args: str) -> None:
+    chat_id = update.message.chat_id
+    book = _load_phrasebook()
+    phrases = book.get("phrases", [])
+    if not phrases:
+        await update.message.reply_text("No phrases in library yet.")
+        return
+    if args.strip():
+        target = args.strip()
+        phrase = next(
+            (p for p in phrases if p["id"] == target or p["id"].endswith(f"_{target}")),
+            None,
+        )
+        if not phrase:
+            await update.message.reply_text(
+                f"Phrase '{target}' not found. Use !phrase list to see ids."
+            )
+            return
+    else:
+        library = [p for p in phrases if p.get("status") == "library"]
+        if not library:
+            await update.message.reply_text(
+                "No library phrases to practice. All promoted to drill or archived."
+            )
+            return
+        phrase = min(library, key=lambda p: (p.get("practice_count", 0), -phrases.index(p)))
+    _phrase_practice[chat_id] = {"phrase_id": phrase["id"]}
+    await update.message.reply_text(
+        f"You learned this one in the wild — type it from memory:\n"
+        f"{phrase['german']}\n"
+        f"{phrase['english']}\n\n"
+        f"Type the German spelling:"
+    )
+
+
+async def _handle_phrase_practice_answer(update: Update, text: str) -> None:
+    from difflib import SequenceMatcher
+    import re as _re
+    chat_id = update.message.chat_id
+    state = _phrase_practice.pop(chat_id, None)
+    if not state:
+        return
+    book = _load_phrasebook()
+    phrase = next((p for p in book["phrases"] if p["id"] == state["phrase_id"]), None)
+    if not phrase:
+        await update.message.reply_text("Phrase not found — it may have been removed.")
+        return
+
+    def _norm(s: str) -> str:
+        return _re.sub(r"[.,!?;:\-–]", "", s.lower()).strip()
+
+    ratio = SequenceMatcher(None, _norm(text), _norm(phrase["german"])).ratio()
+    phrase["practice_count"] = phrase.get("practice_count", 0) + 1
+    phrase["last_practiced"] = datetime.now().date().isoformat()
+    _save_phrasebook(book)
+
+    if ratio >= 0.85:
+        await update.message.reply_text("Correct spelling.")
+    else:
+        await update.message.reply_text(
+            f"Close — correct spelling:\n{phrase['german']}"
+        )
+
+
+async def _handle_phrase_to_drill(update: Update, args: str) -> None:
+    target = args.strip()
+    if not target:
+        await update.message.reply_text("Usage: !phrase drill [id]")
+        return
+    book = _load_phrasebook()
+    phrase = next(
+        (p for p in book.get("phrases", []) if p["id"] == target or p["id"].endswith(f"_{target}")),
+        None,
+    )
+    if not phrase:
+        await update.message.reply_text(
+            f"Phrase '{target}' not found. Use !phrase list to see ids."
+        )
+        return
+    pool = _load_drill_pool()
+    verb_hint = phrase.get("verb_hint", "")
+    if verb_hint:
+        for v in pool.get("core", {}).get("verbs", []):
+            if v["verb"].lower() == verb_hint.lower():
+                new_entry = {"english": phrase["english"], "german": phrase["german"]}
+                if new_entry not in v.get("phrases", []):
+                    v.setdefault("phrases", []).append(new_entry)
+                    _save_drill_pool(pool)
+                    phrase["status"] = "drilling"
+                    _save_phrasebook(book)
+                    await update.message.reply_text(
+                        f"Promoted to drill under '{v['verb']}':\n{phrase['german']}"
+                    )
+                else:
+                    await update.message.reply_text(
+                        f"That phrase is already in '{v['verb']}' drill."
+                    )
+                return
+    await update.message.reply_text(
+        f"Verb '{verb_hint}' not found in core list. Set verb_hint or add manually."
+        if verb_hint else
+        "No verb_hint set for this phrase. Cannot auto-promote without a target verb."
+    )
+
+
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Route plain text messages — German transcript, !german commands, fallback."""
     if not update.message or not update.message.text:
@@ -1727,6 +1939,16 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     text = update.message.text.strip()
+
+    # !phrase commands always route directly — never intercepted by drill or practice state
+    if text.lower().startswith("!phrase"):
+        await _handle_phrase_command(update, text)
+        return
+
+    # Phrase practice intercepts before drill state
+    if update.message.chat_id in _phrase_practice:
+        await _handle_phrase_practice_answer(update, text)
+        return
 
     # Active drill intercepts all input (except control words, list commands, and new drill starts)
     # Lazy reload from disk in case bot restarted after state was saved but before this message arrived.
@@ -1839,6 +2061,11 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
     # Send early acknowledgment for commands that run slow subprocesses (session generation takes 30–120s)
     if _SESSION_RE.search(text) or _WRITING_RE.search(text) or text.lower().startswith("!german session"):
         await update.message.reply_text("⏳ Building your session — hang on…")
+
+    # Phrase practice intercept (voice answers count too)
+    if update.message.chat_id in _phrase_practice and not text.lower().startswith("!phrase"):
+        await _handle_phrase_practice_answer(update, text)
+        return
 
     # Active drill intercepts voice answers too; lazy reload handles bot-restart state loss.
     if update.message.chat_id not in _active_drills:

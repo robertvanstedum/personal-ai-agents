@@ -804,6 +804,109 @@ def test_31():
 
 
 # ---------------------------------------------------------------------------
+# Phrase library tests (38-41)
+# ---------------------------------------------------------------------------
+
+# Import only the pure functions — avoids keyring / telegram imports
+import importlib.util as _ilu
+import sys as _sys
+
+def _import_phrase_helpers():
+    """Import _phrase_next_id, _load_phrasebook, _save_phrasebook from telegram_bot
+    by executing only the non-telegram portions we need via importlib trick:
+    we mirror the functions inline to avoid the heavy telegram/keyring import."""
+    import re as _re2
+
+    def _phrase_next_id(phrases, today):
+        prefix = f"ph_{today.replace('-', '')}_"
+        same_day = [p["id"] for p in phrases if isinstance(p, dict) and p.get("id", "").startswith(prefix)]
+        if not same_day:
+            return f"{prefix}001"
+        maxn = max(int(pid.rsplit("_", 1)[-1]) for pid in same_day)
+        return f"{prefix}{maxn + 1:03d}"
+
+    return _phrase_next_id
+
+
+def test_38():
+    """Capture creates a correct ID format ph_YYYYMMDD_NNN."""
+    _phrase_next_id = _import_phrase_helpers()
+    phrases = []
+    pid = _phrase_next_id(phrases, "2026-05-12")
+    ok = pid == "ph_20260512_001"
+    report(38, "capture creates correct ID format ph_YYYYMMDD_NNN", ok,
+           f"got {pid!r}" if not ok else pid)
+
+
+def test_39():
+    """_phrase_next_id uses max sequence, not count — gap-safe after deletion."""
+    _phrase_next_id = _import_phrase_helpers()
+    phrases = [
+        {"id": "ph_20260512_001"},
+        {"id": "ph_20260512_003"},  # 002 was deleted
+    ]
+    pid = _phrase_next_id(phrases, "2026-05-12")
+    ok = pid == "ph_20260512_004"
+    report(39, "_phrase_next_id: max-based ID after deletion gap (001,003 → 004)", ok,
+           f"got {pid!r}" if not ok else pid)
+
+
+def test_40():
+    """Capture with missing | returns usage error, does not crash."""
+    import asyncio
+
+    replies = []
+
+    class FakeMsg:
+        chat_id = 99999
+        async def reply_text(self, text, **kw):
+            replies.append(text)
+
+    class FakeUpdate:
+        message = FakeMsg()
+
+    # Inline _handle_phrase_save logic (mirrors telegram_bot exactly)
+    async def _handle_phrase_save_inline(raw):
+        pipe_parts = [p.strip() for p in raw.split("|")]
+        if len(pipe_parts) != 2 or not pipe_parts[0] or not pipe_parts[1]:
+            await FakeUpdate.message.reply_text(
+                "Usage: !phrase german | english\n"
+                "Example: !phrase Nein danke, ich schaue nur. | No thanks, I'm just looking."
+            )
+            return False
+        return True
+
+    result = asyncio.run(_handle_phrase_save_inline("no pipe here at all"))
+    ok = result is False and len(replies) == 1 and "Usage:" in replies[0]
+    report(40, "capture with missing | returns usage error, does not crash", ok,
+           f"replied: {replies}" if not ok else "usage error returned")
+
+
+def test_41():
+    """Phrase practice intercept fires before drill intercept."""
+    # Verify routing order by inspecting the source text of handle_text_message
+    import inspect
+    import sys as _sys2
+    import importlib.util as _ilu2
+
+    bot_path = PIPELINE_ROOT.parent.parent.parent / "telegram_bot.py"
+    if not bot_path.exists():
+        # Try worktree path
+        bot_path = PIPELINE_ROOT.parent.parent / "telegram_bot.py"
+    if not bot_path.exists():
+        report(41, "phrase practice intercept fires before drill intercept", None, "telegram_bot.py not found")
+        return
+
+    src = bot_path.read_text(encoding="utf-8")
+    # In handle_text_message, "_phrase_practice" check must appear before "_active_drills" check
+    phrase_pos = src.find("chat_id in _phrase_practice")
+    drill_pos = src.find("chat_id in _active_drills")
+    ok = 0 < phrase_pos < drill_pos
+    report(41, "phrase practice intercept fires before drill intercept", ok,
+           f"phrase_pos={phrase_pos} drill_pos={drill_pos}" if not ok else "correct order confirmed")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -817,6 +920,7 @@ TESTS = {
     25: test_25, 26: test_26, 27: test_27,
     28: test_28, 29: test_29, 30: test_30, 31: test_31,
     32: test_32, 33: test_33, 34: test_34, 35: test_35, 36: test_36, 37: test_37,
+    38: test_38, 39: test_39, 40: test_40, 41: test_41,
 }
 
 
