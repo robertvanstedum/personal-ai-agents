@@ -1013,8 +1013,8 @@ def _make_phrase_capture_re():
     import re
     return re.compile(
         r'\b(?:save\s+(?:a\s+)?phrase|capture\s+(?:this|a\s+phrase|phrase)|'
-        r'new\s+phrase|phrase\s+(?:capture|merken|speichern)|'
-        r'start\s+phrase\s+capture|neue\s+phrase|das\s+merken)\b',
+        r'add\s+(?:a\s+)?phrase|phrase\s+(?:add|capture|merken|speichern)|'
+        r'new\s+phrase|start\s+phrase\s+capture|neue\s+phrase|das\s+merken)\b',
         re.I
     )
 
@@ -1028,6 +1028,9 @@ def test_46():
         ("capture this", True),
         ("capture a phrase", True),
         ("capture phrase", True),          # transcription order: "Capture Phrase."
+        ("add phrase", True),              # "add phrase" word order
+        ("add a phrase", True),            # with article
+        ("phrase add", True),              # voice: "phrase add"
         ("new phrase", True),
         ("phrase capture", True),
         ("start phrase capture", True),
@@ -1037,7 +1040,6 @@ def test_46():
         ("das merken", True),
         ("Nein danke, ich schaue nur.", False),   # phrase content, not a trigger
         ("remember this", False),                  # too generic, not in set
-        ("add phrase", False),                     # not in set
     ]
     failed = [(phrase, expected) for phrase, expected in cases if bool(re_.search(phrase)) != expected]
     ok = not failed
