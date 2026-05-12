@@ -1893,6 +1893,7 @@ async def _handle_phrase_list(update: Update, args: str, offset: int = 0) -> Non
     remaining = len(ordered) - offset - len(page)
     if remaining > 0:
         lines.append(f"— {remaining} more. Say 'phrase more' or type !phrase more —")
+    lines.append("— Say 'phrase practice' or type !phrase practice [id] to drill one —")
     _phrase_list_offset[update.message.chat_id] = offset + len(page)
     await update.message.reply_text("\n\n".join(lines))
 
