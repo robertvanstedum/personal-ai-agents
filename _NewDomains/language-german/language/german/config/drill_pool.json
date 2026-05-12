@@ -755,6 +755,51 @@
         ]
       },
       {
+        "verb": "schauen",
+        "english": "to look / to have a look",
+        "priority": "HIGH",
+        "scenes": [
+          "shopping",
+          "museum",
+          "cafe",
+          "general"
+        ],
+        "conjugations": {
+          "ich": "schaue",
+          "du": "schaust",
+          "er": "schaut",
+          "wir": "schauen",
+          "ihr": "schaut",
+          "sie": "schauen"
+        },
+        "phrases": [
+          {
+            "english": "No thanks, I'm just looking.",
+            "german": "Nein danke, ich schaue nur."
+          },
+          {
+            "english": "Can I have a look at the menu?",
+            "german": "Kann ich kurz in die Speisekarte schauen?"
+          },
+          {
+            "english": "We are just looking around — thank you.",
+            "german": "Wir schauen uns nur um — danke schön."
+          },
+          {
+            "english": "Let me have a look at the map.",
+            "german": "Ich schaue kurz auf die Karte."
+          },
+          {
+            "english": "Have you already looked at the Schaufenster?",
+            "german": "Haben Sie schon ins Schaufenster geschaut?"
+          },
+          {
+            "english": "I always look in at Café Central when I pass.",
+            "german": "Ich schaue immer kurz ins Café Central, wenn ich vorbeigehe."
+          }
+        ]
+      },
+      {
         "verb": "lassen",
         "english": "to let / to have (something done)",
         "priority": "HIGH",

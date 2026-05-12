@@ -873,6 +873,50 @@ async def _handle_german_command(update: Update, text: str):
             "\n".join(lines) if lines else "Nothing in sessions/ or inbox/ yet."
         )
 
+    elif cmd == "addphrase":
+        # Format: !german addphrase verb|german_phrase|english_phrase
+        # Or without verb: !german addphrase german_phrase|english_phrase
+        raw = " ".join(parts[2:])
+        pipe_parts = [p.strip() for p in raw.split("|")]
+        if len(pipe_parts) == 3:
+            verb, german, english = pipe_parts
+        elif len(pipe_parts) == 2:
+            verb, german, english = None, pipe_parts[0], pipe_parts[1]
+        else:
+            await update.message.reply_text(
+                "Usage: !german addphrase [verb|]german|english\n"
+                "Example: !german addphrase schauen|Nein danke, ich schaue nur.|No thanks, I'm just looking."
+            )
+            return
+
+        pool_path = GERMAN_DIR / "config" / "drill_pool.json"
+        pool = json.loads(pool_path.read_text())
+
+        if verb:
+            for v in pool["core"]["verbs"]:
+                if v["verb"].lower() == verb.lower():
+                    v["phrases"].append({"english": english, "german": german})
+                    pool_path.write_text(json.dumps(pool, indent=2, ensure_ascii=False))
+                    await update.message.reply_text(
+                        f"✅ Phrase added to '{verb}':\n🇩🇪 {german}\n🇺🇸 {english}"
+                    )
+                    return
+
+        # Verb not found in core or not given — save to session_fed.pending
+        entry = {
+            "phrase": german,
+            "english": english,
+            "promoted_date": datetime.now().date().isoformat(),
+        }
+        if verb:
+            entry["verb_hint"] = verb
+        pool["session_fed"]["pending"].append(entry)
+        pool_path.write_text(json.dumps(pool, indent=2, ensure_ascii=False))
+        label = f" (verb '{verb}' not in core list)" if verb else ""
+        await update.message.reply_text(
+            f"✅ Phrase saved to pending{label}:\n🇩🇪 {german}\n🇺🇸 {english}"
+        )
+
     else:
         await update.message.reply_text(
             "German commands:\n"
@@ -881,6 +925,7 @@ async def _handle_german_command(update: Update, text: str):
             "  !german drill [N]     — generate N drill sessions\n"
             "  !german status        — current progress summary\n"
             "  !german anki          — import Anki cards\n"
+            "  !german addphrase [verb|]de|en — add a phrase to the drill pool\n"
             "  !german watcher start — start Dropbox transcript watcher\n"
             "  !german watcher stop  — stop watcher"
         )
