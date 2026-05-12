@@ -1758,6 +1758,7 @@ async def _handle_drill_control(update, word: str) -> None:
         counts[it["result"]] = counts.get(it["result"], 0) + 1
     _last_drills[chat_id] = {"verb": state["verb"], "level": state.get("level", 1), "english": state.get("english", "")}
     del _active_drills[chat_id]
+    _save_drill_state()
     lines = [f"Drill ended — {score}/{total} correct so far."]
     if any(counts.values()):
         lines.append(f"  ✅ Clean: {counts['drill-clean']}  📝 Reinforced: {counts['drill-reinforced']}  ⚠️ Needs practice: {counts['needs-practice']}")
