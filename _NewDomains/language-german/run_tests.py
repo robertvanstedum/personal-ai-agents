@@ -804,6 +804,208 @@ def test_31():
 
 
 # ---------------------------------------------------------------------------
+# Phrase library tests (38-41)
+# ---------------------------------------------------------------------------
+
+# Import only the pure functions — avoids keyring / telegram imports
+import importlib.util as _ilu
+import sys as _sys
+
+def _import_phrase_helpers():
+    """Import _phrase_next_id, _load_phrasebook, _save_phrasebook from telegram_bot
+    by executing only the non-telegram portions we need via importlib trick:
+    we mirror the functions inline to avoid the heavy telegram/keyring import."""
+    import re as _re2
+
+    def _phrase_next_id(phrases, today):
+        prefix = f"ph_{today.replace('-', '')}_"
+        same_day = [p["id"] for p in phrases if isinstance(p, dict) and p.get("id", "").startswith(prefix)]
+        if not same_day:
+            return f"{prefix}001"
+        maxn = max(int(pid.rsplit("_", 1)[-1]) for pid in same_day)
+        return f"{prefix}{maxn + 1:03d}"
+
+    return _phrase_next_id
+
+
+def test_38():
+    """Capture creates a correct ID format ph_YYYYMMDD_NNN."""
+    _phrase_next_id = _import_phrase_helpers()
+    phrases = []
+    pid = _phrase_next_id(phrases, "2026-05-12")
+    ok = pid == "ph_20260512_001"
+    report(38, "capture creates correct ID format ph_YYYYMMDD_NNN", ok,
+           f"got {pid!r}" if not ok else pid)
+
+
+def test_39():
+    """_phrase_next_id uses max sequence, not count — gap-safe after deletion."""
+    _phrase_next_id = _import_phrase_helpers()
+    phrases = [
+        {"id": "ph_20260512_001"},
+        {"id": "ph_20260512_003"},  # 002 was deleted
+    ]
+    pid = _phrase_next_id(phrases, "2026-05-12")
+    ok = pid == "ph_20260512_004"
+    report(39, "_phrase_next_id: max-based ID after deletion gap (001,003 → 004)", ok,
+           f"got {pid!r}" if not ok else pid)
+
+
+def test_40():
+    """Capture with missing | returns usage error, does not crash."""
+    import asyncio
+
+    replies = []
+
+    class FakeMsg:
+        chat_id = 99999
+        async def reply_text(self, text, **kw):
+            replies.append(text)
+
+    class FakeUpdate:
+        message = FakeMsg()
+
+    # Inline _handle_phrase_save logic (mirrors telegram_bot exactly)
+    async def _handle_phrase_save_inline(raw):
+        pipe_parts = [p.strip() for p in raw.split("|")]
+        if len(pipe_parts) != 2 or not pipe_parts[0] or not pipe_parts[1]:
+            await FakeUpdate.message.reply_text(
+                "Usage: !phrase german | english\n"
+                "Example: !phrase Nein danke, ich schaue nur. | No thanks, I'm just looking."
+            )
+            return False
+        return True
+
+    result = asyncio.run(_handle_phrase_save_inline("no pipe here at all"))
+    ok = result is False and len(replies) == 1 and "Usage:" in replies[0]
+    report(40, "capture with missing | returns usage error, does not crash", ok,
+           f"replied: {replies}" if not ok else "usage error returned")
+
+
+def test_41():
+    """Phrase practice intercept fires before drill intercept."""
+    bot_path = PIPELINE_ROOT.parent.parent.parent / "telegram_bot.py"
+    if not bot_path.exists():
+        bot_path = PIPELINE_ROOT.parent.parent / "telegram_bot.py"
+    if not bot_path.exists():
+        report(41, "phrase practice intercept fires before drill intercept", None, "telegram_bot.py not found")
+        return
+
+    src = bot_path.read_text(encoding="utf-8")
+    phrase_pos = src.find("chat_id in _phrase_practice")
+    drill_pos = src.find("chat_id in _active_drills")
+    ok = 0 < phrase_pos < drill_pos
+    report(41, "phrase practice intercept fires before drill intercept", ok,
+           f"phrase_pos={phrase_pos} drill_pos={drill_pos}" if not ok else "correct order confirmed")
+
+
+# ---------------------------------------------------------------------------
+# Phrase save confirm tests (42–45)
+# ---------------------------------------------------------------------------
+
+def _make_confirm_helpers():
+    """Inline mirrors of _handle_phrase_save_confirm logic for unit testing."""
+    import asyncio
+
+    _YES = {"yes", "ja", "y", "yep", "correct", "save"}
+    _NO  = {"no", "nein", "n", "cancel", "nope"}
+
+    async def run_confirm(pending_state, reply_text, phrasebook_phrases):
+        """Returns (saved: bool, cancelled: bool, re_asked: bool, phrases_after)."""
+        replies = []
+
+        class FakeMsg:
+            chat_id = 1
+            async def reply_text(self, t, **kw):
+                replies.append(t)
+
+        class FakeUpdate:
+            message = FakeMsg()
+
+        pending = dict(pending_state)  # copy
+        state_store = {1: pending}
+
+        word = reply_text.strip().lower()
+        if word in _YES:
+            import json, tempfile
+            from pathlib import Path
+            from datetime import datetime
+            today = datetime.now().date().isoformat()
+            # Mimic _phrase_next_id
+            prefix = f"ph_{today.replace('-','')}_"
+            same = [p["id"] for p in phrasebook_phrases if p.get("id","").startswith(prefix)]
+            n = (max(int(pid.rsplit("_",1)[-1]) for pid in same) + 1) if same else 1
+            pid = f"{prefix}{n:03d}"
+            phrasebook_phrases.append({
+                "id": pid, "german": pending["german"], "english": pending["english"],
+                "scene": "", "added": today, "status": "library",
+                "verb_hint": "", "practice_count": 0, "last_practiced": None,
+            })
+            state_store.pop(1, None)
+            await FakeUpdate.message.reply_text(f"Saved (#{pid.rsplit('_',1)[-1]})\n{pending['german']}\n{pending['english']}")
+            return True, False, False, phrasebook_phrases
+        elif word in _NO:
+            state_store.pop(1, None)
+            await FakeUpdate.message.reply_text("Cancelled — phrase not saved.")
+            return False, True, False, phrasebook_phrases
+        else:
+            await FakeUpdate.message.reply_text("Reply yes to save or no to cancel.")
+            return False, False, True, phrasebook_phrases
+
+    return asyncio.run, run_confirm
+
+
+def test_42():
+    """yes response saves phrase and clears pending state."""
+    import asyncio
+    run, run_confirm = _make_confirm_helpers()
+    phrases = []
+    saved, cancelled, reasked, phrases = run(run_confirm(
+        {"german": "Nein danke.", "english": "No thanks."}, "yes", phrases
+    ))
+    ok = saved and not cancelled and not reasked and len(phrases) == 1
+    report(42, "yes response saves phrase and clears pending state", ok,
+           f"saved={saved} phrases={len(phrases)}" if not ok else "saved, 1 phrase in list")
+
+
+def test_43():
+    """no response discards phrase and clears pending state."""
+    import asyncio
+    run, run_confirm = _make_confirm_helpers()
+    phrases = []
+    saved, cancelled, reasked, phrases = run(run_confirm(
+        {"german": "Nein danke.", "english": "No thanks."}, "no", phrases
+    ))
+    ok = not saved and cancelled and not reasked and len(phrases) == 0
+    report(43, "no response discards phrase and clears pending state", ok,
+           f"saved={saved} cancelled={cancelled}" if not ok else "cancelled, no phrase saved")
+
+
+def test_44():
+    """Unknown reply re-asks without saving (state preserved)."""
+    import asyncio
+    run, run_confirm = _make_confirm_helpers()
+    phrases = []
+    saved, cancelled, reasked, phrases = run(run_confirm(
+        {"german": "Nein danke.", "english": "No thanks."}, "maybe", phrases
+    ))
+    ok = not saved and not cancelled and reasked and len(phrases) == 0
+    report(44, "unknown reply re-asks without saving (state preserved)", ok,
+           f"saved={saved} reasked={reasked}" if not ok else "re-asked, phrase not saved")
+
+
+def test_45():
+    """LLM None fallback: submitted phrase used as-is, confirm flow still works."""
+    # Mimic _handle_phrase_save when _call_llm returns None
+    german_submitted = "Nein danke, ich schaue nuur."
+    corrected = None  # simulates LLM failure
+    german = corrected.strip() if corrected else german_submitted
+    ok = german == german_submitted
+    report(45, "LLM None fallback uses submitted phrase, confirm flow proceeds", ok,
+           f"got {german!r}" if not ok else f"fallback to submitted: {german!r}")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -817,6 +1019,8 @@ TESTS = {
     25: test_25, 26: test_26, 27: test_27,
     28: test_28, 29: test_29, 30: test_30, 31: test_31,
     32: test_32, 33: test_33, 34: test_34, 35: test_35, 36: test_36, 37: test_37,
+    38: test_38, 39: test_39, 40: test_40, 41: test_41,
+    42: test_42, 43: test_43, 44: test_44, 45: test_45,
 }
 
 

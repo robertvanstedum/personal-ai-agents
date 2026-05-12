@@ -1,0 +1,15 @@
+{
+  "phrases": [
+    {
+      "id": "ph_20260512_001",
+      "german": "Nein danke, ich schaue nur.",
+      "english": "No thanks, I'm just looking.",
+      "scene": "shopping",
+      "added": "2026-05-12",
+      "status": "library",
+      "verb_hint": "schauen",
+      "practice_count": 0,
+      "last_practiced": null
+    }
+  ]
+}
