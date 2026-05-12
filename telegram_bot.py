@@ -991,6 +991,7 @@ def _save_drill_pool(pool: dict) -> None:
 _PHRASEBOOK_FILE = GERMAN_DIR / "config" / "phrasebook.json"
 _phrase_practice: dict = {}     # chat_id → {"phrase_id": str}; in-memory, survives restarts fine
 _phrase_save_pending: dict = {}  # chat_id → {"german": str, "english": str}; awaiting yes/no confirm
+                                 # in-memory only — lost on bot restart; user resubmits with !phrase if this happens
 
 
 def _load_phrasebook() -> dict:
@@ -1795,6 +1796,7 @@ async def _handle_phrase_save(update: Update, raw: str) -> None:
     corrected = _call_llm(correction_prompt, max_tokens=100)
     german = corrected.strip() if corrected else german_submitted
 
+    # future: show diff if german != german_submitted, e.g. "(corrected: nuur → nur)"
     _phrase_save_pending[update.message.chat_id] = {"german": german, "english": english}
     await update.message.reply_text(
         f"Did you mean:\n{german}\n{english}\n\nReply yes to save or no to cancel."
@@ -1808,7 +1810,7 @@ async def _handle_phrase_save_confirm(update: Update, text: str) -> None:
         return
 
     word = text.strip().lower()
-    if word in {"yes", "ja", "y", "yep", "correct", "save"}:
+    if word in {"yes", "ja", "y", "yep", "correct", "save", "genau", "stimmt", "gut", "passt"}:
         today = datetime.now().date().isoformat()
         book = _load_phrasebook()
         pid = _phrase_next_id(book["phrases"], today)
