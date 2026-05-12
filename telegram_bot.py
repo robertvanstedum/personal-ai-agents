@@ -1959,11 +1959,12 @@ async def _handle_phrase_practice_answer(update: Update, text: str) -> None:
     phrase["last_practiced"] = datetime.now().date().isoformat()
     _save_phrasebook(book)
 
-    if ratio >= 0.85:
-        await update.message.reply_text("Correct spelling.")
+    AGAIN = "\n\nSay 'phrase practice' or !phrase practice to try another."
+    if ratio >= 0.92:
+        await update.message.reply_text(f"✅ Correct spelling.{AGAIN}")
     else:
         await update.message.reply_text(
-            f"Close — correct spelling:\n{phrase['german']}"
+            f"Close — correct spelling:\n{phrase['german']}{AGAIN}"
         )
 
 
@@ -2110,6 +2111,18 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Phrase practice intercepts before drill state
     if update.message.chat_id in _phrase_practice:
         await _handle_phrase_practice_answer(update, text)
+        return
+
+    # Text triggers for phrase list / more / practice (mirrors voice routing)
+    if _PHRASE_LIST_VOICE_RE.search(text):
+        _phrase_list_offset[update.message.chat_id] = 0
+        await _handle_phrase_list(update, "")
+        return
+    if _PHRASE_LIST_MORE_VOICE_RE.search(text):
+        await _handle_phrase_list_more(update)
+        return
+    if _PHRASE_PRACTICE_VOICE_RE.search(text):
+        await _handle_phrase_practice(update, "")
         return
 
     # Active drill intercepts all input (except control words, list commands, and new drill starts)
