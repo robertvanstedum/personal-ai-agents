@@ -989,7 +989,8 @@ def _save_drill_pool(pool: dict) -> None:
 
 
 _PHRASEBOOK_FILE = GERMAN_DIR / "config" / "phrasebook.json"
-_phrase_practice: dict = {}  # chat_id → {"phrase_id": str}; in-memory, survives restarts fine
+_phrase_practice: dict = {}     # chat_id → {"phrase_id": str}; in-memory, survives restarts fine
+_phrase_save_pending: dict = {}  # chat_id → {"german": str, "english": str}; awaiting yes/no confirm
 
 
 def _load_phrasebook() -> dict:
@@ -1781,24 +1782,58 @@ async def _handle_phrase_save(update: Update, raw: str) -> None:
             "Example: !phrase Nein danke, ich schaue nur. | No thanks, I'm just looking."
         )
         return
-    german, english = pipe_parts
-    today = datetime.now().date().isoformat()
-    book = _load_phrasebook()
-    pid = _phrase_next_id(book["phrases"], today)
-    book["phrases"].append({
-        "id": pid,
-        "german": german,
-        "english": english,
-        "scene": "",
-        "added": today,
-        "status": "library",
-        "verb_hint": "",
-        "practice_count": 0,
-        "last_practiced": None,
-    })
-    _save_phrasebook(book)
-    short_id = pid.rsplit("_", 1)[-1]
-    await update.message.reply_text(f"Saved (#{short_id})\n{german}\n{english}")
+    german_submitted, english = pipe_parts
+
+    # Ask LLM to fix spelling only — do not change dialect or meaning
+    correction_prompt = (
+        "Fix any spelling mistakes in this German phrase. "
+        "Return ONLY the corrected phrase — no explanation, no quotes. "
+        "Do not change dialect, informal vocabulary, or non-standard usage. "
+        "If already correct, return it unchanged.\n\n"
+        f"Phrase: {german_submitted}"
+    )
+    corrected = _call_llm(correction_prompt, max_tokens=100)
+    german = corrected.strip() if corrected else german_submitted
+
+    _phrase_save_pending[update.message.chat_id] = {"german": german, "english": english}
+    await update.message.reply_text(
+        f"Did you mean:\n{german}\n{english}\n\nReply yes to save or no to cancel."
+    )
+
+
+async def _handle_phrase_save_confirm(update: Update, text: str) -> None:
+    chat_id = update.message.chat_id
+    pending = _phrase_save_pending.pop(chat_id, None)
+    if not pending:
+        return
+
+    word = text.strip().lower()
+    if word in {"yes", "ja", "y", "yep", "correct", "save"}:
+        today = datetime.now().date().isoformat()
+        book = _load_phrasebook()
+        pid = _phrase_next_id(book["phrases"], today)
+        book["phrases"].append({
+            "id": pid,
+            "german": pending["german"],
+            "english": pending["english"],
+            "scene": "",
+            "added": today,
+            "status": "library",
+            "verb_hint": "",
+            "practice_count": 0,
+            "last_practiced": None,
+        })
+        _save_phrasebook(book)
+        short_id = pid.rsplit("_", 1)[-1]
+        await update.message.reply_text(
+            f"Saved (#{short_id})\n{pending['german']}\n{pending['english']}"
+        )
+    elif word in {"no", "nein", "n", "cancel", "nope"}:
+        await update.message.reply_text("Cancelled — phrase not saved.")
+    else:
+        # Unknown reply — re-ask once, put state back
+        _phrase_save_pending[chat_id] = pending
+        await update.message.reply_text("Reply yes to save or no to cancel.")
 
 
 async def _handle_phrase_list(update: Update, args: str) -> None:
@@ -1945,6 +1980,11 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await _handle_phrase_command(update, text)
         return
 
+    # Phrase save confirmation intercepts before drill state
+    if update.message.chat_id in _phrase_save_pending:
+        await _handle_phrase_save_confirm(update, text)
+        return
+
     # Phrase practice intercepts before drill state
     if update.message.chat_id in _phrase_practice:
         await _handle_phrase_practice_answer(update, text)
@@ -2061,6 +2101,11 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
     # Send early acknowledgment for commands that run slow subprocesses (session generation takes 30–120s)
     if _SESSION_RE.search(text) or _WRITING_RE.search(text) or text.lower().startswith("!german session"):
         await update.message.reply_text("⏳ Building your session — hang on…")
+
+    # Phrase save confirmation intercept (voice yes/no counts too)
+    if update.message.chat_id in _phrase_save_pending and not text.lower().startswith("!phrase"):
+        await _handle_phrase_save_confirm(update, text)
+        return
 
     # Phrase practice intercept (voice answers count too)
     if update.message.chat_id in _phrase_practice and not text.lower().startswith("!phrase"):
