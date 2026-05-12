@@ -918,6 +918,13 @@
         "phrase": "Einen Moment bitte — ich überlege kurz.",
         "persona": "Georg",
         "promoted_date": "2026-05-07"
+      },
+      {
+        "phrase": "Nein danke, ich schaue nur.",
+        "english": "No thanks, I'm just looking.",
+        "persona": "Maria",
+        "promoted_date": "2026-05-12",
+        "source": "openclaw-mobile"
       }
     ],
     "approved": []
