@@ -2191,6 +2191,19 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif _DRILL_CTL_RE.search(text):
         await _handle_drill_control(update, text)
     else:
+        # Auto-detect phrase practice: if text fuzzy-matches a phrasebook entry, score it directly
+        _book = _load_phrasebook()
+        _phrases = _book.get("phrases", [])
+        if _phrases:
+            from difflib import SequenceMatcher
+            import re as _re2
+            def _pnorm(s): return _re2.sub(r"[.,!?;:\-–]", "", s.lower()).strip()
+            _best = max(_phrases, key=lambda p: SequenceMatcher(None, _pnorm(text), _pnorm(p["german"])).ratio())
+            if SequenceMatcher(None, _pnorm(text), _pnorm(_best["german"])).ratio() >= 0.70:
+                _phrase_practice[update.message.chat_id] = {"phrase_id": _best["id"]}
+                await _handle_phrase_practice_answer(update, text)
+                return
+
         intent = _resolve_keyword_intent(text, KEYWORD_MAP)
         if intent:
             persona_name, scenario = intent
