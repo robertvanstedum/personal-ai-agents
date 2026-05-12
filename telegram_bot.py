@@ -1788,7 +1788,14 @@ async def _handle_phrase_command(update: Update, text: str) -> None:
         elif sub == "drill":
             await _handle_phrase_to_drill(update, args)
         elif sub in {"add", "capture"}:
-            await _handle_phrase_save(update, args)
+            if "|" in args:
+                await _handle_phrase_save(update, args)
+            elif args:
+                _phrase_capture_mode[update.message.chat_id] = {"mode": "text", "retries": 0}
+                await _handle_phrase_capture_input(update, args)
+            else:
+                _phrase_capture_mode[update.message.chat_id] = {"mode": "text", "retries": 0}
+                await update.message.reply_text("Ready — type the German phrase.")
         else:
             await update.message.reply_text(
                 "phrase commands:\n"
@@ -2104,11 +2111,15 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await _handle_phrase_save_confirm(update, text)
         return
 
-    # Phrase capture mode: typed "cancel" or "stop" exits; any other text is ignored (waiting for voice)
+    # Phrase capture mode
     if update.message.chat_id in _phrase_capture_mode:
         if text.lower().strip() in {"cancel", "abbrechen", "stop"}:
             _phrase_capture_mode.pop(update.message.chat_id, None)
             await update.message.reply_text("Capture cancelled.")
+        elif _phrase_capture_mode[update.message.chat_id].get("mode") == "text":
+            # Text two-step: this message IS the phrase — route same as voice capture input
+            await _handle_phrase_capture_input(update, text)
+        # else: voice mode — ignore typed text, waiting for voice note
         return
 
     # Phrase practice intercepts before drill state
@@ -2128,15 +2139,18 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await _handle_phrase_practice(update, "")
         return
     if _PHRASE_CAPTURE_RE.search(text):
-        # Typed trigger: if args follow the pipe syntax, save directly; otherwise show usage
-        rest = _PHRASE_CAPTURE_RE.sub("", text).strip().lstrip("-—:").strip()
+        rest = _PHRASE_CAPTURE_RE.sub("", text).strip().lstrip("-—:,").strip()
         if "|" in rest:
+            # Full pipe syntax inline — save directly
             await _handle_phrase_save(update, rest)
+        elif rest:
+            # German provided inline, no English — use LLM to translate (same as voice)
+            _phrase_capture_mode[update.message.chat_id] = {"mode": "text", "retries": 0}
+            await _handle_phrase_capture_input(update, rest)
         else:
-            await update.message.reply_text(
-                "Usage: phrase add german | english\n"
-                "Example: phrase add Nein danke, ich schaue nur. | No thanks, I'm just looking."
-            )
+            # Bare trigger — enter text capture mode, prompt for the phrase
+            _phrase_capture_mode[update.message.chat_id] = {"mode": "text", "retries": 0}
+            await update.message.reply_text("Ready — type the German phrase.")
         return
 
     # Active drill intercepts all input (except control words, list commands, and new drill starts)
