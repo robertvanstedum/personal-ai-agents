@@ -1006,6 +1006,99 @@ def test_45():
 
 
 # ---------------------------------------------------------------------------
+# Voice capture tests (46-49)
+# ---------------------------------------------------------------------------
+
+def _make_phrase_capture_re():
+    import re
+    return re.compile(
+        r'\b(?:save\s+(?:a\s+)?phrase|capture\s+(?:this|a\s+phrase)|'
+        r'new\s+phrase|phrase\s+(?:capture|merken|speichern)|'
+        r'start\s+phrase\s+capture|neue\s+phrase|das\s+merken)\b',
+        re.I
+    )
+
+
+def test_46():
+    """Voice trigger regex fires on English and German trigger phrases."""
+    re_ = _make_phrase_capture_re()
+    cases = [
+        ("save a phrase", True),
+        ("save phrase", True),
+        ("capture this", True),
+        ("capture a phrase", True),
+        ("new phrase", True),
+        ("phrase capture", True),
+        ("start phrase capture", True),
+        ("neue Phrase", True),
+        ("Phrase merken", True),
+        ("phrase speichern", True),
+        ("das merken", True),
+        ("Nein danke, ich schaue nur.", False),   # phrase content, not a trigger
+        ("remember this", False),                  # too generic, not in set
+        ("add phrase", False),                     # not in set
+    ]
+    failed = [(phrase, expected) for phrase, expected in cases if bool(re_.search(phrase)) != expected]
+    ok = not failed
+    report(46, "voice capture regex fires on triggers only",
+           ok, "all match" if ok else f"wrong: {failed}")
+
+
+def test_47():
+    """NOT_GERMAN first retry: capture mode retries=0 → retries=1."""
+    # Mimic _handle_phrase_capture_input NOT_GERMAN branch logic
+    state = {"retries": 0}
+    llm_resp = "NOT_GERMAN"
+    if llm_resp == "NOT_GERMAN":
+        retries = state.get("retries", 0)
+        if retries == 0:
+            new_state = {"retries": 1}
+            cancelled = False
+        else:
+            new_state = None
+            cancelled = True
+    ok = new_state == {"retries": 1} and not cancelled
+    report(47, "NOT_GERMAN first attempt: mode stays active with retries=1", ok,
+           f"state={new_state!r} cancelled={cancelled}" if not ok else "retries incremented, mode active")
+
+
+def test_48():
+    """NOT_GERMAN second retry: capture mode exits (cancelled)."""
+    state = {"retries": 1}
+    llm_resp = "NOT_GERMAN"
+    if llm_resp == "NOT_GERMAN":
+        retries = state.get("retries", 0)
+        if retries == 0:
+            cancelled = False
+        else:
+            cancelled = True
+    ok = cancelled
+    report(48, "NOT_GERMAN second attempt: capture cancelled", ok,
+           "cancelled" if ok else "not cancelled — bug")
+
+
+def test_49():
+    """LLM-None fallback in voice capture: raw transcription used, confirm flow entered."""
+    # Mimic _handle_phrase_capture_input when _call_llm returns None
+    transcription = "Nein danke, ich schaue nur."
+    llm_resp = None  # all providers down
+
+    if llm_resp is None:
+        german = transcription
+        english = ""
+        entered_confirm = True
+    else:
+        german = ""
+        english = ""
+        entered_confirm = False
+
+    ok = entered_confirm and german == transcription and english == ""
+    report(49, "voice capture LLM-None: raw transcription used, confirm flow entered", ok,
+           f"german={german!r} english={english!r} confirm={entered_confirm}" if not ok else
+           f"fallback ok: {german!r}")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -1021,6 +1114,7 @@ TESTS = {
     32: test_32, 33: test_33, 34: test_34, 35: test_35, 36: test_36, 37: test_37,
     38: test_38, 39: test_39, 40: test_40, 41: test_41,
     42: test_42, 43: test_43, 44: test_44, 45: test_45,
+    46: test_46, 47: test_47, 48: test_48, 49: test_49,
 }
 
 

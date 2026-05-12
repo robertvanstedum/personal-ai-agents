@@ -992,6 +992,15 @@ _PHRASEBOOK_FILE = GERMAN_DIR / "config" / "phrasebook.json"
 _phrase_practice: dict = {}     # chat_id → {"phrase_id": str}; in-memory, survives restarts fine
 _phrase_save_pending: dict = {}  # chat_id → {"german": str, "english": str}; awaiting yes/no confirm
                                  # in-memory only — lost on bot restart; user resubmits with !phrase if this happens
+_phrase_capture_mode: dict = {}  # chat_id → {"retries": int}; waiting for second voice note with the phrase
+                                 # in-memory only — gap between trigger and phrase note is seconds; restart cost is re-triggering
+
+_PHRASE_CAPTURE_RE = re.compile(
+    r'\b(?:save\s+(?:a\s+)?phrase|capture\s+(?:this|a\s+phrase)|'
+    r'new\s+phrase|phrase\s+(?:capture|merken|speichern)|'
+    r'start\s+phrase\s+capture|neue\s+phrase|das\s+merken)\b',
+    re.I
+)
 
 
 def _load_phrasebook() -> dict:
@@ -1968,6 +1977,79 @@ async def _handle_phrase_to_drill(update: Update, args: str) -> None:
     )
 
 
+async def _handle_phrase_capture_trigger(update: Update) -> None:
+    """First voice note of two-step capture — put chat into capture mode, prompt for phrase."""
+    _phrase_capture_mode[update.message.chat_id] = {"retries": 0}
+    await update.message.reply_text("Ready — say the phrase.")
+
+
+async def _handle_phrase_capture_input(update: Update, text: str) -> None:
+    """Second voice note — LLM corrects + translates, then enters confirm flow."""
+    chat_id = update.message.chat_id
+    state = _phrase_capture_mode.get(chat_id, {})
+
+    prompt = (
+        "The following was transcribed from speech. The speaker just heard this phrase from a "
+        "native German speaker and is repeating it back.\n\n"
+        "Fix any transcription noise or spelling errors in the German. "
+        "Then provide a natural English translation.\n"
+        "The phrase may be in Austrian German or informal register — preserve this.\n\n"
+        "Respond in exactly this format — two lines, nothing else:\n"
+        "German: <corrected German>\n"
+        "English: <natural English translation>\n\n"
+        "If the text does not appear to be a German phrase at all, respond with exactly:\n"
+        "NOT_GERMAN\n\n"
+        f"Transcription: {text}"
+    )
+
+    resp = _call_llm(prompt, max_tokens=80)
+
+    if resp is None:
+        # All providers down — use raw transcription, no English
+        _phrase_capture_mode.pop(chat_id, None)
+        _phrase_save_pending[chat_id] = {"german": text, "english": ""}
+        await update.message.reply_text(
+            f"Saved what I heard — no translation available.\n"
+            f"🇩🇪 {text}\n\n"
+            f"Reply yes to save or no to cancel."
+        )
+        return
+
+    resp = resp.strip()
+
+    if resp == "NOT_GERMAN":
+        retries = state.get("retries", 0)
+        if retries == 0:
+            _phrase_capture_mode[chat_id] = {"retries": 1}
+            await update.message.reply_text(
+                f"That didn't sound like a German phrase — I got:\n"
+                f'"{text}"\n\n'
+                f"Say the phrase again, or say \"cancel\" to exit capture mode."
+            )
+        else:
+            _phrase_capture_mode.pop(chat_id, None)
+            await update.message.reply_text("Capture cancelled — couldn't recognise a German phrase.")
+        return
+
+    # Parse "German: ...\nEnglish: ..." response
+    german = ""
+    english = ""
+    for line in resp.splitlines():
+        if line.startswith("German:"):
+            german = line[len("German:"):].strip()
+        elif line.startswith("English:"):
+            english = line[len("English:"):].strip()
+
+    if not german:
+        german = text
+
+    _phrase_capture_mode.pop(chat_id, None)
+    _phrase_save_pending[chat_id] = {"german": german, "english": english}
+    await update.message.reply_text(
+        f"Did you mean:\n🇩🇪 {german}\n🇺🇸 {english}\n\nReply yes to save or no to cancel."
+    )
+
+
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Route plain text messages — German transcript, !german commands, fallback."""
     if not update.message or not update.message.text:
@@ -1985,6 +2067,13 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Phrase save confirmation intercepts before drill state
     if update.message.chat_id in _phrase_save_pending:
         await _handle_phrase_save_confirm(update, text)
+        return
+
+    # Phrase capture mode: typed "cancel" exits; any other text is ignored (waiting for voice)
+    if update.message.chat_id in _phrase_capture_mode:
+        if text.lower().strip() in {"cancel", "abbrechen"}:
+            _phrase_capture_mode.pop(update.message.chat_id, None)
+            await update.message.reply_text("Capture cancelled.")
         return
 
     # Phrase practice intercepts before drill state
@@ -2107,6 +2196,20 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
     # Phrase save confirmation intercept (voice yes/no counts too)
     if update.message.chat_id in _phrase_save_pending and not text.lower().startswith("!phrase"):
         await _handle_phrase_save_confirm(update, text)
+        return
+
+    # Voice phrase capture — trigger detection
+    if _PHRASE_CAPTURE_RE.search(text) and update.message.chat_id not in _phrase_capture_mode:
+        await _handle_phrase_capture_trigger(update)
+        return
+
+    # Voice phrase capture — second note is the phrase itself
+    if update.message.chat_id in _phrase_capture_mode:
+        if text.lower().strip() in {"cancel", "abbrechen"}:
+            _phrase_capture_mode.pop(update.message.chat_id, None)
+            await update.message.reply_text("Capture cancelled.")
+        else:
+            await _handle_phrase_capture_input(update, text)
         return
 
     # Phrase practice intercept (voice answers count too)
