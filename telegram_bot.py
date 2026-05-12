@@ -1001,6 +1001,17 @@ _PHRASE_CAPTURE_RE = re.compile(
     r'start\s+phrase\s+capture|neue\s+phrase|das\s+merken)\b',
     re.I
 )
+_PHRASE_PRACTICE_VOICE_RE = re.compile(
+    r'\b(?:phrase\s+practice|practice\s+(?:a\s+)?phrase|phrase\s+üben)\b', re.I
+)
+_PHRASE_LIST_VOICE_RE = re.compile(
+    r'\b(?:phrase\s+list|list\s+(?:my\s+)?phrases?|show\s+(?:my\s+)?phrases?|my\s+phrases?)\b', re.I
+)
+_PHRASE_LIST_MORE_VOICE_RE = re.compile(
+    r'\b(?:phrase\s+more|more\s+phrases?|next\s+phrases?)\b', re.I
+)
+
+_phrase_list_offset: dict = {}  # chat_id → int; tracks pagination offset for !phrase list more
 
 
 def _load_phrasebook() -> dict:
@@ -1756,7 +1767,7 @@ async def _handle_drill_control(update, word: str) -> None:
     await update.message.reply_text("\n".join(lines))
 
 
-_PHRASE_SUBS = {"list", "practice", "drill", "help"}
+_PHRASE_SUBS = {"list", "practice", "drill", "help", "more"}
 
 
 async def _handle_phrase_command(update: Update, text: str) -> None:
@@ -1767,7 +1778,10 @@ async def _handle_phrase_command(update: Update, text: str) -> None:
 
     if sub in _PHRASE_SUBS:
         if sub == "list":
+            _phrase_list_offset[update.message.chat_id] = 0
             await _handle_phrase_list(update, args)
+        elif sub == "more":
+            await _handle_phrase_list_more(update)
         elif sub == "practice":
             await _handle_phrase_practice(update, args)
         elif sub == "drill":
@@ -1847,11 +1861,12 @@ async def _handle_phrase_save_confirm(update: Update, text: str) -> None:
         await update.message.reply_text("Reply yes to save or no to cancel.")
 
 
-async def _handle_phrase_list(update: Update, args: str) -> None:
+async def _handle_phrase_list(update: Update, args: str, offset: int = 0) -> None:
+    PAGE = 10
     try:
-        n = int(args.strip()) if args.strip() else 10
+        n = int(args.strip()) if args.strip() and args.strip().isdigit() else PAGE
     except ValueError:
-        n = 10
+        n = PAGE
     book = _load_phrasebook()
     phrases = book.get("phrases", [])
     if not phrases:
@@ -1859,9 +1874,14 @@ async def _handle_phrase_list(update: Update, args: str) -> None:
             "No phrases saved yet. Use !phrase german | english to capture one."
         )
         return
-    recent = phrases[-n:][::-1]
+    # newest first
+    ordered = phrases[::-1]
+    page = ordered[offset:offset + n]
+    if not page:
+        await update.message.reply_text("No more phrases.")
+        return
     lines = []
-    for p in recent:
+    for p in page:
         short_id = p["id"].rsplit("_", 1)[-1]
         count = p.get("practice_count", 0)
         status = p.get("status", "library")
@@ -1869,7 +1889,16 @@ async def _handle_phrase_list(update: Update, args: str) -> None:
             f"#{short_id} {p['german']}\n"
             f"     {p['english']} [{status}, {count} practice{'s' if count != 1 else ''}]"
         )
+    remaining = len(ordered) - offset - len(page)
+    if remaining > 0:
+        lines.append(f"— {remaining} more. Say 'phrase more' or type !phrase more —")
+    _phrase_list_offset[update.message.chat_id] = offset + len(page)
     await update.message.reply_text("\n\n".join(lines))
+
+
+async def _handle_phrase_list_more(update: Update) -> None:
+    offset = _phrase_list_offset.get(update.message.chat_id, 0)
+    await _handle_phrase_list(update, "", offset=offset)
 
 
 async def _handle_phrase_practice(update: Update, args: str) -> None:
@@ -2069,9 +2098,9 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await _handle_phrase_save_confirm(update, text)
         return
 
-    # Phrase capture mode: typed "cancel" exits; any other text is ignored (waiting for voice)
+    # Phrase capture mode: typed "cancel" or "stop" exits; any other text is ignored (waiting for voice)
     if update.message.chat_id in _phrase_capture_mode:
-        if text.lower().strip() in {"cancel", "abbrechen"}:
+        if text.lower().strip() in {"cancel", "abbrechen", "stop"}:
             _phrase_capture_mode.pop(update.message.chat_id, None)
             await update.message.reply_text("Capture cancelled.")
         return
@@ -2198,18 +2227,33 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
         await _handle_phrase_save_confirm(update, text)
         return
 
-    # Voice phrase capture — trigger detection
+    # Voice phrase capture — trigger detection (ends any active drill first)
     if _PHRASE_CAPTURE_RE.search(text) and update.message.chat_id not in _phrase_capture_mode:
+        if update.message.chat_id in _active_drills:
+            _active_drills.pop(update.message.chat_id, None)
+            _save_drill_state()
         await _handle_phrase_capture_trigger(update)
         return
 
     # Voice phrase capture — second note is the phrase itself
     if update.message.chat_id in _phrase_capture_mode:
-        if text.lower().strip() in {"cancel", "abbrechen"}:
+        if text.lower().strip() in {"cancel", "abbrechen", "stop"}:
             _phrase_capture_mode.pop(update.message.chat_id, None)
             await update.message.reply_text("Capture cancelled.")
         else:
             await _handle_phrase_capture_input(update, text)
+        return
+
+    # Voice triggers for phrase list / more / practice
+    if _PHRASE_LIST_VOICE_RE.search(text):
+        _phrase_list_offset[update.message.chat_id] = 0
+        await _handle_phrase_list(update, "")
+        return
+    if _PHRASE_LIST_MORE_VOICE_RE.search(text):
+        await _handle_phrase_list_more(update)
+        return
+    if _PHRASE_PRACTICE_VOICE_RE.search(text):
+        await _handle_phrase_practice(update, "")
         return
 
     # Phrase practice intercept (voice answers count too)
