@@ -1002,8 +1002,22 @@ _PHRASE_CAPTURE_RE = re.compile(
     re.I
 )
 _PHRASE_PRACTICE_VOICE_RE = re.compile(
-    r'\b(?:phrase\s+practice|practice\s+(?:a\s+)?phrase|phrase\s+üben)\b', re.I
+    r'\b(?:phra?se\s+practice|practice\s+(?:a\s+)?phra?se|phrase\s+üben)\b', re.I
 )
+_SPOKEN_NUMBERS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+}
+
+def _parse_spoken_id(text: str) -> str:
+    """Convert spoken phrase id to zero-padded string: 'one' → '001', '3' → '003'."""
+    import re as _re
+    t = _re.sub(r'^number\s+', '', text.strip().strip(".,!? "), flags=_re.I).strip()
+    m = _re.search(r'\d+', t)
+    if m:
+        return f"{int(m.group()):03d}"
+    word = t.lower().strip(".,")
+    return f"{_SPOKEN_NUMBERS[word]:03d}" if word in _SPOKEN_NUMBERS else t
 _PHRASE_LIST_VOICE_RE = re.compile(
     r'\b(?:phrase\s+list|list\s+(?:my\s+)?phrases?|show\s+(?:my\s+)?phrases?|my\s+phrases?)\b', re.I
 )
@@ -1844,7 +1858,7 @@ async def _handle_phrase_save_confirm(update: Update, text: str) -> None:
         return
 
     word = text.strip().lower()
-    if word in {"yes", "ja", "y", "yep", "correct", "save", "genau", "stimmt", "gut", "passt"}:
+    if word in {"yes", "ja", "já", "y", "yep", "correct", "save", "genau", "stimmt", "gut", "passt"}:
         today = datetime.now().date().isoformat()
         book = _load_phrasebook()
         pid = _phrase_next_id(book["phrases"], today)
@@ -2135,8 +2149,10 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if _PHRASE_LIST_MORE_VOICE_RE.search(text):
         await _handle_phrase_list_more(update)
         return
-    if _PHRASE_PRACTICE_VOICE_RE.search(text):
-        await _handle_phrase_practice(update, "")
+    _tm = _PHRASE_PRACTICE_VOICE_RE.search(text)
+    if _tm:
+        _tid = _parse_spoken_id(text[_tm.end():].strip())
+        await _handle_phrase_practice(update, _tid)
         return
     if _PHRASE_CAPTURE_RE.search(text):
         rest = _PHRASE_CAPTURE_RE.sub("", text).strip().lstrip("-—:,").strip()
@@ -2308,14 +2324,29 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
     if _PHRASE_LIST_MORE_VOICE_RE.search(text):
         await _handle_phrase_list_more(update)
         return
-    if _PHRASE_PRACTICE_VOICE_RE.search(text):
-        await _handle_phrase_practice(update, "")
+    _pm = _PHRASE_PRACTICE_VOICE_RE.search(text)
+    if _pm:
+        _id_str = _parse_spoken_id(text[_pm.end():].strip())
+        await _handle_phrase_practice(update, _id_str)
         return
 
     # Phrase practice intercept (voice answers count too)
     if update.message.chat_id in _phrase_practice and not text.lower().startswith("!phrase"):
         await _handle_phrase_practice_answer(update, text)
         return
+
+    # Auto-detect phrase practice from free voice (mirrors text handler logic)
+    _vbook = _load_phrasebook()
+    _vphrases = _vbook.get("phrases", [])
+    if _vphrases and update.message.chat_id not in _active_drills:
+        from difflib import SequenceMatcher
+        import re as _re3
+        def _vpnorm(s): return _re3.sub(r"[.,!?;:\-–]", "", s.lower()).strip()
+        _vbest = max(_vphrases, key=lambda p: SequenceMatcher(None, _vpnorm(text), _vpnorm(p["german"])).ratio())
+        if SequenceMatcher(None, _vpnorm(text), _vpnorm(_vbest["german"])).ratio() >= 0.70:
+            _phrase_practice[update.message.chat_id] = {"phrase_id": _vbest["id"]}
+            await _handle_phrase_practice_answer(update, text)
+            return
 
     # Active drill intercepts voice answers too; lazy reload handles bot-restart state loss.
     if update.message.chat_id not in _active_drills:
