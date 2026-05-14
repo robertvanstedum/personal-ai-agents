@@ -1042,11 +1042,12 @@ def _save_phrasebook(data: dict) -> None:
 
 
 def _phrase_next_id(phrases: list, today: str) -> str:
+    """Global sequence — never resets per day, so short IDs (#001, #002...) stay unique."""
     prefix = f"ph_{today.replace('-', '')}_"
-    same_day = [p["id"] for p in phrases if isinstance(p, dict) and p.get("id", "").startswith(prefix)]
-    if not same_day:
+    all_ids = [p["id"] for p in phrases if isinstance(p, dict) and p.get("id")]
+    if not all_ids:
         return f"{prefix}001"
-    maxn = max(int(pid.rsplit("_", 1)[-1]) for pid in same_day)
+    maxn = max(int(pid.rsplit("_", 1)[-1]) for pid in all_ids)
     return f"{prefix}{maxn + 1:03d}"
 
 

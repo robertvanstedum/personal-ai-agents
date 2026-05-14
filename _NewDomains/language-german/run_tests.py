@@ -819,10 +819,10 @@ def _import_phrase_helpers():
 
     def _phrase_next_id(phrases, today):
         prefix = f"ph_{today.replace('-', '')}_"
-        same_day = [p["id"] for p in phrases if isinstance(p, dict) and p.get("id", "").startswith(prefix)]
-        if not same_day:
+        all_ids = [p["id"] for p in phrases if isinstance(p, dict) and p.get("id")]
+        if not all_ids:
             return f"{prefix}001"
-        maxn = max(int(pid.rsplit("_", 1)[-1]) for pid in same_day)
+        maxn = max(int(pid.rsplit("_", 1)[-1]) for pid in all_ids)
         return f"{prefix}{maxn + 1:03d}"
 
     return _phrase_next_id
@@ -839,15 +839,16 @@ def test_38():
 
 
 def test_39():
-    """_phrase_next_id uses max sequence, not count — gap-safe after deletion."""
+    """_phrase_next_id uses global max — new day continues from highest existing sequence."""
     _phrase_next_id = _import_phrase_helpers()
     phrases = [
         {"id": "ph_20260512_001"},
-        {"id": "ph_20260512_003"},  # 002 was deleted
+        {"id": "ph_20260512_003"},  # 002 was deleted — global max is 3
     ]
-    pid = _phrase_next_id(phrases, "2026-05-12")
-    ok = pid == "ph_20260512_004"
-    report(39, "_phrase_next_id: max-based ID after deletion gap (001,003 → 004)", ok,
+    # New phrase added on 0514 — should be 004, not restart at 001
+    pid = _phrase_next_id(phrases, "2026-05-14")
+    ok = pid == "ph_20260514_004"
+    report(39, "_phrase_next_id: global max across dates (0512_003 → 0514_004)", ok,
            f"got {pid!r}" if not ok else pid)
 
 
