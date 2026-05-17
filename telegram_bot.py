@@ -1277,6 +1277,28 @@ _last_drills: dict = {}   # chat_id → {verb, level, english} snapshot after co
 _drill_list_state: dict = {}  # chat_id → {verbs: list, offset: int} for paginated listing
 
 _DRILL_STATE_FILE = BASE_DIR / "_active_drill_state.json"
+_DRILL_LIST_STATE_FILE = BASE_DIR / "_drill_list_state.json"
+
+
+def _save_drill_list_state() -> None:
+    try:
+        with open(_DRILL_LIST_STATE_FILE, "w") as f:
+            import json as _json
+            _json.dump({str(k): v for k, v in _drill_list_state.items()}, f)
+    except Exception as e:
+        print(f"⚠️  Could not save drill list state: {e}")
+
+
+def _load_drill_list_state() -> None:
+    if not _DRILL_LIST_STATE_FILE.exists():
+        return
+    try:
+        import json as _json
+        with open(_DRILL_LIST_STATE_FILE) as f:
+            data = _json.load(f)
+        _drill_list_state.update({int(k): v for k, v in data.items()})
+    except Exception as e:
+        print(f"⚠️  Could not restore drill list state: {e}")
 
 
 def _save_drill_state() -> None:
@@ -1489,6 +1511,8 @@ async def _handle_drill_l1_start(update, target_lower: str) -> None:
     if not entry:
         await update.message.reply_text("No verbs in drill pool yet.")
         return
+    _drill_list_state.pop(update.message.chat_id, None)
+    _save_drill_list_state()
     state = _start_drill_state(entry)
     state["level"] = 1
     _active_drills[update.message.chat_id] = state
@@ -1504,6 +1528,8 @@ async def _handle_drill_l2_start(update, target_lower: str) -> None:
     if not entry:
         await update.message.reply_text("No verbs in drill pool yet.")
         return
+    _drill_list_state.pop(update.message.chat_id, None)
+    _save_drill_list_state()
     phrases = await _resolve_phrases(update, entry)
     if not phrases:
         return
@@ -1723,9 +1749,9 @@ def _drill_list_page(verbs: list, offset: int, page_size: int = 10) -> str:
         lines.append(f"  {i}. {v['verb']} — {v.get('english', '')}{tag}")
     remaining = total - (offset + len(page))
     if remaining > 0:
-        lines.append(f"\n(say 'more' for next {min(remaining, page_size)})")
+        lines.append(f"\n(say 'more' for next {min(remaining, page_size)}, or type a number or verb to drill)")
     else:
-        lines.append("\n(say 'drill <verb>' to start)")
+        lines.append("\n(type a number or verb to drill)")
     return "\n".join(lines)
 
 
@@ -1737,6 +1763,7 @@ async def _handle_drill_list(update) -> None:
         await update.message.reply_text("No verbs in drill pool yet.")
         return
     _drill_list_state[chat_id] = {"verbs": verbs, "offset": 10}
+    _save_drill_list_state()
     await update.message.reply_text(_drill_list_page(verbs, 0))
 
 
@@ -1752,9 +1779,53 @@ async def _handle_drill_list_more(update) -> None:
     if offset >= len(verbs):
         await update.message.reply_text("That's the full list.")
         del _drill_list_state[chat_id]
+        _save_drill_list_state()
         return
     ls["offset"] = offset + 10
+    _save_drill_list_state()
     await update.message.reply_text(_drill_list_page(verbs, offset))
+
+
+_LIST_SELECT_RE = re.compile(
+    r'^(?:drill\s+)?(?:(?:phrases?|l2|translate|level\s*2)\s+)?(?P<sel>\d+|[a-zäöüß]+)(?:\s+(?:phrases?|l2|translate|level\s*2))?$',
+    re.I,
+)
+_LIST_SELECT_L2_RE = re.compile(r'\b(?:phrases?|l2|translate|level\s*2)\b', re.I)
+# Words that look like bare verb names but are drill control words — never treat as list selections
+_LIST_SELECT_EXCLUDED = {"hint", "skip", "more", "next", "end", "stop", "done", "quit", "enough", "again"}
+
+
+async def _handle_drill_list_select(update, text: str) -> None:
+    """Handle numeric index or bare verb name as selection from a displayed drill list."""
+    chat_id = update.message.chat_id
+    ls = _drill_list_state.get(chat_id)
+    if not ls:
+        return
+    verbs = ls["verbs"]
+    m = _LIST_SELECT_RE.match(text.strip())
+    if not m:
+        return
+    sel = m.group("sel")
+    if sel.lower() in _LIST_SELECT_EXCLUDED:
+        return
+    is_l2 = bool(_LIST_SELECT_L2_RE.search(text))
+    if sel.isdigit():
+        idx = int(sel) - 1
+        if 0 <= idx < len(verbs):
+            entry = verbs[idx]
+        else:
+            await update.message.reply_text(f"No verb #{sel} — list has {len(verbs)}.")
+            return
+    else:
+        entry = next((v for v in verbs if v["verb"].lower() == sel.lower()), None)
+        if not entry:
+            return
+    del _drill_list_state[chat_id]
+    _save_drill_list_state()
+    if is_l2:
+        await _handle_drill_l2_start(update, entry["verb"].lower())
+    else:
+        await _handle_drill_l1_start(update, entry["verb"].lower())
 
 
 async def _handle_drill_control(update, word: str) -> None:
@@ -2143,7 +2214,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     # Text triggers for phrase commands (mirrors voice routing)
-    if _PHRASE_LIST_VOICE_RE.search(text):
+    # Guard: 'drill list phrases' should route to the verb pool, not phrase list
+    if _PHRASE_LIST_VOICE_RE.search(text) and not _DRILL_LIST_RE.search(text):
         _phrase_list_offset[update.message.chat_id] = 0
         await _handle_phrase_list(update, "")
         return
@@ -2191,6 +2263,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await _handle_drill_list(update)
         elif _DRILL_MORE_RE.search(text):
             await _handle_drill_list_more(update)
+        elif _drill_list_state.get(update.message.chat_id) and _LIST_SELECT_RE.match(text.strip()):
+            await _handle_drill_list_select(update, text)
         elif _DRILL_RE.search(text):
             await _handle_drill(update, text)
         elif _SKIP_LESSON_RE.search(text):
@@ -2217,6 +2291,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await _handle_drill_list(update)
     elif _DRILL_MORE_RE.search(text):
         await _handle_drill_list_more(update)
+    elif _drill_list_state.get(update.message.chat_id) and _LIST_SELECT_RE.match(text.strip()):
+        await _handle_drill_list_select(update, text)
     elif _DRILL_AGAIN_RE.search(text) and update.message.chat_id in _last_drills:
         await _restart_last_drill(update)
     elif _SKIP_LESSON_RE.search(text):
@@ -2369,6 +2445,8 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
             await _handle_drill_list(update)
         elif _DRILL_MORE_RE.search(text):
             await _handle_drill_list_more(update)
+        elif _drill_list_state.get(update.message.chat_id) and _LIST_SELECT_RE.match(text.strip()):
+            await _handle_drill_list_select(update, text)
         elif _DRILL_RE.search(text):
             await _handle_drill(update, text)
         elif _SKIP_LESSON_RE.search(text):
@@ -2395,6 +2473,8 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
         await _handle_drill_list(update)
     elif _DRILL_MORE_RE.search(text):
         await _handle_drill_list_more(update)
+    elif _drill_list_state.get(update.message.chat_id) and _LIST_SELECT_RE.match(text.strip()):
+        await _handle_drill_list_select(update, text)
     elif _DRILL_AGAIN_RE.search(text) and update.message.chat_id in _last_drills:
         await _restart_last_drill(update)
     elif _SKIP_LESSON_RE.search(text):
@@ -2516,6 +2596,7 @@ def run_bot_mode():
     app.add_error_handler(error_handler)
 
     _load_drill_state()
+    _load_drill_list_state()
     print("✅ Listening for callbacks and commands...")
     app.run_polling()
 
