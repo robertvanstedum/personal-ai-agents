@@ -88,7 +88,9 @@ curator_media/
 context/
 
 # Working/scratch files — short-term, not for repo
-_working/
+_working/*
+# Build notes are permanent reasoning artifacts — commit them
+!_working/build_note_*.md
 
 # Finance domain — private data
 domains/finance/statements/
