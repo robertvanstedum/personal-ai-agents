@@ -1,31 +1,26 @@
 /* German HTML Interface — base styles
    Spec: docs/GERMAN_HTML_SPEC_v1.0.md
-   Aesthetic: Neubau Vienna — warm dark editorial */
+   Aesthetic: Neubau Vienna — café interior, warm overlay */
 
 :root {
-  /* Backgrounds */
-  --bg:         #1e1c1a;
-  --surface:    #2a2622;
-  --surface-2:  #332e29;
-  --border:     #3d3730;
+  --cafe-brown:  #3C2F2F;
+  --cream:       #F5EDE4;
+  --warm-beige:  #E8D9C8;
+  --accent:      #C68A5E;
+  --accent-muted: rgba(198, 138, 94, 0.4);
+  --surface:     rgba(60, 47, 47, 0.92);
+  --surface-2:   rgba(245, 237, 228, 0.10);
+  --border:      rgba(198, 138, 94, 0.25);
 
-  /* Text */
-  --text:       #e8e0d5;
-  --text-muted: #9a8f84;
-  --text-dim:   #5c5349;
+  --text:       var(--cream);
+  --text-muted: var(--warm-beige);
+  --text-dim:   #a88f7a;
 
-  /* Accent — terracotta */
-  --accent:     #c4623a;
-  --accent-dim: #8a4428;
-  --accent-bg:  #2d1f18;
-
-  /* Typography */
   --font-head: 'Playfair Display', Georgia, serif;
   --font-body: 'DM Sans', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
 
-  /* Spacing */
-  --radius: 6px;
+  --radius: 12px;
   --gap: 1.5rem;
 }
 
@@ -36,7 +31,9 @@
 html { font-size: 16px; }
 
 body {
-  background: var(--bg);
+  background:
+    linear-gradient(rgba(60, 47, 47, 0.85), rgba(60, 47, 47, 0.92)),
+    url('https://images.unsplash.com/photo-1517248135467-4c7edcad34b4?q=80&w=2070&auto=format&fit=crop') center/cover no-repeat fixed;
   color: var(--text);
   font-family: var(--font-body);
   font-weight: 400;
@@ -71,13 +68,33 @@ code, pre, .mono {
 .tab-rail {
   display: flex;
   align-items: stretch;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: rgba(60, 47, 47, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--accent);
   padding: 0 2rem;
   gap: 0.25rem;
   position: sticky;
   top: 0;
   z-index: 100;
+}
+
+.tab-rail .tab-logo {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.9rem 1.5rem 0.75rem 0;
+  font-family: var(--font-head);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  margin-right: 0.5rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tab-rail .tab-logo:hover {
+  color: var(--cream);
 }
 
 .tab-rail a.tab {
