@@ -43,9 +43,16 @@ See spec Section 1 for full rationale.
 2. Record the exact passing count as the baseline
 3. Commit (on feature branch) with message: `test: confirm 49-test baseline before extraction`
 4. Every subsequent extraction step must end with all 49 still passing
+5. After every extraction step: run the bot manually in `--dry-run` mode and confirm
+   it still responds correctly to a basic "next german session" command before committing
 
 If any test is already failing before extraction starts, stop and fix it first.
 Do not carry a broken baseline into the refactor.
+
+**Belt-and-suspenders rule (applies to every Group A–D commit):**
+Automated tests catch logic errors. The dry-run smoke check catches integration breaks
+that tests might miss — import errors, wiring failures, adapter regressions. Both gates
+must pass before any extraction step is committed.
 
 ---
 
