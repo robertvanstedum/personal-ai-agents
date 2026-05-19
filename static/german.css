@@ -28,17 +28,27 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html { font-size: 16px; }
+html { font-size: 16px; height: 100%; }
 
 body {
-  background:
-    linear-gradient(rgba(60, 47, 47, 0.85), rgba(60, 47, 47, 0.92)),
-    url('https://images.unsplash.com/photo-1517248135467-4c7edcad34b4?q=80&w=2070&auto=format&fit=crop') center/cover no-repeat fixed;
+  position: relative;
+  background-color: var(--cafe-brown);
   color: var(--text);
   font-family: var(--font-body);
   font-weight: 400;
   line-height: 1.6;
   min-height: 100vh;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url('https://images.unsplash.com/photo-1517248135467-4c7edcad34b4?q=80&w=2070&auto=format&fit=crop');
+  background-size: cover;
+  background-position: center;
+  opacity: 0.18;
+  z-index: -1;
 }
 
 a { color: var(--accent); text-decoration: none; }
@@ -84,10 +94,11 @@ code, pre, .mono {
   align-items: center;
   padding: 0.9rem 1.5rem 0.75rem 0;
   font-family: var(--font-head);
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 1.05rem;
+  font-weight: 400;
+  font-style: italic;
   color: var(--accent);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   margin-right: 0.5rem;
   white-space: nowrap;
   flex-shrink: 0;
