@@ -5,8 +5,11 @@ Usage:
     python3 test_german_domain.py          # run all tests
     python3 test_german_domain.py --test 3 # run single test
 
-After each run, writes results to:
-    ../../_working/test_german_domain_results_YYYYMMDD.md
+After each run, appends a dated report to:
+    ../../_working/test_german_domain_results_YYYYMMDD_HHMM.md
+
+Failures are shown prominently at the end of stdout and at the top of each report.
+All runs are kept; run `python3 test_german_domain.py --stats` for a build-phase summary.
 """
 
 import sys
@@ -33,12 +36,15 @@ from german_domain import (
 
 _results: list[dict] = []
 
-def report(test_num: str, name: str, passed: bool, detail: str = "") -> None:
+def report(test_num: str, name: str, passed: bool, detail: str = "", *, expected: str = "", got: str = "") -> None:
     status = "PASS" if passed else "FAIL"
     label = f"Test {test_num} — {name}"
     suffix = f": {detail}" if detail else ""
     print(f"{label}: {status}{suffix}")
-    _results.append({"num": test_num, "name": name, "status": status, "detail": detail})
+    _results.append({
+        "num": test_num, "name": name, "status": status,
+        "detail": detail, "expected": expected, "got": got,
+    })
 
 # ─── Sample data ─────────────────────────────────────────────────────────────
 
@@ -64,8 +70,9 @@ SAMPLE_ENTRY = SAMPLE_POOL["core"]["verbs"][0]  # nehmen
 def test_D01():
     name = "_normalize_answer: lowercase, strip punctuation, collapse whitespace"
     result = _normalize_answer("Ich BIN  müde!")
-    passed = result == "ich bin müde"
-    report("D01", name, passed, repr(result))
+    expected = "ich bin müde"
+    passed = result == expected
+    report("D01", name, passed, repr(result), expected=repr(expected), got=repr(result))
 
 def test_D02():
     name = "_expand_contractions: im → in dem, ins → in das, no-op on unknown"
@@ -85,7 +92,8 @@ def test_D03():
     r2 = _parse_spoken_id("three")
     r3 = _parse_spoken_id("5")
     passed = r1 == "001" and r2 == "003" and r3 == "005"
-    report("D03", name, passed, f"one={r1}, three={r2}, 5={r3}")
+    report("D03", name, passed, f"one={r1}, three={r2}, 5={r3}",
+           expected="001, 003, 005", got=f"{r1}, {r2}, {r3}")
 
 def test_D04():
     name = "_lookup_verb: found in pool, not found returns None"
@@ -233,16 +241,52 @@ ALL_TESTS = [
     test_D11, test_D12, test_D13, test_D14, test_D15,
 ]
 
-def _write_results_md():
-    today = datetime.now().strftime("%Y%m%d")
-    out_path = REPO_ROOT / "_working" / f"test_german_domain_results_{today}.md"
+WORKING_DIR = REPO_ROOT / "_working"
+
+def _print_failure_summary() -> None:
+    failures = [r for r in _results if r["status"] == "FAIL"]
+    if not failures:
+        return
+    print("\n" + "─" * 60)
+    print(f"FAILURES ({len(failures)}):")
+    for r in failures:
+        print(f"\n  ❌ {r['num']} — {r['name']}")
+        if r.get("expected"):
+            print(f"     expected : {r['expected']}")
+            print(f"     got      : {r['got']}")
+        elif r.get("detail"):
+            print(f"     detail   : {r['detail']}")
+    print("─" * 60)
+
+def _write_results_md(run_ts: str) -> Path:
+    out_path = WORKING_DIR / f"test_german_domain_{run_ts}.md"
     passed = sum(1 for r in _results if r["status"] == "PASS")
-    total = len(_results)
+    failed = sum(1 for r in _results if r["status"] == "FAIL")
+    total  = len(_results)
+
     lines = [
-        f"# german_domain.py — Test Results",
-        f"**Run:** {datetime.now().strftime('%Y-%m-%d %H:%M')}  ",
+        "# german_domain.py — Test Results",
+        f"**Run:** {run_ts.replace('_', ' ')}  ",
         f"**Suite:** Group A (constants + pure functions)  ",
-        f"**Result:** {passed}/{total} passed",
+        f"**Result:** {passed}/{total} passed" + (f" — **{failed} FAILED**" if failed else ""),
+        "",
+    ]
+
+    failures = [r for r in _results if r["status"] == "FAIL"]
+    if failures:
+        lines += ["## Failures", ""]
+        for r in failures:
+            lines.append(f"### ❌ {r['num']} — {r['name']}")
+            if r.get("expected"):
+                lines.append(f"- **Expected:** `{r['expected']}`")
+                lines.append(f"- **Got:** `{r['got']}`")
+            if r.get("detail"):
+                lines.append(f"- **Detail:** {r['detail']}")
+            lines.append("")
+        lines += ["---", ""]
+
+    lines += [
+        "## Full Results",
         "",
         "| # | Test | Status | Detail |",
         "|---|------|--------|--------|",
@@ -251,13 +295,38 @@ def _write_results_md():
         icon = "✅" if r["status"] == "PASS" else "❌"
         detail = r["detail"].replace("|", "\\|")
         lines.append(f"| {r['num']} | {r['name']} | {icon} {r['status']} | {detail} |")
+
     out_path.write_text("\n".join(lines) + "\n")
-    print(f"\nResults written to: {out_path}")
+    return out_path
+
+def _print_stats() -> None:
+    """Print a summary of all saved test runs — defects found and fixed during build."""
+    reports = sorted(WORKING_DIR.glob("test_german_domain_*.md"))
+    if not reports:
+        print("No reports found in _working/.")
+        return
+    print(f"\nBuild phase stats — {len(reports)} run(s) found:\n")
+    total_failures = 0
+    for p in reports:
+        text = p.read_text()
+        run_ts = p.stem.replace("test_german_domain_", "")
+        result_line = next((l for l in text.splitlines() if "passed" in l and "**Result:**" in l), "")
+        fail_count = text.count("❌")
+        total_failures += fail_count
+        print(f"  {run_ts}  {result_line.replace('**Result:** ', '').strip()}")
+    print(f"\n  Total failure instances across all runs: {total_failures}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--test", type=str, help="Run single test by number, e.g. D03")
+    parser.add_argument("--stats", action="store_true", help="Show build-phase defect stats across all saved runs")
     args = parser.parse_args()
+
+    if args.stats:
+        _print_stats()
+        sys.exit(0)
+
+    run_ts = datetime.now().strftime("%Y%m%d_%H%M")
 
     if args.test:
         target = args.test.upper().lstrip("0") or "0"
@@ -272,7 +341,9 @@ if __name__ == "__main__":
             t()
 
     passed = sum(1 for r in _results if r["status"] == "PASS")
-    total = len(_results)
+    total  = len(_results)
+    _print_failure_summary()
     print(f"\n{passed}/{total} tests passed.")
-    _write_results_md()
+    out_path = _write_results_md(run_ts)
+    print(f"Report: {out_path}")
     sys.exit(0 if passed == total else 1)
