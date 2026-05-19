@@ -1,0 +1,183 @@
+/* German HTML Interface — base styles
+   Spec: docs/GERMAN_HTML_SPEC_v1.0.md
+   Aesthetic: Neubau Vienna — warm dark editorial */
+
+:root {
+  /* Backgrounds */
+  --bg:         #1e1c1a;
+  --surface:    #2a2622;
+  --surface-2:  #332e29;
+  --border:     #3d3730;
+
+  /* Text */
+  --text:       #e8e0d5;
+  --text-muted: #9a8f84;
+  --text-dim:   #5c5349;
+
+  /* Accent — terracotta */
+  --accent:     #c4623a;
+  --accent-dim: #8a4428;
+  --accent-bg:  #2d1f18;
+
+  /* Typography */
+  --font-head: 'Playfair Display', Georgia, serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Spacing */
+  --radius: 6px;
+  --gap: 1.5rem;
+}
+
+/* ── Reset ───────────────────────────────────────────────── */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-weight: 400;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--text); }
+
+h1, h2, h3, h4 {
+  font-family: var(--font-head);
+  font-weight: 400;
+  line-height: 1.25;
+  color: var(--text);
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.15rem; }
+
+code, pre, .mono {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+}
+
+.muted { color: var(--text-muted); }
+.dim   { color: var(--text-dim); }
+
+/* ── Tab rail ────────────────────────────────────────────── */
+
+.tab-rail {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 2rem;
+  gap: 0.25rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.tab-rail a.tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.9rem 1.1rem 0.75rem;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.tab-rail a.tab:hover {
+  color: var(--text);
+}
+
+.tab-rail a.tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.tab-rail a.tab.disabled {
+  color: var(--text-dim);
+  cursor: default;
+  pointer-events: none;
+}
+
+/* ── Page layout ─────────────────────────────────────────── */
+
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--gap) 2rem 4rem;
+}
+
+/* ── Tab placeholder ─────────────────────────────────────── */
+
+.tab-placeholder {
+  padding: 4rem 0 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.tab-placeholder h2 {
+  font-size: 2rem;
+}
+
+.tab-placeholder p {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.tab-placeholder .coming {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.3rem 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+
+/* ── Mobile ──────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .tab-rail {
+    position: fixed;
+    bottom: 0;
+    top: auto;
+    left: 0;
+    right: 0;
+    padding: 0;
+    overflow-x: auto;
+    border-top: 1px solid var(--border);
+    border-bottom: none;
+    justify-content: space-around;
+  }
+
+  .tab-rail a.tab {
+    padding: 0.75rem 0.5rem 0.6rem;
+    font-size: 0.75rem;
+    border-bottom: none;
+    border-top: 2px solid transparent;
+    flex: 1;
+    justify-content: center;
+  }
+
+  .tab-rail a.tab.active {
+    border-bottom: none;
+    border-top-color: var(--accent);
+  }
+
+  .page {
+    padding-bottom: 5rem;
+  }
+}
