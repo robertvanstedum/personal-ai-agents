@@ -210,6 +210,7 @@ After the refactor is merged:
   (👍 👎 🔖), pen icon → Schreiben handoff
 - Thumbs feedback stored (same learning loop as Curator)
 - No scoring personalisation yet — curated list, daily refresh
+- **Write and document Lesen scoring prompt in german_domain.py** — focused on register and accessibility, not geopolitical signal
 - Lesen → Schreiben handoff: pen icon passes article headline + first paragraph
   as context to Schreiben tab
 
@@ -246,6 +247,9 @@ After the refactor is merged:
 - Typography, colour, texture, German placeholder text
 - Mobile layout: single-column below 768px, bottom nav rail
 - Touch-friendly tap targets
+- [ ] Confirm Admin v1.0 scope: CRUD for personas only. Full scenario/scaffold editing is v1.1.
+
+**HTML smoke tests:** Before v1.0 ships, add basic smoke tests for Lesen feed loading, Schreiben correction handoff, and phrase capture from HTML. Full browser tests are out of scope for v1.0 — basic validation only.
 
 ---
 
@@ -289,6 +293,14 @@ A clean `german_domain.py` with Lesen + Schreiben is a better v1.0 than
 a rushed extraction with HTML bolted on top of tangled state.
 
 ---
+
+## Mac Mini Deployment Checklist
+
+- nginx config for Flask app (reverse proxy + static serving)
+- HTTPS setup (required for Web Speech API to work in browser)
+- launchd plist for `html_server.py`
+- Confirm `html_server` added to health_monitor service list
+- Test Web Speech API on target MacBook (Chrome macOS primary)
 
 ## Post-Build Checklist (for OpenClaw after merge)
 
