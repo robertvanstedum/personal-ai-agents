@@ -5,6 +5,8 @@ Both telegram_bot.py and html_server.py import from here.
 Both @minimoi_cmd_bot and @minimoi_agent_bot route to the same Python entrypoint.
 
 Group A: constants, data structures, pure functions (no I/O, no async, no Telegram).
+Group B: file I/O, subprocess, LLM callers (no async, no Telegram).
+Group C: resolver functions — sync, with optional progress_cb for mid-execution messages.
 """
 
 import re
@@ -510,3 +512,70 @@ def _fetch_phrases(verb: str, english: str) -> list:
     except Exception as e:
         print(f"⚠️  Failed to parse phrases JSON for '{verb}': {e}\nRaw: {raw[:100]}")
         return []
+
+
+# ─── Async-free resolvers (Group C) ───────────────────────────────────────────
+
+def _resolve_verb(verb_lower: str, progress_cb=None) -> dict | None:
+    """Find verb in pool or fetch via LLM and cache. Calls progress_cb(msg) for progress."""
+    pool = _load_drill_pool()
+    entry = _lookup_verb(pool, verb_lower)
+    if entry:
+        return entry
+    if progress_cb:
+        progress_cb(f"Looking up '{verb_lower}'…")
+    entry = _fetch_conjugations(verb_lower)
+    if not entry:
+        if progress_cb:
+            progress_cb(f"Couldn't look up '{verb_lower}' — check spelling.")
+        return None
+    on_demand_verbs = pool.setdefault("on_demand", {}).setdefault("verbs", [])
+    on_demand_verbs.append(entry)
+    _save_drill_pool(pool)
+    return entry
+
+
+def _resolve_phrases(entry: dict, progress_cb=None) -> list:
+    """Return cached phrases for a verb entry, or fetch+cache via LLM."""
+    if entry.get("phrases"):
+        return entry["phrases"]
+    if progress_cb:
+        progress_cb(f"Generating phrases for {entry['verb']}…")
+    phrases = _fetch_phrases(entry["verb"], entry.get("english", ""))
+    if not phrases:
+        if progress_cb:
+            progress_cb(f"Couldn't generate phrases for '{entry['verb']}'.")
+        return []
+    pool = _load_drill_pool()
+    for section in (pool.get("core", {}).get("verbs", []), pool.get("on_demand", {}).get("verbs", [])):
+        for v in section:
+            if isinstance(v, dict) and v.get("verb", "").lower() == entry["verb"].lower():
+                v["phrases"] = phrases
+                break
+    _save_drill_pool(pool)
+    entry["phrases"] = phrases
+    return phrases
+
+
+def _resolve_drill_verb(target_lower: str, progress_cb=None) -> dict | None:
+    """Extract verb from trigger text, look up or fetch. Returns entry or None."""
+    pool = _load_drill_pool()
+    all_verbs = _all_verb_entries(pool)
+    entry = next((v for v in all_verbs if v["verb"].lower() in target_lower), None)
+    if entry:
+        return entry
+    stop_words = {"drill", "german", "mode", "start", "verb", "my", "errors", "mistakes",
+                  "level", "translate", "l2", "phrase", "phrases"}
+    words = [w for w in target_lower.split() if w not in stop_words and len(w) > 3 and not w.isdigit()]
+    if words:
+        word = words[0]
+        all_scenes = {s for v in all_verbs for s in v.get("scenes", [])}
+        if word in all_scenes:
+            scene_verbs = [v for v in all_verbs if word in v.get("scenes", [])]
+            if scene_verbs:
+                chosen = random.choice(scene_verbs)
+                if progress_cb:
+                    progress_cb(f"'{word}' is a scene, not a verb — picking {chosen['verb']} ({chosen.get('english', '')}) from that scene.")
+                return chosen
+        return _resolve_verb(word, progress_cb=progress_cb)
+    return random.choice(all_verbs) if all_verbs else None

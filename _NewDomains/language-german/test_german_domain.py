@@ -31,6 +31,8 @@ from german_domain import (
     _load_keyword_map_bot,
     _call_llm, _fetch_conjugations, _fetch_phrases,
     _write_drill_anki, _drill_completion_message,
+    # Group C
+    _resolve_verb, _resolve_phrases, _resolve_drill_verb,
 )
 import german_domain
 import tempfile, unittest.mock as mock
@@ -406,6 +408,53 @@ def test_D27():
     report("D27", name, passed, repr(msg[:120]))
 
 
+def test_D28():
+    name = "_resolve_verb: returns entry immediately when verb already in pool (progress_cb=None)"
+    pool = {"core": {"verbs": [{"verb": "nehmen", "english": "to take", "conjugations": {}}]}}
+    with mock.patch("german_domain._load_drill_pool", return_value=pool):
+        result = _resolve_verb("nehmen", progress_cb=None)
+    passed = result is not None and result["verb"] == "nehmen"
+    report("D28", name, passed, f"verb={result and result['verb']}", expected="nehmen", got=str(result and result['verb']))
+
+def test_D29():
+    name = "_resolve_verb: calls progress_cb with 'Looking up' when verb not in pool"
+    pool = {"core": {"verbs": []}, "on_demand": {"verbs": []}}
+    conj = {"verb": "nehmen", "english": "to take", "conjugations": {"ich": "nehme"}}
+    messages = []
+    def _cb(msg): messages.append(msg)
+    with mock.patch("german_domain._load_drill_pool", return_value=pool), \
+         mock.patch("german_domain._save_drill_pool"), \
+         mock.patch("german_domain._fetch_conjugations", return_value=conj):
+        result = _resolve_verb("nehmen", progress_cb=_cb)
+    passed = result is not None and any("Looking up" in m for m in messages)
+    report("D29", name, passed, f"messages={messages}", expected="'Looking up' in callback", got=str(messages))
+
+def test_D30():
+    name = "_resolve_phrases: returns cached phrases without calling progress_cb (progress_cb=None)"
+    entry = {"verb": "nehmen", "english": "to take", "phrases": [{"english": "I take it", "german": "Ich nehme es"}]}
+    result = _resolve_phrases(entry, progress_cb=None)
+    passed = result == entry["phrases"]
+    report("D30", name, passed, f"count={len(result)}", expected="1 phrase", got=str(len(result)))
+
+def test_D31():
+    name = "_resolve_drill_verb: returns entry for known verb in pool (progress_cb=None)"
+    pool = {"core": {"verbs": [{"verb": "nehmen", "english": "to take", "conjugations": {}}]}}
+    with mock.patch("german_domain._load_drill_pool", return_value=pool):
+        result = _resolve_drill_verb("drill nehmen", progress_cb=None)
+    passed = result is not None and result["verb"] == "nehmen"
+    report("D31", name, passed, f"verb={result and result['verb']}", expected="nehmen", got=str(result and result['verb']))
+
+def test_D32():
+    name = "_resolve_drill_verb: callback fired when scene keyword resolves to verb"
+    pool = {"core": {"verbs": [{"verb": "nehmen", "english": "to take", "conjugations": {}, "scenes": ["cafe"]}]}}
+    messages = []
+    def _cb(msg): messages.append(msg)
+    with mock.patch("german_domain._load_drill_pool", return_value=pool):
+        result = _resolve_drill_verb("drill cafe", progress_cb=_cb)
+    passed = result is not None and any("scene" in m for m in messages)
+    report("D32", name, passed, f"verb={result and result['verb']}, cb_msgs={messages}", expected="scene in callback", got=str(messages))
+
+
 # ─── Main runner ──────────────────────────────────────────────────────────────
 
 ALL_TESTS = [
@@ -415,6 +464,7 @@ ALL_TESTS = [
     test_D16, test_D17, test_D18, test_D19, test_D20,
     test_D21, test_D22, test_D23, test_D24, test_D25,
     test_D26, test_D27,
+    test_D28, test_D29, test_D30, test_D31, test_D32,
 ]
 
 if __name__ == "__main__":

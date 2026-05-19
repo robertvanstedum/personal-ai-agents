@@ -50,6 +50,8 @@ from german_domain import (
     _load_phrasebook, _save_phrasebook,
     _call_llm, _fetch_conjugations, _fetch_phrases,
     _write_drill_anki, _drill_completion_message,
+    # Group C — async-free resolvers with callback pattern
+    _resolve_verb, _resolve_phrases, _resolve_drill_verb,
 )
 
 BASE_DIR = Path(__file__).parent
@@ -908,46 +910,7 @@ _phrase_capture_mode: dict = {}  # chat_id → {"retries": int}; waiting for sec
 _phrase_list_offset: dict = {}   # chat_id → int; pagination offset for phrase list
 
 
-async def _resolve_verb(update, verb_lower: str) -> dict | None:
-    """Find verb in pool or fetch via Claude and cache it. Returns entry or None."""
-    pool = _load_drill_pool()
-    entry = _lookup_verb(pool, verb_lower)
-    if entry:
-        return entry
-    await update.message.reply_text(f"Looking up '{verb_lower}'…")
-    entry = _fetch_conjugations(verb_lower)
-    if not entry:
-        await update.message.reply_text(f"Couldn't look up '{verb_lower}' — check spelling.")
-        return None
-    # Cache in on_demand
-    on_demand_verbs = pool.setdefault("on_demand", {}).setdefault("verbs", [])
-    on_demand_verbs.append(entry)
-    _save_drill_pool(pool)
-    return entry
-
-
-# _fetch_phrases imported from german_domain
-
-
-async def _resolve_phrases(update, entry: dict) -> list:
-    """Return cached phrases for a verb entry, or fetch+cache via LLM."""
-    if entry.get("phrases"):
-        return entry["phrases"]
-    await update.message.reply_text(f"Generating phrases for {entry['verb']}…")
-    phrases = _fetch_phrases(entry["verb"], entry.get("english", ""))
-    if not phrases:
-        await update.message.reply_text(f"Couldn't generate phrases for '{entry['verb']}'.")
-        return []
-    # Cache phrases back into the entry in drill_pool.json
-    pool = _load_drill_pool()
-    for section in (pool.get("core", {}).get("verbs", []), pool.get("on_demand", {}).get("verbs", [])):
-        for v in section:
-            if isinstance(v, dict) and v.get("verb", "").lower() == entry["verb"].lower():
-                v["phrases"] = phrases
-                break
-    _save_drill_pool(pool)
-    entry["phrases"] = phrases
-    return phrases
+# _resolve_verb, _resolve_phrases imported from german_domain (Group C)
 
 
 # _DE_CONTRACTIONS, _DE_CONTRACTION_RE, _expand_contractions,
@@ -956,7 +919,8 @@ async def _resolve_phrases(update, entry: dict) -> list:
 
 async def _handle_conjugate(update, verb: str) -> None:
     """Level 0 conjugate flashcard — any verb, looks up via Claude if needed."""
-    entry = await _resolve_verb(update, verb.lower())
+    async def _cb(msg): await update.message.reply_text(msg)
+    entry = _resolve_verb(verb.lower(), progress_cb=_cb)
     if not entry:
         return
     c = entry.get("conjugations", {})
@@ -975,8 +939,7 @@ _active_drills: dict = {}  # chat_id → drill state; persisted to disk across r
 _last_drills: dict = {}   # chat_id → {verb, level, english} snapshot after completion
 _drill_list_state: dict = {}  # chat_id → {verbs: list, offset: int} for paginated listing
 
-_DRILL_STATE_FILE = BASE_DIR / "_active_drill_state.json"
-_DRILL_LIST_STATE_FILE = BASE_DIR / "_drill_list_state.json"
+# _DRILL_STATE_FILE, _DRILL_LIST_STATE_FILE imported from german_domain
 
 
 def _save_drill_list_state() -> None:
@@ -1030,32 +993,7 @@ def _load_drill_state() -> None:
 # _record_l1_person, _finalize_l1_items imported from german_domain
 
 
-async def _resolve_drill_verb(update, target_lower: str) -> dict | None:
-    """Extract verb from trigger text, look up or fetch. Returns entry or None."""
-    pool = _load_drill_pool()
-    all_verbs = _all_verb_entries(pool)
-    entry = next((v for v in all_verbs if v["verb"].lower() in target_lower), None)
-    if entry:
-        return entry
-    stop_words = {"drill", "german", "mode", "start", "verb", "my", "errors", "mistakes", "level", "translate", "l2", "phrase", "phrases"}
-    words = [w for w in target_lower.split() if w not in stop_words and len(w) > 3 and not w.isdigit()]
-    if words:
-        word = words[0]
-        # Check if word matches a scene tag — don't send nouns/scenes to LLM for conjugation.
-        # Pick a random verb from that scene instead.
-        all_scenes = {s for v in all_verbs for s in v.get("scenes", [])}
-        if word in all_scenes:
-            import random
-            scene_verbs = [v for v in all_verbs if word in v.get("scenes", [])]
-            if scene_verbs:
-                chosen = random.choice(scene_verbs)
-                await update.message.reply_text(
-                    f"'{word}' is a scene, not a verb — picking {chosen['verb']} ({chosen.get('english','')}) from that scene."
-                )
-                return chosen
-        return await _resolve_verb(update, word)
-    import random
-    return random.choice(all_verbs) if all_verbs else None
+# _resolve_drill_verb imported from german_domain (Group C)
 
 
 async def _handle_drill(update, target: str) -> None:
@@ -1069,7 +1007,8 @@ async def _handle_drill(update, target: str) -> None:
 
 async def _handle_drill_l1_start(update, target_lower: str) -> None:
     """Start a Level 1 conjugation drill — any verb, random if none specified."""
-    entry = await _resolve_drill_verb(update, target_lower)
+    async def _cb(msg): await update.message.reply_text(msg)
+    entry = _resolve_drill_verb(target_lower, progress_cb=_cb)
     if not entry:
         await update.message.reply_text("No verbs in drill pool yet.")
         return
@@ -1086,13 +1025,14 @@ async def _handle_drill_l1_start(update, target_lower: str) -> None:
 
 async def _handle_drill_l2_start(update, target_lower: str) -> None:
     """Start a Level 2 translation drill — any verb, random if none specified."""
-    entry = await _resolve_drill_verb(update, target_lower)
+    async def _cb(msg): await update.message.reply_text(msg)
+    entry = _resolve_drill_verb(target_lower, progress_cb=_cb)
     if not entry:
         await update.message.reply_text("No verbs in drill pool yet.")
         return
     _drill_list_state.pop(update.message.chat_id, None)
     _save_drill_list_state()
-    phrases = await _resolve_phrases(update, entry)
+    phrases = _resolve_phrases(entry, progress_cb=_cb)
     if not phrases:
         return
     import random
