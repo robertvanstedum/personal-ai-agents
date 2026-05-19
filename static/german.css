@@ -3,14 +3,14 @@
    Aesthetic: Neubau Vienna — café interior, warm overlay */
 
 :root {
-  --cafe-brown:  #3C2F2F;
-  --cream:       #F5EDE4;
-  --warm-beige:  #E8D9C8;
-  --accent:      #C68A5E;
+  --cafe-brown:   #3C2F2F;
+  --cream:        #F5EDE4;
+  --warm-beige:   #E8D9C8;
+  --accent:       #C68A5E;
   --accent-muted: rgba(198, 138, 94, 0.4);
-  --surface:     rgba(60, 47, 47, 0.92);
-  --surface-2:   rgba(245, 237, 228, 0.10);
-  --border:      rgba(198, 138, 94, 0.25);
+  --surface:      rgba(60, 47, 47, 0.92);
+  --surface-2:    rgba(245, 237, 228, 0.10);
+  --border:       rgba(198, 138, 94, 0.25);
 
   --text:       var(--cream);
   --text-muted: var(--warm-beige);
@@ -21,7 +21,7 @@
   --font-mono: 'IBM Plex Mono', monospace;
 
   --radius: 12px;
-  --gap: 1.5rem;
+  --gap:    1.5rem;
 }
 
 /* ── Reset ───────────────────────────────────────────────── */
@@ -38,32 +38,39 @@ body {
   font-weight: 400;
   line-height: 1.6;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
+/* Background photo — self-hosted in static/
+   Primary:   static/bg-primary.jpg  (Melangerie table, dark wood)
+   Alternate: static/bg-alternate.jpg (bright Viennese interior, needs heavier overlay)
+   Fallback:  var(--cafe-brown) solid color */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background-image: url('https://images.unsplash.com/photo-1517248135467-4c7edcad34b4?q=80&w=2070&auto=format&fit=crop');
+  background-image: url('/static/bg-primary.jpg');
   background-size: cover;
   background-position: center;
-  opacity: 0.18;
+  opacity: 0.25;
   z-index: -1;
 }
+
+/* ── Base typography ─────────────────────────────────────── */
 
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--text); }
 
 h1, h2, h3, h4 {
   font-family: var(--font-head);
-  font-weight: 400;
   line-height: 1.25;
   color: var(--text);
 }
 
-h1 { font-size: 2rem; }
-h2 { font-size: 1.5rem; }
-h3 { font-size: 1.15rem; }
+h1 { font-size: 3.2rem; font-weight: 700; }
+h2 { font-size: 1.5rem;  font-weight: 400; }
+h3 { font-size: 1.15rem; font-weight: 400; }
 
 code, pre, .mono {
   font-family: var(--font-mono);
@@ -73,117 +80,138 @@ code, pre, .mono {
 .muted { color: var(--text-muted); }
 .dim   { color: var(--text-dim); }
 
-/* ── Tab rail ────────────────────────────────────────────── */
+/* ── Navigation ──────────────────────────────────────────── */
 
-.tab-rail {
-  display: flex;
-  align-items: stretch;
+nav {
+  height: 68px;
   background: rgba(60, 47, 47, 0.95);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--accent);
   padding: 0 2rem;
-  gap: 0.25rem;
+  display: flex;
+  align-items: center;
   position: sticky;
   top: 0;
   z-index: 100;
 }
 
-.tab-rail .tab-logo {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.9rem 1.5rem 0.75rem 0;
+.logo {
   font-family: var(--font-head);
-  font-size: 1.05rem;
+  font-size: 1.65rem;
   font-weight: 400;
   font-style: italic;
   color: var(--accent);
-  letter-spacing: 0.02em;
-  margin-right: 0.5rem;
-  white-space: nowrap;
+  margin-right: 3rem;
   flex-shrink: 0;
-}
-
-.tab-rail .tab-logo:hover {
-  color: var(--cream);
-}
-
-.tab-rail a.tab {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.9rem 1.1rem 0.75rem;
-  font-family: var(--font-body);
-  font-size: 0.875rem;
-  font-weight: 500;
-  letter-spacing: 0.03em;
-  color: var(--text-muted);
-  border-bottom: 2px solid transparent;
-  transition: color 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
 
-.tab-rail a.tab:hover {
-  color: var(--text);
+.logo:hover { color: var(--cream); }
+
+.nav-links {
+  display: flex;
+  gap: 2.2rem;
+  list-style: none;
 }
 
-.tab-rail a.tab.active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
+.nav-links a {
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 1.05rem;
+  font-weight: 500;
+  padding: 8px 0;
+  position: relative;
+  transition: color 0.15s;
+  white-space: nowrap;
 }
 
-.tab-rail a.tab.disabled {
+.nav-links a:hover { color: var(--text); }
+
+.nav-links a.active {
+  color: var(--accent);
+}
+
+.nav-links a.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--accent);
+}
+
+.nav-links a.disabled {
   color: var(--text-dim);
-  cursor: default;
   pointer-events: none;
+  cursor: default;
 }
 
 /* ── Page layout ─────────────────────────────────────────── */
 
 .page {
-  max-width: 960px;
+  max-width: 1100px;
   margin: 0 auto;
-  padding: var(--gap) 2rem 4rem;
+  padding: 4rem 2rem 6rem;
+  width: 100%;
+  flex: 1;
 }
 
-/* ── Tab placeholder ─────────────────────────────────────── */
+/* ── Content typography ──────────────────────────────────── */
 
-.tab-placeholder {
-  padding: 4rem 0 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.tab-placeholder h2 {
-  font-size: 2rem;
-}
-
-.tab-placeholder p {
+.subtitle {
+  font-size: 1.15rem;
   color: var(--text-muted);
-  font-size: 0.95rem;
+  max-width: 620px;
+  line-height: 1.5;
+  margin-top: 0.6rem;
 }
 
-.tab-placeholder .coming {
-  display: inline-block;
-  margin-top: 0.5rem;
-  padding: 0.3rem 0.75rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 0.8rem;
+.hint {
+  margin-top: 2rem;
   color: var(--text-dim);
-  font-family: var(--font-mono);
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+/* ── Inputs ──────────────────────────────────────────────── */
+
+input[type="text"],
+input[type="search"],
+textarea {
+  width: 100%;
+  background: rgba(245, 237, 228, 0.12);
+  border: 1px solid rgba(198, 138, 94, 0.45);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 1.1rem;
+  padding: 1rem 1.4rem;
+  border-radius: var(--radius);
+}
+
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(245, 237, 228, 0.20);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-dim);
 }
 
 /* ── Mobile ──────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
-  .tab-rail {
+  nav {
     position: fixed;
     bottom: 0;
     top: auto;
     left: 0;
     right: 0;
+    height: auto;
     padding: 0;
     overflow-x: auto;
     border-top: 1px solid var(--border);
@@ -191,19 +219,30 @@ code, pre, .mono {
     justify-content: space-around;
   }
 
-  .tab-rail a.tab {
-    padding: 0.75rem 0.5rem 0.6rem;
-    font-size: 0.75rem;
-    border-bottom: none;
-    border-top: 2px solid transparent;
-    flex: 1;
-    justify-content: center;
+  .logo { display: none; }
+
+  .nav-links {
+    width: 100%;
+    justify-content: space-around;
+    gap: 0;
+    padding: 0;
   }
 
-  .tab-rail a.tab.active {
-    border-bottom: none;
+  .nav-links li { flex: 1; }
+
+  .nav-links a {
+    display: flex;
+    justify-content: center;
+    padding: 0.75rem 0.5rem 0.6rem;
+    font-size: 0.75rem;
+    border-top: 2px solid transparent;
+  }
+
+  .nav-links a.active {
     border-top-color: var(--accent);
   }
+
+  .nav-links a.active::after { display: none; }
 
   .page {
     padding-bottom: 5rem;
