@@ -28,6 +28,7 @@ from telegram.ext import Application, CallbackQueryHandler, CommandHandler, Mess
 from telegram.ext import filters
 from telegram.error import NetworkError, TimedOut
 from german_domain import (
+    # Group A — constants and pure functions
     ROBERT_CHAT_ID, GERMAN_BASE, GERMAN_DIR, VENV_PYTHON,
     _WRITING_RE, _SESSION_RE, _CONJUGATE_RE,
     _DRILL_RE, _DRILL_L2_RE, _DRILL_CTL_RE, _DRILL_AGAIN_RE,
@@ -42,6 +43,13 @@ from german_domain import (
     _expand_contractions, _normalize_answer, _spell_feedback,
     _item_tag, _drill_prompt, _l2_prompt,
     _start_drill_state, _record_l2_item, _record_l1_person, _finalize_l1_items,
+    # Group B — I/O and LLM functions
+    _PHRASEBOOK_FILE, _DRILL_STATE_FILE, _DRILL_LIST_STATE_FILE,
+    _load_keyword_map_bot, _last_session_persona, _run, _german_agent_mode,
+    _phrase_next_id, _load_drill_pool, _save_drill_pool,
+    _load_phrasebook, _save_phrasebook,
+    _call_llm, _fetch_conjugations, _fetch_phrases,
+    _write_drill_anki, _drill_completion_message,
 )
 
 BASE_DIR = Path(__file__).parent
@@ -585,43 +593,9 @@ def run_send_mode():
 # are imported from german_domain
 
 
-def _load_keyword_map_bot() -> dict:
-    """Load keyword_map.json for bot routing — returns {} if missing."""
-    path = GERMAN_DIR / "config" / "keyword_map.json"
-    try:
-        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-    except Exception:
-        return {}
-
-
-# _resolve_keyword_intent imported from german_domain
-
-
-def _last_session_persona() -> str | None:
-    """Return persona name from the most recent session JSON, or None."""
-    sessions_dir = GERMAN_DIR / "sessions"
-    if not sessions_dir.exists():
-        return None
-    sessions = sorted(sessions_dir.glob("*.json"))
-    if not sessions:
-        return None
-    try:
-        data = json.loads(sessions[-1].read_text(encoding="utf-8"))
-        return data.get("persona")
-    except Exception:
-        return None
-
+# _load_keyword_map_bot, _last_session_persona, _run imported from german_domain
 
 KEYWORD_MAP = _load_keyword_map_bot()
-
-
-def _run(cmd, timeout=120, **kwargs):
-    """Run a subprocess, return (stdout, stderr, returncode)."""
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, **kwargs)
-        return result.stdout, result.stderr, result.returncode
-    except subprocess.TimeoutExpired:
-        return "", f"⏱ Timed out after {timeout}s", 1
 
 
 async def _arun(cmd, timeout=120, **kwargs):
@@ -674,14 +648,7 @@ async def _handle_german_transcript(update: Update, text: str):
     await update.message.reply_text(f"<pre>{escape(out)}</pre>", parse_mode="HTML")
 
 
-def _german_agent_mode() -> str:
-    cfg_path = GERMAN_DIR / "config" / "sync_config.json"
-    if cfg_path.exists():
-        try:
-            return json.loads(cfg_path.read_text()).get("agent_mode", "direct")
-        except Exception:
-            pass
-    return "direct"
+# _german_agent_mode imported from german_domain
 
 
 async def _handle_german_command(update: Update, text: str):
@@ -931,125 +898,14 @@ async def _handle_skip_lesson(update) -> None:
         await update.message.reply_text(confirmation)
 
 
-def _load_drill_pool() -> dict:
-    pool_path = GERMAN_DIR / "config" / "drill_pool.json"
-    if pool_path.exists():
-        try:
-            return json.loads(pool_path.read_text())
-        except Exception:
-            pass
-    return {}
+# _load_drill_pool, _save_drill_pool, _PHRASEBOOK_FILE,
+# _load_phrasebook, _save_phrasebook, _phrase_next_id,
+# _call_llm, _fetch_conjugations imported from german_domain
 
-
-def _save_drill_pool(pool: dict) -> None:
-    pool_path = GERMAN_DIR / "config" / "drill_pool.json"
-    pool_path.write_text(json.dumps(pool, indent=2, ensure_ascii=False))
-
-
-_PHRASEBOOK_FILE = GERMAN_DIR / "config" / "phrasebook.json"
 _phrase_practice: dict = {}     # chat_id → {"phrase_id": str}; in-memory, survives restarts fine
 _phrase_save_pending: dict = {}  # chat_id → {"german": str, "english": str}; awaiting yes/no confirm
-                                 # in-memory only — lost on bot restart; user resubmits with !phrase if this happens
-_phrase_capture_mode: dict = {}  # chat_id → {"retries": int}; waiting for second voice note with the phrase
-                                 # in-memory only — gap between trigger and phrase note is seconds; restart cost is re-triggering
-
-# _PHRASE_CAPTURE_RE, _PHRASE_PRACTICE_VOICE_RE, _SPOKEN_NUMBERS,
-# _parse_spoken_id, _PHRASE_LIST_VOICE_RE, _PHRASE_LIST_MORE_VOICE_RE
-# are imported from german_domain
-
-_phrase_list_offset: dict = {}  # chat_id → int; tracks pagination offset for !phrase list more
-
-
-def _load_phrasebook() -> dict:
-    if _PHRASEBOOK_FILE.exists():
-        try:
-            return json.loads(_PHRASEBOOK_FILE.read_text())
-        except Exception:
-            pass
-    return {"phrases": []}
-
-
-def _save_phrasebook(data: dict) -> None:
-    _PHRASEBOOK_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
-
-
-def _phrase_next_id(phrases: list, today: str) -> str:
-    """Global sequence — never resets per day, so short IDs (#001, #002...) stay unique."""
-    prefix = f"ph_{today.replace('-', '')}_"
-    all_ids = [p["id"] for p in phrases if isinstance(p, dict) and p.get("id")]
-    if not all_ids:
-        return f"{prefix}001"
-    maxn = max(int(pid.rsplit("_", 1)[-1]) for pid in all_ids)
-    return f"{prefix}{maxn + 1:03d}"
-
-
-# _all_verb_entries, _lookup_verb, _LLM_PROVIDERS imported from german_domain
-
-
-def _call_llm(prompt: str, max_tokens: int = 300) -> str | None:
-    """Call LLM providers in order, return text response or None if all fail."""
-    for provider in _LLM_PROVIDERS:
-        try:
-            if provider["type"] == "xai":
-                api_key = keyring.get_password("xai", "api_key")
-                if not api_key:
-                    continue
-                from openai import OpenAI as _OpenAI
-                client = _OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
-                resp = client.chat.completions.create(
-                    model=provider["model"],
-                    max_tokens=max_tokens,
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                return resp.choices[0].message.content.strip()
-            elif provider["type"] == "anthropic":
-                api_key = keyring.get_password("anthropic", "api_key")
-                if not api_key:
-                    continue
-                import anthropic as _anthropic
-                client = _anthropic.Anthropic(api_key=api_key)
-                msg = client.messages.create(
-                    model=provider["model"],
-                    max_tokens=max_tokens,
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                return msg.content[0].text.strip()
-            elif provider["type"] == "ollama":
-                from openai import OpenAI as _OpenAI
-                client = _OpenAI(api_key="ollama", base_url="http://localhost:11434/v1")
-                resp = client.chat.completions.create(
-                    model=provider["model"],
-                    max_tokens=max_tokens,
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                return resp.choices[0].message.content.strip()
-        except Exception as e:
-            print(f"⚠️  LLM provider '{provider['name']}' failed: {e}")
-            continue
-    return None
-
-
-def _fetch_conjugations(verb: str) -> dict | None:
-    """Fetch present-tense conjugations for any German verb via LLM, with fallback."""
-    prompt = (
-        f'Give me the present-tense conjugations of the German verb "{verb}" '
-        f'for these persons: ich, du, er, wir, ihr, sie. '
-        f'Also give a short English translation (infinitive). '
-        f'Reply ONLY with a JSON object in this exact format, no extra text:\n'
-        f'{{"verb":"{verb}","english":"...","conjugations":{{"ich":"...","du":"...","er":"...","wir":"...","ihr":"...","sie":"..."}}}}'
-    )
-    raw = _call_llm(prompt, max_tokens=200)
-    if not raw:
-        return None
-    try:
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        return json.loads(raw.strip())
-    except Exception as e:
-        print(f"⚠️  Failed to parse conjugation JSON for '{verb}': {e}\nRaw: {raw[:100]}")
-        return None
+_phrase_capture_mode: dict = {}  # chat_id → {"retries": int}; waiting for second voice note
+_phrase_list_offset: dict = {}   # chat_id → int; pagination offset for phrase list
 
 
 async def _resolve_verb(update, verb_lower: str) -> dict | None:
@@ -1070,27 +926,7 @@ async def _resolve_verb(update, verb_lower: str) -> dict | None:
     return entry
 
 
-def _fetch_phrases(verb: str, english: str) -> list:
-    """Generate translation phrases for a verb via LLM. Returns list of {english, german} dicts."""
-    prompt = (
-        f'Generate 6 natural German phrases using the verb "{verb}" ({english}). '
-        f'Mix informal (du/ich) and formal (Sie). Vienna-relevant contexts (café, hotel, transport, small talk). '
-        f'Reply ONLY with a JSON array, no extra text:\n'
-        f'[{{"english":"...","german":"..."}},{{"english":"...","german":"..."}}]'
-    )
-    raw = _call_llm(prompt, max_tokens=400)
-    if not raw:
-        return []
-    try:
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        result = json.loads(raw.strip())
-        return [p for p in result if isinstance(p, dict) and "english" in p and "german" in p]
-    except Exception as e:
-        print(f"⚠️  Failed to parse phrases JSON for '{verb}': {e}\nRaw: {raw[:100]}")
-        return []
+# _fetch_phrases imported from german_domain
 
 
 async def _resolve_phrases(update, entry: dict) -> list:
@@ -1188,65 +1024,8 @@ def _load_drill_state() -> None:
     except Exception as e:
         print(f"⚠️  Could not restore drill state: {e}")
 
-# _DRILL_PERSONS, _PERSONS_DISPLAY, _PERSONS_POOL, _item_tag imported from german_domain
-
-
-def _write_drill_anki(state: dict) -> int:
-    """Append friction items from completed drill to vienna_deck.csv. Returns card count written."""
-    import csv as _csv
-    vienna_csv = GERMAN_DIR / "anki" / "vienna_deck.csv"
-    items = state.get("items", [])
-    friction = [it for it in items if it["result"] != "drill-clean"]
-    if not friction:
-        return 0
-
-    existing_fronts: set[str] = set()
-    if vienna_csv.exists():
-        try:
-            with open(vienna_csv, newline="", encoding="utf-8") as f:
-                for row in _csv.DictReader(f):
-                    existing_fronts.add(row.get("Front", "").strip())
-        except Exception:
-            pass
-
-    write_header = not vienna_csv.exists()
-    written = 0
-    try:
-        with open(vienna_csv, "a", newline="", encoding="utf-8") as f:
-            writer = _csv.writer(f, quoting=_csv.QUOTE_ALL)
-            if write_header:
-                writer.writerow(["Front", "Back", "Tags"])
-            for it in friction:
-                if it["front"].strip() in existing_fronts:
-                    continue
-                writer.writerow([it["front"], it["back"], it["tags"]])
-                existing_fronts.add(it["front"].strip())
-                written += 1
-    except Exception as e:
-        print(f"⚠️  Could not write drill Anki cards: {e}")
-    return written
-
-
-def _drill_completion_message(state: dict, reveal_line: str) -> str:
-    """Build completion message with Anki summary. Writes cards as side effect."""
-    score, total = state["score"], state["total"]
-    written = _write_drill_anki(state)
-    counts = {"drill-clean": 0, "drill-reinforced": 0, "needs-practice": 0}
-    for it in state.get("items", []):
-        counts[it["result"]] = counts.get(it["result"], 0) + 1
-    lines = [f"{reveal_line}\n\nDrill complete! {score}/{total} correct."]
-    if counts["drill-clean"] or counts["drill-reinforced"] or counts["needs-practice"]:
-        lines.append(
-            f"  ✅ Clean: {counts['drill-clean']}  "
-            f"📝 Reinforced: {counts['drill-reinforced']}  "
-            f"⚠️ Needs practice: {counts['needs-practice']}"
-        )
-    if written:
-        lines.append(f"  {written} card(s) added to vienna_deck.csv — reimport Anki to sync to phone.")
-    lines.append("(say 'again' to repeat)")
-    return "\n".join(lines)
-
-
+# _DRILL_PERSONS, _PERSONS_DISPLAY, _PERSONS_POOL, _item_tag,
+# _write_drill_anki, _drill_completion_message,
 # _drill_prompt, _l2_prompt, _start_drill_state, _record_l2_item,
 # _record_l1_person, _finalize_l1_items imported from german_domain
 

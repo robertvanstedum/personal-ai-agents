@@ -271,3 +271,242 @@ def _finalize_l1_items(state: dict) -> None:
         "result": tag,
         "tags":   f"{tag} Vienna conjugation",
     })
+
+
+# ─── Domain I/O — file loaders and savers ────────────────────────────────────
+
+import json
+import subprocess
+
+_PHRASEBOOK_FILE       = GERMAN_DIR / "config" / "phrasebook.json"
+_DRILL_STATE_FILE      = _BASE_DIR / "_active_drill_state.json"
+_DRILL_LIST_STATE_FILE = _BASE_DIR / "_drill_list_state.json"
+
+
+def _load_keyword_map_bot() -> dict:
+    """Load keyword_map.json for bot routing — returns {} if missing."""
+    path = GERMAN_DIR / "config" / "keyword_map.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except Exception:
+        return {}
+
+
+def _last_session_persona() -> str | None:
+    """Return persona name from the most recent session JSON, or None."""
+    sessions_dir = GERMAN_DIR / "sessions"
+    if not sessions_dir.exists():
+        return None
+    sessions = sorted(sessions_dir.glob("*.json"))
+    if not sessions:
+        return None
+    try:
+        data = json.loads(sessions[-1].read_text(encoding="utf-8"))
+        return data.get("persona")
+    except Exception:
+        return None
+
+
+def _run(cmd, timeout=120, **kwargs):
+    """Run a subprocess, return (stdout, stderr, returncode)."""
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, **kwargs)
+        return result.stdout, result.stderr, result.returncode
+    except subprocess.TimeoutExpired:
+        return "", f"⏱ Timed out after {timeout}s", 1
+
+
+def _german_agent_mode() -> str:
+    cfg_path = GERMAN_DIR / "config" / "sync_config.json"
+    if cfg_path.exists():
+        try:
+            return json.loads(cfg_path.read_text()).get("agent_mode", "direct")
+        except Exception:
+            pass
+    return "direct"
+
+
+def _phrase_next_id(phrases: list, today: str) -> str:
+    """Global sequence — never resets per day, so short IDs (#001, #002...) stay unique."""
+    prefix = f"ph_{today.replace('-', '')}_"
+    all_ids = [p["id"] for p in phrases if isinstance(p, dict) and p.get("id")]
+    if not all_ids:
+        return f"{prefix}001"
+    maxn = max(int(pid.rsplit("_", 1)[-1]) for pid in all_ids)
+    return f"{prefix}{maxn + 1:03d}"
+
+
+def _load_drill_pool() -> dict:
+    pool_path = GERMAN_DIR / "config" / "drill_pool.json"
+    if pool_path.exists():
+        try:
+            return json.loads(pool_path.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+def _save_drill_pool(pool: dict) -> None:
+    pool_path = GERMAN_DIR / "config" / "drill_pool.json"
+    pool_path.write_text(json.dumps(pool, indent=2, ensure_ascii=False))
+
+
+def _load_phrasebook() -> dict:
+    if _PHRASEBOOK_FILE.exists():
+        try:
+            return json.loads(_PHRASEBOOK_FILE.read_text())
+        except Exception:
+            pass
+    return {"phrases": []}
+
+
+def _save_phrasebook(data: dict) -> None:
+    _PHRASEBOOK_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+
+
+def _write_drill_anki(state: dict) -> int:
+    """Append friction items from completed drill to vienna_deck.csv. Returns card count written."""
+    import csv as _csv
+    vienna_csv = GERMAN_DIR / "anki" / "vienna_deck.csv"
+    items = state.get("items", [])
+    friction = [it for it in items if it["result"] != "drill-clean"]
+    if not friction:
+        return 0
+
+    existing_fronts: set[str] = set()
+    if vienna_csv.exists():
+        try:
+            with open(vienna_csv, newline="", encoding="utf-8") as f:
+                for row in _csv.DictReader(f):
+                    existing_fronts.add(row.get("Front", "").strip())
+        except Exception:
+            pass
+
+    write_header = not vienna_csv.exists()
+    written = 0
+    try:
+        with open(vienna_csv, "a", newline="", encoding="utf-8") as f:
+            writer = _csv.writer(f, quoting=_csv.QUOTE_ALL)
+            if write_header:
+                writer.writerow(["Front", "Back", "Tags"])
+            for it in friction:
+                if it["front"].strip() in existing_fronts:
+                    continue
+                writer.writerow([it["front"], it["back"], it["tags"]])
+                existing_fronts.add(it["front"].strip())
+                written += 1
+    except Exception as e:
+        print(f"⚠️  Could not write drill Anki cards: {e}")
+    return written
+
+
+def _drill_completion_message(state: dict, reveal_line: str) -> str:
+    """Build completion message with Anki summary. Writes cards as side effect."""
+    score, total = state["score"], state["total"]
+    written = _write_drill_anki(state)
+    counts = {"drill-clean": 0, "drill-reinforced": 0, "needs-practice": 0}
+    for it in state.get("items", []):
+        counts[it["result"]] = counts.get(it["result"], 0) + 1
+    lines = [f"{reveal_line}\n\nDrill complete! {score}/{total} correct."]
+    if counts["drill-clean"] or counts["drill-reinforced"] or counts["needs-practice"]:
+        lines.append(
+            f"  ✅ Clean: {counts['drill-clean']}  "
+            f"📝 Reinforced: {counts['drill-reinforced']}  "
+            f"⚠️ Needs practice: {counts['needs-practice']}"
+        )
+    if written:
+        lines.append(f"  {written} card(s) added to vienna_deck.csv — reimport Anki to sync to phone.")
+    lines.append("(say 'again' to repeat)")
+    return "\n".join(lines)
+
+
+# ─── LLM calls ────────────────────────────────────────────────────────────────
+
+def _call_llm(prompt: str, max_tokens: int = 300) -> str | None:
+    """Call LLM providers in order, return text response or None if all fail."""
+    import keyring as _keyring
+    for provider in _LLM_PROVIDERS:
+        try:
+            if provider["type"] == "xai":
+                api_key = _keyring.get_password("xai", "api_key")
+                if not api_key:
+                    continue
+                from openai import OpenAI as _OpenAI
+                client = _OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
+                resp = client.chat.completions.create(
+                    model=provider["model"],
+                    max_tokens=max_tokens,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                return resp.choices[0].message.content.strip()
+            elif provider["type"] == "anthropic":
+                api_key = _keyring.get_password("anthropic", "api_key")
+                if not api_key:
+                    continue
+                import anthropic as _anthropic
+                client = _anthropic.Anthropic(api_key=api_key)
+                msg = client.messages.create(
+                    model=provider["model"],
+                    max_tokens=max_tokens,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                return msg.content[0].text.strip()
+            elif provider["type"] == "ollama":
+                from openai import OpenAI as _OpenAI
+                client = _OpenAI(api_key="ollama", base_url="http://localhost:11434/v1")
+                resp = client.chat.completions.create(
+                    model=provider["model"],
+                    max_tokens=max_tokens,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                return resp.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"⚠️  LLM provider '{provider['name']}' failed: {e}")
+            continue
+    return None
+
+
+def _fetch_conjugations(verb: str) -> dict | None:
+    """Fetch present-tense conjugations for any German verb via LLM, with fallback."""
+    prompt = (
+        f'Give me the present-tense conjugations of the German verb "{verb}" '
+        f'for these persons: ich, du, er, wir, ihr, sie. '
+        f'Also give a short English translation (infinitive). '
+        f'Reply ONLY with a JSON object in this exact format, no extra text:\n'
+        f'{{"verb":"{verb}","english":"...","conjugations":{{"ich":"...","du":"...","er":"...","wir":"...","ihr":"...","sie":"..."}}}}'
+    )
+    raw = _call_llm(prompt, max_tokens=200)
+    if not raw:
+        return None
+    try:
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        return json.loads(raw.strip())
+    except Exception as e:
+        print(f"⚠️  Failed to parse conjugation JSON for '{verb}': {e}\nRaw: {raw[:100]}")
+        return None
+
+
+def _fetch_phrases(verb: str, english: str) -> list:
+    """Generate translation phrases for a verb via LLM. Returns list of {english, german} dicts."""
+    prompt = (
+        f'Generate 6 natural German phrases using the verb "{verb}" ({english}). '
+        f'Mix informal (du/ich) and formal (Sie). Vienna-relevant contexts (café, hotel, transport, small talk). '
+        f'Reply ONLY with a JSON array, no extra text:\n'
+        f'[{{"english":"...","german":"..."}},{{"english":"...","german":"..."}}]'
+    )
+    raw = _call_llm(prompt, max_tokens=400)
+    if not raw:
+        return []
+    try:
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        result = json.loads(raw.strip())
+        return [p for p in result if isinstance(p, dict) and "english" in p and "german" in p]
+    except Exception as e:
+        print(f"⚠️  Failed to parse phrases JSON for '{verb}': {e}\nRaw: {raw[:100]}")
+        return []

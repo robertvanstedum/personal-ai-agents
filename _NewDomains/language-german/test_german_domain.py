@@ -24,9 +24,18 @@ from german_domain import (
     _SESSION_RE, _DRILL_RE, _DRILL_LIST_RE,
     _DRILL_CTL_RE, _PHRASE_CAPTURE_RE, _AGAIN_RE,
     GERMAN_DIR, GERMAN_BASE,
+    # Group B
+    _phrase_next_id, _run,
+    _load_drill_pool, _save_drill_pool,
+    _load_phrasebook, _save_phrasebook,
+    _load_keyword_map_bot,
+    _call_llm, _fetch_conjugations, _fetch_phrases,
+    _write_drill_anki, _drill_completion_message,
 )
+import german_domain
+import tempfile, unittest.mock as mock
 
-runner = TestReporter(suite="german_domain", group="Group A")
+runner = TestReporter(suite="german_domain", group="Group A+B")
 report = runner.report
 
 # ─── Sample data ─────────────────────────────────────────────────────────────
@@ -216,12 +225,196 @@ def test_D15():
     report("D15", name, passed,
            f"session={session_ok} drill={drill_ok} list={list_ok} again={again_ok} ctl={ctl_ok} phrase={phrase_ok}")
 
+# ─── Group B tests ────────────────────────────────────────────────────────────
+
+def test_D16():
+    name = "_phrase_next_id: first ID, global max sequence, date prefix"
+    empty = _phrase_next_id([], "2026-05-19")
+    phrases = [{"id": "ph_20260512_001"}, {"id": "ph_20260514_003"}]
+    next_id = _phrase_next_id(phrases, "2026-05-19")
+    passed = (
+        empty == "ph_20260519_001" and
+        next_id == "ph_20260519_004"
+    )
+    report("D16", name, passed, expected="ph_20260519_001 / ph_20260519_004",
+           got=f"{empty} / {next_id}")
+
+def test_D17():
+    name = "_run: returns (stdout, stderr, returncode) tuple"
+    out, err, rc = _run(["echo", "hello"])
+    passed = rc == 0 and "hello" in out and isinstance(err, str)
+    report("D17", name, passed, f"rc={rc}, out={out.strip()!r}", expected="rc=0", got=f"rc={rc}")
+
+def test_D18():
+    name = "_load_drill_pool: returns {} when file missing; loads dict when present"
+    with tempfile.TemporaryDirectory() as tmp:
+        original = german_domain.GERMAN_DIR
+        fake_dir = Path(tmp)
+        (fake_dir / "config").mkdir()
+        german_domain.GERMAN_DIR = fake_dir
+        try:
+            missing = _load_drill_pool()
+            pool_path = fake_dir / "config" / "drill_pool.json"
+            pool_path.write_text('{"core": {"verbs": []}}')
+            loaded = _load_drill_pool()
+        finally:
+            german_domain.GERMAN_DIR = original
+    passed = missing == {} and loaded == {"core": {"verbs": []}}
+    report("D18", name, passed, f"missing={missing}, loaded={loaded}")
+
+def test_D19():
+    name = "_save_drill_pool + _load_drill_pool: round-trip preserves data"
+    with tempfile.TemporaryDirectory() as tmp:
+        original = german_domain.GERMAN_DIR
+        fake_dir = Path(tmp)
+        (fake_dir / "config").mkdir()
+        german_domain.GERMAN_DIR = fake_dir
+        try:
+            data = {"core": {"verbs": [{"verb": "nehmen"}]}}
+            _save_drill_pool(data)
+            loaded = _load_drill_pool()
+        finally:
+            german_domain.GERMAN_DIR = original
+    passed = loaded == data
+    report("D19", name, passed, expected=str(data), got=str(loaded))
+
+def test_D20():
+    name = "_load_phrasebook: returns {'phrases': []} when missing; loads correctly"
+    with tempfile.TemporaryDirectory() as tmp:
+        original = german_domain._PHRASEBOOK_FILE
+        german_domain._PHRASEBOOK_FILE = Path(tmp) / "phrasebook.json"
+        try:
+            missing = _load_phrasebook()
+            german_domain._PHRASEBOOK_FILE.write_text('{"phrases": [{"id": "ph_001"}]}')
+            loaded = _load_phrasebook()
+        finally:
+            german_domain._PHRASEBOOK_FILE = original
+    passed = missing == {"phrases": []} and loaded["phrases"][0]["id"] == "ph_001"
+    report("D20", name, passed, f"missing={missing}, loaded_count={len(loaded.get('phrases',[]))}")
+
+def test_D21():
+    name = "_save_phrasebook + _load_phrasebook: round-trip preserves data"
+    with tempfile.TemporaryDirectory() as tmp:
+        original = german_domain._PHRASEBOOK_FILE
+        german_domain._PHRASEBOOK_FILE = Path(tmp) / "phrasebook.json"
+        try:
+            data = {"phrases": [{"id": "ph_20260519_001", "german": "Ich nehme es", "english": "I'll take it"}]}
+            _save_phrasebook(data)
+            loaded = _load_phrasebook()
+        finally:
+            german_domain._PHRASEBOOK_FILE = original
+    passed = loaded == data
+    report("D21", name, passed, expected="round-trip match", got="match" if loaded == data else f"got {loaded}")
+
+def test_D22():
+    name = "_load_keyword_map_bot: returns {} when missing; loads dict when present"
+    with tempfile.TemporaryDirectory() as tmp:
+        original = german_domain.GERMAN_DIR
+        fake_dir = Path(tmp)
+        (fake_dir / "config").mkdir()
+        german_domain.GERMAN_DIR = fake_dir
+        try:
+            missing = _load_keyword_map_bot()
+            kmap = {"Georg": {"trigger_words": ["Georg"], "default_scenario": "coffee"}}
+            (fake_dir / "config" / "keyword_map.json").write_text(
+                __import__("json").dumps(kmap)
+            )
+            loaded = _load_keyword_map_bot()
+        finally:
+            german_domain.GERMAN_DIR = original
+    passed = missing == {} and "Georg" in loaded
+    report("D22", name, passed, f"missing={missing}, loaded_keys={list(loaded.keys())}")
+
+def test_D23():
+    name = "_call_llm: returns None when provider list is empty (no providers to try)"
+    with mock.patch("german_domain._LLM_PROVIDERS", []):
+        result = _call_llm("test prompt", max_tokens=10)
+    passed = result is None
+    report("D23", name, passed, f"result={result!r}", expected="None", got=repr(result))
+
+def test_D24():
+    name = "_fetch_conjugations: parses valid JSON from LLM; returns None on bad JSON"
+    good_json = '{"verb":"nehmen","english":"to take","conjugations":{"ich":"nehme","du":"nimmst","er":"nimmt","wir":"nehmen","ihr":"nehmt","sie":"nehmen"}}'
+    with mock.patch("german_domain._call_llm", return_value=good_json):
+        result = _fetch_conjugations("nehmen")
+    with mock.patch("german_domain._call_llm", return_value="not json at all"):
+        bad = _fetch_conjugations("nehmen")
+    with mock.patch("german_domain._call_llm", return_value=None):
+        none_result = _fetch_conjugations("nehmen")
+    passed = (
+        result is not None and result.get("verb") == "nehmen" and
+        bad is None and none_result is None
+    )
+    report("D24", name, passed, f"good={result and result.get('verb')}, bad={bad}, none={none_result}")
+
+def test_D25():
+    name = "_fetch_phrases: parses valid JSON array; returns [] on bad JSON or None"
+    good_json = '[{"english":"I will take it","german":"Ich werde es nehmen"},{"english":"Take this","german":"Nehmen Sie das"}]'
+    with mock.patch("german_domain._call_llm", return_value=good_json):
+        result = _fetch_phrases("nehmen", "to take")
+    with mock.patch("german_domain._call_llm", return_value="garbage"):
+        bad = _fetch_phrases("nehmen", "to take")
+    with mock.patch("german_domain._call_llm", return_value=None):
+        none_result = _fetch_phrases("nehmen", "to take")
+    passed = len(result) == 2 and bad == [] and none_result == []
+    report("D25", name, passed, f"good_count={len(result)}, bad={bad}, none={none_result}")
+
+def test_D26():
+    name = "_write_drill_anki: friction items written to CSV; clean items skipped"
+    with tempfile.TemporaryDirectory() as tmp:
+        original = german_domain.GERMAN_DIR
+        fake_dir = Path(tmp)
+        (fake_dir / "anki").mkdir()
+        german_domain.GERMAN_DIR = fake_dir
+        try:
+            state = {
+                "items": [
+                    {"front": "I'll take it", "back": "Ich nehme es", "result": "needs-practice", "tags": "needs-practice Vienna phrase nehmen"},
+                    {"front": "clean item",   "back": "sauber",        "result": "drill-clean",    "tags": "drill-clean Vienna phrase nehmen"},
+                ]
+            }
+            written = _write_drill_anki(state)
+            csv_path = fake_dir / "anki" / "vienna_deck.csv"
+            content = csv_path.read_text()
+        finally:
+            german_domain.GERMAN_DIR = original
+    friction_in_csv = "I'll take it" in content
+    passed = written == 1 and friction_in_csv and "clean item" not in content
+    report("D26", name, passed, f"written={written}, csv_has_friction={friction_in_csv}",
+           expected="written=1", got=f"written={written}")
+
+def test_D27():
+    name = "_drill_completion_message: returns string with score and counts"
+    state = {
+        "score": 4, "total": 6,
+        "items": [
+            {"result": "drill-clean"},
+            {"result": "drill-reinforced"},
+            {"result": "needs-practice"},
+            {"result": "drill-clean"},
+        ]
+    }
+    with mock.patch("german_domain._write_drill_anki", return_value=0):
+        msg = _drill_completion_message(state, "✅ nehmen — nehme")
+    passed = (
+        "4/6" in msg and
+        "Clean: 2" in msg and
+        "Reinforced: 1" in msg and
+        "Needs practice: 1" in msg and
+        "again" in msg
+    )
+    report("D27", name, passed, repr(msg[:120]))
+
+
 # ─── Main runner ──────────────────────────────────────────────────────────────
 
 ALL_TESTS = [
     test_D01, test_D02, test_D03, test_D04, test_D05,
     test_D06, test_D07, test_D08, test_D09, test_D10,
     test_D11, test_D12, test_D13, test_D14, test_D15,
+    test_D16, test_D17, test_D18, test_D19, test_D20,
+    test_D21, test_D22, test_D23, test_D24, test_D25,
+    test_D26, test_D27,
 ]
 
 if __name__ == "__main__":
