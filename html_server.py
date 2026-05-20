@@ -43,9 +43,6 @@ def index():
 @app.route("/lesen")
 def lesen():
     articles = get_lesen_pool()
-    if not articles:
-        refresh_lesen_feed()
-        articles = get_lesen_pool()
     return render_template("german_lesen.html", active="lesen", articles=articles)
 
 
