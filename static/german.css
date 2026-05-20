@@ -96,7 +96,7 @@ code, pre, .mono {
 
 nav {
   height: 68px;
-  background: rgba(60, 47, 47, 0.95);
+  background: rgba(42, 31, 20, 0.97);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--accent);
@@ -794,4 +794,533 @@ textarea:focus {
   color: var(--accent);
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Lesen — Browse + Reading states
+   Parchment palette: bg #F5F0E8  text #2A1F14
+                      sidebar #EDE7DC  accent #C68A5E
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Shared button sizing — no hover scaling anywhere ────────── */
+:root {
+  --lesen-btn-h: 34px;
+  --parchment:   #F5F0E8;
+  --parch-text:  #2A1F14;
+  --parch-side:  #EDE7DC;
+  --parch-border: rgba(42, 31, 20, 0.15);
+  --parch-accent: #C68A5E;
+}
+
+/* ── Body mode overrides ─────────────────────────────────────── */
+
+body.browse-mode,
+body.reading-mode {
+  overflow: hidden;
+  height: 100vh;
+}
+
+body.browse-mode .page,
+body.reading-mode .page {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+body.reading-mode {
+  background-color: var(--parchment);
+  color: var(--parch-text);
+}
+
+body.reading-mode::before {
+  opacity: 0 !important;
+}
+
+body.reading-mode::after {
+  display: none;
+}
+
+body.reading-mode nav {
+  background: #2A1F14;
+  border-bottom-color: var(--parch-accent);
+}
+
+/* ── Hidden utility ──────────────────────────────────────────── */
+.lesen-state-hidden { display: none !important; }
+
+/* ── Browse — hero content ───────────────────────────────────── */
+
+#browse-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 4rem 3rem 0;
+}
+
+.browse-hero-content {
+  max-width: 580px;
+}
+
+.browse-hero-content h1 {
+  font-size: 3.8rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.browse-hero-content .subtitle {
+  margin-top: 0.75rem;
+}
+
+/* ── Browse — headline strip (fixed bottom) ──────────────────── */
+
+.headline-strip {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: rgba(26, 16, 8, 0.96);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(198, 138, 94, 0.35);
+  max-height: 65vh;
+  overflow-y: auto;
+}
+
+.strip-item {
+  border-bottom: 1px solid rgba(198, 138, 94, 0.12);
+}
+
+.strip-item:last-child { border-bottom: none; }
+
+.strip-item-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.7rem 2rem;
+  cursor: pointer;
+  transition: background 0.12s;
+  width: 100%;
+  text-align: left;
+}
+
+.strip-item-header:hover {
+  background: rgba(198, 138, 94, 0.08);
+}
+
+.strip-source {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.strip-dot {
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.strip-headline-text {
+  font-size: 0.95rem;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.strip-pin-icon {
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.strip-item.pinned .strip-headline-text {
+  color: var(--accent);
+}
+
+/* ── Strip expansion ─────────────────────────────────────────── */
+
+.strip-item-body {
+  display: none;
+  padding: 0 2rem 0.9rem;
+}
+
+.strip-item-body.expanded {
+  display: block;
+}
+
+.strip-summary {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin-bottom: 0.7rem;
+  max-width: 72ch;
+}
+
+.strip-item-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* ── Strip / shared action buttons ──────────────────────────── */
+
+.strip-action-btn {
+  height: var(--lesen-btn-h);
+  padding: 0 0.9rem;
+  background: rgba(245, 237, 228, 0.08);
+  border: 1px solid rgba(198, 138, 94, 0.3);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.strip-action-btn:hover {
+  background: rgba(198, 138, 94, 0.15);
+  border-color: var(--accent-muted);
+  color: var(--text);
+}
+
+.strip-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Strip empty state ───────────────────────────────────────── */
+
+.strip-empty {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  padding: 1rem 2rem;
+}
+
+.strip-empty-text {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Reading state — parchment layout
+   ══════════════════════════════════════════════════════════════ */
+
+#reading-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--parchment);
+  color: var(--parch-text);
+}
+
+/* ── Wien banner ─────────────────────────────────────────────── */
+
+.wien-banner {
+  height: 44px;
+  background: #1a1008;
+  display: flex;
+  align-items: center;
+  padding: 0 2rem;
+  flex-shrink: 0;
+}
+
+.wien-banner-label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: rgba(198, 138, 94, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ── Article bar ─────────────────────────────────────────────── */
+
+.article-bar {
+  height: 48px;
+  background: var(--parchment);
+  border-bottom: 1px solid var(--parch-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2rem;
+  flex-shrink: 0;
+  gap: 1rem;
+}
+
+.article-bar-center {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.article-bar-counter {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--parch-text);
+  opacity: 0.55;
+  min-width: 3.5rem;
+  text-align: center;
+}
+
+.article-bar-btn {
+  height: var(--lesen-btn-h);
+  padding: 0 0.9rem;
+  background: transparent;
+  border: 1px solid var(--parch-border);
+  border-radius: 6px;
+  color: var(--parch-text);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.article-bar-btn:hover {
+  background: rgba(42, 31, 20, 0.07);
+  border-color: rgba(42, 31, 20, 0.3);
+  color: var(--parch-text);
+}
+
+/* ── Reading body — two-column ───────────────────────────────── */
+
+.reading-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.reading-article-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.reading-article-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2.5rem 3rem 1rem;
+}
+
+.reading-headline {
+  font-family: var(--font-head);
+  font-size: 1.65rem;
+  font-weight: 600;
+  color: var(--parch-text);
+  line-height: 1.25;
+  margin-bottom: 0.5rem;
+}
+
+.reading-byline {
+  font-size: 0.8rem;
+  color: rgba(42, 31, 20, 0.5);
+  font-family: var(--font-mono);
+  margin-bottom: 1.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.reading-text {
+  font-size: 1.05rem;
+  line-height: 1.75;
+  color: var(--parch-text);
+  max-width: 68ch;
+  cursor: text;
+  user-select: text;
+}
+
+.reading-text.text-truncated {
+  display: -webkit-box;
+  -webkit-line-clamp: 10;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Reading footer — always visible ────────────────────────── */
+
+.reading-footer {
+  flex-shrink: 0;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.75rem 3rem;
+  border-top: 1px solid var(--parch-border);
+  background: var(--parchment);
+}
+
+.reading-footer-btn {
+  height: var(--lesen-btn-h);
+  padding: 0 0.9rem;
+  background: transparent;
+  border: 1px solid var(--parch-border);
+  border-radius: 6px;
+  color: var(--parch-text);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.reading-footer-btn:hover {
+  background: rgba(42, 31, 20, 0.07);
+  border-color: rgba(42, 31, 20, 0.3);
+}
+
+.reading-footer-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Reading sidebar ─────────────────────────────────────────── */
+
+.reading-sidebar {
+  width: 248px;
+  flex-shrink: 0;
+  background: var(--parch-side);
+  border-left: 1px solid var(--parch-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-panel {
+  padding: 1rem 1.2rem;
+  border-bottom: 1px solid var(--parch-border);
+}
+
+.sidebar-panel-woerter {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-panel-notizen {
+  flex-shrink: 0;
+}
+
+.sidebar-panel-title {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: rgba(42, 31, 20, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.65rem;
+}
+
+.woerter-list {
+  list-style: none;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.woerter-empty-hint {
+  font-size: 0.8rem;
+  color: rgba(42, 31, 20, 0.35);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.woerter-item {
+  font-size: 0.875rem;
+  color: var(--parch-text);
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(42, 31, 20, 0.08);
+  line-height: 1.4;
+}
+
+.woerter-item:last-child { border-bottom: none; }
+
+.notizen-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--parch-text);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  resize: none;
+  padding: 0;
+}
+
+.notizen-input:focus { outline: none; }
+.notizen-input::placeholder { color: rgba(42, 31, 20, 0.3); }
+
+/* ── Word popover — fixed position for reading mode ──────────── */
+
+.word-popover {
+  position: fixed !important;
+  z-index: 600;
+}
+
+/* ── Lesen responsive — below 768px ─────────────────────────── */
+
+@media (max-width: 768px) {
+  .headline-strip {
+    bottom: 3.5rem; /* above bottom nav */
+  }
+
+  #browse-state {
+    padding: 3rem 1.25rem 0;
+  }
+
+  .strip-item-header {
+    padding: 0.65rem 1.25rem;
+  }
+
+  .strip-item-body {
+    padding: 0 1.25rem 0.75rem;
+  }
+
+  .reading-article-scroll {
+    padding: 1.5rem 1.25rem 1rem;
+  }
+
+  .reading-footer {
+    padding: 0.65rem 1.25rem;
+  }
+
+  .reading-body {
+    flex-direction: column;
+  }
+
+  .reading-sidebar {
+    width: 100%;
+    height: auto;
+    flex-shrink: 0;
+    max-height: 220px;
+    border-left: none;
+    border-top: 1px solid var(--parch-border);
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .sidebar-panel-woerter,
+  .sidebar-panel-notizen {
+    min-width: 180px;
+    flex-shrink: 0;
+  }
+
+  .sidebar-panel-notizen {
+    border-bottom: none;
+    border-left: 1px solid var(--parch-border);
+  }
+
+  .article-bar {
+    padding: 0 1rem;
+  }
 }
