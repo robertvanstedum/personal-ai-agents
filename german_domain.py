@@ -579,3 +579,237 @@ def _resolve_drill_verb(target_lower: str, progress_cb=None) -> dict | None:
                 return chosen
         return _resolve_verb(word, progress_cb=progress_cb)
     return random.choice(all_verbs) if all_verbs else None
+
+
+# ─── Lesen — article pool (Group D: HTML interface) ──────────────────────────
+
+import feedparser
+import datetime
+from bs4 import BeautifulSoup
+
+_LESEN_ARTICLES_FILE = GERMAN_DIR / "config" / "lesen_articles.json"
+_LESEN_FEEDBACK_FILE = GERMAN_DIR / "config" / "lesen_feedback.json"
+
+_RSS_SOURCES = [
+    {"name": "ORF Wien",        "url": "https://rss.orf.at/wien.xml"},
+    {"name": "Vienna.at",       "url": "https://www.vienna.at/rss"},
+    {"name": "Standard Kultur", "url": "https://www.derstandard.at/rss/kultur"},
+    {"name": "ORF Sport",       "url": "https://rss.orf.at/sport.xml"},
+    {"name": "Falter",          "url": "https://www.falter.at/rss"},
+]
+
+
+def _load_lesen_articles() -> dict:
+    if _LESEN_ARTICLES_FILE.exists():
+        try:
+            return json.loads(_LESEN_ARTICLES_FILE.read_text())
+        except Exception:
+            pass
+    return {"articles": [], "last_fetched": None}
+
+
+def _save_lesen_articles(data: dict) -> None:
+    _LESEN_ARTICLES_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+
+
+def _strip_html(raw: str) -> str:
+    return BeautifulSoup(raw or "", "html.parser").get_text(separator=" ").strip()
+
+
+def get_lesen_pool() -> list:
+    """Return active + pinned articles, pinned first."""
+    data = _load_lesen_articles()
+    pool = [a for a in data["articles"] if a["status"] in ("active", "pinned")]
+    return sorted(pool, key=lambda a: 0 if a["status"] == "pinned" else 1)
+
+
+def fetch_lesen_articles() -> list:
+    """Fetch all RSS sources, deduplicate against existing pool. Returns new article dicts."""
+    data = _load_lesen_articles()
+    existing_urls = {a["url"] for a in data["articles"]}
+    new_articles = []
+    today = datetime.date.today().isoformat()
+
+    for source in _RSS_SOURCES:
+        try:
+            feed = feedparser.parse(source["url"])
+            for i, entry in enumerate(feed.entries[:6]):
+                url = entry.get("link", "")
+                if not url or url in existing_urls:
+                    continue
+                raw_summary = ""
+                if entry.get("content"):
+                    raw_summary = entry.content[0].value
+                elif entry.get("summary"):
+                    raw_summary = entry.summary
+                summary = _strip_html(raw_summary)[:800]
+                if not summary:
+                    summary = _strip_html(entry.get("title", ""))
+                art_id = f"art_{today.replace('-','')}_{source['name'][:3].lower()}_{i:02d}"
+                new_articles.append({
+                    "id": art_id,
+                    "title": entry.get("title", "").strip(),
+                    "url": url,
+                    "source": source["name"],
+                    "date_fetched": today,
+                    "summary": summary,
+                    "status": "active",
+                    "feedback": None,
+                })
+                existing_urls.add(url)
+        except Exception as e:
+            print(f"⚠️  Lesen RSS fetch failed for {source['name']}: {e}")
+
+    return new_articles
+
+
+def refresh_lesen_feed() -> dict:
+    """Fetch new articles, append to pool, save. Returns summary."""
+    data = _load_lesen_articles()
+    new_articles = fetch_lesen_articles()
+    data["articles"].extend(new_articles)
+    data["last_fetched"] = datetime.datetime.now().isoformat()
+    _save_lesen_articles(data)
+    pool_size = len([a for a in data["articles"] if a["status"] in ("active", "pinned")])
+    return {"added": len(new_articles), "pool_size": pool_size}
+
+
+def lesen_action(article_id: str, action: str) -> None:
+    """Record article action: pos/neg/pin/unpin. Updates pool and feedback log."""
+    data = _load_lesen_articles()
+    status_map = {"pos": "dismissed_pos", "neg": "dismissed_neg", "pin": "pinned", "unpin": "active"}
+    for article in data["articles"]:
+        if article["id"] == article_id:
+            new_status = status_map.get(action)
+            if new_status:
+                article["status"] = new_status
+                article["feedback"] = action
+            break
+    _save_lesen_articles(data)
+
+    feedback_data = {"entries": []}
+    if _LESEN_FEEDBACK_FILE.exists():
+        try:
+            feedback_data = json.loads(_LESEN_FEEDBACK_FILE.read_text())
+        except Exception:
+            pass
+    feedback_data["entries"].append({
+        "article_id": article_id,
+        "action": action,
+        "timestamp": datetime.datetime.now().isoformat(),
+    })
+    _LESEN_FEEDBACK_FILE.write_text(json.dumps(feedback_data, indent=2, ensure_ascii=False))
+
+
+def translate_phrase(phrase: str) -> tuple[str, bool]:
+    """Translate a German word/phrase to English. Checks phrasebook cache first.
+    Returns (translation, cached)."""
+    phrase_lower = phrase.lower().strip()
+    phrasebook = _load_phrasebook()
+    for entry in phrasebook.get("phrases", []):
+        if entry.get("german", "").lower().strip() == phrase_lower:
+            return entry.get("english", ""), True
+
+    prompt = (
+        f"Translate this German word or phrase to English. "
+        f"Reply with only the English translation, nothing else.\n"
+        f"German: {phrase}"
+    )
+    result = _call_llm(prompt, max_tokens=60)
+    return (result.strip() if result else ""), False
+
+
+def save_lesen_phrase(german: str, english: str, context_sentence: str, article_title: str) -> dict:
+    """Save a captured phrase to phrasebook with lesen provenance."""
+    data = _load_phrasebook()
+    today = datetime.date.today().isoformat()
+    new_entry = {
+        "id": _phrase_next_id(data),
+        "german": german,
+        "english": english,
+        "scene": "lesen",
+        "added": today,
+        "status": "library",
+        "verb_hint": "",
+        "practice_count": 0,
+        "last_practiced": None,
+        "source_sentence": context_sentence,
+        "source_article": article_title,
+    }
+    data.setdefault("phrases", []).append(new_entry)
+    _save_phrasebook(data)
+    return new_entry
+
+
+# ─── Schreiben — writing sessions (Group D: HTML interface) ──────────────────
+
+_WRITING_SESSIONS_FILE = GERMAN_DIR / "config" / "writing_sessions.json"
+
+_TAGEBUCH_PROMPTS = [
+    "Was hast du heute in Wien gesehen?",
+    "Beschreib deinen Morgen auf Deutsch.",
+    "Was war heute interessant oder überraschend?",
+    "Beschreib ein Gespräch, das du heute geführt hast.",
+    "Was hast du gegessen oder getrunken? Wie hat es geschmeckt?",
+    "Was planst du für morgen?",
+    "Beschreib das Wetter und wie es dich gestimmt hat.",
+    "Was hast du heute auf Deutsch gelesen oder gehört?",
+]
+
+
+def get_tagebuch_prompts() -> list:
+    return list(_TAGEBUCH_PROMPTS)
+
+
+def correct_writing(text: str, context: str = "") -> dict:
+    """Submit German text for LLM correction. Returns {corrected, notes}."""
+    context_block = f"Context (the article the learner was reading):\n{context}\n" if context else ""
+    prompt = (
+        "You are a German language tutor. Correct the following German text written by "
+        "an intermediate learner.\n"
+        "Return ONLY valid JSON with exactly these fields:\n"
+        '- "corrected": the corrected text (string)\n'
+        '- "notes": array of short strings, each explaining one correction '
+        "(gender, case, word order, vocabulary). Maximum 5 notes.\n\n"
+        f"{context_block}"
+        f"Text to correct:\n{text}"
+    )
+    raw = _call_llm(prompt, max_tokens=400)
+    if not raw:
+        return {"corrected": text, "notes": ["(Correction unavailable)"]}
+    try:
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        result = json.loads(raw.strip())
+        return {
+            "corrected": result.get("corrected", text),
+            "notes": result.get("notes", []),
+        }
+    except Exception:
+        return {"corrected": text, "notes": ["(Correction unavailable)"]}
+
+
+def save_writing_entry(mode: str, text_original: str, text_corrected: str = "",
+                       notes: list = None, context_title: str = "") -> dict:
+    """Append a writing session entry. Trims to last 50. Returns new entry."""
+    data = {"entries": []}
+    if _WRITING_SESSIONS_FILE.exists():
+        try:
+            data = json.loads(_WRITING_SESSIONS_FILE.read_text())
+        except Exception:
+            pass
+    entry = {
+        "id": f"ws_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        "mode": mode,
+        "text_original": text_original,
+        "text_corrected": text_corrected,
+        "notes": notes or [],
+        "timestamp": datetime.datetime.now().isoformat(),
+        "context_title": context_title,
+    }
+    data.setdefault("entries", []).append(entry)
+    data["entries"] = data["entries"][-50:]
+    _WRITING_SESSIONS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    return entry

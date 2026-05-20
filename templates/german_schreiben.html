@@ -1,7 +1,291 @@
 {% extends "german_base.html" %}
 {% block title %}Schreiben{% endblock %}
+
 {% block content %}
-<h1>Schreiben</h1>
-<p class="subtitle">Freeform writing with LLM correction — gender, case, word order notes.</p>
-<p class="hint">Step 7</p>
+<div class="schreiben-header">
+  <h1>Schreiben</h1>
+  <p class="subtitle">Schreib auf Deutsch — mit Korrektur und Verlauf.</p>
+</div>
+
+<div class="mode-toggle">
+  <button class="mode-btn active" data-mode="kontext">Im Kontext</button>
+  <button class="mode-btn" data-mode="woerter">Wörter</button>
+  <button class="mode-btn" data-mode="tagebuch">Tagebuch</button>
+</div>
+
+<!-- ── Im Kontext ─────────────────────────────────────────────────────────── -->
+<div class="mode-pane" id="pane-kontext">
+  <div class="kontext-source" id="kontext-source" style="display:none">
+    <span class="kontext-label">Aus Lesen:</span>
+    <span id="kontext-title"></span>
+    <p id="kontext-summary"></p>
+  </div>
+  <textarea id="kontext-input" rows="6"
+    placeholder="Schreib hier auf Deutsch — über den Artikel oder ein eigenes Thema…"></textarea>
+  <div class="pane-actions">
+    <button class="btn-primary" id="kontext-submit">Korrektur anfordern</button>
+    <span class="write-status" id="kontext-status"></span>
+  </div>
+  <div class="correction-display" id="kontext-correction" style="display:none">
+    <div class="correction-section">
+      <div class="correction-label">Original</div>
+      <div class="correction-original" id="kontext-original"></div>
+    </div>
+    <div class="correction-section">
+      <div class="correction-label">Korrigiert</div>
+      <div class="correction-corrected" id="kontext-corrected"></div>
+    </div>
+    <ul class="correction-notes" id="kontext-notes"></ul>
+    <div class="correction-actions">
+      <button class="btn-primary" id="kontext-save">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Wörter ────────────────────────────────────────────────────────────── -->
+<div class="mode-pane hidden" id="pane-woerter">
+  <p class="subtitle" style="margin-bottom:1.5rem">Wörter und Phrasen manuell erfassen.</p>
+  <div class="woerter-form">
+    <input type="text" id="woerter-german" placeholder="Deutsches Wort / Phrase">
+    <input type="text" id="woerter-english" placeholder="Englische Bedeutung">
+    <input type="text" id="woerter-context" placeholder="Beispielsatz (optional)">
+    <button class="btn-primary" id="woerter-save">Zur Bibliothek</button>
+    <span class="write-status" id="woerter-status"></span>
+  </div>
+</div>
+
+<!-- ── Tagebuch ──────────────────────────────────────────────────────────── -->
+<div class="mode-pane hidden" id="pane-tagebuch">
+  <div class="tagebuch-prompt-row">
+    <p class="tagebuch-prompt" id="tagebuch-prompt"></p>
+    <button class="btn-ghost" id="tagebuch-next-prompt">↻ Anderer Vorschlag</button>
+  </div>
+  <textarea id="tagebuch-input" rows="8"
+    placeholder="Schreib hier…"></textarea>
+  <div class="tagebuch-options">
+    <label class="toggle-label">
+      <input type="checkbox" id="tagebuch-correct" checked>
+      Korrektur anfragen
+    </label>
+  </div>
+  <div class="pane-actions">
+    <button class="btn-primary" id="tagebuch-submit">Eintrag speichern</button>
+    <span class="write-status" id="tagebuch-status"></span>
+  </div>
+  <div class="correction-display" id="tagebuch-correction" style="display:none">
+    <div class="correction-section">
+      <div class="correction-label">Korrigiert</div>
+      <div class="correction-corrected" id="tagebuch-corrected"></div>
+    </div>
+    <ul class="correction-notes" id="tagebuch-notes"></ul>
+  </div>
+</div>
+
+<!-- ── Session history ───────────────────────────────────────────────────── -->
+{% if sessions %}
+<section class="session-history">
+  <h3>Verlauf</h3>
+  {% for entry in sessions %}
+  <div class="session-entry" data-mode="{{ entry.mode }}">
+    <span class="session-mode-badge">{{ entry.mode }}</span>
+    <span class="session-date">{{ entry.timestamp[:10] }}</span>
+    <span class="session-preview">{{ entry.text_original[:80] }}{% if entry.text_original|length > 80 %}…{% endif %}</span>
+    {% if entry.notes %}<span class="session-errors">{{ entry.notes|length }} Hinweise</span>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+
+  const prompts = {{ tagebuch_prompts | tojson }};
+  let promptIdx = Math.floor(Math.random() * prompts.length);
+
+  // ── Mode toggle ─────────────────────────────────────────────────────────────
+  function activateMode(mode) {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.mode-pane').forEach(p => p.classList.add('hidden'));
+    const btn = document.querySelector(`.mode-btn[data-mode="${mode}"]`);
+    const pane = document.getElementById('pane-' + mode);
+    if (btn) btn.classList.add('active');
+    if (pane) pane.classList.remove('hidden');
+    sessionStorage.setItem('schreibenMode', mode);
+  }
+
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => activateMode(btn.dataset.mode));
+  });
+
+  // ── Restore mode + check Lesen handoff ─────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', () => {
+    const saved = sessionStorage.getItem('schreibenMode') || 'kontext';
+    activateMode(saved);
+
+    const kontext = sessionStorage.getItem('schreiben_kontext');
+    if (kontext) {
+      try {
+        const data = JSON.parse(kontext);
+        document.getElementById('kontext-title').textContent = data.title || '';
+        document.getElementById('kontext-summary').textContent = data.summary || '';
+        document.getElementById('kontext-source').style.display = 'block';
+        activateMode('kontext');
+      } catch (e) {}
+      sessionStorage.removeItem('schreiben_kontext');
+    }
+
+    document.getElementById('tagebuch-prompt').textContent = prompts[promptIdx] || '';
+  });
+
+  // ── Tagebuch prompt rotation ────────────────────────────────────────────────
+  document.getElementById('tagebuch-next-prompt').addEventListener('click', () => {
+    promptIdx = (promptIdx + 1) % prompts.length;
+    document.getElementById('tagebuch-prompt').textContent = prompts[promptIdx];
+  });
+
+  // ── Im Kontext correction ───────────────────────────────────────────────────
+  document.getElementById('kontext-submit').addEventListener('click', async () => {
+    const text = document.getElementById('kontext-input').value.trim();
+    if (!text) return;
+    const status = document.getElementById('kontext-status');
+    const btn = document.getElementById('kontext-submit');
+    btn.disabled = true;
+    status.textContent = 'Korrektur läuft…';
+
+    const contextTitle = document.getElementById('kontext-title').textContent;
+    try {
+      const res = await fetch('/api/write-correct', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text, context: contextTitle}),
+      });
+      const data = await res.json();
+      document.getElementById('kontext-original').textContent = text;
+      document.getElementById('kontext-corrected').textContent = data.corrected || text;
+      const notesList = document.getElementById('kontext-notes');
+      notesList.innerHTML = '';
+      (data.notes || []).forEach(note => {
+        const li = document.createElement('li');
+        li.textContent = note;
+        notesList.appendChild(li);
+      });
+      document.getElementById('kontext-correction').style.display = 'block';
+      status.textContent = '';
+
+      document.getElementById('kontext-save').dataset.original = text;
+      document.getElementById('kontext-save').dataset.corrected = data.corrected || '';
+      document.getElementById('kontext-save').dataset.notes = JSON.stringify(data.notes || []);
+    } catch (e) {
+      status.textContent = 'Fehler bei der Korrektur.';
+    }
+    btn.disabled = false;
+  });
+
+  document.getElementById('kontext-save').addEventListener('click', async () => {
+    const btn = document.getElementById('kontext-save');
+    const contextTitle = document.getElementById('kontext-title').textContent;
+    try {
+      await fetch('/api/write-save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          mode: 'kontext',
+          text_original: btn.dataset.original || '',
+          text_corrected: btn.dataset.corrected || '',
+          notes: JSON.parse(btn.dataset.notes || '[]'),
+          context_title: contextTitle,
+        }),
+      });
+      btn.textContent = '✓ Gespeichert';
+      btn.disabled = true;
+      setTimeout(() => { window.location.reload(); }, 800);
+    } catch (e) {}
+  });
+
+  // ── Wörter save ─────────────────────────────────────────────────────────────
+  document.getElementById('woerter-save').addEventListener('click', async () => {
+    const german = document.getElementById('woerter-german').value.trim();
+    const english = document.getElementById('woerter-english').value.trim();
+    const context = document.getElementById('woerter-context').value.trim();
+    const status = document.getElementById('woerter-status');
+    if (!german) { status.textContent = 'Bitte ein Wort eingeben.'; return; }
+    try {
+      await fetch('/api/save-phrase', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({german, english, context_sentence: context, article_title: ''}),
+      });
+      status.textContent = '✓ Gespeichert';
+      document.getElementById('woerter-german').value = '';
+      document.getElementById('woerter-english').value = '';
+      document.getElementById('woerter-context').value = '';
+      setTimeout(() => { status.textContent = ''; }, 2000);
+    } catch (e) {
+      status.textContent = 'Fehler beim Speichern.';
+    }
+  });
+
+  // ── Tagebuch save ───────────────────────────────────────────────────────────
+  document.getElementById('tagebuch-submit').addEventListener('click', async () => {
+    const text = document.getElementById('tagebuch-input').value.trim();
+    if (!text) return;
+    const doCorrect = document.getElementById('tagebuch-correct').checked;
+    const status = document.getElementById('tagebuch-status');
+    const btn = document.getElementById('tagebuch-submit');
+    btn.disabled = true;
+    status.textContent = doCorrect ? 'Korrektur läuft…' : 'Speichern…';
+
+    let corrected = '';
+    let notes = [];
+
+    if (doCorrect) {
+      try {
+        const res = await fetch('/api/write-correct', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({text, context: ''}),
+        });
+        const data = await res.json();
+        corrected = data.corrected || '';
+        notes = data.notes || [];
+
+        document.getElementById('tagebuch-corrected').textContent = corrected;
+        const notesList = document.getElementById('tagebuch-notes');
+        notesList.innerHTML = '';
+        notes.forEach(note => {
+          const li = document.createElement('li');
+          li.textContent = note;
+          notesList.appendChild(li);
+        });
+        document.getElementById('tagebuch-correction').style.display = 'block';
+      } catch (e) {
+        status.textContent = 'Fehler bei der Korrektur.';
+      }
+    }
+
+    try {
+      await fetch('/api/write-save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          mode: 'tagebuch',
+          text_original: text,
+          text_corrected: corrected,
+          notes,
+          context_title: prompts[promptIdx] || '',
+        }),
+      });
+      status.textContent = '✓ Gespeichert';
+      document.getElementById('tagebuch-input').value = '';
+      setTimeout(() => { window.location.reload(); }, 1000);
+    } catch (e) {
+      status.textContent = 'Fehler beim Speichern.';
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
 {% endblock %}

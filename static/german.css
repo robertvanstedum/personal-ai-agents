@@ -261,3 +261,537 @@ textarea::placeholder {
     padding-bottom: 5rem;
   }
 }
+
+/* ── Lesen — article cards ───────────────────────────────── */
+
+.lesen-header { margin-bottom: 2.5rem; }
+
+.article-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.article-card {
+  background: rgba(60, 47, 47, 0.72);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem 1.75rem 1.25rem;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: border-color 0.15s;
+}
+
+.article-card:hover {
+  border-color: rgba(198, 138, 94, 0.55);
+}
+
+.article-card.pinned {
+  border-color: var(--accent);
+  order: -1;
+}
+
+.article-meta {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.article-source {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.article-date {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.article-title {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.article-title a {
+  color: var(--text);
+}
+
+.article-title a:hover {
+  color: var(--accent);
+}
+
+.article-body {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--text-muted);
+  max-width: 68ch;
+  margin-bottom: 1rem;
+  cursor: text;
+  user-select: text;
+}
+
+.article-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.btn-action {
+  background: rgba(245, 237, 228, 0.08);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 0.35rem 0.6rem;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-action:hover {
+  background: rgba(198, 138, 94, 0.18);
+  border-color: var(--accent-muted);
+}
+
+.btn-action.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-write {
+  background: rgba(245, 237, 228, 0.08);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 0.35rem 0.6rem;
+  transition: background 0.15s, border-color 0.15s;
+  margin-left: 0.5rem;
+}
+
+.btn-write:hover {
+  background: rgba(198, 138, 94, 0.18);
+  border-color: var(--accent-muted);
+}
+
+.lesen-empty {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.btn-refresh {
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--accent);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 500;
+  padding: 0.6rem 1.4rem;
+  transition: background 0.15s, color 0.15s;
+  margin-top: 1rem;
+}
+
+.btn-refresh:hover {
+  background: var(--accent);
+  color: var(--cafe-brown);
+}
+
+.btn-refresh:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lesen-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.refresh-status {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+}
+
+/* ── Word capture popover ────────────────────────────────── */
+
+.word-popover {
+  position: absolute;
+  z-index: 500;
+  background: rgba(40, 30, 28, 0.97);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+  min-width: 220px;
+  max-width: 340px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.popover-phrase {
+  font-family: var(--font-head);
+  font-size: 1.1rem;
+  font-style: italic;
+  color: var(--text);
+  margin-bottom: 0.35rem;
+}
+
+.popover-translation {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+  min-height: 1.3em;
+}
+
+.popover-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.btn-save-phrase {
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  color: var(--cafe-brown);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.35rem 0.9rem;
+  transition: opacity 0.15s;
+}
+
+.btn-save-phrase:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-close-popover {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.2rem 0.5rem;
+}
+
+.btn-close-popover:hover { color: var(--text); }
+
+/* ── Schreiben — mode toggle ─────────────────────────────── */
+
+.schreiben-header { margin-bottom: 2rem; }
+
+.mode-toggle {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 2rem;
+}
+
+.mode-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 500;
+  padding: 0.45rem 1.2rem;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.mode-btn:hover {
+  border-color: var(--accent-muted);
+  color: var(--text);
+}
+
+.mode-btn.active {
+  background: rgba(198, 138, 94, 0.18);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.mode-pane { }
+.mode-pane.hidden { display: none; }
+
+/* ── Schreiben — shared pane elements ───────────────────── */
+
+.pane-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  color: var(--cafe-brown);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.65rem 1.5rem;
+  transition: opacity 0.15s;
+}
+
+.btn-primary:hover { opacity: 0.88; }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  padding: 0.35rem 0.9rem;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.btn-ghost:hover {
+  border-color: var(--accent-muted);
+  color: var(--text);
+}
+
+.write-status {
+  font-size: 0.875rem;
+  color: var(--text-dim);
+}
+
+textarea {
+  width: 100%;
+  background: rgba(245, 237, 228, 0.08);
+  border: 1px solid rgba(198, 138, 94, 0.35);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 1.05rem;
+  line-height: 1.65;
+  padding: 1rem 1.25rem;
+  resize: vertical;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(245, 237, 228, 0.13);
+}
+
+/* ── Im Kontext source block ─────────────────────────────── */
+
+.kontext-source {
+  background: rgba(198, 138, 94, 0.08);
+  border: 1px solid rgba(198, 138, 94, 0.3);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.kontext-label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+#kontext-title {
+  font-weight: 600;
+  color: var(--text);
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+#kontext-summary {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ── Correction display ──────────────────────────────────── */
+
+.correction-display {
+  background: rgba(60, 47, 47, 0.6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-top: 1.5rem;
+  overflow: hidden;
+}
+
+.correction-section {
+  padding: 1rem 1.4rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.correction-section:last-of-type {
+  border-bottom: none;
+}
+
+.correction-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.4rem;
+}
+
+.correction-original {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.correction-corrected {
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.correction-notes {
+  list-style: none;
+  padding: 0.75rem 1.4rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.correction-notes li {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  padding-left: 1rem;
+  position: relative;
+}
+
+.correction-notes li::before {
+  content: '›';
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+}
+
+.correction-actions {
+  padding: 0.75rem 1.4rem 1rem;
+}
+
+/* ── Wörter form ─────────────────────────────────────────── */
+
+.woerter-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 520px;
+}
+
+/* ── Tagebuch ────────────────────────────────────────────── */
+
+.tagebuch-prompt-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.tagebuch-prompt {
+  font-family: var(--font-head);
+  font-size: 1.2rem;
+  font-style: italic;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.tagebuch-options {
+  margin-top: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-label input[type="checkbox"] {
+  width: auto;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ── Session history ─────────────────────────────────────── */
+
+.session-history {
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--border);
+}
+
+.session-history h3 {
+  margin-bottom: 1rem;
+  color: var(--text-muted);
+}
+
+.session-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid rgba(198, 138, 94, 0.1);
+  transition: background 0.1s;
+}
+
+.session-entry:last-child { border-bottom: none; }
+
+.session-mode-badge {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  background: rgba(198, 138, 94, 0.15);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--accent);
+  padding: 0.1rem 0.45rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.session-date {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.session-preview {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-errors {
+  font-size: 0.8rem;
+  color: var(--accent);
+  white-space: nowrap;
+  flex-shrink: 0;
+}

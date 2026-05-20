@@ -1,7 +1,208 @@
 {% extends "german_base.html" %}
 {% block title %}Lesen{% endblock %}
+
 {% block content %}
-<h1>Lesen</h1>
-<p class="subtitle">Daily feed — German headlines and articles from Heute, Spiegel, Kicker, ORF.</p>
-<p class="hint">Step 6 — coming this evening</p>
+<div class="lesen-header">
+  <h1>Lesen</h1>
+  <p class="subtitle">Wiener Nachrichten — Lokales, Kultur, Sport.</p>
+</div>
+
+{% if articles %}
+<div class="article-feed" id="article-feed">
+  {% for article in articles %}
+  <article class="article-card{% if article.status == 'pinned' %} pinned{% endif %}" data-id="{{ article.id }}">
+    <div class="article-meta">
+      <span class="article-source">{{ article.source }}</span>
+      <span class="article-date">{{ article.date_fetched }}</span>
+    </div>
+    <h2 class="article-title">
+      <a href="{{ article.url }}" target="_blank" rel="noopener">{{ article.title }}</a>
+    </h2>
+    <div class="article-body selectable-text">{{ article.summary }}</div>
+    <div class="article-actions">
+      <button class="btn-action" data-action="pos" title="Interessant — entfernen">👍</button>
+      <button class="btn-action" data-action="neg" title="Überspringen">👎</button>
+      <button class="btn-action btn-pin{% if article.status == 'pinned' %} active{% endif %}"
+              data-action="{{ 'unpin' if article.status == 'pinned' else 'pin' }}"
+              title="{{ 'Gemerkt — lösen' if article.status == 'pinned' else 'Merken' }}">🔖</button>
+      <button class="btn-write" title="Darüber schreiben">✏️</button>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="lesen-empty" id="lesen-empty">
+  <p class="subtitle">Noch keine Artikel geladen.</p>
+  <button class="btn-refresh" id="btn-refresh-empty">Feed laden</button>
+</div>
+{% endif %}
+
+<div class="lesen-controls">
+  <button class="btn-refresh" id="btn-refresh">↻ Feed aktualisieren</button>
+  <span class="refresh-status" id="refresh-status"></span>
+</div>
+
+<!-- Word capture popover -->
+<div class="word-popover" id="word-popover" style="display:none">
+  <div class="popover-phrase" id="popover-phrase"></div>
+  <div class="popover-translation" id="popover-translation">Übersetzen…</div>
+  <div class="popover-actions">
+    <button class="btn-save-phrase" id="btn-save-phrase" disabled>Speichern</button>
+    <button class="btn-close-popover" id="btn-close-popover">✕</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+
+  // ── Word capture ────────────────────────────────────────────────────────────
+  const popover = document.getElementById('word-popover');
+  const popoverPhrase = document.getElementById('popover-phrase');
+  const popoverTranslation = document.getElementById('popover-translation');
+  const btnSave = document.getElementById('btn-save-phrase');
+  const btnClose = document.getElementById('btn-close-popover');
+
+  let currentPhrase = '';
+  let currentTranslation = '';
+  let currentContext = '';
+  let currentArticleTitle = '';
+
+  document.querySelectorAll('.selectable-text').forEach(el => {
+    el.addEventListener('mouseup', handleSelection);
+  });
+
+  document.addEventListener('mousedown', e => {
+    if (!popover.contains(e.target)) hidePopover();
+  });
+
+  btnClose.addEventListener('click', hidePopover);
+
+  async function handleSelection() {
+    const sel = window.getSelection();
+    const phrase = sel ? sel.toString().trim() : '';
+    if (!phrase || phrase.length > 100 || phrase.length < 2) return;
+
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const card = sel.anchorNode.parentElement.closest('.article-card');
+    currentContext = sel.anchorNode.parentElement.textContent.trim().slice(0, 200);
+    currentArticleTitle = card ? card.querySelector('.article-title').textContent.trim() : '';
+    currentPhrase = phrase;
+    currentTranslation = '';
+    btnSave.disabled = true;
+
+    showPopover(rect);
+    popoverPhrase.textContent = phrase;
+    popoverTranslation.textContent = 'Übersetzen…';
+
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({phrase}),
+      });
+      const data = await res.json();
+      currentTranslation = data.translation || '';
+      popoverTranslation.textContent = currentTranslation || '(keine Übersetzung)';
+      btnSave.disabled = !currentTranslation;
+    } catch (e) {
+      popoverTranslation.textContent = '(Fehler)';
+    }
+  }
+
+  function showPopover(rect) {
+    popover.style.display = 'block';
+    const top = rect.bottom + window.scrollY + 8;
+    const left = Math.min(rect.left + window.scrollX, window.innerWidth - 260);
+    popover.style.top = top + 'px';
+    popover.style.left = Math.max(8, left) + 'px';
+  }
+
+  function hidePopover() {
+    popover.style.display = 'none';
+    currentPhrase = '';
+    currentTranslation = '';
+  }
+
+  btnSave.addEventListener('click', async () => {
+    if (!currentPhrase) return;
+    btnSave.textContent = '✓';
+    btnSave.disabled = true;
+    try {
+      await fetch('/api/save-phrase', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          german: currentPhrase,
+          english: currentTranslation,
+          context_sentence: currentContext,
+          article_title: currentArticleTitle,
+        }),
+      });
+    } catch (e) {}
+    setTimeout(hidePopover, 600);
+  });
+
+  // ── Article actions ─────────────────────────────────────────────────────────
+  document.querySelectorAll('.btn-action').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      const card = e.target.closest('.article-card');
+      const action = btn.dataset.action;
+      await fetch('/api/lesen-action', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({article_id: card.dataset.id, action}),
+      });
+      if (action === 'pos' || action === 'neg') {
+        card.style.transition = 'opacity 0.35s, transform 0.35s';
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(-6px)';
+        setTimeout(() => card.remove(), 380);
+      }
+      if (action === 'pin' || action === 'unpin') {
+        btn.dataset.action = action === 'pin' ? 'unpin' : 'pin';
+        card.classList.toggle('pinned');
+      }
+    });
+  });
+
+  // ── Lesen → Schreiben handoff ───────────────────────────────────────────────
+  document.querySelectorAll('.btn-write').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const card = btn.closest('.article-card');
+      sessionStorage.setItem('schreiben_kontext', JSON.stringify({
+        article_id: card.dataset.id,
+        title: card.querySelector('.article-title').textContent.trim(),
+        summary: card.querySelector('.article-body').textContent.trim().slice(0, 300),
+      }));
+      window.location.href = '/schreiben';
+    });
+  });
+
+  // ── Feed refresh ────────────────────────────────────────────────────────────
+  async function doRefresh(btn) {
+    const status = document.getElementById('refresh-status');
+    btn.disabled = true;
+    if (status) status.textContent = 'Artikel werden geladen…';
+    try {
+      const res = await fetch('/api/lesen-refresh', {method: 'POST'});
+      const data = await res.json();
+      if (status) status.textContent = `${data.added} neue Artikel geladen.`;
+      setTimeout(() => window.location.reload(), 800);
+    } catch (e) {
+      if (status) status.textContent = 'Fehler beim Laden.';
+      btn.disabled = false;
+    }
+  }
+
+  const btnRefresh = document.getElementById('btn-refresh');
+  if (btnRefresh) btnRefresh.addEventListener('click', () => doRefresh(btnRefresh));
+
+  const btnRefreshEmpty = document.getElementById('btn-refresh-empty');
+  if (btnRefreshEmpty) btnRefreshEmpty.addEventListener('click', () => doRefresh(btnRefreshEmpty));
+})();
+</script>
 {% endblock %}
