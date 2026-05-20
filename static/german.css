@@ -57,6 +57,18 @@ body::before {
   z-index: -1;
 }
 
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 180px;
+  background: linear-gradient(to bottom, rgba(30, 20, 18, 0.55), transparent);
+  z-index: -1;
+  pointer-events: none;
+}
+
 /* ── Base typography ─────────────────────────────────────── */
 
 a { color: var(--accent); text-decoration: none; }
@@ -88,6 +100,7 @@ nav {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--accent);
+  box-shadow: 0 2px 24px rgba(0, 0, 0, 0.45);
   padding: 0 2rem;
   display: flex;
   align-items: center;
@@ -99,7 +112,7 @@ nav {
 .logo {
   font-family: var(--font-head);
   font-size: 1.65rem;
-  font-weight: 400;
+  font-weight: 600;
   font-style: italic;
   color: var(--accent);
   margin-right: 3rem;
@@ -161,11 +174,11 @@ nav {
 /* ── Content typography ──────────────────────────────────── */
 
 .subtitle {
-  font-size: 1.15rem;
+  font-size: 1.2rem;
   color: var(--text-muted);
   max-width: 620px;
-  line-height: 1.5;
-  margin-top: 0.6rem;
+  line-height: 1.55;
+  margin-top: 0.8rem;
 }
 
 .hint {
