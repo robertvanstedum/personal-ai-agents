@@ -589,14 +589,16 @@ from bs4 import BeautifulSoup
 
 _LESEN_ARTICLES_FILE = GERMAN_DIR / "config" / "lesen_articles.json"
 _LESEN_FEEDBACK_FILE = GERMAN_DIR / "config" / "lesen_feedback.json"
+_LESEN_SOURCES_FILE  = GERMAN_DIR / "config" / "lesen_sources.json"
 
-_RSS_SOURCES = [
-    {"name": "ORF Wien",        "url": "https://rss.orf.at/wien.xml"},
-    {"name": "Vienna.at",       "url": "https://www.vienna.at/rss"},
-    {"name": "Standard Kultur", "url": "https://www.derstandard.at/rss/kultur"},
-    {"name": "ORF Sport",       "url": "https://rss.orf.at/sport.xml"},
-    {"name": "Falter",          "url": "https://www.falter.at/rss"},
-]
+# Sources are config-driven — edit lesen_sources.json to add/remove/disable.
+# All sources must be non-paywalled. Verify on addition. Remove immediately if paywall detected.
+def _load_rss_sources() -> list:
+    try:
+        data = json.loads(_LESEN_SOURCES_FILE.read_text())
+        return [s for s in data.get("sources", []) if s.get("active", True)]
+    except Exception:
+        return []
 
 
 def _load_lesen_articles() -> dict:
@@ -630,7 +632,7 @@ def fetch_lesen_articles() -> list:
     new_articles = []
     today = datetime.date.today().isoformat()
 
-    for source in _RSS_SOURCES:
+    for source in _load_rss_sources():
         try:
             feed = feedparser.parse(source["url"])
             for i, entry in enumerate(feed.entries[:6]):

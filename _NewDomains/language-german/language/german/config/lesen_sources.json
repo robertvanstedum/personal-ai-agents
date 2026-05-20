@@ -1,0 +1,9 @@
+{
+  "sources": [
+    {"name": "ORF Wien",              "url": "https://rss.orf.at/wien.xml",                    "active": true},
+    {"name": "Vienna.at",             "url": "https://www.vienna.at/rss",                       "active": true},
+    {"name": "Standard Kultur",       "url": "https://www.derstandard.at/rss/kultur",           "active": true},
+    {"name": "ORF Sport",             "url": "https://rss.orf.at/sport.xml",                    "active": true},
+    {"name": "Wiener Bezirksblätter", "url": "https://www.meinbezirk.at/rss",                  "active": true}
+  ]
+}
