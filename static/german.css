@@ -70,7 +70,6 @@ body::before {
   transition: opacity 0.2s;
 }
 
-body.browse-mode::before,
 body.landing-mode::before {
   opacity: 0.25;
 }
@@ -355,8 +354,30 @@ body.landing-mode {
 /* ── Parchment working pages ─────────────────────────────── */
 
 body.parch-mode {
-  background-color: var(--md-parch);
+  background-color: var(--md-parch-mid);
   color: var(--md-text-primary);
+}
+
+body.parch-mode input[type="text"],
+body.parch-mode input[type="search"],
+body.parch-mode textarea,
+body.parch-mode select {
+  background: var(--md-parch-mid);
+  border: 1px solid var(--md-parch-deep);
+  color: var(--md-text-primary);
+}
+
+body.parch-mode input:focus,
+body.parch-mode textarea:focus,
+body.parch-mode select:focus {
+  background: var(--md-parch-mid);
+  border-color: var(--md-accent);
+  outline: none;
+}
+
+body.parch-mode input::placeholder,
+body.parch-mode textarea::placeholder {
+  color: var(--md-text-muted);
 }
 
 body.parch-mode::after {
@@ -972,7 +993,38 @@ textarea:focus {
 
 /* ── Body mode overrides ─────────────────────────────────────── */
 
-body.browse-mode,
+body.browse-mode {
+  background-color: #1c1209;
+  height: 100vh;
+  overflow: hidden;
+}
+
+body.browse-mode main {
+  height: calc(100vh - 68px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+body.browse-mode .page {
+  flex: 1;
+  overflow: hidden;
+}
+
+body.browse-mode .headline-strip {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+body.browse-mode .strip-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
 body.reading-mode {
   overflow: hidden;
   height: 100vh;
@@ -1012,15 +1064,29 @@ body.reading-mode nav {
 /* ── Browse — hero content ───────────────────────────────────── */
 
 #browse-state {
-  flex: 1;
+  height: 28vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   padding: 4rem 3rem 0;
-  min-height: 38vh;
+  background-image: url('/static/bg-lesen.png');
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+#browse-state::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 16, 8, 0.72);
+  pointer-events: none;
 }
 
 .browse-hero-content {
   max-width: 580px;
+  position: relative;
+  z-index: 1;
 }
 
 .browse-hero-content h1 {
@@ -1036,17 +1102,10 @@ body.reading-mode nav {
 /* ── Browse — headline strip (fixed bottom) ──────────────────── */
 
 .headline-strip {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 50;
   background: rgba(26, 16, 8, 0.96);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-top: 1px solid rgba(198, 138, 94, 0.35);
-  max-height: 65vh;
-  overflow-y: auto;
 }
 
 .strip-item {
@@ -1429,10 +1488,6 @@ body.reading-mode nav {
 /* ── Lesen responsive — below 768px ─────────────────────────── */
 
 @media (max-width: 768px) {
-  .headline-strip {
-    bottom: 3.5rem; /* above bottom nav */
-  }
-
   #browse-state {
     padding: 3rem 1.25rem 0;
   }
@@ -1781,7 +1836,7 @@ body.reading-mode nav {
 .archiv-header { margin-bottom: 2rem; }
 
 .archiv-section {
-  margin-bottom: 3rem;
+  margin-bottom: 2.5rem;
   padding-bottom: 2rem;
   border-bottom: 1px solid var(--md-parch-deep);
 }
@@ -1789,7 +1844,7 @@ body.reading-mode nav {
 .archiv-section:last-child { border-bottom: none; }
 
 .archiv-section h2 {
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   color: var(--md-text-primary);
 }
 
@@ -1812,7 +1867,7 @@ body.reading-mode nav {
 .admin-header { margin-bottom: 2rem; }
 
 .admin-section {
-  margin-bottom: 3rem;
+  margin-bottom: 2.5rem;
   padding-bottom: 2rem;
   border-bottom: 1px solid var(--md-parch-deep);
 }
@@ -1823,7 +1878,7 @@ body.reading-mode nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 .admin-section-head h2 { margin: 0; }

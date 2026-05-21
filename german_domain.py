@@ -726,7 +726,7 @@ def save_lesen_phrase(german: str, english: str, context_sentence: str, article_
     data = _load_phrasebook()
     today = datetime.date.today().isoformat()
     new_entry = {
-        "id": _phrase_next_id(data),
+        "id": _phrase_next_id(data.get("phrases", []), today),
         "german": german,
         "english": english,
         "scene": "lesen",
