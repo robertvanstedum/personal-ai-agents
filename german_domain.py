@@ -590,6 +590,7 @@ from bs4 import BeautifulSoup
 _LESEN_ARTICLES_FILE = GERMAN_DIR / "config" / "lesen_articles.json"
 _LESEN_FEEDBACK_FILE = GERMAN_DIR / "config" / "lesen_feedback.json"
 _LESEN_SOURCES_FILE  = GERMAN_DIR / "config" / "lesen_sources.json"
+_LESEN_FILTERS_FILE  = GERMAN_DIR / "config" / "lesen_filters.json"
 
 # Sources are config-driven — edit lesen_sources.json to add/remove/disable.
 # All sources must be non-paywalled. Verify on addition. Remove immediately if paywall detected.
@@ -597,6 +598,14 @@ def _load_rss_sources() -> list:
     try:
         data = json.loads(_LESEN_SOURCES_FILE.read_text())
         return [s for s in data.get("sources", []) if s.get("active", True)]
+    except Exception:
+        return []
+
+
+def _load_lesen_blocked_keywords() -> list:
+    try:
+        data = json.loads(_LESEN_FILTERS_FILE.read_text())
+        return [kw.lower() for kw in data.get("blocked_keywords", [])]
     except Exception:
         return []
 
@@ -629,6 +638,7 @@ def fetch_lesen_articles() -> list:
     """Fetch all RSS sources, deduplicate against existing pool. Returns new article dicts."""
     data = _load_lesen_articles()
     existing_urls = {a["url"] for a in data["articles"]}
+    blocked = _load_lesen_blocked_keywords()
     new_articles = []
     today = datetime.date.today().isoformat()
 
@@ -638,6 +648,9 @@ def fetch_lesen_articles() -> list:
             for i, entry in enumerate(feed.entries[:6]):
                 url = entry.get("link", "")
                 if not url or url in existing_urls:
+                    continue
+                title_lower = entry.get("title", "").lower()
+                if any(kw in title_lower for kw in blocked):
                     continue
                 raw_summary = ""
                 if entry.get("content"):
