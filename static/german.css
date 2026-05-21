@@ -1011,7 +1011,16 @@ body.reading-mode {
   height: 100vh;
 }
 
-body.browse-mode .page,
+body.browse-mode .page {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+
 body.reading-mode .page {
   max-width: none;
   margin: 0;
@@ -1060,7 +1069,7 @@ body.reading-mode nav {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(26, 16, 8, 0.72);
+  background: rgba(26, 16, 8, 0.35);
   pointer-events: none;
 }
 
@@ -1078,6 +1087,45 @@ body.reading-mode nav {
 
 .browse-hero-content .subtitle {
   margin-top: 0.75rem;
+}
+
+/* ── Browse — day toggle ─────────────────────────────────────── */
+.day-toggle {
+  display: flex;
+  gap: 0.5rem;
+  padding: 10px 24px;
+  background: rgba(26, 16, 8, 0.96);
+  border-bottom: 1px solid rgba(198, 138, 94, 0.15);
+  max-width: 860px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.day-btn {
+  background: transparent;
+  border: 1px solid rgba(198, 138, 94, 0.35);
+  color: rgba(245, 237, 228, 0.45);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.day-btn:hover {
+  color: var(--md-accent);
+  border-color: var(--md-accent);
+}
+
+.day-btn.active {
+  background: rgba(198, 138, 94, 0.15);
+  color: var(--md-accent);
+  border-color: var(--md-accent);
 }
 
 /* ── Browse — headline strip (fixed bottom) ──────────────────── */
@@ -1428,7 +1476,7 @@ body.reading-mode nav {
 }
 
 .sidebar-panel-woerter {
-  max-height: 180px;
+  max-height: 220px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;

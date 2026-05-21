@@ -12,11 +12,16 @@
   </div>
 </div>
 
+<div class="day-toggle" id="day-toggle">
+  <button class="day-btn active" data-day="heute">Heute</button>
+  <button class="day-btn" data-day="gestern">Gestern</button>
+</div>
+
 <div class="headline-strip" id="headline-strip">
   {% if articles %}
     {% for article in articles %}
     <div class="strip-item{% if article.status == 'pinned' %} pinned{% endif %}"
-         data-index="{{ loop.index0 }}" data-id="{{ article.id }}">
+         data-index="{{ loop.index0 }}" data-id="{{ article.id }}" data-date="{{ article.date_fetched }}">
       <div class="strip-item-header">
         {% if article.status == 'pinned' %}<span class="strip-pin-icon">📌</span>{% endif %}
         <span class="strip-source">{{ article.source }}</span>
@@ -463,8 +468,35 @@
   // ── Init ─────────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
     enterBrowse();
-    document.querySelectorAll('.strip-item').forEach((item, i) => {
-      if (i >= 5) item.style.display = 'none';
+
+    const allDates = [...new Set((window.__ARTICLES__ || []).map(a => a.date_fetched))].sort().reverse();
+    const heuteDate   = allDates[0];
+    const gesternDate = allDates[1];
+
+    const dayToggle = document.getElementById('day-toggle');
+    if (!gesternDate) dayToggle.style.display = 'none';
+
+    function applyDayFilter(day) {
+      const filterDate = day === 'heute' ? heuteDate : gesternDate;
+      let count = 0;
+      document.querySelectorAll('.strip-item').forEach(item => {
+        if (item.dataset.date === filterDate && count < 5) {
+          item.style.display = '';
+          count++;
+        } else {
+          item.style.display = 'none';
+        }
+      });
+    }
+
+    applyDayFilter('heute');
+
+    dayToggle.querySelectorAll('.day-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        dayToggle.querySelectorAll('.day-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        applyDayFilter(btn.dataset.day);
+      });
     });
   });
 })();
