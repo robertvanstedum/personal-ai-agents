@@ -249,6 +249,24 @@ All three emerged from building and operating this system.
 |---|---|---|
 | ![AI Observations](docs/screenshots/ai-observations.png) | ![Deep Dives](docs/screenshots/deep-dives.png) | ![Morning Briefing](docs/screenshots/morning-briefing.png) |
 
+## Screenshots — German Language Domain (v0.9 beta)
+
+| Landing | Lesen |
+|---|---|
+| ![Landing](docs/screenshots/landing.png) | ![Lesen](docs/screenshots/lesen.png) |
+
+| Schreiben | Üben |
+|---|---|
+| ![Schreiben](docs/screenshots/schreiben.png) | ![Üben](docs/screenshots/ueben.png) |
+
+| Wörter | Archiv |
+|---|---|
+| ![Wörter](docs/screenshots/woerter.png) | ![Archiv](docs/screenshots/archiv.png) |
+
+| Admin | |
+|---|---|
+| ![Admin](docs/screenshots/admin.png) | &nbsp; |
+
 ---
 
 **Status:** v1.1 — Research Intelligence (March 2026) · v0.9 — Language Learning beta (May 2026)
