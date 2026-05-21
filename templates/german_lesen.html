@@ -124,6 +124,7 @@
   'use strict';
 
   const articles = window.__ARTICLES__ || [];
+  let filteredArticles = [];
   let currentIdx = 0;
   let textTruncated = true;
   let currentTranslation = '';
@@ -133,15 +134,19 @@
     document.body.classList.remove('reading-mode', 'parch-mode');
     document.body.classList.add('browse-mode');
     document.getElementById('browse-state').classList.remove('lesen-state-hidden');
+    document.getElementById('day-toggle').classList.remove('lesen-state-hidden');
     document.getElementById('headline-strip').classList.remove('lesen-state-hidden');
     document.getElementById('reading-state').classList.add('lesen-state-hidden');
   }
 
-  function enterReading(idx) {
-    currentIdx = Math.max(0, Math.min(idx, articles.length - 1));
+  function enterReading(articleId) {
+    const filteredIdx = filteredArticles.findIndex(a => a.id === articleId);
+    if (filteredIdx === -1) return;
+    currentIdx = filteredIdx;
     document.body.classList.remove('browse-mode', 'parch-mode');
     document.body.classList.add('reading-mode');
     document.getElementById('browse-state').classList.add('lesen-state-hidden');
+    document.getElementById('day-toggle').classList.add('lesen-state-hidden');
     document.getElementById('headline-strip').classList.add('lesen-state-hidden');
     document.getElementById('reading-state').classList.remove('lesen-state-hidden');
     populateArticle(currentIdx);
@@ -149,14 +154,14 @@
 
   // ── Article population ───────────────────────────────────────────────
   function populateArticle(idx) {
-    const art = articles[idx];
+    const art = filteredArticles[idx];
     if (!art) return;
     document.getElementById('reading-headline').textContent = art.title || '';
     document.getElementById('reading-byline').textContent =
       [art.source, art.date_fetched].filter(Boolean).join(' · ');
     document.getElementById('reading-text').textContent = art.summary || '';
     document.getElementById('art-counter').textContent =
-      `${idx + 1} / ${articles.length}`;
+      `${idx + 1} / ${filteredArticles.length}`;
     const openLink = document.getElementById('btn-art-open');
     openLink.href = art.url || '#';
     textTruncated = true;
@@ -198,7 +203,7 @@
     const art     = articles[idx];
     if (art && openBtn) openBtn.href = art.url || '#';
 
-    header.addEventListener('click', () => enterReading(idx));
+    header.addEventListener('click', () => { if (art) enterReading(art.id); });
 
     mehr.addEventListener('click', async e => {
       e.stopPropagation();
@@ -231,7 +236,7 @@
         merken.textContent = '🔖 Gemerkt';
         merken.disabled = true;
       } else {
-        enterReading(idx);
+        enterReading(art ? art.id : null);
       }
     });
   });
@@ -240,11 +245,11 @@
   document.getElementById('btn-back-liste').addEventListener('click', enterBrowse);
 
   document.getElementById('btn-art-prev').addEventListener('click', () => {
-    if (currentIdx > 0) enterReading(currentIdx - 1);
+    if (currentIdx > 0) enterReading(filteredArticles[currentIdx - 1].id);
   });
 
   document.getElementById('btn-art-next').addEventListener('click', () => {
-    if (currentIdx < articles.length - 1) enterReading(currentIdx + 1);
+    if (currentIdx < filteredArticles.length - 1) enterReading(filteredArticles[currentIdx + 1].id);
   });
 
   // ── Mehr / Weniger (text truncation in reading view) ─────────────────
@@ -489,11 +494,12 @@
 
     function applyDayFilter(day) {
       const filterDate = day === 'heute' ? heuteDate : gesternDate;
-      let count = 0;
+      filteredArticles = [];
       document.querySelectorAll('.strip-item').forEach(item => {
-        if (item.dataset.date === filterDate && count < 5) {
+        if (item.dataset.date === filterDate && filteredArticles.length < 5) {
           item.style.display = '';
-          count++;
+          const art = articles[parseInt(item.dataset.index, 10)];
+          if (art) filteredArticles.push(art);
         } else {
           item.style.display = 'none';
         }

@@ -595,6 +595,7 @@ _LESEN_ARTICLES_FILE = GERMAN_DIR / "config" / "lesen_articles.json"
 _LESEN_FEEDBACK_FILE = GERMAN_DIR / "config" / "lesen_feedback.json"
 _LESEN_SOURCES_FILE  = GERMAN_DIR / "config" / "lesen_sources.json"
 _LESEN_FILTERS_FILE  = GERMAN_DIR / "config" / "lesen_filters.json"
+_LESEN_ARCHIV_FILE   = GERMAN_DIR / "config" / "lesen_archiv.json"
 
 # Sources are config-driven — edit lesen_sources.json to add/remove/disable.
 # All sources must be non-paywalled. Verify on addition. Remove immediately if paywall detected.
@@ -632,15 +633,18 @@ def _strip_html(raw: str) -> str:
 
 
 def get_lesen_pool() -> list:
-    """Return active + pinned articles, pinned first. Blocked keywords filtered at display time."""
+    """Return active articles from today and yesterday only. Older articles belong in Archiv."""
     data = _load_lesen_articles()
     blocked = _load_lesen_blocked_keywords()
+    today = datetime.date.today().isoformat()
+    yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
     pool = [
         a for a in data["articles"]
-        if a["status"] in ("active", "pinned")
+        if a["status"] == "active"
+        and a.get("date_fetched") in (today, yesterday)
         and not any(kw in a["title"].lower() for kw in blocked)
     ]
-    return sorted(pool, key=lambda a: 0 if a["status"] == "pinned" else 1)
+    return pool
 
 
 def fetch_lesen_articles() -> list:
@@ -694,22 +698,39 @@ def refresh_lesen_feed() -> dict:
     data["articles"].extend(new_articles)
     data["last_fetched"] = datetime.datetime.now().isoformat()
     _save_lesen_articles(data)
-    pool_size = len([a for a in data["articles"] if a["status"] in ("active", "pinned")])
+    pool_size = len(get_lesen_pool())
     return {"added": len(new_articles), "pool_size": pool_size}
 
 
 def lesen_action(article_id: str, action: str) -> None:
     """Record article action: pos/neg/pin/unpin. Updates pool and feedback log."""
     data = _load_lesen_articles()
-    status_map = {"pos": "dismissed_pos", "neg": "dismissed_neg", "pin": "pinned", "unpin": "active"}
+    status_map = {"pos": "dismissed_pos", "neg": "dismissed_neg", "pin": "archived", "unpin": "active"}
+    archived_article = None
     for article in data["articles"]:
         if article["id"] == article_id:
             new_status = status_map.get(action)
             if new_status:
                 article["status"] = new_status
                 article["feedback"] = action
+            if action == "pin":
+                archived_article = article
             break
     _save_lesen_articles(data)
+
+    if action == "pin" and archived_article:
+        archiv_data = {"archived": []}
+        if _LESEN_ARCHIV_FILE.exists():
+            try:
+                archiv_data = json.loads(_LESEN_ARCHIV_FILE.read_text())
+            except Exception:
+                pass
+        archiv_data["archived"].append({
+            **{k: archived_article[k] for k in ("id", "title", "url", "source", "date_fetched", "summary") if k in archived_article},
+            "archived_at": datetime.datetime.now().isoformat(),
+            "via": "merken",
+        })
+        _LESEN_ARCHIV_FILE.write_text(json.dumps(archiv_data, indent=2, ensure_ascii=False))
 
     feedback_data = {"entries": []}
     if _LESEN_FEEDBACK_FILE.exists():
