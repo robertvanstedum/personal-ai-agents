@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}German{% endblock %} — Neubau Kaffee</title>
+  <title>{% block title %}German{% endblock %} — Mein Deutsch</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/german.css">
   {% block head %}{% endblock %}
 </head>
@@ -15,14 +15,16 @@
 <nav>
   <a href="/" class="logo">Mein Deutsch</a>
   <ul class="nav-links">
-    <li><a href="/lesen"      {% if active=='lesen' %}class="active"{% endif %}>Lesen</a></li>
-    <li><a href="/schreiben"  {% if active=='schreiben' %}class="active"{% endif %}>Schreiben</a></li>
-    <li><a href="/ueben"      {% if active=='ueben' %}class="active"{% endif %}>Üben</a></li>
-    <li><a href="/bibliothek" {% if active=='bibliothek' %}class="active"{% endif %}>Bibliothek</a></li>
-    <li><a href="/admin"      {% if active=='admin' %}class="active"{% endif %}>Admin</a></li>
-    <li><a href="/archiv"     class="disabled">Archiv</a></li>
+    <li><a href="/lesen"     {% if active=='lesen' %}class="active"{% endif %}>Lesen</a></li>
+    <li><a href="/schreiben" {% if active=='schreiben' %}class="active"{% endif %}>Schreiben</a></li>
+    <li><a href="/ueben"     {% if active=='ueben' %}class="active"{% endif %}>Üben</a></li>
+    <li><a href="/woerter"   {% if active=='woerter' %}class="active"{% endif %}>Wörter</a></li>
+    <li><a href="/archiv"    {% if active=='archiv' %}class="active"{% endif %}>Archiv</a></li>
+    <li><a href="/admin"     {% if active=='admin' %}class="active"{% endif %}>Admin</a></li>
   </ul>
 </nav>
+
+{% block page_strip %}{% endblock %}
 
 <main class="page">
   {% block content %}{% endblock %}
