@@ -1334,6 +1334,11 @@ body.reading-mode nav {
   max-width: 68ch;
   cursor: text;
   user-select: text;
+  border: 1px solid rgba(122, 92, 58, 0.35);
+  border-radius: 6px;
+  padding: 1.25rem 1.5rem;
+  max-height: 420px;
+  overflow-y: auto;
 }
 
 .reading-text.text-truncated {
@@ -1398,13 +1403,10 @@ body.reading-mode nav {
 }
 
 .sidebar-panel-woerter {
-  flex: 1;
+  max-height: 40%;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-}
-
-.sidebar-panel-notizen {
   flex-shrink: 0;
 }
 
@@ -1455,6 +1457,18 @@ body.reading-mode nav {
 .notizen-input:focus { outline: none; }
 .notizen-input::placeholder { color: rgba(42, 31, 20, 0.3); }
 
+.reading-notizen {
+  margin-top: 2rem;
+  max-width: 68ch;
+}
+
+.reading-notizen .notizen-input {
+  border: 1px solid rgba(122, 92, 58, 0.35);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  background: rgba(42, 31, 20, 0.04);
+}
+
 /* ── Word popover — fixed position for reading mode ──────────── */
 
 .word-popover {
@@ -1500,15 +1514,9 @@ body.reading-mode nav {
     overflow-x: auto;
   }
 
-  .sidebar-panel-woerter,
-  .sidebar-panel-notizen {
+  .sidebar-panel-woerter {
     min-width: 180px;
     flex-shrink: 0;
-  }
-
-  .sidebar-panel-notizen {
-    border-bottom: none;
-    border-left: 1px solid var(--parch-border);
   }
 
   .article-bar {
