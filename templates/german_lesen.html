@@ -104,6 +104,7 @@
   const articles = window.__ARTICLES__ || [];
   let currentIdx = 0;
   let textTruncated = true;
+  let currentTranslation = '';
 
   // ── State switching ──────────────────────────────────────────────────
   function enterBrowse() {
@@ -141,6 +142,8 @@
     const btnM = document.getElementById('btn-merken');
     btnM.textContent = '🔖 Merken';
     btnM.disabled = false;
+    document.getElementById('woerter-list').innerHTML =
+      '<li class="woerter-empty-hint">Wörter markieren zum Speichern.</li>';
   }
 
   function applyTruncation() {
@@ -152,40 +155,62 @@
     }
   }
 
+  // ── API helper ───────────────────────────────────────────────────────
+  async function postJSON(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+
   // ── Strip interactions ───────────────────────────────────────────────
   document.querySelectorAll('.strip-item').forEach(item => {
     const header  = item.querySelector('.strip-item-header');
-    const body    = item.querySelector('.strip-item-body');
     const mehr    = item.querySelector('.strip-mehr-btn');
     const weniger = item.querySelector('.strip-weniger-btn');
     const merken  = item.querySelector('.strip-merken-btn');
-
     const openBtn = item.querySelector('.strip-open-btn');
-    const idx = parseInt(item.dataset.index, 10);
-    const art = articles[idx];
+    const idx     = parseInt(item.dataset.index, 10);
+    const art     = articles[idx];
     if (art && openBtn) openBtn.href = art.url || '#';
 
-    header.addEventListener('click', () => {
-      enterReading(idx);
-    });
+    header.addEventListener('click', () => enterReading(idx));
 
-    mehr.addEventListener('click', e => {
+    mehr.addEventListener('click', async e => {
       e.stopPropagation();
       mehr.textContent = '＋ Mehr davon ✓';
       mehr.disabled = true;
-      setTimeout(() => { mehr.textContent = '＋ Mehr davon'; mehr.disabled = false; }, 1500);
+      if (art) await postJSON('/api/lesen-action', { article_id: art.id, action: 'pos' });
+      setTimeout(() => {
+        item.style.transition = 'opacity 0.3s';
+        item.style.opacity = '0';
+        setTimeout(() => { item.style.display = 'none'; }, 300);
+      }, 600);
     });
 
-    weniger.addEventListener('click', e => {
+    weniger.addEventListener('click', async e => {
       e.stopPropagation();
       weniger.textContent = '－ Weniger ✓';
       weniger.disabled = true;
-      setTimeout(() => { weniger.textContent = '－ Weniger'; weniger.disabled = false; }, 1500);
+      if (art) await postJSON('/api/lesen-action', { article_id: art.id, action: 'neg' });
+      setTimeout(() => {
+        item.style.transition = 'opacity 0.3s';
+        item.style.opacity = '0';
+        setTimeout(() => { item.style.display = 'none'; }, 300);
+      }, 600);
     });
 
-    merken.addEventListener('click', e => {
+    merken.addEventListener('click', async e => {
       e.stopPropagation();
-      enterReading(idx);
+      if (art) {
+        await postJSON('/api/lesen-action', { article_id: art.id, action: 'pin' });
+        merken.textContent = '🔖 Gemerkt';
+        merken.disabled = true;
+      } else {
+        enterReading(idx);
+      }
     });
   });
 
@@ -200,7 +225,7 @@
     if (currentIdx < articles.length - 1) enterReading(currentIdx + 1);
   });
 
-  // ── Mehr / Weniger ───────────────────────────────────────────────────
+  // ── Mehr / Weniger (text truncation in reading view) ─────────────────
   document.getElementById('btn-mehr').addEventListener('click', () => {
     textTruncated = false;
     applyTruncation();
@@ -209,13 +234,35 @@
   document.getElementById('btn-weniger').addEventListener('click', () => {
     textTruncated = true;
     applyTruncation();
-    document.getElementById('reading-article-scroll') &&
-      document.querySelector('.reading-article-scroll').scrollTo({ top: 0, behavior: 'smooth' });
+    const scroll = document.querySelector('.reading-article-scroll');
+    if (scroll) scroll.scrollTo({ top: 0, behavior: 'smooth' });
   });
 
-  document.getElementById('btn-merken').addEventListener('click', function () {
+  document.getElementById('btn-merken').addEventListener('click', async function () {
+    const art = articles[currentIdx];
+    if (!art) return;
+    await postJSON('/api/lesen-action', { article_id: art.id, action: 'pin' });
     this.textContent = '🔖 Gemerkt';
     this.disabled = true;
+  });
+
+  // ── Lesen → Schreiben handoff ────────────────────────────────────────
+  // (✏️ button is not in the current HTML strip; wired here for future use)
+  document.querySelectorAll('.strip-item').forEach(item => {
+    const schreibenBtn = item.querySelector('.strip-schreiben-btn');
+    if (!schreibenBtn) return;
+    const idx = parseInt(item.dataset.index, 10);
+    const art = articles[idx];
+    schreibenBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (!art) return;
+      sessionStorage.setItem('schreiben_kontext', JSON.stringify({
+        title: art.title || '',
+        summary: (art.summary || '').slice(0, 300),
+      }));
+      sessionStorage.setItem('schreibenMode', 'kontext');
+      window.location.href = '/schreiben';
+    });
   });
 
   // ── Word capture ─────────────────────────────────────────────────────
@@ -239,17 +286,30 @@
     const phrase = sel ? sel.toString().trim() : '';
     if (!phrase || phrase.length < 2 || phrase.length > 300) return;
     currentPhrase = phrase;
+    currentTranslation = '';
     const rect = sel.getRangeAt(0).getBoundingClientRect();
     popPhrase.textContent = phrase;
     popTrans.textContent = 'Übersetzung…';
-    btnSave.disabled = false;
+    btnSave.disabled = true;
     btnSave.textContent = '＋ In Bibliothek';
     showPopover(rect);
+    fetchTranslation(phrase);
+  }
+
+  async function fetchTranslation(phrase) {
+    try {
+      const data = await postJSON('/api/translate', { phrase });
+      currentTranslation = data.translation || '';
+      popTrans.textContent = currentTranslation || '(keine Übersetzung)';
+      btnSave.disabled = !currentTranslation;
+    } catch {
+      popTrans.textContent = '(Fehler)';
+    }
   }
 
   function showPopover(rect) {
     popover.style.display = 'block';
-    const top  = rect.bottom + 8;
+    const top  = rect.bottom + window.scrollY + 8;
     const left = Math.min(rect.left, window.innerWidth - 280);
     popover.style.top  = Math.max(8, top) + 'px';
     popover.style.left = Math.max(8, left) + 'px';
@@ -258,36 +318,59 @@
   function hidePopover() {
     popover.style.display = 'none';
     currentPhrase = '';
+    currentTranslation = '';
   }
 
-  btnSave.addEventListener('click', () => {
-    if (!currentPhrase) return;
-    const list = document.getElementById('woerter-list');
-    const empty = list.querySelector('.woerter-empty-hint');
-    if (empty) empty.remove();
-    const li = document.createElement('li');
-    li.className = 'woerter-item';
-    li.textContent = currentPhrase;
-    list.prepend(li);
-    btnSave.textContent = '✓';
+  btnSave.addEventListener('click', async () => {
+    if (!currentPhrase || !currentTranslation) return;
+    const art = articles[currentIdx];
+    const contextEl = document.getElementById('reading-text');
+    const contextSentence = contextEl ? contextEl.textContent.slice(0, 200) : '';
+    btnSave.textContent = 'Speichern…';
     btnSave.disabled = true;
-    setTimeout(hidePopover, 700);
+    try {
+      await postJSON('/api/save-phrase', {
+        german: currentPhrase,
+        english: currentTranslation,
+        context_sentence: contextSentence,
+        article_title: art ? art.title : '',
+      });
+      const list = document.getElementById('woerter-list');
+      const empty = list.querySelector('.woerter-empty-hint');
+      if (empty) empty.remove();
+      const li = document.createElement('li');
+      li.className = 'woerter-item';
+      li.textContent = `${currentPhrase} — ${currentTranslation}`;
+      list.prepend(li);
+      btnSave.textContent = '✓ Gespeichert';
+      setTimeout(hidePopover, 700);
+    } catch {
+      btnSave.textContent = 'Fehler';
+      btnSave.disabled = false;
+    }
   });
 
-  // ── Artikel laden stub ───────────────────────────────────────────────
+  // ── Refresh feed ─────────────────────────────────────────────────────
   const btnLaden = document.getElementById('btn-artikel-laden');
   if (btnLaden) {
-    btnLaden.addEventListener('click', () => {
+    btnLaden.addEventListener('click', async () => {
       btnLaden.textContent = 'Laden…';
       btnLaden.disabled = true;
+      try {
+        await postJSON('/api/lesen-refresh', {});
+        window.location.reload();
+      } catch {
+        btnLaden.textContent = 'Fehler — neu versuchen';
+        btnLaden.disabled = false;
+      }
     });
   }
 
-  // ── Strip cap — max 5 items visible ─────────────────────────────────
+  // ── Init ─────────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
     enterBrowse();
     document.querySelectorAll('.strip-item').forEach((item, i) => {
-      if (i >= 5) item.style.display = 'none';
+      if (i >= 10) item.style.display = 'none';
     });
   });
 })();

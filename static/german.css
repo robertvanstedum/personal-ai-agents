@@ -995,31 +995,11 @@ textarea:focus {
 
 body.browse-mode {
   background-color: #1c1209;
-  height: 100vh;
-  overflow: hidden;
-}
-
-body.browse-mode main {
-  height: calc(100vh - 68px);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-body.browse-mode .page {
-  flex: 1;
-  overflow: hidden;
 }
 
 body.browse-mode .headline-strip {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-}
-
-body.browse-mode .strip-item {
-  flex: none;
 }
 
 body.reading-mode {
