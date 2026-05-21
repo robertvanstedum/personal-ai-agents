@@ -84,7 +84,9 @@ _SPOKEN_NUMBERS = {
 # ─── LLM provider list ────────────────────────────────────────────────────────
 
 _LLM_PROVIDERS = [
-    {"name": "grok-mini",    "type": "xai",       "model": "grok-3-mini"},
+    # grok-4-1-fast: proven in production on Curator scoring; better German capability,
+    # lower latency for translation, writing correction, and phrase handling.
+    {"name": "grok-fast",    "type": "xai",       "model": "grok-4-1-fast"},
     {"name": "claude-haiku", "type": "anthropic",  "model": "claude-haiku-4-5-20251001"},
     {"name": "ollama-gemma", "type": "ollama",     "model": "gemma3:1b"},
 ]
