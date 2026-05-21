@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "id": "ws_20260521_082722",
+      "mode": "tagebuch",
+      "text_original": "Heute ich habe ein Kaffee in Wien getrunken. Es war sehr gut.",
+      "text_corrected": "Heute habe ich einen Kaffee in Wien getrunken. Er war sehr gut.",
+      "notes": [
+        "Word order: verb 'habe' must come second after 'Heute'",
+        "Case: 'einen' for accusative masculine object",
+        "Pronoun: 'Er' agrees with masculine noun 'Kaffee'"
+      ],
+      "timestamp": "2026-05-21T08:27:22.658509",
+      "context_title": "Was hast du heute auf Deutsch gelesen oder gehört?"
+    }
+  ]
+}

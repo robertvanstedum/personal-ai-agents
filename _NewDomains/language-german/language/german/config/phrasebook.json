@@ -19,8 +19,8 @@
       "added": "2026-05-12",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 9,
-      "last_practiced": "2026-05-13"
+      "practice_count": 10,
+      "last_practiced": "2026-05-21"
     },
     {
       "id": "ph_20260512_003",
@@ -120,6 +120,84 @@
       "verb_hint": "",
       "practice_count": 0,
       "last_practiced": null
+    },
+    {
+      "id": "ph_20260521_012",
+      "german": "beantragte",
+      "english": "applied for",
+      "scene": "lesen",
+      "added": "2026-05-21",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Der Wiener Reparaturbon ist bereits knapp einen Monat nach dem Start am 22. April wieder ausgeschöpft. Heuer stand ein Budget von 250.000 Euro zur Verfügung. Bereits beantragte Bons können noch eingel",
+      "source_article": "Reparaturbon schon wieder ausgeschöpft"
+    },
+    {
+      "id": "ph_20260521_013",
+      "german": "Behandlung",
+      "english": "treatment",
+      "scene": "lesen",
+      "added": "2026-05-21",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Seit Jänner 2026 gibt es Kassenplätze für klinisch-psychologische Behandlung. Eine Zwischenbilanz der Serviceplattform Psyhelp, die für die Vermittlung zuständig ist, zeigt, dass die Nachfrage groß is",
+      "source_article": "Kürzere Wartezeit auf psychologische Behandlung"
+    },
+    {
+      "id": "ph_20260521_014",
+      "german": "zuständig",
+      "english": "responsible",
+      "scene": "lesen",
+      "added": "2026-05-21",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Seit Jänner 2026 gibt es Kassenplätze für klinisch-psychologische Behandlung. Eine Zwischenbilanz der Serviceplattform Psyhelp, die für die Vermittlung zuständig ist, zeigt, dass die Nachfrage groß is",
+      "source_article": "Kürzere Wartezeit auf psychologische Behandlung"
+    },
+    {
+      "id": "ph_20260521_015",
+      "german": "Behandlungsplatz",
+      "english": "treatment place",
+      "scene": "lesen",
+      "added": "2026-05-21",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Seit Jänner 2026 gibt es Kassenplätze für klinisch-psychologische Behandlung. Eine Zwischenbilanz der Serviceplattform Psyhelp, die für die Vermittlung zuständig ist, zeigt, dass die Nachfrage groß is",
+      "source_article": "Kürzere Wartezeit auf psychologische Behandlung"
+    },
+    {
+      "id": "ph_20260521_016",
+      "german": "Ziel",
+      "english": "goal",
+      "scene": "lesen",
+      "added": "2026-05-21",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Die beiden Bezirksvorsteher Georg Papai und Marcus Franz (beide SPÖ) wollen die Forderung nach mehr Polizei in Floridsdorf und Favoriten mit einer Unterschriftenaktion untermauern. Ziel ist eine Disku",
+      "source_article": "Favoriten und Floridsdorf wollen mehr Polizisten"
+    },
+    {
+      "id": "ph_20260521_017",
+      "german": "die zunehmende Verschmutzung vorgehen",
+      "english": "tackle the increasing pollution",
+      "scene": "lesen",
+      "added": "2026-05-21",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Der Wiener Landtag hat in seiner heutigen Sitzung das Verbot der Altkleidersammelcontainer beschlossen. Die Maßnahme wurde vor einigen Wochen angekündigt. Die Stadt will damit gegen die zunehmende Ver",
+      "source_article": "Landtag beschloss Altkleidercontainerverbot"
     }
   ]
 }
