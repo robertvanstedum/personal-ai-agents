@@ -110,6 +110,7 @@
 <div class="word-popover" id="word-popover" style="display:none">
   <div class="popover-phrase" id="popover-phrase"></div>
   <div class="popover-translation" id="popover-translation">Übersetzung…</div>
+  <div class="popover-timing" id="popover-timing"></div>
   <div class="popover-actions">
     <button class="btn-save-phrase" id="btn-save-phrase">＋ In Bibliothek</button>
     <button class="btn-close-popover" id="btn-close-popover">✕</button>
@@ -287,12 +288,13 @@
   });
 
   // ── Word capture ─────────────────────────────────────────────────────
-  const popover   = document.getElementById('word-popover');
-  const popPhrase = document.getElementById('popover-phrase');
-  const popTrans  = document.getElementById('popover-translation');
-  const btnSave   = document.getElementById('btn-save-phrase');
+  const popover    = document.getElementById('word-popover');
+  const popPhrase  = document.getElementById('popover-phrase');
+  const popTrans   = document.getElementById('popover-translation');
+  const popTiming  = document.getElementById('popover-timing');
+  const btnSave    = document.getElementById('btn-save-phrase');
   const translationCache = new Map();
-  const btnClose  = document.getElementById('btn-close-popover');
+  const btnClose   = document.getElementById('btn-close-popover');
   let currentPhrase = '';
 
   let selectionTimer = null;
@@ -322,6 +324,7 @@
     const rect = range.getBoundingClientRect();
     popPhrase.textContent = phrase;
     popTrans.textContent = 'Übersetzung…';
+    popTiming.textContent = '';
     btnSave.disabled = true;
     btnSave.textContent = '＋ In Bibliothek';
     showPopover(rect);
@@ -333,17 +336,25 @@
     if (translationCache.has(key)) {
       currentTranslation = translationCache.get(key);
       popTrans.textContent = currentTranslation || '(keine Übersetzung)';
+      popTiming.textContent = 'cache';
       btnSave.disabled = !currentTranslation;
       return;
     }
+    const t0 = performance.now();
     try {
       const data = await postJSON('/api/translate', { phrase });
+      const roundTrip = Math.round(performance.now() - t0);
       currentTranslation = data.translation || '';
       translationCache.set(key, currentTranslation);
       popTrans.textContent = currentTranslation || '(keine Übersetzung)';
       btnSave.disabled = !currentTranslation;
+      const t = data.timing || {};
+      const llm = t.llm_ms != null ? `LLM ${t.llm_ms}ms` : '';
+      const internal = t.total_ms != null ? `server ${t.total_ms}ms` : '';
+      popTiming.textContent = `${roundTrip}ms total · ${llm}${llm && internal ? ' · ' : ''}${internal}`;
     } catch {
       popTrans.textContent = '(Fehler)';
+      popTiming.textContent = '';
     }
   }
 

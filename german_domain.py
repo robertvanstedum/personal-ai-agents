@@ -12,6 +12,7 @@ Group C: resolver functions — sync, with optional progress_cb for mid-executio
 import html
 import re
 import random
+import time
 from pathlib import Path
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
@@ -724,22 +725,27 @@ def lesen_action(article_id: str, action: str) -> None:
     _LESEN_FEEDBACK_FILE.write_text(json.dumps(feedback_data, indent=2, ensure_ascii=False))
 
 
-def translate_phrase(phrase: str) -> tuple[str, bool]:
+def translate_phrase(phrase: str) -> tuple[str, bool, dict]:
     """Translate a German word/phrase to English. Checks phrasebook cache first.
-    Returns (translation, cached)."""
+    Returns (translation, cached, timing) where timing = {total_ms, llm_ms}."""
+    t0 = time.perf_counter()
     phrase_lower = phrase.lower().strip()
     phrasebook = _load_phrasebook()
     for entry in phrasebook.get("phrases", []):
         if entry.get("german", "").lower().strip() == phrase_lower:
-            return entry.get("english", ""), True
+            total_ms = round((time.perf_counter() - t0) * 1000)
+            return entry.get("english", ""), True, {"total_ms": total_ms, "llm_ms": 0}
 
     prompt = (
         f"Translate this German word or phrase to English. "
         f"Reply with only the English translation, nothing else.\n"
         f"German: {phrase}"
     )
+    t_llm = time.perf_counter()
     result = _call_llm(prompt, max_tokens=60)
-    return (result.strip() if result else ""), False
+    llm_ms = round((time.perf_counter() - t_llm) * 1000)
+    total_ms = round((time.perf_counter() - t0) * 1000)
+    return (result.strip() if result else ""), False, {"total_ms": total_ms, "llm_ms": llm_ms}
 
 
 def save_lesen_phrase(german: str, english: str, context_sentence: str, article_title: str) -> dict:

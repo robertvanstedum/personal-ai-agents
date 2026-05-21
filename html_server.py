@@ -112,8 +112,8 @@ def api_translate():
     phrase = body.get("phrase", "").strip()
     if not phrase:
         return jsonify({"translation": "", "cached": False})
-    translation, cached = translate_phrase(phrase)
-    return jsonify({"translation": translation, "cached": cached})
+    translation, cached, timing = translate_phrase(phrase)
+    return jsonify({"translation": translation, "cached": cached, "timing": timing})
 
 
 @app.route("/api/save-phrase", methods=["POST"])

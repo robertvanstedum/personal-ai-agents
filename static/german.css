@@ -627,8 +627,17 @@ body.parch-mode .toggle-label {
 .popover-translation {
   font-size: 0.9rem;
   color: var(--text-muted);
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.4rem;
   min-height: 1.3em;
+}
+
+.popover-timing {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  margin-bottom: 0.6rem;
+  min-height: 1em;
+  letter-spacing: 0.02em;
 }
 
 .popover-actions {
