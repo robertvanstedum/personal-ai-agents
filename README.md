@@ -265,7 +265,7 @@ All three emerged from building and operating this system.
 
 | Admin | |
 |---|---|
-| ![Admin](docs/screenshots/admin.png) | &nbsp; |
+| <img src="docs/screenshots/admin.png" width="100%"> | |
 
 ---
 
