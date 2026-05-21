@@ -1413,6 +1413,7 @@ body.reading-mode nav {
 .reading-sidebar {
   width: 248px;
   flex-shrink: 0;
+  align-self: flex-start;
   background: var(--parch-side);
   border-left: 1px solid var(--parch-border);
   display: flex;

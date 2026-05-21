@@ -286,10 +286,15 @@
   const popPhrase = document.getElementById('popover-phrase');
   const popTrans  = document.getElementById('popover-translation');
   const btnSave   = document.getElementById('btn-save-phrase');
+  const translationCache = new Map();
   const btnClose  = document.getElementById('btn-close-popover');
   let currentPhrase = '';
 
-  document.getElementById('reading-text').addEventListener('mouseup', handleSelection);
+  let selectionTimer = null;
+  document.getElementById('reading-text').addEventListener('mouseup', () => {
+    clearTimeout(selectionTimer);
+    selectionTimer = setTimeout(handleSelection, 300);
+  });
 
   document.addEventListener('mousedown', e => {
     if (!popover.contains(e.target)) hidePopover();
@@ -319,9 +324,17 @@
   }
 
   async function fetchTranslation(phrase) {
+    const key = phrase.toLowerCase().trim();
+    if (translationCache.has(key)) {
+      currentTranslation = translationCache.get(key);
+      popTrans.textContent = currentTranslation || '(keine Übersetzung)';
+      btnSave.disabled = !currentTranslation;
+      return;
+    }
     try {
       const data = await postJSON('/api/translate', { phrase });
       currentTranslation = data.translation || '';
+      translationCache.set(key, currentTranslation);
       popTrans.textContent = currentTranslation || '(keine Übersetzung)';
       btnSave.disabled = !currentTranslation;
     } catch {
@@ -451,7 +464,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     enterBrowse();
     document.querySelectorAll('.strip-item').forEach((item, i) => {
-      if (i >= 10) item.style.display = 'none';
+      if (i >= 5) item.style.display = 'none';
     });
   });
 })();

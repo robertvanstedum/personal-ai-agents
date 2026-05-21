@@ -9,6 +9,7 @@ Group B: file I/O, subprocess, LLM callers (no async, no Telegram).
 Group C: resolver functions — sync, with optional progress_cb for mid-execution messages.
 """
 
+import html
 import re
 import random
 from pathlib import Path
@@ -668,7 +669,7 @@ def fetch_lesen_articles() -> list:
                 art_id = f"art_{today.replace('-','')}_{source['name'][:3].lower()}_{i:02d}"
                 new_articles.append({
                     "id": art_id,
-                    "title": entry.get("title", "").strip(),
+                    "title": html.unescape(entry.get("title", "").strip()),
                     "url": url,
                     "source": source["name"],
                     "date_fetched": today,
