@@ -21,6 +21,7 @@ from german_domain import (
     get_tagebuch_prompts,
     correct_writing,
     save_writing_entry,
+    save_note,
 )
 
 BASE_DIR = Path(__file__).parent
@@ -152,6 +153,19 @@ def api_write_save():
         context_title=body.get("context_title", ""),
     )
     return jsonify({"ok": True, "id": entry["id"]})
+
+
+@app.route("/api/note-save", methods=["POST"])
+def api_note_save():
+    body = request.get_json(force=True)
+    note = save_note(
+        article_id=body.get("article_id", ""),
+        article_title=body.get("article_title", ""),
+        original=body.get("original", ""),
+        corrected=body.get("corrected", ""),
+        rewritten=body.get("rewritten", ""),
+    )
+    return jsonify({"success": True, "note_id": note["note_id"]})
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

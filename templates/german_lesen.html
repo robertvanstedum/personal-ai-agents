@@ -65,9 +65,23 @@
              target="_blank" rel="noopener">↗ Artikel öffnen</a>
         </div>
         <div class="reading-text selectable-text" id="reading-text"></div>
-        <div class="reading-notizen">
+        <div class="reading-notizen" id="reading-notizen">
           <div class="sidebar-panel-title">Notizen</div>
-          <textarea class="notizen-input" id="notizen-input" rows="4" placeholder="Notiz schreiben…"></textarea>
+          <textarea class="notizen-input" id="notizen-original" rows="4"
+            placeholder="Notiz schreiben…"></textarea>
+          <div class="notizen-actions">
+            <button class="notizen-btn" id="btn-notizen-correct">Korrektur anfragen</button>
+            <span class="notizen-status" id="notizen-status"></span>
+          </div>
+          <div class="notizen-correction" id="notizen-correction" style="display:none">
+            <div class="notizen-correction-label">Korrektur:</div>
+            <div class="notizen-correction-text" id="notizen-correction-text"></div>
+            <textarea class="notizen-input" id="notizen-rewritten" rows="3"
+              placeholder="Neu schreiben…" style="margin-top:0.75rem"></textarea>
+            <div class="notizen-actions">
+              <button class="notizen-btn notizen-btn-save" id="btn-notizen-save">Speichern</button>
+            </div>
+          </div>
         </div>
       </div>
       <div class="reading-footer">
@@ -357,6 +371,65 @@
       btnSave.disabled = false;
     }
   });
+
+  // ── Notizen flow ─────────────────────────────────────────────────────
+  const btnNotizenCorrect = document.getElementById('btn-notizen-correct');
+  const btnNotizenSave    = document.getElementById('btn-notizen-save');
+  const notizenStatus     = document.getElementById('notizen-status');
+  const notizenCorrection = document.getElementById('notizen-correction');
+  const notizenCorrText   = document.getElementById('notizen-correction-text');
+  let notizenCorrected    = '';
+
+  if (btnNotizenCorrect) {
+    btnNotizenCorrect.addEventListener('click', async () => {
+      const text = document.getElementById('notizen-original').value.trim();
+      if (!text) return;
+      btnNotizenCorrect.disabled = true;
+      notizenStatus.textContent = 'Korrektur läuft…';
+      try {
+        const data = await postJSON('/api/write-correct', { text, context: '' });
+        notizenCorrected = data.corrected || text;
+        notizenCorrText.textContent = notizenCorrected;
+        notizenCorrection.style.display = 'block';
+        notizenStatus.textContent = '';
+      } catch {
+        notizenStatus.textContent = 'Fehler';
+      }
+      btnNotizenCorrect.disabled = false;
+    });
+  }
+
+  if (btnNotizenSave) {
+    btnNotizenSave.addEventListener('click', async () => {
+      const original  = document.getElementById('notizen-original').value.trim();
+      const rewritten = document.getElementById('notizen-rewritten').value.trim();
+      const art = articles[currentIdx];
+      btnNotizenSave.disabled = true;
+      btnNotizenSave.textContent = 'Speichern…';
+      try {
+        await postJSON('/api/note-save', {
+          article_id:    art ? art.id    : '',
+          article_title: art ? art.title : '',
+          original,
+          corrected:  notizenCorrected,
+          rewritten,
+        });
+        btnNotizenSave.textContent = '✓ Gespeichert';
+        setTimeout(() => {
+          document.getElementById('notizen-original').value  = '';
+          document.getElementById('notizen-rewritten').value = '';
+          notizenCorrection.style.display = 'none';
+          notizenCorrected = '';
+          btnNotizenSave.textContent = 'Speichern';
+          btnNotizenSave.disabled = false;
+          btnNotizenCorrect.disabled = false;
+        }, 1200);
+      } catch {
+        btnNotizenSave.textContent = 'Fehler';
+        btnNotizenSave.disabled = false;
+      }
+    });
+  }
 
   // ── Refresh feed ─────────────────────────────────────────────────────
   const btnLaden = document.getElementById('btn-artikel-laden');

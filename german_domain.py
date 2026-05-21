@@ -759,6 +759,7 @@ def save_lesen_phrase(german: str, english: str, context_sentence: str, article_
 # ─── Schreiben — writing sessions (Group D: HTML interface) ──────────────────
 
 _WRITING_SESSIONS_FILE = GERMAN_DIR / "config" / "writing_sessions.json"
+_NOTES_FILE            = GERMAN_DIR / "config" / "notes.json"
 
 _TAGEBUCH_PROMPTS = [
     "Was hast du heute in Wien gesehen?",
@@ -804,6 +805,31 @@ def correct_writing(text: str, context: str = "") -> dict:
         }
     except Exception:
         return {"corrected": text, "notes": ["(Correction unavailable)"]}
+
+
+def save_note(article_id: str, article_title: str, original: str,
+              corrected: str, rewritten: str) -> dict:
+    """Save a Notizen entry (write→correct→rewrite) linked to a Lesen article."""
+    import uuid
+    data = {"notes": []}
+    if _NOTES_FILE.exists():
+        try:
+            data = json.loads(_NOTES_FILE.read_text())
+        except Exception:
+            pass
+    note = {
+        "note_id": str(uuid.uuid4()),
+        "article_id": article_id,
+        "article_title": article_title,
+        "date": datetime.date.today().isoformat(),
+        "original": original,
+        "corrected": corrected,
+        "rewritten": rewritten,
+        "saved": True,
+    }
+    data.setdefault("notes", []).append(note)
+    _NOTES_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    return note
 
 
 def save_writing_entry(mode: str, text_original: str, text_corrected: str = "",
