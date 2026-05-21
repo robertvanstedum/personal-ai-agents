@@ -283,8 +283,13 @@
     });
   }
 
-  // ── Init ─────────────────────────────────────────────────────────────
-  document.addEventListener('DOMContentLoaded', enterBrowse);
+  // ── Strip cap — max 5 items visible ─────────────────────────────────
+  document.addEventListener('DOMContentLoaded', () => {
+    enterBrowse();
+    document.querySelectorAll('.strip-item').forEach((item, i) => {
+      if (i >= 5) item.style.display = 'none';
+    });
+  });
 })();
 </script>
 {% endblock %}

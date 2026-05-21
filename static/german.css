@@ -390,6 +390,36 @@ body.parch-mode h3 {
   color: var(--md-text-primary);
 }
 
+body.parch-mode .mode-btn {
+  color: var(--md-text-secondary);
+  border-color: var(--md-parch-deep);
+}
+
+body.parch-mode .mode-btn:hover {
+  color: var(--md-text-primary);
+  border-color: var(--md-accent);
+}
+
+body.parch-mode .mode-btn.active {
+  background: rgba(198, 138, 94, 0.15);
+  border-color: var(--md-accent);
+  color: var(--md-accent);
+}
+
+body.parch-mode .btn-ghost {
+  color: var(--md-text-secondary);
+  border-color: var(--md-parch-deep);
+}
+
+body.parch-mode .btn-ghost:hover {
+  color: var(--md-text-primary);
+  border-color: var(--md-accent);
+}
+
+body.parch-mode .toggle-label {
+  color: var(--md-text-secondary);
+}
+
 /* ── Lesen — article cards ───────────────────────────────── */
 
 .lesen-header { margin-bottom: 2.5rem; }
@@ -986,6 +1016,7 @@ body.reading-mode nav {
   display: flex;
   flex-direction: column;
   padding: 4rem 3rem 0;
+  min-height: 38vh;
 }
 
 .browse-hero-content {
