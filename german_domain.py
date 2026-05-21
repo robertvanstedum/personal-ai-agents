@@ -628,9 +628,14 @@ def _strip_html(raw: str) -> str:
 
 
 def get_lesen_pool() -> list:
-    """Return active + pinned articles, pinned first."""
+    """Return active + pinned articles, pinned first. Blocked keywords filtered at display time."""
     data = _load_lesen_articles()
-    pool = [a for a in data["articles"] if a["status"] in ("active", "pinned")]
+    blocked = _load_lesen_blocked_keywords()
+    pool = [
+        a for a in data["articles"]
+        if a["status"] in ("active", "pinned")
+        and not any(kw in a["title"].lower() for kw in blocked)
+    ]
     return sorted(pool, key=lambda a: 0 if a["status"] == "pinned" else 1)
 
 

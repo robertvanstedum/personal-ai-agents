@@ -1000,6 +1000,10 @@ body.browse-mode {
 body.browse-mode .headline-strip {
   display: flex;
   flex-direction: column;
+  max-width: 860px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
 }
 
 body.reading-mode {
@@ -1419,10 +1423,11 @@ body.reading-mode nav {
 .sidebar-panel {
   padding: 1rem 1.2rem;
   border-bottom: 1px solid var(--parch-border);
+  overflow: hidden;
 }
 
 .sidebar-panel-woerter {
-  max-height: 40%;
+  max-height: 180px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -1457,6 +1462,8 @@ body.reading-mode nav {
   padding: 0.3rem 0;
   border-bottom: 1px solid rgba(42, 31, 20, 0.08);
   line-height: 1.4;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .woerter-item:last-child { border-bottom: none; }
@@ -1555,6 +1562,10 @@ body.reading-mode nav {
   font-size: 0.95rem;
   color: var(--parch-text);
   line-height: 1.6;
+}
+
+.notizen-rewrite {
+  margin-top: 1.5rem;
 }
 
 /* ── Word popover — fixed position for reading mode ──────────── */
