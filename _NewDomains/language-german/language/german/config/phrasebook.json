@@ -8,7 +8,7 @@
       "added": "2026-05-12",
       "status": "library",
       "verb_hint": "schauen",
-      "practice_count": 8,
+      "practice_count": 10,
       "last_practiced": "2026-05-14"
     },
     {
@@ -19,8 +19,8 @@
       "added": "2026-05-12",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 9,
-      "last_practiced": "2026-05-13"
+      "practice_count": 13,
+      "last_practiced": "2026-05-16"
     },
     {
       "id": "ph_20260512_003",
@@ -30,8 +30,8 @@
       "added": "2026-05-12",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 3,
-      "last_practiced": "2026-05-12"
+      "practice_count": 4,
+      "last_practiced": "2026-05-19"
     },
     {
       "id": "ph_20260512_004",
@@ -41,8 +41,8 @@
       "added": "2026-05-12",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 3,
-      "last_practiced": "2026-05-12"
+      "practice_count": 5,
+      "last_practiced": "2026-05-16"
     },
     {
       "id": "ph_20260512_005",
@@ -52,8 +52,8 @@
       "added": "2026-05-12",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 3,
-      "last_practiced": "2026-05-12"
+      "practice_count": 4,
+      "last_practiced": "2026-05-19"
     },
     {
       "id": "ph_20260513_006",
@@ -63,8 +63,8 @@
       "added": "2026-05-13",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 0,
-      "last_practiced": null
+      "practice_count": 4,
+      "last_practiced": "2026-05-19"
     },
     {
       "id": "ph_20260513_007",
@@ -74,8 +74,8 @@
       "added": "2026-05-13",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 0,
-      "last_practiced": null
+      "practice_count": 1,
+      "last_practiced": "2026-05-19"
     },
     {
       "id": "ph_20260513_008",
@@ -85,8 +85,8 @@
       "added": "2026-05-13",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 1,
-      "last_practiced": "2026-05-13"
+      "practice_count": 3,
+      "last_practiced": "2026-05-14"
     },
     {
       "id": "ph_20260513_009",
@@ -96,8 +96,8 @@
       "added": "2026-05-13",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 0,
-      "last_practiced": null
+      "practice_count": 1,
+      "last_practiced": "2026-05-14"
     },
     {
       "id": "ph_20260514_010",
@@ -107,8 +107,8 @@
       "added": "2026-05-14",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 0,
-      "last_practiced": null
+      "practice_count": 1,
+      "last_practiced": "2026-05-14"
     },
     {
       "id": "ph_20260514_011",
@@ -118,8 +118,8 @@
       "added": "2026-05-14",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 0,
-      "last_practiced": null
+      "practice_count": 1,
+      "last_practiced": "2026-05-15"
     }
   ]
 }

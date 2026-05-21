@@ -98,6 +98,16 @@ can be deleted. A way of working cannot.
 
 Every build phase follows this sequence:
 
+**Testing convention:** All build-phase test suites use test_reporter.py at repo root. Three-line setup: import TestReporter, instantiate with suite name, call runner.finish(). Results write to _working/ as dated markdown.
+
+**Build note convention (multi-step refactors):** Each Group extraction in the German domain refactor produces a _working/build_note_group_[letter].md file committed alongside the code change. This is the detailed reasoning behind what moved and why — separate from the high-level spec in docs/. Standard pattern for all future multi-step refactors.
+
+.gitignore exception: !_working/build_note_*.md (test reports stay ephemeral; build notes commit).
+
+Standard going forward: before committing a group extraction, write _working/build_note_group_[letter].md and stage it in the same commit. Definition of done for each group: code extracted + tests pass + dry-run clean + build note committed.
+
+For Group C, the build note goes in before the commit, not retroactively.
+
 ```
 1. Strategy Agent produces PLAN doc (PDF or in-session)
 2. Robert passes to Memory Agent for validation

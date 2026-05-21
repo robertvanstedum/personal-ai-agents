@@ -1508,3 +1508,2139 @@ The wa
 ✅ Briefing already ran today (2026-05-06) — skipping
 ✅ Briefing already ran today (2026-05-06) — skipping
 ✅ Briefing already ran today (2026-05-06) — skipping
+✅ Briefing already ran today (2026-05-06) — skipping
+✅ Briefing already ran today (2026-05-06) — skipping
+✅ Briefing already ran today (2026-05-06) — skipping
+✅ Briefing already ran today (2026-05-06) — skipping
+⏭  Outside 6AM–6PM window (hour=18) — skipping
+⏭  Outside 6AM–6PM window (hour=20) — skipping
+⏭  Outside 6AM–6PM window (hour=22) — skipping
+⏭  Outside 6AM–6PM window (hour=23) — skipping
+⏭  Outside 6AM–6PM window (hour=02) — skipping
+⏭  Outside 6AM–6PM window (hour=03) — skipping
+⏭  Outside 6AM–6PM window (hour=04) — skipping
+⏭  Outside 6AM–6PM window (hour=05) — skipping
+🚀 Starting curator briefing at Thu May  7 06:34:15 CDT 2026...
+🔖 Pulling new X bookmarks...
+State: last_pull_at=2026-05-06T13:20:08, total_incremental_pulled=49
+Token expires in -72852s — refreshing...
+Refreshing access token...
+Tokens refreshed:
+  access_token:  Um4zTjFZVlJt... ✅
+  refresh_token: dmI3c2pXZl9G... ✅
+  expires_in:    2h 0m
+Existing signals: 447 (dedup set: 447 tweet IDs)
+Pulling bookmarks for @robertvanstedum...
+
+  Page 1: 100 bookmarks (running total seen: 100)
+  → tweet 2050601444093399199 predates last_pull_at (2026-05-06T13:20:08) — stopping pagination early
+
+[DONE] Tweets seen on API: 100
+[DONE] New signals added: 0
+No new signals. Updating state timestamp.
+🚀 Production run  [r_16b911d]
+
+🧠 Starting RSS curation (mode: xai)...
+
+📡 Fetching Geopolitical Futures...
+   ✅ 5 entries from Geopolitical Futures
+📡 Fetching ZeroHedge...
+   ✅ 25 entries from ZeroHedge
+📡 Fetching The Big Picture...
+   ✅ 10 entries from The Big Picture
+📡 Fetching Fed On The Economy...
+   ✅ 50 entries from Fed On The Economy
+📡 Fetching Treasury MSPD...
+   ✅ 50 entries from Treasury MSPD
+📡 Fetching Al Jazeera...
+   ✅ 25 entries from Al Jazeera
+📡 Fetching ProPublica...
+   ✅ 20 entries from ProPublica
+📡 Fetching Antiwar.com...
+   ✅ 10 entries from Antiwar.com
+📡 Fetching Investing.com...
+   ✅ 10 entries from Investing.com
+📡 Fetching The Duran...
+   ✅ 35 entries from The Duran
+📡 Fetching O Globo...
+   ✅ 0 entries from O Globo
+📡 Fetching Deutsche Welle...
+   ✅ 50 entries from Deutsche Welle
+📡 Fetching Spiegel International...
+   ✅ 20 entries from Spiegel International
+📡 Fetching FAZ...
+   ✅ 50 entries from FAZ
+📡 Fetching Die Welt...
+   ✅ 30 entries from Die Welt
+📡 Fetching War on the Rocks...
+   ✅ 50 entries from War on the Rocks
+📡 Fetching Foreign Affairs...
+   ✅ 20 entries from Foreign Affairs
+📡 Fetching arXiv q-fin...
+   ✅ 15 entries from arXiv q-fin
+📡 Fetching Just Security...
+   ✅ 10 entries from Just Security
+📡 Fetching CEPR VoxEU...
+   ✅ 50 entries from CEPR VoxEU
+
+📊 Total entries fetched: 535
+📎 X bookmarks merged: 377 articles (332 signals → 377 after dedup)
+
+🔍 Web search enrichment:
+  🌐 Web baseline: 3 candidates
+   Pool after web search: 915 candidates
+🚫 Source trust: dropped 10 entries (drop tier)
+📌 Loaded 1 active interests from interests/ directory
+   geo_major: 1 flagged articles (+10 total boost)
+🧠 User profile loaded (492 chars) — personalizing scores
+📡 Calling xAI grok-4-1-fast-reasoning to score 905 articles...
+   Input: 60474 tokens, Output: 4096 tokens
+   Cost: $0.3638
+⚠️  Skipping malformed line: 636|geo_major|
+⚖️  Source trust: applied multipliers to 220 entries
+
+🎲 Serendipity reserve: 4/20 articles (20%) from outside learned patterns
+   Selecting 4 serendipity articles from 889 remaining candidates...
+   ✅ Added 4 serendipity articles
+
+📊 Source distribution in top 20:
+   Foreign Affairs: 1 articles
+   War on the Rocks: 1 articles
+   Just Security: 1 articles
+   CEPR VoxEU: 1 articles
+   Treasury MSPD: 1 articles
+   Spiegel International: 1 articles
+   arXiv q-fin: 1 articles
+   ZeroHedge: 1 articles
+   Antiwar.com: 1 articles
+   X/@KobeissiLetter: 1 articles
+   FAZ: 1 articles
+   X/@vtchakarova: 1 articles
+   X/@ThomasSowell: 1 articles
+   The Duran: 1 articles
+   X/@zerohedge: 1 articles
+   X/@CommerceGov: 1 articles
+   X/@ihtesham2005: 1 articles
+   X/@TheMichaelEvery: 1 articles
+   X/@Myrmikan: 1 articles
+   X/@EricLDaugh: 1 articles
+
+🏷️  Category distribution in top 20:
+   geo_other: 4 articles
+   monetary: 4 articles
+   geo_major: 3 articles
+   fiscal: 3 articles
+   technology: 3 articles
+   other: 3 articles
+📝 Logging 20 articles to Signal Store...
+✅ Signal Store updated
+💾 History updated: 20 articles saved
+
+================================================================================
+TOP 20 CURATED ARTICLES (Category + Diversity Weighted)
+================================================================================
+
+#1 [Foreign Affairs] 🏷️  geo_major (xai)
+   ID: 4c1b7
+   This Is Not the World Russia Wants
+   https://www.foreignaffairs.com/united-states/not-world-russia-wants
+   Published: 2026-05-07 04:00 UTC
+   Scores: 15.0/10 (raw: 10.0, final: 25.0)
+   A belligerent America is foiling Putin’s strategy....
+
+#2 [War on the Rocks] 🏷️  geo_major (xai)
+   ID: 660ef
+   How Much Longer Can Russia Last in the War?
+   https://warontherocks.com/how-much-longer-can-russia-last-in-the-war/
+   Published: 2026-05-06 17:30 UTC
+   Scores: 13.5/10 (raw: 9.0, final: 19.0)
+   <p>In 2025, Collin Meisel and Mathew Burrows wrote, &#8220;Russia Can Afford to Take a Beating in Ukraine,&#8221; where they argued Russia was able to...
+
+#3 [Just Security] 🏷️  geo_other (xai)
+   ID: c40f3
+   Taking a Toll
+   https://www.justsecurity.org/137610/iran-toll-strait-hormuz/?utm_source=rss&utm_medium=rss&utm_campaign=iran-toll-strait-hormuz
+   Published: 2026-05-06 12:40 UTC
+   Scores: 13.5/10 (raw: 9.0, final: 13.5)
+   <p>How allowing Iran to charge for transit in the Strait of Hormuz could undermine U.S. strategy in the Pacific and beyond</p> <p>The post <a href="ht...
+
+#4 [CEPR VoxEU] 🏷️  monetary (xai)
+   ID: 0df77
+   Geopolitical oil price shocks: Why these shocks hit harder
+   https://cepr.org/voxeu/columns/geopolitical-oil-price-shocks-why-these-shocks-hit-harder
+   Published: 2026-04-27 23:00 UTC
+   Scores: 13.5/10 (raw: 9.0, final: 13.5)
+   When geopolitical crises strike, oil prices often surge, with consequences that extend far beyond energy markets. This column shows that oil price sho...
+
+#5 [Treasury MSPD] 🏷️  fiscal (xai)
+   ID: 7f21a
+   Monthly Statement of the Public Debt, April 30, 2026
+   https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding
+   Published: 2026-05-06 20:00 UTC
+   Scores: 8.0/10 (raw: 8.0, final: 8.0)
+   April 30, 2026-TABLE I -- SUMMARY OF TREASURY SECURITIES OUTSTANDING...
+
+#6 [Spiegel International] 🏷️  technology (xai)
+   ID: e4141
+   Defense in Orbit: Germany Goes Big in the Military Space Race
+   https://www.spiegel.de/international/germany/defense-in-orbit-germany-goes-big-in-the-military-space-race-a-0b1f15e2-740e-4c8b-b759-52d8a49fab31#ref=rss
+   Published: 2026-04-15 14:00 UTC
+   Scores: 8.0/10 (raw: 8.0, final: 8.0)
+   Berlin was long content to ignore space as a military frontier. But now, the Merz government is investing 35 billion euros in an array of new systems....
+
+#7 [arXiv q-fin] 🏷️  monetary (xai)
+   ID: ff344
+   ESG as Priced Crash Insurance: State-Dependent Tail Risk and Deconfounding Evidence
+   https://arxiv.org/abs/2605.04479
+   Published: 2026-05-07 04:00 UTC
+   Scores: 12.0/10 (raw: 8.0, final: 7.5)
+   arXiv:2605.04479v1 Announce Type: new  Abstract: This research establishes ESG as a state dependent insurance mechanism against equity crashes by addr...
+
+#8 [ZeroHedge] 🏷️  other (xai)
+   ID: bb98e
+   Will Today's British 'Midterms' Spark 'Starmageddon' For The Labour Party?
+   https://www.zerohedge.com/political/will-todays-british-midterms-spark-starmageddon-labour-party
+   Published: 2026-05-07 11:20 UTC
+   Scores: 6.0/10 (raw: 6.0, final: 6.0)
+   <span class="field field--name-title field--type-string field--label-hidden">Will Today's British 'Midterms' Spark 'Starmageddon' For The Labour Party...
+
+#9 [Antiwar.com] 🏷️  geo_other (xai)
+   ID: 1490d
+   Trump Threatens Iran With Bombing at ‘Much Higher Level’ If It Doesn’t Agree to US Deal
+   https://news.antiwar.com/2026/05/06/trump-threatens-iran-with-bombing-at-much-higher-level-if-it-doesnt-agree-to-us-deal/?utm_source=rss&utm_medium=rss&utm_campaign=trump-threatens-iran-with-bombing-at-much-higher-level-if-it-doesnt-agree-to-us-deal
+   Published: 2026-05-06 22:03 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 4.5)
+   President Trump on Wednesday threatened Iran with bombing at &#8220;a much higher level&#8221; than what the US and Israel previously unleashed on the...
+
+#10 [X/@KobeissiLetter] 🏷️  fiscal (xai)
+   ID: 9b75b
+   The US labor market needs far fewer jobs to prevent unemployment from rising:
+
+T
+   https://x.com/KobeissiLetter/status/2025329419041341629
+   Published: Unknown date
+   Scores: 8.0/10 (raw: 8.0, final: 3.5)
+   The US labor market needs far fewer jobs to prevent unemployment from rising:  The breakeven rate of household employment growth is down to just ~50,0...
+
+#11 [FAZ] 🏷️  technology (xai)
+   ID: e6a6f
+   Computer der Zukunft: Das deutsche Quantenwunder
+   https://www.faz.net/aktuell/wirtschaft/unternehmen/computer-der-zukunft-das-deutsche-quantenwunder-200780494.html
+   Published: 2026-05-04 13:45 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 2.5)
+   Die Wirtschaft schwächelt, Investoren halten sich zurück, viele Innovationen kommen nicht so recht vom Hof. Da sorgen hiesige Start-ups ausgerechnet i...
+
+#12 [X/@vtchakarova] 🏷️  geo_major (xai)
+   ID: 7e12d
+   This is mind-blowing scale of purge. And really good news for Taiwan, Japan, and
+   https://x.com/vtchakarova/status/2015035357893378072
+   Published: Unknown date
+   Scores: 9.0/10 (raw: 9.0, final: 1.0)
+   This is mind-blowing scale of purge. And really good news for Taiwan, Japan, and US. https://t.co/CqoxqcAoLA...
+
+#13 [X/@ThomasSowell] 🏷️  other (xai)
+   ID: bbb3e
+   “If there is no equality of outcomes among people born to the same parents and r
+   https://x.com/ThomasSowell/status/2025712204851605604
+   Published: Unknown date
+   Scores: 5.0/10 (raw: 5.0, final: 0.5)
+   “If there is no equality of outcomes among people born to the same parents and raised under the same roof, why should equality of outcomes be expected...
+
+#14 [The Duran] 🏷️  geo_other (xai)
+   ID: d4c90
+   Prof John Mearsheimer: We’ve Lost the Iran War, We’re Screwed
+   https://theduran.com/prof-john-mearsheimer-weve-lost-the-iran-war-were-screwed/
+   Published: 2026-05-01 19:12 UTC
+   Scores: 9.0/10 (raw: 9.0, final: -9.0)
+   <img alt="" class="webfeedsFeaturedVisual wp-post-image" height="372" src="https://i0.wp.com/theduran.com/wp-content/uploads/2026/05/maxresdefault-1.j...
+
+#15 [X/@zerohedge] 🏷️  monetary (xai)
+   ID: 6c579
+   Goldman's Gold Guru Sees "Significant Upside Risk" To $5400 Forecast<!-- --> | ZeroHedge
+   https://www.zerohedge.com/precious-metals/goldmans-gold-guru-sees-significant-upside-risk-5400-forecast
+   Published: Unknown date
+   Scores: 9.0/10 (raw: 9.0, final: -9.0)
+   Gold surged significantly in 2025 and into 2026, driven by competition for limited physical bullion between central banks (especially emerging markets...
+
+#16 [X/@CommerceGov] 🏷️  fiscal (xai)
+   ID: 0b395
+   In 1985, America was a net owner of global assets by over $100B. 
+
+By 2024, fore
+   https://x.com/CommerceGov/status/2009466634537153008
+   Published: Unknown date
+   Scores: 8.0/10 (raw: 8.0, final: -10.0)
+   In 1985, America was a net owner of global assets by over $100B.   By 2024, foreign ownership of U.S. assets exceeded U.S. ownership abroad by nearly ...
+
+#17 [X/@ihtesham2005] 🏷️  technology (xai)
+   ID: aedd8
+   🚨 Anthropic just open-sourced the exact Skills library their own engineers use i
+   https://x.com/ihtesham2005/status/2026752089473314975
+   Published: Unknown date
+   Scores: 7.0/10 (raw: 7.0, final: -11.0)
+   🚨 Anthropic just open-sourced the exact Skills library their own engineers use internally.  Stop building Claude workflows from scratch.  These are pl...
+
+#18 [X/@TheMichaelEvery] 🏷️  other (xai)
+   ID: 590f2
+   The revolution *will* be televised. https://t.co/wnRCnRdnoe
+   https://x.com/TheMichaelEvery/status/2022176313193509097
+   Published: Unknown date
+   Scores: 5.0/10 (raw: 5.0, final: -13.0)
+   The revolution *will* be televised. https://t.co/wnRCnRdnoe...
+
+#19 [X/@Myrmikan] 🏷️  monetary (xai)
+   ID: be1da
+   Trump's Federal Reserve chairman-designate will not be able to stop the bull mar
+   https://x.com/Myrmikan/status/2020850168233705538
+   Published: Unknown date
+   Scores: 9.0/10 (raw: 9.0, final: -31.5)
+   Trump's Federal Reserve chairman-designate will not be able to stop the bull market in gold: https://t.co/9VQlbiYQUj...
+
+#20 [X/@EricLDaugh] 🏷️  geo_other (xai)
+   ID: cb60b
+   🚨 JUST IN: NEW POV FOOTAGE released of the Minneapolis ICE agent that shot and k
+   https://x.com/EricLDaugh/status/2009682363077509453
+   Published: Unknown date
+   Scores: 9.0/10 (raw: 9.0, final: -31.5)
+   🚨 JUST IN: NEW POV FOOTAGE released of the Minneapolis ICE agent that shot and killed woman who tried to run him over with her vehicle  He was DIRECTL...
+
+
+💾 Results saved to curator_output.txt
+📁 Archive saved to curator_archive/curator_2026-05-07-0635.html
+🔖 Latest briefing: curator_latest.html
+📑 Index page updated: curator_index.html
+💾 Wrote 20 articles to curator_latest.json
+✅ Sent 10 articles to Telegram
+✅ Curator briefing generated and sent successfully at Thu May  7 06:36:00 CDT 2026
+✅ Briefing already ran today (2026-05-07) — skipping
+⏭  Outside 6AM–6PM window (hour=22) — skipping
+⏭  Outside 6AM–6PM window (hour=22) — skipping
+⏭  Outside 6AM–6PM window (hour=23) — skipping
+⏭  Outside 6AM–6PM window (hour=00) — skipping
+⏭  Outside 6AM–6PM window (hour=01) — skipping
+⏭  Outside 6AM–6PM window (hour=02) — skipping
+⏭  Outside 6AM–6PM window (hour=03) — skipping
+⏭  Outside 6AM–6PM window (hour=04) — skipping
+⏭  Outside 6AM–6PM window (hour=05) — skipping
+🚀 Starting curator briefing at Sat May  9 06:57:38 CEST 2026...
+🔖 Pulling new X bookmarks...
+State: last_pull_at=2026-05-08T13:03:53, total_incremental_pulled=49
+Token expires in -50027s — refreshing...
+Refreshing access token...
+Tokens refreshed:
+  access_token:  VFMwQVlKNm5s... ✅
+  refresh_token: azNLRWJnV2NG... ✅
+  expires_in:    2h 0m
+Existing signals: 447 (dedup set: 447 tweet IDs)
+Pulling bookmarks for @robertvanstedum...
+
+  Page 1: 99 bookmarks (running total seen: 99)
+  → tweet 2050601444093399199 predates last_pull_at (2026-05-08T13:03:53) — stopping pagination early
+
+[DONE] Tweets seen on API: 99
+[DONE] New signals added: 0
+No new signals. Updating state timestamp.
+🚀 Production run  [r_f70bde0]
+
+🧠 Starting RSS curation (mode: xai)...
+
+📡 Fetching Geopolitical Futures...
+   ✅ 5 entries from Geopolitical Futures
+📡 Fetching ZeroHedge...
+   ✅ 25 entries from ZeroHedge
+📡 Fetching The Big Picture...
+   ✅ 10 entries from The Big Picture
+📡 Fetching Fed On The Economy...
+   ✅ 50 entries from Fed On The Economy
+📡 Fetching Treasury MSPD...
+   ✅ 50 entries from Treasury MSPD
+📡 Fetching Al Jazeera...
+   ✅ 25 entries from Al Jazeera
+📡 Fetching ProPublica...
+   ✅ 20 entries from ProPublica
+📡 Fetching Antiwar.com...
+   ✅ 10 entries from Antiwar.com
+📡 Fetching Investing.com...
+   ✅ 10 entries from Investing.com
+📡 Fetching The Duran...
+   ✅ 35 entries from The Duran
+📡 Fetching O Globo...
+   ✅ 0 entries from O Globo
+📡 Fetching Deutsche Welle...
+   ✅ 50 entries from Deutsche Welle
+📡 Fetching Spiegel International...
+   ✅ 20 entries from Spiegel International
+📡 Fetching FAZ...
+   ✅ 50 entries from FAZ
+📡 Fetching Die Welt...
+   ✅ 30 entries from Die Welt
+📡 Fetching War on the Rocks...
+   ✅ 50 entries from War on the Rocks
+📡 Fetching Foreign Affairs...
+   ✅ 20 entries from Foreign Affairs
+📡 Fetching arXiv q-fin...
+   ✅ 0 entries from arXiv q-fin
+📡 Fetching Just Security...
+   ✅ 10 entries from Just Security
+📡 Fetching CEPR VoxEU...
+   ✅ 50 entries from CEPR VoxEU
+
+📊 Total entries fetched: 520
+📎 X bookmarks merged: 377 articles (332 signals → 377 after dedup)
+
+🔍 Web search enrichment:
+  🌐 Web baseline: 2 candidates
+   Pool after web search: 899 candidates
+🚫 Source trust: dropped 10 entries (drop tier)
+📌 Loaded 1 active interests from interests/ directory
+   geo_major: 1 flagged articles (+10 total boost)
+🧠 User profile loaded (492 chars) — personalizing scores
+📡 Calling xAI grok-4-1-fast-reasoning to score 889 articles...
+   Input: 59673 tokens, Output: 773 tokens
+   Cost: $0.3100
+⚖️  Source trust: applied multipliers to 205 entries
+
+🎲 Serendipity reserve: 4/20 articles (20%) from outside learned patterns
+   Selecting 4 serendipity articles from 873 remaining candidates...
+   ✅ Added 4 serendipity articles
+
+📊 Source distribution in top 20:
+   Geopolitical Futures: 4 articles
+   ZeroHedge: 4 articles
+   Fed On The Economy: 4 articles
+   Treasury MSPD: 3 articles
+   War on the Rocks: 1 articles
+   Foreign Affairs: 1 articles
+   Just Security: 1 articles
+   CEPR VoxEU: 1 articles
+   ProPublica: 1 articles
+
+🏷️  Category distribution in top 20:
+   other: 5 articles
+   fiscal: 4 articles
+   geo_major: 3 articles
+   monetary: 3 articles
+   technology: 3 articles
+   geo_other: 2 articles
+📝 Logging 20 articles to Signal Store...
+✅ Signal Store updated
+💾 History updated: 20 articles saved
+
+================================================================================
+TOP 20 CURATED ARTICLES (Category + Diversity Weighted)
+================================================================================
+
+#1 [Geopolitical Futures] 🏷️  geo_major (xai)
+   ID: 35934
+   George Friedman on Why Putin is Running Out of Time
+   https://geopoliticalfutures.com/george-friedman-on-why-putin-is-running-out-of-time/
+   Published: 2026-05-06 21:14 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 19.0)
+   <p>Is Putin looking to Trump for a lifeline? How does last week’s phone call between the leaders actually signal Russian weakness?</p> <p>On this epis...
+
+#2 [ZeroHedge] 🏷️  geo_major (xai)
+   ID: dd9d7
+   Trump Gets Diplomatic Win In Ukraine War, 3-Day Ceasefire Declared For Russia's V-Day
+   https://www.zerohedge.com/geopolitical/trump-gets-diplomatic-win-ukraine-war-3-day-ceasefire-declared-russias-v-day
+   Published: 2026-05-08 19:30 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 14.5)
+   <span class="field field--name-title field--type-string field--label-hidden">Trump Gets Diplomatic Win In Ukraine War, 3-Day Ceasefire Declared For Ru...
+
+#3 [War on the Rocks] 🏷️  other (xai)
+   ID: 34b3e
+   As Adversaries Integrate, U.S. Partners Bypass Washington
+   https://warontherocks.com/as-adversaries-integrate-u-s-partners-bypass-washington/
+   Published: 2026-05-08 07:30 UTC
+   Scores: 7.5/10 (raw: 5.0, final: 7.5)
+   <p>The drones hitting Gulf Arab states daily since the United States and Israel launched large-scale military operations against Iran in February are ...
+
+#4 [Fed On The Economy] 🏷️  fiscal (xai)
+   ID: bb95f
+   America Underbuilt Inc.: The Supply Side of the U.S. Housing Challenge
+   https://www.stlouisfed.org/on-the-economy/2026/apr/supply-side-of-us-housing-challenge
+   Published: 2026-04-08 16:45 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 7.0)
+   This analysis finds that the U.S. has underbuilt housing for decades. The persistent supply shortfall amid growing demand drives today’s affordability...
+
+#5 [Foreign Affairs] 🏷️  other (xai)
+   ID: 78414
+   America and the Gulf Still Need Each Other
+   https://www.foreignaffairs.com/united-states/america-and-gulf-still-need-each-other
+   Published: 2026-05-08 04:00 UTC
+   Scores: 7.5/10 (raw: 5.0, final: 3.0)
+   How U.S. partnerships can survive the war in Iran....
+
+#6 [ZeroHedge] 🏷️  monetary (xai)
+   ID: e0932
+   Gold, Debt And The Inevitable Global Housing Market Crash
+   https://www.zerohedge.com/economics/gold-debt-and-inevitable-global-housing-market-crash
+   Published: 2026-05-09 02:35 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 0.0)
+   <span class="field field--name-title field--type-string field--label-hidden">Gold, Debt And The Inevitable Global Housing Market Crash</span>         ...
+
+#7 [Geopolitical Futures] 🏷️  geo_other (xai)
+   ID: 84cb4
+   What the UAE’s OPEC Exit Means for the Global Energy Market
+   https://geopoliticalfutures.com/what-the-uaes-opec-exit-means-for-the-global-energy-market/
+   Published: 2026-05-08 10:00 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 0.0)
+   <p>The United Arab Emirates’ decision to leave OPEC, effective May 1, was not an isolated policy shift but the culmination of a deeper, decade-long st...
+
+#8 [Treasury MSPD] 🏷️  fiscal (xai)
+   ID: 7f21a
+   Monthly Statement of the Public Debt, April 30, 2026
+   https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding
+   Published: 2026-05-06 20:00 UTC
+   Scores: 4.0/10 (raw: 4.0, final: -0.5)
+   April 30, 2026-TABLE I -- SUMMARY OF TREASURY SECURITIES OUTSTANDING...
+
+#9 [Fed On The Economy] 🏷️  technology (xai)
+   ID: e986d
+   Why Does AI Adoption Differ So Much across Countries?
+   https://www.stlouisfed.org/on-the-economy/2026/apr/why-does-ai-adoption-differ-so-much-countries
+   Published: 2026-04-14 16:30 UTC
+   Scores: 6.0/10 (raw: 6.0, final: -3.0)
+   U.S. firms have a higher share of workers using AI than European firms. This analysis finds management practices are a surprisingly powerful predictor...
+
+#10 [Just Security] 🏷️  other (xai)
+   ID: 9e100
+   Too Dangerous to Deploy: Anthropic’s Mythos and What Comes Next
+   https://www.justsecurity.org/138011/too-dangerous-anthropic-mythos/?utm_source=rss&utm_medium=rss&utm_campaign=too-dangerous-anthropic-mythos
+   Published: 2026-05-08 13:13 UTC
+   Scores: 7.5/10 (raw: 5.0, final: -10.5)
+   <p>Mythos is a harbinger of the dilemmas that AI companies &#038; governments will face in enabling the safe adoption of progressively more powerful m...
+
+#11 [Treasury MSPD] 🏷️  fiscal (xai)
+   ID: 7f21a
+   Monthly Statement of the Public Debt, March 31, 2026
+   https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding
+   Published: 2026-04-06 20:00 UTC
+   Scores: 4.0/10 (raw: 4.0, final: -23.0)
+   March 31, 2026-TABLE I -- SUMMARY OF TREASURY SECURITIES OUTSTANDING...
+
+#12 [ZeroHedge] 🏷️  monetary (xai)
+   ID: d7485
+   Traders Puzzled As Physical Oil Prices Tumble Amid Surging Chinese Crude Sales, Plunging Imports
+   https://www.zerohedge.com/markets/traders-puzzled-physical-oil-prices-tumble-amid-surging-chinese-crude-sales-plunging
+   Published: 2026-05-08 22:00 UTC
+   Scores: 9.0/10 (raw: 9.0, final: -31.5)
+   <span class="field field--name-title field--type-string field--label-hidden">Traders Puzzled As Physical Oil Prices Tumble Amid Surging Chinese Crude ...
+
+#13 [Geopolitical Futures] 🏷️  geo_other (xai)
+   ID: a5d98
+   Ship Traffic Around Southern Africa Resurges
+   https://geopoliticalfutures.com/ship-traffic-around-southern-africa-resurges/
+   Published: 2026-05-08 20:23 UTC
+   Scores: 8.0/10 (raw: 8.0, final: -32.5)
+   <p>(click to enlarge) Tanker traffic around the Cape of Good Hope has surged to its highest levels since early 2025 as conflict in the Middle East dis...
+
+#14 [CEPR VoxEU] 🏷️  other (xai)
+   ID: 57140
+   Chris Sims and the role of money in economic fluctuations
+   https://cepr.org/voxeu/columns/chris-sims-and-role-money-economic-fluctuations
+   Published: 2026-05-08 23:00 UTC
+   Scores: 7.5/10 (raw: 5.0, final: -33.0)
+   The contributions of Chris Sims, who passed away in Mach 2026, to macroeconometric methodology are well-known and justly celebrated. This column descr...
+
+#15 [Fed On The Economy] 🏷️  technology (xai)
+   ID: b672a
+   Mind the Gap: AI Adoption in Europe and the U.S.
+   https://www.stlouisfed.org/on-the-economy/2026/mar/mind-gap-ai-adoption-europe-us
+   Published: 2026-03-30 09:30 UTC
+   Scores: 6.0/10 (raw: 6.0, final: -34.5)
+   AI adoption is much higher among American workers than it is among European workers. Is this widening the gap between U.S. and EU productivity growth?...
+
+#16 [ProPublica] 🏷️  other (xai)
+   ID: 2f2e4
+   Puerto Rico Lawmakers Call for Investigation Into Alleged Drugs-for-Votes Scheme After ProPublica Report
+   https://www.propublica.org/article/puerto-rico-trump-drugs-votes-prisons-elections-jenniffer-gonzalez-colon
+   Published: 2026-05-08 17:25 UTC
+   Scores: 5.0/10 (raw: 5.0, final: -67.0)
+   <p>The post <a href="https://www.propublica.org/article/puerto-rico-trump-drugs-votes-prisons-elections-jenniffer-gonzalez-colon">Puerto Rico Lawmaker...
+
+#17 [Treasury MSPD] 🏷️  fiscal (xai)
+   ID: 7f21a
+   Monthly Statement of the Public Debt, February 28, 2026
+   https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding
+   Published: 2026-03-05 20:00 UTC
+   Scores: 4.0/10 (raw: 4.0, final: -72.5)
+   February 28, 2026-TABLE I -- SUMMARY OF TREASURY SECURITIES OUTSTANDING...
+
+#18 [Geopolitical Futures] 🏷️  geo_major (xai)
+   ID: f240d
+   Daily Memo: Drone Attack in Russia, US-Brazil Talks
+   https://geopoliticalfutures.com/daily-memo-drone-attack-in-russia-us-brazil-talks/
+   Published: 2026-05-08 14:28 UTC
+   Scores: 8.0/10 (raw: 8.0, final: -91.0)
+   <p>Ukrainian attack. Several airports in southern Russia were forced to close on Friday after a Ukrainian drone hit the air traffic control center for...
+
+#19 [ZeroHedge] 🏷️  technology (xai)
+   ID: af370
+   Thailand Emerges As Possible Hub In Nvidia Chip-Smuggling Channel To Alibaba
+   https://www.zerohedge.com/ai/thailand-emerges-possible-hub-nvidia-chip-smuggling-channel-alibaba
+   Published: 2026-05-08 22:50 UTC
+   Scores: 8.0/10 (raw: 8.0, final: -91.0)
+   <span class="field field--name-title field--type-string field--label-hidden">Thailand Emerges As Possible Hub In Nvidia Chip-Smuggling Channel To Alib...
+
+#20 [Fed On The Economy] 🏷️  monetary (xai)
+   ID: 26fa9
+   U.S. Import Price Dynamics Following the 2025 Tariffs
+   https://www.stlouisfed.org/on-the-economy/2026/feb/us-import-price-dynamics-2025-tariffs
+   Published: 2026-02-26 20:00 UTC
+   Scores: 7.0/10 (raw: 7.0, final: -92.0)
+   This analysis examines how 2025 tariffs affected U.S. import prices because of price changes by existing foreign suppliers and the shift to alternativ...
+
+
+💾 Results saved to curator_output.txt
+📁 Archive saved to curator_archive/curator_2026-05-09-0658.html
+🔖 Latest briefing: curator_latest.html
+📑 Index page updated: curator_index.html
+💾 Wrote 20 articles to curator_latest.json
+✅ Sent 10 articles to Telegram
+✅ Curator briefing generated and sent successfully at Sat May  9 06:58:49 CEST 2026
+✅ Briefing already ran today (2026-05-09) — skipping
+✅ Briefing already ran today (2026-05-09) — skipping
+✅ Briefing already ran today (2026-05-09) — skipping
+⏭  Outside 6AM–6PM window (hour=20) — skipping
+⏭  Outside 6AM–6PM window (hour=21) — skipping
+⏭  Outside 6AM–6PM window (hour=22) — skipping
+⏭  Outside 6AM–6PM window (hour=23) — skipping
+⏭  Outside 6AM–6PM window (hour=00) — skipping
+⏭  Outside 6AM–6PM window (hour=01) — skipping
+⏭  Outside 6AM–6PM window (hour=02) — skipping
+⏭  Outside 6AM–6PM window (hour=03) — skipping
+⏭  Outside 6AM–6PM window (hour=04) — skipping
+⏭  Outside 6AM–6PM window (hour=05) — skipping
+🚀 Starting curator briefing at Sun May 10 06:58:01 CEST 2026...
+🔖 Pulling new X bookmarks...
+State: last_pull_at=2026-05-09T04:57:40, total_incremental_pulled=49
+Token expires in -79222s — refreshing...
+Refreshing access token...
+Tokens refreshed:
+  access_token:  bF9TQ3RCMUJR... ✅
+  refresh_token: Z0lpZF9OUXpo... ✅
+  expires_in:    2h 0m
+Existing signals: 447 (dedup set: 447 tweet IDs)
+Pulling bookmarks for @robertvanstedum...
+
+  Page 1: 99 bookmarks (running total seen: 99)
+  → tweet 2050601444093399199 predates last_pull_at (2026-05-09T04:57:40) — stopping pagination early
+
+[DONE] Tweets seen on API: 99
+[DONE] New signals added: 0
+No new signals. Updating state timestamp.
+🚀 Production run  [r_cfcea95]
+
+🧠 Starting RSS curation (mode: xai)...
+
+📡 Fetching Geopolitical Futures...
+   ✅ 5 entries from Geopolitical Futures
+📡 Fetching ZeroHedge...
+   ✅ 25 entries from ZeroHedge
+📡 Fetching The Big Picture...
+   ✅ 10 entries from The Big Picture
+📡 Fetching Fed On The Economy...
+   ✅ 50 entries from Fed On The Economy
+📡 Fetching Treasury MSPD...
+   ✅ 50 entries from Treasury MSPD
+📡 Fetching Al Jazeera...
+   ✅ 25 entries from Al Jazeera
+📡 Fetching ProPublica...
+   ✅ 20 entries from ProPublica
+📡 Fetching Antiwar.com...
+   ✅ 10 entries from Antiwar.com
+📡 Fetching Investing.com...
+   ✅ 10 entries from Investing.com
+📡 Fetching The Duran...
+   ✅ 35 entries from The Duran
+📡 Fetching O Globo...
+   ✅ 0 entries from O Globo
+📡 Fetching Deutsche Welle...
+   ✅ 50 entries from Deutsche Welle
+📡 Fetching Spiegel International...
+   ✅ 20 entries from Spiegel International
+📡 Fetching FAZ...
+   ✅ 50 entries from FAZ
+📡 Fetching Die Welt...
+   ✅ 30 entries from Die Welt
+📡 Fetching War on the Rocks...
+   ✅ 50 entries from War on the Rocks
+📡 Fetching Foreign Affairs...
+   ✅ 20 entries from Foreign Affairs
+📡 Fetching arXiv q-fin...
+   ✅ 0 entries from arXiv q-fin
+📡 Fetching Just Security...
+   ✅ 10 entries from Just Security
+📡 Fetching CEPR VoxEU...
+   ✅ 50 entries from CEPR VoxEU
+
+📊 Total entries fetched: 520
+📎 X bookmarks merged: 377 articles (332 signals → 377 after dedup)
+
+🔍 Web search enrichment:
+  🌐 Web baseline: 3 candidates
+   Pool after web search: 900 candidates
+🚫 Source trust: dropped 10 entries (drop tier)
+📌 Loaded 1 active interests from interests/ directory
+   geo_major: 1 flagged articles (+10 total boost)
+🧠 User profile loaded (492 chars) — personalizing scores
+📡 Calling xAI grok-4-1-fast-reasoning to score 890 articles...
+   Input: 59517 tokens, Output: 4096 tokens
+   Cost: $0.3590
+⚠️  Skipping malformed line: 574|X/@BraedenSorbo|
+⚖️  Source trust: applied multipliers to 205 entries
+
+🎲 Serendipity reserve: 4/20 articles (20%) from outside learned patterns
+   Selecting 4 serendipity articles from 874 remaining candidates...
+   ✅ Added 4 serendipity articles
+
+📊 Source distribution in top 20:
+   Foreign Affairs: 2 articles
+   Just Security: 1 articles
+   War on the Rocks: 1 articles
+   CEPR VoxEU: 1 articles
+   Geopolitical Futures: 1 articles
+   ZeroHedge: 1 articles
+   X/@zerohedge: 1 articles
+   X/@KobeissiLetter: 1 articles
+   X/@LukeGromen: 1 articles
+   X/@TaviCosta: 1 articles
+   X/@Myrmikan: 1 articles
+   X/@vtchakarova: 1 articles
+   Antiwar.com: 1 articles
+   X/@Eng_china5: 1 articles
+   X/@TheMichaelEvery: 1 articles
+   X/@Globalflows: 1 articles
+   X/@jenniferzeng97: 1 articles
+   Fed On The Economy: 1 articles
+   X/@JDVance: 1 articles
+
+🏷️  Category distribution in top 20:
+   geo_major: 2 articles
+   war on the rocks: 1 articles
+   monetary: 1 articles
+   geo_other: 1 articles
+   zerohedge.com: 1 articles
+   x/@zerohedge: 1 articles
+   x/@kobeissiletter: 1 articles
+   x/@lukegromen: 1 articles
+   x/@tavicosta: 1 articles
+   x/@myrmikan: 1 articles
+   x/@vtchakarova: 1 articles
+   fiscal: 1 articles
+   x/@eng_china5: 1 articles
+   x/@themichaelevery: 1 articles
+   x/@globalflows: 1 articles
+   x/@jenniferzeng97: 1 articles
+   foreign affairs: 1 articles
+   technology: 1 articles
+   x/@jdvance: 1 articles
+📝 Logging 20 articles to Signal Store...
+✅ Signal Store updated
+💾 History updated: 20 articles saved
+
+================================================================================
+TOP 20 CURATED ARTICLES (Category + Diversity Weighted)
+================================================================================
+
+#1 [Foreign Affairs] 🏷️  geo_major (xai)
+   ID: 85e4b
+   The Return of Japanese Hard Power
+   https://www.foreignaffairs.com/japan/return-japanese-hard-power
+   Published: 2026-05-05 04:00 UTC
+   Scores: 13.5/10 (raw: 9.0, final: 23.5)
+   Why Tokyo is bulking up its defense industrial base....
+
+#2 [Just Security] 🏷️  geo_major (xai)
+   ID: aad12
+   The International Compensation Mechanism for Ukraine: Update on the Convention Establishing an International Claims Commission and the Register of Damage for Ukraine
+   https://www.justsecurity.org/138292/international-compensation-mechanism-ukraine-update/?utm_source=rss&utm_medium=rss&utm_campaign=international-compensation-mechanism-ukraine-update
+   Published: 2026-05-08 12:45 UTC
+   Scores: 10.5/10 (raw: 7.0, final: 16.0)
+   <p>Together, they signal a shift from largely symbolic institution-building to a functional system capable of handling the full scope and scale of Ukr...
+
+#3 [War on the Rocks] 🏷️  war on the rocks (xai)
+   ID: 34b3e
+   As Adversaries Integrate, U.S. Partners Bypass Washington
+   https://warontherocks.com/as-adversaries-integrate-u-s-partners-bypass-washington/
+   Published: 2026-05-08 07:30 UTC
+   Scores: 13.5/10 (raw: 9.0, final: 13.5)
+   <p>The drones hitting Gulf Arab states daily since the United States and Israel launched large-scale military operations against Iran in February are ...
+
+#4 [CEPR VoxEU] 🏷️  monetary (xai)
+   ID: a14c0
+   Quantifying the impact of the Iran war on US inflation
+   https://cepr.org/voxeu/columns/quantifying-impact-iran-war-us-inflation
+   Published: 2026-05-03 23:00 UTC
+   Scores: 13.5/10 (raw: 9.0, final: 13.5)
+   The outbreak of the Iran war in February 2026 has led to a major disruption to oil trade and a surge in oil prices. This column assesses the inflation...
+
+#5 [Geopolitical Futures] 🏷️  geo_other (xai)
+   ID: a5d98
+   Ship Traffic Around Southern Africa Resurges
+   https://geopoliticalfutures.com/ship-traffic-around-southern-africa-resurges/
+   Published: 2026-05-08 20:23 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 9.0)
+   <p>(click to enlarge) Tanker traffic around the Cape of Good Hope has surged to its highest levels since early 2025 as conflict in the Middle East dis...
+
+#6 [ZeroHedge] 🏷️  zerohedge.com (xai)
+   ID: 01615
+   Chinese EVs Absent From U.S. Roads, But Parts Under The Hood Are Alarming
+   https://www.zerohedge.com/geopolitical/chinese-evs-absent-us-roads-parts-under-hood-are-alarming
+   Published: 2026-05-10 02:45 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 9.0)
+   <span class="field field--name-title field--type-string field--label-hidden">Chinese EVs Absent From U.S. Roads, But Parts Under The Hood Are Alarming...
+
+#7 [X/@zerohedge] 🏷️  x/@zerohedge (xai)
+   ID: 6c579
+   Goldman's Gold Guru Sees "Significant Upside Risk" To $5400 Forecast<!-- --> | ZeroHedge
+   https://www.zerohedge.com/precious-metals/goldmans-gold-guru-sees-significant-upside-risk-5400-forecast
+   Published: Unknown date
+   Scores: 9.0/10 (raw: 9.0, final: 9.0)
+   Gold surged significantly in 2025 and into 2026, driven by competition for limited physical bullion between central banks (especially emerging markets...
+
+#8 [X/@KobeissiLetter] 🏷️  x/@kobeissiletter (xai)
+   ID: 9b75b
+   The US labor market needs far fewer jobs to prevent unemployment from rising:
+
+T
+   https://x.com/KobeissiLetter/status/2025329419041341629
+   Published: Unknown date
+   Scores: 8.0/10 (raw: 8.0, final: 8.0)
+   The US labor market needs far fewer jobs to prevent unemployment from rising:  The breakeven rate of household employment growth is down to just ~50,0...
+
+#9 [X/@LukeGromen] 🏷️  x/@lukegromen (xai)
+   ID: 723ba
+   One of a number of potentially important macro divergences that occurred in 2H25
+   https://x.com/LukeGromen/status/2023425014071242852
+   Published: Unknown date
+   Scores: 8.0/10 (raw: 8.0, final: 8.0)
+   One of a number of potentially important macro divergences that occurred in 2H25 is shown below.  For the prior 10+ years, foreign Central Banks sold ...
+
+#10 [X/@TaviCosta] 🏷️  x/@tavicosta (xai)
+   ID: 63a6d
+   How early are we in the move out of US assets and into emerging markets?
+
+About 
+   https://x.com/TaviCosta/status/2021687231602425930
+   Published: Unknown date
+   Scores: 8.0/10 (raw: 8.0, final: 8.0)
+   How early are we in the move out of US assets and into emerging markets?  About this early — see the chart below.  The ratio of Latin American to US s...
+
+#11 [X/@Myrmikan] 🏷️  x/@myrmikan (xai)
+   ID: be1da
+   Trump's Federal Reserve chairman-designate will not be able to stop the bull mar
+   https://x.com/Myrmikan/status/2020850168233705538
+   Published: Unknown date
+   Scores: 8.0/10 (raw: 8.0, final: 8.0)
+   Trump's Federal Reserve chairman-designate will not be able to stop the bull market in gold: https://t.co/9VQlbiYQUj...
+
+#12 [X/@vtchakarova] 🏷️  x/@vtchakarova (xai)
+   ID: 7e12d
+   This is mind-blowing scale of purge. And really good news for Taiwan, Japan, and
+   https://x.com/vtchakarova/status/2015035357893378072
+   Published: Unknown date
+   Scores: 8.0/10 (raw: 8.0, final: 8.0)
+   This is mind-blowing scale of purge. And really good news for Taiwan, Japan, and US. https://t.co/CqoxqcAoLA...
+
+#13 [Antiwar.com] 🏷️  fiscal (xai)
+   ID: 10169
+   Hegseth Calls Inflating the Pentagon Budget by 50% to $1.5 Trillion a ‘Fiscally Responsible Investment’
+   https://news.antiwar.com/2026/05/07/hegseth-calls-inflating-the-pentagon-budget-by-50-to-1-5-trillion-a-fiscally-responsible-investment/?utm_source=rss&utm_medium=rss&utm_campaign=hegseth-calls-inflating-the-pentagon-budget-by-50-to-1-5-trillion-a-fiscally-responsible-investment
+   Published: 2026-05-07 20:54 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 7.0)
+   Secretary of War Pete Hegseth said in a post on X on Thursday that inflating the Pentagon budget by nearly 50% to $1.5 trillion for 2027 was a &#8220;...
+
+#14 [X/@Eng_china5] 🏷️  x/@eng_china5 (xai)
+   ID: ed3ea
+   CHINA:
+
+"The US is a war addict. Throughout its over 240-year history, it has be
+   https://x.com/Eng_china5/status/2027699741128020231
+   Published: Unknown date
+   Scores: 7.0/10 (raw: 7.0, final: 7.0)
+   CHINA:  "The US is a war addict. Throughout its over 240-year history, it has been at war for all but 16 years.  The US has 800 overseas military base...
+
+#15 [X/@TheMichaelEvery] 🏷️  x/@themichaelevery (xai)
+   ID: 590f2
+   The revolution *will* be televised. https://t.co/wnRCnRdnoe
+   https://x.com/TheMichaelEvery/status/2022176313193509097
+   Published: Unknown date
+   Scores: 7.0/10 (raw: 7.0, final: 7.0)
+   The revolution *will* be televised. https://t.co/wnRCnRdnoe...
+
+#16 [X/@Globalflows] 🏷️  x/@globalflows (xai)
+   ID: a8289
+   This is what Druckenmiller thinks about Kevin Warsh
+
+This is setting the stage f
+   https://x.com/Globalflows/status/2018173643566764503
+   Published: Unknown date
+   Scores: 7.0/10 (raw: 7.0, final: 7.0)
+   This is what Druckenmiller thinks about Kevin Warsh  This is setting the stage for a much bigger change (see article linked below) https://t.co/vYhrtf...
+
+#17 [X/@jenniferzeng97] 🏷️  x/@jenniferzeng97 (xai)
+   ID: 00bdc
+   🚨Update: Xi's Hereditary Plan Sparks Army Clash
+
+🔘 1. Basic Judgment on the Zhan
+   https://x.com/jenniferzeng97/status/2015777274927120791
+   Published: Unknown date
+   Scores: 7.0/10 (raw: 7.0, final: 7.0)
+   🚨Update: Xi's Hereditary Plan Sparks Army Clash  🔘 1. Basic Judgment on the Zhang Youxia Incident.  The incident was not an ordinary organizational ha...
+
+#18 [Foreign Affairs] 🏷️  foreign affairs (xai)
+   ID: 78414
+   America and the Gulf Still Need Each Other
+   https://www.foreignaffairs.com/united-states/america-and-gulf-still-need-each-other
+   Published: 2026-05-08 04:00 UTC
+   Scores: 15.0/10 (raw: 10.0, final: 6.0)
+   How U.S. partnerships can survive the war in Iran....
+
+#19 [Fed On The Economy] 🏷️  technology (xai)
+   ID: 9acf8
+   Tracking AI’s Contribution to GDP Growth
+   https://www.stlouisfed.org/on-the-economy/2026/jan/tracking-ai-contribution-gdp-growth
+   Published: 2026-01-12 10:30 UTC
+   Scores: 6.0/10 (raw: 6.0, final: 6.0)
+   This analysis suggests recent investments in AI-related categories have contributed significantly to the real U.S. economic growth in the first nine m...
+
+#20 [X/@JDVance] 🏷️  x/@jdvance (xai)
+   ID: 683b4
+   Twenty years ago we invaded Iraq. The war killed many innocent Iraqis and Americ
+   https://x.com/JDVance/status/1637602424377552899
+   Published: Unknown date
+   Scores: 6.0/10 (raw: 6.0, final: 6.0)
+   Twenty years ago we invaded Iraq. The war killed many innocent Iraqis and Americans. It destroyed the oldest Christian populations in the world. It co...
+
+
+💾 Results saved to curator_output.txt
+📁 Archive saved to curator_archive/curator_2026-05-10-0700.html
+🔖 Latest briefing: curator_latest.html
+📑 Index page updated: curator_index.html
+💾 Wrote 20 articles to curator_latest.json
+✅ Sent 10 articles to Telegram
+✅ Curator briefing generated and sent successfully at Sun May 10 07:00:15 CEST 2026
+✅ Briefing already ran today (2026-05-10) — skipping
+✅ Briefing already ran today (2026-05-10) — skipping
+✅ Briefing already ran today (2026-05-10) — skipping
+✅ Briefing already ran today (2026-05-10) — skipping
+✅ Briefing already ran today (2026-05-10) — skipping
+✅ Briefing already ran today (2026-05-10) — skipping
+✅ Briefing already ran today (2026-05-10) — skipping
+✅ Briefing already ran today (2026-05-10) — skipping
+✅ Briefing already ran today (2026-05-10) — skipping
+✅ Briefing already ran today (2026-05-10) — skipping
+⏭  Outside 6AM–6PM window (hour=18) — skipping
+⏭  Outside 6AM–6PM window (hour=19) — skipping
+⏭  Outside 6AM–6PM window (hour=20) — skipping
+⏭  Outside 6AM–6PM window (hour=21) — skipping
+⏭  Outside 6AM–6PM window (hour=22) — skipping
+⏭  Outside 6AM–6PM window (hour=23) — skipping
+⏭  Outside 6AM–6PM window (hour=00) — skipping
+⏭  Outside 6AM–6PM window (hour=01) — skipping
+⏭  Outside 6AM–6PM window (hour=02) — skipping
+⏭  Outside 6AM–6PM window (hour=03) — skipping
+⏭  Outside 6AM–6PM window (hour=04) — skipping
+🚀 Starting curator briefing at Mon May 11 06:23:03 CEST 2026...
+🔖 Pulling new X bookmarks...
+State: last_pull_at=2026-05-10T04:58:02, total_incremental_pulled=49
+Token expires in -77102s — refreshing...
+Refreshing access token...
+Tokens refreshed:
+  access_token:  dEZsY2c3OC1h... ✅
+  refresh_token: c2dJdWxnX1Nu... ✅
+  expires_in:    2h 0m
+Existing signals: 447 (dedup set: 447 tweet IDs)
+Pulling bookmarks for @robertvanstedum...
+
+  Page 1: 99 bookmarks (running total seen: 99)
+  → tweet 2053337706110066813 predates last_pull_at (2026-05-10T04:58:02) — stopping pagination early
+
+[DONE] Tweets seen on API: 99
+[DONE] New signals added: 0
+No new signals. Updating state timestamp.
+🚀 Production run  [r_23bffc9]
+
+🧠 Starting RSS curation (mode: xai)...
+
+📡 Fetching Geopolitical Futures...
+   ✅ 5 entries from Geopolitical Futures
+📡 Fetching ZeroHedge...
+   ✅ 25 entries from ZeroHedge
+📡 Fetching The Big Picture...
+   ✅ 10 entries from The Big Picture
+📡 Fetching Fed On The Economy...
+   ✅ 50 entries from Fed On The Economy
+📡 Fetching Treasury MSPD...
+   ✅ 50 entries from Treasury MSPD
+📡 Fetching Al Jazeera...
+   ✅ 25 entries from Al Jazeera
+📡 Fetching ProPublica...
+   ✅ 20 entries from ProPublica
+📡 Fetching Antiwar.com...
+   ✅ 10 entries from Antiwar.com
+📡 Fetching Investing.com...
+   ✅ 10 entries from Investing.com
+📡 Fetching The Duran...
+   ✅ 35 entries from The Duran
+📡 Fetching O Globo...
+   ✅ 0 entries from O Globo
+📡 Fetching Deutsche Welle...
+   ✅ 50 entries from Deutsche Welle
+📡 Fetching Spiegel International...
+   ✅ 20 entries from Spiegel International
+📡 Fetching FAZ...
+   ✅ 50 entries from FAZ
+📡 Fetching Die Welt...
+   ✅ 30 entries from Die Welt
+📡 Fetching War on the Rocks...
+   ✅ 50 entries from War on the Rocks
+📡 Fetching Foreign Affairs...
+   ✅ 20 entries from Foreign Affairs
+📡 Fetching arXiv q-fin...
+   ✅ 15 entries from arXiv q-fin
+📡 Fetching Just Security...
+   ✅ 10 entries from Just Security
+📡 Fetching CEPR VoxEU...
+   ✅ 50 entries from CEPR VoxEU
+
+📊 Total entries fetched: 535
+📎 X bookmarks merged: 377 articles (332 signals → 377 after dedup)
+
+🔍 Web search enrichment:
+  🌐 Web baseline: 3 candidates
+   Pool after web search: 915 candidates
+🚫 Source trust: dropped 10 entries (drop tier)
+📌 Loaded 1 active interests from interests/ directory
+   geo_major: 1 flagged articles (+10 total boost)
+🧠 User profile loaded (492 chars) — personalizing scores
+📡 Calling xAI grok-4-1-fast-reasoning to score 905 articles...
+   Input: 60635 tokens, Output: 802 tokens
+   Cost: $0.3152
+⚖️  Source trust: applied multipliers to 220 entries
+
+🎲 Serendipity reserve: 4/20 articles (20%) from outside learned patterns
+   Selecting 4 serendipity articles from 889 remaining candidates...
+   ✅ Added 4 serendipity articles
+
+📊 Source distribution in top 20:
+   ZeroHedge: 4 articles
+   Geopolitical Futures: 4 articles
+   Fed On The Economy: 3 articles
+   Treasury MSPD: 3 articles
+   War on the Rocks: 1 articles
+   The Big Picture: 1 articles
+   Foreign Affairs: 1 articles
+   arXiv q-fin: 1 articles
+   Just Security: 1 articles
+   CEPR VoxEU: 1 articles
+
+🏷️  Category distribution in top 20:
+   other: 5 articles
+   fiscal: 4 articles
+   geo_major: 3 articles
+   monetary: 3 articles
+   geo_other: 2 articles
+   technology: 2 articles
+   commodity: 1 articles
+📝 Logging 20 articles to Signal Store...
+✅ Signal Store updated
+💾 History updated: 20 articles saved
+
+================================================================================
+TOP 20 CURATED ARTICLES (Category + Diversity Weighted)
+================================================================================
+
+#1 [ZeroHedge] 🏷️  geo_major (xai)
+   ID: 2fb41
+   Rabobank: "More War Seems Inevitable"
+   https://www.zerohedge.com/geopolitical/rabobank-more-war-seems-inevitable
+   Published: 2026-05-11 03:37 UTC
+   Scores: 10.0/10 (raw: 10.0, final: 20.0)
+   <span class="field field--name-title field--type-string field--label-hidden">Rabobank: "More War Seems Inevitable"</span>              <div class="cle...
+
+#2 [Geopolitical Futures] 🏷️  geo_major (xai)
+   ID: e860d
+   George Answers Your Questions: The Significance of the Trump-Putin Talks
+   https://geopoliticalfutures.com/george-answers-your-questions-the-significance-of-the-trump-putin-talks/
+   Published: 2026-05-09 12:00 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 14.5)
+   <p>The Significance of the Trump-Putin Talks May 4, 2026 Question: Russian President Vladimir Putin wants only a one-day ceasefire for his May 9 celeb...
+
+#3 [War on the Rocks] 🏷️  other (xai)
+   ID: 34b3e
+   As Adversaries Integrate, U.S. Partners Bypass Washington
+   https://warontherocks.com/as-adversaries-integrate-u-s-partners-bypass-washington/
+   Published: 2026-05-08 07:30 UTC
+   Scores: 7.5/10 (raw: 5.0, final: 7.5)
+   <p>The drones hitting Gulf Arab states daily since the United States and Israel launched large-scale military operations against Iran in February are ...
+
+#4 [The Big Picture] 🏷️  monetary (xai)
+   ID: 0067b
+   ATM:  Focusing on Growth (Not Market Cap)
+   https://ritholtz.com/2026/05/atm-growth-not-cap/
+   Published: 2026-05-06 16:00 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 7.0)
+   <p>&#160; &#160; &#160; At The Money: Focusing on Growth (Not Market Cap) with Rob Arnott, RAFI (May 7, 2026) Indexes are weighted by their size, prim...
+
+#5 [Fed On The Economy] 🏷️  fiscal (xai)
+   ID: bb95f
+   America Underbuilt Inc.: The Supply Side of the U.S. Housing Challenge
+   https://www.stlouisfed.org/on-the-economy/2026/apr/supply-side-of-us-housing-challenge
+   Published: 2026-04-08 16:45 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 7.0)
+   This analysis finds that the U.S. has underbuilt housing for decades. The persistent supply shortfall amid growing demand drives today’s affordability...
+
+#6 [Foreign Affairs] 🏷️  other (xai)
+   ID: 78414
+   America and the Gulf Still Need Each Other
+   https://www.foreignaffairs.com/united-states/america-and-gulf-still-need-each-other
+   Published: 2026-05-08 04:00 UTC
+   Scores: 7.5/10 (raw: 5.0, final: 3.0)
+   How U.S. partnerships can survive the war in Iran....
+
+#7 [Geopolitical Futures] 🏷️  geo_other (xai)
+   ID: a5d98
+   Ship Traffic Around Southern Africa Resurges
+   https://geopoliticalfutures.com/ship-traffic-around-southern-africa-resurges/
+   Published: 2026-05-08 20:23 UTC
+   Scores: 10.0/10 (raw: 10.0, final: 1.0)
+   <p>(click to enlarge) Tanker traffic around the Cape of Good Hope has surged to its highest levels since early 2025 as conflict in the Middle East dis...
+
+#8 [ZeroHedge] 🏷️  commodity (xai)
+   ID: 46a94
+   Global Fertilizer Shortage Means Spring Planting Season Disaster In The Northern Hemisphere
+   https://www.zerohedge.com/geopolitical/global-fertilizer-shortage-means-spring-planting-season-disaster-northern-hemisphere
+   Published: 2026-05-11 02:45 UTC
+   Scores: 10.0/10 (raw: 10.0, final: 1.0)
+   <span class="field field--name-title field--type-string field--label-hidden">Global Fertilizer Shortage Means Spring Planting Season Disaster In The N...
+
+#9 [Treasury MSPD] 🏷️  fiscal (xai)
+   ID: 7f21a
+   Monthly Statement of the Public Debt, April 30, 2026
+   https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding
+   Published: 2026-05-06 20:00 UTC
+   Scores: 4.0/10 (raw: 4.0, final: -0.5)
+   April 30, 2026-TABLE I -- SUMMARY OF TREASURY SECURITIES OUTSTANDING...
+
+#10 [Fed On The Economy] 🏷️  technology (xai)
+   ID: 9acf8
+   Tracking AI’s Contribution to GDP Growth
+   https://www.stlouisfed.org/on-the-economy/2026/jan/tracking-ai-contribution-gdp-growth
+   Published: 2026-01-12 10:30 UTC
+   Scores: 7.0/10 (raw: 7.0, final: -2.0)
+   This analysis suggests recent investments in AI-related categories have contributed significantly to the real U.S. economic growth in the first nine m...
+
+#11 [arXiv q-fin] 🏷️  other (xai)
+   ID: 9cb84
+   Stochastic Policy Gradient Methods in the Uncertain Volatility Model
+   https://arxiv.org/abs/2605.06670
+   Published: 2026-05-11 04:00 UTC
+   Scores: 7.5/10 (raw: 5.0, final: -10.5)
+   arXiv:2605.06670v1 Announce Type: new  Abstract: The multidimensional Uncertain Volatility Model leads to robust option pricing problems under joint v...
+
+#12 [Treasury MSPD] 🏷️  fiscal (xai)
+   ID: 7f21a
+   Monthly Statement of the Public Debt, March 31, 2026
+   https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding
+   Published: 2026-04-06 20:00 UTC
+   Scores: 4.0/10 (raw: 4.0, final: -23.0)
+   March 31, 2026-TABLE I -- SUMMARY OF TREASURY SECURITIES OUTSTANDING...
+
+#13 [ZeroHedge] 🏷️  monetary (xai)
+   ID: d7485
+   Traders Puzzled As Physical Oil Prices Tumble Amid Surging Chinese Crude Sales, Plunging Imports
+   https://www.zerohedge.com/markets/traders-puzzled-physical-oil-prices-tumble-amid-surging-chinese-crude-sales-plunging
+   Published: 2026-05-10 19:55 UTC
+   Scores: 10.0/10 (raw: 10.0, final: -30.5)
+   <span class="field field--name-title field--type-string field--label-hidden">Traders Puzzled As Physical Oil Prices Tumble Amid Surging Chinese Crude ...
+
+#14 [Just Security] 🏷️  other (xai)
+   ID: ce4df
+   Digest of Recent Articles on Just Security (May 4-8, 2026)
+   https://www.justsecurity.org/137624/digest-recent-articles-just-security-may-4-8-2026/?utm_source=rss&utm_medium=rss&utm_campaign=digest-recent-articles-just-security-may-4-8-2026
+   Published: 2026-05-09 12:05 UTC
+   Scores: 7.5/10 (raw: 5.0, final: -33.0)
+   <p>U.S.-Israel-Iran War • Russia-Ukraine War • U.S. Military • U.S. Boat Strikes • Series: Syria in Transition • Series: When Guardrails Erode • Viole...
+
+#15 [Fed On The Economy] 🏷️  technology (xai)
+   ID: e986d
+   Why Does AI Adoption Differ So Much across Countries?
+   https://www.stlouisfed.org/on-the-economy/2026/apr/why-does-ai-adoption-differ-so-much-countries
+   Published: 2026-04-14 16:30 UTC
+   Scores: 6.0/10 (raw: 6.0, final: -34.5)
+   U.S. firms have a higher share of workers using AI than European firms. This analysis finds management practices are a surprisingly powerful predictor...
+
+#16 [Geopolitical Futures] 🏷️  geo_major (xai)
+   ID: f240d
+   Daily Memo: Drone Attack in Russia, US-Brazil Talks
+   https://geopoliticalfutures.com/daily-memo-drone-attack-in-russia-us-brazil-talks/
+   Published: 2026-05-08 14:28 UTC
+   Scores: 8.0/10 (raw: 8.0, final: -36.0)
+   <p>Ukrainian attack. Several airports in southern Russia were forced to close on Friday after a Ukrainian drone hit the air traffic control center for...
+
+#17 [CEPR VoxEU] 🏷️  other (xai)
+   ID: 3b9da
+   How UK firms are responding to the war in Iran: Early evidence from the Decision Maker Panel
+   https://cepr.org/voxeu/columns/how-uk-firms-are-responding-war-iran-early-evidence-decision-maker-panel
+   Published: 2026-05-10 23:00 UTC
+   Scores: 7.5/10 (raw: 5.0, final: -64.5)
+   The conflict in the Middle East has pushed energy prices sharply higher, but the implications for UK inflation will depend on the scale and duration o...
+
+#18 [Treasury MSPD] 🏷️  fiscal (xai)
+   ID: 7f21a
+   Monthly Statement of the Public Debt, February 28, 2026
+   https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding
+   Published: 2026-03-05 20:00 UTC
+   Scores: 4.0/10 (raw: 4.0, final: -72.5)
+   February 28, 2026-TABLE I -- SUMMARY OF TREASURY SECURITIES OUTSTANDING...
+
+#19 [ZeroHedge] 🏷️  geo_other (xai)
+   ID: b20cc
+   Soaring Death Toll In Lebanon As Full-Fledged Israel, Hezbollah Fighting Returns
+   https://www.zerohedge.com/geopolitical/soaring-death-lebanon-toll-full-fledged-israel-hezbollah-fighting-returns
+   Published: 2026-05-10 15:40 UTC
+   Scores: 9.0/10 (raw: 9.0, final: -76.5)
+   <span class="field field--name-title field--type-string field--label-hidden">Soaring Death Toll In Lebanon As Full-Fledged Israel, Hezbollah Fighting ...
+
+#20 [Geopolitical Futures] 🏷️  monetary (xai)
+   ID: 84cb4
+   What the UAE’s OPEC Exit Means for the Global Energy Market
+   https://geopoliticalfutures.com/what-the-uaes-opec-exit-means-for-the-global-energy-market/
+   Published: 2026-05-08 10:00 UTC
+   Scores: 9.0/10 (raw: 9.0, final: -90.0)
+   <p>The United Arab Emirates’ decision to leave OPEC, effective May 1, was not an isolated policy shift but the culmination of a deeper, decade-long st...
+
+
+💾 Results saved to curator_output.txt
+📁 Archive saved to curator_archive/curator_2026-05-11-0624.html
+🔖 Latest briefing: curator_latest.html
+📑 Index page updated: curator_index.html
+💾 Wrote 20 articles to curator_latest.json
+✅ Sent 10 articles to Telegram
+✅ Curator briefing generated and sent successfully at Mon May 11 06:24:10 CEST 2026
+✅ Briefing already ran today (2026-05-11) — skipping
+✅ Briefing already ran today (2026-05-11) — skipping
+✅ Briefing already ran today (2026-05-11) — skipping
+✅ Briefing already ran today (2026-05-11) — skipping
+✅ Briefing already ran today (2026-05-11) — skipping
+✅ Briefing already ran today (2026-05-11) — skipping
+✅ Briefing already ran today (2026-05-11) — skipping
+✅ Briefing already ran today (2026-05-11) — skipping
+⏭  Outside 6AM–6PM window (hour=18) — skipping
+⏭  Outside 6AM–6PM window (hour=22) — skipping
+⏭  Outside 6AM–6PM window (hour=23) — skipping
+⏭  Outside 6AM–6PM window (hour=00) — skipping
+⏭  Outside 6AM–6PM window (hour=01) — skipping
+⏭  Outside 6AM–6PM window (hour=02) — skipping
+⏭  Outside 6AM–6PM window (hour=03) — skipping
+⏭  Outside 6AM–6PM window (hour=04) — skipping
+🚀 Starting curator briefing at Tue May 12 06:28:42 CEST 2026...
+🔖 Pulling new X bookmarks...
+State: last_pull_at=2026-05-11T04:23:05, total_incremental_pulled=49
+Token expires in -79539s — refreshing...
+Refreshing access token...
+Tokens refreshed:
+  access_token:  M2lDczZfd0Rf... ✅
+  refresh_token: N2p0ZlhfVlNU... ✅
+  expires_in:    2h 0m
+Existing signals: 447 (dedup set: 447 tweet IDs)
+Pulling bookmarks for @robertvanstedum...
+
+  Page 1: 99 bookmarks (running total seen: 99)
+  + @MarioNawfal: 'From 1908-1940, Sears sold over 70,000 mail-order homes for around $93'
+  → tweet 2053181971644416080 predates last_pull_at (2026-05-11T04:23:05) — stopping pagination early
+
+[DONE] Tweets seen on API: 99
+[DONE] New signals added: 1
+  curator_signals.json: 447 → 448 signals
+  Enrichment breakdown:
+    fetched body text:  0
+    tweet fallback:     0
+    tweet-only (no URL): 1
+  x_pull_state.json updated: last_pull_at=2026-05-12T04:28:44, total=50
+
+Done.
+🚀 Production run  [r_b986ef4]
+
+🧠 Starting RSS curation (mode: xai)...
+
+📡 Fetching Geopolitical Futures...
+   ✅ 5 entries from Geopolitical Futures
+📡 Fetching ZeroHedge...
+   ✅ 25 entries from ZeroHedge
+📡 Fetching The Big Picture...
+   ✅ 10 entries from The Big Picture
+📡 Fetching Fed On The Economy...
+   ✅ 50 entries from Fed On The Economy
+📡 Fetching Treasury MSPD...
+   ✅ 50 entries from Treasury MSPD
+📡 Fetching Al Jazeera...
+   ✅ 25 entries from Al Jazeera
+📡 Fetching ProPublica...
+   ✅ 20 entries from ProPublica
+📡 Fetching Antiwar.com...
+   ✅ 10 entries from Antiwar.com
+📡 Fetching Investing.com...
+   ✅ 10 entries from Investing.com
+📡 Fetching The Duran...
+   ✅ 35 entries from The Duran
+📡 Fetching O Globo...
+   ✅ 0 entries from O Globo
+📡 Fetching Deutsche Welle...
+   ✅ 50 entries from Deutsche Welle
+📡 Fetching Spiegel International...
+   ✅ 20 entries from Spiegel International
+📡 Fetching FAZ...
+   ✅ 50 entries from FAZ
+📡 Fetching Die Welt...
+   ✅ 30 entries from Die Welt
+📡 Fetching War on the Rocks...
+   ✅ 50 entries from War on the Rocks
+📡 Fetching Foreign Affairs...
+   ✅ 20 entries from Foreign Affairs
+📡 Fetching arXiv q-fin...
+   ✅ 15 entries from arXiv q-fin
+📡 Fetching Just Security...
+   ✅ 10 entries from Just Security
+📡 Fetching CEPR VoxEU...
+   ✅ 50 entries from CEPR VoxEU
+
+📊 Total entries fetched: 535
+📎 X bookmarks merged: 378 articles (332 signals → 378 after dedup)
+
+🔍 Web search enrichment:
+  🌐 Web baseline: 3 candidates
+   Pool after web search: 916 candidates
+🚫 Source trust: dropped 10 entries (drop tier)
+📌 Loaded 1 active interests from interests/ directory
+   geo_major: 1 flagged articles (+10 total boost)
+🧠 User profile loaded (492 chars) — personalizing scores
+📡 Calling xAI grok-4-1-fast-reasoning to score 906 articles...
+   Input: 60831 tokens, Output: 4096 tokens
+   Cost: $0.3656
+⚖️  Source trust: applied multipliers to 221 entries
+
+🎲 Serendipity reserve: 4/20 articles (20%) from outside learned patterns
+   Selecting 4 serendipity articles from 890 remaining candidates...
+   ✅ Added 4 serendipity articles
+
+📊 Source distribution in top 20:
+   Foreign Affairs: 2 articles
+   Just Security: 1 articles
+   X/@JDVance: 1 articles
+   War on the Rocks: 1 articles
+   CEPR VoxEU: 1 articles
+   arXiv q-fin: 1 articles
+   Geopolitical Futures: 1 articles
+   ZeroHedge: 1 articles
+   Antiwar.com: 1 articles
+   Spiegel International: 1 articles
+   X/@SamaHoole: 1 articles
+   foreignaffairs.com: 1 articles
+   X/@KobeissiLetter: 1 articles
+   X/@zerohedge: 1 articles
+   FAZ: 1 articles
+   X/@HungaryBased: 1 articles
+   The Duran: 1 articles
+   X/@ihtesham2005: 1 articles
+   Treasury MSPD: 1 articles
+
+🏷️  Category distribution in top 20:
+   geo_major: 2 articles
+   foreign affairs: 2 articles
+   cepr.org: 2 articles
+   monetary: 2 articles
+   geo_other: 2 articles
+   technology: 2 articles
+   other: 2 articles
+   fiscal: 2 articles
+   war on the rocks: 1 articles
+   zerohedge.com: 1 articles
+   news.antiwar.com: 1 articles
+   commodity: 1 articles
+📝 Logging 20 articles to Signal Store...
+✅ Signal Store updated
+💾 History updated: 20 articles saved
+
+================================================================================
+TOP 20 CURATED ARTICLES (Category + Diversity Weighted)
+================================================================================
+
+#1 [Just Security] 🏷️  geo_major (xai)
+   ID: aad12
+   The International Compensation Mechanism for Ukraine: Update on the Convention Establishing an International Claims Commission and the Register of Damage for Ukraine
+   https://www.justsecurity.org/138292/international-compensation-mechanism-ukraine-update/?utm_source=rss&utm_medium=rss&utm_campaign=international-compensation-mechanism-ukraine-update
+   Published: 2026-05-08 12:45 UTC
+   Scores: 10.5/10 (raw: 7.0, final: 20.5)
+   <p>Together, they signal a shift from largely symbolic institution-building to a functional system capable of handling the full scope and scale of Ukr...
+
+#2 [X/@JDVance] 🏷️  geo_major (xai)
+   ID: 683b4
+   Twenty years ago we invaded Iraq. The war killed many innocent Iraqis and Americ
+   https://x.com/JDVance/status/1637602424377552899
+   Published: Unknown date
+   Scores: 9.0/10 (raw: 9.0, final: 14.5)
+   Twenty years ago we invaded Iraq. The war killed many innocent Iraqis and Americans. It destroyed the oldest Christian populations in the world. It co...
+
+#3 [War on the Rocks] 🏷️  war on the rocks (xai)
+   ID: 8d41d
+   Sensationalism Doesn’t Serve Society
+   https://warontherocks.com/sensationalism-doesnt-serve-society/
+   Published: 2026-05-11 17:35 UTC
+   Scores: 13.5/10 (raw: 9.0, final: 13.5)
+   <p>Welcome to&#160;The Ukraine Compass, a weekly digest of Ukrainian commentary and analysis from across the political spectrum only for&#160;War on t...
+
+#4 [Foreign Affairs] 🏷️  foreign affairs (xai)
+   ID: e3c48
+   The Stakes of Trump vs. Xi
+   https://www.foreignaffairs.com/united-states/stakes-trump-vs-xi-kurt-campbell
+   Published: 2026-05-11 04:00 UTC
+   Scores: 13.5/10 (raw: 9.0, final: 13.5)
+   How the summit could change the course of U.S.-China competition....
+
+#5 [CEPR VoxEU] 🏷️  cepr.org (xai)
+   ID: ddc2a
+   When the ruler is made of the thing it measures: Multi-model evidence on AI occupational exposure scores
+   https://cepr.org/voxeu/columns/when-ruler-made-thing-it-measures-multi-model-evidence-ai-occupational-exposure
+   Published: 2026-05-11 23:00 UTC
+   Scores: 12.0/10 (raw: 8.0, final: 12.0)
+   To estimate how AI is reshaping work, it is now standard to ask AI itself to score how exposed each occupation is. The instrument is thus an instance ...
+
+#6 [arXiv q-fin] 🏷️  monetary (xai)
+   ID: 378c6
+   The Phase Structure of Metallic Money: An MPTT Framework for the Spanish Price Revolution
+   https://arxiv.org/abs/2605.08788
+   Published: 2026-05-12 04:00 UTC
+   Scores: 10.5/10 (raw: 7.0, final: 10.5)
+   arXiv:2605.08788v1 Announce Type: new  Abstract: The Spanish Price Revolution is usually treated as a classic case in which American bullion inflows e...
+
+#7 [Geopolitical Futures] 🏷️  geo_other (xai)
+   ID: a5d98
+   Ship Traffic Around Southern Africa Resurges
+   https://geopoliticalfutures.com/ship-traffic-around-southern-africa-resurges/
+   Published: 2026-05-08 20:23 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 9.0)
+   <p>(click to enlarge) Tanker traffic around the Cape of Good Hope has surged to its highest levels since early 2025 as conflict in the Middle East dis...
+
+#8 [ZeroHedge] 🏷️  zerohedge.com (xai)
+   ID: 80e84
+   India Rejects Russian LNG Under Sanctions
+   https://www.zerohedge.com/markets/india-rejects-russian-lng-under-sanctions
+   Published: 2026-05-12 01:45 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 9.0)
+   <span class="field field--name-title field--type-string field--label-hidden">India Rejects Russian LNG Under Sanctions</span>              <div class=...
+
+#9 [Antiwar.com] 🏷️  news.antiwar.com (xai)
+   ID: 2cf28
+   Report: UAE Has Secretly Launched Attacks Against Iran
+   https://news.antiwar.com/2026/05/11/report-uae-has-secretly-launched-attacks-against-iran/?utm_source=rss&utm_medium=rss&utm_campaign=report-uae-has-secretly-launched-attacks-against-iran
+   Published: 2026-05-11 23:05 UTC
+   Scores: 8.0/10 (raw: 8.0, final: 8.0)
+   The Wall Street Journal reported on Monday that the United Arab Emirates has carried out military strikes against Iran, and its sources presented the ...
+
+#10 [Spiegel International] 🏷️  technology (xai)
+   ID: e4141
+   Defense in Orbit: Germany Goes Big in the Military Space Race
+   https://www.spiegel.de/international/germany/defense-in-orbit-germany-goes-big-in-the-military-space-race-a-0b1f15e2-740e-4c8b-b759-52d8a49fab31#ref=rss
+   Published: 2026-04-15 14:00 UTC
+   Scores: 8.0/10 (raw: 8.0, final: 8.0)
+   Berlin was long content to ignore space as a military frontier. But now, the Merz government is investing 35 billion euros in an array of new systems....
+
+#11 [X/@SamaHoole] 🏷️  commodity (xai)
+   ID: 3c890
+   California's Central Valley produces 80% of the world's almonds. Each almond req
+   https://x.com/SamaHoole/status/2015647929172680922
+   Published: Unknown date
+   Scores: 8.0/10 (raw: 8.0, final: 8.0)
+   California's Central Valley produces 80% of the world's almonds. Each almond requires 3.2 gallons of actual irrigation water to grow. Not rainfall. Ac...
+
+#12 [foreignaffairs.com] 🏷️  other (xai)
+   ID: e3058
+   Is America Losing the High Ground? | Foreign Affairs
+   https://www.foreignaffairs.com/podcasts/america-losing-high-ground
+   Published: Unknown date
+   Scores: 7.5/10 (raw: 5.0, final: 7.5)
+   As you reflect back over the last two and a half years or so since October 7, I’m curious what you make of U.S. policy over that period and what lesso...
+
+#13 [X/@KobeissiLetter] 🏷️  fiscal (xai)
+   ID: 9b75b
+   The US labor market needs far fewer jobs to prevent unemployment from rising:
+
+T
+   https://x.com/KobeissiLetter/status/2025329419041341629
+   Published: Unknown date
+   Scores: 7.0/10 (raw: 7.0, final: 7.0)
+   The US labor market needs far fewer jobs to prevent unemployment from rising:  The breakeven rate of household employment growth is down to just ~50,0...
+
+#14 [X/@zerohedge] 🏷️  monetary (xai)
+   ID: 6c579
+   Goldman's Gold Guru Sees "Significant Upside Risk" To $5400 Forecast<!-- --> | ZeroHedge
+   https://www.zerohedge.com/precious-metals/goldmans-gold-guru-sees-significant-upside-risk-5400-forecast
+   Published: Unknown date
+   Scores: 9.0/10 (raw: 9.0, final: 4.5)
+   Gold surged significantly in 2025 and into 2026, driven by competition for limited physical bullion between central banks (especially emerging markets...
+
+#15 [FAZ] 🏷️  geo_other (xai)
+   ID: 1acdd
+   Liveblog Irankrieg: Vereinigte Arabische Emirate haben laut Bericht im April Iran angegriffen
+   https://www.faz.net/aktuell/politik/ausland/liveblog-irankrieg-vereinigte-arabische-emirate-haben-laut-bericht-im-april-iran-angegriffen-faz-200583539.html
+   Published: 2026-05-12 03:20 UTC
+   Scores: 8.0/10 (raw: 8.0, final: 3.5)
+   Trump: Waffenruhe mit Iran so schwach wie noch nie +++ USA verhängen weitere Sanktionen gegen Iran +++ Tanker passieren Straße von Hormus mit abgescha...
+
+#16 [X/@HungaryBased] 🏷️  cepr.org (xai)
+   ID: ebeff
+   🚨BREAKING:  
+
+🇮🇹 Giorgia Meloni REVEALS that Japan will now be a Special Strateg
+   https://x.com/HungaryBased/status/2028885617229132276
+   Published: Unknown date
+   Scores: 8.0/10 (raw: 8.0, final: 3.5)
+   🚨BREAKING:    🇮🇹 Giorgia Meloni REVEALS that Japan will now be a Special Strategic Partner.    "I am committed to strengthening relations with Sanae T...
+
+#17 [The Duran] 🏷️  other (xai)
+   ID: e93ab
+   Putin Says Europe Aims Dismantle Russia All Ukraine Talks Have Ended; Iran Says Targets US Warships
+   https://theduran.com/putin-says-europe-aims-dismantle-russia-all-ukraine-talks-have-ended-iran-says-targets-us-warships/
+   Published: 2026-05-10 17:15 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 2.5)
+   <img alt="" class="webfeedsFeaturedVisual wp-post-image" height="372" src="https://i0.wp.com/theduran.com/wp-content/uploads/2026/05/maxresdefault-39....
+
+#18 [X/@ihtesham2005] 🏷️  technology (xai)
+   ID: aedd8
+   🚨 Anthropic just open-sourced the exact Skills library their own engineers use i
+   https://x.com/ihtesham2005/status/2026752089473314975
+   Published: Unknown date
+   Scores: 7.0/10 (raw: 7.0, final: 2.5)
+   🚨 Anthropic just open-sourced the exact Skills library their own engineers use internally.  Stop building Claude workflows from scratch.  These are pl...
+
+#19 [Treasury MSPD] 🏷️  fiscal (xai)
+   ID: 7f21a
+   Monthly Statement of the Public Debt, April 30, 2026
+   https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding
+   Published: 2026-05-06 20:00 UTC
+   Scores: 6.0/10 (raw: 6.0, final: 1.5)
+   April 30, 2026-TABLE I -- SUMMARY OF TREASURY SECURITIES OUTSTANDING...
+
+#20 [Foreign Affairs] 🏷️  foreign affairs (xai)
+   ID: 7c4b9
+   The Winners and Losers of the Iran Energy Shock
+   https://www.foreignaffairs.com/iran/winners-and-losers-iran-energy-shock
+   Published: 2026-05-11 04:00 UTC
+   Scores: 13.5/10 (raw: 9.0, final: 0.0)
+   How the war created a new geopolitical divide....
+
+
+💾 Results saved to curator_output.txt
+📁 Archive saved to curator_archive/curator_2026-05-12-0630.html
+🔖 Latest briefing: curator_latest.html
+📑 Index page updated: curator_index.html
+💾 Wrote 20 articles to curator_latest.json
+✅ Sent 10 articles to Telegram
+✅ Curator briefing generated and sent successfully at Tue May 12 06:30:17 CEST 2026
+✅ Briefing already ran today (2026-05-12) — skipping
+✅ Briefing already ran today (2026-05-12) — skipping
+⏭  Outside 6AM–6PM window (hour=20) — skipping
+⏭  Outside 6AM–6PM window (hour=21) — skipping
+⏭  Outside 6AM–6PM window (hour=22) — skipping
+⏭  Outside 6AM–6PM window (hour=23) — skipping
+⏭  Outside 6AM–6PM window (hour=01) — skipping
+⏭  Outside 6AM–6PM window (hour=02) — skipping
+⏭  Outside 6AM–6PM window (hour=03) — skipping
+⏭  Outside 6AM–6PM window (hour=04) — skipping
+⏭  Outside 6AM–6PM window (hour=05) — skipping
+🚀 Starting curator briefing at Wed May 13 06:47:07 CEST 2026...
+🔖 Pulling new X bookmarks...
+State: last_pull_at=2026-05-12T04:28:44, total_incremental_pulled=50
+Token expires in -80304s — refreshing...
+Refreshing access token...
+Tokens refreshed:
+  access_token:  M1NQN1d6Qzdt... ✅
+  refresh_token: TG5TTHZfbkNG... ✅
+  expires_in:    2h 0m
+Existing signals: 448 (dedup set: 448 tweet IDs)
+Pulling bookmarks for @robertvanstedum...
+
+  Page 1: 99 bookmarks (running total seen: 99)
+  → tweet 2053744919508881686 predates last_pull_at (2026-05-12T04:28:44) — stopping pagination early
+
+[DONE] Tweets seen on API: 99
+[DONE] New signals added: 0
+No new signals. Updating state timestamp.
+🚀 Production run  [r_e8e10dc]
+
+🧠 Starting RSS curation (mode: xai)...
+
+📡 Fetching Geopolitical Futures...
+   ✅ 5 entries from Geopolitical Futures
+📡 Fetching ZeroHedge...
+   ✅ 25 entries from ZeroHedge
+📡 Fetching The Big Picture...
+   ✅ 10 entries from The Big Picture
+📡 Fetching Fed On The Economy...
+   ✅ 50 entries from Fed On The Economy
+📡 Fetching Treasury MSPD...
+   ✅ 50 entries from Treasury MSPD
+📡 Fetching Al Jazeera...
+   ✅ 25 entries from Al Jazeera
+📡 Fetching ProPublica...
+   ✅ 20 entries from ProPublica
+📡 Fetching Antiwar.com...
+   ✅ 10 entries from Antiwar.com
+📡 Fetching Investing.com...
+   ✅ 10 entries from Investing.com
+📡 Fetching The Duran...
+   ✅ 35 entries from The Duran
+📡 Fetching O Globo...
+   ✅ 0 entries from O Globo
+📡 Fetching Deutsche Welle...
+   ✅ 50 entries from Deutsche Welle
+📡 Fetching Spiegel International...
+   ✅ 20 entries from Spiegel International
+📡 Fetching FAZ...
+   ✅ 50 entries from FAZ
+📡 Fetching Die Welt...
+   ✅ 30 entries from Die Welt
+📡 Fetching War on the Rocks...
+   ✅ 50 entries from War on the Rocks
+📡 Fetching Foreign Affairs...
+   ✅ 20 entries from Foreign Affairs
+📡 Fetching arXiv q-fin...
+   ✅ 15 entries from arXiv q-fin
+📡 Fetching Just Security...
+   ✅ 10 entries from Just Security
+📡 Fetching CEPR VoxEU...
+   ✅ 50 entries from CEPR VoxEU
+
+📊 Total entries fetched: 535
+📎 X bookmarks merged: 378 articles (332 signals → 378 after dedup)
+
+🔍 Web search enrichment:
+  🌐 Web baseline: 3 candidates
+   Pool after web search: 916 candidates
+🚫 Source trust: dropped 10 entries (drop tier)
+📌 Loaded 1 active interests from interests/ directory
+   geo_major: 1 flagged articles (+10 total boost)
+🧠 User profile loaded (492 chars) — personalizing scores
+📡 Calling xAI grok-4-1-fast-reasoning to score 906 articles...
+   Input: 60745 tokens, Output: 4096 tokens
+   Cost: $0.3652
+⚠️  Skipping malformed line: 634|technology|
+⚖️  Source trust: applied multipliers to 221 entries
+
+🎲 Serendipity reserve: 4/20 articles (20%) from outside learned patterns
+   Selecting 4 serendipity articles from 890 remaining candidates...
+   ✅ Added 4 serendipity articles
+
+📊 Source distribution in top 20:
+   Foreign Affairs: 1 articles
+   War on the Rocks: 1 articles
+   CEPR VoxEU: 1 articles
+   Just Security: 1 articles
+   Spiegel International: 1 articles
+   foreignaffairs.com: 1 articles
+   ZeroHedge: 1 articles
+   arXiv q-fin: 1 articles
+   FAZ: 1 articles
+   Fed On The Economy: 1 articles
+   X/@Citrini7: 1 articles
+   Geopolitical Futures: 1 articles
+   The Duran: 1 articles
+   X/@zerohedge: 1 articles
+   Antiwar.com: 1 articles
+   X/@r0ck3t23: 1 articles
+   X/@KobeissiLetter: 1 articles
+   X/@Peter_Turchin: 1 articles
+   X/@HungaryBased: 1 articles
+   X/@Myrmikan: 1 articles
+
+🏷️  Category distribution in top 20:
+   geo_major: 4 articles
+   monetary: 4 articles
+   geo_other: 3 articles
+   technology: 3 articles
+   other: 3 articles
+   fiscal: 3 articles
+📝 Logging 20 articles to Signal Store...
+✅ Signal Store updated
+💾 History updated: 20 articles saved
+
+================================================================================
+TOP 20 CURATED ARTICLES (Category + Diversity Weighted)
+================================================================================
+
+#1 [Foreign Affairs] 🏷️  geo_major (xai)
+   ID: dc316
+   The Promise and Peril of U.S.-China Summitry
+   https://www.foreignaffairs.com/united-states/promise-and-peril-us-china-summitry
+   Published: 2026-05-13 04:00 UTC
+   Scores: 15.0/10 (raw: 10.0, final: 25.0)
+   What Xi wants from Trump—and Trump might get from Xi....
+
+#2 [War on the Rocks] 🏷️  geo_major (xai)
+   ID: dbe75
+   What Does SOUTHCOM’s New Autonomous Warfare Command Herald?
+   https://warontherocks.com/what-does-southcoms-new-autonomous-warfare-command-herald/
+   Published: 2026-05-12 17:40 UTC
+   Scores: 13.5/10 (raw: 9.0, final: 19.0)
+   <p>Gen. Frank Donovan, commander of U.S. Southern Command, sat down with Ryan to discuss the vision behind the command&#8217;s new Autonomous Warfare ...
+
+#3 [CEPR VoxEU] 🏷️  monetary (xai)
+   ID: daadd
+   The different effects of oil and gas supply shocks on euro area inflation
+   https://cepr.org/voxeu/columns/different-effects-oil-and-gas-supply-shocks-euro-area-inflation
+   Published: 2026-05-12 23:00 UTC
+   Scores: 13.5/10 (raw: 9.0, final: 13.5)
+   The surge in energy prices since March 2026 has revived questions about the pass-through to consumer prices. This column argues that oil supply shocks...
+
+#4 [Just Security] 🏷️  geo_other (xai)
+   ID: 92d3e
+   Early Edition: May 12, 2026
+   https://www.justsecurity.org/138749/early-edition-may-12-2026/?utm_source=rss&utm_medium=rss&utm_campaign=early-edition-may-12-2026
+   Published: 2026-05-12 11:52 UTC
+   Scores: 12.0/10 (raw: 8.0, final: 12.0)
+   <p>Signup to receive the Early Edition in your inbox here. A curated weekday guide to major news and developments over the last 24 hours. Here’s today...
+
+#5 [Spiegel International] 🏷️  technology (xai)
+   ID: e4141
+   Defense in Orbit: Germany Goes Big in the Military Space Race
+   https://www.spiegel.de/international/germany/defense-in-orbit-germany-goes-big-in-the-military-space-race-a-0b1f15e2-740e-4c8b-b759-52d8a49fab31#ref=rss
+   Published: 2026-04-15 14:00 UTC
+   Scores: 8.0/10 (raw: 8.0, final: 8.0)
+   Berlin was long content to ignore space as a military frontier. But now, the Merz government is investing 35 billion euros in an array of new systems....
+
+#6 [foreignaffairs.com] 🏷️  other (xai)
+   ID: e3058
+   Is America Losing the High Ground? | Foreign Affairs
+   https://www.foreignaffairs.com/podcasts/america-losing-high-ground
+   Published: Unknown date
+   Scores: 7.5/10 (raw: 5.0, final: 7.5)
+   As you reflect back over the last two and a half years or so since October 7, I’m curious what you make of U.S. policy over that period and what lesso...
+
+#7 [ZeroHedge] 🏷️  fiscal (xai)
+   ID: abf50
+   Kevin Warsh Cleared By Senate For 14‑Year Fed Board Seat
+   https://www.zerohedge.com/political/kevin-warsh-cleared-senate-14-year-fed-board-seat
+   Published: 2026-05-12 20:20 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 7.0)
+   <span class="field field--name-title field--type-string field--label-hidden">Kevin Warsh Cleared By Senate For 14‑Year Fed Board Seat</span>          ...
+
+#8 [arXiv q-fin] 🏷️  monetary (xai)
+   ID: ea196
+   The Value of Information: A Puzzle
+   https://arxiv.org/abs/2605.11180
+   Published: 2026-05-13 04:00 UTC
+   Scores: 10.5/10 (raw: 7.0, final: 6.0)
+   arXiv:2605.11180v1 Announce Type: new  Abstract: We show that under mild assumptions, the total value of information to informed traders in the market...
+
+#9 [FAZ] 🏷️  geo_other (xai)
+   ID: 5242f
+   Liveblog Irankrieg: Irans Raketenarsenal soll weitgehend intakt sein
+   https://www.faz.net/aktuell/politik/ausland/liveblog-irankrieg-irans-raketenarsenal-soll-weitgehend-intakt-sein-faz-200583539.html
+   Published: 2026-05-13 02:00 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 4.5)
+   US-Medienberichten zufolge verfügt Teheran immer noch über den Großteil seiner Raketen +++ Pentagon: Irankrieg kostete bislang 29 Milliarden Dollar ++...
+
+#10 [Fed On The Economy] 🏷️  fiscal (xai)
+   ID: 95c35
+   Inflation and the Accuracy of Public Debt Forecasts
+   https://www.stlouisfed.org/on-the-economy/2026/feb/inflation-accuracy-public-debt-forecasts
+   Published: 2026-02-17 14:15 UTC
+   Scores: 7.0/10 (raw: 7.0, final: 2.5)
+   An analysis of public debt projections by the CBO examines how forecasting divergences can differ in a high-inflation versus a low-inflation environme...
+
+#11 [X/@Citrini7] 🏷️  technology (xai)
+   ID: a0081
+   THE 2028 GLOBAL INTELLIGENCE CRISIS
+   https://www.citriniresearch.com/p/2028gic
+   Published: Unknown date
+   Scores: 7.0/10 (raw: 7.0, final: 2.5)
+   What if our AI bullishness continues to be right...and what if that’s actually bearish? What follows is a scenario, not a prediction. This isn’t bear ...
+
+#12 [Geopolitical Futures] 🏷️  geo_major (xai)
+   ID: 242c5
+   The Week the New Global Reality Showed Itself
+   https://geopoliticalfutures.com/the-week-the-new-global-reality-showed-itself-podcast/
+   Published: 2026-05-12 22:06 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 1.0)
+   <p>With the US, Russia, China, and Europe all at strategic crossroads, the new global geopolitical order is starting to show itself.</p> <p>On this ep...
+
+#13 [The Duran] 🏷️  other (xai)
+   ID: 82b71
+   From Nero to Napoleon to Trump: Three Arches of Triumph… but who is triumphant?
+   https://theduran.com/from-nero-to-napoleon-to-trump-three-arches-of-triumph-but-who-is-triumphant/
+   Published: 2026-05-12 14:09 UTC
+   Scores: 5.0/10 (raw: 5.0, final: 0.5)
+   <img alt="" class="webfeedsFeaturedVisual wp-post-image" height="373" src="https://i0.wp.com/theduran.com/wp-content/uploads/2026/05/trump-triomf.jpg?...
+
+#14 [X/@zerohedge] 🏷️  monetary (xai)
+   ID: 6c579
+   Goldman's Gold Guru Sees "Significant Upside Risk" To $5400 Forecast<!-- --> | ZeroHedge
+   https://www.zerohedge.com/precious-metals/goldmans-gold-guru-sees-significant-upside-risk-5400-forecast
+   Published: Unknown date
+   Scores: 9.0/10 (raw: 9.0, final: -9.0)
+   Gold surged significantly in 2025 and into 2026, driven by competition for limited physical bullion between central banks (especially emerging markets...
+
+#15 [Antiwar.com] 🏷️  geo_other (xai)
+   ID: 57e0c
+   Report: Saudi Arabia Launched Attacks Against Iran During US-Israeli Bombing Campaign
+   https://news.antiwar.com/2026/05/12/report-saudi-arabia-launched-attacks-against-iran-during-us-israeli-bombing-campaign/?utm_source=rss&utm_medium=rss&utm_campaign=report-saudi-arabia-launched-attacks-against-iran-during-us-israeli-bombing-campaign
+   Published: 2026-05-12 23:06 UTC
+   Scores: 8.0/10 (raw: 8.0, final: -10.0)
+   Reuters reported on Tuesday that Saudi Arabia launched numerous, unpublicized strikes against Iran during the US-Israeli bombing campaign, dubbed &#82...
+
+#16 [X/@r0ck3t23] 🏷️  technology (xai)
+   ID: ff487
+   Alex Karp just said what every other tech CEO is terrified to admit: the world d
+   https://x.com/r0ck3t23/status/2021835344044343421
+   Published: Unknown date
+   Scores: 7.0/10 (raw: 7.0, final: -11.0)
+   Alex Karp just said what every other tech CEO is terrified to admit: the world doesn’t split three ways. It splits two. And second place is extinction...
+
+#17 [X/@KobeissiLetter] 🏷️  fiscal (xai)
+   ID: 9b75b
+   The US labor market needs far fewer jobs to prevent unemployment from rising:
+
+T
+   https://x.com/KobeissiLetter/status/2025329419041341629
+   Published: Unknown date
+   Scores: 7.0/10 (raw: 7.0, final: -11.0)
+   The US labor market needs far fewer jobs to prevent unemployment from rising:  The breakeven rate of household employment growth is down to just ~50,0...
+
+#18 [X/@Peter_Turchin] 🏷️  other (xai)
+   ID: 0fe10
+   Democracy’s Edge: Elite Overproduction
+   https://substack.com/home/post/p-184509827
+   Published: Unknown date
+   Scores: 5.0/10 (raw: 5.0, final: -13.0)
+   This essay is part of an ongoing series examining the structural failure modes outlined in Democracy’s Edge . Each installment is designed to stand on...
+
+#19 [X/@HungaryBased] 🏷️  geo_major (xai)
+   ID: ebeff
+   🚨BREAKING:  
+
+🇮🇹 Giorgia Meloni REVEALS that Japan will now be a Special Strateg
+   https://x.com/HungaryBased/status/2028885617229132276
+   Published: Unknown date
+   Scores: 9.0/10 (raw: 9.0, final: -31.5)
+   🚨BREAKING:    🇮🇹 Giorgia Meloni REVEALS that Japan will now be a Special Strategic Partner.    "I am committed to strengthening relations with Sanae T...
+
+#20 [X/@Myrmikan] 🏷️  monetary (xai)
+   ID: be1da
+   Trump's Federal Reserve chairman-designate will not be able to stop the bull mar
+   https://x.com/Myrmikan/status/2020850168233705538
+   Published: Unknown date
+   Scores: 9.0/10 (raw: 9.0, final: -31.5)
+   Trump's Federal Reserve chairman-designate will not be able to stop the bull market in gold: https://t.co/9VQlbiYQUj...
+
+
+💾 Results saved to curator_output.txt
+📁 Archive saved to curator_archive/curator_2026-05-13-0648.html
+🔖 Latest briefing: curator_latest.html
+📑 Index page updated: curator_index.html
+💾 Wrote 20 articles to curator_latest.json
+✅ Sent 10 articles to Telegram
+✅ Curator briefing generated and sent successfully at Wed May 13 06:48:45 CEST 2026
+✅ Briefing already ran today (2026-05-13) — skipping
+✅ Briefing already ran today (2026-05-13) — skipping
+✅ Briefing already ran today (2026-05-13) — skipping
+✅ Briefing already ran today (2026-05-13) — skipping
+✅ Briefing already ran today (2026-05-13) — skipping
+✅ Briefing already ran today (2026-05-13) — skipping
+✅ Briefing already ran today (2026-05-13) — skipping
+✅ Briefing already ran today (2026-05-13) — skipping
+✅ Briefing already ran today (2026-05-13) — skipping
+✅ Briefing already ran today (2026-05-13) — skipping
+⏭  Outside 6AM–6PM window (hour=18) — skipping
+⏭  Outside 6AM–6PM window (hour=19) — skipping
+⏭  Outside 6AM–6PM window (hour=20) — skipping
+⏭  Outside 6AM–6PM window (hour=21) — skipping
+⏭  Outside 6AM–6PM window (hour=22) — skipping
+🚀 Starting curator briefing at Thu May 14 08:05:54 CEST 2026...
+🔖 Pulling new X bookmarks...
+State: last_pull_at=2026-05-13T04:47:09, total_incremental_pulled=50
+Token expires in -83926s — refreshing...
+Refreshing access token...
+Tokens refreshed:
+  access_token:  QXhwZnZpU3p2... ✅
+  refresh_token: MTdwZ2pxT1do... ✅
+  expires_in:    2h 0m
+Existing signals: 448 (dedup set: 448 tweet IDs)
+Pulling bookmarks for @robertvanstedum...
+
+  Page 1: 99 bookmarks (running total seen: 99)
+  → tweet 2053744919508881686 predates last_pull_at (2026-05-13T04:47:09) — stopping pagination early
+
+[DONE] Tweets seen on API: 99
+[DONE] New signals added: 0
+No new signals. Updating state timestamp.
+🚀 Production run  [r_31897f3]
+
+🧠 Starting RSS curation (mode: xai)...
+
+📡 Fetching Geopolitical Futures...
+   ✅ 5 entries from Geopolitical Futures
+📡 Fetching ZeroHedge...
+   ✅ 25 entries from ZeroHedge
+📡 Fetching The Big Picture...
+   ✅ 10 entries from The Big Picture
+📡 Fetching Fed On The Economy...
+   ✅ 50 entries from Fed On The Economy
+📡 Fetching Treasury MSPD...
+   ✅ 50 entries from Treasury MSPD
+📡 Fetching Al Jazeera...
+   ✅ 25 entries from Al Jazeera
+📡 Fetching ProPublica...
+   ✅ 20 entries from ProPublica
+📡 Fetching Antiwar.com...
+   ✅ 10 entries from Antiwar.com
+📡 Fetching Investing.com...
+   ✅ 10 entries from Investing.com
+📡 Fetching The Duran...
+   ✅ 35 entries from The Duran
+📡 Fetching O Globo...
+   ✅ 0 entries from O Globo
+📡 Fetching Deutsche Welle...
+   ✅ 50 entries from Deutsche Welle
+📡 Fetching Spiegel International...
+   ✅ 20 entries from Spiegel International
+📡 Fetching FAZ...
+   ✅ 50 entries from FAZ
+📡 Fetching Die Welt...
+   ✅ 30 entries from Die Welt
+📡 Fetching War on the Rocks...
+   ✅ 50 entries from War on the Rocks
+📡 Fetching Foreign Affairs...
+   ✅ 20 entries from Foreign Affairs
+📡 Fetching arXiv q-fin...
+   ✅ 15 entries from arXiv q-fin
+📡 Fetching Just Security...
+   ✅ 10 entries from Just Security
+📡 Fetching CEPR VoxEU...
+   ✅ 50 entries from CEPR VoxEU
+
+📊 Total entries fetched: 535
+📎 X bookmarks merged: 378 articles (332 signals → 378 after dedup)
+
+🔍 Web search enrichment:
+  🌐 Web baseline: 3 candidates
+   Pool after web search: 916 candidates
+🚫 Source trust: dropped 10 entries (drop tier)
+📌 Loaded 1 active interests from interests/ directory
+   geo_major: 1 flagged articles (+10 total boost)
+🧠 User profile loaded (492 chars) — personalizing scores
+📡 Calling xAI grok-4-1-fast-reasoning to score 906 articles...
+   Input: 60921 tokens, Output: 805 tokens
+   Cost: $0.3167
+⚠️  Skipping malformed line: 129|fiscal|
+⚖️  Source trust: applied multipliers to 221 entries
+
+🎲 Serendipity reserve: 4/20 articles (20%) from outside learned patterns
+   Selecting 4 serendipity articles from 890 remaining candidates...
+   ✅ Added 4 serendipity articles
+
+📊 Source distribution in top 20:
+   Fed On The Economy: 4 articles
+   ZeroHedge: 3 articles
+   Geopolitical Futures: 3 articles
+   Treasury MSPD: 3 articles
+   The Big Picture: 2 articles
+   War on the Rocks: 1 articles
+   Foreign Affairs: 1 articles
+   arXiv q-fin: 1 articles
+   Just Security: 1 articles
+   CEPR VoxEU: 1 articles
+
+🏷️  Category distribution in top 20:
+   other: 5 articles
+   geo_major: 3 articles
+   monetary: 3 articles
+   fiscal: 3 articles
+   technology: 3 articles
+   geo_other: 3 articles
+📝 Logging 20 articles to Signal Store...
+✅ Signal Store updated
+💾 History updated: 20 articles saved
+
+================================================================================
+TOP 20 CURATED ARTICLES (Category + Diversity Weighted)
+================================================================================
+
+#1 [ZeroHedge] 🏷️  geo_major (xai)
+   ID: 25b7e
+   The UK's New Multinational Naval Initiative Aims To Contain Russia In The Arctic & Baltic
+   https://www.zerohedge.com/geopolitical/uks-new-multinational-naval-initiative-aims-contain-russia-arctic-baltic
+   Published: 2026-05-14 06:00 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 19.0)
+   <span class="field field--name-title field--type-string field--label-hidden">The UK's New Multinational Naval Initiative Aims To Contain Russia In The...
+
+#2 [Geopolitical Futures] 🏷️  geo_major (xai)
+   ID: cc448
+   Daily Memo: Bessent in East Asia, Iran’s Recovery
+   https://geopoliticalfutures.com/daily-memo-bessent-in-east-asia-irans-recovery/
+   Published: 2026-05-13 14:35 UTC
+   Scores: 8.0/10 (raw: 8.0, final: 13.5)
+   <p>Asia visit. U.S. Treasury Secretary Scott Bessent met with Chinese Vice Premier He Lifeng in Seoul on Wednesday. Ahead of President Donald Trump’s ...
+
+#3 [War on the Rocks] 🏷️  other (xai)
+   ID: 98763
+   Analyzing Trump’s Foreign Policy and Its International Implications
+   https://warontherocks.com/analyzing-trumps-foreign-policy-and-its-international-implications/
+   Published: 2026-05-13 17:30 UTC
+   Scores: 7.5/10 (raw: 5.0, final: 7.5)
+   <p>In 2016, Ben Friedman wrote, &#8220;The Trump Administration Will be Hawkish,&#8221; where he argued that despite Trump&#8217;s non-interventionist...
+
+#4 [Fed On The Economy] 🏷️  monetary (xai)
+   ID: 26fa9
+   U.S. Import Price Dynamics Following the 2025 Tariffs
+   https://www.stlouisfed.org/on-the-economy/2026/feb/us-import-price-dynamics-2025-tariffs
+   Published: 2026-02-26 20:00 UTC
+   Scores: 6.0/10 (raw: 6.0, final: 6.0)
+   This analysis examines how 2025 tariffs affected U.S. import prices because of price changes by existing foreign suppliers and the shift to alternativ...
+
+#5 [Treasury MSPD] 🏷️  fiscal (xai)
+   ID: 7f21a
+   Monthly Statement of the Public Debt, April 30, 2026
+   https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding
+   Published: 2026-05-06 20:00 UTC
+   Scores: 6.0/10 (raw: 6.0, final: 6.0)
+   April 30, 2026-TABLE I -- SUMMARY OF TREASURY SECURITIES OUTSTANDING...
+
+#6 [The Big Picture] 🏷️  technology (xai)
+   ID: 9aab8
+   Artificial Intelligence and Quarterly Earnings Reports
+   https://ritholtz.com/2026/05/ai-q-earnings/
+   Published: 2026-05-11 19:00 UTC
+   Scores: 4.0/10 (raw: 4.0, final: 4.0)
+   <p>&#160; &#160; A proposal from the current administration is working its way through the U.S. Securities and Exchange Commission to end quarterly co...
+
+#7 [Foreign Affairs] 🏷️  other (xai)
+   ID: 15ba2
+   The Illusion of Reciprocity
+   https://www.foreignaffairs.com/united-states/illusion-reciprocity
+   Published: 2026-05-14 04:00 UTC
+   Scores: 7.5/10 (raw: 5.0, final: 3.0)
+   Trump’s self-defeating trade policy....
+
+#8 [Geopolitical Futures] 🏷️  geo_other (xai)
+   ID: 325d9
+   Denial Vs. Control in the Strait of Hormuz
+   https://geopoliticalfutures.com/denial-vs-control-in-the-strait-of-hormuz/
+   Published: 2026-05-13 10:09 UTC
+   Scores: 9.0/10 (raw: 9.0, final: 0.0)
+   <p>The debate surrounding the Strait of Hormuz tends to overlook a fairly obvious fact. Recent attacks and continued vessel movement through the strai...
+
+#9 [ZeroHedge] 🏷️  monetary (xai)
+   ID: c626a
+   Japan's Refinery Utilization Hits 73% As Strategic Oil Stocks Flow In
+   https://www.zerohedge.com/energy/japans-refinery-utilization-hits-73-strategic-oil-stocks-flow
+   Published: 2026-05-13 21:20 UTC
+   Scores: 8.0/10 (raw: 8.0, final: -5.5)
+   <span class="field field--name-title field--type-string field--label-hidden">Japan's Refinery Utilization Hits 73% As Strategic Oil Stocks Flow In</sp...
+
+#10 [Fed On The Economy] 🏷️  technology (xai)
+   ID: 9acf8
+   Tracking AI’s Contribution to GDP Growth
+   https://www.stlouisfed.org/on-the-economy/2026/jan/tracking-ai-contribution-gdp-growth
+   Published: 2026-01-12 10:30 UTC
+   Scores: 6.0/10 (raw: 6.0, final: -7.5)
+   This analysis suggests recent investments in AI-related categories have contributed significantly to the real U.S. economic growth in the first nine m...
+
+#11 [Treasury MSPD] 🏷️  fiscal (xai)
+   ID: 7f21a
+   Monthly Statement of the Public Debt, March 31, 2026
+   https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding
+   Published: 2026-04-06 20:00 UTC
+   Scores: 6.0/10 (raw: 6.0, final: -7.5)
+   March 31, 2026-TABLE I -- SUMMARY OF TREASURY SECURITIES OUTSTANDING...
+
+#12 [arXiv q-fin] 🏷️  other (xai)
+   ID: b682b
+   AgenticAITA: A Proof-Of-Concept About Deliberative Multi-Agent Reasoning for Autonomous Trading Systems
+   https://arxiv.org/abs/2605.12532
+   Published: 2026-05-14 04:00 UTC
+   Scores: 7.5/10 (raw: 5.0, final: -10.5)
+   arXiv:2605.12532v1 Announce Type: new  Abstract: Conventional algorithmic trading systems are grounded in deterministic heuristics or offline-trained ...
+
+#13 [The Big Picture] 🏷️  monetary (xai)
+   ID: 33600
+   10 Monday AM Reads
+   https://ritholtz.com/2026/05/10-monday-am-reads-474/
+   Published: 2026-05-11 10:30 UTC
+   Scores: 5.0/10 (raw: 5.0, final: -22.0)
+   <p>My back-to-work morning train WFH reads: • Trade court rules Trump’s replacement tariffs illegal: A divided three-judge panel on the U.S. Court of ...
+
+#14 [Just Security] 🏷️  other (xai)
+   ID: 460e8
+   Submission to the U.N. Committee on Economic, Social and Cultural Rights: Application of the ICESCR in Situations of Armed Conflict
+   https://www.justsecurity.org/138094/submission-un-committee-economic-social-cultural-rights/?utm_source=rss&utm_medium=rss&utm_campaign=submission-un-committee-economic-social-cultural-rights
+   Published: 2026-05-13 13:17 UTC
+   Scores: 7.5/10 (raw: 5.0, final: -33.0)
+   <p>Outgoing UN Special Rapporteur finds that the destruction of housing in armed conflict is a "central and systemic" violation of international law.<...
+
+#15 [ZeroHedge] 🏷️  geo_other (xai)
+   ID: 34c5c
+   Neocon Grandee Robert Kagan Issues Surprise Scathing Critique Of Iran War
+   https://www.zerohedge.com/geopolitical/neocon-grandee-robert-kagan-issues-surprise-scathing-critique-iran-war
+   Published: 2026-05-14 03:25 UTC
+   Scores: 7.0/10 (raw: 7.0, final: -33.5)
+   <span class="field field--name-title field--type-string field--label-hidden">Neocon Grandee Robert Kagan Issues Surprise Scathing Critique Of Iran War...
+
+#16 [Geopolitical Futures] 🏷️  geo_major (xai)
+   ID: 242c5
+   The Week the New Global Reality Showed Itself
+   https://geopoliticalfutures.com/the-week-the-new-global-reality-showed-itself-podcast/
+   Published: 2026-05-12 22:06 UTC
+   Scores: 8.0/10 (raw: 8.0, final: -36.0)
+   <p>With the US, Russia, China, and Europe all at strategic crossroads, the new global geopolitical order is starting to show itself.</p> <p>On this ep...
+
+#17 [Treasury MSPD] 🏷️  fiscal (xai)
+   ID: 7f21a
+   Monthly Statement of the Public Debt, February 28, 2026
+   https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding
+   Published: 2026-03-05 20:00 UTC
+   Scores: 6.0/10 (raw: 6.0, final: -48.0)
+   February 28, 2026-TABLE I -- SUMMARY OF TREASURY SECURITIES OUTSTANDING...
+
+#18 [Fed On The Economy] 🏷️  geo_other (xai)
+   ID: d12dd
+   Determinants of Foreign Aid to Ukraine
+   https://www.stlouisfed.org/on-the-economy/2026/may/determinants-foreign-aid-ukraine
+   Published: 2026-05-01 09:30 UTC
+   Scores: 5.0/10 (raw: 5.0, final: -49.0)
+   This analysis examines a country’s foreign aid to Ukraine relative to the size of its economy for 41 nations, ranging from Iceland to China. Which cou...
+
+#19 [CEPR VoxEU] 🏷️  other (xai)
+   ID: 9f04f
+   Some chickens are coming home to roost: EU fiscal policies in 2025
+   https://cepr.org/voxeu/columns/some-chickens-are-coming-home-roost-eu-fiscal-policies-2025
+   Published: 2026-05-13 23:00 UTC
+   Scores: 7.5/10 (raw: 5.0, final: -64.5)
+   For years, the European fiscal landscape was characterised by a reliable, if tense, dichotomy: a frugal core led by Germany providing the ‘fiscal spac...
+
+#20 [Fed On The Economy] 🏷️  technology (xai)
+   ID: e986d
+   Why Does AI Adoption Differ So Much across Countries?
+   https://www.stlouisfed.org/on-the-economy/2026/apr/why-does-ai-adoption-differ-so-much-countries
+   Published: 2026-04-14 16:30 UTC
+   Scores: 5.0/10 (raw: 5.0, final: -94.0)
+   U.S. firms have a higher share of workers using AI than European firms. This analysis finds management practices are a surprisingly powerful predictor...
+
+
+💾 Results saved to curator_output.txt
+📁 Archive saved to curator_archive/curator_2026-05-14-0807.html
+🔖 Latest briefing: curator_latest.html
+📑 Index page updated: curator_index.html
+💾 Wrote 20 articles to curator_latest.json
+✅ Sent 10 articles to Telegram
+✅ Curator briefing generated and sent successfully at Thu May 14 08:07:17 CEST 2026
+⏭  Outside 6AM–6PM window (hour=18) — skipping
+⏭  Outside 6AM–6PM window (hour=19) — skipping
+⏭  Outside 6AM–6PM window (hour=20) — skipping
+⏭  Outside 6AM–6PM window (hour=21) — skipping
+⏭  Outside 6AM–6PM window (hour=22) — skipping
+⏭  Outside 6AM–6PM window (hour=23) — skipping
+🚀 Starting curator briefing at Fri May 15 06:47:55 CEST 2026...
+🔖 Pulling new X bookmarks...

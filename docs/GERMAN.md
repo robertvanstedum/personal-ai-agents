@@ -1,7 +1,7 @@
 # mini-moi — German Language Domain
 ### *A personal language coach that learns from your sessions.*
 
-**Status:** v0.9 beta — active daily use · Vienna trip May 2026 as real-world test  
+**Status:** v1.0 in progress — HTML interface target June 1 · See docs/GERMAN_HTML_SPEC_v1.0.md  
 **Sessions:** 60+ · **Anki cards:** 220+ · **Practice minutes:** 480+ · **Tests:** 31/31 passing
 
 ---

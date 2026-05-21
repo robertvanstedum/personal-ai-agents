@@ -25,7 +25,7 @@ One checkbox per discrete action. Complete in order. Do not skip Step 0.
 - [ ] Extract session JSON schema definitions
 - [ ] Extract persona file parsing utilities
 - [ ] Run all 49 tests — confirm green
-- [ ] Dry-run smoke check: run bot with `--dry-run`, confirm "next german session" responds correctly
+- [ ] Dry-run smoke check: run bot with `--dry-run`, confirm "next german session" responds correctly  (refers to import telegram_bot + identity confirmation pattern, not a literal --dry-run flag)
 - [ ] Commit: `refactor(domain): extract Group A — [what]`
 
 ---
@@ -42,7 +42,7 @@ One checkbox per discrete action. Complete in order. Do not skip Step 0.
 - [ ] Add module docstring: both bots route to same entrypoint (OpenClaw note #3)
 - [ ] Add carry-forward output: error counts and vocabulary on separate lines (OpenClaw note #4)
 - [ ] Run all 49 tests — confirm green
-- [ ] Dry-run smoke check: run bot with `--dry-run`, confirm "next german session" responds correctly
+- [ ] Dry-run smoke check: run bot with `--dry-run`, confirm "next german session" responds correctly  (refers to import telegram_bot + identity confirmation pattern, not a literal --dry-run flag)
 - [ ] Commit: `refactor(domain): extract Group B — [what]`
 
 ---
@@ -55,7 +55,7 @@ One checkbox per discrete action. Complete in order. Do not skip Step 0.
 - [ ] Audit `telegram_bot.py` for any other functions with mid-execution `reply_text` sends — extract each
 - [ ] Add test for each Group C function called with `progress_cb=None` — confirm no raise
 - [ ] Run all 49 tests — confirm green
-- [ ] Dry-run smoke check: run bot with `--dry-run`, confirm "next german session" responds correctly
+- [ ] Dry-run smoke check: run bot with `--dry-run`, confirm "next german session" responds correctly  (refers to import telegram_bot + identity confirmation pattern, not a literal --dry-run flag)
 - [ ] Commit: `refactor(domain): extract Group C — [what] with callback pattern`
 
 ---
@@ -65,7 +65,7 @@ One checkbox per discrete action. Complete in order. Do not skip Step 0.
 - [ ] Update `telegram_bot.py` to import from `german_domain`
 - [ ] Verify `telegram_bot.py` contains: message routing, Whisper voice transcription, Telegram formatting, callback delivery — and nothing else
 - [ ] Run all 49 tests — confirm green
-- [ ] Dry-run smoke check: run bot with `--dry-run`, confirm "next german session" responds correctly
+- [ ] Dry-run smoke check: run bot with `--dry-run`, confirm "next german session" responds correctly  (refers to import telegram_bot + identity confirmation pattern, not a literal --dry-run flag)
 - [ ] Smoke-test bot on staging (basic German drill and phrase commands)
 - [ ] Commit: `refactor: wire telegram adapter to german_domain`
 - [ ] Merge `feat/german-domain-extraction` to main
