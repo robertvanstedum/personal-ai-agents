@@ -287,9 +287,15 @@
     const sel = window.getSelection();
     const phrase = sel ? sel.toString().trim() : '';
     if (!phrase || phrase.length < 2 || phrase.length > 300) return;
+    const range = sel.getRangeAt(0);
+    const before = range.startContainer.textContent[range.startOffset - 1];
+    const after  = range.endContainer.textContent[range.endOffset];
+    const startsClean = !before || /\W/.test(before);
+    const endsClean   = !after  || /\W/.test(after);
+    if (!startsClean || !endsClean) return;
     currentPhrase = phrase;
     currentTranslation = '';
-    const rect = sel.getRangeAt(0).getBoundingClientRect();
+    const rect = range.getBoundingClientRect();
     popPhrase.textContent = phrase;
     popTrans.textContent = 'Übersetzung…';
     btnSave.disabled = true;
