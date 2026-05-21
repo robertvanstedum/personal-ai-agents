@@ -1,6 +1,10 @@
 {% extends "german_base.html" %}
 {% block title %}Schreiben{% endblock %}
 
+{% block page_strip %}
+<div class="page-strip"><span class="page-strip-label">[Schreibtisch]</span></div>
+{% endblock %}
+
 {% block content %}
 <div class="schreiben-header">
   <h1>Schreiben</h1>
@@ -8,9 +12,9 @@
 </div>
 
 <div class="mode-toggle">
-  <button class="mode-btn active" data-mode="kontext">Im Kontext</button>
-  <button class="mode-btn" data-mode="woerter">Wörter</button>
-  <button class="mode-btn" data-mode="tagebuch">Tagebuch</button>
+  <button class="mode-btn active" data-mode="tagebuch">Tagebuch</button>
+  <button class="mode-btn" data-mode="kontext">Im Kontext</button>
+  <button class="mode-btn" data-mode="woerter">Wörter üben</button>
 </div>
 
 <!-- ── Im Kontext ─────────────────────────────────────────────────────────── -->
@@ -42,7 +46,7 @@
   </div>
 </div>
 
-<!-- ── Wörter ────────────────────────────────────────────────────────────── -->
+<!-- ── Wörter üben ───────────────────────────────────────────────────────── -->
 <div class="mode-pane hidden" id="pane-woerter">
   <p class="subtitle" style="margin-bottom:1.5rem">Wörter und Phrasen manuell erfassen.</p>
   <div class="woerter-form">
@@ -99,6 +103,7 @@
 
 {% block scripts %}
 <script>
+document.body.classList.add('parch-mode');
 (function () {
   'use strict';
 
@@ -122,7 +127,7 @@
 
   // ── Restore mode + check Lesen handoff ─────────────────────────────────────
   window.addEventListener('DOMContentLoaded', () => {
-    const saved = sessionStorage.getItem('schreibenMode') || 'kontext';
+    const saved = sessionStorage.getItem('schreibenMode') || 'tagebuch';
     activateMode(saved);
 
     const kontext = sessionStorage.getItem('schreiben_kontext');

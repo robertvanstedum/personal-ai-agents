@@ -26,9 +26,10 @@
       <div class="strip-item-body">
         <p class="strip-summary">{{ article.summary[:300] }}{% if article.summary|length > 300 %}…{% endif %}</p>
         <div class="strip-item-actions">
-          <button class="strip-action-btn strip-merken-btn">🔖 Merken</button>
-          <button class="strip-action-btn strip-mehr-btn">＋ Mehr</button>
+          <button class="strip-action-btn strip-mehr-btn">＋ Mehr davon</button>
           <button class="strip-action-btn strip-weniger-btn">－ Weniger</button>
+          <button class="strip-action-btn strip-merken-btn">🔖 Merken</button>
+          <a class="strip-action-btn strip-open-btn" href="#" target="_blank" rel="noopener">↗ Artikel öffnen</a>
         </div>
       </div>
     </div>
@@ -106,7 +107,7 @@
 
   // ── State switching ──────────────────────────────────────────────────
   function enterBrowse() {
-    document.body.classList.remove('reading-mode');
+    document.body.classList.remove('reading-mode', 'parch-mode');
     document.body.classList.add('browse-mode');
     document.getElementById('browse-state').classList.remove('lesen-state-hidden');
     document.getElementById('headline-strip').classList.remove('lesen-state-hidden');
@@ -115,7 +116,7 @@
 
   function enterReading(idx) {
     currentIdx = Math.max(0, Math.min(idx, articles.length - 1));
-    document.body.classList.remove('browse-mode');
+    document.body.classList.remove('browse-mode', 'parch-mode');
     document.body.classList.add('reading-mode');
     document.getElementById('browse-state').classList.add('lesen-state-hidden');
     document.getElementById('headline-strip').classList.add('lesen-state-hidden');
@@ -159,27 +160,32 @@
     const weniger = item.querySelector('.strip-weniger-btn');
     const merken  = item.querySelector('.strip-merken-btn');
 
+    const openBtn = item.querySelector('.strip-open-btn');
+    const idx = parseInt(item.dataset.index, 10);
+    const art = articles[idx];
+    if (art && openBtn) openBtn.href = art.url || '#';
+
     header.addEventListener('click', () => {
-      document.querySelectorAll('.strip-item-body.expanded').forEach(b => {
-        if (b !== body) b.classList.remove('expanded');
-      });
-      body.classList.toggle('expanded');
+      enterReading(idx);
     });
 
     mehr.addEventListener('click', e => {
       e.stopPropagation();
-      enterReading(parseInt(item.dataset.index, 10));
+      mehr.textContent = '＋ Mehr davon ✓';
+      mehr.disabled = true;
+      setTimeout(() => { mehr.textContent = '＋ Mehr davon'; mehr.disabled = false; }, 1500);
     });
 
     weniger.addEventListener('click', e => {
       e.stopPropagation();
-      body.classList.remove('expanded');
+      weniger.textContent = '－ Weniger ✓';
+      weniger.disabled = true;
+      setTimeout(() => { weniger.textContent = '－ Weniger'; weniger.disabled = false; }, 1500);
     });
 
     merken.addEventListener('click', e => {
       e.stopPropagation();
-      merken.textContent = '🔖 Gemerkt';
-      merken.disabled = true;
+      enterReading(idx);
     });
   });
 

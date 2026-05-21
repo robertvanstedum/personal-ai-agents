@@ -1,7 +1,168 @@
 {% extends "german_base.html" %}
 {% block title %}Üben{% endblock %}
+
+{% block page_strip %}
+<div class="page-strip"><span class="page-strip-label">[Wien Außenaufnahme]</span></div>
+{% endblock %}
+
 {% block content %}
-<h1>Üben</h1>
-<p class="subtitle">Drill practice — verbs, phrases, vocab review.</p>
-<p class="hint">Step 10</p>
+<div class="ueben-header">
+  <h1>Üben</h1>
+  <p class="subtitle">Wähle eine Persona und starte eine Konversationsszene.</p>
+</div>
+
+<!-- ── Breadcrumb sub-nav ──────────────────────────────────────────────── -->
+<nav class="ueben-subnav" aria-label="Üben Navigation">
+  <button class="ueben-subnav-btn active" data-section="szenen">Szenen</button>
+  <button class="ueben-subnav-btn" data-section="verb-drill">Verb-Drill</button>
+  <button class="ueben-subnav-btn" data-section="phrasen-drill">Phrasen-Drill</button>
+  <button class="ueben-subnav-btn" data-section="drill-pool">Drill-Pool</button>
+  <button class="ueben-subnav-btn" data-section="anki">Anki-Karten</button>
+</nav>
+
+<!-- ── Szenen section ─────────────────────────────────────────────────── -->
+<div class="ueben-section" id="section-szenen">
+  <div class="persona-grid" id="persona-grid">
+
+    <div class="persona-card" data-persona="maria">
+      <div class="persona-avatar">M</div>
+      <div class="persona-info">
+        <div class="persona-name">Maria</div>
+        <div class="persona-role">Kellnerin · Kaffeehaus</div>
+      </div>
+    </div>
+
+    <div class="persona-card" data-persona="fischer">
+      <div class="persona-avatar">F</div>
+      <div class="persona-info">
+        <div class="persona-name">Herr Fischer</div>
+        <div class="persona-role">Rezeptionist · Hotel</div>
+      </div>
+    </div>
+
+    <div class="persona-card" data-persona="georg">
+      <div class="persona-avatar">G</div>
+      <div class="persona-info">
+        <div class="persona-name">Georg</div>
+        <div class="persona-role">Wirt · Lokal</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Scene panel — shown after persona selection -->
+  <div class="scene-panel" id="scene-panel" style="display:none">
+    <div class="scene-panel-header">
+      <span class="scene-persona-name" id="scene-persona-name"></span>
+      <button class="btn-ghost" id="scene-back">← Zurück</button>
+    </div>
+    <div class="scene-options" id="scene-options"></div>
+    <div class="scene-actions">
+      <button class="btn-primary" id="btn-telegram-start">Telegram-Sitzung starten</button>
+      <span class="write-status" id="telegram-status"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Stub sections ──────────────────────────────────────────────────── -->
+<div class="ueben-section ueben-stub" id="section-verb-drill" style="display:none">
+  <h2>Verb-Drill</h2>
+  <p class="hint">Noch nicht implementiert — Phase 2.</p>
+</div>
+
+<div class="ueben-section ueben-stub" id="section-phrasen-drill" style="display:none">
+  <h2>Phrasen-Drill</h2>
+  <p class="hint">Noch nicht implementiert — Phase 2.</p>
+</div>
+
+<div class="ueben-section ueben-stub" id="section-drill-pool" style="display:none">
+  <h2>Drill-Pool</h2>
+  <p class="hint">Noch nicht implementiert — Phase 2.</p>
+</div>
+
+<div class="ueben-section ueben-stub" id="section-anki" style="display:none">
+  <h2>Anki-Karten</h2>
+  <p class="hint">Noch nicht implementiert — Phase 2.</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.body.classList.add('parch-mode');
+(function () {
+  'use strict';
+
+  const personas = {
+    maria:   { name: 'Maria',        role: 'Kellnerin · Kaffeehaus',
+                scenes: ['Guten Morgen — Bestellung', 'Stammgast-Gespräch', 'Rechnung bitte'] },
+    fischer: { name: 'Herr Fischer', role: 'Rezeptionist · Hotel',
+                scenes: ['Check-in', 'Zimmerservice anfragen', 'Auschecken'] },
+    georg:   { name: 'Georg',        role: 'Wirt · Lokal',
+                scenes: ['Tisch reservieren', 'Speisekarte besprechen', 'Feierabend-Gespräch'] },
+  };
+
+  let selectedPersona = null;
+  let selectedScene   = null;
+
+  // ── Sub-nav ──────────────────────────────────────────────────────────
+  document.querySelectorAll('.ueben-subnav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.ueben-subnav-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.ueben-section').forEach(s => { s.style.display = 'none'; });
+      btn.classList.add('active');
+      document.getElementById('section-' + btn.dataset.section).style.display = 'block';
+    });
+  });
+
+  // ── Persona cards ────────────────────────────────────────────────────
+  document.querySelectorAll('.persona-card').forEach(card => {
+    card.addEventListener('click', () => {
+      selectedPersona = card.dataset.persona;
+      const p = personas[selectedPersona];
+      document.querySelectorAll('.persona-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+
+      document.getElementById('scene-persona-name').textContent = p.name + ' · ' + p.role;
+      const opts = document.getElementById('scene-options');
+      opts.innerHTML = '';
+      p.scenes.forEach(scene => {
+        const btn = document.createElement('button');
+        btn.className = 'scene-option-btn';
+        btn.textContent = scene;
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.scene-option-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          selectedScene = scene;
+        });
+        opts.appendChild(btn);
+      });
+
+      document.getElementById('scene-panel').style.display = 'block';
+      document.getElementById('telegram-status').textContent = '';
+      document.getElementById('btn-telegram-start').disabled = false;
+      document.getElementById('btn-telegram-start').textContent = 'Telegram-Sitzung starten';
+    });
+  });
+
+  document.getElementById('scene-back').addEventListener('click', () => {
+    document.getElementById('scene-panel').style.display = 'none';
+    document.querySelectorAll('.persona-card').forEach(c => c.classList.remove('selected'));
+    selectedPersona = null;
+    selectedScene   = null;
+  });
+
+  // ── Telegram start stub ──────────────────────────────────────────────
+  document.getElementById('btn-telegram-start').addEventListener('click', () => {
+    const p = personas[selectedPersona];
+    if (!p) return;
+    const scene = selectedScene || p.scenes[0];
+    const prompt = `[Szene: ${scene}] Persona: ${p.name} — ${p.role}`;
+    navigator.clipboard.writeText(prompt).then(() => {
+      document.getElementById('telegram-status').textContent = '✓ Prompt kopiert — öffne Telegram und füge ein';
+    }).catch(() => {
+      document.getElementById('telegram-status').textContent = prompt;
+    });
+  });
+})();
+</script>
 {% endblock %}

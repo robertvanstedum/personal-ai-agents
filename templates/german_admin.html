@@ -1,7 +1,147 @@
 {% extends "german_base.html" %}
 {% block title %}Admin{% endblock %}
+
 {% block content %}
-<h1>Admin</h1>
-<p class="subtitle">Persona editor — create, fork, edit. Prompt preview before saving.</p>
-<p class="hint">Step 11</p>
+<div class="admin-header">
+  <h1>Admin</h1>
+  <p class="subtitle">Personas, Quellen und Systemkonfiguration. Desktop only in v1.0.</p>
+</div>
+
+<!-- ── Personas ───────────────────────────────────────────────────────── -->
+<section class="admin-section">
+  <div class="admin-section-head">
+    <h2>Personas</h2>
+    <button class="btn-ghost" id="btn-persona-create">＋ Neue Persona</button>
+  </div>
+  <div class="admin-list" id="persona-list">
+    <div class="admin-list-item">
+      <div class="admin-item-info">
+        <span class="admin-item-name">Maria</span>
+        <span class="admin-item-meta">Kellnerin · Kaffeehaus</span>
+      </div>
+      <div class="admin-item-actions">
+        <button class="btn-ghost btn-sm">Bearbeiten</button>
+        <button class="btn-ghost btn-sm">Fork</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Persona Maria löschen?">Löschen</button>
+      </div>
+    </div>
+    <div class="admin-list-item">
+      <div class="admin-item-info">
+        <span class="admin-item-name">Herr Fischer</span>
+        <span class="admin-item-meta">Rezeptionist · Hotel</span>
+      </div>
+      <div class="admin-item-actions">
+        <button class="btn-ghost btn-sm">Bearbeiten</button>
+        <button class="btn-ghost btn-sm">Fork</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Persona Herr Fischer löschen?">Löschen</button>
+      </div>
+    </div>
+    <div class="admin-list-item">
+      <div class="admin-item-info">
+        <span class="admin-item-name">Georg</span>
+        <span class="admin-item-meta">Wirt · Lokal</span>
+      </div>
+      <div class="admin-item-actions">
+        <button class="btn-ghost btn-sm">Bearbeiten</button>
+        <button class="btn-ghost btn-sm">Fork</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Persona Georg löschen?">Löschen</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Quellen ────────────────────────────────────────────────────────── -->
+<section class="admin-section">
+  <div class="admin-section-head">
+    <h2>Quellen</h2>
+    <button class="btn-ghost" id="btn-source-add">＋ Quelle hinzufügen</button>
+  </div>
+  <div class="admin-list" id="source-list">
+    <div class="admin-list-item">
+      <div class="admin-item-info">
+        <span class="admin-item-name">ORF Wien</span>
+        <span class="admin-item-meta admin-item-active">aktiv</span>
+      </div>
+      <div class="admin-item-actions">
+        <button class="btn-ghost btn-sm">Pausieren</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Quelle ORF Wien entfernen?">Entfernen</button>
+      </div>
+    </div>
+    <div class="admin-list-item">
+      <div class="admin-item-info">
+        <span class="admin-item-name">Vienna.at</span>
+        <span class="admin-item-meta admin-item-active">aktiv</span>
+      </div>
+      <div class="admin-item-actions">
+        <button class="btn-ghost btn-sm">Pausieren</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Quelle Vienna.at entfernen?">Entfernen</button>
+      </div>
+    </div>
+    <div class="admin-list-item">
+      <div class="admin-item-info">
+        <span class="admin-item-name">Standard Kultur</span>
+        <span class="admin-item-meta admin-item-active">aktiv</span>
+      </div>
+      <div class="admin-item-actions">
+        <button class="btn-ghost btn-sm">Pausieren</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Quelle Standard Kultur entfernen?">Entfernen</button>
+      </div>
+    </div>
+    <div class="admin-list-item">
+      <div class="admin-item-info">
+        <span class="admin-item-name">Wiener Bezirksblätter</span>
+        <span class="admin-item-meta admin-item-active">aktiv</span>
+      </div>
+      <div class="admin-item-actions">
+        <button class="btn-ghost btn-sm">Pausieren</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Quelle Wiener Bezirksblätter entfernen?">Entfernen</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── System ─────────────────────────────────────────────────────────── -->
+<section class="admin-section">
+  <h2>System</h2>
+  <div class="admin-system-grid">
+    <div class="admin-system-item">
+      <label class="admin-label">Artikel-Schwellenwert (min. aktiv)</label>
+      <input type="number" class="admin-input" value="2" min="1" max="10">
+    </div>
+    <div class="admin-system-item">
+      <label class="admin-label">LLM-Route</label>
+      <select class="admin-input">
+        <option>grok-mini → claude-haiku → ollama</option>
+        <option>claude-haiku</option>
+        <option>ollama-gemma</option>
+      </select>
+    </div>
+  </div>
+  <div class="admin-export-row">
+    <button class="btn-ghost">Phrasebook exportieren</button>
+    <button class="btn-ghost">Schreibverlauf exportieren</button>
+  </div>
+  <div class="admin-log-placeholder">
+    <p class="hint">Log-Viewer — Phase 2.</p>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.body.classList.add('parch-mode');
+(function () {
+  'use strict';
+
+  document.querySelectorAll('.btn-destructive').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const msg = btn.dataset.confirm || 'Wirklich löschen?';
+      if (confirm(msg)) {
+        btn.closest('.admin-list-item').style.opacity = '0.4';
+        btn.disabled = true;
+      }
+    });
+  });
+})();
+</script>
 {% endblock %}

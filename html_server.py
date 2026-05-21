@@ -37,7 +37,7 @@ CORS(app)
 
 @app.route("/")
 def index():
-    return redirect("/lesen")
+    return render_template("german_landing.html", active="landing")
 
 
 @app.route("/lesen")
@@ -66,9 +66,14 @@ def ueben():
     return render_template("german_ueben.html", active="ueben")
 
 
+@app.route("/woerter")
+def woerter():
+    return render_template("german_woerter.html", active="woerter")
+
+
 @app.route("/bibliothek")
 def bibliothek():
-    return render_template("german_bibliothek.html", active="bibliothek")
+    return redirect("/woerter", code=301)
 
 
 @app.route("/admin")
