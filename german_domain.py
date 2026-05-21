@@ -746,17 +746,49 @@ def lesen_action(article_id: str, action: str) -> None:
     _LESEN_FEEDBACK_FILE.write_text(json.dumps(feedback_data, indent=2, ensure_ascii=False))
 
 
+def _translate_with_deepl(phrase: str) -> str | None:
+    """Translate German phrase to English via DeepL. Returns None on any failure."""
+    try:
+        import deepl as _deepl
+        import keyring as _keyring
+        api_key = _keyring.get_password("deepl", "api_key")
+        if not api_key:
+            return None
+        translator = _deepl.Translator(api_key)
+        result = translator.translate_text(
+            phrase,
+            source_lang="DE",
+            target_lang="EN-US",
+            model_type="latency_optimized",
+        )
+        return result.text
+    except Exception:
+        return None
+
+
 def translate_phrase(phrase: str) -> tuple[str, bool, dict]:
-    """Translate a German word/phrase to English. Checks phrasebook cache first.
-    Returns (translation, cached, timing) where timing = {total_ms, llm_ms}."""
+    """Translate a German word/phrase to English.
+    Hierarchy: phrasebook cache → DeepL → LLM fallback.
+    Returns (translation, cached, timing) where timing = {total_ms, deepl_ms, llm_ms}."""
     t0 = time.perf_counter()
     phrase_lower = phrase.lower().strip()
+
+    # Layer 1: phrasebook cache
     phrasebook = _load_phrasebook()
     for entry in phrasebook.get("phrases", []):
         if entry.get("german", "").lower().strip() == phrase_lower:
             total_ms = round((time.perf_counter() - t0) * 1000)
-            return entry.get("english", ""), True, {"total_ms": total_ms, "llm_ms": 0}
+            return entry.get("english", ""), True, {"total_ms": total_ms, "deepl_ms": 0, "llm_ms": 0}
 
+    # Layer 2: DeepL
+    t_deepl = time.perf_counter()
+    deepl_result = _translate_with_deepl(phrase)
+    deepl_ms = round((time.perf_counter() - t_deepl) * 1000)
+    if deepl_result:
+        total_ms = round((time.perf_counter() - t0) * 1000)
+        return deepl_result, False, {"total_ms": total_ms, "deepl_ms": deepl_ms, "llm_ms": 0}
+
+    # Layer 3: LLM fallback
     prompt = (
         f"Translate this German word or phrase to English. "
         f"Reply with only the English translation, nothing else.\n"
@@ -766,7 +798,7 @@ def translate_phrase(phrase: str) -> tuple[str, bool, dict]:
     result = _call_llm(prompt, max_tokens=60)
     llm_ms = round((time.perf_counter() - t_llm) * 1000)
     total_ms = round((time.perf_counter() - t0) * 1000)
-    return (result.strip() if result else ""), False, {"total_ms": total_ms, "llm_ms": llm_ms}
+    return (result.strip() if result else ""), False, {"total_ms": total_ms, "deepl_ms": 0, "llm_ms": llm_ms}
 
 
 def save_lesen_phrase(german: str, english: str, context_sentence: str, article_title: str) -> dict:

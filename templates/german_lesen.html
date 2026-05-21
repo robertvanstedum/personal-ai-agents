@@ -354,9 +354,11 @@
       popTrans.textContent = currentTranslation || '(keine Übersetzung)';
       btnSave.disabled = !currentTranslation;
       const t = data.timing || {};
-      const llm = t.llm_ms != null ? `LLM ${t.llm_ms}ms` : '';
-      const internal = t.total_ms != null ? `server ${t.total_ms}ms` : '';
-      popTiming.textContent = `${roundTrip}ms total · ${llm}${llm && internal ? ' · ' : ''}${internal}`;
+      const parts = [`${roundTrip}ms`];
+      if (t.deepl_ms) parts.push(`DeepL ${t.deepl_ms}ms`);
+      else if (t.llm_ms) parts.push(`LLM ${t.llm_ms}ms`);
+      if (t.total_ms) parts.push(`server ${t.total_ms}ms`);
+      popTiming.textContent = parts.join(' · ');
     } catch {
       popTrans.textContent = '(Fehler)';
       popTiming.textContent = '';
