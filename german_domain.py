@@ -759,7 +759,6 @@ def _translate_with_deepl(phrase: str) -> str | None:
             phrase,
             source_lang="DE",
             target_lang="EN-US",
-            model_type="latency_optimized",
         )
         return result.text
     except Exception:
