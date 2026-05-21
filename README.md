@@ -267,9 +267,9 @@ Road-tested in Vienna, May 2026. Local-first, model-agnostic, open source.
 |---|---|
 | ![Wörter](docs/screenshots/woerter.png) | ![Archiv](docs/screenshots/archiv.png) |
 
-| Admin | |
-|---|---|
-| <img src="docs/screenshots/admin.png" width="580"> | |
+**Admin**
+
+<img src="docs/screenshots/admin.png" width="580">
 
 ---
 
