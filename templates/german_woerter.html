@@ -14,8 +14,9 @@
 <!-- ── Filter bar ──────────────────────────────────────────────────────── -->
 <div class="woerter-filter-bar">
   <label class="filter-label">
-    <span>Quelle</span>
-    <select class="filter-select" id="filter-quelle">
+    <span>Quelle <span class="filter-hint">(Herkunft)</span></span>
+    <select class="filter-select" id="filter-quelle"
+            title="Wo wurde diese Phrase gespeichert? Lesen = aus Artikeln, Telegram = vom Handy, Manuell = selbst eingegeben">
       <option value="">Alle</option>
       <option value="lesen">Lesen</option>
       <option value="telegram">Telegram</option>
@@ -23,8 +24,9 @@
     </select>
   </label>
   <label class="filter-label">
-    <span>Status</span>
-    <select class="filter-select" id="filter-status">
+    <span>Status <span class="filter-hint">(Lernstand)</span></span>
+    <select class="filter-select" id="filter-status"
+            title="Bibliothek = gespeichert, Üben = im Drill-Pool, Prüfen = 5× korrekt, Gelernt = bestätigt gelernt">
       <option value="">Alle</option>
       <option value="library">Bibliothek</option>
       <option value="practice">Üben</option>
@@ -70,7 +72,8 @@
         </td>
         <td class="w-expand-col"><button class="btn-expand" aria-label="Details">↓</button></td>
       </tr>
-      <tr class="woerter-detail" id="detail-{{ entry.id }}" style="display:none">
+      <tr class="woerter-detail" id="detail-{{ entry.id }}" style="display:none"
+          data-german="{{ entry.german }}" data-english="{{ entry.english }}">
         <td colspan="6">
           <div class="detail-inner">
             {% if entry.source_sentence %}
@@ -79,6 +82,37 @@
             {% if entry.source_article %}
             <div class="detail-source-article">{{ entry.source_article }}</div>
             {% endif %}
+
+            <!-- Practice section -->
+            <div class="expand-practice">
+              <div class="expand-label">ÜBEN</div>
+              <div class="direction-toggle-inline">
+                <button class="dir-btn active" data-dir="de-en">🇩🇪 → 🇺🇸</button>
+                <button class="dir-btn" data-dir="en-de">🇺🇸 → 🇩🇪</button>
+              </div>
+              <div class="practice-prompt">
+                <span class="practice-prompt-text">{{ entry.german }}</span>
+                <button class="btn-voice-out btn-speak-practice"
+                        data-text="{{ entry.german }}">🔊</button>
+              </div>
+              <div class="practice-input-wrap">
+                <textarea class="practice-input" placeholder="Deine Antwort…" rows="2"></textarea>
+                <div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+                  <button class="btn-voice-mic btn-voice-practice"
+                          data-direction="de-en">🎤</button>
+                  <button class="btn-delivery btn-pruefen-practice"
+                          data-id="{{ entry.id }}">Prüfen</button>
+                </div>
+              </div>
+              <div class="practice-correction" style="display:none">
+                <div class="correction-attempt result-label"></div>
+                <div class="correction-answer result-value"></div>
+                <div class="correction-notes-block" style="display:none">
+                  <ul class="drill-notes correction-notes-list"></ul>
+                </div>
+              </div>
+            </div>
+
             <div class="detail-actions">
               {% if entry.status == 'library' %}
               <button class="btn-ghost btn-promote" data-id="{{ entry.id }}" data-next="practice">
@@ -109,6 +143,10 @@
       {% endfor %}
     </tbody>
   </table>
+  <div class="empty-filter-state" id="empty-filter-state" style="display:none">
+    Keine Phrasen in dieser Kategorie.
+    <a href="/lesen">Zum Lesen →</a> um neue Vokabeln zu speichern.
+  </div>
   {% else %}
   <div class="woerter-empty">
     <p>Noch keine Wörter gespeichert.</p>
@@ -167,6 +205,7 @@ document.body.classList.add('parch-mode');
   // ── Filter ───────────────────────────────────────────────────────────
   const rows = Array.from(document.querySelectorAll('.woerter-row'));
   const countEl = document.getElementById('filter-count');
+  const emptyFilterEl = document.getElementById('empty-filter-state');
 
   function applyFilters() {
     const quelle = document.getElementById('filter-quelle').value;
@@ -177,7 +216,6 @@ document.body.classList.add('parch-mode');
       const matchS = !status || row.dataset.status === status;
       const show = matchQ && matchS;
       row.style.display = show ? '' : 'none';
-      // also hide the detail row when parent is hidden
       const detail = document.getElementById('detail-' + row.dataset.id);
       if (detail && !show) {
         detail.style.display = 'none';
@@ -187,11 +225,114 @@ document.body.classList.add('parch-mode');
       if (show) visible++;
     });
     countEl.textContent = visible + ' Eintr' + (visible === 1 ? 'ag' : 'äge');
+    if (emptyFilterEl) {
+      emptyFilterEl.style.display = (visible === 0 && rows.length > 0) ? 'block' : 'none';
+    }
   }
 
   document.getElementById('filter-quelle').addEventListener('change', applyFilters);
   document.getElementById('filter-status').addEventListener('change', applyFilters);
-  applyFilters(); // set initial count
+  applyFilters();
+
+  // ── Wörter inline practice ────────────────────────────────────────────
+
+  // Direction toggle inside each expand
+  document.querySelectorAll('.direction-toggle-inline').forEach(toggle => {
+    const detail = toggle.closest('.woerter-detail');
+    toggle.querySelectorAll('.dir-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        toggle.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        // Update prompt text and voice mic lang
+        const dir = btn.dataset.dir;
+        const german = detail.dataset.german;
+        const english = detail.dataset.english;
+        const promptEl = toggle.closest('.expand-practice').querySelector('.practice-prompt-text');
+        promptEl.textContent = dir === 'de-en' ? german : english;
+        const micBtn = toggle.closest('.expand-practice').querySelector('.btn-voice-practice');
+        if (micBtn) micBtn.dataset.direction = dir;
+        // Reset correction block
+        const corr = toggle.closest('.expand-practice').querySelector('.practice-correction');
+        if (corr) corr.style.display = 'none';
+        const input = toggle.closest('.expand-practice').querySelector('.practice-input');
+        if (input) input.value = '';
+      });
+    });
+  });
+
+  // 🔊 speak buttons in practice section — never auto
+  document.querySelectorAll('.btn-speak-practice').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const text = btn.dataset.text;
+      if (!text || !window.speechSynthesis) return;
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'de-DE'; u.rate = 0.9;
+      window.speechSynthesis.speak(u);
+    });
+  });
+
+  // 🎤 voice input in practice section
+  document.querySelectorAll('.btn-voice-practice').forEach(btn => {
+    if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
+      btn.style.display = 'none'; return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    btn.addEventListener('click', () => {
+      if (recognition) { recognition.stop(); recognition = null; btn.textContent = '🎤'; return; }
+      const input = btn.closest('.expand-practice').querySelector('.practice-input');
+      recognition = new SR();
+      recognition.lang = btn.dataset.direction === 'de-en' ? 'en-US' : 'de-DE';
+      recognition.interimResults = false;
+      recognition.onresult = e => { input.value = e.results[0][0].transcript; };
+      recognition.onend = () => { recognition = null; btn.textContent = '🎤'; };
+      recognition.start();
+      btn.textContent = '⏹';
+    });
+  });
+
+  // Prüfen in practice section
+  document.querySelectorAll('.btn-pruefen-practice').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const expand = btn.closest('.expand-practice');
+      const detail = btn.closest('.woerter-detail');
+      const activeDir = expand.querySelector('.dir-btn.active').dataset.dir;
+      const input = expand.querySelector('.practice-input').value.trim();
+      const corr = expand.querySelector('.practice-correction');
+      if (!input) return;
+
+      corr.style.display = 'block';
+      corr.querySelector('.correction-attempt').textContent = 'Deine Antwort: ' + input;
+      corr.querySelector('.correction-notes-block').style.display = 'none';
+
+      if (activeDir === 'de-en') {
+        const english = detail.dataset.english;
+        corr.querySelector('.correction-answer').textContent = 'Lösung: ' + english;
+      } else {
+        corr.querySelector('.correction-answer').textContent = 'Wird korrigiert…';
+        const promptText = expand.querySelector('.practice-prompt-text').textContent;
+        try {
+          const res = await fetch('/api/write-correct', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: input, context: promptText })
+          });
+          const data = await res.json();
+          corr.querySelector('.correction-answer').textContent =
+            'Korrektur: ' + (data.corrected || detail.dataset.german);
+          const notes = data.notes || [];
+          if (notes.length) {
+            corr.querySelector('.correction-notes-list').innerHTML =
+              notes.map(n => `<li>${n}</li>`).join('');
+            corr.querySelector('.correction-notes-block').style.display = 'block';
+          }
+        } catch {
+          corr.querySelector('.correction-answer').textContent =
+            'Lösung: ' + detail.dataset.german;
+        }
+      }
+    });
+  });
 })();
 </script>
 {% endblock %}

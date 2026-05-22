@@ -76,22 +76,63 @@
 <!-- ── Drill-Pool ─────────────────────────────────────────────────────── -->
 <div class="ueben-section" id="section-drill-pool" style="display:none">
   {% if drill_pool %}
+  <!-- Direction toggle -->
+  <div class="direction-toggle" id="direction-toggle">
+    <button class="dir-btn active" data-dir="de-en" id="dir-de-en">
+      🇩🇪 → 🇺🇸 Deutsch zu Englisch
+    </button>
+    <button class="dir-btn" data-dir="en-de" id="dir-en-de">
+      🇺🇸 → 🇩🇪 Englisch zu Deutsch
+    </button>
+  </div>
+
+  <!-- Progress -->
   <div class="drill-stats">
     <span id="drill-progress">0 von {{ drill_pool|length }} geübt</span>
     <button class="btn-ghost btn-sm" id="drill-restart">Neu starten</button>
   </div>
+
+  <!-- Active drill card -->
   <div class="drill-card" id="drill-card">
-    <div class="drill-german" id="drill-german"></div>
-    <div class="drill-english hidden" id="drill-english"></div>
-    <div class="drill-actions">
-      <button class="btn-ghost drill-reveal" id="drill-reveal">Zeigen</button>
-      <div class="drill-result-btns" id="drill-result-btns" style="display:none">
-        <button class="btn-drill-correct" id="drill-correct">✓ Richtig</button>
-        <button class="btn-drill-wrong"   id="drill-wrong">✗ Falsch</button>
-        <button class="btn-drill-skip"    id="drill-skip">→ Überspringen</button>
+    <div class="drill-prompt" id="drill-prompt"></div>
+    <button class="btn-voice-out" id="btn-speak-prompt">🔊 anhören</button>
+
+    <div class="drill-input-area" id="drill-input-area">
+      <textarea id="drill-input" placeholder="Deine Antwort hier eingeben…" rows="3"></textarea>
+      <div class="drill-input-row">
+        <button class="btn-voice-mic" id="voice-drill" title="Spracheingabe">🎤 Sprechen</button>
+        <button class="btn-delivery" id="btn-pruefen">Prüfen</button>
       </div>
     </div>
+
+    <!-- Result block (hidden until Prüfen) -->
+    <div class="drill-result-block" id="drill-result-block" style="display:none">
+      <div class="result-row">
+        <span class="result-label">Deine Antwort</span>
+        <span class="result-value" id="drill-attempt-text"></span>
+      </div>
+      <div class="result-row">
+        <span class="result-label" id="drill-answer-label">Lösung</span>
+        <span class="result-value" id="drill-answer-text"></span>
+      </div>
+      <div id="drill-corrected-block" style="display:none">
+        <div class="result-row">
+          <span class="result-label">Korrigiert</span>
+          <span class="result-value" id="drill-corrected-text"></span>
+        </div>
+        <ul class="drill-notes" id="drill-notes-list"></ul>
+      </div>
+    </div>
+
+    <!-- Self-assess (hidden until Prüfen) -->
+    <div class="drill-assess" id="drill-assess" style="display:none">
+      <button class="btn-richtig" id="drill-correct">✓ Richtig</button>
+      <button class="btn-falsch"  id="drill-wrong">✗ Falsch</button>
+      <button class="btn-skip"    id="drill-skip">→ Überspringen</button>
+    </div>
   </div>
+
+  <!-- Done state -->
   <div class="drill-done" id="drill-done" style="display:none">
     <p>Runde abgeschlossen.</p>
     <button class="btn-ghost" id="drill-done-restart">Neu starten</button>
@@ -236,49 +277,151 @@ document.body.classList.add('parch-mode');
     URL.revokeObjectURL(url);
   });
 
-  // ── Drill-Pool ───────────────────────────────────────────────────────
+  // ── Drill-Pool state machine ─────────────────────────────────────────
   if (drillPool.length > 0) {
-    let queue = [...drillPool], pos = 0, practiced = 0;
+    const drill = {
+      queue: [...drillPool],
+      pos: 0,
+      practiced: 0,
+      direction: sessionStorage.getItem('drillDirection') || 'de-en',
+    };
+
+    // Direction toggle
+    function setDirection(dir) {
+      drill.direction = dir;
+      sessionStorage.setItem('drillDirection', dir);
+      document.querySelectorAll('#direction-toggle .dir-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.dir === dir);
+      });
+      showPhrase(drill.pos);
+    }
+
+    document.querySelectorAll('#direction-toggle .dir-btn').forEach(btn => {
+      btn.addEventListener('click', () => setDirection(btn.dataset.dir));
+    });
+
+    // Restore saved direction on load
+    setDirection(drill.direction);
+
+    function updateProgress() {
+      document.getElementById('drill-progress').textContent =
+        `${drill.practiced} von ${drill.queue.length} geübt`;
+    }
 
     function showPhrase(idx) {
-      if (idx >= queue.length) {
+      if (idx >= drill.queue.length) {
         document.getElementById('drill-card').style.display = 'none';
         document.getElementById('drill-done').style.display = 'block';
         return;
       }
-      const phrase = queue[idx];
-      document.getElementById('drill-german').textContent = phrase.german;
-      document.getElementById('drill-english').textContent = phrase.english;
-      document.getElementById('drill-english').classList.add('hidden');
-      document.getElementById('drill-reveal').style.display = '';
-      document.getElementById('drill-result-btns').style.display = 'none';
+      const phrase = drill.queue[idx];
+      const prompt = drill.direction === 'de-en' ? phrase.german : phrase.english;
+      document.getElementById('drill-prompt').textContent = prompt;
+      document.getElementById('drill-input').value = '';
+      document.getElementById('drill-result-block').style.display = 'none';
+      document.getElementById('drill-corrected-block').style.display = 'none';
+      document.getElementById('drill-assess').style.display = 'none';
+      document.getElementById('drill-input-area').style.display = '';
+      document.getElementById('btn-pruefen').disabled = false;
+      document.getElementById('drill-card').style.display = '';
+      document.getElementById('drill-done').style.display = 'none';
     }
 
-    function updateProgress() {
-      document.getElementById('drill-progress').textContent =
-        `${practiced} von ${queue.length} geübt`;
+    async function submitAttempt() {
+      const phrase = drill.queue[drill.pos];
+      const attempt = document.getElementById('drill-input').value.trim();
+      if (!attempt) return;
+
+      document.getElementById('btn-pruefen').disabled = true;
+      document.getElementById('drill-attempt-text').textContent = attempt;
+
+      if (drill.direction === 'de-en') {
+        // Reveal stored English — no API call
+        document.getElementById('drill-answer-label').textContent = 'Lösung';
+        document.getElementById('drill-answer-text').textContent = phrase.english;
+        document.getElementById('drill-corrected-block').style.display = 'none';
+        document.getElementById('drill-result-block').style.display = 'block';
+        document.getElementById('drill-assess').style.display = 'flex';
+      } else {
+        // EN→DE: call correction API
+        document.getElementById('drill-answer-label').textContent = 'Korrektur';
+        document.getElementById('drill-answer-text').textContent = 'Wird korrigiert…';
+        document.getElementById('drill-result-block').style.display = 'block';
+
+        try {
+          const res = await fetch('/api/write-correct', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: attempt,
+              context: `Expected German for: ${phrase.english}`
+            })
+          });
+          const data = await res.json();
+          document.getElementById('drill-answer-text').textContent = data.corrected || phrase.german;
+
+          const notes = data.notes || [];
+          if (notes.length) {
+            document.getElementById('drill-corrected-text').textContent = phrase.german;
+            document.getElementById('drill-notes-list').innerHTML =
+              notes.map(n => `<li>${n}</li>`).join('');
+            document.getElementById('drill-corrected-block').style.display = 'block';
+          }
+        } catch {
+          document.getElementById('drill-answer-text').textContent = phrase.german;
+        }
+        document.getElementById('drill-assess').style.display = 'flex';
+      }
     }
 
     async function recordResult(result) {
-      const phrase = queue[pos];
+      const phrase = drill.queue[drill.pos];
       await fetch('/api/drill-result', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phrase_id: phrase.id, result })
       });
-      if (result !== 'skip') practiced++;
-      pos++; updateProgress(); showPhrase(pos);
+      if (result !== 'skip') drill.practiced++;
+      drill.pos++;
+      updateProgress();
+      showPhrase(drill.pos);
     }
 
-    document.getElementById('drill-reveal').addEventListener('click', () => {
-      document.getElementById('drill-english').classList.remove('hidden');
-      document.getElementById('drill-reveal').style.display = 'none';
-      document.getElementById('drill-result-btns').style.display = 'flex';
-      if (window.speechSynthesis) {
-        const u = new SpeechSynthesisUtterance(queue[pos].german);
-        u.lang = 'de-DE'; u.rate = 0.9;
-        window.speechSynthesis.speak(u);
-      }
+    // 🔊 speak prompt — user-initiated only, never auto
+    document.getElementById('btn-speak-prompt').addEventListener('click', () => {
+      const phrase = drill.queue[drill.pos];
+      if (!phrase || !window.speechSynthesis) return;
+      // Always speak the German side
+      const text = drill.direction === 'de-en' ? phrase.german : phrase.german;
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'de-DE'; u.rate = 0.9;
+      window.speechSynthesis.speak(u);
+    });
+
+    // 🎤 voice input — lang switches with direction
+    const voiceDrillBtn = document.getElementById('voice-drill');
+    if (voiceDrillBtn && (window.SpeechRecognition || window.webkitSpeechRecognition)) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      let recognition = null;
+      voiceDrillBtn.addEventListener('click', () => {
+        if (recognition) { recognition.stop(); recognition = null; voiceDrillBtn.textContent = '🎤 Sprechen'; return; }
+        recognition = new SR();
+        recognition.lang = drill.direction === 'de-en' ? 'en-US' : 'de-DE';
+        recognition.interimResults = false;
+        recognition.onresult = e => {
+          document.getElementById('drill-input').value = e.results[0][0].transcript;
+        };
+        recognition.onend = () => { recognition = null; voiceDrillBtn.textContent = '🎤 Sprechen'; };
+        recognition.start();
+        voiceDrillBtn.textContent = '⏹ Stop';
+      });
+    } else if (voiceDrillBtn) {
+      voiceDrillBtn.style.display = 'none';
+    }
+
+    document.getElementById('btn-pruefen').addEventListener('click', submitAttempt);
+    document.getElementById('drill-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitAttempt();
     });
 
     document.getElementById('drill-correct').addEventListener('click', () => recordResult('correct'));
@@ -286,15 +429,14 @@ document.body.classList.add('parch-mode');
     document.getElementById('drill-skip').addEventListener('click',    () => recordResult('skip'));
 
     function restart() {
-      pos = 0; practiced = 0; queue = [...drillPool];
-      document.getElementById('drill-card').style.display = '';
-      document.getElementById('drill-done').style.display = 'none';
+      drill.pos = 0; drill.practiced = 0; drill.queue = [...drillPool];
       updateProgress(); showPhrase(0);
     }
 
     document.getElementById('drill-restart').addEventListener('click', restart);
     document.getElementById('drill-done-restart').addEventListener('click', restart);
-    showPhrase(0); updateProgress();
+
+    updateProgress(); showPhrase(0);
   }
 })();
 </script>

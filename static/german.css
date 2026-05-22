@@ -2201,3 +2201,281 @@ body.reading-mode nav {
 }
 
 .admin-log-placeholder .hint { margin-top: 0; }
+
+/* ══════════════════════════════════════════════════════════════
+   Drill interaction — direction toggle, drill card, assess btns
+   ══════════════════════════════════════════════════════════════ */
+
+.direction-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.dir-btn {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--md-text-secondary);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.dir-btn:hover { border-color: var(--md-accent); color: var(--md-text-primary); }
+
+.dir-btn.active {
+  background: var(--md-accent);
+  border-color: var(--md-accent);
+  color: var(--md-parch);
+}
+
+.drill-stats {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.88rem;
+  color: var(--md-text-secondary);
+}
+
+.drill-card {
+  background: var(--md-parch-mid);
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 8px;
+  padding: 1.5rem;
+  max-width: 680px;
+}
+
+.drill-prompt {
+  font-family: Georgia, serif;
+  font-size: 1.25rem;
+  color: var(--md-text-primary);
+  margin-bottom: 0.75rem;
+  line-height: 1.5;
+}
+
+.drill-prompt-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.btn-voice-out {
+  background: transparent;
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 20px;
+  color: var(--md-text-secondary);
+  font-size: 0.82rem;
+  padding: 0.25rem 0.7rem;
+  cursor: pointer;
+}
+
+.btn-voice-out:hover { border-color: var(--md-accent); color: var(--md-accent); }
+
+.drill-input-area {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.drill-input-area textarea {
+  width: 100%;
+  background: var(--md-parch);
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 6px;
+  color: var(--md-text-primary);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  padding: 0.65rem 0.9rem;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.drill-input-area textarea:focus {
+  outline: none;
+  border-color: var(--md-accent);
+}
+
+.drill-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.drill-input-row textarea { flex: 1; }
+
+.btn-voice-mic {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--md-parch-deep);
+  background: transparent;
+  font-size: 1rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.btn-voice-mic.listening { background: var(--md-accent); border-color: var(--md-accent); }
+
+.drill-result-block {
+  border-top: 1px solid var(--md-parch-deep);
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.result-row { margin-bottom: 0.75rem; }
+
+.result-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--md-text-muted);
+  margin-bottom: 0.2rem;
+}
+
+.result-value {
+  font-size: 0.95rem;
+  color: var(--md-text-primary);
+  line-height: 1.5;
+}
+
+.drill-notes {
+  margin: 0.25rem 0 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+  color: var(--md-text-secondary);
+  line-height: 1.6;
+}
+
+.drill-assess {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.btn-richtig {
+  background: #4a7c4e; color: white; border: none;
+  padding: 0.5rem 1.1rem; border-radius: 6px; cursor: pointer;
+  font-family: var(--font-body); font-size: 0.9rem;
+}
+
+.btn-falsch {
+  background: #8b3a3a; color: white; border: none;
+  padding: 0.5rem 1.1rem; border-radius: 6px; cursor: pointer;
+  font-family: var(--font-body); font-size: 0.9rem;
+}
+
+.btn-skip {
+  background: transparent; color: var(--md-text-muted);
+  border: 1px solid var(--md-parch-deep);
+  padding: 0.5rem 1.1rem; border-radius: 6px; cursor: pointer;
+  font-family: var(--font-body); font-size: 0.9rem;
+}
+
+.drill-done {
+  padding: 2rem 0;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  color: var(--md-text-secondary);
+}
+
+/* ── Wörter inline practice ── */
+
+.expand-practice {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--md-parch-deep);
+}
+
+.expand-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--md-text-muted);
+  margin-bottom: 0.6rem;
+}
+
+.direction-toggle-inline {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.practice-prompt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.practice-prompt-text {
+  font-family: Georgia, serif;
+  font-size: 1.05rem;
+  color: var(--md-text-primary);
+}
+
+.practice-input-wrap {
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.practice-input {
+  flex: 1;
+  background: var(--md-parch);
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 6px;
+  color: var(--md-text-primary);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  padding: 0.5rem 0.75rem;
+  resize: vertical;
+}
+
+.practice-input:focus { outline: none; border-color: var(--md-accent); }
+
+.practice-correction {
+  background: var(--md-parch);
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin: 0.5rem 0;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+/* ── Filter hints + empty state ── */
+
+.filter-hint {
+  font-size: 0.75rem;
+  color: var(--md-text-muted);
+  font-weight: normal;
+}
+
+.empty-filter-state {
+  color: var(--md-text-muted);
+  font-style: italic;
+  padding: 2rem 0;
+  font-size: 0.95rem;
+}
+
+/* ── Heading size reduction for Üben + Wörter ── */
+
+.ueben-header h1,
+.woerter-page-header h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+
+.ueben-header .subtitle,
+.woerter-page-header .subtitle { font-size: 0.9rem; margin-bottom: 0.75rem; }
