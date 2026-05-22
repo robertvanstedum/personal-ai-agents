@@ -13,6 +13,17 @@
       "timestamp": "2026-05-21T08:27:22.658509",
       "context_title": "Was hast du heute auf Deutsch gelesen oder gehört?",
       "user": "robert"
+    },
+    {
+      "id": "ws_20260521_230011",
+      "mode": "tagebuch",
+      "text_original": "Ich werde nächste woche ein \"Interview\" haben.  Wie sagt man das?",
+      "text_corrected": "Ich werde nächste Woche ein Interview haben. Wie sagt man das?",
+      "notes": [
+        "Capitalization: 'Woche' must be capitalized as all German nouns are capitalized."
+      ],
+      "timestamp": "2026-05-21T23:00:11.608799",
+      "context_title": "Was war heute interessant oder überraschend?"
     }
   ]
 }

@@ -348,8 +348,8 @@
       "source": "ORF Wien",
       "date_fetched": "2026-05-20",
       "summary": "Seit 15 Jahren gibt es in Österreich den elektronisch überwachten Hausarrest mit Fußfesseln.  Die Zahl der Anträge steigt. Wer eine Fußfessel bekommt, entscheiden Justiz und der Verein Neustart.",
-      "status": "active",
-      "feedback": null,
+      "status": "archived",
+      "feedback": "pin",
       "user": "robert"
     },
     {
@@ -626,7 +626,267 @@
       "status": "active",
       "feedback": null,
       "user": "robert"
+    },
+    {
+      "id": "art_20260522_orf_00",
+      "title": "Festwochen eröffnen mit Patti Smith",
+      "url": "https://wien.orf.at/stories/3355180/",
+      "source": "ORF Wien",
+      "date_fetched": "2026-05-22",
+      "summary": "Heute Abend feiern die Wiener Festwochen die Eröffnung ihrer 75. Ausgabe mit einer ungewöhnlichen Mischung aus Punk, einem Schmusechor und norwegischem Black Metal. Erstmals findet das Event am Heldenplatz statt, mit Patti Smith als prägender Figur.",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_orf_01",
+      "title": "Bericht deckt Mängel bei ICE-Panne auf",
+      "url": "https://wien.orf.at/stories/3355289/",
+      "source": "ORF Wien",
+      "date_fetched": "2026-05-22",
+      "summary": "Dem ORF liegen erste Untersuchungsergebnisse zu einem Bahnvorfall vor rund zehn Monaten vor. Ein ICE war in einem Tunnel westlich von Wien stehengeblieben. Es dauerte mehr als sieben Stunden, rund 400 Passagiere aus dem Tunnel zu bringen. Der Bericht deckt nun Mängel auf.",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_orf_02",
+      "title": "Nach Brand: Beide Kinder gestorben",
+      "url": "https://wien.orf.at/stories/3355182/",
+      "source": "ORF Wien",
+      "date_fetched": "2026-05-22",
+      "summary": "Nach dem Brand in einer Wohnung in Wien-Ottakring am Montag sind heute im Abstand von wenigen Stunden beide Kinder gestorben. Sie hatten infolge des Brands einen Herz-Kreislauf-Stillstand erlitten, ehe sie von Feuerwehrleuten geborgen werden konnten.",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_orf_03",
+      "title": "Verwaltungsgericht „konstant überlastet“",
+      "url": "https://wien.orf.at/stories/3355257/",
+      "source": "ORF Wien",
+      "date_fetched": "2026-05-22",
+      "summary": "Seit 2014 soll das Wiener Verwaltungsgericht Verfahren rascher abwickeln. Das aber werde immer schwieriger, heißt es im Tätigkeitsbericht 2025. Zu wenig Personal, immer mehr Verfahren und dazu noch ein veraltetes Gebäude: Jetzt warnt das Gericht vor den Folgen.",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_orf_05",
+      "title": "Sicherer Umgang mit Akkus",
+      "url": "https://wien.orf.at/stories/3355270/",
+      "source": "ORF Wien",
+      "date_fetched": "2026-05-22",
+      "summary": "Akkus finden sich heute wohl fast in jedem Haushalt. Die Energiespeicher stecken in Handys, Spielzeug, Haushaltsgeräten und vielem mehr. Doch wie gerade erst ein Wohnungsbrand in Ottakring zeigt, kann von Akkus eine tödliche Gefahr ausgehen.",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_vie_00",
+      "title": "Austria Sweats at Pentecost with Up to 32 Degrees",
+      "url": "https://www.vienna.at/austria-sweats-at-pentecost-with-up-to-32-degrees/10186748",
+      "source": "Vienna.at",
+      "date_fetched": "2026-05-22",
+      "summary": "Good prospects for the Pentecost weekend: The weather is showing its best side, it will be early summer warm. There is hardly any precipitation, but plenty of sunshine throughout the country.",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_vie_01",
+      "title": "Österreich schwitzt zu Pfingsten bei bis zu 32 Grad",
+      "url": "https://www.vienna.at/oesterreich-schwitzt-zu-pfingsten-bei-bis-zu-32-grad/10185881",
+      "source": "Vienna.at",
+      "date_fetched": "2026-05-22",
+      "summary": "Gute Aussichten für das Pfingstwochenende: Das Wetter zeigt sich von seiner besten Seite, es wird frühsommerlich warm. Es gibt kaum Niederschlag, aber viel Sonnenschein im ganzen Land.",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_vie_02",
+      "title": "Public Viewing bei Eishockey Krimi  AUT vs. GER",
+      "url": "https://www.vienna.at/public-viewing-bei-eishockey-krimi-aut-vs-ger/10186742",
+      "source": "Vienna.at",
+      "date_fetched": "2026-05-22",
+      "summary": "Bulldogs Dornbirn veranstalten ein Public Viewing im Dornbirner Messestadion.",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_vie_04",
+      "title": "Viel mehr Todesopfer bei Lkw-Unfällen im Jahr 2025",
+      "url": "https://www.vienna.at/viel-mehr-todesopfer-bei-lkw-unfaellen-im-jahr-2025/10186736",
+      "source": "Vienna.at",
+      "date_fetched": "2026-05-22",
+      "summary": "Die Zahl der tödlichen Lkw-Unfälle ist 2025 stark gestiegen: 73 Menschen verloren bei Kollisionen mit Lastern ihr Leben, 31 mehr als im Jahr davor. Das berichtete die Mobilitätsorganisation VCÖ am Freitag auf Basis von Daten der Statistik Austria. Jeder 16. Lkw-Unfall endete tödlich. Die meisten Toten gab es mit 25 in Niederösterreich. Der VCÖ fordert Gegenmaßnahmen. Neben mehr Kontrollen und Ausrüstung mit Assistenzsystemen sei eine Verringerung des Schwerverkehrs nötig.",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_vie_05",
+      "title": "Waldbericht zeigt Fichten-Minus, mehr Vielfalt und Invasoren",
+      "url": "https://www.vienna.at/waldbericht-zeigt-fichten-minus-mehr-vielfalt-und-invasoren/10186730",
+      "source": "Vienna.at",
+      "date_fetched": "2026-05-22",
+      "summary": "Der österreichische Wald befindet sich in einer Übergangsphase, die auch von der Klimaerwärmung und dem Einwandern neuer Arten geprägt ist. Im neuen \"Waldbiodiversitätsbericht\" zeigen Expertinnen und Experten u.a. Fortschritte bei der Baumartenvielfalt in vielen Bereichen auf. Der Anteil der immer noch omnipräsenten Fichte nimmt demnach etwas ab, invasive Arten (Neophyten) wie die Robinie sind hingegen auf dem Vormarsch. Geschützte Flächen wurden nur leicht erweitert.",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_sta_00",
+      "title": "Eröffnung der Wiener Festwochen: Wunderheiler Braco schaut auch vorbei",
+      "url": "https://www.derstandard.at/story/3000000321510/eroeffnung-der-wiener-festwochen-wunderheiler-braco-schaut-auch-vorbei?ref=rss",
+      "source": "Standard Kultur",
+      "date_fetched": "2026-05-22",
+      "summary": "Der Kroate mit dem gütigen Silberblick tritt am Freitagabend neben Patti Smith, Witch Club Satan oder Nenda auf dem Heldenplatz auf. Ein Überblick",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_sta_01",
+      "title": "Rötzer: „Man sieht am Dekor, dass Frauen hier keine Spuren hinterlassen haben“",
+      "url": "https://www.derstandard.at/story/3000000321705/roetzer-man-sieht-am-dekor-dass-frauen-hier-keine-spuren-hinterlassen-haben?ref=rss",
+      "source": "Standard Kultur",
+      "date_fetched": "2026-05-22",
+      "summary": "Die neue Direktorin der Josefstadt will mehr Autorinnen zeigen, das Haus besser vernetzen, es international öffnen – und optisch für \"mehr Helligkeit\" sorgen",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_sta_02",
+      "title": "Österreichs Performance bei Biennale und ESC: Einmal hui, einmal pfuh",
+      "url": "https://www.derstandard.at/story/3000000321609/oesterreichs-performance-bei-biennale-und-esc-einmal-hui-einmal-pfuh?ref=rss",
+      "source": "Standard Kultur",
+      "date_fetched": "2026-05-22",
+      "summary": "Wer sehen will, wie sich die Kulturnation als modernes, zukunftsoffenes Land präsentiert, musste zuletzt eher nach Venedig als in die Wiener Stadthalle schauen",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_sta_03",
+      "title": "Was Marie Rötzer ab Herbst alles mit dem Theater in der Josefstadt vorhat",
+      "url": "https://www.derstandard.at/story/3000000321667/stellte-programm-vor-was-marie-roetzer-mit-dem-theater-in-der-josefstadt-vorhat?ref=rss",
+      "source": "Standard Kultur",
+      "date_fetched": "2026-05-22",
+      "summary": "Die designierte Direktorin bringt 14 Premieren mit Regiegrößen wie Jossi Wieler oder Stefan Pucher – neu im Ensemble sind etwa Olivia Grigolli, Lili Winderlich, Irem Gökçen",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_orf_00",
+      "title": "Zweifacher NASCAR-Champion Busch mit 41 Jahren gestorben",
+      "url": "https://sport.orf.at/stories/3156123/",
+      "source": "ORF Sport",
+      "date_fetched": "2026-05-22",
+      "summary": "Zweifacher NASCAR-Champion Busch mit 41 Jahren gestorben",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_orf_01",
+      "title": "Gastgeber Schweiz bleibt weiter makellos",
+      "url": "https://sport.orf.at/stories/3156122/",
+      "source": "ORF Sport",
+      "date_fetched": "2026-05-22",
+      "summary": "Gastgeber Schweiz bleibt weiter makellos",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_orf_02",
+      "title": "Ronaldo mit al-Nassr erstmals Meister",
+      "url": "https://sport.orf.at/stories/3156121/",
+      "source": "ORF Sport",
+      "date_fetched": "2026-05-22",
+      "summary": "Ronaldo mit al-Nassr erstmals Meister",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_orf_03",
+      "title": "Wolfsburg spielt in Relegationshinspiel nur remis",
+      "url": "https://sport.orf.at/stories/3156120/",
+      "source": "ORF Sport",
+      "date_fetched": "2026-05-22",
+      "summary": "Wolfsburg spielt in Relegationshinspiel nur remis",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_orf_04",
+      "title": "Atzgersdorf gewinnt Halbfinal-Hinspiel in Tulln",
+      "url": "https://sport.orf.at/stories/3156119/",
+      "source": "ORF Sport",
+      "date_fetched": "2026-05-22",
+      "summary": "Atzgersdorf gewinnt Halbfinal-Hinspiel in Tulln",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_orf_05",
+      "title": "Österreichs Akku erhält nötige Ladezeit",
+      "url": "https://sport.orf.at/stories/3156089/",
+      "source": "ORF Sport",
+      "date_fetched": "2026-05-22",
+      "summary": "Nach vier Spielen in fünf Tagen bei der WM in Zürich darf Österreichs Nationalteam mit zwei spielfreien Tagen seine Batterien aufladen. Davor zeigte Gastgeber Schweiz den Mannen von Teamchef Roger Bader mit einem 9:0 eindrucksvoll den Unterschied zwischen Welt- und normaler A-Klasse auf. Dennoch schöpfte das Team auch aus dem Debakel Mut für das wohl entscheidende Spiel um den Aufstieg ins Viertelfinale am Samstag (20.15 Uhr, live in ORF1) gegen Deutschland. Die Schönheiten Zürichs sollen beim Kopffreikriegen zusätzlich helfen.",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_wie_00",
+      "title": "Die billigsten Tankstellen in Zwettl",
+      "url": "https://www.meinbezirk.at/zwettl/c-motor/die-billigsten-tankstellen-in-zwettl_a5849095",
+      "source": "Wiener Bezirksblätter",
+      "date_fetched": "2026-05-22",
+      "summary": "Hier erfährst du, wo in Zwettl die billigsten Tankstellen sind, wie man günstig tankt und wie man Sprit sparen kann. ZWETTL. In ganz Österreich ist es immer am günstigsten, knapp vor 12 Uhr zu tanken. Denn Tankstellen dürfen nur einmal täglich bis 12 Uhr, die Spritpreise erhöhen. Preissenkungen sind jedoch jederzeit in unbegrenzter Anzahl und Ausmaß möglich. Wir aktualisieren die Liste der günstigsten Tankstellen in Zwettl täglich mit den aktuell gültigen Preisen. Die Niederösterreich Übersicht...",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_wie_01",
+      "title": "Die billigsten Tankstellen in Grieskirchen & Eferding",
+      "url": "https://www.meinbezirk.at/grieskirchen-eferding/c-motor/die-billigsten-tankstellen-in-grieskirchen-and-eferding_a5748142",
+      "source": "Wiener Bezirksblätter",
+      "date_fetched": "2026-05-22",
+      "summary": "Hier erfährst du, wo in Grieskirchen & Eferding die billigsten Tankstellen sind, wie man günstig tankt und wie man Sprit sparen kann. GRIESKIRCHEN & EFERDING. In ganz Österreich ist es immer am günstigsten, knapp vor 12 Uhr zu tanken. Denn Tankstellen dürfen nur einmal täglich bis 12 Uhr, die Spritpreise erhöhen. Preissenkungen sind jedoch jederzeit in unbegrenzter Anzahl und Ausmaß möglich. Wir aktualisieren die Liste der günstigsten Tankstellen in Grieskirchen & Eferding täglich mit den...",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_wie_02",
+      "title": "Das sind aktuell die günstigsten Tankstellen in Reutte",
+      "url": "https://www.meinbezirk.at/reutte/c-motor/das-sind-aktuell-die-guenstigsten-tankstellen-in-reutte_a5794201",
+      "source": "Wiener Bezirksblätter",
+      "date_fetched": "2026-05-22",
+      "summary": "Wir haben für dich tagesaktuell die billigsten Tankstellen in der Region Reutte. Hier erfährst du, wo du am günstigsten tankst und wie man sonst noch Sprit sparen kann. REUTTE. Nur einmal am Tag dürfen die Spritpreise bei den Tankstellen erhöht werden, nämlich um 12 Uhr. Deswegen ist es am günstigsten kurz vor 12 zu tanken. Die billigsten Tankstellen in der Region Reutte findest du in diesem Beitrag. Wir stellen dir eine tägliche Aktualisierung zur Verfügung (Daten von E-Control). Wie spare ich...",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_wie_03",
+      "title": "Die billigsten Tankstellen in Graz",
+      "url": "https://www.meinbezirk.at/graz/c-motor/die-billigsten-tankstellen-in-graz_a5821870",
+      "source": "Wiener Bezirksblätter",
+      "date_fetched": "2026-05-22",
+      "summary": "Hier erfährst du, wo in Graz  die billigsten Tankstellen sind, wie man günstig tankt und wie man Sprit sparen kann. GRAZ. . In ganz Österreich ist es immer am günstigsten, knapp vor 12 Uhr zu tanken. Denn Tankstellen dürfen ihre Preise nur einmal täglich um 12 Uhr mittags erhöhen. Preissenkungen sind jedoch jederzeit in unbegrenzter Anzahl und Ausmaß möglich. Wir aktualisieren die Liste der günstigsten Tankstellen in Graz täglich mit den aktuell gültigen Preisen. Die Daten stammen von der...",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_wie_04",
+      "title": "Das sind aktuell die günstigsten Tankstellen im Stubai-/Wipptal",
+      "url": "https://www.meinbezirk.at/stubai-wipptal/c-motor/das-sind-aktuell-die-guenstigsten-tankstellen-im-stubai-wipptal_a5794519",
+      "source": "Wiener Bezirksblätter",
+      "date_fetched": "2026-05-22",
+      "summary": "Wir haben für dich tagesaktuell die billigsten Tankstellen im Stubai-/Wipptal. Hier erfährst du, wo du am günstigsten tankst und wie man sonst noch Sprit sparen kann. STUBAI-WIPPTAL. Nur einmal am Tag dürfen die Spritpreise bei den Tankstellen erhöht werden, nämlich um 12 Uhr. Deswegen ist es am günstigsten kurz vor 12 zu tanken. Die billigsten Tankstellen im Stubai-Wipptal findest du in diesem Beitrag. Wir stellen dir eine tägliche Aktualisierung zur Verfügung (Daten von E-Control). Wie spare...",
+      "status": "active",
+      "feedback": null
+    },
+    {
+      "id": "art_20260522_wie_05",
+      "title": "Das sind aktuell die günstigsten Tankstellen im Westlichen Mittelgebirge",
+      "url": "https://www.meinbezirk.at/westliches-mittelgebirge/c-motor/das-sind-aktuell-die-guenstigsten-tankstellen-im-westlichen-mittelgebirge_a5794483",
+      "source": "Wiener Bezirksblätter",
+      "date_fetched": "2026-05-22",
+      "summary": "Wir haben für dich tagesaktuell die billigsten Tankstellen im Westlichen Mittelgebirge. Hier erfährst du, wo du am günstigsten tankst und wie man sonst noch Sprit sparen kann. Westliches Mittelgebirge. Nur einmal am Tag dürfen die Spritpreise bei den Tankstellen erhöht werden, nämlich um 12 Uhr. Deswegen ist es am günstigsten kurz vor 12 zu tanken. Die billigsten Tankstellen im Westlichen Mittelgebirge findest du in diesem Beitrag. Wir stellen dir eine tägliche Aktualisierung zur Verfügung...",
+      "status": "active",
+      "feedback": null
     }
   ],
-  "last_fetched": "2026-05-20T21:26:15.927233"
+  "last_fetched": "2026-05-22T00:03:27.174786"
 }

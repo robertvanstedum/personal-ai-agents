@@ -42,10 +42,10 @@
       "english": "I really liked it.",
       "scene": "",
       "added": "2026-05-12",
-      "status": "library",
+      "status": "practice",
       "verb_hint": "",
-      "practice_count": 3,
-      "last_practiced": "2026-05-12",
+      "practice_count": 4,
+      "last_practiced": "2026-05-21T23:40:46.442259",
       "user": "robert"
     },
     {
@@ -229,6 +229,19 @@
       "source_sentence": "Die beiden Bezirksvorsteher Georg Papai und Marcus Franz (beide SPÖ) wollen die Forderung nach mehr Polizei in Floridsdorf und Favoriten mit einer Unterschriftenaktion untermauern. Ziel ist eine Disku",
       "source_article": "Favoriten und Floridsdorf wollen mehr Polizisten",
       "user": "robert"
+    },
+    {
+      "id": "ph_20260521_019",
+      "german": "Die Zahl der Anträge steigt",
+      "english": "The number of applications is increasing",
+      "scene": "lesen",
+      "added": "2026-05-21",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Seit 15 Jahren gibt es in Österreich den elektronisch überwachten Hausarrest mit Fußfesseln.  Die Zahl der Anträge steigt. Wer eine Fußfessel bekommt, entscheiden Justiz und der Verein Neustart.",
+      "source_article": "Zahl der Anträge auf Fußfesseln steigt"
     }
   ]
 }
