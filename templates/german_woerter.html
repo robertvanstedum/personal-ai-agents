@@ -8,7 +8,7 @@
 {% block content %}
 <div class="woerter-page-header">
   <h1>Wörter</h1>
-  <p class="subtitle">Gespeicherte Vokabeln und Phrasen aus dem Lesen.</p>
+  <p class="subtitle">Gespeicherte Vokabeln und Phrasen — aus dem Lesen, dem Schreiben und dem Üben.</p>
 </div>
 
 <!-- ── Filter bar ──────────────────────────────────────────────────────── -->
@@ -18,8 +18,8 @@
     <select class="filter-select" id="filter-quelle">
       <option value="">Alle</option>
       <option value="lesen">Lesen</option>
-      <option value="schreiben">Schreiben</option>
-      <option value="manuell">Manuell</option>
+      <option value="telegram">Telegram</option>
+      <option value="manual">Manuell</option>
     </select>
   </label>
   <label class="filter-label">
@@ -27,15 +27,18 @@
     <select class="filter-select" id="filter-status">
       <option value="">Alle</option>
       <option value="library">Bibliothek</option>
-      <option value="drill">Drill-Pool</option>
+      <option value="practice">Üben</option>
+      <option value="review_ready">Bereit zu prüfen</option>
       <option value="mastered">Gelernt</option>
     </select>
   </label>
-  <span class="filter-count" id="filter-count">5 Einträge</span>
+  <span class="filter-count" id="filter-count"></span>
+  <a class="btn-ghost woerter-export-all" href="/api/anki-export" download>Anki Export — Alle</a>
 </div>
 
 <!-- ── Word table ──────────────────────────────────────────────────────── -->
 <div class="woerter-table-wrap">
+  {% if entries %}
   <table class="woerter-table" id="woerter-table">
     <thead>
       <tr>
@@ -43,117 +46,75 @@
         <th>Englisch</th>
         <th>Quelle</th>
         <th>Datum</th>
+        <th>Status</th>
         <th></th>
       </tr>
     </thead>
     <tbody id="woerter-tbody">
-      <!-- Stub rows -->
-      <tr class="woerter-row" data-id="1">
-        <td class="w-german">das Rathaus</td>
-        <td class="w-english">city hall</td>
-        <td class="w-source">lesen</td>
-        <td class="w-date">2026-05-21</td>
-        <td class="w-expand-col"><button class="btn-expand">↓</button></td>
+      {% for entry in entries %}
+      <tr class="woerter-row"
+          data-id="{{ entry.id }}"
+          data-source="{{ entry.scene or '' }}"
+          data-status="{{ entry.status or 'library' }}">
+        <td class="w-german">{{ entry.german }}</td>
+        <td class="w-english">{{ entry.english }}</td>
+        <td class="w-source">{{ entry.scene or '—' }}</td>
+        <td class="w-date">{{ entry.added or '' }}</td>
+        <td class="w-status">
+          <span class="status-badge status-{{ entry.status or 'library' }}">
+            {% if entry.status == 'practice' %}Üben
+            {% elif entry.status == 'review_ready' %}Prüfen
+            {% elif entry.status == 'mastered' %}Gelernt
+            {% else %}Bibliothek{% endif %}
+          </span>
+        </td>
+        <td class="w-expand-col"><button class="btn-expand" aria-label="Details">↓</button></td>
       </tr>
-      <tr class="woerter-detail" id="detail-1" style="display:none">
-        <td colspan="5">
+      <tr class="woerter-detail" id="detail-{{ entry.id }}" style="display:none">
+        <td colspan="6">
           <div class="detail-inner">
-            <div class="detail-context">Das Rathaus am Ring ist ein beeindruckendes Gebäude.</div>
-            <div class="detail-source-article">ORF Wien · 2026-05-21</div>
-            <textarea class="detail-notiz" placeholder="Notiz…" rows="2"></textarea>
+            {% if entry.source_sentence %}
+            <div class="detail-context">"{{ entry.source_sentence }}"</div>
+            {% endif %}
+            {% if entry.source_article %}
+            <div class="detail-source-article">{{ entry.source_article }}</div>
+            {% endif %}
             <div class="detail-actions">
-              <button class="btn-ghost">Fördern → Üben</button>
-              <button class="btn-ghost">Anki Export</button>
+              {% if entry.status == 'library' %}
+              <button class="btn-ghost btn-promote" data-id="{{ entry.id }}" data-next="practice">
+                Fördern → Üben
+              </button>
+              {% elif entry.status == 'practice' %}
+              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="library">
+                ← Bibliothek
+              </button>
+              {% elif entry.status == 'review_ready' %}
+              <button class="btn-ghost btn-promote" data-id="{{ entry.id }}" data-next="mastered">
+                ✓ Als gelernt markieren
+              </button>
+              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="practice">
+                ← Weiter üben
+              </button>
+              {% elif entry.status == 'mastered' %}
+              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="practice">
+                ← Wieder üben
+              </button>
+              {% endif %}
+              <button class="btn-ghost btn-speak" data-text="{{ entry.german }}">🔊</button>
+              <a class="btn-ghost" href="/api/anki-export?status={{ entry.status }}" download>Anki Export</a>
             </div>
           </div>
         </td>
       </tr>
-
-      <tr class="woerter-row" data-id="2">
-        <td class="w-german">der Bürgermeister</td>
-        <td class="w-english">mayor</td>
-        <td class="w-source">lesen</td>
-        <td class="w-date">2026-05-20</td>
-        <td class="w-expand-col"><button class="btn-expand">↓</button></td>
-      </tr>
-      <tr class="woerter-detail" id="detail-2" style="display:none">
-        <td colspan="5">
-          <div class="detail-inner">
-            <div class="detail-context">Der Bürgermeister sprach über neue Projekte.</div>
-            <div class="detail-source-article">Heute · 2026-05-20</div>
-            <textarea class="detail-notiz" placeholder="Notiz…" rows="2"></textarea>
-            <div class="detail-actions">
-              <button class="btn-ghost">Fördern → Üben</button>
-              <button class="btn-ghost">Anki Export</button>
-            </div>
-          </div>
-        </td>
-      </tr>
-
-      <tr class="woerter-row" data-id="3">
-        <td class="w-german">die Unterkunft</td>
-        <td class="w-english">accommodation</td>
-        <td class="w-source">schreiben</td>
-        <td class="w-date">2026-05-19</td>
-        <td class="w-expand-col"><button class="btn-expand">↓</button></td>
-      </tr>
-      <tr class="woerter-detail" id="detail-3" style="display:none">
-        <td colspan="5">
-          <div class="detail-inner">
-            <div class="detail-context">Ich habe eine günstige Unterkunft gefunden.</div>
-            <div class="detail-source-article">Schreiben · 2026-05-19</div>
-            <textarea class="detail-notiz" placeholder="Notiz…" rows="2"></textarea>
-            <div class="detail-actions">
-              <button class="btn-ghost">Fördern → Üben</button>
-              <button class="btn-ghost">Anki Export</button>
-            </div>
-          </div>
-        </td>
-      </tr>
-
-      <tr class="woerter-row" data-id="4">
-        <td class="w-german">verständlich</td>
-        <td class="w-english">understandable</td>
-        <td class="w-source">lesen</td>
-        <td class="w-date">2026-05-18</td>
-        <td class="w-expand-col"><button class="btn-expand">↓</button></td>
-      </tr>
-      <tr class="woerter-detail" id="detail-4" style="display:none">
-        <td colspan="5">
-          <div class="detail-inner">
-            <div class="detail-context">Das ist gut verständlich erklärt.</div>
-            <div class="detail-source-article">Standard · 2026-05-18</div>
-            <textarea class="detail-notiz" placeholder="Notiz…" rows="2"></textarea>
-            <div class="detail-actions">
-              <button class="btn-ghost">Fördern → Üben</button>
-              <button class="btn-ghost">Anki Export</button>
-            </div>
-          </div>
-        </td>
-      </tr>
-
-      <tr class="woerter-row" data-id="5">
-        <td class="w-german">der Ausflug</td>
-        <td class="w-english">excursion / day trip</td>
-        <td class="w-source">manuell</td>
-        <td class="w-date">2026-05-17</td>
-        <td class="w-expand-col"><button class="btn-expand">↓</button></td>
-      </tr>
-      <tr class="woerter-detail" id="detail-5" style="display:none">
-        <td colspan="5">
-          <div class="detail-inner">
-            <div class="detail-context">Wir planen einen Ausflug nach Klosterneuburg.</div>
-            <div class="detail-source-article">Manuell</div>
-            <textarea class="detail-notiz" placeholder="Notiz…" rows="2"></textarea>
-            <div class="detail-actions">
-              <button class="btn-ghost">Fördern → Üben</button>
-              <button class="btn-ghost">Anki Export</button>
-            </div>
-          </div>
-        </td>
-      </tr>
+      {% endfor %}
     </tbody>
   </table>
+  {% else %}
+  <div class="woerter-empty">
+    <p>Noch keine Wörter gespeichert.</p>
+    <p class="hint">Markiere Wörter beim Lesen, um sie hier zu sehen.</p>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
 
@@ -167,7 +128,7 @@ document.body.classList.add('parch-mode');
   document.querySelectorAll('.btn-expand').forEach(btn => {
     btn.addEventListener('click', () => {
       const row = btn.closest('.woerter-row');
-      const id  = row.dataset.id;
+      const id = row.dataset.id;
       const detail = document.getElementById('detail-' + id);
       const open = detail.style.display !== 'none';
       detail.style.display = open ? 'none' : 'table-row';
@@ -175,12 +136,62 @@ document.body.classList.add('parch-mode');
     });
   });
 
-  // ── Filter stubs (UI only) ───────────────────────────────────────────
-  ['filter-quelle', 'filter-status'].forEach(id => {
-    document.getElementById(id).addEventListener('change', () => {
-      document.getElementById('filter-count').textContent = '5 Einträge';
+  // ── Status promote/demote ────────────────────────────────────────────
+  document.querySelectorAll('.btn-promote, .btn-demote').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const next = btn.dataset.next;
+      const resp = await fetch('/api/phrase-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: next })
+      });
+      if ((await resp.json()).ok) {
+        // Reload to reflect updated status
+        window.location.reload();
+      }
     });
   });
+
+  // ── Voice output ─────────────────────────────────────────────────────
+  document.querySelectorAll('.btn-speak').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const text = btn.dataset.text;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'de-DE';
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    });
+  });
+
+  // ── Filter ───────────────────────────────────────────────────────────
+  const rows = Array.from(document.querySelectorAll('.woerter-row'));
+  const countEl = document.getElementById('filter-count');
+
+  function applyFilters() {
+    const quelle = document.getElementById('filter-quelle').value;
+    const status = document.getElementById('filter-status').value;
+    let visible = 0;
+    rows.forEach(row => {
+      const matchQ = !quelle || row.dataset.source === quelle;
+      const matchS = !status || row.dataset.status === status;
+      const show = matchQ && matchS;
+      row.style.display = show ? '' : 'none';
+      // also hide the detail row when parent is hidden
+      const detail = document.getElementById('detail-' + row.dataset.id);
+      if (detail && !show) {
+        detail.style.display = 'none';
+        const btn = row.querySelector('.btn-expand');
+        if (btn) btn.textContent = '↓';
+      }
+      if (show) visible++;
+    });
+    countEl.textContent = visible + ' Eintr' + (visible === 1 ? 'ag' : 'äge');
+  }
+
+  document.getElementById('filter-quelle').addEventListener('change', applyFilters);
+  document.getElementById('filter-status').addEventListener('change', applyFilters);
+  applyFilters(); // set initial count
 })();
 </script>
 {% endblock %}

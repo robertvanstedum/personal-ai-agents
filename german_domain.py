@@ -10,6 +10,7 @@ Group C: resolver functions — sync, with optional progress_cb for mid-executio
 """
 
 import html
+import os
 import re
 import random
 import time
@@ -22,6 +23,7 @@ GERMAN_BASE = _BASE_DIR / "_NewDomains" / "language-german"
 GERMAN_DIR  = GERMAN_BASE / "language" / "german"
 VENV_PYTHON = _BASE_DIR / "venv" / "bin" / "python3"
 ROBERT_CHAT_ID = 8379221702
+DEFAULT_USER = os.environ.get("GERMAN_USER", "robert")
 
 # ─── Session / intent patterns ────────────────────────────────────────────────
 
@@ -920,3 +922,39 @@ def save_writing_entry(mode: str, text_original: str, text_corrected: str = "",
     data["entries"] = data["entries"][-50:]
     _WRITING_SESSIONS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
     return entry
+
+
+# ─── Wörter / Phrasebook ──────────────────────────────────────────────────────
+
+def get_phrasebook_entries(source: str = None, status: str = None,
+                           user: str = DEFAULT_USER) -> list:
+    """
+    Returns phrasebook entries sorted by date desc.
+    source: scene tag filter — 'lesen', 'telegram', 'manual', or None for all.
+    status: 'library', 'practice', 'review_ready', 'mastered', or None for all.
+    """
+    data = _load_phrasebook()
+    entries = [e for e in data.get("phrases", []) if e.get("user") == user]
+    if source:
+        entries = [e for e in entries if e.get("scene", "") == source]
+    if status:
+        entries = [e for e in entries if e.get("status", "") == status]
+    return sorted(entries, key=lambda e: e.get("added", ""), reverse=True)
+
+
+def update_phrase_status(phrase_id: str, new_status: str,
+                         user: str = DEFAULT_USER) -> bool:
+    """
+    Updates status on a phrase. Returns True if found and updated.
+    Valid statuses: library, practice, review_ready, mastered.
+    """
+    valid = {"library", "practice", "review_ready", "mastered"}
+    if new_status not in valid:
+        return False
+    data = _load_phrasebook()
+    for entry in data.get("phrases", []):
+        if entry.get("id") == phrase_id and entry.get("user") == user:
+            entry["status"] = new_status
+            _save_phrasebook(data)
+            return True
+    return False

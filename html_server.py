@@ -22,6 +22,8 @@ from german_domain import (
     correct_writing,
     save_writing_entry,
     save_note,
+    get_phrasebook_entries,
+    update_phrase_status,
 )
 
 BASE_DIR = Path(__file__).parent
@@ -69,7 +71,8 @@ def ueben():
 
 @app.route("/woerter")
 def woerter():
-    return render_template("german_woerter.html", active="woerter")
+    entries = get_phrasebook_entries()
+    return render_template("german_woerter.html", active="woerter", entries=entries)
 
 
 @app.route("/bibliothek")
@@ -166,6 +169,39 @@ def api_note_save():
         rewritten=body.get("rewritten", ""),
     )
     return jsonify({"success": True, "note_id": note["note_id"]})
+
+
+# ── Wörter API ───────────────────────────────────────────────────────────────
+
+@app.route("/api/phrase-update", methods=["POST"])
+def api_phrase_update():
+    body = request.get_json(force=True)
+    phrase_id = body.get("id", "")
+    new_status = body.get("status", "")
+    if not phrase_id or not new_status:
+        return jsonify({"ok": False, "error": "id and status required"}), 400
+    ok = update_phrase_status(phrase_id, new_status)
+    return jsonify({"ok": ok})
+
+
+@app.route("/api/anki-export")
+def api_anki_export():
+    source = request.args.get("source") or None
+    status = request.args.get("status") or None
+    entries = get_phrasebook_entries(source=source, status=status)
+    lines = ["German\tEnglish\tContext"]
+    for e in entries:
+        german = e.get("german", "").replace("\t", " ")
+        english = e.get("english", "").replace("\t", " ")
+        context = e.get("source_sentence", "").replace("\t", " ")[:200]
+        lines.append(f"{german}\t{english}\t{context}")
+    tsv = "\n".join(lines)
+    from flask import Response
+    return Response(
+        tsv,
+        mimetype="text/tab-separated-values",
+        headers={"Content-Disposition": "attachment; filename=mein-deutsch-anki.tsv"}
+    )
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
