@@ -338,9 +338,18 @@ body.landing-mode {
   height: 44px;
   background: var(--md-strip-dark);
   display: flex;
-  align-items: center;
-  padding: 0 2rem;
+  align-items: flex-end;
+  padding: 0 2rem 0.6rem;
   flex-shrink: 0;
+  background-size: cover;
+}
+
+.page-strip.ueben,
+.page-strip.lesen,
+.page-strip.schreiben,
+.page-strip.woerter,
+.page-strip.archiv {
+  height: 120px;
 }
 
 .page-strip-label {
@@ -2481,30 +2490,25 @@ body.reading-mode nav {
 .woerter-page-header .subtitle { font-size: 0.9rem; margin-bottom: 0.75rem; }
 
 /* ── Tab strip photos — v1.0 ─────────────────────────────────────────── */
-body.ueben-mode .page-strip {
+.page-strip.ueben {
     background-image: url('/static/photos/street_s-bahn_IMG_5434.jpg');
-    background-size: cover;
-    background-position: center 40%;
-}
-body.lesen-mode .page-strip {
-    background-image: url('/static/photos/burggarten_2_IMG_5541.jpg');
-    background-size: cover;
     background-position: center 60%;
 }
-body.schreiben-mode .page-strip {
+.page-strip.lesen {
+    background-image: url('/static/photos/burggarten_2_IMG_5541.jpg');
+    background-position: center 55%;
+}
+.page-strip.schreiben {
     background-image: url('/static/photos/Vera_cafe_IMG_5211_2.jpg');
-    background-size: cover;
-    background-position: right center;
+    background-position: center 70%;
 }
-body.woerter-mode .page-strip {
+.page-strip.woerter {
     background-image: url('/static/photos/flower_market_IMG_5162_2.jpg');
-    background-size: cover;
-    background-position: center center;
+    background-position: center 50%;
 }
-body.archiv-mode .page-strip {
+.page-strip.archiv {
     background-image: url('/static/photos/bike_trail_IMG_5464.jpg');
-    background-size: cover;
-    background-position: center 30%;
+    background-position: center 40%;
 }
 
 /* ── Voice input component — v1.0 ────────────────────────────────────── */
