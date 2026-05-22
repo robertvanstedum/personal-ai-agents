@@ -1,17 +1,14 @@
 {% extends "german_base.html" %}
 {% block title %}Schreiben{% endblock %}
 
-{% block page_footer %}
-<div class="tab-hero schreiben tab-hero-footer">
-  <div class="tab-hero-content">
-    <div class="tab-hero-label">[Schreibtisch]</div>
-    <h1>Schreiben</h1>
-  </div>
-</div>
-{% endblock %}
-
 {% block content %}
-<p class="tab-description">Schreib auf Deutsch — mit Korrektur und Verlauf.</p>
+<div class="tab-layout-split">
+  <div class="tab-content">
+    <div class="tab-split-header">
+      <div class="tab-hero-label">[SCHREIBTISCH]</div>
+      <h1>Schreiben</h1>
+      <p class="tab-description">Schreib auf Deutsch — mit Korrektur und Verlauf.</p>
+    </div>
 
 <div class="mode-toggle">
   <button class="mode-btn active" data-mode="tagebuch">Tagebuch</button>
@@ -109,6 +106,11 @@
   {% endfor %}
 </section>
 {% endif %}
+  </div><!-- .tab-content -->
+  <div class="tab-panel-photo">
+    <img src="/static/photos/Vera_cafe_IMG_5211_2.jpg" alt="Café Sperl">
+  </div>
+</div><!-- .tab-layout-split -->
 {% endblock %}
 
 {% block scripts %}

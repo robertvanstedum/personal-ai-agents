@@ -2551,9 +2551,9 @@ body.reading-mode nav {
     border-color: var(--md-accent);
 }
 
-/* ── Split panel layout (Admin, Archiv) ──────────────────────────────── */
-body.admin-mode .page,
-body.archiv-mode .page {
+/* ── Split panel layout (Üben, Schreiben) ────────────────────────────── */
+body.ueben-mode .page,
+body.schreiben-mode .page {
     max-width: none;
     padding: 0;
 }
@@ -2610,16 +2610,25 @@ body.archiv-mode .page {
 }
 
 /* Pages with footer hero: don't stretch main to full viewport height */
-body.ueben-mode .page,
-body.schreiben-mode .page,
 body.woerter-mode .page {
     flex: 0 0 auto;
 }
 
-/* ── Footer hero (Üben, Schreiben, Wörter — photo after content) ─────── */
+/* ── Footer hero (Wörter — photo after content) ──────────────────────── */
 .tab-hero-footer {
     height: 180px;
     margin-top: 4rem;
+}
+
+/* Wörter footer hero — taller */
+body.woerter-mode .tab-hero-footer {
+    height: 260px;
+}
+
+/* Wörter table — cap visible rows */
+.woerter-table-wrap {
+    max-height: 420px;
+    overflow-y: auto;
 }
 
 .tab-hero-footer .tab-hero-content h1 {

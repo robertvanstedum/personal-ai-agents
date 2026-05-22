@@ -1,17 +1,14 @@
 {% extends "german_base.html" %}
 {% block title %}Üben{% endblock %}
 
-{% block page_footer %}
-<div class="tab-hero ueben tab-hero-footer">
-  <div class="tab-hero-content">
-    <div class="tab-hero-label">[Wien Außenaufnahme]</div>
-    <h1>Üben</h1>
-  </div>
-</div>
-{% endblock %}
-
 {% block content %}
-<p class="tab-description">Wähle eine Persona, wähle eine Szene, und starte die Sitzung — per Telegram, Kopieren oder als Datei.</p>
+<div class="tab-layout-split">
+  <div class="tab-content">
+    <div class="tab-split-header">
+      <div class="tab-hero-label">[WIEN AUSSENAUFNAHME]</div>
+      <h1>Üben</h1>
+      <p class="tab-description">Wähle eine Persona, wähle eine Szene, und starte die Sitzung.</p>
+    </div>
 
 <!-- ── Sub-nav ────────────────────────────────────────────────────────── -->
 <div class="ueben-subnav">
@@ -147,6 +144,11 @@
   </div>
   {% endif %}
 </div>
+  </div><!-- .tab-content -->
+  <div class="tab-panel-photo">
+    <img src="/static/photos/street_s-bahn_IMG_5434.jpg" alt="Wien Straße">
+  </div>
+</div><!-- .tab-layout-split -->
 {% endblock %}
 
 {% block scripts %}
