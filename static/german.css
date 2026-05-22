@@ -2517,11 +2517,11 @@ body.reading-mode nav {
 /* ── Tab hero photos — v1.1 ──────────────────────────────────────────── */
 .tab-hero.ueben {
     background-image: url('/static/photos/street_s-bahn_IMG_5434.jpg');
-    background-position: center 60%;
+    background-position: center 75%;
 }
 .tab-hero.schreiben {
     background-image: url('/static/photos/Vera_cafe_IMG_5211_2.jpg');
-    background-position: center 70%;
+    background-position: bottom center;
 }
 .tab-hero.woerter {
     background-image: url('/static/photos/flower_market_IMG_5162_2.jpg');
@@ -2560,7 +2560,7 @@ body.archiv-mode .page {
 
 .tab-layout-split {
     display: grid;
-    grid-template-columns: 1fr 280px;
+    grid-template-columns: 1fr 380px;
     gap: 0;
     min-height: calc(100vh - 70px);
 }
@@ -2607,4 +2607,21 @@ body.archiv-mode .page {
     .tab-panel-photo {
         display: none;
     }
+}
+
+/* Pages with footer hero: don't stretch main to full viewport height */
+body.ueben-mode .page,
+body.schreiben-mode .page,
+body.woerter-mode .page {
+    flex: 0 0 auto;
+}
+
+/* ── Footer hero (Üben, Schreiben, Wörter — photo after content) ─────── */
+.tab-hero-footer {
+    height: 180px;
+    margin-top: 4rem;
+}
+
+.tab-hero-footer .tab-hero-content h1 {
+    font-size: 1.8rem;
 }
