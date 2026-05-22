@@ -942,6 +942,42 @@ def get_phrasebook_entries(source: str = None, status: str = None,
     return sorted(entries, key=lambda e: e.get("added", ""), reverse=True)
 
 
+def get_personas() -> list:
+    """Returns all personas from personas.json. Shared config — not user-scoped."""
+    path = GERMAN_DIR / "config" / "personas.json"
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return []
+
+
+def get_drill_pool(user: str = DEFAULT_USER) -> list:
+    """Phrasebook entries with status == 'practice' for this user."""
+    return get_phrasebook_entries(status="practice", user=user)
+
+
+def save_drill_result(phrase_id: str, result: str, user: str = DEFAULT_USER) -> dict:
+    """
+    Records drill result. result = "correct" | "wrong" | "skip"
+    Updates practice_count, last_practiced.
+    Amendment 4: at 5 correct, sets status='review_ready' — never auto-promotes to mastered.
+    Returns updated entry dict, or {} if not found.
+    """
+    data = _load_phrasebook()
+    for entry in data.get("phrases", []):
+        if entry.get("id") == phrase_id and entry.get("user") == user:
+            if result == "correct":
+                entry["practice_count"] = entry.get("practice_count", 0) + 1
+            entry["last_practiced"] = datetime.datetime.now().isoformat()
+            if result == "correct" and entry.get("practice_count", 0) >= 5:
+                entry["status"] = "review_ready"
+            _save_phrasebook(data)
+            return entry
+    return {}
+
+
 def update_phrase_status(phrase_id: str, new_status: str,
                          user: str = DEFAULT_USER) -> bool:
     """

@@ -8,46 +8,39 @@
 {% block content %}
 <div class="ueben-header">
   <h1>Üben</h1>
-  <p class="subtitle">Wähle eine Persona und starte eine Konversationsszene.</p>
+  <p class="subtitle">Konversationsszenen mit Wiener Personas oder Vokabeln aus dem Drill-Pool üben.</p>
 </div>
 
-<!-- ── Breadcrumb sub-nav ──────────────────────────────────────────────── -->
+<!-- ── Sub-nav ────────────────────────────────────────────────────────── -->
 <div class="ueben-subnav">
   <button class="ueben-subnav-btn active" data-section="szenen">Szenen</button>
-  <button class="ueben-subnav-btn" data-section="verb-drill">Verb-Drill</button>
-  <button class="ueben-subnav-btn" data-section="phrasen-drill">Phrasen-Drill</button>
-  <button class="ueben-subnav-btn" data-section="drill-pool">Drill-Pool</button>
-  <button class="ueben-subnav-btn" data-section="anki">Anki-Karten</button>
+  <button class="ueben-subnav-btn" data-section="drill-pool">
+    Drill-Pool
+    {% if drill_pool %}<span class="pool-badge">{{ drill_pool|length }}</span>{% endif %}
+  </button>
 </div>
 
-<!-- ── Szenen section ─────────────────────────────────────────────────── -->
+<!-- ── Szenen ─────────────────────────────────────────────────────────── -->
 <div class="ueben-section" id="section-szenen">
+
+  {% if drill_pool %}
+  <div class="drill-pool-nudge">
+    <span>{{ drill_pool|length }} Phrase{{ 'n' if drill_pool|length != 1 }} im Drill-Pool</span>
+    <button class="btn-ghost btn-sm" id="nudge-drill">Jetzt üben →</button>
+  </div>
+  {% endif %}
+
   <div class="persona-grid" id="persona-grid">
-
-    <div class="persona-card" data-persona="maria">
-      <div class="persona-avatar">M</div>
+    {% for p in personas %}
+    {% set slug = p.name | lower | replace(' ', '_') | replace('.', '') %}
+    <div class="persona-card" data-persona="{{ loop.index0 }}">
+      <div class="persona-avatar">{{ p.name[0] }}</div>
       <div class="persona-info">
-        <div class="persona-name">Maria</div>
-        <div class="persona-role">Kellnerin · Kaffeehaus</div>
+        <div class="persona-name">{{ p.name }}</div>
+        <div class="persona-role">{{ p.role }}</div>
       </div>
     </div>
-
-    <div class="persona-card" data-persona="fischer">
-      <div class="persona-avatar">F</div>
-      <div class="persona-info">
-        <div class="persona-name">Herr Fischer</div>
-        <div class="persona-role">Rezeptionist · Hotel</div>
-      </div>
-    </div>
-
-    <div class="persona-card" data-persona="georg">
-      <div class="persona-avatar">G</div>
-      <div class="persona-info">
-        <div class="persona-name">Georg</div>
-        <div class="persona-role">Wirt · Lokal</div>
-      </div>
-    </div>
-
+    {% endfor %}
   </div>
 
   <!-- Scene panel — shown after persona selection -->
@@ -56,7 +49,11 @@
       <span class="scene-persona-name" id="scene-persona-name"></span>
       <button class="btn-ghost" id="scene-back">← Zurück</button>
     </div>
+    <div class="scene-description" id="scene-description"></div>
     <div class="scene-options" id="scene-options"></div>
+    <div class="scene-prompt-preview" id="scene-prompt-preview" style="display:none">
+      <p class="scene-prompt-text" id="scene-prompt-text"></p>
+    </div>
     <div class="scene-actions">
       <button class="btn-primary" id="btn-telegram-start">Telegram-Sitzung starten</button>
       <span class="write-status" id="telegram-status"></span>
@@ -64,25 +61,38 @@
   </div>
 </div>
 
-<!-- ── Stub sections ──────────────────────────────────────────────────── -->
-<div class="ueben-section ueben-stub" id="section-verb-drill" style="display:none">
-  <h2>Verb-Drill</h2>
-  <p class="hint">Noch nicht implementiert — Phase 2.</p>
-</div>
+<!-- ── Drill-Pool ─────────────────────────────────────────────────────── -->
+<div class="ueben-section" id="section-drill-pool" style="display:none">
+  {% if drill_pool %}
+  <div class="drill-stats" id="drill-stats">
+    <span id="drill-progress">0 von {{ drill_pool|length }} geübt</span>
+    <button class="btn-ghost btn-sm" id="drill-restart">Neu starten</button>
+  </div>
 
-<div class="ueben-section ueben-stub" id="section-phrasen-drill" style="display:none">
-  <h2>Phrasen-Drill</h2>
-  <p class="hint">Noch nicht implementiert — Phase 2.</p>
-</div>
+  <div class="drill-card" id="drill-card">
+    <div class="drill-german" id="drill-german"></div>
+    <div class="drill-english hidden" id="drill-english"></div>
+    <div class="drill-actions">
+      <button class="btn-ghost drill-reveal" id="drill-reveal">Zeigen</button>
+      <div class="drill-result-btns" id="drill-result-btns" style="display:none">
+        <button class="btn-drill-correct" id="drill-correct">✓ Richtig</button>
+        <button class="btn-drill-wrong"   id="drill-wrong">✗ Falsch</button>
+        <button class="btn-drill-skip"    id="drill-skip">→ Überspringen</button>
+      </div>
+    </div>
+  </div>
 
-<div class="ueben-section ueben-stub" id="section-drill-pool" style="display:none">
-  <h2>Drill-Pool</h2>
-  <p class="hint">Noch nicht implementiert — Phase 2.</p>
-</div>
-
-<div class="ueben-section ueben-stub" id="section-anki" style="display:none">
-  <h2>Anki-Karten</h2>
-  <p class="hint">Noch nicht implementiert — Phase 2.</p>
+  <div class="drill-done" id="drill-done" style="display:none">
+    <p>Runde abgeschlossen.</p>
+    <button class="btn-ghost" id="drill-done-restart">Neu starten</button>
+    <a class="btn-ghost" href="/woerter">Wörter ansehen →</a>
+  </div>
+  {% else %}
+  <div class="woerter-empty">
+    <p>Keine Phrasen im Drill-Pool.</p>
+    <p class="hint">Gehe zu <a href="/woerter">Wörter</a> und fördere Phrasen in den Drill-Pool.</p>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
 
@@ -92,17 +102,8 @@ document.body.classList.add('parch-mode');
 (function () {
   'use strict';
 
-  const personas = {
-    maria:   { name: 'Maria',        role: 'Kellnerin · Kaffeehaus',
-                scenes: ['Guten Morgen — Bestellung', 'Stammgast-Gespräch', 'Rechnung bitte'] },
-    fischer: { name: 'Herr Fischer', role: 'Rezeptionist · Hotel',
-                scenes: ['Check-in', 'Zimmerservice anfragen', 'Auschecken'] },
-    georg:   { name: 'Georg',        role: 'Wirt · Lokal',
-                scenes: ['Tisch reservieren', 'Speisekarte besprechen', 'Feierabend-Gespräch'] },
-  };
-
-  let selectedPersona = null;
-  let selectedScene   = null;
+  const personas = {{ personas | tojson }};
+  const drillPool = {{ drill_pool | tojson }};
 
   // ── Sub-nav ──────────────────────────────────────────────────────────
   document.querySelectorAll('.ueben-subnav-btn').forEach(btn => {
@@ -114,55 +115,156 @@ document.body.classList.add('parch-mode');
     });
   });
 
+  // Nudge button switches to drill-pool section
+  const nudge = document.getElementById('nudge-drill');
+  if (nudge) {
+    nudge.addEventListener('click', () => {
+      document.querySelector('[data-section="drill-pool"]').click();
+    });
+  }
+
   // ── Persona cards ────────────────────────────────────────────────────
+  let selectedIdx = null;
+  let selectedSceneKey = null;
+
   document.querySelectorAll('.persona-card').forEach(card => {
     card.addEventListener('click', () => {
-      selectedPersona = card.dataset.persona;
-      const p = personas[selectedPersona];
+      const idx = parseInt(card.dataset.persona, 10);
+      const p = personas[idx];
+      if (!p) return;
+
+      selectedIdx = idx;
+      selectedSceneKey = null;
+
       document.querySelectorAll('.persona-card').forEach(c => c.classList.remove('selected'));
       card.classList.add('selected');
 
       document.getElementById('scene-persona-name').textContent = p.name + ' · ' + p.role;
+      document.getElementById('scene-description').textContent = p.description || '';
+
       const opts = document.getElementById('scene-options');
       opts.innerHTML = '';
-      p.scenes.forEach(scene => {
-        const btn = document.createElement('button');
-        btn.className = 'scene-option-btn';
-        btn.textContent = scene;
-        btn.addEventListener('click', () => {
-          document.querySelectorAll('.scene-option-btn').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          selectedScene = scene;
-        });
-        opts.appendChild(btn);
-      });
+      const prompts = p.speaking_prompts || {};
+      const keys = Object.keys(prompts);
 
-      document.getElementById('scene-panel').style.display = 'block';
+      if (keys.length === 0) {
+        opts.innerHTML = '<p class="hint">Keine Szenen konfiguriert.</p>';
+      } else {
+        keys.forEach(key => {
+          const btn = document.createElement('button');
+          btn.className = 'scene-option-btn';
+          btn.textContent = key.replace(/_/g, ' ');
+          btn.dataset.key = key;
+          btn.addEventListener('click', () => {
+            document.querySelectorAll('.scene-option-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            selectedSceneKey = key;
+            const preview = document.getElementById('scene-prompt-preview');
+            document.getElementById('scene-prompt-text').textContent = prompts[key];
+            preview.style.display = 'block';
+          });
+          opts.appendChild(btn);
+        });
+        // Auto-select first scene
+        opts.firstChild.click();
+      }
+
       document.getElementById('telegram-status').textContent = '';
-      document.getElementById('btn-telegram-start').disabled = false;
-      document.getElementById('btn-telegram-start').textContent = 'Telegram-Sitzung starten';
+      document.getElementById('scene-panel').style.display = 'block';
     });
   });
 
   document.getElementById('scene-back').addEventListener('click', () => {
     document.getElementById('scene-panel').style.display = 'none';
+    document.getElementById('scene-prompt-preview').style.display = 'none';
     document.querySelectorAll('.persona-card').forEach(c => c.classList.remove('selected'));
-    selectedPersona = null;
-    selectedScene   = null;
+    selectedIdx = null;
+    selectedSceneKey = null;
   });
 
-  // ── Telegram start stub ──────────────────────────────────────────────
+  // ── Telegram start ───────────────────────────────────────────────────
   document.getElementById('btn-telegram-start').addEventListener('click', () => {
-    const p = personas[selectedPersona];
-    if (!p) return;
-    const scene = selectedScene || p.scenes[0];
-    const prompt = `[Szene: ${scene}] Persona: ${p.name} — ${p.role}`;
+    if (selectedIdx === null) return;
+    const p = personas[selectedIdx];
+    const prompts = p.speaking_prompts || {};
+    const key = selectedSceneKey || Object.keys(prompts)[0];
+    const prompt = prompts[key] || `Szene: ${p.name}`;
     navigator.clipboard.writeText(prompt).then(() => {
       document.getElementById('telegram-status').textContent = '✓ Prompt kopiert — öffne Telegram und füge ein';
     }).catch(() => {
       document.getElementById('telegram-status').textContent = prompt;
     });
   });
+
+  // ── Drill-Pool ───────────────────────────────────────────────────────
+  if (drillPool.length > 0) {
+    let queue = [...drillPool];
+    let pos = 0;
+    let practiced = 0;
+
+    function showPhrase(idx) {
+      if (idx >= queue.length) {
+        document.getElementById('drill-card').style.display = 'none';
+        document.getElementById('drill-done').style.display = 'block';
+        return;
+      }
+      const phrase = queue[idx];
+      document.getElementById('drill-german').textContent = phrase.german;
+      document.getElementById('drill-english').textContent = phrase.english;
+      document.getElementById('drill-english').classList.add('hidden');
+      document.getElementById('drill-reveal').style.display = '';
+      document.getElementById('drill-result-btns').style.display = 'none';
+    }
+
+    function updateProgress() {
+      document.getElementById('drill-progress').textContent =
+        practiced + ' von ' + queue.length + ' geübt';
+    }
+
+    async function recordResult(result) {
+      const phrase = queue[pos];
+      await fetch('/api/drill-result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phrase_id: phrase.id, result })
+      });
+      if (result !== 'skip') practiced++;
+      pos++;
+      updateProgress();
+      showPhrase(pos);
+    }
+
+    document.getElementById('drill-reveal').addEventListener('click', () => {
+      document.getElementById('drill-english').classList.remove('hidden');
+      document.getElementById('drill-reveal').style.display = 'none';
+      document.getElementById('drill-result-btns').style.display = 'flex';
+      // Speak the German phrase
+      if (window.speechSynthesis) {
+        const u = new SpeechSynthesisUtterance(queue[pos].german);
+        u.lang = 'de-DE'; u.rate = 0.9;
+        window.speechSynthesis.speak(u);
+      }
+    });
+
+    document.getElementById('drill-correct').addEventListener('click', () => recordResult('correct'));
+    document.getElementById('drill-wrong').addEventListener('click',   () => recordResult('wrong'));
+    document.getElementById('drill-skip').addEventListener('click',    () => recordResult('skip'));
+
+    function restart() {
+      pos = 0; practiced = 0;
+      queue = [...drillPool];
+      document.getElementById('drill-card').style.display = '';
+      document.getElementById('drill-done').style.display = 'none';
+      updateProgress();
+      showPhrase(0);
+    }
+
+    document.getElementById('drill-restart').addEventListener('click', restart);
+    document.getElementById('drill-done-restart').addEventListener('click', restart);
+
+    showPhrase(0);
+    updateProgress();
+  }
 })();
 </script>
 {% endblock %}

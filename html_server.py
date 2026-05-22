@@ -24,6 +24,9 @@ from german_domain import (
     save_note,
     get_phrasebook_entries,
     update_phrase_status,
+    get_personas,
+    get_drill_pool,
+    save_drill_result,
 )
 
 BASE_DIR = Path(__file__).parent
@@ -66,7 +69,10 @@ def schreiben():
 
 @app.route("/ueben")
 def ueben():
-    return render_template("german_ueben.html", active="ueben")
+    personas = get_personas()
+    drill_pool = get_drill_pool()
+    return render_template("german_ueben.html", active="ueben",
+                           personas=personas, drill_pool=drill_pool)
 
 
 @app.route("/woerter")
@@ -169,6 +175,19 @@ def api_note_save():
         rewritten=body.get("rewritten", ""),
     )
     return jsonify({"success": True, "note_id": note["note_id"]})
+
+
+# ── Üben API ─────────────────────────────────────────────────────────────────
+
+@app.route("/api/drill-result", methods=["POST"])
+def api_drill_result():
+    body = request.get_json(force=True)
+    phrase_id = body.get("phrase_id", "")
+    result = body.get("result", "")
+    if not phrase_id or result not in ("correct", "wrong", "skip"):
+        return jsonify({"ok": False, "error": "invalid params"}), 400
+    entry = save_drill_result(phrase_id, result)
+    return jsonify({"ok": bool(entry), "entry": entry})
 
 
 # ── Wörter API ───────────────────────────────────────────────────────────────
