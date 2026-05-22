@@ -24,8 +24,12 @@
     <span id="kontext-title"></span>
     <p id="kontext-summary"></p>
   </div>
-  <textarea id="kontext-input" rows="6"
-    placeholder="Schreib hier auf Deutsch — über den Artikel oder ein eigenes Thema…"></textarea>
+  <div class="input-with-voice">
+    <textarea id="kontext-input" rows="6"
+      placeholder="Schreib hier auf Deutsch — über den Artikel oder ein eigenes Thema…"></textarea>
+    <button class="btn-voice" id="voice-kontext"
+            title="Spracheingabe — funktioniert am besten in Chrome/Safari">🎤</button>
+  </div>
   <div class="pane-actions">
     <button class="btn-primary" id="kontext-submit">Korrektur anfordern</button>
     <span class="write-status" id="kontext-status"></span>
@@ -64,8 +68,12 @@
     <p class="tagebuch-prompt" id="tagebuch-prompt"></p>
     <button class="btn-ghost" id="tagebuch-next-prompt">↻ Anderer Vorschlag</button>
   </div>
-  <textarea id="tagebuch-input" rows="8"
-    placeholder="Schreib hier…"></textarea>
+  <div class="input-with-voice">
+    <textarea id="tagebuch-input" rows="8"
+      placeholder="Schreib hier…"></textarea>
+    <button class="btn-voice" id="voice-tagebuch"
+            title="Spracheingabe — funktioniert am besten in Chrome/Safari">🎤</button>
+  </div>
   <div class="tagebuch-options">
     <label class="toggle-label">
       <input type="checkbox" id="tagebuch-correct" checked>
@@ -291,6 +299,31 @@ document.body.classList.add('parch-mode');
       btn.disabled = false;
     }
   });
+  // ── Voice input ─────────────────────────────────────────────────────────────
+  function attachVoiceButton(textareaId, buttonId, lang) {
+    const btn = document.getElementById(buttonId);
+    const textarea = document.getElementById(textareaId);
+    if (!btn || !textarea) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { btn.style.display = 'none'; return; }
+    let recognition = null;
+    btn.addEventListener('click', () => {
+      if (recognition) { recognition.stop(); recognition = null; btn.textContent = '🎤'; return; }
+      recognition = new SR();
+      recognition.lang = lang || 'de-DE';
+      recognition.interimResults = false;
+      recognition.onresult = e => {
+        textarea.value += (textarea.value ? ' ' : '') + e.results[0][0].transcript;
+      };
+      recognition.onend = () => { recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
+      recognition.onerror = () => { recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
+      recognition.onstart = () => { btn.textContent = '⏹'; btn.classList.add('listening'); };
+      recognition.start();
+    });
+  }
+  attachVoiceButton('tagebuch-input', 'voice-tagebuch', 'de-DE');
+  attachVoiceButton('kontext-input', 'voice-kontext', 'de-DE');
+
 })();
 </script>
 {% endblock %}

@@ -10,14 +10,14 @@
   <link rel="stylesheet" href="/static/german.css">
   {% block head %}{% endblock %}
 </head>
-<body>
+<body class="{{ active }}-mode">
 
 <nav>
   <a href="/" class="logo">Mein Deutsch</a>
   <ul class="nav-links">
+    <li><a href="/ueben"     {% if active=='ueben' %}class="active"{% endif %}>Üben</a></li>
     <li><a href="/lesen"     {% if active=='lesen' %}class="active"{% endif %}>Lesen</a></li>
     <li><a href="/schreiben" {% if active=='schreiben' %}class="active"{% endif %}>Schreiben</a></li>
-    <li><a href="/ueben"     {% if active=='ueben' %}class="active"{% endif %}>Üben</a></li>
     <li><a href="/woerter"   {% if active=='woerter' %}class="active"{% endif %}>Wörter</a></li>
     <li><a href="/archiv"    {% if active=='archiv' %}class="active"{% endif %}>Archiv</a></li>
     <li><a href="/admin"     {% if active=='admin' %}class="active"{% endif %}>Admin</a></li>

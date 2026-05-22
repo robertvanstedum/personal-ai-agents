@@ -72,8 +72,12 @@
         <div class="reading-text selectable-text" id="reading-text"></div>
         <div class="reading-notizen" id="reading-notizen">
           <div class="sidebar-panel-title">Notizen</div>
-          <textarea class="notizen-input" id="notizen-original" rows="4"
-            placeholder="Notiz schreiben…"></textarea>
+          <div class="input-with-voice">
+            <textarea class="notizen-input" id="notizen-original" rows="4"
+              placeholder="Notiz schreiben…"></textarea>
+            <button class="btn-voice" id="voice-notizen"
+                    title="Spracheingabe — funktioniert am besten in Chrome/Safari">🎤</button>
+          </div>
           <div class="notizen-actions">
             <button class="notizen-btn" id="btn-notizen-correct">Korrektur anfragen</button>
             <span class="notizen-status" id="notizen-status"></span>
@@ -93,6 +97,8 @@
         <button class="reading-footer-btn" id="btn-mehr">＋ Mehr</button>
         <button class="reading-footer-btn" id="btn-weniger">－ Weniger</button>
         <button class="reading-footer-btn" id="btn-merken">🔖 Merken</button>
+        <button class="reading-footer-btn" id="btn-vorlesen"
+                title="Artikel vorlesen lassen">🔊 Vorlesen</button>
       </div>
     </div>
     <aside class="reading-sidebar">
@@ -518,6 +524,38 @@
       });
     });
   });
+  // ── Voice input on Notizen ───────────────────────────────────────────────────
+  (function () {
+    const btn = document.getElementById('voice-notizen');
+    const textarea = document.getElementById('notizen-original');
+    if (!btn || !textarea) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { btn.style.display = 'none'; return; }
+    let recognition = null;
+    btn.addEventListener('click', () => {
+      if (recognition) { recognition.stop(); recognition = null; btn.textContent = '🎤'; return; }
+      recognition = new SR();
+      recognition.lang = 'de-DE';
+      recognition.interimResults = false;
+      recognition.onresult = e => {
+        textarea.value += (textarea.value ? ' ' : '') + e.results[0][0].transcript;
+      };
+      recognition.onend = () => { recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
+      recognition.onerror = () => { recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
+      recognition.onstart = () => { btn.textContent = '⏹'; btn.classList.add('listening'); };
+      recognition.start();
+    });
+  })();
+
+  // ── 🔊 Vorlesen — user-initiated only, never auto ────────────────────────────
+  document.getElementById('btn-vorlesen').addEventListener('click', () => {
+    const text = document.getElementById('reading-text').textContent.trim();
+    if (!text || !window.speechSynthesis) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'de-DE'; u.rate = 0.9;
+    window.speechSynthesis.speak(u);
+  });
+
 })();
 </script>
 {% endblock %}
