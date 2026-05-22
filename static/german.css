@@ -332,32 +332,57 @@ body.landing-mode {
   color: var(--md-accent);
 }
 
-/* ── Page strip (photo strip below nav on working pages) ── */
+/* ── Tab hero (full-width photo hero below nav) ──────────── */
 
-.page-strip {
-  height: 44px;
-  background: var(--md-strip-dark);
+.tab-hero {
+  width: 100%;
+  height: 300px;
+  position: relative;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-color: var(--md-strip-dark);
   display: flex;
   align-items: flex-end;
-  padding: 0 2rem 0.6rem;
-  flex-shrink: 0;
-  background-size: cover;
+  padding: 0 2.5rem 2rem;
+  box-sizing: border-box;
 }
 
-.page-strip.ueben,
-.page-strip.lesen,
-.page-strip.schreiben,
-.page-strip.woerter,
-.page-strip.archiv {
-  height: 120px;
+.tab-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    rgba(60, 47, 47, 0.3),
+    rgba(60, 47, 47, 0.65)
+  );
 }
 
-.page-strip-label {
+.tab-hero-content {
+  position: relative;
+  z-index: 1;
+}
+
+.tab-hero-content h1 {
+  font-family: Georgia, serif;
+  font-size: 3rem;
+  color: var(--md-parch);
+  margin: 0 0 0.25rem 0;
+  line-height: 1;
+}
+
+.tab-hero-label {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: rgba(198, 138, 94, 0.5);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: rgba(245, 240, 232, 0.6);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+}
+
+.tab-description {
+  font-size: 1.05rem;
+  color: var(--md-text-secondary);
+  margin: 1.75rem 0 1.5rem 0;
+  line-height: 1.5;
 }
 
 /* ── Parchment working pages ─────────────────────────────── */
@@ -2489,24 +2514,21 @@ body.reading-mode nav {
 .ueben-header .subtitle,
 .woerter-page-header .subtitle { font-size: 0.9rem; margin-bottom: 0.75rem; }
 
-/* ── Tab strip photos — v1.0 ─────────────────────────────────────────── */
-.page-strip.ueben {
+/* ── Tab hero photos — v1.1 ──────────────────────────────────────────── */
+.tab-hero.ueben {
     background-image: url('/static/photos/street_s-bahn_IMG_5434.jpg');
     background-position: center 60%;
 }
-.page-strip.lesen {
-    background-image: url('/static/photos/burggarten_2_IMG_5541.jpg');
-    background-position: center 55%;
-}
-.page-strip.schreiben {
+.tab-hero.schreiben {
     background-image: url('/static/photos/Vera_cafe_IMG_5211_2.jpg');
     background-position: center 70%;
 }
-.page-strip.woerter {
+.tab-hero.woerter {
     background-image: url('/static/photos/flower_market_IMG_5162_2.jpg');
     background-position: center 50%;
+    height: 240px;
 }
-.page-strip.archiv {
+.tab-hero.archiv {
     background-image: url('/static/photos/bike_trail_IMG_5464.jpg');
     background-position: center 40%;
 }
