@@ -198,6 +198,19 @@
       "last_practiced": null,
       "source_sentence": "Der Wiener Landtag hat in seiner heutigen Sitzung das Verbot der Altkleidersammelcontainer beschlossen. Die Maßnahme wurde vor einigen Wochen angekündigt. Die Stadt will damit gegen die zunehmende Ver",
       "source_article": "Landtag beschloss Altkleidercontainerverbot"
+    },
+    {
+      "id": "ph_20260521_018",
+      "german": "Favoriten mit einer Unterschriftenaktion",
+      "english": "Favorites with a signature campaign",
+      "scene": "lesen",
+      "added": "2026-05-21",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Die beiden Bezirksvorsteher Georg Papai und Marcus Franz (beide SPÖ) wollen die Forderung nach mehr Polizei in Floridsdorf und Favoriten mit einer Unterschriftenaktion untermauern. Ziel ist eine Disku",
+      "source_article": "Favoriten und Floridsdorf wollen mehr Polizisten"
     }
   ]
 }
