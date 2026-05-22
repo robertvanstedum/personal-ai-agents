@@ -2528,11 +2528,6 @@ body.reading-mode nav {
     background-position: center 50%;
     height: 240px;
 }
-.tab-hero.archiv {
-    background-image: url('/static/photos/bike_trail_IMG_5464.jpg');
-    background-position: center 40%;
-}
-
 /* ── Voice input component — v1.0 ────────────────────────────────────── */
 .input-with-voice {
     display: flex;
@@ -2603,4 +2598,13 @@ body.archiv-mode .page {
     height: 100%;
     object-fit: cover;
     object-position: center center;
+}
+
+@media (max-width: 768px) {
+    .tab-layout-split {
+        grid-template-columns: 1fr;
+    }
+    .tab-panel-photo {
+        display: none;
+    }
 }
