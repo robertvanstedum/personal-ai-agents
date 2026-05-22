@@ -2555,3 +2555,52 @@ body.reading-mode nav {
     background: var(--md-accent);
     border-color: var(--md-accent);
 }
+
+/* ── Split panel layout (Admin, Archiv) ──────────────────────────────── */
+body.admin-mode .page,
+body.archiv-mode .page {
+    max-width: none;
+    padding: 0;
+}
+
+.tab-layout-split {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.tab-content {
+    padding: 2.5rem 3rem;
+}
+
+.tab-split-header {
+    margin-bottom: 2rem;
+}
+
+.tab-split-header h1 {
+    font-family: Georgia, serif;
+    font-size: 2.8rem;
+    margin: 0.25rem 0 0 0;
+    line-height: 1;
+    color: var(--md-text-primary);
+}
+
+.tab-split-header .tab-description {
+    margin-top: 0.75rem;
+    margin-bottom: 0;
+}
+
+.tab-panel-photo {
+    position: sticky;
+    top: 70px;
+    height: calc(100vh - 70px);
+    overflow: hidden;
+}
+
+.tab-panel-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center center;
+}

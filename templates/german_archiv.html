@@ -1,42 +1,45 @@
 {% extends "german_base.html" %}
 {% block title %}Archiv{% endblock %}
 
-{% block page_strip %}
-<div class="tab-hero archiv">
-  <div class="tab-hero-content">
-    <div class="tab-hero-label">[Bibliothek]</div>
-    <h1>Archiv</h1>
+{% block content %}
+<div class="tab-layout-split">
+  <div class="tab-content">
+    <div class="tab-split-header">
+      <div class="tab-hero-label">[Bibliothek]</div>
+      <h1>Archiv</h1>
+      <p class="tab-description">Gespeicherte Artikel, Schreib-Verlauf und Drill-Geschichte.</p>
+    </div>
+
+    <!-- ── Gespeicherte Artikel ─────────────────────────────────────── -->
+    <section class="archiv-section">
+      <h2>Gespeicherte Artikel</h2>
+      <div class="archiv-empty">
+        <p class="hint">Noch keine Artikel gespeichert. Klick 🔖 Merken in Lesen, um Artikel zu speichern.</p>
+      </div>
+    </section>
+
+    <!-- ── Schreib-Verlauf ──────────────────────────────────────────── -->
+    <section class="archiv-section">
+      <h2>Schreib-Verlauf</h2>
+      <div class="archiv-empty">
+        <p class="hint">Schreibeinträge aus Tagebuch, Im Kontext und Wörter üben erscheinen hier.</p>
+      </div>
+    </section>
+
+    <!-- ── Drill-Verlauf ───────────────────────────────────────────── -->
+    <section class="archiv-section">
+      <h2>Drill-Verlauf</h2>
+      <div class="archiv-chart-placeholder">
+        <p class="hint">Fehlerquoten-Diagramm (Chart.js) — Phase 3.</p>
+        <div class="chart-stub" aria-label="Fehlerquoten-Diagramm Platzhalter"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="tab-panel-photo">
+    <img src="/static/photos/grafiti_and_flowers_IMG_5172.jpg" alt="Wien Gründerzeit">
   </div>
 </div>
-{% endblock %}
-
-{% block content %}
-<p class="tab-description">Gespeicherte Artikel, Schreib-Verlauf und Drill-Geschichte.</p>
-
-<!-- ── Gespeicherte Artikel ───────────────────────────────────────────── -->
-<section class="archiv-section">
-  <h2>Gespeicherte Artikel</h2>
-  <div class="archiv-empty">
-    <p class="hint">Noch keine Artikel gespeichert. Klick 🔖 Merken in Lesen, um Artikel zu speichern.</p>
-  </div>
-</section>
-
-<!-- ── Schreib-Verlauf ────────────────────────────────────────────────── -->
-<section class="archiv-section">
-  <h2>Schreib-Verlauf</h2>
-  <div class="archiv-empty">
-    <p class="hint">Schreibeinträge aus Tagebuch, Im Kontext und Wörter üben erscheinen hier.</p>
-  </div>
-</section>
-
-<!-- ── Drill-Verlauf ─────────────────────────────────────────────────── -->
-<section class="archiv-section">
-  <h2>Drill-Verlauf</h2>
-  <div class="archiv-chart-placeholder">
-    <p class="hint">Fehlerquoten-Diagramm (Chart.js) — Phase 3.</p>
-    <div class="chart-stub" aria-label="Fehlerquoten-Diagramm Platzhalter"></div>
-  </div>
-</section>
 {% endblock %}
 
 {% block scripts %}
