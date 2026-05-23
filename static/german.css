@@ -2774,8 +2774,8 @@ body.schreiben-mode .page {
 
 .tab-panel-photo {
     position: sticky;
-    top: 69px;
-    height: calc(100vh - 69px);
+    top: 0;
+    height: 100vh;
     overflow: hidden;
 }
 
