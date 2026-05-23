@@ -50,6 +50,36 @@
   </div>
 </section>
 
+<!-- ── Runden ─────────────────────────────────────────────────────────── -->
+<section class="admin-section">
+  <div class="admin-section-head">
+    <h2>Runden-Management</h2>
+  </div>
+  <div class="admin-list" id="runden-list">
+    {% for pr in persona_rounds %}
+    <div class="admin-list-item {% if pr.ready_to_archive %}runde-ready{% endif %}">
+      <div class="admin-item-info">
+        <span class="admin-item-name">{{ pr.emoji }} {{ pr.name }}</span>
+        <span class="admin-item-meta">
+          Runde {{ pr.current_round }}/{{ pr.round_default }} · {{ pr.sessions_this_round }} Sitzung{{ 'en' if pr.sessions_this_round != 1 else '' }}
+          {% if pr.ready_to_archive %}<span class="round-ready-dot">●</span>{% endif %}
+        </span>
+      </div>
+      {% if pr.ready_to_archive %}
+      <div class="admin-item-actions">
+        <button class="btn-ghost btn-sm btn-round-action"
+                data-slug="{{ pr.slug }}" data-action="close">Runde abschließen</button>
+        <button class="btn-ghost btn-sm btn-round-action"
+                data-slug="{{ pr.slug }}" data-action="extend">Verlängern +3</button>
+      </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <p class="hint" style="padding: 1rem">Noch keine Sitzungen — Runden-Daten erscheinen nach der ersten Analyse.</p>
+    {% endfor %}
+  </div>
+</section>
+
 <!-- ── Quellen ────────────────────────────────────────────────────────── -->
 <section class="admin-section">
   <div class="admin-section-head">
@@ -140,6 +170,26 @@ document.body.classList.add('parch-mode');
       if (confirm(msg)) {
         btn.closest('.admin-list-item').style.opacity = '0.4';
         btn.disabled = true;
+      }
+    });
+  });
+
+  document.querySelectorAll('.btn-round-action').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const slug = btn.dataset.slug;
+      const action = btn.dataset.action;
+      btn.disabled = true;
+      btn.closest('.admin-list-item').style.opacity = '0.5';
+      try {
+        await fetch('/api/round-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ persona_slug: slug, action }),
+        });
+        setTimeout(() => window.location.reload(), 500);
+      } catch (e) {
+        btn.disabled = false;
+        btn.closest('.admin-list-item').style.opacity = '1';
       }
     });
   });

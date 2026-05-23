@@ -16,11 +16,24 @@
   <!-- Left: persona list -->
   <div class="persona-list" id="persona-list">
     {% for p in personas %}
-    <div class="persona-list-item" data-idx="{{ loop.index0 }}" data-name="{{ p.name }}">
+    <div class="persona-list-item" data-idx="{{ loop.index0 }}" data-name="{{ p.name }}"
+         data-slug="{{ p.slug }}"
+         data-ready="{{ 'true' if p.memory.ready_to_archive else 'false' }}"
+         data-round="{{ p.memory.current_round }}"
+         data-sessions="{{ p.memory.active_memory.sessions_this_round }}"
+         data-round-default="{{ p.memory.round_default }}">
       <div class="persona-avatar">{{ p.emoji or p.name[0] }}</div>
       <div class="persona-info">
-        <div class="persona-name">{{ p.name }}</div>
-        <div class="persona-role">{{ p.role }}</div>
+        <div class="persona-name">
+          {{ p.name }}
+          {% if p.memory.ready_to_archive %}<span class="round-ready-dot" title="Runde abgeschlossen — Aktion erforderlich">●</span>{% endif %}
+        </div>
+        <div class="persona-role">
+          {{ p.role }}
+          {% if p.memory.active_memory.sessions_this_round > 0 %}
+          <span class="round-counter">Runde {{ p.memory.current_round }}/{{ p.memory.round_default }}</span>
+          {% endif %}
+        </div>
       </div>
     </div>
     {% endfor %}
@@ -91,6 +104,18 @@
     <div class="feedback-block" id="feedback-focus-block" style="display:none">
       <div class="feedback-block-label">Für nächste Mal</div>
       <p class="feedback-next-focus" id="feedback-next-focus"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ── Round-ready modal ─────────────────────────────────────────────────── -->
+<div id="round-ready-modal" class="round-modal" style="display:none" role="dialog" aria-modal="true">
+  <div class="round-modal-content">
+    <div class="round-modal-title" id="round-modal-title"></div>
+    <div class="round-modal-actions">
+      <button class="btn-primary btn-sm" id="btn-round-close">Neue Runde starten</button>
+      <button class="btn-ghost btn-sm" id="btn-round-extend">Verlängern +3</button>
+      <button class="btn-ghost btn-sm" id="btn-round-defer">Jetzt nicht</button>
     </div>
   </div>
 </div>
@@ -190,8 +215,47 @@ document.body.classList.add('parch-mode');
     return btn;
   }
 
+  // ── Round-ready modal ─────────────────────────────────────────────────────
+  let pendingRoundSlug = null;
+
+  function showRoundModal(item) {
+    pendingRoundSlug = item.dataset.slug;
+    const round = item.dataset.round;
+    const sessions = item.dataset.sessions;
+    document.getElementById('round-modal-title').textContent =
+      `Runde ${round} abgeschlossen (${sessions} Sitzung${sessions === '1' ? '' : 'en'}).`;
+    document.getElementById('round-ready-modal').style.display = 'flex';
+  }
+
+  async function doRoundAction(action) {
+    if (!pendingRoundSlug) return;
+    document.getElementById('round-ready-modal').style.display = 'none';
+    if (action === 'defer') { pendingRoundSlug = null; return; }
+    try {
+      await fetch('/api/round-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ persona_slug: pendingRoundSlug, action }),
+      });
+      window.location.reload();
+    } catch (e) {
+      console.error('Round action failed', e);
+    }
+    pendingRoundSlug = null;
+  }
+
+  document.getElementById('btn-round-close').addEventListener('click', () => doRoundAction('close'));
+  document.getElementById('btn-round-extend').addEventListener('click', () => doRoundAction('extend'));
+  document.getElementById('btn-round-defer').addEventListener('click', () => doRoundAction('defer'));
+  document.getElementById('round-ready-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) doRoundAction('defer');
+  });
+
   document.querySelectorAll('.persona-list-item').forEach(item => {
-    item.addEventListener('click', () => selectPersona(parseInt(item.dataset.idx, 10)));
+    item.addEventListener('click', () => {
+      selectPersona(parseInt(item.dataset.idx, 10));
+      if (item.dataset.ready === 'true') showRoundModal(item);
+    });
   });
   if (personas.length > 0) selectPersona(0);
 

@@ -13,6 +13,7 @@ from flask import Flask, render_template, redirect, request, jsonify
 from flask_cors import CORS
 from german_domain import (
     GERMAN_DIR,
+    DEFAULT_USER,
     get_lesen_pool,
     refresh_lesen_feed,
     lesen_action,
@@ -29,6 +30,10 @@ from german_domain import (
     save_drill_result,
     analyse_session,
     get_gesprache_sessions,
+    persona_to_slug,
+    get_persona_memory,
+    close_round,
+    extend_round,
 )
 
 BASE_DIR = Path(__file__).parent
@@ -72,6 +77,10 @@ def schreiben():
 @app.route("/gesprache")
 def gesprache():
     personas = get_personas()
+    for p in personas:
+        slug = persona_to_slug(p["name"])
+        p["slug"] = slug
+        p["memory"] = get_persona_memory(DEFAULT_USER, slug)
     sessions = get_gesprache_sessions(limit=5)
     return render_template("german_gesprache.html", active="gesprache",
                            personas=personas, sessions=sessions)
@@ -97,7 +106,21 @@ def bibliothek():
 
 @app.route("/admin")
 def admin():
-    return render_template("german_admin.html", active="admin")
+    personas = get_personas()
+    persona_rounds = []
+    for p in personas:
+        slug = persona_to_slug(p["name"])
+        mem = get_persona_memory(DEFAULT_USER, slug)
+        persona_rounds.append({
+            "name": p["name"],
+            "emoji": p.get("emoji", ""),
+            "slug": slug,
+            "current_round": mem.get("current_round", 1),
+            "round_default": mem.get("round_default", 5),
+            "sessions_this_round": mem.get("active_memory", {}).get("sessions_this_round", 0),
+            "ready_to_archive": mem.get("ready_to_archive", False),
+        })
+    return render_template("german_admin.html", active="admin", persona_rounds=persona_rounds)
 
 
 @app.route("/archiv")
@@ -255,6 +278,20 @@ def api_analyse_transcript():
         return jsonify({"ok": False, "error": "transcript required"}), 400
     result = analyse_session(transcript, persona_name, scene)
     return jsonify({"ok": True, **result})
+
+
+@app.route("/api/round-action", methods=["POST"])
+def api_round_action():
+    body = request.get_json(force=True)
+    persona_slug = body.get("persona_slug", "").strip()
+    action = body.get("action", "").strip()
+    if not persona_slug or action not in ("close", "extend"):
+        return jsonify({"ok": False, "error": "invalid params"}), 400
+    if action == "close":
+        close_round(DEFAULT_USER, persona_slug)
+    elif action == "extend":
+        extend_round(DEFAULT_USER, persona_slug)
+    return jsonify({"ok": True})
 
 
 @app.route("/api/gesprache-sessions")

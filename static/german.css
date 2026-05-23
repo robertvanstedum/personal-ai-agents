@@ -2926,3 +2926,67 @@ body.archiv-mode .page {
     max-width: none;
     padding: 0;
 }
+
+/* ── Persona Memory — round indicator ── */
+
+.round-ready-dot {
+  color: var(--md-accent);
+  font-size: 0.6rem;
+  margin-left: 0.35rem;
+  vertical-align: middle;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.round-counter {
+  margin-left: 0.5rem;
+  color: var(--md-text-secondary);
+  font-size: 0.7rem;
+  opacity: 0.75;
+}
+
+/* ── Round-ready modal ── */
+
+.round-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.round-modal-content {
+  background: var(--md-parch-light, #f5ede0);
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 6px;
+  padding: 1.75rem 2rem;
+  max-width: 380px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+
+.round-modal-title {
+  font-family: Georgia, serif;
+  font-size: 1rem;
+  color: var(--md-text-primary);
+  margin-bottom: 1.25rem;
+  line-height: 1.5;
+}
+
+.round-modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ── Admin: round-ready highlight ── */
+
+.admin-list-item.runde-ready {
+  border-left: 3px solid var(--md-accent);
+}

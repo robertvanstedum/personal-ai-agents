@@ -9,6 +9,7 @@ Group B: file I/O, subprocess, LLM callers (no async, no Telegram).
 Group C: resolver functions — sync, with optional progress_cb for mid-execution messages.
 """
 
+import fcntl
 import html
 import os
 import re
@@ -286,9 +287,34 @@ def _finalize_l1_items(state: dict) -> None:
 import json
 import subprocess
 
+
+def safe_read_json(path: Path) -> dict:
+    """Read JSON with shared lock. Returns {} if file absent."""
+    if not path.exists():
+        return {}
+    with open(path, 'r', encoding='utf-8') as f:
+        fcntl.flock(f, fcntl.LOCK_SH)
+        try:
+            return json.load(f)
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def safe_write_json(path: Path, data: dict) -> None:
+    """Write JSON with exclusive lock. Creates parent dirs if needed."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
 _PHRASEBOOK_FILE       = GERMAN_DIR / "config" / "phrasebook.json"
 _DRILL_STATE_FILE      = _BASE_DIR / "_active_drill_state.json"
 _DRILL_LIST_STATE_FILE = _BASE_DIR / "_drill_list_state.json"
+_PERSONA_MEMORY_FILE   = GERMAN_DIR / "config" / "persona_memory.json"
 
 
 def _load_keyword_map_bot() -> dict:
@@ -360,16 +386,12 @@ def _save_drill_pool(pool: dict) -> None:
 
 
 def _load_phrasebook() -> dict:
-    if _PHRASEBOOK_FILE.exists():
-        try:
-            return json.loads(_PHRASEBOOK_FILE.read_text())
-        except Exception:
-            pass
-    return {"phrases": []}
+    data = safe_read_json(_PHRASEBOOK_FILE)
+    return data if data else {"phrases": []}
 
 
 def _save_phrasebook(data: dict) -> None:
-    _PHRASEBOOK_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    safe_write_json(_PHRASEBOOK_FILE, data)
 
 
 def _write_drill_anki(state: dict) -> int:
@@ -996,6 +1018,210 @@ def update_phrase_status(phrase_id: str, new_status: str,
     return False
 
 
+# ─── Persona Memory (Layer 1) ────────────────────────────────────────────────
+
+_ROUND_DEFAULTS = {
+    "casual": 5,
+    "social": 4,
+    "friend": 999,
+}
+
+
+def persona_to_slug(persona_name: str) -> str:
+    """Convert persona display name to storage key slug. 'Frau Berger' → 'frau_berger'."""
+    return re.sub(r'\s+', '_', persona_name.strip().lower())
+
+
+def _default_active_memory(round_number: int = 1) -> dict:
+    return {
+        "round_number": round_number,
+        "sessions_this_round": 0,
+        "last_seen": None,
+        "topics_discussed": [],
+        "errors_noted": [],
+        "strengths": [],
+        "vocabulary_introduced": [],
+        "notes": "",
+        "rapport_level": "neutral",
+    }
+
+
+def get_persona_memory(user: str, persona_slug: str) -> dict:
+    """Return memory block for user+persona pair. Creates default on first access."""
+    all_data = safe_read_json(_PERSONA_MEMORY_FILE)
+    key = f"{user}_{persona_slug}"
+    if key not in all_data:
+        persona_type = "casual"
+        for p in get_personas():
+            if persona_to_slug(p["name"]) == persona_slug:
+                persona_type = p.get("type", "casual")
+                break
+        round_default = _ROUND_DEFAULTS.get(persona_type, 5)
+        all_data[key] = {
+            "user": user,
+            "persona": persona_slug,
+            "persona_type": persona_type,
+            "current_round": 1,
+            "round_default": round_default,
+            "round_extended": False,
+            "ready_to_archive": False,
+            "active_memory": _default_active_memory(round_number=1),
+            "archived_rounds": [],
+        }
+        safe_write_json(_PERSONA_MEMORY_FILE, all_data)
+    return all_data[key]
+
+
+def update_persona_memory(user: str, persona_slug: str, updates: dict) -> dict:
+    """
+    Merge updates into active_memory.
+    Lists: append + deduplicate + cap at 20. Scalars: overwrite.
+    Increments sessions_this_round. Sets ready_to_archive when threshold is reached.
+    """
+    all_data = safe_read_json(_PERSONA_MEMORY_FILE)
+    key = f"{user}_{persona_slug}"
+    if key not in all_data:
+        get_persona_memory(user, persona_slug)
+        all_data = safe_read_json(_PERSONA_MEMORY_FILE)
+
+    entry = all_data[key]
+    mem = entry["active_memory"]
+
+    for list_key in ("topics_discussed", "errors_noted", "strengths", "vocabulary_introduced"):
+        if updates.get(list_key):
+            existing = mem.get(list_key, [])
+            new_items = [item for item in updates[list_key] if item and item not in existing]
+            mem[list_key] = (existing + new_items)[:20]
+
+    for scalar in ("last_seen", "notes", "rapport_level"):
+        if updates.get(scalar):
+            mem[scalar] = updates[scalar]
+
+    mem["sessions_this_round"] = mem.get("sessions_this_round", 0) + 1
+
+    if mem["sessions_this_round"] >= entry.get("round_default", 5) and not entry["ready_to_archive"]:
+        entry["ready_to_archive"] = True
+
+    all_data[key] = entry
+    safe_write_json(_PERSONA_MEMORY_FILE, all_data)
+    return entry
+
+
+def close_round(user: str, persona_slug: str, summary: str = None) -> None:
+    """Archive active_memory as completed round, reset to new round."""
+    all_data = safe_read_json(_PERSONA_MEMORY_FILE)
+    key = f"{user}_{persona_slug}"
+    if key not in all_data:
+        return
+
+    entry = all_data[key]
+    mem = entry["active_memory"]
+    round_num = entry["current_round"]
+
+    if summary is None:
+        summary = _generate_round_summary(
+            round_num=round_num,
+            sessions=mem.get("sessions_this_round", 0),
+            topics=mem.get("topics_discussed", []),
+            errors=mem.get("errors_noted", []),
+            strengths=mem.get("strengths", []),
+            vocabulary=mem.get("vocabulary_introduced", []),
+        )
+
+    archived = {
+        "round_number": round_num,
+        "sessions": mem.get("sessions_this_round", 0),
+        "date_end": datetime.date.today().isoformat(),
+        "summary": summary,
+        "key_errors": mem.get("errors_noted", [])[:5],
+        "key_strengths": mem.get("strengths", [])[:5],
+        "summary_generated": "auto" if summary.startswith(f"Runde {round_num}") else "llm",
+    }
+
+    entry["archived_rounds"] = entry.get("archived_rounds", []) + [archived]
+    entry["current_round"] = round_num + 1
+    entry["ready_to_archive"] = False
+    entry["round_extended"] = False
+    entry["round_default"] = _ROUND_DEFAULTS.get(entry.get("persona_type", "casual"), 5)
+    entry["active_memory"] = _default_active_memory(round_number=round_num + 1)
+
+    all_data[key] = entry
+    safe_write_json(_PERSONA_MEMORY_FILE, all_data)
+
+
+def extend_round(user: str, persona_slug: str, extra_sessions: int = 3) -> None:
+    """Add extra_sessions to current round threshold and clear ready_to_archive."""
+    all_data = safe_read_json(_PERSONA_MEMORY_FILE)
+    key = f"{user}_{persona_slug}"
+    if key not in all_data:
+        return
+    entry = all_data[key]
+    entry["round_default"] = entry.get("round_default", 5) + extra_sessions
+    entry["round_extended"] = True
+    entry["ready_to_archive"] = False
+    all_data[key] = entry
+    safe_write_json(_PERSONA_MEMORY_FILE, all_data)
+
+
+def _generate_round_summary(round_num: int, sessions: int, topics: list,
+                             errors: list, strengths: list, vocabulary: list) -> str:
+    prompt = (
+        "Generate a 2-sentence summary in German of this language learning round.\n"
+        "Focus on: main errors observed, main strengths, overall progress.\n"
+        "Be specific and encouraging. Do not use filler phrases.\n\n"
+        f"Sessions completed: {sessions}\n"
+        f"Main errors: {', '.join(errors[:5]) or 'none noted'}\n"
+        f"Main strengths: {', '.join(strengths[:5]) or 'none noted'}\n"
+        f"Topics covered: {', '.join(topics[:5]) or 'various'}\n"
+        f"Vocabulary introduced: {', '.join(vocabulary[:5]) or 'various'}"
+    )
+    result = _call_llm(prompt, max_tokens=150)
+    if result:
+        return result
+    return (
+        f"Runde {round_num} abgeschlossen ({sessions} Sitzungen). "
+        f"Themen: {', '.join(topics[:3]) or 'verschiedene'}. "
+        f"Häufigste Fehler: {', '.join(errors[:2]) or 'keine notiert'}."
+    )
+
+
+def build_persona_prompt(persona: dict, memory: dict, tutor_focus: str = None) -> str:
+    """Inject active persona memory into system prompt. Returns enriched prompt string."""
+    base = persona.get("description", "")
+    if not memory:
+        return base
+
+    mem = memory.get("active_memory", {})
+    round_num = memory.get("current_round", 1)
+    sessions = mem.get("sessions_this_round", 0)
+
+    if round_num == 1 and sessions == 0:
+        return base
+
+    lines = [base, "", "## Erinnerungen aus vergangenen Sitzungen", ""]
+    if mem.get("topics_discussed"):
+        lines.append(f"Besprochene Themen: {', '.join(mem['topics_discussed'][:5])}")
+    if mem.get("errors_noted"):
+        lines.append(f"Häufige Fehler des Lernenden: {', '.join(mem['errors_noted'][:3])}")
+    if mem.get("strengths"):
+        lines.append(f"Stärken: {', '.join(mem['strengths'][:3])}")
+    if mem.get("vocabulary_introduced"):
+        lines.append(f"Eingeführtes Vokabular: {', '.join(mem['vocabulary_introduced'][:5])}")
+    if mem.get("rapport_level") and mem["rapport_level"] != "neutral":
+        lines.append(f"Beziehung: {mem['rapport_level']}")
+    if mem.get("notes"):
+        lines.append(f"Notiz: {mem['notes'][:200]}")
+
+    if tutor_focus:
+        lines.extend([
+            "",
+            f"Aktueller Lernfokus: {tutor_focus}",
+            "Achte besonders darauf und korrigiere sanft wenn nötig.",
+        ])
+
+    return "\n".join(lines)
+
+
 # ─── Gespräche — transcript analysis (HTML interface) ────────────────────────
 
 _SESSIONS_DIR = GERMAN_DIR / "sessions"
@@ -1017,7 +1243,9 @@ Required schema:
     }
   ],
   "strengths": ["specific things Robert did well"],
-  "next_focus": "one concrete grammar or vocabulary focus for the next session"
+  "next_focus": "one concrete grammar or vocabulary focus for the next session",
+  "topics": ["main topics or themes discussed (e.g. food, weather, directions)"],
+  "vocabulary": ["notable German words or phrases used or introduced in the session"]
 }"""
 
 
@@ -1106,6 +1334,8 @@ def analyse_session(transcript: str, persona_name: str, scene: str) -> dict:
                 "errors": parsed.get("errors", []),
                 "strengths": parsed.get("strengths", []),
                 "next_focus": parsed.get("next_focus", ""),
+                "topics": parsed.get("topics", []),
+                "vocabulary": parsed.get("vocabulary", []),
             }
         except Exception:
             feedback["overall_summary"] = raw_text[:500]
@@ -1124,6 +1354,19 @@ def analyse_session(transcript: str, persona_name: str, scene: str) -> dict:
     }
     session_path = _SESSIONS_DIR / f"{file_stem}.json"
     session_path.write_text(json.dumps(session, indent=2, ensure_ascii=False))
+
+    update_persona_memory(
+        user=DEFAULT_USER,
+        persona_slug=persona_to_slug(persona_name),
+        updates={
+            "last_seen": date_str,
+            "topics_discussed": feedback.get("topics", []),
+            "errors_noted": [e.get("explanation", "") for e in feedback.get("errors", []) if e.get("explanation")],
+            "strengths": feedback.get("strengths", []),
+            "vocabulary_introduced": feedback.get("vocabulary", []),
+            "notes": feedback.get("overall_summary", ""),
+        }
+    )
 
     return {"session_id": session_id, "feedback": feedback}
 
