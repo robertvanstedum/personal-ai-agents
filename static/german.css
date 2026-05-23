@@ -2626,7 +2626,7 @@ body.schreiben-mode .page {
 }
 
 body.schreiben-mode .tab-panel-photo img {
-    object-position: right 20%;
+    object-position: 65% center;
 }
 
 @media (max-width: 768px) {
