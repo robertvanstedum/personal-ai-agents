@@ -2001,6 +2001,142 @@ body.reading-mode nav {
   .persona-detail { max-height: none; }
 }
 
+/* ── Gespräche — transcript + feedback + session list ── */
+
+.gesprache-divider {
+  border: none;
+  border-top: 1px solid var(--md-parch-deep);
+  margin: 2rem 0;
+}
+
+.gesprache-section-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--md-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.75rem;
+}
+
+.gesprache-transcript textarea {
+  min-height: 180px;
+  font-family: var(--font-body);
+}
+
+.gesprache-submit-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.gesprache-status {
+  font-size: 0.875rem;
+  color: var(--md-text-secondary);
+}
+
+.gesprache-feedback {
+  background: rgba(60, 47, 47, 0.55);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.feedback-summary {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(198,138,94,0.15);
+  font-size: 0.95rem;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.feedback-block {
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid rgba(198,138,94,0.1);
+}
+
+.feedback-block:last-child { border-bottom: none; }
+
+.feedback-block-label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.5rem;
+}
+
+.feedback-errors-list,
+.feedback-strengths-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.feedback-errors-list li {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  padding-left: 1rem;
+  position: relative;
+}
+
+.feedback-errors-list li::before {
+  content: '›';
+  position: absolute;
+  left: 0;
+  color: #c47;
+}
+
+.feedback-strengths-list li {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  padding-left: 1rem;
+  position: relative;
+}
+
+.feedback-strengths-list li::before {
+  content: '›';
+  position: absolute;
+  left: 0;
+  color: var(--md-accent);
+}
+
+.feedback-next-focus {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.gesprache-sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.gesprache-session-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--md-parch-deep);
+  font-size: 0.875rem;
+}
+
+.gesprache-session-row:last-child { border-bottom: none; }
+
+.gesprache-session-date { color: var(--md-text-muted); white-space: nowrap; flex-shrink: 0; }
+.gesprache-session-persona { color: var(--md-accent); white-space: nowrap; flex-shrink: 0; }
+.gesprache-session-scene { color: var(--md-text-secondary); flex: 1; }
+.gesprache-session-source {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--md-text-muted);
+  flex-shrink: 0;
+}
+
 /* ══════════════════════════════════════════════════════════════
    Wörter page
    ══════════════════════════════════════════════════════════════ */
@@ -2601,7 +2737,7 @@ body.reading-mode nav {
 }
 
 /* ── Split panel layout (Üben, Schreiben) ────────────────────────────── */
-body.ueben-mode .page,
+body.gesprache-mode .page,
 body.schreiben-mode .page {
     max-width: none;
     padding: 0;

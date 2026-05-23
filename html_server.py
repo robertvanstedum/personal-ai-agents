@@ -27,6 +27,8 @@ from german_domain import (
     get_personas,
     get_drill_pool,
     save_drill_result,
+    analyse_session,
+    get_gesprache_sessions,
 )
 
 BASE_DIR = Path(__file__).parent
@@ -67,18 +69,25 @@ def schreiben():
                            sessions=sessions, tagebuch_prompts=prompts)
 
 
-@app.route("/ueben")
-def ueben():
+@app.route("/gesprache")
+def gesprache():
     personas = get_personas()
-    drill_pool = get_drill_pool()
-    return render_template("german_ueben.html", active="ueben",
-                           personas=personas, drill_pool=drill_pool)
+    sessions = get_gesprache_sessions(limit=5)
+    return render_template("german_gesprache.html", active="gesprache",
+                           personas=personas, sessions=sessions)
+
+
+@app.route("/ueben")
+def ueben_redirect():
+    return redirect("/gesprache", code=301)
 
 
 @app.route("/woerter")
 def woerter():
     entries = get_phrasebook_entries()
-    return render_template("german_woerter.html", active="woerter", entries=entries)
+    drill_pool = get_drill_pool()
+    return render_template("german_woerter.html", active="woerter",
+                           entries=entries, drill_pool=drill_pool)
 
 
 @app.route("/bibliothek")
@@ -221,6 +230,27 @@ def api_anki_export():
         mimetype="text/tab-separated-values",
         headers={"Content-Disposition": "attachment; filename=mein-deutsch-anki.tsv"}
     )
+
+
+# ── Gespräche API ─────────────────────────────────────────────────────────────
+
+@app.route("/api/analyse-transcript", methods=["POST"])
+def api_analyse_transcript():
+    body = request.get_json(force=True)
+    transcript = body.get("transcript", "").strip()
+    persona_name = body.get("persona_name", "").strip()
+    scene = body.get("scene", "").strip()
+    if not transcript:
+        return jsonify({"ok": False, "error": "transcript required"}), 400
+    result = analyse_session(transcript, persona_name, scene)
+    return jsonify({"ok": True, **result})
+
+
+@app.route("/api/gesprache-sessions")
+def api_gesprache_sessions():
+    limit = min(int(request.args.get("limit", 5)), 20)
+    sessions = get_gesprache_sessions(limit=limit)
+    return jsonify(sessions)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

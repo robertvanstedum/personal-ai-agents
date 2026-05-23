@@ -994,3 +994,158 @@ def update_phrase_status(phrase_id: str, new_status: str,
             _save_phrasebook(data)
             return True
     return False
+
+
+# ─── Gespräche — transcript analysis (HTML interface) ────────────────────────
+
+_SESSIONS_DIR = GERMAN_DIR / "sessions"
+
+_REVIEW_SYSTEM_PROMPT = """\
+You are a German language tutor reviewing a voice practice session between a student (Robert) and an AI persona.
+Analyze the transcript and return a single JSON object — no markdown, no explanation, just the JSON.
+
+Required schema:
+{
+  "overall_summary": "2-3 sentence summary of the session quality and main takeaway",
+  "errors": [
+    {
+      "type": "gender|word_order|missing_article|verb_conjugation|vocabulary|register",
+      "original": "what Robert said",
+      "correction": "correct form",
+      "explanation": "one sentence why",
+      "context": "full sentence from transcript"
+    }
+  ],
+  "strengths": ["specific things Robert did well"],
+  "next_focus": "one concrete grammar or vocabulary focus for the next session"
+}"""
+
+
+def _parse_transcript_turns(text: str) -> list:
+    """Parse raw transcript into list of {speaker, text} dicts."""
+    turns = []
+    for line in text.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if ':' in line:
+            speaker, _, body = line.partition(':')
+            speaker = speaker.strip()
+            body = body.strip()
+            if speaker and body and len(speaker) < 40:
+                turns.append({"speaker": speaker, "text": body})
+                continue
+        if turns:
+            turns[-1]["text"] += " " + line
+        else:
+            turns.append({"speaker": "Transcript", "text": line})
+    return turns or [{"speaker": "Transcript", "text": text.strip()}]
+
+
+def _next_session_filename(date_str: str) -> str:
+    """Return next available session filename for date (matching parse_transcript.py convention)."""
+    _SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+    existing = sorted(_SESSIONS_DIR.glob(f"{date_str}_*.json"))
+    if not existing:
+        return f"{date_str}_001"
+    last = existing[-1].stem
+    try:
+        n = int(last.split("_")[-1]) + 1
+    except ValueError:
+        n = len(existing) + 1
+    return f"{date_str}_{n:03d}"
+
+
+def analyse_session(transcript: str, persona_name: str, scene: str) -> dict:
+    """Analyse a pasted Grok Voice transcript. Returns {session_id, feedback}."""
+    import keyring as _keyring
+    import anthropic as _anthropic
+
+    ts = datetime.datetime.now()
+    date_str = ts.strftime("%Y-%m-%d")
+    file_stem = _next_session_filename(date_str)
+    session_id = f"session_{file_stem}"
+
+    turns = _parse_transcript_turns(transcript)
+
+    prompt_lines = [
+        f"Persona: {persona_name}",
+        f"Scenario: {scene}",
+        f"Date: {date_str}",
+        "",
+        "Transcript:",
+    ] + [f"{t['speaker']}: {t['text']}" for t in turns]
+    user_prompt = "\n".join(prompt_lines)
+
+    feedback = {"overall_summary": "", "errors": [], "strengths": [], "next_focus": ""}
+    raw_text = None
+    try:
+        api_key = _keyring.get_password("anthropic", "api_key")
+        if api_key:
+            client = _anthropic.Anthropic(api_key=api_key)
+            resp = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=2000,
+                system=_REVIEW_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            raw_text = resp.content[0].text.strip()
+    except Exception:
+        pass
+
+    if raw_text:
+        try:
+            text = raw_text
+            if text.startswith("```"):
+                text = text.split("```")[1]
+                if text.startswith("json"):
+                    text = text[4:]
+            parsed = json.loads(text.strip())
+            feedback = {
+                "overall_summary": parsed.get("overall_summary", ""),
+                "errors": parsed.get("errors", []),
+                "strengths": parsed.get("strengths", []),
+                "next_focus": parsed.get("next_focus", ""),
+            }
+        except Exception:
+            feedback["overall_summary"] = raw_text[:500]
+
+    session = {
+        "session_id": session_id,
+        "date": date_str,
+        "persona": persona_name,
+        "scenario": scene,
+        "duration_estimate_min": max(1, len(transcript) // 300),
+        "source": "html",
+        "raw_transcript": turns,
+        "reviewer_output": feedback,
+        "anki_generated": False,
+        "next_lesson_generated": False,
+    }
+    session_path = _SESSIONS_DIR / f"{file_stem}.json"
+    session_path.write_text(json.dumps(session, indent=2, ensure_ascii=False))
+
+    return {"session_id": session_id, "feedback": feedback}
+
+
+def get_gesprache_sessions(limit: int = 5) -> list:
+    """Return last N sessions (newest first) with summary fields."""
+    if not _SESSIONS_DIR.exists():
+        return []
+    paths = sorted(_SESSIONS_DIR.glob("*.json"), reverse=True)
+    result = []
+    for path in paths:
+        try:
+            data = json.loads(path.read_text())
+            result.append({
+                "session_id": data.get("session_id", path.stem),
+                "date": data.get("date", ""),
+                "persona": data.get("persona", ""),
+                "scenario": data.get("scenario", ""),
+                "source": data.get("source", ""),
+            })
+        except Exception:
+            continue
+        if len(result) >= limit:
+            break
+    return result
