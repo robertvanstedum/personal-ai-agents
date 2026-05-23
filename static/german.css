@@ -2799,28 +2799,9 @@ body.schreiben-mode .tab-panel-photo img {
     }
 }
 
-/* Pages with footer hero: don't stretch main to full viewport height */
-body.woerter-mode .page {
-    flex: 0 0 auto;
-}
-
-/* ── Footer hero (Wörter — photo after content) ──────────────────────── */
-.tab-hero-footer {
-    height: 180px;
-    margin-top: 4rem;
-}
-
-/* Wörter footer hero — taller */
-body.woerter-mode .tab-hero-footer {
-    height: 260px;
-}
-
-/* Wörter table — cap visible rows */
-.woerter-table-wrap {
-    max-height: 420px;
-    overflow-y: auto;
-}
-
-.tab-hero-footer .tab-hero-content h1 {
-    font-size: 1.8rem;
+/* Wörter + Archiv: full-width split panel layout */
+body.woerter-mode .page,
+body.archiv-mode .page {
+    max-width: none;
+    padding: 0;
 }

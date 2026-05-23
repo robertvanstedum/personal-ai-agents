@@ -2,10 +2,13 @@
 {% block title %}Archiv{% endblock %}
 
 {% block content %}
-<div class="archiv-header">
-  <h1>Archiv</h1>
-  <p class="tab-description">Gespeicherte Artikel, Schreib-Verlauf und Drill-Geschichte.</p>
-</div>
+<div class="tab-layout-split">
+  <div class="tab-content">
+    <div class="tab-split-header">
+      <div class="tab-hero-label">[BIBLIOTHEK]</div>
+      <h1>Archiv</h1>
+    </div>
+    <p class="tab-description">Gespeicherte Artikel, Schreib-Verlauf und Drill-Geschichte.</p>
 
 <!-- ── Gespeicherte Artikel ─────────────────────────────────────── -->
 <section class="archiv-section">
@@ -31,6 +34,12 @@
     <div class="chart-stub" aria-label="Fehlerquoten-Diagramm Platzhalter"></div>
   </div>
 </section>
+
+  </div><!-- .tab-content -->
+  <div class="tab-panel-photo">
+    <img src="/static/photos/burggarten_2_IMG_5541.jpg" alt="Burggarten Wien" style="object-position: center 50%">
+  </div>
+</div><!-- .tab-layout-split -->
 {% endblock %}
 
 {% block scripts %}

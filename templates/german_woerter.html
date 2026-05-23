@@ -1,16 +1,13 @@
 {% extends "german_base.html" %}
 {% block title %}Wörter{% endblock %}
 
-{% block page_footer %}
-<div class="tab-hero woerter tab-hero-footer">
-  <div class="tab-hero-content">
-    <div class="tab-hero-label">[Notizbuch]</div>
-    <h1>Wörter</h1>
-  </div>
-</div>
-{% endblock %}
-
 {% block content %}
+<div class="tab-layout-split">
+  <div class="tab-content">
+    <div class="tab-split-header">
+      <div class="tab-hero-label">[NOTIZBUCH]</div>
+      <h1>Wörter</h1>
+    </div>
 <p class="tab-description">Gespeicherte Vokabeln und Phrasen — aus dem Lesen, dem Schreiben und dem Üben.</p>
 
 <!-- ── Subnav ──────────────────────────────────────────────────────────── -->
@@ -235,6 +232,12 @@
   </div>
   {% endif %}
 </div><!-- #section-drill-pool -->
+
+  </div><!-- .tab-content -->
+  <div class="tab-panel-photo">
+    <img src="/static/photos/bike_trail_IMG_5464.jpg" alt="Wien Parkweg" style="object-position: center 35%">
+  </div>
+</div><!-- .tab-layout-split -->
 
 {% endblock %}
 
