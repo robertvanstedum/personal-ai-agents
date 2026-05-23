@@ -2590,6 +2590,10 @@ body.schreiben-mode .page {
     min-height: calc(100vh - 70px);
 }
 
+body.schreiben-mode .tab-layout-split {
+    grid-template-columns: 1fr 520px;
+}
+
 .tab-content {
     padding: 2.5rem 3rem;
 }
@@ -2626,7 +2630,7 @@ body.schreiben-mode .page {
 }
 
 body.schreiben-mode .tab-panel-photo img {
-    object-position: right top;
+    object-position: 52% top;
 }
 
 @media (max-width: 768px) {
