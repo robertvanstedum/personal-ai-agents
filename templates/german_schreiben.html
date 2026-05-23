@@ -23,16 +23,15 @@
     <span id="kontext-title"></span>
     <p id="kontext-summary"></p>
   </div>
-  <div class="input-with-voice">
-    <textarea id="kontext-input" rows="6"
-      placeholder="Schreib hier auf Deutsch — über den Artikel oder ein eigenes Thema…"></textarea>
-    <button class="btn-voice" id="voice-kontext"
-            title="Spracheingabe — funktioniert am besten in Chrome/Safari">🎤</button>
-  </div>
+  <textarea class="notebook-textarea" id="kontext-input" rows="6"
+    placeholder="Schreib hier auf Deutsch — über den Artikel oder ein eigenes Thema…"></textarea>
   <div class="pane-actions">
-    <button class="btn-primary" id="kontext-submit">Korrektur anfordern</button>
-    <span class="write-status" id="kontext-status"></span>
+    <div class="pane-actions-left">
+      <button class="btn-voice" id="voice-kontext" title="Spracheingabe">🎤</button>
+    </div>
+    <button class="btn-primary" id="kontext-submit">Korrigieren</button>
   </div>
+  <span class="write-status" id="kontext-status"></span>
   <div class="correction-display" id="kontext-correction" style="display:none">
     <div class="correction-section">
       <div class="correction-label">Original</div>
@@ -51,7 +50,7 @@
 
 <!-- ── Wörter üben ───────────────────────────────────────────────────────── -->
 <div class="mode-pane hidden" id="pane-woerter">
-  <p class="subtitle" style="margin-bottom:1.5rem">Wörter und Phrasen manuell erfassen.</p>
+  <p class="woerter-subtitle">Wörter und Phrasen manuell erfassen.</p>
   <div class="woerter-form">
     <input type="text" id="woerter-german" placeholder="Deutsches Wort / Phrase">
     <input type="text" id="woerter-english" placeholder="Englische Bedeutung">
@@ -65,30 +64,30 @@
 <div class="mode-pane hidden" id="pane-tagebuch">
   <div class="tagebuch-prompt-row">
     <p class="tagebuch-prompt" id="tagebuch-prompt"></p>
-    <button class="btn-ghost" id="tagebuch-next-prompt">↻ Anderer Vorschlag</button>
+    <button class="btn-ghost" id="tagebuch-next-prompt">↻ Anderer</button>
   </div>
-  <div class="input-with-voice">
-    <textarea id="tagebuch-input" rows="8"
-      placeholder="Schreib hier…"></textarea>
-    <button class="btn-voice" id="voice-tagebuch"
-            title="Spracheingabe — funktioniert am besten in Chrome/Safari">🎤</button>
-  </div>
-  <div class="tagebuch-options">
-    <label class="toggle-label">
-      <input type="checkbox" id="tagebuch-correct" checked>
-      Korrektur anfragen
-    </label>
-  </div>
+  <textarea class="notebook-textarea" id="tagebuch-input" rows="8"
+    placeholder="Schreib hier…"></textarea>
   <div class="pane-actions">
-    <button class="btn-primary" id="tagebuch-submit">Eintrag speichern</button>
-    <span class="write-status" id="tagebuch-status"></span>
+    <div class="pane-actions-left">
+      <button class="btn-voice" id="voice-tagebuch" title="Spracheingabe">🎤</button>
+      <label class="toggle-label">
+        <input type="checkbox" id="tagebuch-correct" checked>
+        Korrektur anfragen
+      </label>
+    </div>
+    <button class="btn-primary" id="tagebuch-korrigieren">Korrigieren</button>
   </div>
+  <span class="write-status" id="tagebuch-status"></span>
   <div class="correction-display" id="tagebuch-correction" style="display:none">
     <div class="correction-section">
       <div class="correction-label">Korrigiert</div>
       <div class="correction-corrected" id="tagebuch-corrected"></div>
     </div>
     <ul class="correction-notes" id="tagebuch-notes"></ul>
+    <div class="correction-actions">
+      <button class="btn-primary" id="tagebuch-submit">Speichern</button>
+    </div>
   </div>
 </div>
 
@@ -163,7 +162,7 @@ document.body.classList.add('parch-mode');
     document.getElementById('tagebuch-prompt').textContent = prompts[promptIdx];
   });
 
-  // ── Im Kontext correction ───────────────────────────────────────────────────
+  // ── Im Kontext — step 1: Korrigieren ────────────────────────────────────────
   document.getElementById('kontext-submit').addEventListener('click', async () => {
     const text = document.getElementById('kontext-input').value.trim();
     if (!text) return;
@@ -191,7 +190,6 @@ document.body.classList.add('parch-mode');
       });
       document.getElementById('kontext-correction').style.display = 'block';
       status.textContent = '';
-
       document.getElementById('kontext-save').dataset.original = text;
       document.getElementById('kontext-save').dataset.corrected = data.corrected || '';
       document.getElementById('kontext-save').dataset.notes = JSON.stringify(data.notes || []);
@@ -201,6 +199,7 @@ document.body.classList.add('parch-mode');
     btn.disabled = false;
   });
 
+  // ── Im Kontext — step 2: Speichern ──────────────────────────────────────────
   document.getElementById('kontext-save').addEventListener('click', async () => {
     const btn = document.getElementById('kontext-save');
     const contextTitle = document.getElementById('kontext-title').textContent;
@@ -245,44 +244,72 @@ document.body.classList.add('parch-mode');
     }
   });
 
-  // ── Tagebuch save ───────────────────────────────────────────────────────────
-  document.getElementById('tagebuch-submit').addEventListener('click', async () => {
+  // ── Tagebuch — step 1: Korrigieren (or direct save if checkbox off) ──────────
+  const tagebuchCorrectBox = document.getElementById('tagebuch-correct');
+  const tagebuchKorrigierenBtn = document.getElementById('tagebuch-korrigieren');
+
+  function syncTagebuchBtn() {
+    tagebuchKorrigierenBtn.textContent = tagebuchCorrectBox.checked ? 'Korrigieren' : 'Speichern';
+  }
+  tagebuchCorrectBox.addEventListener('change', syncTagebuchBtn);
+  syncTagebuchBtn();
+
+  tagebuchKorrigierenBtn.addEventListener('click', async () => {
     const text = document.getElementById('tagebuch-input').value.trim();
     if (!text) return;
-    const doCorrect = document.getElementById('tagebuch-correct').checked;
     const status = document.getElementById('tagebuch-status');
-    const btn = document.getElementById('tagebuch-submit');
-    btn.disabled = true;
-    status.textContent = doCorrect ? 'Korrektur läuft…' : 'Speichern…';
 
-    let corrected = '';
-    let notes = [];
-
-    if (doCorrect) {
-      try {
-        const res = await fetch('/api/write-correct', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({text, context: ''}),
-        });
-        const data = await res.json();
-        corrected = data.corrected || '';
-        notes = data.notes || [];
-
-        document.getElementById('tagebuch-corrected').textContent = corrected;
-        const notesList = document.getElementById('tagebuch-notes');
-        notesList.innerHTML = '';
-        notes.forEach(note => {
-          const li = document.createElement('li');
-          li.textContent = note;
-          notesList.appendChild(li);
-        });
-        document.getElementById('tagebuch-correction').style.display = 'block';
-      } catch (e) {
-        status.textContent = 'Fehler bei der Korrektur.';
-      }
+    if (!tagebuchCorrectBox.checked) {
+      await saveTagebuchEntry(text, '', []);
+      return;
     }
 
+    tagebuchKorrigierenBtn.disabled = true;
+    status.textContent = 'Korrektur läuft…';
+
+    try {
+      const res = await fetch('/api/write-correct', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text, context: ''}),
+      });
+      const data = await res.json();
+      const corrected = data.corrected || '';
+      const notes = data.notes || [];
+
+      document.getElementById('tagebuch-corrected').textContent = corrected;
+      const notesList = document.getElementById('tagebuch-notes');
+      notesList.innerHTML = '';
+      notes.forEach(note => {
+        const li = document.createElement('li');
+        li.textContent = note;
+        notesList.appendChild(li);
+      });
+      document.getElementById('tagebuch-correction').style.display = 'block';
+
+      const submitBtn = document.getElementById('tagebuch-submit');
+      submitBtn.dataset.original = text;
+      submitBtn.dataset.corrected = corrected;
+      submitBtn.dataset.notes = JSON.stringify(notes);
+      status.textContent = '';
+    } catch (e) {
+      status.textContent = 'Fehler bei der Korrektur.';
+    }
+    tagebuchKorrigierenBtn.disabled = false;
+  });
+
+  // ── Tagebuch — step 2: Speichern ─────────────────────────────────────────────
+  document.getElementById('tagebuch-submit').addEventListener('click', async () => {
+    const btn = document.getElementById('tagebuch-submit');
+    await saveTagebuchEntry(
+      btn.dataset.original || '',
+      btn.dataset.corrected || '',
+      JSON.parse(btn.dataset.notes || '[]')
+    );
+  });
+
+  async function saveTagebuchEntry(text, corrected, notes) {
+    const status = document.getElementById('tagebuch-status');
     try {
       await fetch('/api/write-save', {
         method: 'POST',
@@ -300,9 +327,9 @@ document.body.classList.add('parch-mode');
       setTimeout(() => { window.location.reload(); }, 1000);
     } catch (e) {
       status.textContent = 'Fehler beim Speichern.';
-      btn.disabled = false;
     }
-  });
+  }
+
   // ── Voice input ─────────────────────────────────────────────────────────────
   function attachVoiceButton(textareaId, buttonId, lang) {
     const btn = document.getElementById(buttonId);
