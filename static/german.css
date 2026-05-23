@@ -2279,31 +2279,147 @@ body.reading-mode nav {
    Archiv
    ══════════════════════════════════════════════════════════════ */
 
-.archiv-header { margin-bottom: 2rem; }
+.archiv-header { margin-bottom: 1.25rem; }
 
-.archiv-section {
-  margin-bottom: 2.5rem;
-  padding-bottom: 2rem;
-  border-bottom: 1px solid var(--md-parch-deep);
+.archiv-title {
+    font-family: Georgia, serif;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--md-text-primary);
+    margin: 0 0 0.25rem 0;
 }
 
-.archiv-section:last-child { border-bottom: none; }
-
-.archiv-section h2 {
-  margin-bottom: 0.5rem;
-  color: var(--md-text-primary);
+.archiv-description {
+    font-size: 0.9rem;
+    color: var(--md-text-muted);
+    margin: 0 0 1.25rem 0;
 }
 
-.archiv-empty .hint { margin-top: 0; }
+.archiv-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid var(--md-parch-deep);
+    padding-bottom: 0.75rem;
+}
 
-.chart-stub {
-  width: 100%;
-  max-width: 540px;
-  height: 160px;
-  background: var(--md-parch-mid);
-  border: 1px dashed var(--md-parch-deep);
-  border-radius: 8px;
-  margin-top: 0.75rem;
+.archiv-tab {
+    padding: 0.35rem 0.9rem;
+    border-radius: 20px;
+    border: 1px solid var(--md-parch-deep);
+    background: transparent;
+    color: var(--md-text-secondary);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.archiv-tab.active {
+    background: var(--md-accent);
+    border-color: var(--md-accent);
+    color: white;
+}
+
+.archiv-section-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    color: var(--md-text-muted);
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+}
+
+.archiv-section.hidden { display: none; }
+
+.archiv-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--md-parch-deep);
+    font-size: 0.9rem;
+}
+
+.archiv-row:hover {
+    background: var(--md-parch-mid);
+    margin: 0 -0.5rem;
+    padding: 0.6rem 0.5rem;
+    cursor: pointer;
+}
+
+.archiv-date {
+    color: var(--md-text-muted);
+    font-size: 0.8rem;
+    white-space: nowrap;
+    min-width: 80px;
+}
+
+.archiv-persona {
+    color: var(--md-text-primary);
+    font-weight: 500;
+    min-width: 120px;
+}
+
+.archiv-scene {
+    color: var(--md-text-secondary);
+    flex: 1;
+}
+
+.archiv-source {
+    font-size: 0.75rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    background: var(--md-parch-deep);
+    color: var(--md-text-muted);
+}
+
+.archiv-source-html {
+    background: rgba(198,138,94,0.15);
+    color: var(--md-accent);
+}
+
+.archiv-mode-badge {
+    font-size: 0.75rem;
+    background: var(--md-parch-deep);
+    color: var(--md-accent);
+    padding: 0.1rem 0.5rem;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.archiv-preview {
+    color: var(--md-text-secondary);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.archiv-hints {
+    font-size: 0.75rem;
+    color: var(--md-accent);
+    white-space: nowrap;
+}
+
+.archiv-empty {
+    color: var(--md-text-muted);
+    font-style: italic;
+    font-size: 0.9rem;
+    padding: 1rem 0;
+}
+
+.archiv-empty a { color: var(--md-accent); }
+
+.archiv-placeholder-text {
+    color: var(--md-text-muted);
+    font-style: italic;
+    font-size: 0.85rem;
+}
+
+.archiv-drill-placeholder {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--md-parch-deep);
 }
 
 /* ══════════════════════════════════════════════════════════════

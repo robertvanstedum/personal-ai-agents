@@ -102,7 +102,18 @@ def admin():
 
 @app.route("/archiv")
 def archiv():
-    return render_template("german_archiv.html", active="archiv")
+    sessions_file = GERMAN_DIR / "config" / "writing_sessions.json"
+    writing_sessions = []
+    if sessions_file.exists():
+        try:
+            data = json.loads(sessions_file.read_text())
+            writing_sessions = list(reversed(data.get("entries", [])))[:50]
+        except Exception:
+            pass
+    gesprache_sessions = get_gesprache_sessions(limit=50)
+    return render_template("german_archiv.html", active="archiv",
+                           gesprache_sessions=gesprache_sessions,
+                           writing_sessions=writing_sessions)
 
 
 # ── Lesen API ─────────────────────────────────────────────────────────────────

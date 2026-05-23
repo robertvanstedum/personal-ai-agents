@@ -4,46 +4,86 @@
 {% block content %}
 <div class="tab-layout-split">
   <div class="tab-content">
-    <div class="tab-split-header">
-      <div class="tab-hero-label">[BIBLIOTHEK]</div>
-      <h1>Archiv</h1>
+
+    <div class="archiv-header">
+      <h2 class="archiv-title">Archiv</h2>
+      <p class="archiv-description">Gespeicherte Verlaufsdaten aus Gespräche, Schreiben und Lesen.</p>
     </div>
-    <p class="tab-description">Gespeicherte Artikel, Schreib-Verlauf und Drill-Geschichte.</p>
 
-<!-- ── Gespeicherte Artikel ─────────────────────────────────────── -->
-<section class="archiv-section">
-  <h2>Gespeicherte Artikel</h2>
-  <div class="archiv-empty">
-    <p class="hint">Noch keine Artikel gespeichert. Klick 🔖 Merken in Lesen, um Artikel zu speichern.</p>
+    <div class="archiv-tabs">
+      <button class="archiv-tab active" data-section="gesprache">Gespräche</button>
+      <button class="archiv-tab" data-section="schreiben">Schreiben</button>
+      <button class="archiv-tab" data-section="artikel">Artikel</button>
+    </div>
+
+    <!-- Gespräche section -->
+    <div class="archiv-section" id="section-gesprache">
+      <div class="archiv-section-label">Gespräche</div>
+      {% if gesprache_sessions %}
+        {% for s in gesprache_sessions %}
+        <div class="archiv-row">
+          <span class="archiv-date">{{ s.date }}</span>
+          <span class="archiv-persona">{{ s.persona }}</span>
+          <span class="archiv-scene">{{ s.scenario }}</span>
+          <span class="archiv-source archiv-source-{{ s.source }}">{{ s.source }}</span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="archiv-empty">Noch keine Gespräche. Starte eine Sitzung in <a href="/gesprache">Gespräche</a>.</p>
+      {% endif %}
+    </div>
+
+    <!-- Schreiben section -->
+    <div class="archiv-section hidden" id="section-schreiben">
+      <div class="archiv-section-label">Schreiben</div>
+      {% if writing_sessions %}
+        {% for s in writing_sessions %}
+        <div class="archiv-row">
+          <span class="archiv-date">{{ s.timestamp[:10] }}</span>
+          <span class="archiv-mode-badge">{{ s.mode }}</span>
+          <span class="archiv-preview">{{ s.text_original[:60] }}…</span>
+          {% if s.notes %}<span class="archiv-hints">{{ s.notes|length }} Hinweise</span>{% endif %}
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="archiv-empty">Noch keine Einträge. Schreib etwas in <a href="/schreiben">Schreiben</a>.</p>
+      {% endif %}
+    </div>
+
+    <!-- Artikel section -->
+    <div class="archiv-section hidden" id="section-artikel">
+      <div class="archiv-section-label">Gespeicherte Artikel</div>
+      <p class="archiv-empty">Noch keine Artikel gespeichert. Klick <a href="/lesen">🔖 Merken in Lesen</a>, um Artikel zu speichern.</p>
+    </div>
+
+    <!-- Drill placeholder -->
+    <div class="archiv-drill-placeholder">
+      <div class="archiv-section-label">Drill-Verlauf</div>
+      <p class="archiv-placeholder-text">Fehlerquoten-Diagramm — Phase 3</p>
+    </div>
+
   </div>
-</section>
-
-<!-- ── Schreib-Verlauf ──────────────────────────────────────────── -->
-<section class="archiv-section">
-  <h2>Schreib-Verlauf</h2>
-  <div class="archiv-empty">
-    <p class="hint">Schreibeinträge aus Tagebuch, Im Kontext und Wörter üben erscheinen hier.</p>
-  </div>
-</section>
-
-<!-- ── Drill-Verlauf ───────────────────────────────────────────── -->
-<section class="archiv-section">
-  <h2>Drill-Verlauf</h2>
-  <div class="archiv-chart-placeholder">
-    <p class="hint">Fehlerquoten-Diagramm (Chart.js) — Phase 3.</p>
-    <div class="chart-stub" aria-label="Fehlerquoten-Diagramm Platzhalter"></div>
-  </div>
-</section>
-
-  </div><!-- .tab-content -->
   <div class="tab-panel-photo">
-    <img src="/static/photos/burggarten_2_IMG_5541.jpg" alt="Burggarten Wien" style="object-position: left 50%">
+    <img src="/static/photos/burggarten_2_IMG_5541.jpg" alt="Burggarten Wien" style="object-position: 30% 82%">
   </div>
-</div><!-- .tab-layout-split -->
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 document.body.classList.add('parch-mode');
+(function () {
+  'use strict';
+
+  document.querySelectorAll('.archiv-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.archiv-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      document.querySelectorAll('.archiv-section').forEach(s => s.classList.add('hidden'));
+      const target = document.getElementById('section-' + tab.dataset.section);
+      if (target) target.classList.remove('hidden');
+    });
+  });
+})();
 </script>
 {% endblock %}
