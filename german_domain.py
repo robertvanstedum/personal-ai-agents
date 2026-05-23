@@ -13,6 +13,7 @@ import fcntl
 import html
 import os
 import re
+import tempfile
 import random
 import time
 from pathlib import Path
@@ -289,26 +290,47 @@ import subprocess
 
 
 def safe_read_json(path: Path) -> dict:
-    """Read JSON with shared lock. Returns {} if file absent."""
+    """Read JSON with shared lock. Returns {} if file absent, corrupt, or unreadable."""
     if not path.exists():
         return {}
-    with open(path, 'r', encoding='utf-8') as f:
-        fcntl.flock(f, fcntl.LOCK_SH)
-        try:
-            return json.load(f)
-        finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            fcntl.flock(f, fcntl.LOCK_SH)
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return {}
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
+    except (OSError, PermissionError) as e:
+        print(f"⚠️  safe_read_json failed for {path}: {e}")
+        return {}
 
 
 def safe_write_json(path: Path, data: dict) -> None:
-    """Write JSON with exclusive lock. Creates parent dirs if needed."""
+    """Write JSON atomically via temp file + rename. Exclusive lock. Creates parent dirs."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
+    try:
+        tmp_fd, tmp_path = tempfile.mkstemp(
+            dir=path.parent, prefix='.tmp_', suffix='.json'
+        )
         try:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+            with os.fdopen(tmp_fd, 'w', encoding='utf-8') as f:
+                fcntl.flock(f, fcntl.LOCK_EX)
+                try:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+                finally:
+                    fcntl.flock(f, fcntl.LOCK_UN)
+            os.replace(tmp_path, path)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+    except (OSError, PermissionError) as e:
+        print(f"⚠️  safe_write_json failed for {path}: {e}")
+        raise
 
 
 _PHRASEBOOK_FILE       = GERMAN_DIR / "config" / "phrasebook.json"
