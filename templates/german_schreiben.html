@@ -100,7 +100,7 @@
     <span class="session-mode-badge">{{ entry.mode }}</span>
     <span class="session-date">{{ entry.timestamp[:10] }}</span>
     <span class="session-preview">{{ entry.text_original[:80] }}{% if entry.text_original|length > 80 %}…{% endif %}</span>
-    {% if entry.notes %}<span class="session-errors">{{ entry.notes|length }} Hinweise</span>{% endif %}
+    {% if entry.notes %}<span class="session-errors">{{ entry.notes|length }} {% if entry.notes|length == 1 %}Hinweis{% else %}Hinweise{% endif %}</span>{% endif %}
   </div>
   {% endfor %}
 </section>

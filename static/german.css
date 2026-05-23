@@ -475,6 +475,30 @@ body.parch-mode .toggle-label {
   color: var(--md-text-secondary);
 }
 
+body.parch-mode .write-status {
+  color: var(--md-text-secondary);
+}
+
+body.parch-mode .session-history {
+  border-top-color: var(--md-parch-deep);
+}
+
+body.parch-mode .session-history h3 {
+  color: var(--md-text-muted);
+}
+
+body.parch-mode .session-entry {
+  border-bottom-color: var(--md-parch-deep);
+}
+
+body.parch-mode .session-date {
+  color: var(--md-text-muted);
+}
+
+body.parch-mode .session-preview {
+  color: var(--md-text-secondary);
+}
+
 /* ── Lesen — article cards ───────────────────────────────── */
 
 .lesen-header { margin-bottom: 2.5rem; }
