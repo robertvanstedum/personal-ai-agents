@@ -1447,7 +1447,7 @@ body.reading-mode nav {
 .cat-card-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(42, 31, 20, 0.40);
+  background: rgba(42, 31, 20, 0.20);
   transition: background 0.15s;
 }
 
