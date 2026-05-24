@@ -961,6 +961,27 @@ textarea:focus {
   margin-bottom: 1.5rem;
 }
 
+/* Fix 5 — consistent height prevents layout jump when switching modes */
+#tagebuch-input,
+#kontext-input {
+  min-height: 280px;
+}
+
+/* Fix 6 — Wörter üben mode explainer */
+.mode-explainer {
+  font-size: 0.875rem;
+  color: var(--md-text-muted);
+  background: var(--md-parch-mid);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+  line-height: 1.5;
+}
+
+.mode-explainer a {
+  color: var(--md-accent);
+}
+
 /* ── Wörter form ─────────────────────────────────────────── */
 
 .woerter-form {
@@ -1086,7 +1107,7 @@ textarea:focus {
 /* ── Body mode overrides ─────────────────────────────────────── */
 
 body.browse-mode {
-  background-color: #1c1209;
+  background-color: var(--md-parch);
 }
 
 body.browse-mode .headline-strip {
@@ -1146,22 +1167,27 @@ body.reading-mode nav {
 /* ── Browse — hero content ───────────────────────────────────── */
 
 #browse-state {
-  height: 28vh;
+  height: 24vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  padding: 4rem 3rem 0;
-  background-image: url('/static/bg-lesen.png');
-  background-size: cover;
-  background-position: center;
+  padding: 3rem 3rem 0;
   position: relative;
+}
+
+#browse-state .hero-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 #browse-state::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(26, 16, 8, 0.35);
+  background: rgba(26, 16, 8, 0.62);
   pointer-events: none;
 }
 
@@ -1181,24 +1207,17 @@ body.reading-mode nav {
   margin-top: 0.75rem;
 }
 
-/* ── Browse — day toggle ─────────────────────────────────────── */
+/* ── Browse — day toggle (parchment context) ─────────────────── */
 .day-toggle {
   display: flex;
   gap: 0.5rem;
-  padding: 10px 24px;
-  background: rgba(26, 16, 8, 0.96);
-  border-bottom: 1px solid rgba(198, 138, 94, 0.15);
-  max-width: 860px;
-  margin-left: auto;
-  margin-right: auto;
-  width: 100%;
-  box-sizing: border-box;
+  padding: 1rem 0 0;
 }
 
 .day-btn {
   background: transparent;
-  border: 1px solid rgba(198, 138, 94, 0.35);
-  color: rgba(245, 237, 228, 0.45);
+  border: 1px solid var(--md-parch-deep);
+  color: var(--md-text-muted);
   font-family: var(--font-mono);
   font-size: 0.72rem;
   letter-spacing: 0.05em;
@@ -1215,8 +1234,8 @@ body.reading-mode nav {
 }
 
 .day-btn.active {
-  background: rgba(198, 138, 94, 0.15);
-  color: var(--md-accent);
+  background: var(--md-accent);
+  color: white;
   border-color: var(--md-accent);
 }
 
@@ -1344,6 +1363,161 @@ body.reading-mode nav {
 .strip-empty-text {
   font-size: 0.9rem;
   color: var(--text-dim);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Lesen — parchment content area (below hero)
+   ══════════════════════════════════════════════════════════════ */
+
+#lesen-content-area {
+  background: var(--md-parch);
+  min-height: 72vh;
+  padding: 0 2rem 3rem;
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  position: relative;
+}
+
+/* Ghost image — visible only when no category is selected */
+#lesen-content-area.no-selection::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: url('/static/photos/burggarten_2_IMG_5541.jpg') center 40% / cover no-repeat;
+  opacity: 0.06;
+  filter: grayscale(100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Controls and articles always sit above ghost */
+.lesen-cat-row,
+#lesen-article-list,
+#lesen-empty-state,
+.day-toggle {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Category cards ──────────────────────────────────────────── */
+.lesen-cat-row {
+  display: flex;
+  gap: 1rem;
+  padding: 1.25rem 0 1rem;
+  flex-wrap: nowrap;
+}
+
+.lesen-cat-card {
+  flex: 1;
+  min-width: 120px;
+  height: 145px;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  cursor: pointer;
+  background-size: cover;
+  background-repeat: no-repeat;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.lesen-cat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(42, 31, 20, 0.2);
+}
+
+.lesen-cat-card.active {
+  box-shadow: 0 0 0 2.5px var(--md-accent),
+              0 4px 16px rgba(42, 31, 20, 0.2);
+}
+
+.cat-card-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(42, 31, 20, 0.30);
+  transition: background 0.15s;
+}
+
+.lesen-cat-card.active .cat-card-overlay,
+.lesen-cat-card:hover .cat-card-overlay {
+  background: rgba(42, 31, 20, 0.15);
+}
+
+.cat-card-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0.75rem 0.9rem;
+  z-index: 1;
+}
+
+.cat-emoji {
+  font-size: 1.1rem;
+  margin-bottom: 0.2rem;
+  line-height: 1;
+}
+
+.cat-name {
+  font-family: Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: white;
+  line-height: 1.1;
+}
+
+.cat-sub {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.78);
+  margin-top: 0.2rem;
+  line-height: 1.3;
+}
+
+/* ── Parchment article rows ──────────────────────────────────── */
+.lesen-article-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--md-parch-deep);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.lesen-article-row:hover {
+  background: var(--md-parch-mid);
+  margin: 0 -1rem;
+  padding: 0.75rem 1rem;
+}
+
+.lesen-source-tag {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  color: var(--md-accent);
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.lesen-dot {
+  color: var(--md-text-muted);
+  flex-shrink: 0;
+}
+
+.lesen-headline {
+  font-size: 0.95rem;
+  color: var(--md-text-primary);
+  line-height: 1.4;
+}
+
+/* ── Loading / empty state ───────────────────────────────────── */
+.lesen-loading {
+  padding: 2rem 0;
+  color: var(--md-text-muted);
+  font-size: 0.9rem;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -1940,6 +2114,23 @@ body.reading-mode nav {
 
 /* ── Prompt delivery ── */
 
+.session-brief-panel {
+  margin-bottom: 1rem;
+}
+
+.session-brief-text {
+  background: var(--md-parch-mid);
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 6px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--md-text-primary);
+  white-space: pre-wrap;
+  font-family: inherit;
+  margin: 0.5rem 0 0;
+}
+
 .prompt-delivery { margin-top: 0.5rem; }
 
 .prompt-label {
@@ -2192,7 +2383,7 @@ body.reading-mode nav {
   font-family: var(--font-mono);
   font-size: 0.68rem;
   font-weight: 500;
-  color: var(--md-text-muted);
+  color: var(--md-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   padding: 0.4rem 0.75rem;
@@ -2207,13 +2398,13 @@ body.reading-mode nav {
 .woerter-row:hover { background: rgba(42, 31, 20, 0.04); }
 
 .woerter-row td {
-  padding: 0.55rem 0.75rem;
+  padding: 0.35rem 0.75rem;
   border-bottom: 1px solid var(--md-parch-deep);
   vertical-align: middle;
 }
 
 .w-german { font-weight: 600; color: var(--md-text-primary); }
-.w-english { color: var(--md-text-secondary); }
+.w-english { color: var(--md-text-primary); }
 .w-source {
   font-family: var(--font-mono);
   font-size: 0.72rem;
@@ -2221,16 +2412,94 @@ body.reading-mode nav {
   text-transform: uppercase;
 }
 .w-date { font-size: 0.8rem; color: var(--md-text-muted); white-space: nowrap; }
-.w-expand-col { width: 2rem; text-align: center; }
+.w-expand-col { width: 6.5rem; text-align: center; white-space: nowrap; }
 
 .btn-expand {
   background: transparent;
   border: 1px solid var(--md-parch-deep);
-  border-radius: 4px;
-  color: var(--md-text-muted);
+  border-radius: 10px;
+  color: var(--md-text-secondary);
   cursor: pointer;
-  font-size: 0.75rem;
-  padding: 0.15rem 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  white-space: nowrap;
+}
+
+.btn-expand:hover {
+  border-color: var(--md-accent);
+  color: var(--md-accent);
+}
+
+.btn-filter-reset {
+  background: transparent;
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 12px;
+  color: var(--md-text-muted);
+  font-size: 0.8rem;
+  font-family: var(--font-body);
+  padding: 0.3rem 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.btn-filter-reset:hover {
+  border-color: var(--md-accent);
+  color: var(--md-accent);
+}
+
+.expand-source {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.expand-source-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--md-text-muted);
+  flex-shrink: 0;
+}
+
+.expand-source-text {
+  font-size: 0.875rem;
+  color: var(--md-text-secondary);
+}
+
+/* Fix 9 — metadata row inside expanded detail */
+.expand-meta {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--md-text-muted);
+  flex-wrap: wrap;
+}
+
+.expand-meta-label {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+  margin-right: 0.3rem;
+}
+
+/* Fix 8 — visible borders on drill + practice textareas */
+#drill-input,
+.practice-input {
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 6px;
+  background: white;
+  padding: 0.75rem 1rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#drill-input:focus,
+.practice-input:focus {
+  outline: none;
+  border-color: var(--md-accent);
+  box-shadow: 0 0 0 2px rgba(198, 138, 94, 0.12);
 }
 
 .woerter-detail td {

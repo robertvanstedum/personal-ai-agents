@@ -2,49 +2,86 @@
 {% block title %}Lesen{% endblock %}
 
 {% block content %}
-<script>window.__ARTICLES__ = {{ articles | tojson | safe }};</script>
 
-<!-- ── Browse state ──────────────────────────────────────────────────── -->
+<!-- ── Browse state (hero only — dark) ───────────────────────────────── -->
 <div id="browse-state">
+  <img class="hero-img" src="/static/photos/Bookstore_1.jpg"
+       alt="Franz Leo &amp; Comp. Buchhandlung Wien"
+       style="object-position: center 66%">
   <div class="browse-hero-content">
     <h1>Lesen</h1>
     <p class="subtitle">Wiener Nachrichten — Lokales, Kultur, Sport.</p>
   </div>
 </div>
 
-<div class="day-toggle" id="day-toggle">
-  <button class="day-btn active" data-day="heute">Heute</button>
-  <button class="day-btn" data-day="gestern">Gestern</button>
-</div>
+<!-- ── Parchment content area ────────────────────────────────────────── -->
+<div id="lesen-content-area" class="no-selection">
 
-<div class="headline-strip" id="headline-strip">
-  {% if articles %}
-    {% for article in articles %}
-    <div class="strip-item{% if article.status == 'pinned' %} pinned{% endif %}"
-         data-index="{{ loop.index0 }}" data-id="{{ article.id }}" data-date="{{ article.date_fetched }}">
-      <div class="strip-item-header">
-        {% if article.status == 'pinned' %}<span class="strip-pin-icon">📌</span>{% endif %}
-        <span class="strip-source">{{ article.source }}</span>
-        <span class="strip-dot">·</span>
-        <span class="strip-headline-text">{{ article.title }}</span>
-      </div>
-      <div class="strip-item-body">
-        <p class="strip-summary">{{ article.summary[:300] }}{% if article.summary|length > 300 %}…{% endif %}</p>
-        <div class="strip-item-actions">
-          <button class="strip-action-btn strip-mehr-btn">＋ Mehr davon</button>
-          <button class="strip-action-btn strip-weniger-btn">－ Weniger</button>
-          <button class="strip-action-btn strip-merken-btn">🔖 Merken</button>
-          <a class="strip-action-btn strip-open-btn" href="#" target="_blank" rel="noopener">↗ Artikel öffnen</a>
-        </div>
+  <!-- Day toggle (hidden until a category is selected) -->
+  <div class="day-toggle" id="day-toggle" style="display:none">
+    <button class="day-btn active" data-day="heute">Heute</button>
+    <button class="day-btn" data-day="gestern">Gestern</button>
+  </div>
+
+  <!-- Category cards -->
+  <div class="lesen-cat-row">
+
+    <div class="lesen-cat-card" data-category="alltag"
+         style="background-image: url('/static/photos/croissant.jpg');
+                background-position: center 40%;">
+      <div class="cat-card-overlay"></div>
+      <div class="cat-card-content">
+        <span class="cat-emoji">☕</span>
+        <span class="cat-name">Alltag</span>
+        <span class="cat-sub">Haushalt · Sport · Alltägliches</span>
       </div>
     </div>
-    {% endfor %}
-  {% else %}
-    <div class="strip-empty">
-      <span class="strip-empty-text">Keine Artikel geladen.</span>
-      <button class="strip-action-btn" id="btn-artikel-laden">Artikel laden ↻</button>
+
+    <div class="lesen-cat-card" data-category="kultur"
+         style="background-image: url('/static/photos/Museum_2.jpg');
+                background-position: center 35%;">
+      <div class="cat-card-overlay"></div>
+      <div class="cat-card-content">
+        <span class="cat-emoji">🎭</span>
+        <span class="cat-name">Kultur</span>
+        <span class="cat-sub">Musik · Kunst · Theater</span>
+      </div>
     </div>
-  {% endif %}
+
+    <div class="lesen-cat-card" data-category="politik"
+         style="background-image: url('/static/photos/Newspaper.jpg');
+                background-position: center 25%;">
+      <div class="cat-card-overlay"></div>
+      <div class="cat-card-content">
+        <span class="cat-emoji">📰</span>
+        <span class="cat-name">Politik</span>
+        <span class="cat-sub">Nachrichten · Wirtschaft</span>
+      </div>
+    </div>
+
+    <div class="lesen-cat-card" data-category="wien"
+         style="background-image: url('/static/photos/Schnitzel_and_Beer.jpg');
+                background-position: center 45%;">
+      <div class="cat-card-overlay"></div>
+      <div class="cat-card-content">
+        <span class="cat-emoji">🏛️</span>
+        <span class="cat-name">Wien</span>
+        <span class="cat-sub">Stadt · Bezirke · Lokales</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Article list (filled by JS on category select) -->
+  <div id="lesen-article-list"></div>
+
+  <!-- Empty / refresh state -->
+  <div class="strip-empty" id="lesen-empty-state" style="display:none">
+    <span class="strip-empty-text">Keine Artikel geladen.</span>
+    <button class="strip-action-btn" id="btn-artikel-laden"
+            title="Refresh article feed">Artikel laden ↻</button>
+  </div>
+
 </div>
 
 <!-- ── Reading state ─────────────────────────────────────────────────── -->
@@ -53,11 +90,11 @@
     <span class="wien-banner-label">[Wien Stadtbild]</span>
   </div>
   <div class="article-bar">
-    <button class="article-bar-btn" id="btn-back-liste">← Liste</button>
+    <button class="article-bar-btn" id="btn-back-liste" title="Back to article list">← Liste</button>
     <div class="article-bar-center">
-      <button class="article-bar-btn" id="btn-art-prev">‹</button>
+      <button class="article-bar-btn" id="btn-art-prev" title="Previous article">‹</button>
       <span class="article-bar-counter" id="art-counter">1 / 1</span>
-      <button class="article-bar-btn" id="btn-art-next">›</button>
+      <button class="article-bar-btn" id="btn-art-next" title="Next article">›</button>
     </div>
   </div>
   <div class="reading-body">
@@ -79,7 +116,8 @@
                     title="Spracheingabe — funktioniert am besten in Chrome/Safari">🎤</button>
           </div>
           <div class="notizen-actions">
-            <button class="notizen-btn" id="btn-notizen-correct">Korrektur anfragen</button>
+            <button class="notizen-btn" id="btn-notizen-correct"
+                    title="Get AI grammar correction">Korrektur anfragen</button>
             <span class="notizen-status" id="notizen-status"></span>
           </div>
           <div class="notizen-correction" id="notizen-correction" style="display:none">
@@ -88,15 +126,19 @@
             <textarea class="notizen-input notizen-rewrite" id="notizen-rewritten" rows="3"
               placeholder="Neu schreiben…"></textarea>
             <div class="notizen-actions">
-              <button class="notizen-btn notizen-btn-save" id="btn-notizen-save">Speichern</button>
+              <button class="notizen-btn notizen-btn-save" id="btn-notizen-save"
+                      title="Save note">Speichern</button>
             </div>
           </div>
         </div>
       </div>
       <div class="reading-footer">
-        <button class="reading-footer-btn" id="btn-mehr">＋ Mehr</button>
-        <button class="reading-footer-btn" id="btn-weniger">－ Weniger</button>
-        <button class="reading-footer-btn" id="btn-merken">🔖 Merken</button>
+        <button class="reading-footer-btn" id="btn-mehr"
+                title="Expand full article text">＋ Mehr</button>
+        <button class="reading-footer-btn" id="btn-weniger"
+                title="Collapse article text">－ Weniger</button>
+        <button class="reading-footer-btn" id="btn-merken"
+                title="Save article for later">🔖 Merken</button>
         <button class="reading-footer-btn" id="btn-vorlesen"
                 title="Artikel vorlesen lassen">🔊 Vorlesen</button>
       </div>
@@ -118,8 +160,9 @@
   <div class="popover-translation" id="popover-translation">Übersetzung…</div>
   <div class="popover-timing" id="popover-timing"></div>
   <div class="popover-actions">
-    <button class="btn-save-phrase" id="btn-save-phrase">＋ In Bibliothek</button>
-    <button class="btn-close-popover" id="btn-close-popover">✕</button>
+    <button class="btn-save-phrase" id="btn-save-phrase"
+            title="Save word or phrase to library">＋ In Bibliothek</button>
+    <button class="btn-close-popover" id="btn-close-popover" title="Close">✕</button>
   </div>
 </div>
 {% endblock %}
@@ -129,36 +172,133 @@
 (function () {
   'use strict';
 
-  const articles = window.__ARTICLES__ || [];
-  let filteredArticles = [];
-  let currentIdx = 0;
-  let textTruncated = true;
+  // ── State ────────────────────────────────────────────────────────────
+  let categoryArticles = [];   // all articles for selected category
+  let filteredArticles = [];   // articles after day filter
+  let currentIdx      = 0;
+  let currentCategory = null;
+  let currentDay      = 'heute';
+  let heuteDate       = null;
+  let gesternDate     = null;
+  let textTruncated   = true;
   let currentTranslation = '';
+
+  // ── Helpers ──────────────────────────────────────────────────────────
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  async function postJSON(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
 
   // ── State switching ──────────────────────────────────────────────────
   function enterBrowse() {
     document.body.classList.remove('reading-mode', 'parch-mode');
     document.body.classList.add('browse-mode');
     document.getElementById('browse-state').classList.remove('lesen-state-hidden');
-    document.getElementById('day-toggle').classList.remove('lesen-state-hidden');
-    document.getElementById('headline-strip').classList.remove('lesen-state-hidden');
+    document.getElementById('lesen-content-area').classList.remove('lesen-state-hidden');
     document.getElementById('reading-state').classList.add('lesen-state-hidden');
   }
 
   function enterReading(articleId) {
-    const filteredIdx = filteredArticles.findIndex(a => a.id === articleId);
-    if (filteredIdx === -1) return;
-    currentIdx = filteredIdx;
+    const idx = filteredArticles.findIndex(a => a.id === articleId);
+    if (idx === -1) return;
+    currentIdx = idx;
     document.body.classList.remove('browse-mode', 'parch-mode');
     document.body.classList.add('reading-mode');
     document.getElementById('browse-state').classList.add('lesen-state-hidden');
-    document.getElementById('day-toggle').classList.add('lesen-state-hidden');
-    document.getElementById('headline-strip').classList.add('lesen-state-hidden');
+    document.getElementById('lesen-content-area').classList.add('lesen-state-hidden');
     document.getElementById('reading-state').classList.remove('lesen-state-hidden');
     populateArticle(currentIdx);
   }
 
-  // ── Article population ───────────────────────────────────────────────
+  // ── Category selection ────────────────────────────────────────────────
+  async function selectCategory(cat) {
+    currentCategory = cat;
+    document.getElementById('lesen-content-area').classList.remove('no-selection');
+
+    // Highlight active card
+    document.querySelectorAll('.lesen-cat-card').forEach(b => {
+      b.classList.toggle('active', b.dataset.category === cat);
+    });
+
+    // Show loading hint
+    const list = document.getElementById('lesen-article-list');
+    list.innerHTML = '<div class="lesen-loading">Wird geladen…</div>';
+    document.getElementById('lesen-empty-state').style.display = 'none';
+
+    try {
+      const res = await fetch(`/api/lesen-category?category=${encodeURIComponent(cat)}`);
+      const data = await res.json();
+      categoryArticles = data.articles || [];
+    } catch {
+      categoryArticles = [];
+    }
+
+    // Derive heute / gestern from returned articles
+    const allDates = [...new Set(categoryArticles.map(a => a.date_fetched))].sort().reverse();
+    heuteDate   = allDates[0] || null;
+    gesternDate = allDates[1] || null;
+
+    // Show/hide day toggle
+    const dayToggle = document.getElementById('day-toggle');
+    dayToggle.style.display = gesternDate ? '' : 'none';
+
+    applyDayFilter(currentDay);
+  }
+
+  // ── Day filter ────────────────────────────────────────────────────────
+  function applyDayFilter(day) {
+    currentDay = day;
+    // Update active day button
+    document.querySelectorAll('.day-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.day === day);
+    });
+
+    const filterDate = day === 'heute' ? heuteDate : gesternDate;
+    filteredArticles = filterDate
+      ? categoryArticles.filter(a => a.date_fetched === filterDate)
+      : categoryArticles;
+
+    renderArticles(filteredArticles);
+  }
+
+  // ── Article row rendering ─────────────────────────────────────────────
+  function renderArticles(list) {
+    const container = document.getElementById('lesen-article-list');
+    const emptyState = document.getElementById('lesen-empty-state');
+    container.innerHTML = '';
+
+    if (list.length === 0) {
+      emptyState.style.display = '';
+      return;
+    }
+    emptyState.style.display = 'none';
+
+    list.forEach(art => {
+      const row = document.createElement('div');
+      row.className = 'lesen-article-row';
+      row.dataset.id = art.id;
+      row.innerHTML =
+        `<span class="lesen-source-tag">${escapeHtml(art.source)}</span>` +
+        `<span class="lesen-dot">·</span>` +
+        `<span class="lesen-headline">${escapeHtml(art.title)}</span>`;
+      row.addEventListener('click', () => enterReading(art.id));
+      container.appendChild(row);
+    });
+  }
+
+  // ── Article population (reading view) ────────────────────────────────
   function populateArticle(idx) {
     const art = filteredArticles[idx];
     if (!art) return;
@@ -181,73 +321,20 @@
 
   function applyTruncation() {
     const el = document.getElementById('reading-text');
-    if (textTruncated) {
-      el.classList.add('text-truncated');
-    } else {
-      el.classList.remove('text-truncated');
-    }
+    el.classList.toggle('text-truncated', textTruncated);
   }
 
-  // ── API helper ───────────────────────────────────────────────────────
-  async function postJSON(url, body) {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    return res.json();
-  }
-
-  // ── Strip interactions ───────────────────────────────────────────────
-  document.querySelectorAll('.strip-item').forEach(item => {
-    const header  = item.querySelector('.strip-item-header');
-    const mehr    = item.querySelector('.strip-mehr-btn');
-    const weniger = item.querySelector('.strip-weniger-btn');
-    const merken  = item.querySelector('.strip-merken-btn');
-    const openBtn = item.querySelector('.strip-open-btn');
-    const idx     = parseInt(item.dataset.index, 10);
-    const art     = articles[idx];
-    if (art && openBtn) openBtn.href = art.url || '#';
-
-    header.addEventListener('click', () => { if (art) enterReading(art.id); });
-
-    mehr.addEventListener('click', async e => {
-      e.stopPropagation();
-      mehr.textContent = '＋ Mehr davon ✓';
-      mehr.disabled = true;
-      if (art) await postJSON('/api/lesen-action', { article_id: art.id, action: 'pos' });
-      setTimeout(() => {
-        item.style.transition = 'opacity 0.3s';
-        item.style.opacity = '0';
-        setTimeout(() => { item.style.display = 'none'; }, 300);
-      }, 600);
-    });
-
-    weniger.addEventListener('click', async e => {
-      e.stopPropagation();
-      weniger.textContent = '－ Weniger ✓';
-      weniger.disabled = true;
-      if (art) await postJSON('/api/lesen-action', { article_id: art.id, action: 'neg' });
-      setTimeout(() => {
-        item.style.transition = 'opacity 0.3s';
-        item.style.opacity = '0';
-        setTimeout(() => { item.style.display = 'none'; }, 300);
-      }, 600);
-    });
-
-    merken.addEventListener('click', async e => {
-      e.stopPropagation();
-      if (art) {
-        await postJSON('/api/lesen-action', { article_id: art.id, action: 'pin' });
-        merken.textContent = '🔖 Gemerkt';
-        merken.disabled = true;
-      } else {
-        enterReading(art ? art.id : null);
-      }
-    });
+  // ── Category cards ────────────────────────────────────────────────────
+  document.querySelectorAll('.lesen-cat-card').forEach(btn => {
+    btn.addEventListener('click', () => selectCategory(btn.dataset.category));
   });
 
-  // ── Reading navigation ───────────────────────────────────────────────
+  // ── Day toggle ────────────────────────────────────────────────────────
+  document.querySelectorAll('.day-btn').forEach(btn => {
+    btn.addEventListener('click', () => applyDayFilter(btn.dataset.day));
+  });
+
+  // ── Reading navigation ────────────────────────────────────────────────
   document.getElementById('btn-back-liste').addEventListener('click', enterBrowse);
 
   document.getElementById('btn-art-prev').addEventListener('click', () => {
@@ -258,7 +345,7 @@
     if (currentIdx < filteredArticles.length - 1) enterReading(filteredArticles[currentIdx + 1].id);
   });
 
-  // ── Mehr / Weniger (text truncation in reading view) ─────────────────
+  // ── Text truncation ───────────────────────────────────────────────────
   document.getElementById('btn-mehr').addEventListener('click', () => {
     textTruncated = false;
     applyTruncation();
@@ -271,41 +358,40 @@
     if (scroll) scroll.scrollTo({ top: 0, behavior: 'smooth' });
   });
 
+  // ── Merken (reading view) ─────────────────────────────────────────────
   document.getElementById('btn-merken').addEventListener('click', async function () {
-    const art = articles[currentIdx];
+    const art = filteredArticles[currentIdx];
     if (!art) return;
     await postJSON('/api/lesen-action', { article_id: art.id, action: 'pin' });
     this.textContent = '🔖 Gemerkt';
     this.disabled = true;
   });
 
-  // ── Lesen → Schreiben handoff ────────────────────────────────────────
-  // (✏️ button is not in the current HTML strip; wired here for future use)
-  document.querySelectorAll('.strip-item').forEach(item => {
-    const schreibenBtn = item.querySelector('.strip-schreiben-btn');
-    if (!schreibenBtn) return;
-    const idx = parseInt(item.dataset.index, 10);
-    const art = articles[idx];
-    schreibenBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      if (!art) return;
-      sessionStorage.setItem('schreiben_kontext', JSON.stringify({
-        title: art.title || '',
-        summary: (art.summary || '').slice(0, 300),
-      }));
-      sessionStorage.setItem('schreibenMode', 'kontext');
-      window.location.href = '/schreiben';
+  // ── Refresh feed ──────────────────────────────────────────────────────
+  const btnLaden = document.getElementById('btn-artikel-laden');
+  if (btnLaden) {
+    btnLaden.addEventListener('click', async () => {
+      btnLaden.textContent = 'Laden…';
+      btnLaden.disabled = true;
+      try {
+        await postJSON('/api/lesen-refresh', {});
+        if (currentCategory) selectCategory(currentCategory);
+        else { btnLaden.textContent = 'Artikel laden ↻'; btnLaden.disabled = false; }
+      } catch {
+        btnLaden.textContent = 'Fehler — neu versuchen';
+        btnLaden.disabled = false;
+      }
     });
-  });
+  }
 
-  // ── Word capture ─────────────────────────────────────────────────────
+  // ── Word capture ──────────────────────────────────────────────────────
   const popover    = document.getElementById('word-popover');
   const popPhrase  = document.getElementById('popover-phrase');
   const popTrans   = document.getElementById('popover-translation');
   const popTiming  = document.getElementById('popover-timing');
   const btnSave    = document.getElementById('btn-save-phrase');
-  const translationCache = new Map();
   const btnClose   = document.getElementById('btn-close-popover');
+  const translationCache = new Map();
   let currentPhrase = '';
 
   let selectionTimer = null;
@@ -327,9 +413,7 @@
     const range = sel.getRangeAt(0);
     const before = range.startContainer.textContent[range.startOffset - 1];
     const after  = range.endContainer.textContent[range.endOffset];
-    const startsClean = !before || /\W/.test(before);
-    const endsClean   = !after  || /\W/.test(after);
-    if (!startsClean || !endsClean) return;
+    if ((before && /\w/.test(before)) || (after && /\w/.test(after))) return;
     currentPhrase = phrase;
     currentTranslation = '';
     const rect = range.getBoundingClientRect();
@@ -387,7 +471,7 @@
 
   btnSave.addEventListener('click', async () => {
     if (!currentPhrase || !currentTranslation) return;
-    const art = articles[currentIdx];
+    const art = filteredArticles[currentIdx];
     const contextEl = document.getElementById('reading-text');
     const contextSentence = contextEl ? contextEl.textContent.slice(0, 200) : '';
     btnSave.textContent = 'Speichern…';
@@ -414,7 +498,7 @@
     }
   });
 
-  // ── Notizen flow ─────────────────────────────────────────────────────
+  // ── Notizen flow ──────────────────────────────────────────────────────
   const btnNotizenCorrect = document.getElementById('btn-notizen-correct');
   const btnNotizenSave    = document.getElementById('btn-notizen-save');
   const notizenStatus     = document.getElementById('notizen-status');
@@ -445,7 +529,7 @@
     btnNotizenSave.addEventListener('click', async () => {
       const original  = document.getElementById('notizen-original').value.trim();
       const rewritten = document.getElementById('notizen-rewritten').value.trim();
-      const art = articles[currentIdx];
+      const art = filteredArticles[currentIdx];
       btnNotizenSave.disabled = true;
       btnNotizenSave.textContent = 'Speichern…';
       try {
@@ -464,7 +548,7 @@
           notizenCorrected = '';
           btnNotizenSave.textContent = 'Speichern';
           btnNotizenSave.disabled = false;
-          btnNotizenCorrect.disabled = false;
+          if (btnNotizenCorrect) btnNotizenCorrect.disabled = false;
         }, 1200);
       } catch {
         btnNotizenSave.textContent = 'Fehler';
@@ -473,58 +557,7 @@
     });
   }
 
-  // ── Refresh feed ─────────────────────────────────────────────────────
-  const btnLaden = document.getElementById('btn-artikel-laden');
-  if (btnLaden) {
-    btnLaden.addEventListener('click', async () => {
-      btnLaden.textContent = 'Laden…';
-      btnLaden.disabled = true;
-      try {
-        await postJSON('/api/lesen-refresh', {});
-        window.location.reload();
-      } catch {
-        btnLaden.textContent = 'Fehler — neu versuchen';
-        btnLaden.disabled = false;
-      }
-    });
-  }
-
-  // ── Init ─────────────────────────────────────────────────────────────
-  document.addEventListener('DOMContentLoaded', () => {
-    enterBrowse();
-
-    const allDates = [...new Set((window.__ARTICLES__ || []).map(a => a.date_fetched))].sort().reverse();
-    const heuteDate   = allDates[0];
-    const gesternDate = allDates[1];
-
-    const dayToggle = document.getElementById('day-toggle');
-    if (!gesternDate) dayToggle.style.display = 'none';
-
-    function applyDayFilter(day) {
-      const filterDate = day === 'heute' ? heuteDate : gesternDate;
-      filteredArticles = [];
-      document.querySelectorAll('.strip-item').forEach(item => {
-        if (item.dataset.date === filterDate && filteredArticles.length < 5) {
-          item.style.display = '';
-          const art = articles[parseInt(item.dataset.index, 10)];
-          if (art) filteredArticles.push(art);
-        } else {
-          item.style.display = 'none';
-        }
-      });
-    }
-
-    applyDayFilter('heute');
-
-    dayToggle.querySelectorAll('.day-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        dayToggle.querySelectorAll('.day-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        applyDayFilter(btn.dataset.day);
-      });
-    });
-  });
-  // ── Voice input on Notizen ───────────────────────────────────────────────────
+  // ── Voice input on Notizen ────────────────────────────────────────────
   (function () {
     const btn = document.getElementById('voice-notizen');
     const textarea = document.getElementById('notizen-original');
@@ -540,14 +573,18 @@
       recognition.onresult = e => {
         textarea.value += (textarea.value ? ' ' : '') + e.results[0][0].transcript;
       };
-      recognition.onend = () => { recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
-      recognition.onerror = () => { recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
+      recognition.onend = () => {
+        recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening');
+      };
+      recognition.onerror = () => {
+        recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening');
+      };
       recognition.onstart = () => { btn.textContent = '⏹'; btn.classList.add('listening'); };
       recognition.start();
     });
   })();
 
-  // ── 🔊 Vorlesen — user-initiated only, never auto ────────────────────────────
+  // ── Vorlesen ──────────────────────────────────────────────────────────
   document.getElementById('btn-vorlesen').addEventListener('click', () => {
     const text = document.getElementById('reading-text').textContent.trim();
     if (!text || !window.speechSynthesis) return;
@@ -555,6 +592,9 @@
     u.lang = 'de-DE'; u.rate = 0.9;
     window.speechSynthesis.speak(u);
   });
+
+  // ── Init ──────────────────────────────────────────────────────────────
+  enterBrowse();
 
 })();
 </script>
