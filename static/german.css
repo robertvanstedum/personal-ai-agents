@@ -1187,7 +1187,7 @@ body.reading-mode nav {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(26, 16, 8, 0.62);
+  background: rgba(26, 16, 8, 0.28);
   pointer-events: none;
 }
 
