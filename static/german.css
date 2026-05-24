@@ -308,10 +308,11 @@ body.landing-mode {
 
 .landing-subtitle {
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--md-text-muted);
+  color: var(--md-accent);
+  text-shadow: 1px 1px 3px rgba(0,0,0,0.6);
   margin-bottom: 3rem;
 }
 
@@ -1201,12 +1202,15 @@ body.reading-mode nav {
   font-size: 3.8rem;
   font-weight: 700;
   line-height: 1.1;
+  color: var(--md-accent);
 }
 
 .browse-hero-content .subtitle {
-  margin-top: 0.75rem;
+  margin-top: 0.15rem;
   font-weight: 700;
-  text-shadow: 1px 1px 4px rgba(0,0,0,0.8);
+  color: #ffffff;
+  text-shadow: 1px 1px 5px rgba(0,0,0,0.85);
+  font-size: 1.0rem;
 }
 
 /* ── Browse — day toggle (parchment context) ─────────────────── */
