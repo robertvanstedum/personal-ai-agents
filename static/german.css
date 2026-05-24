@@ -1206,6 +1206,8 @@ body.reading-mode nav {
 }
 
 .browse-hero-content .subtitle {
+  margin: 0;
+  padding: 0;
   margin-top: 0.1rem;
   font-weight: 700;
   color: #f5efe6;
