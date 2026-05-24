@@ -1214,7 +1214,7 @@ body.reading-mode nav {
   padding: 0;
   margin-top: 0.1rem;
   font-weight: 700;
-  color: #1a1008;
+  color: var(--md-text-secondary);
   text-shadow: 1px 1px 5px rgba(0,0,0,0.85);
   font-size: 1.0rem;
 }
