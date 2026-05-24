@@ -1205,6 +1205,8 @@ body.reading-mode nav {
 
 .browse-hero-content .subtitle {
   margin-top: 0.75rem;
+  font-weight: 700;
+  text-shadow: 1px 1px 4px rgba(0,0,0,0.8);
 }
 
 /* ── Browse — day toggle (parchment context) ─────────────────── */
