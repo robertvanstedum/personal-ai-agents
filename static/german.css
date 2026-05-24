@@ -1202,13 +1202,13 @@ body.reading-mode nav {
   font-size: 3.8rem;
   font-weight: 700;
   line-height: 1.1;
-  color: var(--md-accent);
+  color: #f5efe6;
 }
 
 .browse-hero-content .subtitle {
-  margin-top: 0.15rem;
+  margin-top: 0.1rem;
   font-weight: 700;
-  color: #ffffff;
+  color: #f5efe6;
   text-shadow: 1px 1px 5px rgba(0,0,0,0.85);
   font-size: 1.0rem;
 }
