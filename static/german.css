@@ -1205,7 +1205,7 @@ body.reading-mode nav {
   font-size: 3.8rem;
   font-weight: 700;
   line-height: 1.1;
-  color: var(--md-accent);
+  color: #1a1008;
 }
 
 .browse-hero-content .subtitle {
@@ -1214,7 +1214,7 @@ body.reading-mode nav {
   padding: 0;
   margin-top: 0.1rem;
   font-weight: 700;
-  color: var(--md-accent);
+  color: #1a1008;
   text-shadow: 1px 1px 5px rgba(0,0,0,0.85);
   font-size: 1.0rem;
 }
