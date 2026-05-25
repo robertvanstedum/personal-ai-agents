@@ -739,7 +739,7 @@ def _strip_html(raw: str) -> str:
 
 
 def get_lesen_pool(category: str | None = None) -> list:
-    """Return active articles from today and yesterday only. Older articles belong in Archiv.
+    """Return active articles from the last 5 days. Falls back to newest 30 if pool is empty.
 
     Args:
         category: Optional filter — 'alltag' | 'kultur' | 'politik' | 'wien'.
@@ -747,8 +747,7 @@ def get_lesen_pool(category: str | None = None) -> list:
     """
     data = _load_lesen_articles()
     blocked = _load_lesen_blocked_keywords()
-    today = datetime.date.today().isoformat()
-    yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+    cutoff = (datetime.date.today() - datetime.timedelta(days=5)).isoformat()
     # Source→category map for articles that pre-date category tagging
     sources = _load_rss_sources()
     source_category_map = {s["name"]: s.get("category", "wien") for s in sources}
@@ -756,7 +755,7 @@ def get_lesen_pool(category: str | None = None) -> list:
     for a in data["articles"]:
         if a["status"] != "active":
             continue
-        if a.get("date_fetched") not in (today, yesterday):
+        if (a.get("date_fetched") or "") < cutoff:
             continue
         if any(kw in a["title"].lower() for kw in blocked):
             continue
@@ -764,6 +763,18 @@ def get_lesen_pool(category: str | None = None) -> list:
         if "category" not in a:
             a["category"] = source_category_map.get(a.get("source", ""), "wien")
         pool.append(a)
+    # Fallback: if the 5-day window is empty, return newest 30 active articles
+    if not pool:
+        all_active = sorted(
+            [a for a in data["articles"] if a["status"] == "active"
+             and not any(kw in a["title"].lower() for kw in blocked)],
+            key=lambda a: a.get("date_fetched", ""),
+            reverse=True,
+        )
+        pool = all_active[:30]
+        for a in pool:
+            if "category" not in a:
+                a["category"] = source_category_map.get(a.get("source", ""), "wien")
     if category:
         pool = [a for a in pool if a.get("category") == category]
     return pool
