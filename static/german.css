@@ -2136,6 +2136,7 @@ body.reading-mode nav {
 /* ── Prompt delivery ── */
 
 .session-brief-panel {
+  margin-top: 1.25rem;
   margin-bottom: 1rem;
 }
 
@@ -2159,7 +2160,7 @@ body.reading-mode nav {
   font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--md-text-muted);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0;
 }
 
 .prompt-text {
