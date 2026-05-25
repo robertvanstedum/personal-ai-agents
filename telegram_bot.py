@@ -774,6 +774,26 @@ async def _handle_german_command(update: Update, text: str):
         else:
             await update.message.reply_text("ℹ️ Watcher was not running (or pkill failed).")
 
+    elif cmd == "resetphrases":
+        verb = args.strip().lower() if args else ""
+        if not verb:
+            await update.message.reply_text("Usage: !german resetphrases [verb]")
+            return
+        pool = _load_drill_pool()
+        found = False
+        for section in ("core", "on_demand"):
+            for entry in pool.get(section, {}).get("verbs", []):
+                if isinstance(entry, dict) and entry.get("verb", "").lower() == verb:
+                    entry.pop("phrases", None)
+                    found = True
+        if found:
+            _save_drill_pool(pool)
+            await update.message.reply_text(
+                f"✅ Phrases cleared for '{verb}'. Next drill will regenerate."
+            )
+        else:
+            await update.message.reply_text(f"⚠️ Verb '{verb}' not found in pool.")
+
     elif cmd == "anki":
         anki_dir = GERMAN_DIR / "anki"
         csvs = sorted(anki_dir.glob("*.csv")) if anki_dir.exists() else []
