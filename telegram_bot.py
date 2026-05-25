@@ -908,6 +908,7 @@ _phrase_practice: dict = {}     # chat_id → {"phrase_id": str}; in-memory, sur
 _phrase_save_pending: dict = {}  # chat_id → {"german": str, "english": str}; awaiting yes/no confirm
 _phrase_capture_mode: dict = {}  # chat_id → {"retries": int}; waiting for second voice note
 _phrase_list_offset: dict = {}   # chat_id → int; pagination offset for phrase list
+_last_list_type: dict = {}       # chat_id → 'phrase' | 'verb'; which list was shown last (for bare "more" routing)
 
 
 # _resolve_verb, _resolve_phrases imported from german_domain (Group C)
@@ -1266,6 +1267,7 @@ async def _handle_drill_list(update) -> None:
         return
     _drill_list_state[chat_id] = {"verbs": verbs, "offset": 10}
     _save_drill_list_state()
+    _last_list_type[chat_id] = 'verb'
     await update.message.reply_text(_drill_list_page(verbs, 0))
 
 
@@ -1493,6 +1495,7 @@ async def _handle_phrase_list(update: Update, args: str, offset: int = 0) -> Non
         lines.append(f"— {remaining} more. Say 'phrase more' or type !phrase more —")
     lines.append("— Say 'phrase practice' or type !phrase practice [id] to drill one —")
     _phrase_list_offset[update.message.chat_id] = offset + len(page)
+    _last_list_type[update.message.chat_id] = 'phrase'
     await update.message.reply_text("\n\n".join(lines))
 
 
@@ -1722,6 +1725,10 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await _handle_phrase_list(update, "")
         return
     if _PHRASE_LIST_MORE_VOICE_RE.search(text):
+        await _handle_phrase_list_more(update)
+        return
+    # Bare "more"/"next" — route to whichever list was shown last (phrase vs verb)
+    if _DRILL_MORE_RE.search(text) and _last_list_type.get(update.message.chat_id) == 'phrase':
         await _handle_phrase_list_more(update)
         return
     _tm = _PHRASE_PRACTICE_VOICE_RE.search(text)
