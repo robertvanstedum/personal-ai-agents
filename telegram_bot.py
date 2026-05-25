@@ -1910,6 +1910,10 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
     if _PHRASE_LIST_MORE_VOICE_RE.search(text):
         await _handle_phrase_list_more(update)
         return
+    # Bare "more"/"next" — route to phrase list continuation if phrase was shown last
+    if _DRILL_MORE_RE.search(text) and _last_list_type.get(update.message.chat_id) == 'phrase':
+        await _handle_phrase_list_more(update)
+        return
     _pm = _PHRASE_PRACTICE_VOICE_RE.search(text)
     if _pm:
         _id_str = _parse_spoken_id(text[_pm.end():].strip())
