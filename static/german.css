@@ -1416,7 +1416,7 @@ body.reading-mode nav {
 /* ── Category cards ──────────────────────────────────────────── */
 .lesen-cat-row {
   display: flex;
-  gap: 1rem;
+  gap: 1.5rem;
   padding: 1.25rem 0 1rem;
   flex-wrap: nowrap;
 }
