@@ -1,49 +1,49 @@
 [
   {
-    "hash_id": "f56f9",
+    "hash_id": "3fa8e",
     "source": "War on the Rocks",
-    "title": "China\u2019s AI Governance Offensive Threatens U.S. Tech Leadership",
-    "link": "https://warontherocks.com/cogs-of-war/chinas-ai-governance-offensive-threatens-u-s-tech-leadership/",
-    "summary": "<p>China&#8217;s diplomats are on an &#8220;AI governance&#8221; offensive. At a May 5 United Nations meeting, China&#8217;s vice minister of science and technology championed China&#8217;s role in shaping U.N.-led frameworks that determine how the technology should be built and used. Just a week earlier, two top Chinese AI experts actively involved in Beijing&#8217;s governance efforts appeared by video on a Capitol Hill panel discussion hosted by Senator Bernie Sanders, touting China&#8217;s contributions to AI safety and cooperation.Norms and standards on AI development and applications are still being defined. Being a standards-setter rather than a standards-follower can simultaneously solidify a country&#8217;s technological</p>\n<p>The post <a href=\"https://warontherocks.com/cogs-of-war/chinas-ai-governance-offensive-threatens-u-s-tech-leadership/\">China&#8217;s AI Governance Offensive Threatens U.S. Tech Leadership</a> appeared first on <a href=\"https://warontherocks.com\">War on the Rocks</a>.</p>",
-    "published": "2026-05-21 08:00:37+00:00",
+    "title": "Inside Ukraine\u2019s Battlefield Innovation Loop",
+    "link": "https://warontherocks.com/cogs-of-war/inside-ukraines-battlefield-innovation-loop/",
+    "summary": "<p>This exclusive Cogs of War interview is with Catarina Buchatskiy, the co-founder and director of analytics at the Snake Island Institute, a Kyiv-based defense analytics center, and Viktoriia Honcharuk, the institute&#8217;s director of defense technologies. We asked them to share their views on how Ukraine&#8217;s military and defense firms turn battlefield feedback into rapid innovation, what Western investors and defense tech companies can learn from Ukraine, and what a future Ukraine-West defense industrial partnership might look like.&#160;Sign Up for Our Newsletter&#160;American and allied defense companies often speak about testing their products in Ukraine, but few have consistently done so. Why</p>\n<p>The post <a href=\"https://warontherocks.com/cogs-of-war/inside-ukraines-battlefield-innovation-loop/\">Inside Ukraine\u2019s Battlefield Innovation Loop</a> appeared first on <a href=\"https://warontherocks.com\">War on the Rocks</a>.</p>",
+    "published": "2026-05-22 08:00:24+00:00",
     "raw_entry": {
-      "title": "China\u2019s AI Governance Offensive Threatens U.S. Tech Leadership",
+      "title": "Inside Ukraine\u2019s Battlefield Innovation Loop",
       "title_detail": {
         "type": "text/plain",
         "language": null,
         "base": "",
-        "value": "China\u2019s AI Governance Offensive Threatens U.S. Tech Leadership"
+        "value": "Inside Ukraine\u2019s Battlefield Innovation Loop"
       },
       "links": [
         {
           "rel": "alternate",
           "type": "text/html",
-          "href": "https://warontherocks.com/cogs-of-war/chinas-ai-governance-offensive-threatens-u-s-tech-leadership/"
+          "href": "https://warontherocks.com/cogs-of-war/inside-ukraines-battlefield-innovation-loop/"
         }
       ],
-      "link": "https://warontherocks.com/cogs-of-war/chinas-ai-governance-offensive-threatens-u-s-tech-leadership/",
+      "link": "https://warontherocks.com/cogs-of-war/inside-ukraines-battlefield-innovation-loop/",
       "authors": [
         {
-          "name": "Audrye Wong"
+          "name": "Catarina Buchatskiy"
         },
         {
-          "name": "Ryan Fedasiuk"
+          "name": "Viktoriia Honcharuk"
         }
       ],
-      "author": "Ryan Fedasiuk",
+      "author": "Viktoriia Honcharuk",
       "author_detail": {
-        "name": "Audrye Wong"
+        "name": "Catarina Buchatskiy"
       },
-      "published": "Thu, 21 May 2026 08:00:37 +0000",
+      "published": "Fri, 22 May 2026 08:00:24 +0000",
       "published_parsed": [
         2026,
         5,
-        21,
+        22,
         8,
         0,
-        37,
-        3,
-        141,
+        24,
+        4,
+        142,
         0
       ],
       "tags": [
@@ -53,29 +53,34 @@
           "label": null
         },
         {
-          "term": "Artificial Intelligence",
+          "term": "Vertical",
           "scheme": null,
           "label": null
         },
         {
-          "term": "International Law",
+          "term": "Defense Industry",
           "scheme": null,
           "label": null
         },
         {
-          "term": "U.S.-Chinese Competition",
+          "term": "Defense Innovation",
+          "scheme": null,
+          "label": null
+        },
+        {
+          "term": "Ukraine",
           "scheme": null,
           "label": null
         }
       ],
-      "id": "https://warontherocks.com/?p=44480",
+      "id": "https://warontherocks.com/?p=44570",
       "guidislink": false,
-      "summary": "<p>China&#8217;s diplomats are on an &#8220;AI governance&#8221; offensive. At a May 5 United Nations meeting, China&#8217;s vice minister of science and technology championed China&#8217;s role in shaping U.N.-led frameworks that determine how the technology should be built and used. Just a week earlier, two top Chinese AI experts actively involved in Beijing&#8217;s governance efforts appeared by video on a Capitol Hill panel discussion hosted by Senator Bernie Sanders, touting China&#8217;s contributions to AI safety and cooperation.Norms and standards on AI development and applications are still being defined. Being a standards-setter rather than a standards-follower can simultaneously solidify a country&#8217;s technological</p>\n<p>The post <a href=\"https://warontherocks.com/cogs-of-war/chinas-ai-governance-offensive-threatens-u-s-tech-leadership/\">China&#8217;s AI Governance Offensive Threatens U.S. Tech Leadership</a> appeared first on <a href=\"https://warontherocks.com\">War on the Rocks</a>.</p>",
+      "summary": "<p>This exclusive Cogs of War interview is with Catarina Buchatskiy, the co-founder and director of analytics at the Snake Island Institute, a Kyiv-based defense analytics center, and Viktoriia Honcharuk, the institute&#8217;s director of defense technologies. We asked them to share their views on how Ukraine&#8217;s military and defense firms turn battlefield feedback into rapid innovation, what Western investors and defense tech companies can learn from Ukraine, and what a future Ukraine-West defense industrial partnership might look like.&#160;Sign Up for Our Newsletter&#160;American and allied defense companies often speak about testing their products in Ukraine, but few have consistently done so. Why</p>\n<p>The post <a href=\"https://warontherocks.com/cogs-of-war/inside-ukraines-battlefield-innovation-loop/\">Inside Ukraine\u2019s Battlefield Innovation Loop</a> appeared first on <a href=\"https://warontherocks.com\">War on the Rocks</a>.</p>",
       "summary_detail": {
         "type": "text/html",
         "language": null,
         "base": "",
-        "value": "<p>China&#8217;s diplomats are on an &#8220;AI governance&#8221; offensive. At a May 5 United Nations meeting, China&#8217;s vice minister of science and technology championed China&#8217;s role in shaping U.N.-led frameworks that determine how the technology should be built and used. Just a week earlier, two top Chinese AI experts actively involved in Beijing&#8217;s governance efforts appeared by video on a Capitol Hill panel discussion hosted by Senator Bernie Sanders, touting China&#8217;s contributions to AI safety and cooperation.Norms and standards on AI development and applications are still being defined. Being a standards-setter rather than a standards-follower can simultaneously solidify a country&#8217;s technological</p>\n<p>The post <a href=\"https://warontherocks.com/cogs-of-war/chinas-ai-governance-offensive-threatens-u-s-tech-leadership/\">China&#8217;s AI Governance Offensive Threatens U.S. Tech Leadership</a> appeared first on <a href=\"https://warontherocks.com\">War on the Rocks</a>.</p>"
+        "value": "<p>This exclusive Cogs of War interview is with Catarina Buchatskiy, the co-founder and director of analytics at the Snake Island Institute, a Kyiv-based defense analytics center, and Viktoriia Honcharuk, the institute&#8217;s director of defense technologies. We asked them to share their views on how Ukraine&#8217;s military and defense firms turn battlefield feedback into rapid innovation, what Western investors and defense tech companies can learn from Ukraine, and what a future Ukraine-West defense industrial partnership might look like.&#160;Sign Up for Our Newsletter&#160;American and allied defense companies often speak about testing their products in Ukraine, but few have consistently done so. Why</p>\n<p>The post <a href=\"https://warontherocks.com/cogs-of-war/inside-ukraines-battlefield-innovation-loop/\">Inside Ukraine\u2019s Battlefield Innovation Loop</a> appeared first on <a href=\"https://warontherocks.com\">War on the Rocks</a>.</p>"
       }
     },
     "score": 13.5,
@@ -88,61 +93,61 @@
     "interest_modifier": 10
   },
   {
-    "hash_id": "e58dc",
+    "hash_id": "42f59",
     "source": "Foreign Affairs",
-    "title": "The Crumbling Pillars of Global Peace",
-    "link": "https://www.foreignaffairs.com/united-states/crumbling-pillars-global-peace",
-    "summary": "War, empire, and the forgotten power of the United Nations.",
-    "published": "2026-05-21 04:00:00+00:00",
+    "title": "Hormuz Is a Warning for the Indo-Pacific",
+    "link": "https://www.foreignaffairs.com/china/hormuz-warning-indo-pacific",
+    "summary": "What Hormuz unleashed.",
+    "published": "2026-05-22 04:00:00+00:00",
     "raw_entry": {
-      "title": "The Crumbling Pillars of Global Peace",
+      "title": "Hormuz Is a Warning for the Indo-Pacific",
       "title_detail": {
         "type": "text/plain",
         "language": null,
         "base": "https://www.foreignaffairs.com/",
-        "value": "The Crumbling Pillars of Global Peace"
+        "value": "Hormuz Is a Warning for the Indo-Pacific"
       },
       "links": [
         {
           "rel": "alternate",
           "type": "text/html",
-          "href": "https://www.foreignaffairs.com/united-states/crumbling-pillars-global-peace"
+          "href": "https://www.foreignaffairs.com/china/hormuz-warning-indo-pacific"
         }
       ],
-      "link": "https://www.foreignaffairs.com/united-states/crumbling-pillars-global-peace",
-      "summary": "War, empire, and the forgotten power of the United Nations.",
+      "link": "https://www.foreignaffairs.com/china/hormuz-warning-indo-pacific",
+      "summary": "What Hormuz unleashed.",
       "summary_detail": {
         "type": "text/html",
         "language": null,
         "base": "https://www.foreignaffairs.com/",
-        "value": "War, empire, and the forgotten power of the United Nations."
+        "value": "What Hormuz unleashed."
       },
-      "published": "Thu, 21 May 2026 00:00:00 -0400",
+      "published": "Fri, 22 May 2026 00:00:00 -0400",
       "published_parsed": [
         2026,
         5,
-        21,
+        22,
         4,
         0,
         0,
-        3,
-        141,
+        4,
+        142,
         0
       ],
       "authors": [
         {
-          "name": "Thant Myint-U"
+          "name": "Lynn Kuok"
         }
       ],
-      "author": "Thant Myint-U",
+      "author": "Lynn Kuok",
       "author_detail": {
-        "name": "Thant Myint-U"
+        "name": "Lynn Kuok"
       },
-      "id": "1134979",
+      "id": "1134981",
       "guidislink": false,
       "media_content": [
         {
-          "url": "https://cdn-live.foreignaffairs.com/sites/default/files/styles/x_large_1x/public/images/2026/05/20/2025-09-18T202806Z_1155122181_RC2HUGAHZN2Y_RTRMADP_3_AID-UN.JPG?itok=Mme1lzCj",
+          "url": "https://cdn-live.foreignaffairs.com/sites/default/files/styles/x_large_1x/public/images/2026/05/21/2026-03-18T041434Z_776775019_RC2A6KAF3O6U_RTRMADP_3_IRAN-CRISIS-SHIP-USA.JPG?itok=kV0VxTsS",
           "type": "image/jpeg",
           "expression": "full",
           "width": "1200",
@@ -160,60 +165,60 @@
     "interest_modifier": 10
   },
   {
-    "hash_id": "de5a0",
+    "hash_id": "a14c0",
     "source": "CEPR VoxEU",
-    "title": "When energy shocks bite harder: Non-linear inflation dynamics",
-    "link": "https://cepr.org/voxeu/columns/when-energy-shocks-bite-harder-non-linear-inflation-dynamics",
-    "summary": "The conflict in the Middle East has exposed the euro area to higher energy prices. Using a flexible empirical framework, this column shows that inflation responds disproportionately to larger shocks, which could be linked to more frequent price adjustments, stronger wage responses, and shifts in inflation expectations. Energy price developments in the weeks following the US-Iran conflict are consistent with an increased likelihood of non-linear effects. The strength of transmission depends on the size, breadth, and persistence of the shock, as well as on the state of the economy when the shock hits.",
-    "published": "2026-05-19 23:00:00+00:00",
+    "title": "Quantifying the impact of the Iran war on US inflation",
+    "link": "https://cepr.org/voxeu/columns/quantifying-impact-iran-war-us-inflation",
+    "summary": "The outbreak of the Iran war in February 2026 has led to a major disruption to oil trade and a surge in oil prices. This column assesses the inflationary impact of the oil price fluctuations caused by the war. Even under a cautiously optimistic scenario in which the closure of the Strait of Hormuz lasts for one quarter, after which oil exports resume gradually, the surge in oil prices is expected to raise US headline inflation by 0.6 percentage points and core inflation by 0.2 percentage points in 2026.",
+    "published": "2026-05-03 23:00:00+00:00",
     "raw_entry": {
-      "title": "When energy shocks bite harder: Non-linear inflation dynamics",
+      "title": "Quantifying the impact of the Iran war on US inflation",
       "title_detail": {
         "type": "text/plain",
         "language": null,
         "base": "https://cepr.org/",
-        "value": "When energy shocks bite harder: Non-linear inflation dynamics"
+        "value": "Quantifying the impact of the Iran war on US inflation"
       },
       "links": [
         {
           "rel": "alternate",
           "type": "text/html",
-          "href": "https://cepr.org/voxeu/columns/when-energy-shocks-bite-harder-non-linear-inflation-dynamics"
+          "href": "https://cepr.org/voxeu/columns/quantifying-impact-iran-war-us-inflation"
         }
       ],
-      "link": "https://cepr.org/voxeu/columns/when-energy-shocks-bite-harder-non-linear-inflation-dynamics",
-      "summary": "The conflict in the Middle East has exposed the euro area to higher energy prices. Using a flexible empirical framework, this column shows that inflation responds disproportionately to larger shocks, which could be linked to more frequent price adjustments, stronger wage responses, and shifts in inflation expectations. Energy price developments in the weeks following the US-Iran conflict are consistent with an increased likelihood of non-linear effects. The strength of transmission depends on the size, breadth, and persistence of the shock, as well as on the state of the economy when the shock hits.",
+      "link": "https://cepr.org/voxeu/columns/quantifying-impact-iran-war-us-inflation",
+      "summary": "The outbreak of the Iran war in February 2026 has led to a major disruption to oil trade and a surge in oil prices. This column assesses the inflationary impact of the oil price fluctuations caused by the war. Even under a cautiously optimistic scenario in which the closure of the Strait of Hormuz lasts for one quarter, after which oil exports resume gradually, the surge in oil prices is expected to raise US headline inflation by 0.6 percentage points and core inflation by 0.2 percentage points in 2026.",
       "summary_detail": {
         "type": "text/html",
         "language": null,
         "base": "https://cepr.org/",
-        "value": "The conflict in the Middle East has exposed the euro area to higher energy prices. Using a flexible empirical framework, this column shows that inflation responds disproportionately to larger shocks, which could be linked to more frequent price adjustments, stronger wage responses, and shifts in inflation expectations. Energy price developments in the weeks following the US-Iran conflict are consistent with an increased likelihood of non-linear effects. The strength of transmission depends on the size, breadth, and persistence of the shock, as well as on the state of the economy when the shock hits."
+        "value": "The outbreak of the Iran war in February 2026 has led to a major disruption to oil trade and a surge in oil prices. This column assesses the inflationary impact of the oil price fluctuations caused by the war. Even under a cautiously optimistic scenario in which the closure of the Strait of Hormuz lasts for one quarter, after which oil exports resume gradually, the surge in oil prices is expected to raise US headline inflation by 0.6 percentage points and core inflation by 0.2 percentage points in 2026."
       },
-      "published": "Wed, 20 May 2026 00:00:00 +0100",
+      "published": "Mon, 04 May 2026 00:00:00 +0100",
       "published_parsed": [
         2026,
         5,
-        19,
+        3,
         23,
         0,
         0,
-        1,
-        139,
+        6,
+        123,
         0
       ],
       "authors": [
         {
-          "name": "Elena Bobeica, Sarah Holton, Florian Huber, Catalina Mart\u00ednez Hern\u00e1ndez"
+          "name": "Lutz Kilian, Michael D. Plante, Alexander W. Richter, Xiaoqing Zhou"
         }
       ],
-      "author": "Elena Bobeica, Sarah Holton, Florian Huber, Catalina Mart\u00ednez Hern\u00e1ndez",
+      "author": "Lutz Kilian, Michael D. Plante, Alexander W. Richter, Xiaoqing Zhou",
       "author_detail": {
-        "name": "Elena Bobeica, Sarah Holton, Florian Huber, Catalina Mart\u00ednez Hern\u00e1ndez"
+        "name": "Lutz Kilian, Michael D. Plante, Alexander W. Richter, Xiaoqing Zhou"
       },
-      "id": "e7c01942-57c5-4d73-9fcb-7d53fc6295e1",
+      "id": "2f1a92a3-a774-4263-84cf-d6e29a490bcc",
       "guidislink": false,
       "cepr_type": "VoxEU Column",
-      "cepr_cover_image": "https://cepr.org/sites/default/files/styles/rss_featured_image/public/2026-05/AdobeStock_1957530938.jpeg?itok=Wa175mze"
+      "cepr_cover_image": "https://cepr.org/sites/default/files/styles/rss_featured_image/public/2026-05/AdobeStock_1963277756.jpeg?itok=frvltic_"
     },
     "score": 12.0,
     "category": "monetary",
@@ -284,6 +289,11 @@
         },
         {
           "term": "Elections",
+          "scheme": null,
+          "label": null
+        },
+        {
+          "term": "Featured Articles",
           "scheme": null,
           "label": null
         },
@@ -392,306 +402,63 @@
       ],
       "post-id": "139565"
     },
-    "score": 10.5,
-    "category": "geo_other",
-    "method": "xai",
-    "raw_score": 7.0,
-    "trust_tier": "trusted",
-    "final_score": 10.5
-  },
-  {
-    "hash_id": "003c7",
-    "source": "arXiv q-fin",
-    "title": "The Economics of Model Collapse: Equilibrium, Welfare, and Optimal Provenance Subsidies in Synthetic Data Markets",
-    "link": "https://arxiv.org/abs/2605.20279",
-    "summary": "arXiv:2605.20279v1 Announce Type: new \nAbstract: Generative artificial intelligence is rapidly transforming the supply side of training data: an increasing share of new tokens, images, and structured records is produced by previous-generation models rather than by human originators. Recursive training on such synthetic content induces a measurable and often irreversible loss of distributional fidelity, a phenomenon known as model collapse. We develop the first unified microeconomic theory of synthetic data markets under model collapse. We introduce the Synthetic Data Contamination Equilibrium (SDCE), prove existence and generic uniqueness, derive a welfare decomposition W = W_prod + W_cons - L_coll - L_info, establish a Wasserstein-gradient-flow mean-field collapse limit, prove an impossibility of information-constrained implementation, and obtain closed-form expressions for the welfare-maximizing provenance subsidy s* = KL(q||p)/(2 kappa) and the welfare-maximizing watermark strength w* = (1 - psi) KL(q||p)/(2 kappa psi). We prove an information-theoretic Cramer-Rao lower bound on any provenance estimator using only producer-side observations and show that the Provenance-Market Iterative Retraining (PMIR) algorithm attains this bound up to constants while converging to an epsilon-SDCE in O(epsilon^-2 log T) iterations. A reduced-form OLS estimation on a C4-synthetic benchmark over ten retraining generations yields a collapse-rate coefficient b-hat = 0.181 (HAC s.e. 0.024), within one standard error of the structural prediction 0.183. Calibrated experiments raise generation-ten model quality by 23.1 percent over the unregulated benchmark while lowering the 2-Wasserstein drift on a held-out diversity probe from 0.318 to 0.142. Scaling experiments over generations t in {1,...,10} recover a logarithmic-in-t collapse law log Q_t = log Q_0 - 0.183 t rho^2 with R^2 = 0.962.",
-    "published": "2026-05-21 04:00:00+00:00",
-    "raw_entry": {
-      "title": "The Economics of Model Collapse: Equilibrium, Welfare, and Optimal Provenance Subsidies in Synthetic Data Markets",
-      "title_detail": {
-        "type": "text/plain",
-        "language": null,
-        "base": "",
-        "value": "The Economics of Model Collapse: Equilibrium, Welfare, and Optimal Provenance Subsidies in Synthetic Data Markets"
-      },
-      "links": [
-        {
-          "rel": "alternate",
-          "type": "text/html",
-          "href": "https://arxiv.org/abs/2605.20279"
-        }
-      ],
-      "link": "https://arxiv.org/abs/2605.20279",
-      "summary": "arXiv:2605.20279v1 Announce Type: new \nAbstract: Generative artificial intelligence is rapidly transforming the supply side of training data: an increasing share of new tokens, images, and structured records is produced by previous-generation models rather than by human originators. Recursive training on such synthetic content induces a measurable and often irreversible loss of distributional fidelity, a phenomenon known as model collapse. We develop the first unified microeconomic theory of synthetic data markets under model collapse. We introduce the Synthetic Data Contamination Equilibrium (SDCE), prove existence and generic uniqueness, derive a welfare decomposition W = W_prod + W_cons - L_coll - L_info, establish a Wasserstein-gradient-flow mean-field collapse limit, prove an impossibility of information-constrained implementation, and obtain closed-form expressions for the welfare-maximizing provenance subsidy s* = KL(q||p)/(2 kappa) and the welfare-maximizing watermark strength w* = (1 - psi) KL(q||p)/(2 kappa psi). We prove an information-theoretic Cramer-Rao lower bound on any provenance estimator using only producer-side observations and show that the Provenance-Market Iterative Retraining (PMIR) algorithm attains this bound up to constants while converging to an epsilon-SDCE in O(epsilon^-2 log T) iterations. A reduced-form OLS estimation on a C4-synthetic benchmark over ten retraining generations yields a collapse-rate coefficient b-hat = 0.181 (HAC s.e. 0.024), within one standard error of the structural prediction 0.183. Calibrated experiments raise generation-ten model quality by 23.1 percent over the unregulated benchmark while lowering the 2-Wasserstein drift on a held-out diversity probe from 0.318 to 0.142. Scaling experiments over generations t in {1,...,10} recover a logarithmic-in-t collapse law log Q_t = log Q_0 - 0.183 t rho^2 with R^2 = 0.962.",
-      "summary_detail": {
-        "type": "text/html",
-        "language": null,
-        "base": "",
-        "value": "arXiv:2605.20279v1 Announce Type: new \nAbstract: Generative artificial intelligence is rapidly transforming the supply side of training data: an increasing share of new tokens, images, and structured records is produced by previous-generation models rather than by human originators. Recursive training on such synthetic content induces a measurable and often irreversible loss of distributional fidelity, a phenomenon known as model collapse. We develop the first unified microeconomic theory of synthetic data markets under model collapse. We introduce the Synthetic Data Contamination Equilibrium (SDCE), prove existence and generic uniqueness, derive a welfare decomposition W = W_prod + W_cons - L_coll - L_info, establish a Wasserstein-gradient-flow mean-field collapse limit, prove an impossibility of information-constrained implementation, and obtain closed-form expressions for the welfare-maximizing provenance subsidy s* = KL(q||p)/(2 kappa) and the welfare-maximizing watermark strength w* = (1 - psi) KL(q||p)/(2 kappa psi). We prove an information-theoretic Cramer-Rao lower bound on any provenance estimator using only producer-side observations and show that the Provenance-Market Iterative Retraining (PMIR) algorithm attains this bound up to constants while converging to an epsilon-SDCE in O(epsilon^-2 log T) iterations. A reduced-form OLS estimation on a C4-synthetic benchmark over ten retraining generations yields a collapse-rate coefficient b-hat = 0.181 (HAC s.e. 0.024), within one standard error of the structural prediction 0.183. Calibrated experiments raise generation-ten model quality by 23.1 percent over the unregulated benchmark while lowering the 2-Wasserstein drift on a held-out diversity probe from 0.318 to 0.142. Scaling experiments over generations t in {1,...,10} recover a logarithmic-in-t collapse law log Q_t = log Q_0 - 0.183 t rho^2 with R^2 = 0.962."
-      },
-      "id": "oai:arXiv.org:2605.20279v1",
-      "guidislink": false,
-      "tags": [
-        {
-          "term": "econ.GN",
-          "scheme": null,
-          "label": null
-        },
-        {
-          "term": "cs.CY",
-          "scheme": null,
-          "label": null
-        },
-        {
-          "term": "cs.LG",
-          "scheme": null,
-          "label": null
-        },
-        {
-          "term": "q-fin.EC",
-          "scheme": null,
-          "label": null
-        }
-      ],
-      "published": "Thu, 21 May 2026 00:00:00 -0400",
-      "published_parsed": [
-        2026,
-        5,
-        21,
-        4,
-        0,
-        0,
-        3,
-        141,
-        0
-      ],
-      "arxiv_announce_type": "new",
-      "rights": "http://arxiv.org/licenses/nonexclusive-distrib/1.0/",
-      "rights_detail": {
-        "type": "text/plain",
-        "language": null,
-        "base": "",
-        "value": "http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
-      },
-      "authors": [
-        {
-          "name": "Gustav Olaf Yunus Laitinen-Fredriksson Lundstr\\\"om-Imanov"
-        }
-      ],
-      "author": "Gustav Olaf Yunus Laitinen-Fredriksson Lundstr\\\"om-Imanov",
-      "author_detail": {
-        "name": "Gustav Olaf Yunus Laitinen-Fredriksson Lundstr\\\"om-Imanov"
-      }
-    },
     "score": 9.0,
-    "category": "technology",
+    "category": "geo_other",
     "method": "xai",
     "raw_score": 6.0,
     "trust_tier": "trusted",
     "final_score": 9.0
   },
   {
-    "hash_id": "05908",
-    "source": "ZeroHedge",
-    "title": "Is The Bond Market About To Break Washington",
-    "link": "https://www.zerohedge.com/markets/bond-market-about-break-washington",
-    "summary": "<span class=\"field field--name-title field--type-string field--label-hidden\">Is The Bond Market About To Break Washington</span>\n\n            <div class=\"clearfix text-formatted field field--name-body field--type-text-with-summary field--label-hidden field__item\"><p><em>Submitted by <a href=\"https://quoththeraven.substack.com/p/the-bond-market-is-about-to-break\">QTR's Fringe Finance</a></em></p>\n\n<p>The bond market is beginning to force reality onto Washington, and it may ultimately force an end to the Iran war long before politicians or diplomats are willing to admit it.</p>\n\n<p>For months, investors have focused on missiles, retaliation headlines, oil chokepoints, and the possibility of a broader regional escalation from the Iran War. During the geopolitical noise, I urged readers not to overlook stress in financial markets that was happening before the war even started,\u00a0<a href=\"https://quoththeraven.substack.com/p/unprecedented-withdrawal-requests?utm_source=publication-search\">namely in places like private credit</a>\u00a0and\u00a0<a href=\"https://quoththeraven.substack.com/p/another-real-crisis-hiding-behind?utm_source=publication-search\">subprime auto lending</a>. I called these \u201creal crises\u201d\u00a0<a href=\"https://quoththeraven.substack.com/p/another-real-crisis-hiding-behind?utm_source=publication-search\">hiding behind record highs</a>\u00a0while \u201cinvestors\u201d chase\u00a0<a href=\"https://quoththeraven.substack.com/p/the-markets-feedback-loop-will-self\">gamma squeezes</a>\u00a0higher in an\u00a0<a href=\"https://quoththeraven.substack.com/p/the-permanent-distortion-theory\">ongoing distortion feedback loop</a>\u00a0that is making things look far better than they are under the surface.</p>\n\n<p>And now, beneath all the geopolitical noise, a much more serious, harder to ignore crisis is unfolding. As Cypher says in\u00a0<em>The Matrix:</em></p>\n\n<p>\"<strong>Fasten your seat belt Dorothy, 'cause Kansas is going bye-bye.\"</strong></p>\n\n<p><strong><a href=\"https://cms.zerohedge.com/s3/files/inline-images/Screenshot%202026-05-20%20at%2018.15.26.jpg?itok=vt2SqVlp\"><img alt=\"\" class=\"inline-images image-style-inline-images\" height=\"423\" src=\"https://assets.zerohedge.com/s3fs-public/styles/inline_image_mobile/public/inline-images/Screenshot%202026-05-20%20at%2018.15.26.jpg?itok=vt2SqVlp\" width=\"500\" /></a></strong></p>\n\n<p>This crisis is in the Treasury market. Bond yields are moving sharply higher, and they are sending a message that policymakers can no longer afford to ignore: the financial system is becoming unstable under the weight of war spending, massive deficits, persistent inflation, and a debt load that was already unsustainable before this conflict began.</p>\n\n<p>The bond market does not give a\u00a0<em>flying fuck</em>\u00a0about political narratives, gamma squeezes, meme stocks, retail investors or any other ticky tacky end-around style loopholes that continue to push stocks higher. It cares about math, fiscal policy and monetary policy. And the math is getting ugly very quickly.</p>\n\n<p>The 10-year Treasury yield is arguably the single most important price in global finance because virtually every major asset class is built on top of it. Mortgage rates, commercial real estate valuations, private equity models, corporate borrowing costs, equity multiples, venture capital, and government financing itself all depend on stable Treasury markets.\u00a0When yields rise too quickly, everything starts repricing at once. That is why this matters so much more than the daily moves in the stock market.</p>\n\n<p>Washington understands this, even if it refuses to say it publicly.</p>\n\n<p>The United States can survive political embarrassment overseas, but it simply cannot survive a disorderly Treasury market.</p>\n\n<p>That is why I believe the bond market is eventually going to force a few things. First, a de-escalation of the Iran conflict. The priority now is no longer \u201cvictory\u201d or even geopolitical strategy. The priority is restoring stability before bond yields spiral completely out of control. A prolonged war that keeps oil prices elevated while deficits explode higher is simply incompatible with a heavily indebted financial system already struggling under the burden of high interest rates.</p>\n\n<p>The problem is that America entered this conflict from an extraordinarily weak fiscal position to begin with. This is not World War II, when the country had a young population, industrial dominance, low debt levels, and decades of economic expansion ahead of it. Today the US government is already running deficits approaching $2 trillion annually during what is supposedly a normal economic environment. Interest expense on the national debt has already become one of the largest items in the federal budget. Now add war spending, weakening foreign demand for Treasuries, rising commodity prices, and higher refinancing costs, and the entire situation starts looking dangerously unstable.</p>\n\n<p><a href=\"https://cms.zerohedge.com/s3/files/inline-images/Screenshot%202026-05-21%20at%2007.07.59.jpg?itok=rcpq6IZs\"><img alt=\"\" class=\"inline-images image-style-inline-images\" height=\"324\" src=\"https://assets.zerohedge.com/s3fs-public/styles/inline_image_mobile/public/inline-images/Screenshot%202026-05-21%20at%2007.07.59.jpg?itok=rcpq6IZs\" width=\"500\" /></a></p>\n\n<p>This is where the inflation problem becomes unavoidable.</p>\n\n<p>War has always been inflationary, but not just because of oil shocks or supply chain disruptions. The deeper issue is debt creation itself. Wars are financed through borrowing, and borrowing at these levels increasingly requires central bank intervention one way or another. The process is actually very simple: war creates debt, debt pressures the financial system, and eventually the system responds through some combination of money creation, currency debasement, and financial repression.</p>\n\n<p>That is exactly what the bond market is beginning to anticipate right now.</p>\n\n<p>Ironically, as I\u2019ve predicted the past week, before the Federal Reserve eventually steps in to suppress yields,\u00a0<a href=\"https://quoththeraven.substack.com/p/time-for-rate-hikes\">we may actually see another round of rate hikes first</a>. If oil prices remain elevated and inflation expectations continue rising alongside Treasury yields, the Fed may feel forced to tighten policy again simply to preserve credibility and prevent inflation psychology from becoming entrenched. If that doesn\u2019t work, I\u2019ve predicted that the Fed\u00a0<a href=\"https://quoththeraven.substack.com/p/the-fed-will-invent-new-inflation\">will simply start bullshitting its inflation numbers</a>.</p>\n\n<p>In other words, the system may briefly attempt to defend the dollar before ultimately surrendering to debt realities. That creates the possibility of a brutal stagflationary environment where growth slows, markets weaken, borrowing costs rise, and inflation remains stubbornly elevated at the same time.</p>\n\n<p>And\u00a0<em>that\u2026</em>is a nightmare scenario for risk assets and\u00a0<a href=\"https://quoththeraven.substack.com/p/new-fed-chair-kevin-warshs-job-is\">a near-impossible job for incoming Fed chair Kevin Warsh</a>.</p>\n\n<p>For years, markets became addicted to near-zero rates and endless liquidity. Entire sectors of the economy were built on the assumption that capital would remain permanently cheap. But when Treasury yields rise meaningfully, everything changes. Leveraged speculation becomes harder to sustain. Corporate refinancing becomes more expensive. Housing affordability deteriorates further. Commercial real estate faces additional stress. Equity valuations compress. The \u201ceverything bubble\u201d suddenly starts losing oxygen and all the shit I\u2019ve written about that I think will blow up \u2014 including\u00a0<a href=\"https://quoththeraven.substack.com/p/10-areas-of-the-market-id-avoid-right?utm_source=publication-search\">all 10 area of the market I highlighted here</a>\u00a0\u2014 will implode.</p>\n\n<p>And once again, the people who get hurt the most will not be the financial elite, it will be ordinary Americans. You heard it from the former bartender turned Substack shit-talker first\u2026read this slowly:</p>\n\n<p><strong>Mom and pop savers are about to get squeezed from every direction at once.</strong>\u00a0Their wages will fail to keep up with inflation. Their borrowing costs will rise. Their credit card rates will stay elevated. Their insurance, food, energy, and housing costs will continue climbing. Their retirement portfolios will become more volatile. And eventually, after enduring all of that pain, they will likely watch policymakers step in to rescue the bond market and financial system through another round of monetary intervention that further destroys the purchasing power of their savings.</p>\n\n<hr /><p>\ud83d\udd25\u00a0<strong>50% OFF FOR LIFE:</strong>\u00a0Using this coupon entitles you to 50% off an annual subscription to\u00a0<em>Fringe Finance\u00a0</em>for life:\u00a0<strong><a href=\"https://quoththeraven.substack.com/subscribe?coupon=d8097c43\" rel=\"\">Get 50% off forever</a></strong></p>\n\n<hr /><p>Every cycle ends the same way. Wall Street and the financial system are treated as too important to fail, while ordinary citizens absorb the consequences through inflation and currency debasement. Policymakers will present future interventions as necessary for \u201cfinancial stability,\u201d but stability for whom? Stability for leveraged institutions, overextended governments, and asset markets dependent on artificially suppressed rates.</p>\n\n<p>Meanwhile, the average family gets punished twice. First through inflation, then through the policies used to contain the damage caused by inflation.</p>\n\n<p>And make no mistake, if yields continue climbing, the Fed and Treasury will eventually intervene in some form. Maybe they will not officially call it yield curve control at first. Maybe it arrives through stealth quantitative easing, emergency liquidity facilities, Treasury buyback programs, bank regulatory changes, or coordinated purchases through the financial system. But the end result will be the same: suppress long-term yields because the debt burden has become too large for markets to absorb naturally.</p>\n\n<p>At current debt levels, genuinely free market interest rates are politically and financially impossible. The bond market is beginning to expose that reality.</p>\n\n<p>That is also why I am becoming bullish again on gold, silver, and mining stocks after stepping away from them earlier this year following their enormous run in 2025. If the Fed ultimately chooses to suppress yields while inflation remains structurally elevated, precious metals become one of the clearest beneficiaries. Gold and silver perform best when confidence in fiat systems deteriorates and when governments prioritize debt sustainability over currency stability. I\u2019ve long said I think they will have a sharp fall lower on the initial deleveraging, then probably double off their near term bottom in short order once the Fed\u2019s liquidity starts hitting the market.</p>\n\n<p>And that is exactly the direction this appears to be heading.</p>\n\n<p>The Iran war may end sooner than many expect, not because global leaders suddenly become responsible, but because the bond market is forcing them into a corner. Financial instability is becoming the greater threat. Policymakers now face an impossible balancing act between inflation, debt servicing costs, economic slowdown, and geopolitical conflict.</p>\n\n<p>Something will have to give. Historically, when governments reach this stage, they choose to protect the debt market and sacrifice the currency.</p>\n\n<p>There is little reason to believe this time will be any different.</p>\n\n<figure><p>--</p>\n\n<p><em><strong>QTR\u2019s Disclaimer</strong></em><strong>:</strong>\u00a0<em>Please read my full legal disclaimer\u00a0<a href=\"https://quoththeraven.substack.com/about\">on my About page here</a></em>.\u00a0<em>This post represents my opinions only.</em>\u00a0<em>In addition, please understand I am an idiot and often get things wrong and lose money. I may own or transact in any names mentioned in this piece at any time without warning. Contributor posts and aggregated posts have been hand selected by me, have not been fact checked and are the opinions of their authors. They are either submitted to QTR by their author, reprinted under a\u00a0<a href=\"https://creativecommons.org/share-your-work/\">Creative Commons license</a>\u00a0with my best effort to uphold what the license asks, or with the permission of the author.</em></p>\n\n<p><em>This is not a recommendation to buy or sell any stocks or securities, just my opinions. I often lose money on positions I trade/invest in. I may add any name mentioned in this article and sell any name mentioned in this piece at any time, without further warning. None of this is a solicitation to buy or sell securities. I may or may not own names I write about and are watching. Sometimes I\u2019m bullish without owning things, sometimes I\u2019m bearish and do own things. Just assume my positions could be exactly the opposite of what you think they are just in case. If I\u2019m long I could quickly be short and vice versa. I won\u2019t update my positions. All positions can change immediately as soon as I publish this, with or without notice and at any point I can be long, short or neutral on any position. You are on your own. Do not make decisions based on my blog. I exist on the fringe. If you see numbers and calculations of any sort, assume they are wrong and double check them. I failed Algebra in 8th grade and topped off my high school math accolades by getting a D- in remedial Calculus my senior year, before becoming an English major in college so I could bullshit my way through things easier.</em></p>\n\n<p><em>The publisher does not guarantee the accuracy or completeness of the information provided in this page. These are not the opinions of any of my employers, partners, or associates. I did my best to be honest about my disclosures but can\u2019t guarantee I am right; I write these posts after a couple beers sometimes. I edit after my posts are published because I\u2019m impatient and lazy, so if you see a typo, check back in a half hour. Also, I just straight up get shit wrong a lot. I mention it twice because it\u2019s that important.</em></p>\n</figure><p>\u00a0</p>\n</div>\n      <span class=\"field field--name-uid field--type-entity-reference field--label-hidden\" rel=\"schema:author\"><a class=\"username\" href=\"https://cms.zerohedge.com/users/tyler-durden\" lang=\"\" title=\"View user profile.\" xml:lang=\"\">Tyler Durden</a></span>\n<span class=\"field field--name-created field--type-created field--label-hidden\">Thu, 05/21/2026 - 11:05</span>",
-    "published": "2026-05-21 15:05:00+00:00",
-    "raw_entry": {
-      "title": "Is The Bond Market About To Break Washington",
-      "title_detail": {
-        "type": "text/plain",
-        "language": null,
-        "base": "https://www.zerohedge.com",
-        "value": "Is The Bond Market About To Break Washington"
-      },
-      "links": [
-        {
-          "rel": "alternate",
-          "type": "text/html",
-          "href": "https://www.zerohedge.com/markets/bond-market-about-break-washington"
-        }
-      ],
-      "link": "https://www.zerohedge.com/markets/bond-market-about-break-washington",
-      "summary": "<span class=\"field field--name-title field--type-string field--label-hidden\">Is The Bond Market About To Break Washington</span>\n\n            <div class=\"clearfix text-formatted field field--name-body field--type-text-with-summary field--label-hidden field__item\"><p><em>Submitted by <a href=\"https://quoththeraven.substack.com/p/the-bond-market-is-about-to-break\">QTR's Fringe Finance</a></em></p>\n\n<p>The bond market is beginning to force reality onto Washington, and it may ultimately force an end to the Iran war long before politicians or diplomats are willing to admit it.</p>\n\n<p>For months, investors have focused on missiles, retaliation headlines, oil chokepoints, and the possibility of a broader regional escalation from the Iran War. During the geopolitical noise, I urged readers not to overlook stress in financial markets that was happening before the war even started,\u00a0<a href=\"https://quoththeraven.substack.com/p/unprecedented-withdrawal-requests?utm_source=publication-search\">namely in places like private credit</a>\u00a0and\u00a0<a href=\"https://quoththeraven.substack.com/p/another-real-crisis-hiding-behind?utm_source=publication-search\">subprime auto lending</a>. I called these \u201creal crises\u201d\u00a0<a href=\"https://quoththeraven.substack.com/p/another-real-crisis-hiding-behind?utm_source=publication-search\">hiding behind record highs</a>\u00a0while \u201cinvestors\u201d chase\u00a0<a href=\"https://quoththeraven.substack.com/p/the-markets-feedback-loop-will-self\">gamma squeezes</a>\u00a0higher in an\u00a0<a href=\"https://quoththeraven.substack.com/p/the-permanent-distortion-theory\">ongoing distortion feedback loop</a>\u00a0that is making things look far better than they are under the surface.</p>\n\n<p>And now, beneath all the geopolitical noise, a much more serious, harder to ignore crisis is unfolding. As Cypher says in\u00a0<em>The Matrix:</em></p>\n\n<p>\"<strong>Fasten your seat belt Dorothy, 'cause Kansas is going bye-bye.\"</strong></p>\n\n<p><strong><a href=\"https://cms.zerohedge.com/s3/files/inline-images/Screenshot%202026-05-20%20at%2018.15.26.jpg?itok=vt2SqVlp\"><img alt=\"\" class=\"inline-images image-style-inline-images\" height=\"423\" src=\"https://assets.zerohedge.com/s3fs-public/styles/inline_image_mobile/public/inline-images/Screenshot%202026-05-20%20at%2018.15.26.jpg?itok=vt2SqVlp\" width=\"500\" /></a></strong></p>\n\n<p>This crisis is in the Treasury market. Bond yields are moving sharply higher, and they are sending a message that policymakers can no longer afford to ignore: the financial system is becoming unstable under the weight of war spending, massive deficits, persistent inflation, and a debt load that was already unsustainable before this conflict began.</p>\n\n<p>The bond market does not give a\u00a0<em>flying fuck</em>\u00a0about political narratives, gamma squeezes, meme stocks, retail investors or any other ticky tacky end-around style loopholes that continue to push stocks higher. It cares about math, fiscal policy and monetary policy. And the math is getting ugly very quickly.</p>\n\n<p>The 10-year Treasury yield is arguably the single most important price in global finance because virtually every major asset class is built on top of it. Mortgage rates, commercial real estate valuations, private equity models, corporate borrowing costs, equity multiples, venture capital, and government financing itself all depend on stable Treasury markets.\u00a0When yields rise too quickly, everything starts repricing at once. That is why this matters so much more than the daily moves in the stock market.</p>\n\n<p>Washington understands this, even if it refuses to say it publicly.</p>\n\n<p>The United States can survive political embarrassment overseas, but it simply cannot survive a disorderly Treasury market.</p>\n\n<p>That is why I believe the bond market is eventually going to force a few things. First, a de-escalation of the Iran conflict. The priority now is no longer \u201cvictory\u201d or even geopolitical strategy. The priority is restoring stability before bond yields spiral completely out of control. A prolonged war that keeps oil prices elevated while deficits explode higher is simply incompatible with a heavily indebted financial system already struggling under the burden of high interest rates.</p>\n\n<p>The problem is that America entered this conflict from an extraordinarily weak fiscal position to begin with. This is not World War II, when the country had a young population, industrial dominance, low debt levels, and decades of economic expansion ahead of it. Today the US government is already running deficits approaching $2 trillion annually during what is supposedly a normal economic environment. Interest expense on the national debt has already become one of the largest items in the federal budget. Now add war spending, weakening foreign demand for Treasuries, rising commodity prices, and higher refinancing costs, and the entire situation starts looking dangerously unstable.</p>\n\n<p><a href=\"https://cms.zerohedge.com/s3/files/inline-images/Screenshot%202026-05-21%20at%2007.07.59.jpg?itok=rcpq6IZs\"><img alt=\"\" class=\"inline-images image-style-inline-images\" height=\"324\" src=\"https://assets.zerohedge.com/s3fs-public/styles/inline_image_mobile/public/inline-images/Screenshot%202026-05-21%20at%2007.07.59.jpg?itok=rcpq6IZs\" width=\"500\" /></a></p>\n\n<p>This is where the inflation problem becomes unavoidable.</p>\n\n<p>War has always been inflationary, but not just because of oil shocks or supply chain disruptions. The deeper issue is debt creation itself. Wars are financed through borrowing, and borrowing at these levels increasingly requires central bank intervention one way or another. The process is actually very simple: war creates debt, debt pressures the financial system, and eventually the system responds through some combination of money creation, currency debasement, and financial repression.</p>\n\n<p>That is exactly what the bond market is beginning to anticipate right now.</p>\n\n<p>Ironically, as I\u2019ve predicted the past week, before the Federal Reserve eventually steps in to suppress yields,\u00a0<a href=\"https://quoththeraven.substack.com/p/time-for-rate-hikes\">we may actually see another round of rate hikes first</a>. If oil prices remain elevated and inflation expectations continue rising alongside Treasury yields, the Fed may feel forced to tighten policy again simply to preserve credibility and prevent inflation psychology from becoming entrenched. If that doesn\u2019t work, I\u2019ve predicted that the Fed\u00a0<a href=\"https://quoththeraven.substack.com/p/the-fed-will-invent-new-inflation\">will simply start bullshitting its inflation numbers</a>.</p>\n\n<p>In other words, the system may briefly attempt to defend the dollar before ultimately surrendering to debt realities. That creates the possibility of a brutal stagflationary environment where growth slows, markets weaken, borrowing costs rise, and inflation remains stubbornly elevated at the same time.</p>\n\n<p>And\u00a0<em>that\u2026</em>is a nightmare scenario for risk assets and\u00a0<a href=\"https://quoththeraven.substack.com/p/new-fed-chair-kevin-warshs-job-is\">a near-impossible job for incoming Fed chair Kevin Warsh</a>.</p>\n\n<p>For years, markets became addicted to near-zero rates and endless liquidity. Entire sectors of the economy were built on the assumption that capital would remain permanently cheap. But when Treasury yields rise meaningfully, everything changes. Leveraged speculation becomes harder to sustain. Corporate refinancing becomes more expensive. Housing affordability deteriorates further. Commercial real estate faces additional stress. Equity valuations compress. The \u201ceverything bubble\u201d suddenly starts losing oxygen and all the shit I\u2019ve written about that I think will blow up \u2014 including\u00a0<a href=\"https://quoththeraven.substack.com/p/10-areas-of-the-market-id-avoid-right?utm_source=publication-search\">all 10 area of the market I highlighted here</a>\u00a0\u2014 will implode.</p>\n\n<p>And once again, the people who get hurt the most will not be the financial elite, it will be ordinary Americans. You heard it from the former bartender turned Substack shit-talker first\u2026read this slowly:</p>\n\n<p><strong>Mom and pop savers are about to get squeezed from every direction at once.</strong>\u00a0Their wages will fail to keep up with inflation. Their borrowing costs will rise. Their credit card rates will stay elevated. Their insurance, food, energy, and housing costs will continue climbing. Their retirement portfolios will become more volatile. And eventually, after enduring all of that pain, they will likely watch policymakers step in to rescue the bond market and financial system through another round of monetary intervention that further destroys the purchasing power of their savings.</p>\n\n<hr /><p>\ud83d\udd25\u00a0<strong>50% OFF FOR LIFE:</strong>\u00a0Using this coupon entitles you to 50% off an annual subscription to\u00a0<em>Fringe Finance\u00a0</em>for life:\u00a0<strong><a href=\"https://quoththeraven.substack.com/subscribe?coupon=d8097c43\" rel=\"\">Get 50% off forever</a></strong></p>\n\n<hr /><p>Every cycle ends the same way. Wall Street and the financial system are treated as too important to fail, while ordinary citizens absorb the consequences through inflation and currency debasement. Policymakers will present future interventions as necessary for \u201cfinancial stability,\u201d but stability for whom? Stability for leveraged institutions, overextended governments, and asset markets dependent on artificially suppressed rates.</p>\n\n<p>Meanwhile, the average family gets punished twice. First through inflation, then through the policies used to contain the damage caused by inflation.</p>\n\n<p>And make no mistake, if yields continue climbing, the Fed and Treasury will eventually intervene in some form. Maybe they will not officially call it yield curve control at first. Maybe it arrives through stealth quantitative easing, emergency liquidity facilities, Treasury buyback programs, bank regulatory changes, or coordinated purchases through the financial system. But the end result will be the same: suppress long-term yields because the debt burden has become too large for markets to absorb naturally.</p>\n\n<p>At current debt levels, genuinely free market interest rates are politically and financially impossible. The bond market is beginning to expose that reality.</p>\n\n<p>That is also why I am becoming bullish again on gold, silver, and mining stocks after stepping away from them earlier this year following their enormous run in 2025. If the Fed ultimately chooses to suppress yields while inflation remains structurally elevated, precious metals become one of the clearest beneficiaries. Gold and silver perform best when confidence in fiat systems deteriorates and when governments prioritize debt sustainability over currency stability. I\u2019ve long said I think they will have a sharp fall lower on the initial deleveraging, then probably double off their near term bottom in short order once the Fed\u2019s liquidity starts hitting the market.</p>\n\n<p>And that is exactly the direction this appears to be heading.</p>\n\n<p>The Iran war may end sooner than many expect, not because global leaders suddenly become responsible, but because the bond market is forcing them into a corner. Financial instability is becoming the greater threat. Policymakers now face an impossible balancing act between inflation, debt servicing costs, economic slowdown, and geopolitical conflict.</p>\n\n<p>Something will have to give. Historically, when governments reach this stage, they choose to protect the debt market and sacrifice the currency.</p>\n\n<p>There is little reason to believe this time will be any different.</p>\n\n<figure><p>--</p>\n\n<p><em><strong>QTR\u2019s Disclaimer</strong></em><strong>:</strong>\u00a0<em>Please read my full legal disclaimer\u00a0<a href=\"https://quoththeraven.substack.com/about\">on my About page here</a></em>.\u00a0<em>This post represents my opinions only.</em>\u00a0<em>In addition, please understand I am an idiot and often get things wrong and lose money. I may own or transact in any names mentioned in this piece at any time without warning. Contributor posts and aggregated posts have been hand selected by me, have not been fact checked and are the opinions of their authors. They are either submitted to QTR by their author, reprinted under a\u00a0<a href=\"https://creativecommons.org/share-your-work/\">Creative Commons license</a>\u00a0with my best effort to uphold what the license asks, or with the permission of the author.</em></p>\n\n<p><em>This is not a recommendation to buy or sell any stocks or securities, just my opinions. I often lose money on positions I trade/invest in. I may add any name mentioned in this article and sell any name mentioned in this piece at any time, without further warning. None of this is a solicitation to buy or sell securities. I may or may not own names I write about and are watching. Sometimes I\u2019m bullish without owning things, sometimes I\u2019m bearish and do own things. Just assume my positions could be exactly the opposite of what you think they are just in case. If I\u2019m long I could quickly be short and vice versa. I won\u2019t update my positions. All positions can change immediately as soon as I publish this, with or without notice and at any point I can be long, short or neutral on any position. You are on your own. Do not make decisions based on my blog. I exist on the fringe. If you see numbers and calculations of any sort, assume they are wrong and double check them. I failed Algebra in 8th grade and topped off my high school math accolades by getting a D- in remedial Calculus my senior year, before becoming an English major in college so I could bullshit my way through things easier.</em></p>\n\n<p><em>The publisher does not guarantee the accuracy or completeness of the information provided in this page. These are not the opinions of any of my employers, partners, or associates. I did my best to be honest about my disclosures but can\u2019t guarantee I am right; I write these posts after a couple beers sometimes. I edit after my posts are published because I\u2019m impatient and lazy, so if you see a typo, check back in a half hour. Also, I just straight up get shit wrong a lot. I mention it twice because it\u2019s that important.</em></p>\n</figure><p>\u00a0</p>\n</div>\n      <span class=\"field field--name-uid field--type-entity-reference field--label-hidden\" rel=\"schema:author\"><a class=\"username\" href=\"https://cms.zerohedge.com/users/tyler-durden\" lang=\"\" title=\"View user profile.\" xml:lang=\"\">Tyler Durden</a></span>\n<span class=\"field field--name-created field--type-created field--label-hidden\">Thu, 05/21/2026 - 11:05</span>",
-      "summary_detail": {
-        "type": "text/html",
-        "language": null,
-        "base": "https://www.zerohedge.com",
-        "value": "<span class=\"field field--name-title field--type-string field--label-hidden\">Is The Bond Market About To Break Washington</span>\n\n            <div class=\"clearfix text-formatted field field--name-body field--type-text-with-summary field--label-hidden field__item\"><p><em>Submitted by <a href=\"https://quoththeraven.substack.com/p/the-bond-market-is-about-to-break\">QTR's Fringe Finance</a></em></p>\n\n<p>The bond market is beginning to force reality onto Washington, and it may ultimately force an end to the Iran war long before politicians or diplomats are willing to admit it.</p>\n\n<p>For months, investors have focused on missiles, retaliation headlines, oil chokepoints, and the possibility of a broader regional escalation from the Iran War. During the geopolitical noise, I urged readers not to overlook stress in financial markets that was happening before the war even started,\u00a0<a href=\"https://quoththeraven.substack.com/p/unprecedented-withdrawal-requests?utm_source=publication-search\">namely in places like private credit</a>\u00a0and\u00a0<a href=\"https://quoththeraven.substack.com/p/another-real-crisis-hiding-behind?utm_source=publication-search\">subprime auto lending</a>. I called these \u201creal crises\u201d\u00a0<a href=\"https://quoththeraven.substack.com/p/another-real-crisis-hiding-behind?utm_source=publication-search\">hiding behind record highs</a>\u00a0while \u201cinvestors\u201d chase\u00a0<a href=\"https://quoththeraven.substack.com/p/the-markets-feedback-loop-will-self\">gamma squeezes</a>\u00a0higher in an\u00a0<a href=\"https://quoththeraven.substack.com/p/the-permanent-distortion-theory\">ongoing distortion feedback loop</a>\u00a0that is making things look far better than they are under the surface.</p>\n\n<p>And now, beneath all the geopolitical noise, a much more serious, harder to ignore crisis is unfolding. As Cypher says in\u00a0<em>The Matrix:</em></p>\n\n<p>\"<strong>Fasten your seat belt Dorothy, 'cause Kansas is going bye-bye.\"</strong></p>\n\n<p><strong><a href=\"https://cms.zerohedge.com/s3/files/inline-images/Screenshot%202026-05-20%20at%2018.15.26.jpg?itok=vt2SqVlp\"><img alt=\"\" class=\"inline-images image-style-inline-images\" height=\"423\" src=\"https://assets.zerohedge.com/s3fs-public/styles/inline_image_mobile/public/inline-images/Screenshot%202026-05-20%20at%2018.15.26.jpg?itok=vt2SqVlp\" width=\"500\" /></a></strong></p>\n\n<p>This crisis is in the Treasury market. Bond yields are moving sharply higher, and they are sending a message that policymakers can no longer afford to ignore: the financial system is becoming unstable under the weight of war spending, massive deficits, persistent inflation, and a debt load that was already unsustainable before this conflict began.</p>\n\n<p>The bond market does not give a\u00a0<em>flying fuck</em>\u00a0about political narratives, gamma squeezes, meme stocks, retail investors or any other ticky tacky end-around style loopholes that continue to push stocks higher. It cares about math, fiscal policy and monetary policy. And the math is getting ugly very quickly.</p>\n\n<p>The 10-year Treasury yield is arguably the single most important price in global finance because virtually every major asset class is built on top of it. Mortgage rates, commercial real estate valuations, private equity models, corporate borrowing costs, equity multiples, venture capital, and government financing itself all depend on stable Treasury markets.\u00a0When yields rise too quickly, everything starts repricing at once. That is why this matters so much more than the daily moves in the stock market.</p>\n\n<p>Washington understands this, even if it refuses to say it publicly.</p>\n\n<p>The United States can survive political embarrassment overseas, but it simply cannot survive a disorderly Treasury market.</p>\n\n<p>That is why I believe the bond market is eventually going to force a few things. First, a de-escalation of the Iran conflict. The priority now is no longer \u201cvictory\u201d or even geopolitical strategy. The priority is restoring stability before bond yields spiral completely out of control. A prolonged war that keeps oil prices elevated while deficits explode higher is simply incompatible with a heavily indebted financial system already struggling under the burden of high interest rates.</p>\n\n<p>The problem is that America entered this conflict from an extraordinarily weak fiscal position to begin with. This is not World War II, when the country had a young population, industrial dominance, low debt levels, and decades of economic expansion ahead of it. Today the US government is already running deficits approaching $2 trillion annually during what is supposedly a normal economic environment. Interest expense on the national debt has already become one of the largest items in the federal budget. Now add war spending, weakening foreign demand for Treasuries, rising commodity prices, and higher refinancing costs, and the entire situation starts looking dangerously unstable.</p>\n\n<p><a href=\"https://cms.zerohedge.com/s3/files/inline-images/Screenshot%202026-05-21%20at%2007.07.59.jpg?itok=rcpq6IZs\"><img alt=\"\" class=\"inline-images image-style-inline-images\" height=\"324\" src=\"https://assets.zerohedge.com/s3fs-public/styles/inline_image_mobile/public/inline-images/Screenshot%202026-05-21%20at%2007.07.59.jpg?itok=rcpq6IZs\" width=\"500\" /></a></p>\n\n<p>This is where the inflation problem becomes unavoidable.</p>\n\n<p>War has always been inflationary, but not just because of oil shocks or supply chain disruptions. The deeper issue is debt creation itself. Wars are financed through borrowing, and borrowing at these levels increasingly requires central bank intervention one way or another. The process is actually very simple: war creates debt, debt pressures the financial system, and eventually the system responds through some combination of money creation, currency debasement, and financial repression.</p>\n\n<p>That is exactly what the bond market is beginning to anticipate right now.</p>\n\n<p>Ironically, as I\u2019ve predicted the past week, before the Federal Reserve eventually steps in to suppress yields,\u00a0<a href=\"https://quoththeraven.substack.com/p/time-for-rate-hikes\">we may actually see another round of rate hikes first</a>. If oil prices remain elevated and inflation expectations continue rising alongside Treasury yields, the Fed may feel forced to tighten policy again simply to preserve credibility and prevent inflation psychology from becoming entrenched. If that doesn\u2019t work, I\u2019ve predicted that the Fed\u00a0<a href=\"https://quoththeraven.substack.com/p/the-fed-will-invent-new-inflation\">will simply start bullshitting its inflation numbers</a>.</p>\n\n<p>In other words, the system may briefly attempt to defend the dollar before ultimately surrendering to debt realities. That creates the possibility of a brutal stagflationary environment where growth slows, markets weaken, borrowing costs rise, and inflation remains stubbornly elevated at the same time.</p>\n\n<p>And\u00a0<em>that\u2026</em>is a nightmare scenario for risk assets and\u00a0<a href=\"https://quoththeraven.substack.com/p/new-fed-chair-kevin-warshs-job-is\">a near-impossible job for incoming Fed chair Kevin Warsh</a>.</p>\n\n<p>For years, markets became addicted to near-zero rates and endless liquidity. Entire sectors of the economy were built on the assumption that capital would remain permanently cheap. But when Treasury yields rise meaningfully, everything changes. Leveraged speculation becomes harder to sustain. Corporate refinancing becomes more expensive. Housing affordability deteriorates further. Commercial real estate faces additional stress. Equity valuations compress. The \u201ceverything bubble\u201d suddenly starts losing oxygen and all the shit I\u2019ve written about that I think will blow up \u2014 including\u00a0<a href=\"https://quoththeraven.substack.com/p/10-areas-of-the-market-id-avoid-right?utm_source=publication-search\">all 10 area of the market I highlighted here</a>\u00a0\u2014 will implode.</p>\n\n<p>And once again, the people who get hurt the most will not be the financial elite, it will be ordinary Americans. You heard it from the former bartender turned Substack shit-talker first\u2026read this slowly:</p>\n\n<p><strong>Mom and pop savers are about to get squeezed from every direction at once.</strong>\u00a0Their wages will fail to keep up with inflation. Their borrowing costs will rise. Their credit card rates will stay elevated. Their insurance, food, energy, and housing costs will continue climbing. Their retirement portfolios will become more volatile. And eventually, after enduring all of that pain, they will likely watch policymakers step in to rescue the bond market and financial system through another round of monetary intervention that further destroys the purchasing power of their savings.</p>\n\n<hr /><p>\ud83d\udd25\u00a0<strong>50% OFF FOR LIFE:</strong>\u00a0Using this coupon entitles you to 50% off an annual subscription to\u00a0<em>Fringe Finance\u00a0</em>for life:\u00a0<strong><a href=\"https://quoththeraven.substack.com/subscribe?coupon=d8097c43\" rel=\"\">Get 50% off forever</a></strong></p>\n\n<hr /><p>Every cycle ends the same way. Wall Street and the financial system are treated as too important to fail, while ordinary citizens absorb the consequences through inflation and currency debasement. Policymakers will present future interventions as necessary for \u201cfinancial stability,\u201d but stability for whom? Stability for leveraged institutions, overextended governments, and asset markets dependent on artificially suppressed rates.</p>\n\n<p>Meanwhile, the average family gets punished twice. First through inflation, then through the policies used to contain the damage caused by inflation.</p>\n\n<p>And make no mistake, if yields continue climbing, the Fed and Treasury will eventually intervene in some form. Maybe they will not officially call it yield curve control at first. Maybe it arrives through stealth quantitative easing, emergency liquidity facilities, Treasury buyback programs, bank regulatory changes, or coordinated purchases through the financial system. But the end result will be the same: suppress long-term yields because the debt burden has become too large for markets to absorb naturally.</p>\n\n<p>At current debt levels, genuinely free market interest rates are politically and financially impossible. The bond market is beginning to expose that reality.</p>\n\n<p>That is also why I am becoming bullish again on gold, silver, and mining stocks after stepping away from them earlier this year following their enormous run in 2025. If the Fed ultimately chooses to suppress yields while inflation remains structurally elevated, precious metals become one of the clearest beneficiaries. Gold and silver perform best when confidence in fiat systems deteriorates and when governments prioritize debt sustainability over currency stability. I\u2019ve long said I think they will have a sharp fall lower on the initial deleveraging, then probably double off their near term bottom in short order once the Fed\u2019s liquidity starts hitting the market.</p>\n\n<p>And that is exactly the direction this appears to be heading.</p>\n\n<p>The Iran war may end sooner than many expect, not because global leaders suddenly become responsible, but because the bond market is forcing them into a corner. Financial instability is becoming the greater threat. Policymakers now face an impossible balancing act between inflation, debt servicing costs, economic slowdown, and geopolitical conflict.</p>\n\n<p>Something will have to give. Historically, when governments reach this stage, they choose to protect the debt market and sacrifice the currency.</p>\n\n<p>There is little reason to believe this time will be any different.</p>\n\n<figure><p>--</p>\n\n<p><em><strong>QTR\u2019s Disclaimer</strong></em><strong>:</strong>\u00a0<em>Please read my full legal disclaimer\u00a0<a href=\"https://quoththeraven.substack.com/about\">on my About page here</a></em>.\u00a0<em>This post represents my opinions only.</em>\u00a0<em>In addition, please understand I am an idiot and often get things wrong and lose money. I may own or transact in any names mentioned in this piece at any time without warning. Contributor posts and aggregated posts have been hand selected by me, have not been fact checked and are the opinions of their authors. They are either submitted to QTR by their author, reprinted under a\u00a0<a href=\"https://creativecommons.org/share-your-work/\">Creative Commons license</a>\u00a0with my best effort to uphold what the license asks, or with the permission of the author.</em></p>\n\n<p><em>This is not a recommendation to buy or sell any stocks or securities, just my opinions. I often lose money on positions I trade/invest in. I may add any name mentioned in this article and sell any name mentioned in this piece at any time, without further warning. None of this is a solicitation to buy or sell securities. I may or may not own names I write about and are watching. Sometimes I\u2019m bullish without owning things, sometimes I\u2019m bearish and do own things. Just assume my positions could be exactly the opposite of what you think they are just in case. If I\u2019m long I could quickly be short and vice versa. I won\u2019t update my positions. All positions can change immediately as soon as I publish this, with or without notice and at any point I can be long, short or neutral on any position. You are on your own. Do not make decisions based on my blog. I exist on the fringe. If you see numbers and calculations of any sort, assume they are wrong and double check them. I failed Algebra in 8th grade and topped off my high school math accolades by getting a D- in remedial Calculus my senior year, before becoming an English major in college so I could bullshit my way through things easier.</em></p>\n\n<p><em>The publisher does not guarantee the accuracy or completeness of the information provided in this page. These are not the opinions of any of my employers, partners, or associates. I did my best to be honest about my disclosures but can\u2019t guarantee I am right; I write these posts after a couple beers sometimes. I edit after my posts are published because I\u2019m impatient and lazy, so if you see a typo, check back in a half hour. Also, I just straight up get shit wrong a lot. I mention it twice because it\u2019s that important.</em></p>\n</figure><p>\u00a0</p>\n</div>\n      <span class=\"field field--name-uid field--type-entity-reference field--label-hidden\" rel=\"schema:author\"><a class=\"username\" href=\"https://cms.zerohedge.com/users/tyler-durden\" lang=\"\" title=\"View user profile.\" xml:lang=\"\">Tyler Durden</a></span>\n<span class=\"field field--name-created field--type-created field--label-hidden\">Thu, 05/21/2026 - 11:05</span>"
-      },
-      "published": "Thu, 21 May 2026 15:05:00 +0000",
-      "published_parsed": [
-        2026,
-        5,
-        21,
-        15,
-        5,
-        0,
-        3,
-        141,
-        0
-      ],
-      "authors": [
-        {
-          "name": "Tyler Durden"
-        }
-      ],
-      "author": "Tyler Durden",
-      "author_detail": {
-        "name": "Tyler Durden"
-      },
-      "id": "1112472 at https://www.zerohedge.com",
-      "guidislink": false
-    },
-    "score": 8.0,
-    "category": "fiscal",
-    "method": "xai",
-    "raw_score": 8.0,
-    "final_score": 8.0
-  },
-  {
-    "hash_id": "bb95f",
+    "hash_id": "9acf8",
     "source": "Fed On The Economy",
-    "title": "America Underbuilt Inc.: The Supply Side of the U.S. Housing Challenge",
-    "link": "https://www.stlouisfed.org/on-the-economy/2026/apr/supply-side-of-us-housing-challenge",
-    "summary": "This analysis finds that the U.S. has underbuilt housing for decades. The persistent supply shortfall amid growing demand drives today\u2019s affordability crisis.",
-    "published": "2026-04-08 16:45:00+00:00",
+    "title": "Tracking AI\u2019s Contribution to GDP Growth",
+    "link": "https://www.stlouisfed.org/on-the-economy/2026/jan/tracking-ai-contribution-gdp-growth",
+    "summary": "This analysis suggests recent investments in AI-related categories have contributed significantly to the real U.S. economic growth in the first nine months of 2025.",
+    "published": "2026-01-12 10:30:00+00:00",
     "raw_entry": {
-      "id": "{03FFF3C8-8AEF-4E0B-B866-5638E7F7A0D5}",
+      "id": "{02533F9D-F584-4901-9DD5-9F2F44E46E97}",
       "guidislink": false,
       "links": [
         {
           "rel": "alternate",
           "type": "text/html",
-          "href": "https://www.stlouisfed.org/on-the-economy/2026/apr/supply-side-of-us-housing-challenge"
+          "href": "https://www.stlouisfed.org/on-the-economy/2026/jan/tracking-ai-contribution-gdp-growth"
         }
       ],
-      "link": "https://www.stlouisfed.org/on-the-economy/2026/apr/supply-side-of-us-housing-challenge",
-      "title": "America Underbuilt Inc.: The Supply Side of the U.S. Housing Challenge",
+      "link": "https://www.stlouisfed.org/on-the-economy/2026/jan/tracking-ai-contribution-gdp-growth",
+      "title": "Tracking AI\u2019s Contribution to GDP Growth",
       "title_detail": {
         "type": "text/plain",
         "language": null,
         "base": "",
-        "value": "America Underbuilt Inc.: The Supply Side of the U.S. Housing Challenge"
+        "value": "Tracking AI\u2019s Contribution to GDP Growth"
       },
-      "summary": "This analysis finds that the U.S. has underbuilt housing for decades. The persistent supply shortfall amid growing demand drives today\u2019s affordability crisis.",
+      "summary": "This analysis suggests recent investments in AI-related categories have contributed significantly to the real U.S. economic growth in the first nine months of 2025.",
       "summary_detail": {
         "type": "text/html",
         "language": null,
         "base": "",
-        "value": "This analysis finds that the U.S. has underbuilt housing for decades. The persistent supply shortfall amid growing demand drives today\u2019s affordability crisis."
+        "value": "This analysis suggests recent investments in AI-related categories have contributed significantly to the real U.S. economic growth in the first nine months of 2025."
       },
-      "published": "Wed, 08 Apr 2026 11:45:00 -0500",
+      "published": "Mon, 12 Jan 2026 04:30:00 -0600",
       "published_parsed": [
         2026,
-        4,
-        8,
-        16,
-        45,
+        1,
+        12,
+        10,
+        30,
         0,
-        2,
-        98,
+        0,
+        12,
         0
       ]
     },
-    "score": 5.0,
-    "category": "other",
+    "score": 6.0,
+    "category": "technology",
     "method": "xai",
-    "raw_score": 5.0,
-    "final_score": 5.0
-  },
-  {
-    "hash_id": "08a85",
-    "source": "Geopolitical Futures",
-    "title": "Lingering Volatility in Energy Markets",
-    "link": "https://geopoliticalfutures.com/lingering-volatility-in-energy-markets/",
-    "summary": "<p>(click to enlarge) According to the World Bank Commodity Markets Outlook, energy markets remain highly volatile amid the Iran war and continued disruption risks in the Strait of Hormuz. While Brent crude is projected ease in 2027, natural gas prices may remain elevated because of tighter LNG markets and stronger Asian demand. Coal prices are also recovering modestly. This chart highlights how widening imbalances between energy consumption and production are increasing pressure on global natural gas markets. North America and the Middle East are driving most of the supply growth through expanded LNG exports, while Asia remains the main source [&#8230;]</p>\n<p>The post <a href=\"https://geopoliticalfutures.com/lingering-volatility-in-energy-markets/\">Lingering Volatility in Energy Markets</a> appeared first on <a href=\"https://geopoliticalfutures.com\">Geopolitical Futures</a>.</p>",
-    "published": "2026-05-19 18:00:44+00:00",
-    "raw_entry": {
-      "title": "Lingering Volatility in Energy Markets",
-      "title_detail": {
-        "type": "text/plain",
-        "language": null,
-        "base": "",
-        "value": "Lingering Volatility in Energy Markets"
-      },
-      "links": [
-        {
-          "rel": "alternate",
-          "type": "text/html",
-          "href": "https://geopoliticalfutures.com/lingering-volatility-in-energy-markets/"
-        }
-      ],
-      "link": "https://geopoliticalfutures.com/lingering-volatility-in-energy-markets/",
-      "authors": [
-        {
-          "name": "Geopolitical Futures"
-        }
-      ],
-      "author": "Geopolitical Futures",
-      "author_detail": {
-        "name": "Geopolitical Futures"
-      },
-      "published": "Tue, 19 May 2026 18:00:44 +0000",
-      "published_parsed": [
-        2026,
-        5,
-        19,
-        18,
-        0,
-        44,
-        1,
-        139,
-        0
-      ],
-      "tags": [
-        {
-          "term": "Weekly Graphic",
-          "scheme": null,
-          "label": null
-        },
-        {
-          "term": "Energy",
-          "scheme": null,
-          "label": null
-        },
-        {
-          "term": "lng",
-          "scheme": null,
-          "label": null
-        },
-        {
-          "term": "natural gas",
-          "scheme": null,
-          "label": null
-        },
-        {
-          "term": "Oil Prices",
-          "scheme": null,
-          "label": null
-        },
-        {
-          "term": "Strait of Hormuz",
-          "scheme": null,
-          "label": null
-        }
-      ],
-      "id": "https://geopoliticalfutures.com/?p=433551",
-      "guidislink": false,
-      "summary": "<p>(click to enlarge) According to the World Bank Commodity Markets Outlook, energy markets remain highly volatile amid the Iran war and continued disruption risks in the Strait of Hormuz. While Brent crude is projected ease in 2027, natural gas prices may remain elevated because of tighter LNG markets and stronger Asian demand. Coal prices are also recovering modestly. This chart highlights how widening imbalances between energy consumption and production are increasing pressure on global natural gas markets. North America and the Middle East are driving most of the supply growth through expanded LNG exports, while Asia remains the main source [&#8230;]</p>\n<p>The post <a href=\"https://geopoliticalfutures.com/lingering-volatility-in-energy-markets/\">Lingering Volatility in Energy Markets</a> appeared first on <a href=\"https://geopoliticalfutures.com\">Geopolitical Futures</a>.</p>",
-      "summary_detail": {
-        "type": "text/html",
-        "language": null,
-        "base": "",
-        "value": "<p>(click to enlarge) According to the World Bank Commodity Markets Outlook, energy markets remain highly volatile amid the Iran war and continued disruption risks in the Strait of Hormuz. While Brent crude is projected ease in 2027, natural gas prices may remain elevated because of tighter LNG markets and stronger Asian demand. Coal prices are also recovering modestly. This chart highlights how widening imbalances between energy consumption and production are increasing pressure on global natural gas markets. North America and the Middle East are driving most of the supply growth through expanded LNG exports, while Asia remains the main source [&#8230;]</p>\n<p>The post <a href=\"https://geopoliticalfutures.com/lingering-volatility-in-energy-markets/\">Lingering Volatility in Energy Markets</a> appeared first on <a href=\"https://geopoliticalfutures.com\">Geopolitical Futures</a>.</p>"
-      }
-    },
-    "score": 8.0,
-    "category": "monetary",
-    "method": "xai",
-    "raw_score": 8.0,
-    "final_score": 3.5
+    "raw_score": 6.0,
+    "final_score": 6.0
   },
   {
     "hash_id": "7f21a",
@@ -743,168 +510,174 @@
         0
       ]
     },
-    "score": 7.0,
+    "score": 5.0,
     "category": "fiscal",
     "method": "xai",
-    "raw_score": 7.0,
-    "final_score": 2.5
+    "raw_score": 5.0,
+    "final_score": 5.0
   },
   {
-    "hash_id": "c0853",
-    "source": "Die Welt",
-    "title": "\u201eEs gibt Kursziele von \u00fcber 300 Dollar \u2013 das halte ich f\u00fcr gerechtfertigt\u201c",
-    "link": "https://www.welt.de/videos/video6a0f2a6ea896ebf1b49e90df/nvidia-beschleunigt-wachstum-es-gibt-kursziele-von-ueber-300-dollar-das-halte-ich-fuer-gerechtfertigt.html",
-    "summary": "Der Chip-Konzern Nvidia konnte den Umsatz im vergangenen Quartal im Jahresvergleich um 85 Prozent auf knapp 82 Milliarden Dollar steigern. \u201eDas ist dieser agentischen KI zu verdanken\u201c, sagt maydornreport-Chefredakteur Alfred Maydorn im Gespr\u00e4ch mit Dietmar Deffner.",
-    "published": "2026-05-21 16:28:43+00:00",
+    "hash_id": "31427",
+    "source": "X/@ThomasSowell",
+    "title": "Rob Schneider: \"My friend had dinner with the Editor-in-Chief of the NYT\u2026 and he",
+    "link": "https://x.com/ThomasSowell/status/2003168659662078183",
+    "summary": "Rob Schneider: \"My friend had dinner with the Editor-in-Chief of the NYT\u2026 and he said, is objectivity something you're concerned about? His answer was, I believe it is my moral imperative to make sure that Donald Trump does not become President again.\"\n\nhttps://t.co/hhl0k1xQF1",
+    "published": null,
+    "content_type": "x_bookmark",
+    "score": 5.0,
+    "category": "other",
+    "method": "xai",
+    "raw_score": 5.0,
+    "final_score": 5.0
+  },
+  {
+    "hash_id": "30bfc",
+    "source": "ZeroHedge",
+    "title": "China To Impose Mining Controls On Strategic Minerals",
+    "link": "https://www.zerohedge.com/commodities/china-impose-mining-controls-strategic-minerals",
+    "summary": "<span class=\"field field--name-title field--type-string field--label-hidden\">China To Impose Mining Controls On Strategic Minerals</span>\n\n            <div class=\"clearfix text-formatted field field--name-body field--type-text-with-summary field--label-hidden field__item\"><p>The Trump-Xi meeting is now history, so Beijing can go back to doing what it does best: squeezing US supply chains with its near chokehold on most strategic and rare-earth supply chains.</p>\n\n<p>China plans to <strong>impose mining controls on certain strategic minerals to ensure supply security and protect the finite resources</strong>, Beijing revealed in a government notification <a href=\"https://www.xinhuanet.com/20260520/069cf9cc4761414f82caf623632a8048/c.html\">published </a>by the official Xinhua News Agency.\u00a0</p>\n\n<p>The new rules will take effect from June 15 and allow <strong>Beijing to control total output, restrict mining entities and run security reviews on foreign investments in mining </strong>that could pose a risk to national security.</p>\n\n<p>Xinhua didn\u2019t specify which minerals will be impacted. <strong>Any adjustment to the list of strategic mineral resources will assess factors like economic importance, national security, domestic requirements and supply chain resilience</strong>, according to the regulation.</p>\n\n<p><a href=\"https://cms.zerohedge.com/s3/files/inline-images/rare%20earths%20gs_0.jpg?itok=9Zp0GIBT\"><img alt=\"\" class=\"inline-images image-style-inline-images\" height=\"691\" src=\"https://assets.zerohedge.com/s3fs-public/styles/inline_image_mobile/public/inline-images/rare%20earths%20gs_0.jpg?itok=9Zp0GIBT\" width=\"500\" /></a></p>\n\n<p>China currently has similar controls on production of rare earths, critical materials vital for high-tech manufacturing, through annual production quotas to a few licensed domestic companies.\u00a0</p>\n\n<p>\u00a0</p>\n</div>\n      <span class=\"field field--name-uid field--type-entity-reference field--label-hidden\" rel=\"schema:author\"><a class=\"username\" href=\"https://cms.zerohedge.com/users/tyler-durden\" lang=\"\" title=\"View user profile.\" xml:lang=\"\">Tyler Durden</a></span>\n<span class=\"field field--name-created field--type-created field--label-hidden\">Fri, 05/22/2026 - 18:50</span>",
+    "published": "2026-05-22 22:50:00+00:00",
     "raw_entry": {
-      "title": "\u201eEs gibt Kursziele von \u00fcber 300 Dollar \u2013 das halte ich f\u00fcr gerechtfertigt\u201c",
+      "title": "China To Impose Mining Controls On Strategic Minerals",
       "title_detail": {
         "type": "text/plain",
         "language": null,
-        "base": "",
-        "value": "\u201eEs gibt Kursziele von \u00fcber 300 Dollar \u2013 das halte ich f\u00fcr gerechtfertigt\u201c"
+        "base": "https://www.zerohedge.com",
+        "value": "China To Impose Mining Controls On Strategic Minerals"
       },
       "links": [
         {
           "rel": "alternate",
           "type": "text/html",
-          "href": "https://www.welt.de/videos/video6a0f2a6ea896ebf1b49e90df/nvidia-beschleunigt-wachstum-es-gibt-kursziele-von-ueber-300-dollar-das-halte-ich-fuer-gerechtfertigt.html"
+          "href": "https://www.zerohedge.com/commodities/china-impose-mining-controls-strategic-minerals"
         }
       ],
-      "link": "https://www.welt.de/videos/video6a0f2a6ea896ebf1b49e90df/nvidia-beschleunigt-wachstum-es-gibt-kursziele-von-ueber-300-dollar-das-halte-ich-fuer-gerechtfertigt.html",
-      "summary": "Der Chip-Konzern Nvidia konnte den Umsatz im vergangenen Quartal im Jahresvergleich um 85 Prozent auf knapp 82 Milliarden Dollar steigern. \u201eDas ist dieser agentischen KI zu verdanken\u201c, sagt maydornreport-Chefredakteur Alfred Maydorn im Gespr\u00e4ch mit Dietmar Deffner.",
+      "link": "https://www.zerohedge.com/commodities/china-impose-mining-controls-strategic-minerals",
+      "summary": "<span class=\"field field--name-title field--type-string field--label-hidden\">China To Impose Mining Controls On Strategic Minerals</span>\n\n            <div class=\"clearfix text-formatted field field--name-body field--type-text-with-summary field--label-hidden field__item\"><p>The Trump-Xi meeting is now history, so Beijing can go back to doing what it does best: squeezing US supply chains with its near chokehold on most strategic and rare-earth supply chains.</p>\n\n<p>China plans to <strong>impose mining controls on certain strategic minerals to ensure supply security and protect the finite resources</strong>, Beijing revealed in a government notification <a href=\"https://www.xinhuanet.com/20260520/069cf9cc4761414f82caf623632a8048/c.html\">published </a>by the official Xinhua News Agency.\u00a0</p>\n\n<p>The new rules will take effect from June 15 and allow <strong>Beijing to control total output, restrict mining entities and run security reviews on foreign investments in mining </strong>that could pose a risk to national security.</p>\n\n<p>Xinhua didn\u2019t specify which minerals will be impacted. <strong>Any adjustment to the list of strategic mineral resources will assess factors like economic importance, national security, domestic requirements and supply chain resilience</strong>, according to the regulation.</p>\n\n<p><a href=\"https://cms.zerohedge.com/s3/files/inline-images/rare%20earths%20gs_0.jpg?itok=9Zp0GIBT\"><img alt=\"\" class=\"inline-images image-style-inline-images\" height=\"691\" src=\"https://assets.zerohedge.com/s3fs-public/styles/inline_image_mobile/public/inline-images/rare%20earths%20gs_0.jpg?itok=9Zp0GIBT\" width=\"500\" /></a></p>\n\n<p>China currently has similar controls on production of rare earths, critical materials vital for high-tech manufacturing, through annual production quotas to a few licensed domestic companies.\u00a0</p>\n\n<p>\u00a0</p>\n</div>\n      <span class=\"field field--name-uid field--type-entity-reference field--label-hidden\" rel=\"schema:author\"><a class=\"username\" href=\"https://cms.zerohedge.com/users/tyler-durden\" lang=\"\" title=\"View user profile.\" xml:lang=\"\">Tyler Durden</a></span>\n<span class=\"field field--name-created field--type-created field--label-hidden\">Fri, 05/22/2026 - 18:50</span>",
+      "summary_detail": {
+        "type": "text/html",
+        "language": null,
+        "base": "https://www.zerohedge.com",
+        "value": "<span class=\"field field--name-title field--type-string field--label-hidden\">China To Impose Mining Controls On Strategic Minerals</span>\n\n            <div class=\"clearfix text-formatted field field--name-body field--type-text-with-summary field--label-hidden field__item\"><p>The Trump-Xi meeting is now history, so Beijing can go back to doing what it does best: squeezing US supply chains with its near chokehold on most strategic and rare-earth supply chains.</p>\n\n<p>China plans to <strong>impose mining controls on certain strategic minerals to ensure supply security and protect the finite resources</strong>, Beijing revealed in a government notification <a href=\"https://www.xinhuanet.com/20260520/069cf9cc4761414f82caf623632a8048/c.html\">published </a>by the official Xinhua News Agency.\u00a0</p>\n\n<p>The new rules will take effect from June 15 and allow <strong>Beijing to control total output, restrict mining entities and run security reviews on foreign investments in mining </strong>that could pose a risk to national security.</p>\n\n<p>Xinhua didn\u2019t specify which minerals will be impacted. <strong>Any adjustment to the list of strategic mineral resources will assess factors like economic importance, national security, domestic requirements and supply chain resilience</strong>, according to the regulation.</p>\n\n<p><a href=\"https://cms.zerohedge.com/s3/files/inline-images/rare%20earths%20gs_0.jpg?itok=9Zp0GIBT\"><img alt=\"\" class=\"inline-images image-style-inline-images\" height=\"691\" src=\"https://assets.zerohedge.com/s3fs-public/styles/inline_image_mobile/public/inline-images/rare%20earths%20gs_0.jpg?itok=9Zp0GIBT\" width=\"500\" /></a></p>\n\n<p>China currently has similar controls on production of rare earths, critical materials vital for high-tech manufacturing, through annual production quotas to a few licensed domestic companies.\u00a0</p>\n\n<p>\u00a0</p>\n</div>\n      <span class=\"field field--name-uid field--type-entity-reference field--label-hidden\" rel=\"schema:author\"><a class=\"username\" href=\"https://cms.zerohedge.com/users/tyler-durden\" lang=\"\" title=\"View user profile.\" xml:lang=\"\">Tyler Durden</a></span>\n<span class=\"field field--name-created field--type-created field--label-hidden\">Fri, 05/22/2026 - 18:50</span>"
+      },
+      "published": "Fri, 22 May 2026 22:50:00 +0000",
+      "published_parsed": [
+        2026,
+        5,
+        22,
+        22,
+        50,
+        0,
+        4,
+        142,
+        0
+      ],
+      "authors": [
+        {
+          "name": "Tyler Durden"
+        }
+      ],
+      "author": "Tyler Durden",
+      "author_detail": {
+        "name": "Tyler Durden"
+      },
+      "id": "1112643 at https://www.zerohedge.com",
+      "guidislink": false
+    },
+    "score": 8.0,
+    "category": "monetary",
+    "method": "xai",
+    "raw_score": 8.0,
+    "final_score": 3.5
+  },
+  {
+    "hash_id": "e4141",
+    "source": "Spiegel International",
+    "title": "Defense in Orbit: Germany Goes Big in the Military Space Race",
+    "link": "https://www.spiegel.de/international/germany/defense-in-orbit-germany-goes-big-in-the-military-space-race-a-0b1f15e2-740e-4c8b-b759-52d8a49fab31#ref=rss",
+    "summary": "Berlin was long content to ignore space as a military frontier. But now, the Merz government is investing 35 billion euros in an array of new systems. The race for lucrative contracts has begun.",
+    "published": "2026-04-15 14:00:00+00:00",
+    "raw_entry": {
+      "title": "Defense in Orbit: Germany Goes Big in the Military Space Race",
+      "title_detail": {
+        "type": "text/plain",
+        "language": null,
+        "base": "",
+        "value": "Defense in Orbit: Germany Goes Big in the Military Space Race"
+      },
+      "links": [
+        {
+          "rel": "alternate",
+          "type": "text/html",
+          "href": "https://www.spiegel.de/international/germany/defense-in-orbit-germany-goes-big-in-the-military-space-race-a-0b1f15e2-740e-4c8b-b759-52d8a49fab31#ref=rss"
+        },
+        {
+          "type": "image/jpeg",
+          "length": "0",
+          "href": "https://cdn.prod.www.spiegel.de/images/49a2680e-c2c8-4fad-9401-8536f6dbeb71_w520_r2.08_fpx56_fpy50.jpg",
+          "rel": "enclosure"
+        }
+      ],
+      "link": "https://www.spiegel.de/international/germany/defense-in-orbit-germany-goes-big-in-the-military-space-race-a-0b1f15e2-740e-4c8b-b759-52d8a49fab31#ref=rss",
+      "summary": "Berlin was long content to ignore space as a military frontier. But now, the Merz government is investing 35 billion euros in an array of new systems. The race for lucrative contracts has begun.",
       "summary_detail": {
         "type": "text/html",
         "language": null,
         "base": "",
-        "value": "Der Chip-Konzern Nvidia konnte den Umsatz im vergangenen Quartal im Jahresvergleich um 85 Prozent auf knapp 82 Milliarden Dollar steigern. \u201eDas ist dieser agentischen KI zu verdanken\u201c, sagt maydornreport-Chefredakteur Alfred Maydorn im Gespr\u00e4ch mit Dietmar Deffner."
+        "value": "Berlin was long content to ignore space as a military frontier. But now, the Merz government is investing 35 billion euros in an array of new systems. The race for lucrative contracts has begun."
       },
-      "tags": [
+      "content": [
         {
-          "term": "Videos",
-          "scheme": null,
-          "label": null
-        },
-        {
-          "term": "Nvidia",
-          "scheme": null,
-          "label": null
-        },
-        {
-          "term": "Deffner-Dietmar",
-          "scheme": null,
-          "label": null
+          "type": "text/html",
+          "language": null,
+          "base": "",
+          "value": "Berlin was long content to ignore space as a military frontier. But now, the Merz government is investing 35 billion euros in an array of new systems. The race for lucrative contracts has begun."
         }
       ],
-      "published": "Thu, 21 May 2026 16:28:43 GMT",
+      "id": "0b1f15e2-740e-4c8b-b759-52d8a49fab31",
+      "guidislink": false,
+      "published": "Wed, 15 Apr 2026 16:00:00 +0200",
       "published_parsed": [
         2026,
-        5,
-        21,
-        16,
-        28,
-        43,
-        3,
-        141,
+        4,
+        15,
+        14,
+        0,
+        0,
+        2,
+        105,
         0
-      ],
-      "id": "6a0f2a6ea896ebf1b49e90df",
-      "guidislink": false,
-      "authors": [
-        {
-          "name": "Dietmar Deffner"
-        }
-      ],
-      "author": "Dietmar Deffner",
-      "author_detail": {
-        "name": "Dietmar Deffner"
-      },
-      "dc_source": "WELT TV",
-      "welt_premium": "false",
-      "welt_topic": "Nvidia beschleunigt Wachstum",
-      "welt_commercialoptions": "all",
-      "welt_subtype": "video",
-      "media_content": [
-        {
-          "duration": "260",
-          "type": "application/vnd.apple.mpegurl",
-          "url": "https://vod-stream.welt.personalstream.tv/videos/ermmhrj0j8mw/rendition/1191e65f-964c-4968-8db3-8d2394c9cdc5/master.m3u8"
-        },
-        {
-          "duration": "260",
-          "type": "video/mp4",
-          "url": "https://vod-file.welt.personalstream.tv/videos/ermmhrj0j8mw/rendition/23c57376295cdea43f2ac6d9e075de70-rodfnxkxqgkionl-brseneu-onl-b-rseneu/video_0_700.mp4"
-        },
-        {
-          "duration": "260",
-          "type": "video/mp4",
-          "url": "https://vod-file.welt.personalstream.tv/videos/ermmhrj0j8mw/rendition/23c57376295cdea43f2ac6d9e075de70-rodfnxkxqgkionl-brseneu-onl-b-rseneu/video_1_1200.mp4"
-        },
-        {
-          "duration": "260",
-          "type": "video/mp4",
-          "url": "https://vod-file.welt.personalstream.tv/videos/ermmhrj0j8mw/rendition/23c57376295cdea43f2ac6d9e075de70-rodfnxkxqgkionl-brseneu-onl-b-rseneu/video_2_2400.mp4"
-        },
-        {
-          "duration": "260",
-          "type": "video/mp4",
-          "url": "https://vod-file.welt.personalstream.tv/videos/ermmhrj0j8mw/rendition/23c57376295cdea43f2ac6d9e075de70-rodfnxkxqgkionl-brseneu-onl-b-rseneu/video_3_4800.mp4"
-        },
-        {
-          "type": "image/jpeg",
-          "url": "https://images.welt.de/6a0f2a6ea896ebf1b49e90df/7c4a1d86ea0f31a6a357537fd3a147b4/ci16x9-w1200/onl-boerseneu-bmp"
-        }
-      ],
-      "media_credit": [
-        {
-          "scheme": "urn:ebu",
-          "content": "WELT TV"
-        }
-      ],
-      "credit": "WELT TV",
-      "media_rating": {
-        "scheme": "urn:fsk",
-        "content": "0"
-      },
-      "rating": "0",
-      "media_thumbnail": [
-        {
-          "url": "https://images.welt.de/6a0f2a6ea896ebf1b49e90df/7c4a1d86ea0f31a6a357537fd3a147b4/ci16x9-w1200/onl-boerseneu-bmp"
-        }
-      ],
-      "href": "",
-      "media_keywords": "Nvidia, Deffner-Dietmar",
-      "dcterms_lastmodified": "2026-05-21T16:40:02.707Z"
+      ]
     },
-    "score": 7.0,
+    "score": 6.0,
     "category": "technology",
     "method": "xai",
-    "raw_score": 7.0,
-    "final_score": 2.5
+    "raw_score": 6.0,
+    "final_score": 1.5
   },
   {
-    "hash_id": "91c2b",
+    "hash_id": "a126c",
     "source": "The Duran",
-    "title": "Starmer Exit and the By-Election That Could End the Labour Party",
-    "link": "https://theduran.com/starmer-exit-and-the-by-election-that-could-end-the-labour-party/",
-    "summary": "<img alt=\"\" class=\"webfeedsFeaturedVisual wp-post-image\" height=\"372\" src=\"https://i0.wp.com/theduran.com/wp-content/uploads/2026/05/maxresdefault-73.jpg?fit=662%2C372&amp;ssl=1\" style=\"display: block; margin-bottom: 5px; clear: both;\" width=\"662\" />",
-    "published": "2026-05-18 17:37:23+00:00",
+    "title": "Germany Tipping Point: AfD Surges as CDU Crumbles",
+    "link": "https://theduran.com/germany-tipping-point-afd-surges-as-cdu-crumbles/",
+    "summary": "<img alt=\"\" class=\"webfeedsFeaturedVisual wp-post-image\" height=\"372\" src=\"https://i0.wp.com/theduran.com/wp-content/uploads/2026/05/maxresdefault-93.jpg?fit=662%2C372&amp;ssl=1\" style=\"display: block; margin-bottom: 5px; clear: both;\" width=\"662\" />",
+    "published": "2026-05-22 15:36:35+00:00",
     "raw_entry": {
-      "title": "Starmer Exit and the By-Election That Could End the Labour Party",
+      "title": "Germany Tipping Point: AfD Surges as CDU Crumbles",
       "title_detail": {
         "type": "text/plain",
         "language": null,
         "base": "",
-        "value": "Starmer Exit and the By-Election That Could End the Labour Party"
+        "value": "Germany Tipping Point: AfD Surges as CDU Crumbles"
       },
       "links": [
         {
           "rel": "alternate",
           "type": "text/html",
-          "href": "https://theduran.com/starmer-exit-and-the-by-election-that-could-end-the-labour-party/"
+          "href": "https://theduran.com/germany-tipping-point-afd-surges-as-cdu-crumbles/"
         }
       ],
-      "link": "https://theduran.com/starmer-exit-and-the-by-election-that-could-end-the-labour-party/",
+      "link": "https://theduran.com/germany-tipping-point-afd-surges-as-cdu-crumbles/",
       "authors": [
         {
           "name": "Alex Christoforou"
@@ -914,16 +687,16 @@
       "author_detail": {
         "name": "Alex Christoforou"
       },
-      "published": "Mon, 18 May 2026 17:37:23 +0000",
+      "published": "Fri, 22 May 2026 15:36:35 +0000",
       "published_parsed": [
         2026,
         5,
-        18,
-        17,
-        37,
-        23,
-        0,
-        138,
+        22,
+        15,
+        36,
+        35,
+        4,
+        142,
         0
       ],
       "tags": [
@@ -938,24 +711,24 @@
           "label": null
         }
       ],
-      "id": "https://theduran.com/?p=297811",
+      "id": "https://theduran.com/?p=298586",
       "guidislink": false,
-      "summary": "<img alt=\"\" class=\"webfeedsFeaturedVisual wp-post-image\" height=\"372\" src=\"https://i0.wp.com/theduran.com/wp-content/uploads/2026/05/maxresdefault-73.jpg?fit=662%2C372&amp;ssl=1\" style=\"display: block; margin-bottom: 5px; clear: both;\" width=\"662\" />",
+      "summary": "<img alt=\"\" class=\"webfeedsFeaturedVisual wp-post-image\" height=\"372\" src=\"https://i0.wp.com/theduran.com/wp-content/uploads/2026/05/maxresdefault-93.jpg?fit=662%2C372&amp;ssl=1\" style=\"display: block; margin-bottom: 5px; clear: both;\" width=\"662\" />",
       "summary_detail": {
         "type": "text/html",
         "language": null,
         "base": "",
-        "value": "<img alt=\"\" class=\"webfeedsFeaturedVisual wp-post-image\" height=\"372\" src=\"https://i0.wp.com/theduran.com/wp-content/uploads/2026/05/maxresdefault-73.jpg?fit=662%2C372&amp;ssl=1\" style=\"display: block; margin-bottom: 5px; clear: both;\" width=\"662\" />"
+        "value": "<img alt=\"\" class=\"webfeedsFeaturedVisual wp-post-image\" height=\"372\" src=\"https://i0.wp.com/theduran.com/wp-content/uploads/2026/05/maxresdefault-93.jpg?fit=662%2C372&amp;ssl=1\" style=\"display: block; margin-bottom: 5px; clear: both;\" width=\"662\" />"
       },
       "content": [
         {
           "type": "text/html",
           "language": null,
           "base": "",
-          "value": "<img alt=\"\" class=\"webfeedsFeaturedVisual wp-post-image\" height=\"372\" src=\"https://i0.wp.com/theduran.com/wp-content/uploads/2026/05/maxresdefault-73.jpg?fit=662%2C372&amp;ssl=1\" style=\"display: block; margin-bottom: 5px; clear: both;\" width=\"662\" /><p></p>"
+          "value": "<img alt=\"\" class=\"webfeedsFeaturedVisual wp-post-image\" height=\"372\" src=\"https://i0.wp.com/theduran.com/wp-content/uploads/2026/05/maxresdefault-93.jpg?fit=662%2C372&amp;ssl=1\" style=\"display: block; margin-bottom: 5px; clear: both;\" width=\"662\" /><p></p>"
         }
       ],
-      "post-id": "297811"
+      "post-id": "298586"
     },
     "score": 6.0,
     "category": "geo_other",
@@ -964,89 +737,11 @@
     "final_score": 1.5
   },
   {
-    "hash_id": "9a8de",
-    "source": "Antiwar.com",
-    "title": "Trump Administration Indicts Cuba\u2019s Former President, Setting Up Pretext for War",
-    "link": "https://news.antiwar.com/2026/05/20/trump-administration-indicts-cubas-former-president-setting-up-pretext-for-war/?utm_source=rss&utm_medium=rss&utm_campaign=trump-administration-indicts-cubas-former-president-setting-up-pretext-for-war",
-    "summary": "The US Justice Department on Wednesday unsealed an indictment for 94-year-old Raul Castro, Cuba&#8217;s former president and brother of long-time leader Fidel Castro, a move clearly aimed at providing a pretext for the US to attack the island nation. The indictment is related to the 1996 shoot-down of two planes belonging to the Brothers to [&#8230;]",
-    "published": "2026-05-20 20:31:58+00:00",
-    "raw_entry": {
-      "title": "Trump Administration Indicts Cuba\u2019s Former President, Setting Up Pretext for War",
-      "title_detail": {
-        "type": "text/plain",
-        "language": null,
-        "base": "",
-        "value": "Trump Administration Indicts Cuba\u2019s Former President, Setting Up Pretext for War"
-      },
-      "links": [
-        {
-          "rel": "alternate",
-          "type": "text/html",
-          "href": "https://news.antiwar.com/2026/05/20/trump-administration-indicts-cubas-former-president-setting-up-pretext-for-war/?utm_source=rss&utm_medium=rss&utm_campaign=trump-administration-indicts-cubas-former-president-setting-up-pretext-for-war"
-        }
-      ],
-      "link": "https://news.antiwar.com/2026/05/20/trump-administration-indicts-cubas-former-president-setting-up-pretext-for-war/?utm_source=rss&utm_medium=rss&utm_campaign=trump-administration-indicts-cubas-former-president-setting-up-pretext-for-war",
-      "comments": "https://news.antiwar.com/2026/05/20/trump-administration-indicts-cubas-former-president-setting-up-pretext-for-war/#comments",
-      "authors": [
-        {
-          "name": "Dave DeCamp"
-        }
-      ],
-      "author": "Dave DeCamp",
-      "author_detail": {
-        "name": "Dave DeCamp"
-      },
-      "published": "Wed, 20 May 2026 20:31:58 +0000",
-      "published_parsed": [
-        2026,
-        5,
-        20,
-        20,
-        31,
-        58,
-        2,
-        140,
-        0
-      ],
-      "tags": [
-        {
-          "term": "News",
-          "scheme": null,
-          "label": null
-        },
-        {
-          "term": "Cuba",
-          "scheme": null,
-          "label": null
-        }
-      ],
-      "id": "https://news.antiwar.com/?p=172420",
-      "guidislink": false,
-      "summary": "The US Justice Department on Wednesday unsealed an indictment for 94-year-old Raul Castro, Cuba&#8217;s former president and brother of long-time leader Fidel Castro, a move clearly aimed at providing a pretext for the US to attack the island nation. The indictment is related to the 1996 shoot-down of two planes belonging to the Brothers to [&#8230;]",
-      "summary_detail": {
-        "type": "text/html",
-        "language": null,
-        "base": "",
-        "value": "The US Justice Department on Wednesday unsealed an indictment for 94-year-old Raul Castro, Cuba&#8217;s former president and brother of long-time leader Fidel Castro, a move clearly aimed at providing a pretext for the US to attack the island nation. The indictment is related to the 1996 shoot-down of two planes belonging to the Brothers to [&#8230;]"
-      },
-      "wfw_commentrss": "https://news.antiwar.com/2026/05/20/trump-administration-indicts-cubas-former-president-setting-up-pretext-for-war/feed/",
-      "slash_comments": "14",
-      "post-id": "172420"
-    },
-    "score": 9.0,
-    "category": "geo_major",
-    "method": "xai",
-    "raw_score": 9.0,
-    "final_score": 1.0,
-    "interest_boosted": true,
-    "interest_modifier": 10
-  },
-  {
-    "hash_id": "c6c44",
-    "source": "X/@iAnonPatriot",
-    "title": "The Average Salary vs. Home Prices \n\nThis chart is insanity. https://t.co/gqD8ro",
-    "link": "https://x.com/iAnonPatriot/status/2006071590052848032",
-    "summary": "The Average Salary vs. Home Prices \n\nThis chart is insanity. https://t.co/gqD8roPX4Q",
+    "hash_id": "f265d",
+    "source": "X/@A1Anduril",
+    "title": "In 1993, during the final days of the Cold War, the defense primes gathered for ",
+    "link": "https://x.com/A1Anduril/status/2003144909885260209",
+    "summary": "In 1993, during the final days of the Cold War, the defense primes gathered for a dinner that became known as the \"Last Supper.\u201d\n\nThey were ordered by the U.S government to consolidate. As you can see in the chart below, they listened.\n\nBut this consolidation didn't lead to https://t.co/bzUXkyFZwA",
     "published": null,
     "content_type": "x_bookmark",
     "score": 5.0,
@@ -1056,90 +751,219 @@
     "final_score": 0.5
   },
   {
-    "hash_id": "b1f72",
-    "source": "Spiegel International",
-    "title": "U.S. Military Expert on Oil Tanker Convoys in the Strait of Hormuz: \"Iran Must Only Succeed Once to Trigger a Catastrophe\"",
-    "link": "https://www.spiegel.de/international/world/u-s-military-expert-on-oil-tanker-convoys-in-the-strait-of-hormuz-iran-must-only-succeed-once-to-trigger-a-catastrophe-a-1b4f4521-01dd-4711-8a5e-8da225d053b5#ref=rss",
-    "summary": "How can Iran's blockade of the Strait of Hormuz be broken? Retired General S. Clinton Hinote has addressed precisely that question as the former Air Force chief strategist. His conclusion? Difficult.",
-    "published": "2026-03-19 13:37:00+00:00",
+    "hash_id": "e2129",
+    "source": "FAZ",
+    "title": "Vorsorge f\u00fcr den Ruhestand: Die Reform der Riester-Rente ist gut, greift aber zu kurz",
+    "link": "https://www.faz.net/aktuell/wirtschaft/die-reform-der-riesterrente-ist-gut-greift-aber-zu-kurz-200857270.html",
+    "summary": "Die Anpassungen der Riester-Rente sind richtig. Verbraucher haben nun mehr Wahlfreiheit, und das kann zu h\u00f6heren Ertr\u00e4gen f\u00fchren. Doch ein wesentlicher Baustein der Altersvorsorge fehlt noch.",
+    "published": "2026-05-23 08:54:07+00:00",
     "raw_entry": {
-      "title": "U.S. Military Expert on Oil Tanker Convoys in the Strait of Hormuz: \"Iran Must Only Succeed Once to Trigger a Catastrophe\"",
+      "title": "Vorsorge f\u00fcr den Ruhestand: Die Reform der Riester-Rente ist gut, greift aber zu kurz",
       "title_detail": {
         "type": "text/plain",
         "language": null,
         "base": "",
-        "value": "U.S. Military Expert on Oil Tanker Convoys in the Strait of Hormuz: \"Iran Must Only Succeed Once to Trigger a Catastrophe\""
+        "value": "Vorsorge f\u00fcr den Ruhestand: Die Reform der Riester-Rente ist gut, greift aber zu kurz"
       },
       "links": [
         {
           "rel": "alternate",
           "type": "text/html",
-          "href": "https://www.spiegel.de/international/world/u-s-military-expert-on-oil-tanker-convoys-in-the-strait-of-hormuz-iran-must-only-succeed-once-to-trigger-a-catastrophe-a-1b4f4521-01dd-4711-8a5e-8da225d053b5#ref=rss"
-        },
-        {
-          "type": "image/jpeg",
-          "length": "0",
-          "href": "https://cdn.prod.www.spiegel.de/images/c41a2c2a-c009-47ac-b742-e82ae3d4ba70_w520_r2.08_fpx68.66_fpy52.99.jpg",
-          "rel": "enclosure"
+          "href": "https://www.faz.net/aktuell/wirtschaft/die-reform-der-riesterrente-ist-gut-greift-aber-zu-kurz-200857270.html"
         }
       ],
-      "link": "https://www.spiegel.de/international/world/u-s-military-expert-on-oil-tanker-convoys-in-the-strait-of-hormuz-iran-must-only-succeed-once-to-trigger-a-catastrophe-a-1b4f4521-01dd-4711-8a5e-8da225d053b5#ref=rss",
-      "summary": "How can Iran's blockade of the Strait of Hormuz be broken? Retired General S. Clinton Hinote has addressed precisely that question as the former Air Force chief strategist. His conclusion? Difficult.",
+      "link": "https://www.faz.net/aktuell/wirtschaft/die-reform-der-riesterrente-ist-gut-greift-aber-zu-kurz-200857270.html",
+      "id": "https://www.faz.net/aktuell/wirtschaft/die-reform-der-riesterrente-ist-gut-greift-aber-zu-kurz-200857270.html",
+      "guidislink": false,
+      "summary": "Die Anpassungen der Riester-Rente sind richtig. Verbraucher haben nun mehr Wahlfreiheit, und das kann zu h\u00f6heren Ertr\u00e4gen f\u00fchren. Doch ein wesentlicher Baustein der Altersvorsorge fehlt noch.",
       "summary_detail": {
         "type": "text/html",
         "language": null,
         "base": "",
-        "value": "How can Iran's blockade of the Strait of Hormuz be broken? Retired General S. Clinton Hinote has addressed precisely that question as the former Air Force chief strategist. His conclusion? Difficult."
+        "value": "Die Anpassungen der Riester-Rente sind richtig. Verbraucher haben nun mehr Wahlfreiheit, und das kann zu h\u00f6heren Ertr\u00e4gen f\u00fchren. Doch ein wesentlicher Baustein der Altersvorsorge fehlt noch."
       },
       "content": [
         {
           "type": "text/html",
           "language": null,
           "base": "",
-          "value": "How can Iran's blockade of the Strait of Hormuz be broken? Retired General S. Clinton Hinote has addressed precisely that question as the former Air Force chief strategist. His conclusion? Difficult."
+          "value": "<img src=\"https://media0.faz.net/image/7a136ff360da/w3300h1856x0y172/202605/43601.0.2103597471/finanzminister-lars-klingbeil.webp\" title=\"Finanzminister Lars Klingbeil (SPD, links) ist es nach einigen gescheiterten Versuchen gelungen, das Riester-System zu reformieren. Kanzler Friedrich Merz sucht nach einer neuen Balance in der Altersvorsorge. - EPA\" /><p>Die Anpassungen der Riester-Rente sind richtig. Verbraucher haben nun mehr Wahlfreiheit, und das kann zu h\u00f6heren Ertr\u00e4gen f\u00fchren. Doch ein wesentlicher Baustein der Altersvorsorge fehlt noch.</p>"
         }
       ],
-      "id": "1b4f4521-01dd-4711-8a5e-8da225d053b5",
-      "guidislink": false,
-      "published": "Thu, 19 Mar 2026 14:37:00 +0100",
+      "published": "Sat, 23 May 2026 08:54:07 GMT",
       "published_parsed": [
         2026,
-        3,
-        19,
-        13,
-        37,
-        0,
-        3,
-        78,
+        5,
+        23,
+        8,
+        54,
+        7,
+        5,
+        143,
         0
+      ],
+      "authors": [
+        {
+          "name": "Philipp Krohn"
+        }
+      ],
+      "author": "Philipp Krohn",
+      "author_detail": {
+        "name": "Philipp Krohn"
+      },
+      "media_thumbnail": [
+        {
+          "url": "https://media0.faz.net/image/7a136ff360da/w3300h1856x0y172/202605/43601.0.2103597471/finanzminister-lars-klingbeil.webp",
+          "width": "400",
+          "height": "225"
+        }
+      ],
+      "href": "",
+      "media_content": [
+        {
+          "url": "https://media0.faz.net/image/7a136ff360da/w3300h1856x0y172/202605/43601.0.2103597471/finanzminister-lars-klingbeil.webp",
+          "type": "image/webp",
+          "medium": "image",
+          "width": "1200",
+          "height": "675"
+        }
       ]
     },
-    "score": 8.0,
-    "category": "monetary",
+    "score": 5.0,
+    "category": "fiscal",
     "method": "xai",
-    "raw_score": 8.0,
-    "final_score": -10.0
+    "raw_score": 5.0,
+    "final_score": 0.5
   },
   {
-    "hash_id": "0b395",
-    "source": "X/@CommerceGov",
-    "title": "In 1985, America was a net owner of global assets by over $100B. \n\nBy 2024, fore",
-    "link": "https://x.com/CommerceGov/status/2009466634537153008",
-    "summary": "In 1985, America was a net owner of global assets by over $100B. \n\nBy 2024, foreign ownership of U.S. assets exceeded U.S. ownership abroad by nearly $26T \u2014 the cost of decades of failed trade policy.\n\nPresident Trump and Secretary Lutnick are reversing course.\n\nAmerica First. https://t.co/yg8Eu4ugQw",
+    "hash_id": "a321d",
+    "source": "Geopolitical Futures",
+    "title": "George Answers Your Questions: After the US-China Summit",
+    "link": "https://geopoliticalfutures.com/george-answers-your-questions-after-the-us-china-summit/",
+    "summary": "<p>After the US-China Summit May 18, 2026 Question: I am not seeing the bits about China abandoning communist ideology in the quotes that are presented. What should we make of this fascinating thesis that China has definitively become a capitalist state? Is it truly enough to possess a stock exchange, foreign capital and export-driven factories [&#8230;]</p>\n<p>The post <a href=\"https://geopoliticalfutures.com/george-answers-your-questions-after-the-us-china-summit/\">George Answers Your Questions: After the US-China Summit</a> appeared first on <a href=\"https://geopoliticalfutures.com\">Geopolitical Futures</a>.</p>",
+    "published": "2026-05-23 12:00:47+00:00",
+    "raw_entry": {
+      "title": "George Answers Your Questions: After the US-China Summit",
+      "title_detail": {
+        "type": "text/plain",
+        "language": null,
+        "base": "",
+        "value": "George Answers Your Questions: After the US-China Summit"
+      },
+      "links": [
+        {
+          "rel": "alternate",
+          "type": "text/html",
+          "href": "https://geopoliticalfutures.com/george-answers-your-questions-after-the-us-china-summit/"
+        }
+      ],
+      "link": "https://geopoliticalfutures.com/george-answers-your-questions-after-the-us-china-summit/",
+      "authors": [
+        {
+          "name": "George Friedman"
+        }
+      ],
+      "author": "George Friedman",
+      "author_detail": {
+        "name": "George Friedman"
+      },
+      "published": "Sat, 23 May 2026 12:00:47 +0000",
+      "published_parsed": [
+        2026,
+        5,
+        23,
+        12,
+        0,
+        47,
+        5,
+        143,
+        0
+      ],
+      "tags": [
+        {
+          "term": "Americas",
+          "scheme": null,
+          "label": null
+        },
+        {
+          "term": "Analysis",
+          "scheme": null,
+          "label": null
+        },
+        {
+          "term": "Asia Pacific",
+          "scheme": null,
+          "label": null
+        },
+        {
+          "term": "From the Desk of George Friedman",
+          "scheme": null,
+          "label": null
+        },
+        {
+          "term": "George Answers Your Questions",
+          "scheme": null,
+          "label": null
+        },
+        {
+          "term": "United States",
+          "scheme": null,
+          "label": null
+        },
+        {
+          "term": "China",
+          "scheme": null,
+          "label": null
+        },
+        {
+          "term": "Cuba",
+          "scheme": null,
+          "label": null
+        },
+        {
+          "term": "Russia",
+          "scheme": null,
+          "label": null
+        }
+      ],
+      "id": "https://geopoliticalfutures.com/?p=433805",
+      "guidislink": false,
+      "summary": "<p>After the US-China Summit May 18, 2026 Question: I am not seeing the bits about China abandoning communist ideology in the quotes that are presented. What should we make of this fascinating thesis that China has definitively become a capitalist state? Is it truly enough to possess a stock exchange, foreign capital and export-driven factories [&#8230;]</p>\n<p>The post <a href=\"https://geopoliticalfutures.com/george-answers-your-questions-after-the-us-china-summit/\">George Answers Your Questions: After the US-China Summit</a> appeared first on <a href=\"https://geopoliticalfutures.com\">Geopolitical Futures</a>.</p>",
+      "summary_detail": {
+        "type": "text/html",
+        "language": null,
+        "base": "",
+        "value": "<p>After the US-China Summit May 18, 2026 Question: I am not seeing the bits about China abandoning communist ideology in the quotes that are presented. What should we make of this fascinating thesis that China has definitively become a capitalist state? Is it truly enough to possess a stock exchange, foreign capital and export-driven factories [&#8230;]</p>\n<p>The post <a href=\"https://geopoliticalfutures.com/george-answers-your-questions-after-the-us-china-summit/\">George Answers Your Questions: After the US-China Summit</a> appeared first on <a href=\"https://geopoliticalfutures.com\">Geopolitical Futures</a>.</p>"
+      }
+    },
+    "score": 8.0,
+    "category": "geo_major",
+    "method": "xai",
+    "raw_score": 8.0,
+    "final_score": 0.0,
+    "interest_boosted": true,
+    "interest_modifier": 10
+  },
+  {
+    "hash_id": "6c579",
+    "source": "X/@zerohedge",
+    "title": "Goldman's Gold Guru Sees \"Significant Upside Risk\" To $5400 Forecast<!-- --> | ZeroHedge",
+    "link": "https://www.zerohedge.com/precious-metals/goldmans-gold-guru-sees-significant-upside-risk-5400-forecast",
+    "summary": "Gold surged significantly in 2025 and into 2026, driven by competition for limited physical bullion between central banks (especially emerging markets diversifying reserves) and private investors. \"We've seen actually an acceleration in the gold value in 2025... private investors join central banks in competing for the same limited gold bullion .\" Make sure to read our \"How To [Read/Tip Off] Zero Hedge Without Attracting The\n                      Interest Of [Human Resources/The Treasury/Black\n                      Helicopters]\" Guide It would be very wise of you to study our privacy policy and our (non)policy on conflicts / full disclosure . Here's our Cookie Policy .",
     "published": null,
     "content_type": "x_bookmark",
     "score": 7.0,
-    "category": "fiscal",
+    "category": "monetary",
     "method": "xai",
     "raw_score": 7.0,
     "final_score": -11.0
   },
   {
-    "hash_id": "a51d9",
-    "source": "X/@AveryDaye",
-    "title": "Europe is being conquered.\n\n-Only 10% of children in Brussels are of Belgian ori",
-    "link": "https://x.com/AveryDaye/status/2014049892730044566",
-    "summary": "Europe is being conquered.\n\n-Only 10% of children in Brussels are of Belgian origin.\n-British residents are a minority in London, and 10 boroughs have a majority non-white population.\n-Mohammad is the number 1 baby name in England.\n-Sweden has 65 no-go zones.\n-There are 900 https://t.co/PgaH1oB53Y",
+    "hash_id": "df48d",
+    "source": "X/@realMaalouf",
+    "title": "People across Venezuela are celebrating that communist narco-dictator Maduro has",
+    "link": "https://x.com/realMaalouf/status/2007439119480131672",
+    "summary": "People across Venezuela are celebrating that communist narco-dictator Maduro has been captured by America, and they are finally free.\n\nDon\u2019t let anyone tell you Trump didn\u2019t do the right thing. https://t.co/MfWXncFIQf",
     "published": null,
     "content_type": "x_bookmark",
     "score": 6.0,
@@ -1149,97 +973,169 @@
     "final_score": -12.0
   },
   {
-    "hash_id": "645f4",
-    "source": "FAZ",
-    "title": "Autonomes Fahren: Xpeng baut Robotaxis in Serie",
-    "link": "https://www.faz.net/premium/digitalwirtschaft/mobility/autonomes-fahren-xpeng-industrialisiert-das-robotaxi-accg-200845985.html",
-    "summary": "Der Elektroautobauer l\u00e4sst als erster Hersteller autonome Autos in Serie vom Band laufen. Die Botschaft: Den Robotaxi-Markt wird gewinnen, wer das fahrerlose Fahrzeug industriell g\u00fcnstig herstellen kann.",
-    "published": "2026-05-20 04:50:00+00:00",
+    "hash_id": "f9008",
+    "source": "X/@LukeGromen",
+    "title": "\"Anthropic is releasing a new version of its most powerful AI model that\u2019s desig",
+    "link": "https://x.com/LukeGromen/status/2019488862133702837",
+    "summary": "\"Anthropic is releasing a new version of its most powerful AI model that\u2019s designed to carry out financial research\" - Bloomberg, 2/5/26\n\nUS white collar workers today increasingly looking like Cleveland, Ohio in 1959: \"So proud and optimistic about the future...\"\ud83d\udc47 https://t.co/W7qoq2FIuq",
+    "published": null,
+    "content_type": "x_bookmark",
+    "score": 6.0,
+    "category": "technology",
+    "method": "xai",
+    "raw_score": 6.0,
+    "final_score": -12.0
+  },
+  {
+    "hash_id": "f3c56",
+    "source": "Die Welt",
+    "title": "\u201eNicht beliebt \u2013 aber notwendig\u201c \u2013 Arbeitgeberpr\u00e4sident fordert sp\u00e4teren Renteneintritt",
+    "link": "https://www.welt.de/politik/deutschland/article6a1174f7be29d4b4607a46d4/rentendebatte-nicht-beliebt-aber-notwendig-arbeitgeberpraesident-fordert-spaeteren-renteneintritt.html",
+    "summary": "In der Rentendebatte erh\u00f6ht Arbeitgeberpr\u00e4sident Dulger den Druck: Er fordert ein h\u00f6heres Eintrittsalter, weniger Fr\u00fchverrentung und mehr Kapitalvorsorge \u2013 und dr\u00e4ngt zugleich auf flexiblere Arbeitszeiten, um demografische Belastungen abzufedern.",
+    "published": "2026-05-23 09:59:02+00:00",
     "raw_entry": {
-      "title": "Autonomes Fahren: Xpeng baut Robotaxis in Serie",
+      "title": "\u201eNicht beliebt \u2013 aber notwendig\u201c \u2013 Arbeitgeberpr\u00e4sident fordert sp\u00e4teren Renteneintritt",
       "title_detail": {
         "type": "text/plain",
         "language": null,
         "base": "",
-        "value": "Autonomes Fahren: Xpeng baut Robotaxis in Serie"
+        "value": "\u201eNicht beliebt \u2013 aber notwendig\u201c \u2013 Arbeitgeberpr\u00e4sident fordert sp\u00e4teren Renteneintritt"
       },
       "links": [
         {
           "rel": "alternate",
           "type": "text/html",
-          "href": "https://www.faz.net/premium/digitalwirtschaft/mobility/autonomes-fahren-xpeng-industrialisiert-das-robotaxi-accg-200845985.html"
+          "href": "https://www.welt.de/politik/deutschland/article6a1174f7be29d4b4607a46d4/rentendebatte-nicht-beliebt-aber-notwendig-arbeitgeberpraesident-fordert-spaeteren-renteneintritt.html"
         }
       ],
-      "link": "https://www.faz.net/premium/digitalwirtschaft/mobility/autonomes-fahren-xpeng-industrialisiert-das-robotaxi-accg-200845985.html",
-      "id": "https://www.faz.net/premium/digitalwirtschaft/mobility/autonomes-fahren-xpeng-industrialisiert-das-robotaxi-accg-200845985.html",
-      "guidislink": false,
-      "summary": "Der Elektroautobauer l\u00e4sst als erster Hersteller autonome Autos in Serie vom Band laufen. Die Botschaft: Den Robotaxi-Markt wird gewinnen, wer das fahrerlose Fahrzeug industriell g\u00fcnstig herstellen kann.",
+      "link": "https://www.welt.de/politik/deutschland/article6a1174f7be29d4b4607a46d4/rentendebatte-nicht-beliebt-aber-notwendig-arbeitgeberpraesident-fordert-spaeteren-renteneintritt.html",
+      "summary": "In der Rentendebatte erh\u00f6ht Arbeitgeberpr\u00e4sident Dulger den Druck: Er fordert ein h\u00f6heres Eintrittsalter, weniger Fr\u00fchverrentung und mehr Kapitalvorsorge \u2013 und dr\u00e4ngt zugleich auf flexiblere Arbeitszeiten, um demografische Belastungen abzufedern.",
       "summary_detail": {
         "type": "text/html",
         "language": null,
         "base": "",
-        "value": "Der Elektroautobauer l\u00e4sst als erster Hersteller autonome Autos in Serie vom Band laufen. Die Botschaft: Den Robotaxi-Markt wird gewinnen, wer das fahrerlose Fahrzeug industriell g\u00fcnstig herstellen kann."
+        "value": "In der Rentendebatte erh\u00f6ht Arbeitgeberpr\u00e4sident Dulger den Druck: Er fordert ein h\u00f6heres Eintrittsalter, weniger Fr\u00fchverrentung und mehr Kapitalvorsorge \u2013 und dr\u00e4ngt zugleich auf flexiblere Arbeitszeiten, um demografische Belastungen abzufedern."
       },
-      "content": [
+      "tags": [
         {
-          "type": "text/html",
-          "language": null,
-          "base": "",
-          "value": "<img src=\"https://media0.faz.net/image/47923ed0a9e6/w3340h1879x100y14/202604/43601.0.2017611686/wo-die-sind-ist-vorn-xpeng-auf.webp\" title=\"Wo die sind ist vorn: XPeng auf der Peking Autoshow - AFP\" /><p>Der Elektroautobauer l\u00e4sst als erster Hersteller autonome Autos in Serie vom Band laufen. Die Botschaft: Den Robotaxi-Markt wird gewinnen, wer das fahrerlose Fahrzeug industriell g\u00fcnstig herstellen kann.</p>"
+          "term": "Deutschland",
+          "scheme": null,
+          "label": null
+        },
+        {
+          "term": "Dulger",
+          "scheme": null,
+          "label": null
+        },
+        {
+          "term": "Rainer",
+          "scheme": null,
+          "label": null
+        },
+        {
+          "term": "Newsteam",
+          "scheme": null,
+          "label": null
+        },
+        {
+          "term": "BDA (Bundesvereinigung der Deutschen Arbeitgeberverb\u00e4nde) (ks)",
+          "scheme": null,
+          "label": null
+        },
+        {
+          "term": "Rente",
+          "scheme": null,
+          "label": null
+        },
+        {
+          "term": "Sozialpolitik (ks)",
+          "scheme": null,
+          "label": null
         }
       ],
-      "published": "Wed, 20 May 2026 04:50:00 GMT",
+      "published": "Sat, 23 May 2026 09:59:02 GMT",
       "published_parsed": [
         2026,
         5,
-        20,
-        4,
-        50,
-        0,
+        23,
+        9,
+        59,
         2,
-        140,
+        5,
+        143,
         0
       ],
+      "id": "6a1174f7be29d4b4607a46d4",
+      "guidislink": false,
       "authors": [
+        {}
+      ],
+      "author": "",
+      "dc_source": "AFP/nw",
+      "welt_premium": "false",
+      "welt_topic": "Rentendebatte",
+      "welt_commercialoptions": "all",
+      "welt_subtype": "news",
+      "media_content": [
         {
-          "name": "Johannes Winkelhage"
+          "duration": "35",
+          "type": "application/vnd.apple.mpegurl",
+          "url": "https://vod-stream.welt.personalstream.tv/videos/xy9kmu7a7686/rendition/24c876a5-466a-4081-8a66-b38eaebf1dee/master.m3u8"
+        },
+        {
+          "duration": "35",
+          "type": "video/mp4",
+          "url": "https://vod-file.welt.personalstream.tv/videos/xy9kmu7a7686/rendition/6a055705e60fcb66ee45ea9370e60089-nk751ee1kuf0pcr1-pgm-06-00-bis-10-00-off-rente-mit-70-0604/video_0_700.mp4"
+        },
+        {
+          "duration": "35",
+          "type": "video/mp4",
+          "url": "https://vod-file.welt.personalstream.tv/videos/xy9kmu7a7686/rendition/6a055705e60fcb66ee45ea9370e60089-nk751ee1kuf0pcr1-pgm-06-00-bis-10-00-off-rente-mit-70-0604/video_1_1200.mp4"
+        },
+        {
+          "duration": "35",
+          "type": "video/mp4",
+          "url": "https://vod-file.welt.personalstream.tv/videos/xy9kmu7a7686/rendition/6a055705e60fcb66ee45ea9370e60089-nk751ee1kuf0pcr1-pgm-06-00-bis-10-00-off-rente-mit-70-0604/video_2_2400.mp4"
+        },
+        {
+          "duration": "35",
+          "type": "video/mp4",
+          "url": "https://vod-file.welt.personalstream.tv/videos/xy9kmu7a7686/rendition/6a055705e60fcb66ee45ea9370e60089-nk751ee1kuf0pcr1-pgm-06-00-bis-10-00-off-rente-mit-70-0604/video_3_4800.mp4"
+        },
+        {
+          "type": "image/jpeg",
+          "url": "https://images.welt.de/6a1174f7be29d4b4607a46d4/73ffc775da1bfb0f027a388d1a30e713/ci23x11-w1200/dpa-com-260514-935-1341909-jpg"
         }
       ],
-      "author": "Johannes Winkelhage",
-      "author_detail": {
-        "name": "Johannes Winkelhage"
-      },
+      "media_credit": [
+        {
+          "scheme": "urn:ebu",
+          "content": "WELT TV"
+        }
+      ],
+      "credit": "WELT TV",
       "media_thumbnail": [
         {
-          "url": "https://media0.faz.net/image/47923ed0a9e6/w3340h1879x100y14/202604/43601.0.2017611686/wo-die-sind-ist-vorn-xpeng-auf.webp",
-          "width": "400",
-          "height": "225"
+          "url": "https://images.welt.de/6a1174f7be29d4b4607a46d4/73ffc775da1bfb0f027a388d1a30e713/ci23x11-w1200/dpa-com-260514-935-1341909-jpg"
         }
       ],
       "href": "",
-      "media_content": [
-        {
-          "url": "https://media0.faz.net/image/47923ed0a9e6/w3340h1879x100y14/202604/43601.0.2017611686/wo-die-sind-ist-vorn-xpeng-auf.webp",
-          "type": "image/webp",
-          "medium": "image",
-          "width": "1200",
-          "height": "675"
-        }
-      ]
+      "media_keywords": "Dulger, Rainer, Newsteam, BDA (Bundesvereinigung der Deutschen Arbeitgeberverb\u00e4nde) (ks), Rente, Sozialpolitik (ks)",
+      "dcterms_lastmodified": "2026-05-23T10:42:08.893Z"
     },
-    "score": 6.0,
-    "category": "technology",
+    "score": 5.0,
+    "category": "fiscal",
     "method": "xai",
-    "raw_score": 6.0,
-    "final_score": -12.0,
+    "raw_score": 5.0,
+    "final_score": -13.0,
     "serendipity_pick": true
   },
   {
-    "hash_id": "bb2b2",
-    "source": "X/@hubermanlab",
-    "title": "The cure for addiction, explained by Terry Real https://t.co/JdLN5LoFlZ",
-    "link": "https://x.com/hubermanlab/status/2005681545596788962",
-    "summary": "The cure for addiction, explained by Terry Real https://t.co/JdLN5LoFlZ",
+    "hash_id": "ed74f",
+    "source": "X/@sfiscience",
+    "title": "New book: Allocation, Distribution, and Policy\n\nOver the past 40 years, the fiel",
+    "link": "https://x.com/sfiscience/status/2003171530235064476",
+    "summary": "New book: Allocation, Distribution, and Policy\n\nOver the past 40 years, the field of microeconomics has gone through a revolution in real-world applications, yet the theoretical models taught in Ph.D. coursework have been slow to catch up.\u00a0\n\nIn a new textbook, SFI Professor Sam https://t.co/JgY5gQ0yey",
     "published": null,
     "content_type": "x_bookmark",
     "score": 5.0,
@@ -1267,18 +1163,18 @@
     "serendipity_pick": true
   },
   {
-    "hash_id": "6c579",
-    "source": "X/@zerohedge",
-    "title": "Goldman's Gold Guru Sees \"Significant Upside Risk\" To $5400 Forecast<!-- --> | ZeroHedge",
-    "link": "https://www.zerohedge.com/precious-metals/goldmans-gold-guru-sees-significant-upside-risk-5400-forecast",
-    "summary": "Gold surged significantly in 2025 and into 2026, driven by competition for limited physical bullion between central banks (especially emerging markets diversifying reserves) and private investors. \"We've seen actually an acceleration in the gold value in 2025... private investors join central banks in competing for the same limited gold bullion .\" Make sure to read our \"How To [Read/Tip Off] Zero Hedge Without Attracting The\n                      Interest Of [Human Resources/The Treasury/Black\n                      Helicopters]\" Guide It would be very wise of you to study our privacy policy and our (non)policy on conflicts / full disclosure . Here's our Cookie Policy .",
+    "hash_id": "be1da",
+    "source": "X/@Myrmikan",
+    "title": "Trump's Federal Reserve chairman-designate will not be able to stop the bull mar",
+    "link": "https://x.com/Myrmikan/status/2020850168233705538",
+    "summary": "Trump's Federal Reserve chairman-designate will not be able to stop the bull market in gold: https://t.co/9VQlbiYQUj",
     "published": null,
     "content_type": "x_bookmark",
-    "score": 8.0,
+    "score": 7.0,
     "category": "monetary",
     "method": "xai",
-    "raw_score": 8.0,
-    "final_score": -32.5,
+    "raw_score": 7.0,
+    "final_score": -33.5,
     "serendipity_pick": true
   }
 ]

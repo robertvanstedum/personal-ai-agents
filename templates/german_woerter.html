@@ -12,8 +12,8 @@
 
 <!-- ── Subnav ──────────────────────────────────────────────────────────── -->
 <div class="ueben-subnav">
-  <button class="ueben-subnav-btn active" data-section="vokabeln">Vokabeln</button>
-  <button class="ueben-subnav-btn" data-section="drill-pool">
+  <button class="ueben-subnav-btn active" data-section="vokabeln" title="Vocabulary library">Vokabeln</button>
+  <button class="ueben-subnav-btn" data-section="drill-pool" title="Active drill queue">
     Drill-Pool{% if drill_pool %} <span class="pool-badge">{{ drill_pool|length }}</span>{% endif %}
   </button>
 </div>
@@ -45,7 +45,10 @@
     </select>
   </label>
   <span class="filter-count" id="filter-count"></span>
-  <a class="btn-ghost woerter-export-all" href="/api/anki-export" download>Anki Export — Alle</a>
+  <button class="btn-filter-reset" id="btn-reset-filters"
+          title="Show all entries">Alle anzeigen</button>
+  <a class="btn-ghost woerter-export-all" href="/api/anki-export" download
+     title="Export all vocabulary to Anki flashcard deck">Anki Export — Alle</a>
 </div>
 
 <!-- ── Word table ──────────────────────────────────────────────────────── -->
@@ -56,9 +59,6 @@
       <tr>
         <th>Deutsch</th>
         <th>Englisch</th>
-        <th>Quelle</th>
-        <th>Datum</th>
-        <th>Status</th>
         <th></th>
       </tr>
     </thead>
@@ -70,48 +70,52 @@
           data-status="{{ entry.status or 'library' }}">
         <td class="w-german">{{ entry.german }}</td>
         <td class="w-english">{{ entry.english }}</td>
-        <td class="w-source">{{ entry.scene or '—' }}</td>
-        <td class="w-date">{{ entry.added or '' }}</td>
-        <td class="w-status">
-          <span class="status-badge status-{{ entry.status or 'library' }}">
-            {% if entry.status == 'practice' %}Üben
-            {% elif entry.status == 'review_ready' %}Prüfen
-            {% elif entry.status == 'mastered' %}Gelernt
-            {% else %}Bibliothek{% endif %}
-          </span>
-        </td>
-        <td class="w-expand-col"><button class="btn-expand" aria-label="Details">↓</button></td>
+        <td class="w-expand-col"><button class="btn-expand" aria-label="Details" title="Show details">Details</button></td>
       </tr>
       <tr class="woerter-detail" id="detail-{{ entry.id }}" style="display:none"
           data-german="{{ entry.german }}" data-english="{{ entry.english }}">
-        <td colspan="6">
+        <td colspan="3">
           <div class="detail-inner">
+            <div class="expand-meta">
+              <span class="expand-meta-item">
+                <span class="expand-meta-label">Quelle:</span>{{ entry.scene or '—' }}
+              </span>
+              <span class="expand-meta-item">
+                <span class="expand-meta-label">Datum:</span>{{ entry.added or '' }}
+              </span>
+              <span class="expand-meta-item">
+                <span class="expand-meta-label">Status:</span>{% if entry.status == 'practice' %}Üben{% elif entry.status == 'review_ready' %}Prüfen{% elif entry.status == 'mastered' %}Gelernt{% else %}Bibliothek{% endif %}
+              </span>
+            </div>
             {% if entry.source_sentence %}
             <div class="detail-context">"{{ entry.source_sentence }}"</div>
             {% endif %}
             {% if entry.source_article %}
-            <div class="detail-source-article">{{ entry.source_article }}</div>
+            <div class="expand-source">
+              <span class="expand-source-label">Aus Artikel:</span>
+              <span class="expand-source-text">{{ entry.source_article }}</span>
+            </div>
             {% endif %}
 
             <!-- Practice section -->
             <div class="expand-practice">
               <div class="expand-label">ÜBEN</div>
               <div class="direction-toggle-inline">
-                <button class="dir-btn active" data-dir="de-en">🇩🇪 → 🇺🇸</button>
-                <button class="dir-btn" data-dir="en-de">🇺🇸 → 🇩🇪</button>
+                <button class="dir-btn active" data-dir="de-en" title="German to English">🇩🇪 → 🇺🇸</button>
+                <button class="dir-btn" data-dir="en-de" title="English to German">🇺🇸 → 🇩🇪</button>
               </div>
               <div class="practice-prompt">
                 <span class="practice-prompt-text">{{ entry.german }}</span>
                 <button class="btn-voice-out btn-speak-practice"
-                        data-text="{{ entry.german }}">🔊</button>
+                        data-text="{{ entry.german }}" title="Hear pronunciation">🔊</button>
               </div>
               <div class="practice-input-wrap">
                 <textarea class="practice-input" placeholder="Deine Antwort…" rows="2"></textarea>
                 <div style="display:flex;gap:0.5rem;margin-top:0.4rem">
                   <button class="btn-voice-mic btn-voice-practice"
-                          data-direction="de-en">🎤</button>
+                          data-direction="de-en" title="Speak your answer">🎤</button>
                   <button class="btn-delivery btn-pruefen-practice"
-                          data-id="{{ entry.id }}">Prüfen</button>
+                          data-id="{{ entry.id }}" title="Check answer">Prüfen</button>
                 </div>
               </div>
               <div class="practice-correction" style="display:none">
@@ -125,27 +129,33 @@
 
             <div class="detail-actions">
               {% if entry.status == 'library' %}
-              <button class="btn-ghost btn-promote" data-id="{{ entry.id }}" data-next="practice">
+              <button class="btn-ghost btn-promote" data-id="{{ entry.id }}" data-next="practice"
+                      title="Move to practice queue">
                 Fördern → Üben
               </button>
               {% elif entry.status == 'practice' %}
-              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="library">
+              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="library"
+                      title="Demote back to library">
                 ← Bibliothek
               </button>
               {% elif entry.status == 'review_ready' %}
-              <button class="btn-ghost btn-promote" data-id="{{ entry.id }}" data-next="mastered">
+              <button class="btn-ghost btn-promote" data-id="{{ entry.id }}" data-next="mastered"
+                      title="Mark as learned">
                 ✓ Als gelernt markieren
               </button>
-              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="practice">
+              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="practice"
+                      title="Keep practising">
                 ← Weiter üben
               </button>
               {% elif entry.status == 'mastered' %}
-              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="practice">
+              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="practice"
+                      title="Practice again">
                 ← Wieder üben
               </button>
               {% endif %}
-              <button class="btn-ghost btn-speak" data-text="{{ entry.german }}">🔊</button>
-              <a class="btn-ghost" href="/api/anki-export?status={{ entry.status }}" download>Anki Export</a>
+              <button class="btn-ghost btn-speak" data-text="{{ entry.german }}" title="Hear pronunciation">🔊</button>
+              <a class="btn-ghost" href="/api/anki-export?status={{ entry.status }}" download
+                 title="Export to Anki flashcard deck">Anki Export</a>
             </div>
           </div>
         </td>
@@ -171,28 +181,28 @@
 <div class="woerter-section" id="section-drill-pool" style="display:none">
   {% if drill_pool %}
   <div class="direction-toggle" id="direction-toggle">
-    <button class="dir-btn active" data-dir="de-en" id="dir-de-en">
+    <button class="dir-btn active" data-dir="de-en" id="dir-de-en" title="German to English">
       🇩🇪 → 🇺🇸 Deutsch zu Englisch
     </button>
-    <button class="dir-btn" data-dir="en-de" id="dir-en-de">
+    <button class="dir-btn" data-dir="en-de" id="dir-en-de" title="English to German">
       🇺🇸 → 🇩🇪 Englisch zu Deutsch
     </button>
   </div>
 
   <div class="drill-stats">
     <span id="drill-progress">0 von {{ drill_pool|length }} geübt</span>
-    <button class="btn-ghost btn-sm" id="drill-restart">Neu starten</button>
+    <button class="btn-ghost btn-sm" id="drill-restart" title="Restart drill session">Neu starten</button>
   </div>
 
   <div class="drill-card" id="drill-card">
     <div class="drill-prompt" id="drill-prompt"></div>
-    <button class="btn-voice-out" id="btn-speak-prompt">🔊 anhören</button>
+    <button class="btn-voice-out" id="btn-speak-prompt" title="Hear the prompt">🔊 anhören</button>
 
     <div class="drill-input-area" id="drill-input-area">
       <textarea id="drill-input" placeholder="Deine Antwort hier eingeben…" rows="3"></textarea>
       <div class="drill-input-row">
-        <button class="btn-voice-mic" id="voice-drill" title="Spracheingabe">🎤 Sprechen</button>
-        <button class="btn-delivery" id="btn-pruefen">Prüfen</button>
+        <button class="btn-voice-mic" id="voice-drill" title="Spracheingabe">🎤</button>
+        <button class="btn-delivery" id="btn-pruefen" title="Check answer">Prüfen</button>
       </div>
     </div>
 
@@ -215,15 +225,15 @@
     </div>
 
     <div class="drill-assess" id="drill-assess" style="display:none">
-      <button class="btn-richtig" id="drill-correct">✓ Richtig</button>
-      <button class="btn-falsch"  id="drill-wrong">✗ Falsch</button>
-      <button class="btn-skip"    id="drill-skip">→ Überspringen</button>
+      <button class="btn-richtig" id="drill-correct" title="Mark correct">✓ Richtig</button>
+      <button class="btn-falsch"  id="drill-wrong"  title="Mark wrong">✗ Falsch</button>
+      <button class="btn-skip"    id="drill-skip"   title="Skip this card">→ Überspringen</button>
     </div>
   </div>
 
   <div class="drill-done" id="drill-done" style="display:none">
     <p>Runde abgeschlossen.</p>
-    <button class="btn-ghost" id="drill-done-restart">Neu starten</button>
+    <button class="btn-ghost" id="drill-done-restart" title="Start a new drill session">Neu starten</button>
   </div>
   {% else %}
   <div class="woerter-empty">
@@ -267,7 +277,12 @@ document.body.classList.add('parch-mode');
       const detail = document.getElementById('detail-' + id);
       const open = detail.style.display !== 'none';
       detail.style.display = open ? 'none' : 'table-row';
-      btn.textContent = open ? '↓' : '↑';
+      btn.textContent = open ? 'Details' : 'Schließen';
+      if (!open) {
+        setTimeout(() => {
+          detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 50);
+      }
     });
   });
 
@@ -317,7 +332,7 @@ document.body.classList.add('parch-mode');
       if (detail && !show) {
         detail.style.display = 'none';
         const btn = row.querySelector('.btn-expand');
-        if (btn) btn.textContent = '↓';
+        if (btn) btn.textContent = 'Details';
       }
       if (show) visible++;
     });
@@ -329,6 +344,11 @@ document.body.classList.add('parch-mode');
 
   document.getElementById('filter-quelle').addEventListener('change', applyFilters);
   document.getElementById('filter-status').addEventListener('change', applyFilters);
+  document.getElementById('btn-reset-filters').addEventListener('click', () => {
+    document.getElementById('filter-quelle').value = '';
+    document.getElementById('filter-status').value = '';
+    applyFilters();
+  });
   applyFilters();
 
   // ── Wörter inline practice ────────────────────────────────────────────
@@ -556,9 +576,9 @@ document.body.classList.add('parch-mode');
         recognition.onresult = e => {
           document.getElementById('drill-input').value = e.results[0][0].transcript;
         };
-        recognition.onend = () => { recognition = null; voiceDrillBtn.textContent = '🎤 Sprechen'; };
+        recognition.onend = () => { recognition = null; voiceDrillBtn.textContent = '🎤'; };
         recognition.start();
-        voiceDrillBtn.textContent = '⏹ Stop';
+        voiceDrillBtn.textContent = '⏹';
       });
     } else if (voiceDrillBtn) {
       voiceDrillBtn.style.display = 'none';

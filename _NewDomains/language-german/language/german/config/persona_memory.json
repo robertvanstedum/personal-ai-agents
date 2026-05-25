@@ -1,0 +1,221 @@
+{
+  "robert_herr_fischer": {
+    "user": "robert",
+    "persona": "herr_fischer",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 0,
+      "last_seen": null,
+      "topics_discussed": [],
+      "errors_noted": [],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  },
+  "robert_maria": {
+    "user": "robert",
+    "persona": "maria",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 1,
+      "last_seen": "2026-05-25",
+      "topics_discussed": [
+        "ordering drinks",
+        "Viennese coffee culture",
+        "paying the bill",
+        "café vocabulary"
+      ],
+      "errors_noted": [
+        "'Manualchen' is not a German or Viennese coffee term; the intended drink was 'eine Melange', the classic Viennese milk coffee.",
+        "'Melange' is feminine (die Melange), requiring the article 'eine' in the accusative, not 'einen'.",
+        "In a subordinate clause introduced by 'dass', the verb must go to the end of the clause.",
+        "'Verlängerter' is a masculine adjectival noun (der Verlängerte), so it takes 'einen' in the accusative, not 'einer'.",
+        "'Kaffee' is masculine (der Kaffee), so the accusative requires 'den', not 'das'; note that in Austrian German 'das Kaffee' can colloquially refer to a cup of coffee, but standard usage is 'der Kaffee'.",
+        "'Sellen' is not a German word; Robert likely intended 'zahlen' (to pay) or 'die Rechnung' (the bill), both standard ways to ask for the check.",
+        "Using English 'Likewise' breaks the target language immersion; the German equivalents 'Gleichfalls' or 'Danke, ebenso' should be used to wish someone well in return."
+      ],
+      "strengths": [
+        "Successfully self-corrected the article for 'Verlängerten' mid-sentence, showing active monitoring of his own speech",
+        "Used 'meine Frau' correctly with the right possessive form",
+        "Politely used 'Vielen Dank' at an appropriate moment",
+        "Managed to communicate payment intent clearly with 'hier ist meine Karte'",
+        "Attempted Viennese-specific coffee vocabulary, showing awareness of regional dialect"
+      ],
+      "vocabulary_introduced": [
+        "Melange",
+        "Verlängerter",
+        "Gugelhupf",
+        "die Rechnung",
+        "zahlen",
+        "Kaffeehaus",
+        "Bitte schön",
+        "Servus",
+        "auf Wiederschaun",
+        "Lass es euch gut schmecken"
+      ],
+      "notes": "Robert successfully navigated a Viennese café ordering scenario, demonstrating practical vocabulary for coffee types and payment. He struggled with recalling specific Viennese coffee terms and made a gender/article error with 'Kaffee', but communicated his intentions clearly enough for the waiter to understand. The session showed good functional communication despite some hesitation and vocabulary gaps.",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  },
+  "robert_dr._huber": {
+    "user": "robert",
+    "persona": "dr._huber",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 0,
+      "last_seen": null,
+      "topics_discussed": [],
+      "errors_noted": [],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  },
+  "robert_stefan": {
+    "user": "robert",
+    "persona": "stefan",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 0,
+      "last_seen": null,
+      "topics_discussed": [],
+      "errors_noted": [],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  },
+  "robert_frau_novak": {
+    "user": "robert",
+    "persona": "frau_novak",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 0,
+      "last_seen": null,
+      "topics_discussed": [],
+      "errors_noted": [],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  },
+  "robert_klaus": {
+    "user": "robert",
+    "persona": "klaus",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 0,
+      "last_seen": null,
+      "topics_discussed": [],
+      "errors_noted": [],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  },
+  "robert_georg": {
+    "user": "robert",
+    "persona": "georg",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 0,
+      "last_seen": null,
+      "topics_discussed": [],
+      "errors_noted": [],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  },
+  "robert_anna": {
+    "user": "robert",
+    "persona": "anna",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 0,
+      "last_seen": null,
+      "topics_discussed": [],
+      "errors_noted": [],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  },
+  "robert_frau_berger": {
+    "user": "robert",
+    "persona": "frau_berger",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 0,
+      "last_seen": null,
+      "topics_discussed": [],
+      "errors_noted": [],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  }
+}

@@ -11,7 +11,7 @@
 <section class="admin-section">
   <div class="admin-section-head">
     <h2>Personas</h2>
-    <button class="btn-ghost" id="btn-persona-create">＋ Neue Persona</button>
+    <button class="btn-ghost" id="btn-persona-create" title="Create a new persona">＋ Neue Persona</button>
   </div>
   <div class="admin-list" id="persona-list">
     <div class="admin-list-item">
@@ -20,9 +20,9 @@
         <span class="admin-item-meta">Kellnerin · Kaffeehaus</span>
       </div>
       <div class="admin-item-actions">
-        <button class="btn-ghost btn-sm">Bearbeiten</button>
-        <button class="btn-ghost btn-sm">Fork</button>
-        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Persona Maria löschen?">Löschen</button>
+        <button class="btn-ghost btn-sm" title="Edit persona">Bearbeiten</button>
+        <button class="btn-ghost btn-sm" title="Duplicate persona">Fork</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Persona Maria löschen?" title="Delete persona">Löschen</button>
       </div>
     </div>
     <div class="admin-list-item">
@@ -31,9 +31,9 @@
         <span class="admin-item-meta">Rezeptionist · Hotel</span>
       </div>
       <div class="admin-item-actions">
-        <button class="btn-ghost btn-sm">Bearbeiten</button>
-        <button class="btn-ghost btn-sm">Fork</button>
-        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Persona Herr Fischer löschen?">Löschen</button>
+        <button class="btn-ghost btn-sm" title="Edit persona">Bearbeiten</button>
+        <button class="btn-ghost btn-sm" title="Duplicate persona">Fork</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Persona Herr Fischer löschen?" title="Delete persona">Löschen</button>
       </div>
     </div>
     <div class="admin-list-item">
@@ -42,9 +42,9 @@
         <span class="admin-item-meta">Wirt · Lokal</span>
       </div>
       <div class="admin-item-actions">
-        <button class="btn-ghost btn-sm">Bearbeiten</button>
-        <button class="btn-ghost btn-sm">Fork</button>
-        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Persona Georg löschen?">Löschen</button>
+        <button class="btn-ghost btn-sm" title="Edit persona">Bearbeiten</button>
+        <button class="btn-ghost btn-sm" title="Duplicate persona">Fork</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Persona Georg löschen?" title="Delete persona">Löschen</button>
       </div>
     </div>
   </div>
@@ -68,9 +68,11 @@
       {% if pr.ready_to_archive %}
       <div class="admin-item-actions">
         <button class="btn-ghost btn-sm btn-round-action"
-                data-slug="{{ pr.slug }}" data-action="close">Runde abschließen</button>
+                data-slug="{{ pr.slug }}" data-action="close"
+                title="Finish round & create summary">Runde abschließen</button>
         <button class="btn-ghost btn-sm btn-round-action"
-                data-slug="{{ pr.slug }}" data-action="extend">Verlängern +3</button>
+                data-slug="{{ pr.slug }}" data-action="extend"
+                title="Add 3 more sessions to round">Verlängern +3</button>
       </div>
       {% endif %}
     </div>
@@ -84,7 +86,7 @@
 <section class="admin-section">
   <div class="admin-section-head">
     <h2>Quellen</h2>
-    <button class="btn-ghost" id="btn-source-add">＋ Quelle hinzufügen</button>
+    <button class="btn-ghost" id="btn-source-add" title="Add a new article source">＋ Quelle hinzufügen</button>
   </div>
   <div class="admin-list" id="source-list">
     <div class="admin-list-item">
@@ -93,8 +95,8 @@
         <span class="admin-item-meta admin-item-active">aktiv</span>
       </div>
       <div class="admin-item-actions">
-        <button class="btn-ghost btn-sm">Pausieren</button>
-        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Quelle ORF Wien entfernen?">Entfernen</button>
+        <button class="btn-ghost btn-sm" title="Pause this source">Pausieren</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Quelle ORF Wien entfernen?" title="Remove this source">Entfernen</button>
       </div>
     </div>
     <div class="admin-list-item">
@@ -103,8 +105,8 @@
         <span class="admin-item-meta admin-item-active">aktiv</span>
       </div>
       <div class="admin-item-actions">
-        <button class="btn-ghost btn-sm">Pausieren</button>
-        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Quelle Vienna.at entfernen?">Entfernen</button>
+        <button class="btn-ghost btn-sm" title="Pause this source">Pausieren</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Quelle Vienna.at entfernen?" title="Remove this source">Entfernen</button>
       </div>
     </div>
     <div class="admin-list-item">
@@ -113,8 +115,8 @@
         <span class="admin-item-meta admin-item-active">aktiv</span>
       </div>
       <div class="admin-item-actions">
-        <button class="btn-ghost btn-sm">Pausieren</button>
-        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Quelle Standard Kultur entfernen?">Entfernen</button>
+        <button class="btn-ghost btn-sm" title="Pause this source">Pausieren</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Quelle Standard Kultur entfernen?" title="Remove this source">Entfernen</button>
       </div>
     </div>
     <div class="admin-list-item">
@@ -123,8 +125,8 @@
         <span class="admin-item-meta admin-item-active">aktiv</span>
       </div>
       <div class="admin-item-actions">
-        <button class="btn-ghost btn-sm">Pausieren</button>
-        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Quelle Wiener Bezirksblätter entfernen?">Entfernen</button>
+        <button class="btn-ghost btn-sm" title="Pause this source">Pausieren</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Quelle Wiener Bezirksblätter entfernen?" title="Remove this source">Entfernen</button>
       </div>
     </div>
   </div>
@@ -148,8 +150,8 @@
     </div>
   </div>
   <div class="admin-export-row">
-    <button class="btn-ghost">Phrasebook exportieren</button>
-    <button class="btn-ghost">Schreibverlauf exportieren</button>
+    <button class="btn-ghost" title="Export phrasebook to file">Phrasebook exportieren</button>
+    <button class="btn-ghost" title="Export writing history to file">Schreibverlauf exportieren</button>
   </div>
   <div class="admin-log-placeholder">
     <p class="hint">Log-Viewer — Phase 2.</p>

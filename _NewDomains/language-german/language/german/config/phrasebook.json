@@ -196,8 +196,8 @@
       "added": "2026-05-21",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 0,
-      "last_practiced": null,
+      "practice_count": 1,
+      "last_practiced": "2026-05-23",
       "source_sentence": "Die beiden Bezirksvorsteher Georg Papai und Marcus Franz (beide SPÖ) wollen die Forderung nach mehr Polizei in Floridsdorf und Favoriten mit einer Unterschriftenaktion untermauern. Ziel ist eine Disku",
       "source_article": "Favoriten und Floridsdorf wollen mehr Polizisten",
       "user": "robert"
@@ -242,6 +242,32 @@
       "last_practiced": null,
       "source_sentence": "Seit 15 Jahren gibt es in Österreich den elektronisch überwachten Hausarrest mit Fußfesseln.  Die Zahl der Anträge steigt. Wer eine Fußfessel bekommt, entscheiden Justiz und der Verein Neustart.",
       "source_article": "Zahl der Anträge auf Fußfesseln steigt"
+    },
+    {
+      "id": "ph_20260523_020",
+      "german": "ungewöhnlichen",
+      "english": "unusual",
+      "scene": "lesen",
+      "added": "2026-05-23",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Heute Abend feiern die Wiener Festwochen die Eröffnung ihrer 75. Ausgabe mit einer ungewöhnlichen Mischung aus Punk, einem Schmusechor und norwegischem Black Metal. Erstmals findet das Event am Helden",
+      "source_article": "Festwochen eröffnen mit Patti Smith"
+    },
+    {
+      "id": "ph_20260524_021",
+      "german": "Viertelfinale",
+      "english": "Quarterfinals",
+      "scene": "lesen",
+      "added": "2026-05-24",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Österreichs Eishockey-Nationalteam hat den vorzeitigen Einzug ins WM-Viertelfinale verpasst. Die ÖEHV-Mannschaft musste sich Verfolger Deutschland am Samstag in Zürich 2:6 (0:0,1:2,1:4) beugen. Mit ei",
+      "source_article": "Eishockey-Nationalteam unterliegt Deutschland bei WM 2:6"
     }
   ]
 }

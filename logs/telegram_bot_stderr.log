@@ -1753,3 +1753,9 @@ Traceback (most recent call last):
   File "/Users/vanstedum/Projects/personal-ai-agents/venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 296, in do_request
     raise TimedOut from err
 telegram.error.TimedOut: Timed out
+/Users/vanstedum/Projects/personal-ai-agents/german_domain.py:579: RuntimeWarning: coroutine '_handle_drill_l2_start.<locals>._cb' was never awaited
+  progress_cb(f"Looking up '{verb_lower}'…")
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+/Users/vanstedum/Projects/personal-ai-agents/german_domain.py:596: RuntimeWarning: coroutine '_handle_drill_l2_start.<locals>._cb' was never awaited
+  progress_cb(f"Generating phrases for {entry['verb']}…")
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback

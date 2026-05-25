@@ -11,9 +11,9 @@
     </div>
 
 <div class="mode-toggle">
-  <button class="mode-btn active" data-mode="tagebuch">Tagebuch</button>
-  <button class="mode-btn" data-mode="kontext">Im Kontext</button>
-  <button class="mode-btn" data-mode="woerter">Wörter üben</button>
+  <button class="mode-btn active" data-mode="tagebuch" title="Journal writing mode">Tagebuch</button>
+  <button class="mode-btn" data-mode="kontext" title="Practice writing in context">Im Kontext</button>
+  <button class="mode-btn" data-mode="woerter" title="Vocabulary practice mode">Wörter üben</button>
 </div>
 
 <!-- ── Im Kontext ─────────────────────────────────────────────────────────── -->
@@ -29,7 +29,7 @@
     <div class="pane-actions-left">
       <button class="btn-voice" id="voice-kontext" title="Spracheingabe">🎤</button>
     </div>
-    <button class="btn-primary" id="kontext-submit">Korrigieren</button>
+    <button class="btn-primary" id="kontext-submit" title="Request AI grammar correction">Korrigieren</button>
   </div>
   <span class="write-status" id="kontext-status"></span>
   <div class="correction-display" id="kontext-correction" style="display:none">
@@ -43,19 +43,25 @@
     </div>
     <ul class="correction-notes" id="kontext-notes"></ul>
     <div class="correction-actions">
-      <button class="btn-primary" id="kontext-save">Speichern</button>
+      <button class="btn-primary" id="kontext-save" title="Save corrected entry">Speichern</button>
     </div>
   </div>
 </div>
 
 <!-- ── Wörter üben ───────────────────────────────────────────────────────── -->
 <div class="mode-pane hidden" id="pane-woerter">
-  <p class="woerter-subtitle">Wörter und Phrasen manuell erfassen.</p>
+  <div class="mode-explainer">
+    <p>Wörter und Phrasen manuell erfassen — zum Beispiel aus
+    einem Gespräch oder einem Buch. Gespeicherte Einträge
+    erscheinen in der
+    <a href="/woerter" title="Go to vocabulary library">
+        Wörter-Bibliothek</a>.</p>
+  </div>
   <div class="woerter-form">
     <input type="text" id="woerter-german" placeholder="Deutsches Wort / Phrase">
     <input type="text" id="woerter-english" placeholder="Englische Bedeutung">
     <input type="text" id="woerter-context" placeholder="Beispielsatz (optional)">
-    <button class="btn-primary" id="woerter-save">Zur Bibliothek</button>
+    <button class="btn-primary" id="woerter-save" title="Add word to vocabulary library">Zur Bibliothek</button>
     <span class="write-status" id="woerter-status"></span>
   </div>
 </div>
@@ -64,9 +70,9 @@
 <div class="mode-pane hidden" id="pane-tagebuch">
   <div class="tagebuch-prompt-row">
     <p class="tagebuch-prompt" id="tagebuch-prompt"></p>
-    <button class="btn-ghost" id="tagebuch-next-prompt">↻ Anderer</button>
+    <button class="btn-ghost" id="tagebuch-next-prompt" title="Another writing prompt">↻ Anderer</button>
   </div>
-  <textarea class="notebook-textarea" id="tagebuch-input" rows="8"
+  <textarea class="notebook-textarea" id="tagebuch-input" rows="6"
     placeholder="Schreib hier…"></textarea>
   <div class="pane-actions">
     <div class="pane-actions-left">
@@ -76,7 +82,7 @@
         Korrektur anfragen
       </label>
     </div>
-    <button class="btn-primary" id="tagebuch-korrigieren">Korrigieren</button>
+    <button class="btn-primary" id="tagebuch-korrigieren" title="Request AI grammar correction">Korrigieren</button>
   </div>
   <span class="write-status" id="tagebuch-status"></span>
   <div class="correction-display" id="tagebuch-correction" style="display:none">
@@ -86,7 +92,7 @@
     </div>
     <ul class="correction-notes" id="tagebuch-notes"></ul>
     <div class="correction-actions">
-      <button class="btn-primary" id="tagebuch-submit">Speichern</button>
+      <button class="btn-primary" id="tagebuch-submit" title="Save journal entry">Speichern</button>
     </div>
   </div>
 </div>

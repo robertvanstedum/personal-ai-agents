@@ -34,6 +34,8 @@ from german_domain import (
     get_persona_memory,
     close_round,
     extend_round,
+    assemble_session_prompt,
+    build_session_brief,
 )
 
 BASE_DIR = Path(__file__).parent
@@ -44,6 +46,7 @@ app = Flask(
     static_folder=str(BASE_DIR / "static"),
 )
 CORS(app)
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400  # cache static files for 1 day
 
 
 # ── Page routes ───────────────────────────────────────────────────────────────
@@ -55,8 +58,7 @@ def index():
 
 @app.route("/lesen")
 def lesen():
-    articles = get_lesen_pool()
-    return render_template("german_lesen.html", active="lesen", articles=articles)
+    return render_template("german_lesen.html", active="lesen")
 
 
 @app.route("/schreiben")
@@ -140,6 +142,13 @@ def archiv():
 
 
 # ── Lesen API ─────────────────────────────────────────────────────────────────
+
+@app.route("/api/lesen-category")
+def api_lesen_category():
+    category = request.args.get("category") or None
+    articles = get_lesen_pool(category=category)
+    return jsonify({"articles": articles})
+
 
 @app.route("/api/lesen-refresh", methods=["POST"])
 def api_lesen_refresh():
@@ -299,6 +308,23 @@ def api_gesprache_sessions():
     limit = min(int(request.args.get("limit", 5)), 20)
     sessions = get_gesprache_sessions(limit=limit)
     return jsonify(sessions)
+
+
+@app.route("/api/persona-prompt")
+def api_persona_prompt():
+    persona_slug = request.args.get("persona", "")
+    scene = request.args.get("scene", "")
+
+    personas = get_personas()
+    persona = next((p for p in personas if persona_to_slug(p["name"]) == persona_slug), None)
+    if not persona:
+        return jsonify({"error": "persona not found"}), 404
+
+    memory = get_persona_memory(DEFAULT_USER, persona_slug)
+    prompt = assemble_session_prompt(persona, scene, memory)
+    brief = build_session_brief(persona, scene, memory)
+
+    return jsonify({"prompt": prompt, "session_brief": brief})
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
