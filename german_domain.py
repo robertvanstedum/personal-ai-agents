@@ -550,7 +550,16 @@ def _fetch_phrases(verb: str, english: str) -> list:
     prompt = (
         f'Generate 6 natural German phrases using the verb "{verb}" ({english}). '
         f'Mix informal (du/ich) and formal (Sie). Vienna-relevant contexts (café, hotel, transport, small talk). '
-        f'Reply ONLY with a JSON array, no extra text:\n'
+        f'\n\nCRITICAL: Write the German sentence first as a native Viennese speaker would say it — '
+        f'never translate English idioms literally. '
+        f'If the English equivalent uses an idiom with no direct German counterpart, '
+        f'express the same meaning naturally (e.g. "aim for" → möchten/wollen/anstreben, NOT zielen auf; '
+        f'"looking forward to" → freuen auf, NOT vorwärts schauen; '
+        f'"make up your mind" → sich entscheiden, NOT deinen Verstand machen). '
+        f'Prefer Austrian/Viennese register where it differs from High German '
+        f'(e.g. "Bim" for tram, "Paradeiser" for tomato, "Erdgeschoss" not "Erdstock"). '
+        f'The English field should reflect the natural meaning of the German sentence, not the reverse. '
+        f'\nReply ONLY with a JSON array, no extra text:\n'
         f'[{{"english":"...","german":"..."}},{{"english":"...","german":"..."}}]'
     )
     raw = _call_llm(prompt, max_tokens=400)
