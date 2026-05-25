@@ -545,20 +545,41 @@ def _fetch_conjugations(verb: str) -> dict | None:
         return None
 
 
-def _fetch_phrases(verb: str, english: str) -> list:
+def _german_contains_verb(german: str, verb: str, conjugations: dict) -> bool:
+    """Return True if german sentence contains any conjugated form of the verb."""
+    german_lower = german.lower()
+    # Check all conjugation forms if available
+    all_forms: set[str] = set()
+    for person_forms in conjugations.values():
+        if isinstance(person_forms, dict):
+            all_forms.update(v.lower() for v in person_forms.values() if v)
+    if all_forms:
+        return any(form in german_lower for form in all_forms)
+    # Fallback: check verb stem (strip -en / -n suffix)
+    stem = verb
+    if stem.endswith("en"):
+        stem = stem[:-2]
+    elif stem.endswith("n"):
+        stem = stem[:-1]
+    return stem.lower() in german_lower
+
+
+def _fetch_phrases(verb: str, english: str, conjugations: dict | None = None) -> list:
     """Generate translation phrases for a verb via LLM. Returns list of {english, german} dicts."""
     prompt = (
         f'Generate 6 natural German phrases using the verb "{verb}" ({english}). '
         f'Mix informal (du/ich) and formal (Sie). Vienna-relevant contexts (café, hotel, transport, small talk). '
-        f'\n\nCRITICAL: Write the German sentence first as a native Viennese speaker would say it — '
+        f'\n\nCRITICAL: Every German sentence MUST contain a conjugated form of "{verb}". '
+        f'Do not substitute a different verb. '
+        f'Write the German sentence as a native Viennese speaker would say it — '
         f'never translate English idioms literally. '
         f'If the English equivalent uses an idiom with no direct German counterpart, '
-        f'express the same meaning naturally (e.g. "aim for" → möchten/wollen/anstreben, NOT zielen auf; '
-        f'"looking forward to" → freuen auf, NOT vorwärts schauen; '
-        f'"make up your mind" → sich entscheiden, NOT deinen Verstand machen). '
+        f'express the same meaning naturally using "{verb}" '
+        f'(e.g. "aim for" → möchten/wollen/anstreben, NOT zielen auf; '
+        f'"looking forward to" → freuen auf, NOT vorwärts schauen). '
         f'Prefer Austrian/Viennese register where it differs from High German '
         f'(e.g. "Bim" for tram, "Paradeiser" for tomato, "Erdgeschoss" not "Erdstock"). '
-        f'The English field should reflect the natural meaning of the German sentence, not the reverse. '
+        f'The English field should reflect the natural meaning of the German sentence. '
         f'\nReply ONLY with a JSON array, no extra text:\n'
         f'[{{"english":"...","german":"..."}},{{"english":"...","german":"..."}}]'
     )
@@ -571,7 +592,15 @@ def _fetch_phrases(verb: str, english: str) -> list:
             if raw.startswith("json"):
                 raw = raw[4:]
         result = json.loads(raw.strip())
-        return [p for p in result if isinstance(p, dict) and "english" in p and "german" in p]
+        parsed = [p for p in result if isinstance(p, dict) and "english" in p and "german" in p]
+        # Filter out phrases where the German doesn't use the target verb
+        conj = conjugations or {}
+        valid = [p for p in parsed if _german_contains_verb(p["german"], verb, conj)]
+        if len(valid) < 3:
+            # Too few passed — log and fall back to unfiltered to avoid empty set
+            print(f"⚠️  Only {len(valid)}/{len(parsed)} phrases pass verb check for '{verb}' — using all")
+            return parsed
+        return valid
     except Exception as e:
         print(f"⚠️  Failed to parse phrases JSON for '{verb}': {e}\nRaw: {raw[:100]}")
         return []
@@ -604,7 +633,7 @@ def _resolve_phrases(entry: dict, progress_cb=None) -> list:
         return entry["phrases"]
     if progress_cb:
         progress_cb(f"Generating phrases for {entry['verb']}…")
-    phrases = _fetch_phrases(entry["verb"], entry.get("english", ""))
+    phrases = _fetch_phrases(entry["verb"], entry.get("english", ""), entry.get("conjugations", {}))
     if not phrases:
         if progress_cb:
             progress_cb(f"Couldn't generate phrases for '{entry['verb']}'.")
