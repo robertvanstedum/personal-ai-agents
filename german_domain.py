@@ -41,7 +41,8 @@ _SESSION_RE = re.compile(
     r"german session today|today.?s german session|"
     r"german session|session german|next session|next lesson|"
     r"start.{0,30}german|start.{0,30}session.{0,30}german|"
-    r"let.{0,10}s.{0,10}german)",
+    r"let.{0,10}s.{0,10}german|"
+    r"let.?s\s+practice|\bready\b|\bbereit\b)",
     re.I,
 )
 _CONJUGATE_RE = re.compile(r'\bconjugate\s+(\w+)\b', re.I)
@@ -59,7 +60,7 @@ _SKIP_LESSON_RE = re.compile(
     re.I,
 )
 _AGAIN_RE = re.compile(
-    r"\b(again|one more|repeat|same (session|persona|scenario)|do it again)\b",
+    r"\b(again|one more|once more|repeat|same (session|persona|scenario|one)|do it again)\b",
     re.I,
 )
 
