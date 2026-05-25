@@ -1552,20 +1552,29 @@ async def _handle_phrase_practice_answer(update: Update, text: str) -> None:
         await update.message.reply_text("Phrase not found — it may have been removed.")
         return
 
-    def _norm(s: str) -> str:
-        return _re.sub(r"[.,!?;:\-–]", "", s.lower()).strip()
-
-    ratio = SequenceMatcher(None, _norm(text), _norm(phrase["german"])).ratio()
-    phrase["practice_count"] = phrase.get("practice_count", 0) + 1
-    phrase["last_practiced"] = datetime.now().date().isoformat()
-    _save_phrasebook(book)
+    normalized_user = _normalize_answer(text)
+    normalized_expected = _normalize_answer(phrase["german"])
+    ratio = SequenceMatcher(None, normalized_user, normalized_expected).ratio()
 
     AGAIN = "\n\nSay 'phrase practice' or !phrase practice to try another."
     if ratio >= 0.92:
-        await update.message.reply_text(f"✅ Correct spelling.{AGAIN}")
-    else:
+        # Exact or very close — count as correct
+        phrase["practice_count"] = phrase.get("practice_count", 0) + 1
+        phrase["last_practiced"] = datetime.now().date().isoformat()
+        _save_phrasebook(book)
+        await update.message.reply_text(f"✅ Correct!{AGAIN}")
+    elif ratio >= 0.78:
+        # Near-match — accept, show exact form
+        phrase["practice_count"] = phrase.get("practice_count", 0) + 1
+        phrase["last_practiced"] = datetime.now().date().isoformat()
+        _save_phrasebook(book)
         await update.message.reply_text(
-            f"Close — correct spelling:\n{phrase['german']}{AGAIN}"
+            f"✅ Close enough!\nExact: {phrase['german']}{AGAIN}"
+        )
+    else:
+        # Wrong — don't count, prompt to try again
+        await update.message.reply_text(
+            f"❌ Try again.\nExpected something close to: {phrase['german'][:40]}…{AGAIN}"
         )
 
 
