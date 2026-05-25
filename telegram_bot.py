@@ -1953,6 +1953,11 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
         _id_str = _parse_spoken_id(text[_pm.end():].strip())
         await _handle_phrase_practice(update, _id_str)
         return
+    # Phrase ID shortcut: "#010" (unlikely via voice but handle anyway)
+    _vpid_m = re.search(r'#(\d{1,3})\b', text)
+    if _vpid_m:
+        await _handle_phrase_practice(update, f"{int(_vpid_m.group(1)):03d}")
+        return
 
     # Phrase practice intercept (voice answers count too)
     if update.message.chat_id in _phrase_practice and not text.lower().startswith("!phrase"):
