@@ -27,6 +27,9 @@
     <button class="day-btn" data-day="gestern">Gestern</button>
   </div>
 
+  <!-- Staleness notice (shown when pool is older than yesterday) -->
+  <div id="lesen-stale-notice" class="lesen-stale-notice" style="display:none"></div>
+
   <!-- Category cards -->
   <div class="lesen-cat-row">
 
@@ -259,6 +262,23 @@
     dayToggle.style.display = gesternDate ? '' : 'none';
 
     applyDayFilter(currentDay);
+
+    // Staleness notice — show if newest article is older than yesterday
+    const staleNotice = document.getElementById('lesen-stale-notice');
+    if (staleNotice) {
+      if (heuteDate) {
+        const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+        if (heuteDate < yesterday) {
+          const days = Math.round((Date.now() - new Date(heuteDate)) / 864e5);
+          staleNotice.textContent = `Letzte Aktualisierung vor ${days} Tag${days === 1 ? '' : 'en'} — tippe auf ↻ um zu aktualisieren`;
+          staleNotice.style.display = '';
+        } else {
+          staleNotice.style.display = 'none';
+        }
+      } else {
+        staleNotice.style.display = 'none';
+      }
+    }
   }
 
   // ── Day filter ────────────────────────────────────────────────────────

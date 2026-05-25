@@ -1532,6 +1532,15 @@ body.reading-mode nav {
   font-size: 0.9rem;
 }
 
+.lesen-stale-notice {
+  font-size: 0.72rem;
+  color: var(--md-text-muted, #888);
+  text-align: center;
+  padding: 0.3rem 0 0;
+  letter-spacing: 0.01em;
+  opacity: 0.8;
+}
+
 /* ══════════════════════════════════════════════════════════════
    Reading state — parchment layout
    ══════════════════════════════════════════════════════════════ */
