@@ -669,6 +669,24 @@ def _resolve_drill_verb(target_lower: str, progress_cb=None) -> dict | None:
                 if progress_cb:
                     progress_cb(f"'{word}' is a scene, not a verb — picking {chosen['verb']} ({chosen.get('english', '')}) from that scene.")
                 return chosen
+        # Guard: if the word matches a saved phrasebook entry (German word/phrase),
+        # it's a noun or phrase — don't treat it as a verb.
+        try:
+            book = _load_phrasebook()
+            for phrase in book.get("phrases", []):
+                german = phrase.get("german", "")
+                # Match single-word phrases (nouns) or multi-word where the word appears
+                german_words = german.lower().split()
+                if word in german_words or german.lower() == word:
+                    if progress_cb:
+                        short_id = phrase["id"].rsplit("_", 1)[-1]
+                        progress_cb(
+                            f"'{word}' looks like a saved phrase (#{short_id} {german}), not a verb. "
+                            f"Try: phrase practice {short_id}"
+                        )
+                    return None
+        except Exception:
+            pass  # Phrasebook check is best-effort — don't block drill on failure
         return _resolve_verb(word, progress_cb=progress_cb)
     return random.choice(all_verbs) if all_verbs else None
 

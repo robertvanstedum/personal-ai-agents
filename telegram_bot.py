@@ -1765,6 +1765,11 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         _tid = _parse_spoken_id(text[_tm.end():].strip())
         await _handle_phrase_practice(update, _tid)
         return
+    # Phrase ID shortcut: "#010" or "drill #010" routes to phrase practice regardless of drill state
+    _pid_m = re.search(r'#(\d{1,3})\b', text)
+    if _pid_m:
+        await _handle_phrase_practice(update, f"{int(_pid_m.group(1)):03d}")
+        return
     if _PHRASE_CAPTURE_RE.search(text):
         rest = _PHRASE_CAPTURE_RE.sub("", text).strip().lstrip("-—:,").strip()
         if "|" in rest:
