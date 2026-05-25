@@ -1,9 +1,42 @@
-# mini-moi / Career Domain (Technical Toolbox)
+# mini-moi-agent-guild / Career Domain (Technical Toolbox)
 
 **Domain status:** v0.9 — active build  
 **Owner:** Robert Van Stedum, TPM  
 **Repo:** github.com/robertvanstedum/personal-ai-agents  
 **Public:** Yes — this domain is intentionally open as a portfolio artifact
+
+---
+
+## The Guild
+
+The historical guild was a group of practitioners who shared knowledge,
+maintained standards, trained each other, and produced work that individual
+craftsmen could not produce alone. What died in the industrial age was the
+physical co-location requirement. What the mini-moi-agent-guild rebuilds
+is the knowledge-sharing and standards layer — with AI agents as the guild
+members.
+
+**mini-moi** — personal and specific. Not a general intelligence, a specific
+one. Yours. The platform that knows you, built by you, for you.
+
+**agent** — autonomous actors with defined roles and responsibilities.
+Not tools. Members.
+
+**guild** — accumulated craft knowledge, standards of practice, and work
+that compounds over time. A guild doesn't just execute tasks. It builds
+and preserves expertise across engagements, roles, and years.
+
+The guild has four members and one charter:
+
+| Member | Role |
+|--------|------|
+| Robert | TPM and decision point. Owns vision, strategy, and final call. |
+| Claude.ai | Design and strategy. Architecture, artifact creation, conceptual work. |
+| OpenClaw | Memory and execution. File system writes, context continuity, orchestration. |
+| Claude Code | All git operations. Nothing else touches the repo. |
+
+This is not a hierarchy. It is a division of craft. Each member does what
+they do best. Robert is the master craftsman. The agents are the guild.
 
 ---
 
@@ -40,8 +73,8 @@ diagrams, and interview-ready scenarios built on TM Forum standards.
 All examples use generic carriers, generic account IDs, and public TMF
 standard patterns.
 
-**It connects to:** The mini-moi platform (personal-ai-agents repo), which
-runs three domains:
+**It connects to:** The mini-moi-agent-guild platform (personal-ai-agents repo),
+which runs three domains:
 
 1. **Curator** — geopolitics and finance intelligence briefing, in daily
    production. RSS ingestion, two-stage LLM scoring, Telegram delivery at 7 AM.
@@ -120,8 +153,8 @@ Paste `tmf622-product-ordering-api.yaml` into:
 
 ## Release roadmap
 
-| Version | Status      | Description                              |
-|---------|-------------|------------------------------------------|
-| v0.9    | In progress | Toolkit foundation — spec, patterns, diagrams |
-| v1.0    | Planned     | Full pattern library + interview scenario set |
-| v1.1    | Future      | mini-moi pipeline integration (job signal ingestion, skill gap analysis) |
+| Version | Status      | Description                                        |
+|---------|-------------|----------------------------------------------------|
+| v0.9    | In progress | Toolkit foundation — spec, patterns, diagrams      |
+| v1.0    | Planned     | Full pattern library + interview scenario set      |
+| v1.1    | Future      | Guild pipeline integration (job signal ingestion, skill gap analysis) |
