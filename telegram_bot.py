@@ -1434,7 +1434,7 @@ async def _handle_phrase_save_confirm(update: Update, text: str) -> None:
         return
 
     word = text.strip().lower()
-    if word in {"yes", "ja", "já", "y", "yep", "correct", "save", "genau", "stimmt", "gut", "passt"}:
+    if word in {"yes", "ja", "já", "jo", "y", "yep", "correct", "save", "genau", "stimmt", "gut", "passt"}:
         today = datetime.now().date().isoformat()
         book = _load_phrasebook()
         pid = _phrase_next_id(book["phrases"], today)

@@ -72,7 +72,7 @@ _PHRASE_CAPTURE_RE = re.compile(
     re.I
 )
 _PHRASE_PRACTICE_VOICE_RE = re.compile(
-    r'\b(?:phra?se\s+practice|practice\s+(?:a\s+)?phra?se|phrase\s+üben)\b', re.I
+    r'\b(?:phra?se\s+practice|phase\s+practice|practice\s+(?:a\s+)?phra?se|practice\s+phase|phrase\s+üben)\b', re.I
 )
 _PHRASE_LIST_VOICE_RE = re.compile(
     r'\b(?:phrase\s+list|list\s+(?:my\s+)?phrases?|show\s+(?:my\s+)?phrases?|my\s+phrases?)\b', re.I
@@ -337,6 +337,9 @@ _PHRASEBOOK_FILE       = GERMAN_DIR / "config" / "phrasebook.json"
 _DRILL_STATE_FILE      = _BASE_DIR / "_active_drill_state.json"
 _DRILL_LIST_STATE_FILE = _BASE_DIR / "_drill_list_state.json"
 _PERSONA_MEMORY_FILE   = GERMAN_DIR / "config" / "persona_memory.json"
+_PROGRESS_FILE         = GERMAN_DIR / "progress.json"
+_KEYWORD_MAP_FILE      = GERMAN_DIR / "config" / "keyword_map.json"
+_PROMPTS_DIR           = GERMAN_DIR / "config" / "prompts"
 
 
 def _load_keyword_map_bot() -> dict:
@@ -678,19 +681,73 @@ def _strip_html(raw: str) -> str:
     return BeautifulSoup(raw or "", "html.parser").get_text(separator=" ").strip()
 
 
-def get_lesen_pool() -> list:
-    """Return active articles from today and yesterday only. Older articles belong in Archiv."""
+def get_lesen_pool(category: str | None = None) -> list:
+    """Return active articles from today and yesterday only. Older articles belong in Archiv.
+
+    Args:
+        category: Optional filter — 'alltag' | 'kultur' | 'politik' | 'wien'.
+                  None returns all categories.
+    """
     data = _load_lesen_articles()
     blocked = _load_lesen_blocked_keywords()
     today = datetime.date.today().isoformat()
     yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
-    pool = [
-        a for a in data["articles"]
-        if a["status"] == "active"
-        and a.get("date_fetched") in (today, yesterday)
-        and not any(kw in a["title"].lower() for kw in blocked)
-    ]
+    # Source→category map for articles that pre-date category tagging
+    sources = _load_rss_sources()
+    source_category_map = {s["name"]: s.get("category", "wien") for s in sources}
+    pool = []
+    for a in data["articles"]:
+        if a["status"] != "active":
+            continue
+        if a.get("date_fetched") not in (today, yesterday):
+            continue
+        if any(kw in a["title"].lower() for kw in blocked):
+            continue
+        # Derive category on the fly for articles that don't have one yet
+        if "category" not in a:
+            a["category"] = source_category_map.get(a.get("source", ""), "wien")
+        pool.append(a)
+    if category:
+        pool = [a for a in pool if a.get("category") == category]
     return pool
+
+
+def categorize_article(title: str, summary: str,
+                       source_category: str = "wien") -> str:
+    """LLM-based categorization of a German news article.
+
+    Uses the source-based category as a hint and fallback.
+    Returns: 'alltag' | 'kultur' | 'politik' | 'wien'
+    """
+    prompt = (
+        "Categorize this German news article into exactly one category.\n"
+        "Return only the category name, nothing else.\n\n"
+        "Note: articles are from Austrian publications.\n"
+        "Use Austrian German register and context to judge.\n\n"
+        "Categories:\n"
+        "- alltag: domestic life, health, consumer topics, sport,\n"
+        "  morning-show register, everyday practical content\n"
+        "- kultur: arts, music, film, theatre, festivals, exhibitions,\n"
+        "  pop culture\n"
+        "- politik: politics, economics, government, law,\n"
+        "  international news, business\n"
+        "- wien: Vienna/Austrian local news, neighborhoods, parks,\n"
+        "  transport, city life, Austrian geography and culture\n\n"
+        f"Source category hint (may be correct or too broad): {source_category}\n"
+        f"Article title: {title}\n"
+        f"Summary: {summary[:200]}\n\n"
+        "Category:"
+    )
+    result = _call_llm(prompt, max_tokens=10)
+    if not result:
+        print(f"⚠️  categorize_article: LLM returned None for '{title[:60]}'")
+        return source_category
+    category = result.strip().lower()
+    valid = ("alltag", "kultur", "politik", "wien")
+    if category not in valid:
+        print(f"⚠️  categorize_article: unexpected result '{category}' for '{title[:60]}'")
+        return source_category
+    return category
 
 
 def fetch_lesen_articles() -> list:
@@ -700,8 +757,10 @@ def fetch_lesen_articles() -> list:
     blocked = _load_lesen_blocked_keywords()
     new_articles = []
     today = datetime.date.today().isoformat()
+    all_sources = _load_rss_sources()
+    source_category_map = {s["name"]: s.get("category", "wien") for s in all_sources}
 
-    for source in _load_rss_sources():
+    for source in all_sources:
         try:
             feed = feedparser.parse(source["url"])
             for i, entry in enumerate(feed.entries[:6]):
@@ -720,11 +779,16 @@ def fetch_lesen_articles() -> list:
                 if not summary:
                     summary = _strip_html(entry.get("title", ""))
                 art_id = f"art_{today.replace('-','')}_{source['name'][:3].lower()}_{i:02d}"
+                title_clean = html.unescape(entry.get("title", "").strip())
+                source_cat  = source_category_map.get(source["name"], "wien")
+                category    = categorize_article(title_clean, summary,
+                                                 source_category=source_cat)
                 new_articles.append({
                     "id": art_id,
-                    "title": html.unescape(entry.get("title", "").strip()),
+                    "title": title_clean,
                     "url": url,
                     "source": source["name"],
+                    "category": category,
                     "date_fetched": today,
                     "summary": summary,
                     "status": "active",
@@ -792,15 +856,32 @@ def lesen_action(article_id: str, action: str) -> None:
     _LESEN_FEEDBACK_FILE.write_text(json.dumps(feedback_data, indent=2, ensure_ascii=False))
 
 
+_deepl_client: object | None = None  # cached — avoids HTTP session overhead per call
+
+
+def _get_deepl_client():
+    """Return a cached DeepL Translator, initializing on first call."""
+    global _deepl_client
+    if _deepl_client is not None:
+        return _deepl_client
+    try:
+        import deepl as _deepl
+        import keyring as _kr
+        api_key = _kr.get_password("deepl", "api_key")
+        if not api_key:
+            return None
+        _deepl_client = _deepl.Translator(api_key)
+        return _deepl_client
+    except Exception:
+        return None
+
+
 def _translate_with_deepl(phrase: str) -> str | None:
     """Translate German phrase to English via DeepL. Returns None on any failure."""
     try:
-        import deepl as _deepl
-        import keyring as _keyring
-        api_key = _keyring.get_password("deepl", "api_key")
-        if not api_key:
+        translator = _get_deepl_client()
+        if not translator:
             return None
-        translator = _deepl.Translator(api_key)
         result = translator.translate_text(
             phrase,
             source_lang="DE",
@@ -808,6 +889,8 @@ def _translate_with_deepl(phrase: str) -> str | None:
         )
         return result.text
     except Exception:
+        global _deepl_client
+        _deepl_client = None  # reset on error so next call retries init
         return None
 
 
@@ -1240,6 +1323,120 @@ def build_persona_prompt(persona: dict, memory: dict, tutor_focus: str = None) -
             f"Aktueller Lernfokus: {tutor_focus}",
             "Achte besonders darauf und korrigiere sanft wenn nötig.",
         ])
+
+    return "\n".join(lines)
+
+
+# ─── Gespräche — session prompt assembly (HTML interface) ────────────────────
+
+# Mirrors constants in get_german_session.py — both paths must produce identical prompts.
+_UNIVERSAL_HEADER = """\
+=== SESSION INSTRUCTIONS — READ BEFORE STARTING ===
+
+You are playing a character in a German language practice session. These rules override everything else. Follow them exactly.
+
+0. VOICE AND GENDER: Play the character exactly as described below — including gender. Never switch. Non-negotiable.
+
+1. SCENARIO AND MEDIUM: Follow the scenario setup exactly. If it says "phone call", you answer the phone. If it says I walk in, greet me in person. Never change the setting mid-session.
+
+2. NO NAME PREFIX: Do not announce your name before each turn.
+   Wrong: "Klaus: Guten Abend!"
+   Correct: "Guten Abend!"
+
+3. LANGUAGE: Always respond in German. Never switch to English unless I say "English please."
+
+4. CORRECTIONS: If I make a grammatical error, gently use the correct form naturally. Do not break character.
+
+5. START TRIGGER: Do not begin until I say "Start today's session", "Start session", or "Let's start." Wait in silence — do not acknowledge or ask.
+
+6. STAY IN CHARACTER: Do not comment on the exercise or your role. You are the character.
+
+=== CHARACTER AND SCENARIO BELOW ===""".strip()
+
+_UNIVERSAL_FOOTER = """\
+=== HOW TO END THIS SESSION ===
+
+Switch to TEXT MODE, then type "End session. Give me the transcript." Do NOT end while in voice mode.
+
+Output ONLY this block — nothing before or after, no commentary:
+
+---SESSION---
+Date: [today's date as YYYY-MM-DD]
+Persona: [character name]
+Scenario: [scenario_label]
+Duration: [number only — e.g. 12]
+Mode: voice
+
+[Character name]: [their exact words]
+Robert: [your exact words]
+[continue alternating turns in order...]
+---END---
+
+Every turn in order, no skips. Use --- not em-dashes. Duration is a number only. Nothing before ---SESSION---. Nothing after ---END---.""".strip()
+
+
+def _find_persona_prompt_file(persona_name: str) -> Path | None:
+    slug = persona_name.lower().replace(" ", "_")
+    matches = list(_PROMPTS_DIR.glob(f"{slug}*.txt"))
+    return matches[0] if matches else None
+
+
+def assemble_session_prompt(persona: dict, scene: str, memory: dict) -> str:
+    """Full Grok Voice system prompt: UNIVERSAL_HEADER + persona .txt + UNIVERSAL_FOOTER."""
+    persona_name = persona.get("name", "")
+    prompt_file = _find_persona_prompt_file(persona_name)
+    if prompt_file and prompt_file.exists():
+        persona_txt = prompt_file.read_text(encoding="utf-8").strip()
+    else:
+        persona_txt = persona.get("description", f"You are {persona_name}.")
+    return "\n\n".join([_UNIVERSAL_HEADER, persona_txt, _UNIVERSAL_FOOTER])
+
+
+def build_session_brief(persona: dict, scene: str, memory: dict) -> str:
+    """Layer 3 session brief for UI display — not pasted into Grok."""
+    persona_name = persona.get("name", "")
+
+    progress = safe_read_json(_PROGRESS_FILE)
+    lesson_number = progress.get("total_sessions", 0) + 1
+
+    km = safe_read_json(_KEYWORD_MAP_FILE)
+    km_entry = km.get(persona_name, {})
+    register = km_entry.get("register", "")
+    scaffold_phrases = km_entry.get("scaffold_phrases", [])
+    recovery_phrase = km_entry.get("recovery_phrase", "")
+
+    speaking_prompts = persona.get("speaking_prompts", {})
+    scene_description = speaking_prompts.get(scene, scene.replace("_", " ").title())
+
+    mem = memory.get("active_memory", {}) if memory else {}
+    errors_noted = mem.get("errors_noted", [])
+    vocab = mem.get("vocabulary_introduced", [])
+
+    if vocab:
+        carry = vocab[-1]
+    elif errors_noted:
+        carry = f"Fehler wiederholen: {errors_noted[-1]}"
+    else:
+        carry = "Erste Sitzung — kein Carry-forward"
+
+    register_label = f" [use {register}]" if register else ""
+    scene_label = scene.replace("_", " ").title()
+
+    lines = [
+        f"📚 Sitzung {lesson_number} — {persona_name} / {scene_label}{register_label}",
+        f"Carry forward: {carry}",
+    ]
+    if errors_noted:
+        lines.append(f"Warm-up: Wiederhole häufigen Fehler aus letzter Sitzung: {errors_noted[0]}")
+    lines.append(f"Ziel: {scene_description}")
+
+    if scaffold_phrases:
+        lines.append("")
+        lines.append("🧱 Heutige Vorbereitung:")
+        for phrase in scaffold_phrases[:4]:
+            lines.append(f"   • {phrase['de']}")
+        if recovery_phrase:
+            lines.append(f"   🆘 {recovery_phrase}")
 
     return "\n".join(lines)
 
