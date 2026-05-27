@@ -1382,7 +1382,7 @@ body.reading-mode nav {
    ══════════════════════════════════════════════════════════════ */
 
 #lesen-content-area {
-  background: var(--md-parch);
+  background: var(--md-parch-mid);
   min-height: 72vh;
   padding: 0 2rem 3rem;
   max-width: 860px;
