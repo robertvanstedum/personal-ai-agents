@@ -1828,17 +1828,25 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
             
             # Apply interest-based boosting
             interest_boost = apply_interest_boost(entry, active_interests)
-            
+
             # Apply priorities-based boosting
             priorities_boost = apply_priorities_boost(entry, active_priorities)
-            
-            entry["final_score"] = entry["score"] - source_penalty - category_penalty + interest_boost + priorities_boost
+
+            # Scale boosts by age multiplier so old articles don't get amplified
+            # by historical interest. A 13d FAST article gets 65% of its boost;
+            # a 1d article gets 100%. SLOW sources at <30d retain full boost.
+            # This makes fresh content win when Grok scores are similar.
+            age_mult = entry.get('age_multiplier', 1.0)
+            scaled_interest = interest_boost * age_mult
+            scaled_priorities = priorities_boost * age_mult
+
+            entry["final_score"] = entry["score"] - source_penalty - category_penalty + scaled_interest + scaled_priorities
             if interest_boost != 0:
                 entry["interest_boosted"] = True
-                entry["interest_modifier"] = interest_boost
+                entry["interest_modifier"] = scaled_interest
             if priorities_boost > 0:
                 entry["priorities_boosted"] = True
-                entry["priorities_modifier"] = priorities_boost
+                entry["priorities_modifier"] = scaled_priorities
         
         # Pick the highest-scoring candidate (respecting X post hard cap)
         candidates.sort(key=lambda x: x["final_score"], reverse=True)
