@@ -1,0 +1,16 @@
+{
+  "current_focus": "Guild domain Phase 1 scaffolding",
+  "quarter": "Q2 2026",
+  "domain_status": {
+    "curator": "production",
+    "german": "v0.9 - release pending",
+    "guild": "Phase 1 - scaffolding"
+  },
+  "active_players": ["Robert", "Claude.ai", "Grok", "OpenClaw", "Claude Code"],
+  "open_items": [
+    "Phase 1 content review (intent-register + game-state)",
+    "Phase 2: Chief of Staff briefing template"
+  ],
+  "next_milestone": "German v1.0 + Guild v1.0 release together",
+  "last_updated": "2026-05-26T22:45:00Z"
+}
