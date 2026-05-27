@@ -1108,7 +1108,7 @@ textarea:focus {
 /* ── Body mode overrides ─────────────────────────────────────── */
 
 body.browse-mode {
-  background-color: var(--md-parch);
+  background-color: var(--md-parch-mid);
 }
 
 body.browse-mode .headline-strip {
