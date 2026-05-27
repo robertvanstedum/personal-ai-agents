@@ -2570,6 +2570,21 @@ body.reading-mode nav {
    Archiv
    ══════════════════════════════════════════════════════════════ */
 
+/* ── In-progress banner (Admin + Archiv) ──────────────────────────── */
+.tab-in-progress-banner {
+  display: inline-block;
+  margin-bottom: 1.5rem;
+  padding: 0.3rem 0.85rem;
+  border: 1px solid rgba(198, 138, 94, 0.35);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--md-accent);
+  opacity: 0.75;
+}
+
 .archiv-header { margin-bottom: 1.25rem; }
 
 .archiv-title {
