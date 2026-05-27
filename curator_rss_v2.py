@@ -105,15 +105,15 @@ FEEDS = {
     "The Big Picture": "https://ritholtz.com/feed/",
     "Fed On The Economy": "https://www.stlouisfed.org/rss/page%20resources/publications/blog-entries",
     "Treasury MSPD": "https://www.treasurydirect.gov/rss/mspd.xml",
-    
-    # NEW - Feb 18, 2026: Expanded source diversity
+
+    # Feb 18, 2026: Expanded source diversity
     "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",  # Non-Western perspective
     "ProPublica": "https://www.propublica.org/feeds/propublica/main",  # Investigative journalism
     "Antiwar.com": "https://news.antiwar.com/feed/",  # Contrarian/realist geopolitics
-    "Investing.com": "https://www.investing.com/rss/news.rss",  # Finance/markets
+    # Investing.com removed — was DROP tier, wasted HTTP request each run
     "The Duran": "https://theduran.com/feed/",  # Contrarian analysis
     "O Globo": "https://oglobo.globo.com/rss.xml",  # Brazilian/Portuguese perspective
-    
+
     # German sources (Feb 18, 2026)
     "Deutsche Welle": "https://rss.dw.com/xml/rss-en-all",  # Public broadcaster, English, no paywall
     "Spiegel International": "https://www.spiegel.de/international/index.rss",  # English, partial paywall
@@ -126,6 +126,35 @@ FEEDS = {
     "arXiv q-fin": "https://rss.arxiv.org/rss/q-fin",  # Academic preprints, capped at 15
     "Just Security": "https://www.justsecurity.org/feed/",  # National security / international law
     "CEPR VoxEU": "https://cepr.org/rss/vox-content",  # Economic policy research columns
+
+    # v1.1 additions (May 2026): source diversity + quality uplift
+    "Crisis Group": "https://www.crisisgroup.org/rss.xml",  # Conflict analysis, already trusted
+    # Chatham House: returns 403 on automated fetch — deferred, add when resolved
+    "Adam Tooze Chartbook": "https://adamtooze.substack.com/feed",  # Macro/political economy newsletter
+    "NY Fed Liberty Street": "https://libertystreeteconomics.newyorkfed.org/feed/",  # Fed research blog
+    "Naked Capitalism": "https://www.nakedcapitalism.com/feed",  # Finance/macro commentary
+}
+
+# ── X post cap and account filter ─────────────────────────────────────────────
+# Max X bookmark posts allowed in a single briefing (hard cap across both
+# selection phases). Prevents X from dominating when handles each count
+# as a distinct "source" in the diversity penalty logic.
+X_POST_CAP = 4
+
+# Minimum Grok score for any X post to be eligible for selection.
+# Applied after scoring, before the selection loop.
+X_POST_MIN_SCORE = 3.0
+
+# Accounts excluded from the candidate pool regardless of score.
+# Criteria: aggregators, redundant with RSS feeds already present, anonymous
+# political commentary with no editorial accountability.
+X_ACCOUNT_BLACKLIST = {
+    "X/@ThomasSowell",   # Aggregator — not Sowell's account
+    "X/@zerohedge",      # Redundant — ZeroHedge RSS already in FEEDS
+    "X/@realMaalouf",    # Anonymous political commentary
+    "X/@WarrenVsCCP",    # Anonymous political commentary
+    "X/@A1Anduril",      # Anonymous defense commentary
+    "X/@Myrmikan",       # Publishes bi-monthly PDFs by email only — wrong format
 }
 
 # Keywords for scoring (legacy mechanical mode)
@@ -167,6 +196,29 @@ CATEGORIES = {
 # Geo categories win over technology when both match (operational context trumps R&D)
 # Monetary/fiscal are specific finance categories
 CATEGORY_PRIORITY = ['geo_major', 'geo_other', 'monetary', 'fiscal', 'technology', 'other']
+
+# ── Two-tier age penalty domains ───────────────────────────────────────────────
+# SLOW: think tanks, academic, institutional, newsletters.
+# These publish infrequently — a 90-day article may still be highly relevant.
+# Any source domain NOT in this list is treated as FAST (news, X posts, blogs),
+# where content older than 30 days is essentially dead.
+SLOW_SOURCE_DOMAINS = {
+    "crisisgroup.org",
+    "chathamhouse.org",
+    "warontherocks.com",
+    "foreignaffairs.com",
+    "cepr.org",
+    "arxiv.org",
+    "stlouisfed.org",        # Fed On The Economy
+    "federalreserve.gov",
+    "treasurydirect.gov",    # Treasury MSPD
+    "newyorkfed.org",        # NY Fed Liberty Street
+    "bis.org",
+    "adamtooze.substack.com",
+    "geopoliticalfutures.com",
+    "justsecurity.org",
+    "propublica.org",        # Investigative — long relevance window
+}
 
 def fetch_feed(name: str, url: str) -> List[Dict]:
     """Fetch and parse a single RSS feed"""
@@ -256,6 +308,41 @@ def normalize_score(raw_score: float, max_score: float = 200.0) -> float:
     """
     normalized = (raw_score / max_score) * 10
     return min(10.0, max(0.0, normalized))
+
+def _compute_age_multiplier(entry: Dict) -> float:
+    """
+    Two-tier age decay multiplier based on source type.
+
+    SLOW sources (think tanks, academic, institutional) decay gently —
+    a 90-day Crisis Group report is still valuable if the topic resurfaces.
+
+    FAST sources (news, X posts, blogs) decay sharply — content older
+    than 30 days is near-dead in the briefing candidate pool.
+
+    Returns a multiplier in (0, 1.0]. Returns 1.0 when published date
+    is unknown (X bookmarks with no date get no age penalty).
+    """
+    pub = entry.get('published')
+    if pub is None:
+        return 1.0  # No date — no penalty (X bookmarks, some institutional feeds)
+
+    days_old = (datetime.now(timezone.utc) - pub).total_seconds() / 86400
+    link = entry.get('link', '').lower()
+    is_slow = any(domain in link for domain in SLOW_SOURCE_DOMAINS)
+
+    if is_slow:
+        if days_old <= 30:  return 1.0
+        if days_old <= 60:  return 0.85
+        if days_old <= 90:  return 0.65
+        return 0.40          # 90+ days — significant penalty, still eligible
+    else:
+        # Fast content: news, X posts, blogs, finance commentary
+        if days_old <= 3:   return 1.0
+        if days_old <= 7:   return 0.85
+        if days_old <= 14:  return 0.65
+        if days_old <= 30:  return 0.40
+        return 0.05          # 30+ days — essentially dead for fast content
+
 
 def score_entry_mechanical(entry: Dict) -> Dict:
     """
@@ -1562,11 +1649,17 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
 
     # Merge X bookmark articles into candidate pool (Phase 3C.6)
     # Dedup by hash_id (MD5 of URL) — RSS articles take precedence on collision
+    # Apply account blacklist: aggregators, redundant, anonymous commentary (v1.1)
     from x_to_article import load_x_bookmark_articles
     seen_hashes = {e['hash_id'] for e in all_entries if e.get('hash_id')}
-    x_articles  = [a for a in load_x_bookmark_articles() if a['hash_id'] not in seen_hashes]
+    x_raw = load_x_bookmark_articles()
+    x_after_dedup = [a for a in x_raw if a['hash_id'] not in seen_hashes]
+    x_blacklisted_count = sum(1 for a in x_after_dedup if a.get('source') in X_ACCOUNT_BLACKLIST)
+    x_articles = [a for a in x_after_dedup if a.get('source') not in X_ACCOUNT_BLACKLIST]
     all_entries.extend(x_articles)
-    print(f"📎 X bookmarks merged: {len(x_articles)} articles (332 signals → {len(x_articles)} after dedup)")
+    print(f"📎 X bookmarks merged: {len(x_articles)} articles "
+          f"({len(x_raw)} signals → {len(x_after_dedup)} after dedup "
+          f"→ {len(x_articles)} after blacklist [{x_blacklisted_count} removed])")
 
     # Web search enrichment — active priority keywords + static baseline topics
     print(f"\n🔍 Web search enrichment:")
@@ -1670,6 +1763,28 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
         if boosted:
             print(f"⚖️  Source trust: applied multipliers to {boosted} entries")
 
+    # Apply two-tier age penalty (SLOW: think tanks/academic/institutional vs FAST: news/X/blogs)
+    # Applied after trust multipliers so the combined score is adjusted together.
+    age_penalized = 0
+    for entry in all_entries:
+        multiplier = _compute_age_multiplier(entry)
+        if multiplier < 1.0:
+            entry['score'] = round(entry['score'] * multiplier, 2)
+            entry['age_multiplier'] = multiplier
+            age_penalized += 1
+    if age_penalized:
+        print(f"⏰  Age penalty applied to {age_penalized} entries")
+
+    # Filter X posts below minimum score threshold (after scoring + all multipliers)
+    x_before_filter = len(all_entries)
+    all_entries = [
+        e for e in all_entries
+        if not (e.get('content_type') == 'x_bookmark' and e.get('score', 0) < X_POST_MIN_SCORE)
+    ]
+    x_score_filtered = x_before_filter - len(all_entries)
+    if x_score_filtered:
+        print(f"✂️  Filtered {x_score_filtered} X posts below min score ({X_POST_MIN_SCORE})")
+
     # Load serendipity reserve setting
     serendipity_reserve = 0.20  # Default
     try:
@@ -1690,7 +1805,8 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
     # Apply diversity-aware selection
     selected = []
     source_counts = {}
-    category_counts = {}  # NEW: Track category distribution
+    category_counts = {}  # Track category distribution
+    x_post_count = 0      # Hard cap on X bookmark posts across both selection phases
     candidates = all_entries.copy()
     
     # PHASE 1: Select personalized articles (with interest/priority boosts)
@@ -1724,18 +1840,26 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
                 entry["priorities_boosted"] = True
                 entry["priorities_modifier"] = priorities_boost
         
-        # Pick the highest-scoring candidate
+        # Pick the highest-scoring candidate (respecting X post hard cap)
         candidates.sort(key=lambda x: x["final_score"], reverse=True)
-        best = candidates.pop(0)
-        
+        best = None
+        for _i, _cand in enumerate(candidates):
+            if _cand.get('content_type') == 'x_bookmark' and x_post_count >= X_POST_CAP:
+                continue  # Skip X posts once cap is reached
+            best = candidates.pop(_i)
+            break
+        if best is None:
+            break  # All remaining candidates are X posts at cap limit
+
         selected.append(best)
-        
+
         source = best["source"]
         category = best.get("category", "other")
-        
+        if best.get('content_type') == 'x_bookmark':
+            x_post_count += 1
         source_counts[source] = source_counts.get(source, 0) + 1
         category_counts[category] = category_counts.get(category, 0) + 1
-    
+
     # PHASE 2: Select serendipity articles (NO interest/priority boosts, only base score + diversity)
     if serendipity_count > 0 and candidates:
         print(f"   Selecting {serendipity_count} serendipity articles from {len(candidates)} remaining candidates...")
@@ -1757,15 +1881,23 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
                 entry["final_score"] = entry["score"] - source_penalty - category_penalty
                 entry["serendipity_pick"] = True
             
-            # Pick highest base-scoring candidate
+            # Pick highest base-scoring candidate (respecting X post hard cap)
             candidates.sort(key=lambda x: x["final_score"], reverse=True)
-            best = candidates.pop(0)
-            
+            best = None
+            for _i, _cand in enumerate(candidates):
+                if _cand.get('content_type') == 'x_bookmark' and x_post_count >= X_POST_CAP:
+                    continue  # Skip X posts once cap is reached
+                best = candidates.pop(_i)
+                break
+            if best is None:
+                break  # All remaining candidates are X posts at cap limit
+
             serendipity_selected.append(best)
-            
+
             source = best["source"]
             category = best.get("category", "other")
-            
+            if best.get('content_type') == 'x_bookmark':
+                x_post_count += 1
             source_counts[source] = source_counts.get(source, 0) + 1
             category_counts[category] = category_counts.get(category, 0) + 1
         

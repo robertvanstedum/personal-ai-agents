@@ -467,15 +467,9 @@
   },
   {
     "domain": "dw.com",
-    "trust": "probationary",
-    "set_by": "auto",
-    "note": "auto-discovered via Brave 2026-03-17",
-    "added_date": "2026-03-17",
-    "query": "Gold rise Gold fall Gold miner one year prospects",
-    "haiku_evaluated": true,
-    "haiku_verdict": "credible",
-    "haiku_note": "credible \u2014 DW (Deutsche Welle) is Germany's state-sponsored international broadcaster with established editorial standards and original reporting across economics and geopolitics topics.",
-    "haiku_evaluated_at": "2026-03-17"
+    "trust": "trusted",
+    "set_by": "explicit",
+    "note": "Deutsche Welle \u2014 Germany's state broadcaster, established editorial standards \u2014 upgraded from probationary to trusted 2026-05-27"
   },
   {
     "domain": "mining.com",
@@ -503,15 +497,9 @@
   },
   {
     "domain": "aljazeera.com",
-    "trust": "probationary",
-    "set_by": "auto",
-    "note": "auto-discovered via Brave 2026-03-17",
-    "added_date": "2026-03-17",
-    "query": "Gold rise Gold fall Gold miner one year prospects",
-    "haiku_evaluated": true,
-    "haiku_verdict": "credible",
-    "haiku_note": "credible \u2014 Al Jazeera is an established international news organization with professional editorial standards and original reporting capabilities across economics and geopolitics, though editorial perspective reflects its state-funded origins.",
-    "haiku_evaluated_at": "2026-03-17"
+    "trust": "trusted",
+    "set_by": "explicit",
+    "note": "Major international broadcaster \u2014 upgraded from probationary to trusted 2026-05-27 (was penalized 30% with no justification after calibration period)"
   },
   {
     "domain": "markets.financialcontent.com",
@@ -580,5 +568,35 @@
     "note": "auto-discovered via Brave 2026-03-18",
     "added_date": "2026-03-18",
     "query": "Tigray Ethiopia TPLF"
+  },
+  {
+    "domain": "spiegel.de",
+    "trust": "trusted",
+    "set_by": "explicit",
+    "note": "Spiegel International — major German outlet with English coverage. Added 2026-05-27 (was missing from trust table, source penalized by default)"
+  },
+  {
+    "domain": "chathamhouse.org",
+    "trust": "trusted",
+    "set_by": "explicit",
+    "note": "Chatham House — UK foreign policy think tank. RSS feed returns 403 on automated fetch as of 2026-05-27; trust entry ready for when feed is accessible"
+  },
+  {
+    "domain": "adamtooze.substack.com",
+    "trust": "trusted",
+    "set_by": "explicit",
+    "note": "Adam Tooze Chartbook — macro/political economy newsletter. Added to FEEDS 2026-05-27"
+  },
+  {
+    "domain": "newyorkfed.org",
+    "trust": "trusted",
+    "set_by": "explicit",
+    "note": "NY Fed Liberty Street Economics — Federal Reserve Bank of New York research blog. Added to FEEDS 2026-05-27"
+  },
+  {
+    "domain": "nakedcapitalism.com",
+    "trust": "neutral",
+    "set_by": "explicit",
+    "note": "Naked Capitalism — finance/macro commentary blog. Added to FEEDS 2026-05-27"
   }
 ]
