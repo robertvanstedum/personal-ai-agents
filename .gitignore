@@ -107,3 +107,9 @@ _NewDomains/language-german/language/german/sessions/
 _NewDomains/language-german/language/german/anki/
 _NewDomains/language-german/language/german/lessons/
 _NewDomains/language-german/language/german/progress.json
+
+# Guild domain — private data lives in mini-moi-private repo
+_NewDomains/guild/job-search/**
+!_NewDomains/guild/job-search/.gitkeep
+_NewDomains/guild/new-ventures/job-search/**
+!_NewDomains/guild/new-ventures/job-search/.gitkeep
