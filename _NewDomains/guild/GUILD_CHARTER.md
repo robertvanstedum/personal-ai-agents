@@ -11,23 +11,21 @@ are superseded by this one. Spin off detailed implementation docs from here.
 
 ---
 
-## 1. Who This Is For
+## 1. What This Is
 
-**Robert Van Stedum.** TPM, 30 years telecom/satellite/IoT. Currently on
-contract at T-Mobile as delivery manager for a Partner Integration Layer
-(B2B API platform + developer portal). Actively job searching, Chicago
-primary market, open to Dubai/Saudi Arabia, Brazil as fallback.
+**mini-moi-agent-guild** is a personal AI platform — an extension of the
+personal-ai-agents repository — built by and for its owner. It is a
+professional operating system: a way of organizing work, intent, and
+capability across an AI-native team of one (or more).
 
-Platform: **mini-moi-agent-guild**
 The platform is branded **mini-moi-agent-guild** while living inside the
-long-standing public repository **personal-ai-agents** — the name that is
-already on Robert's resume, LinkedIn, and in the public domain.
+long-standing public repository **personal-ai-agents**.
 Main repo: `github.com/robertvanstedum/personal-ai-agents` (public)
 Private repo: `github.com/robertvanstedum/mini-moi-private` (private — sensitive data across all domains)
 
-**Origin rule:** Robert is setting up a similar model at T-Mobile.
-This personal build comes FIRST. Concepts may be reused there —
-never the other way around. Origin is always here.
+**Origin rule:** This personal build is always the origin.
+Concepts may be reused in professional or organizational contexts —
+never the other way around. What is built here belongs to the owner.
 
 ---
 
