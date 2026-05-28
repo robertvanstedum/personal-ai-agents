@@ -18,6 +18,10 @@
   <div class="login-card">
     <h1 class="login-title">Sign in</h1>
 
+    {% if request.args.get('notice') == 'owner_required' %}
+      <div class="login-notice">That page requires the owner account. Sign in as <strong>robert</strong> to continue.</div>
+    {% endif %}
+
     {% if error %}
       <div class="login-error">{{ error }}</div>
     {% endif %}

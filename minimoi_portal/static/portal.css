@@ -624,6 +624,16 @@ body.admin { background: var(--parch-mid); }
 .nav-btn-ghost:hover { color: var(--ink); }
 
 /* Login subtitle */
+.login-notice {
+  background: #eaf0fa;
+  border-radius: 6px;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.875rem;
+  color: #1a3a6a;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
 .login-subtitle {
   font-size: 0.9rem;
   color: var(--ink-light);

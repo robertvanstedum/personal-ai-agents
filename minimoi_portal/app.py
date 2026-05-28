@@ -75,8 +75,11 @@ def _require_owner(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         user = _current_user()
-        if not user or user.get("tier") != "owner":
-            return redirect(url_for("dashboard"))
+        if not user:
+            return redirect(url_for("login", next=request.path))
+        if user.get("tier") != "owner":
+            # Logged in but wrong tier — send to login so they can switch accounts
+            return redirect(url_for("login", next=request.path, notice="owner_required"))
         return f(*args, **kwargs)
     return decorated
 
