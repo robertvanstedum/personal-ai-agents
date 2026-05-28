@@ -108,6 +108,10 @@ _NewDomains/language-german/language/german/anki/
 _NewDomains/language-german/language/german/lessons/
 _NewDomains/language-german/language/german/progress.json
 
+# Portal auth — credentials never in public repo (keep in mini-moi-private)
+minimoi_portal/auth/users.json
+minimoi_portal/auth/guests.json
+
 # Guild domain — private data lives in mini-moi-private repo
 _NewDomains/guild/job-search/**
 !_NewDomains/guild/job-search/.gitkeep
