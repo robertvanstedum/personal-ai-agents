@@ -49,6 +49,10 @@ from minimoi_portal import config as _cfg  # noqa: E402
 
 app.secret_key = _cfg.SECRET_KEY
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=_cfg.SESSION_LIFETIME_DAYS)
+# Only send session cookie when session actually changes (login/logout).
+# Without this, Flask re-sends Set-Cookie on EVERY response including images,
+# which prevents browsers from caching proxied static assets.
+app.config["SESSION_REFRESH_EACH_REQUEST"] = False
 
 # Lazy imports
 from minimoi_portal import auth as _auth          # noqa: E402
@@ -220,14 +224,8 @@ def german_root():
 def german_proxy(path):
     user = _current_user()
     if user["tier"] == "guest":
-        # Block admin for guests
+        # Guests can see all German pages except Admin
         if path.startswith("admin"):
-            return redirect(url_for("german_root"))
-        # Allow static assets (CSS, JS, images) — needed for all pages to render
-        # Allow lesen and its API endpoints
-        allowed = ("static", "lesen", "api/lesen-category", "api/lesen-refresh",
-                   "api/lesen-action", "api/translate", "api/save-phrase")
-        if not any(path.startswith(p) for p in allowed):
             return redirect(url_for("german_root"))
     return _proxy.proxy_to(_cfg.GERMAN_BACKEND, path, "/app/german", user=user)
 
