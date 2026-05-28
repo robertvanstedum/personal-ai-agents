@@ -190,7 +190,7 @@ def curator_root():
     user = _current_user()
     if user["tier"] == "guest":
         return redirect(url_for("guest_briefing"))
-    return _proxy.proxy_to(_cfg.CURATOR_BACKEND, "/", "/app/curator")
+    return _proxy.proxy_to(_cfg.CURATOR_BACKEND, "/", "/app/curator", user=user)
 
 
 @app.route("/app/curator/<path:path>", methods=["GET", "POST", "DELETE", "PATCH"])
@@ -200,9 +200,9 @@ def curator_proxy(path):
     if user["tier"] == "guest":
         # Allow deep dive HTML files so guests can view their generated dives
         if path.startswith("interests/"):
-            return _proxy.proxy_to(_cfg.CURATOR_BACKEND, path, "/app/curator")
+            return _proxy.proxy_to(_cfg.CURATOR_BACKEND, path, "/app/curator", user=user)
         return redirect(url_for("guest_briefing"))
-    return _proxy.proxy_to(_cfg.CURATOR_BACKEND, path, "/app/curator")
+    return _proxy.proxy_to(_cfg.CURATOR_BACKEND, path, "/app/curator", user=user)
 
 
 # ── Mein Deutsch proxy (owner + family full; guest: lesen only, no admin) ────
@@ -211,7 +211,8 @@ def curator_proxy(path):
 @app.route("/app/german/")
 @_require_login
 def german_root():
-    return _proxy.proxy_to(_cfg.GERMAN_BACKEND, "/", "/app/german")
+    user = _current_user()
+    return _proxy.proxy_to(_cfg.GERMAN_BACKEND, "/", "/app/german", user=user)
 
 
 @app.route("/app/german/<path:path>", methods=["GET", "POST"])
@@ -227,7 +228,7 @@ def german_proxy(path):
                    "api/lesen-action", "api/translate", "api/save-phrase")
         if not any(path.startswith(p) for p in allowed):
             return redirect(url_for("german_root"))
-    return _proxy.proxy_to(_cfg.GERMAN_BACKEND, path, "/app/german")
+    return _proxy.proxy_to(_cfg.GERMAN_BACKEND, path, "/app/german", user=user)
 
 
 # ── Guest briefing view ───────────────────────────────────────────────────────

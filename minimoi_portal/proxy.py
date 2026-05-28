@@ -5,7 +5,8 @@ Forwards authenticated requests to the backend Flask apps and rewrites
 HTML content so all internal links resolve correctly through the portal prefix.
 
 Rewriting strategy:
-  - HTML: tag attributes (href/src/action/data-src) + inline <script> blocks
+  - HTML: tag attributes (href/src/action/data-src/data-url) + inline style url()
+          + inline <script> blocks + injected portal nav bar
   - CSS:  url('/...') references
   - JS:   external .js files — fetch/axios/url patterns rewritten
   - Template literals (fetch(`/...`)) are NOT rewritten — known gap for
@@ -64,7 +65,42 @@ def _rewrite_js(text: str, portal_prefix: str) -> str:
     return text
 
 
-def proxy_to(backend_url: str, path: str, portal_prefix: str) -> Response:
+def _portal_nav_html(user: dict, portal_prefix: str) -> str:
+    """
+    Render a slim fixed portal nav bar to inject at the top of every proxied page.
+    Self-contained inline CSS so it works regardless of the backend's own styles.
+    """
+    display_name = user.get("display_name", user.get("username", "")) if user else ""
+
+    curator_active = "color:#c9b8ff;font-weight:600;" if portal_prefix == "/app/curator" else ""
+    german_active  = "color:#c9b8ff;font-weight:600;" if portal_prefix == "/app/german"  else ""
+
+    return f"""
+<div id="portal-nav-bar" style="
+  position:fixed;top:0;left:0;right:0;z-index:999999;
+  height:38px;background:#12122a;color:#e8e8e8;
+  display:flex;align-items:center;padding:0 16px;gap:0;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:13px;border-bottom:1px solid rgba(255,255,255,0.12);
+  box-shadow:0 1px 8px rgba(0,0,0,0.4);
+">
+  <a href="/dashboard" style="color:#c9b8ff;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
+  <span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
+  <a href="/app/curator" style="color:#e8e8e8;text-decoration:none;margin-right:14px;{curator_active}">Curator</a>
+  <a href="/app/german"  style="color:#e8e8e8;text-decoration:none;{german_active}">German</a>
+  <div style="flex:1;"></div>
+  <span style="color:rgba(255,255,255,0.45);margin-right:12px;">{display_name}</span>
+  <a href="/logout" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;">Sign out</a>
+</div>
+<style>
+  body {{ padding-top: 38px !important; }}
+  #portal-nav-bar a:hover {{ opacity: 0.8; }}
+</style>
+"""
+
+
+def proxy_to(backend_url: str, path: str, portal_prefix: str,
+             user: dict | None = None) -> Response:
     """
     Forward the current Flask request to backend_url/path.
     Rewrites URLs in HTML, CSS, and JS responses so they resolve
@@ -73,6 +109,7 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str) -> Response:
     portal_prefix: e.g. '/app/curator' or '/app/german'
     backend_url:   e.g. 'http://localhost:8766'
     path:          the remaining path after stripping the portal prefix
+    user:          current logged-in user dict (for nav bar injection)
     """
     target = f"{backend_url}/{path.lstrip('/')}"
     if request.query_string:
@@ -119,21 +156,34 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str) -> Response:
     if "text/html" in content_type:
         soup = BeautifulSoup(resp.content, "html.parser")
 
-        # Rewrite tag attributes
+        # Rewrite tag attributes (href, src, action, data-* URL attrs)
         for tag in soup.find_all(True):
             for attr in ("href", "src", "action", "data-src", "data-url"):
                 val = tag.get(attr, "")
                 if val and val.startswith("/") and not val.startswith("//"):
                     tag[attr] = f"{portal_prefix}{val}"
 
+            # Rewrite inline style background-image: url('/...')
+            style_val = tag.get("style", "")
+            if style_val and "url(" in style_val:
+                new_style = re.sub(
+                    r"""(url\s*\(\s*['"]?)(/[^'")?#])""",
+                    lambda m: m.group(1) + portal_prefix + m.group(2),
+                    style_val,
+                )
+                if new_style != style_val:
+                    tag["style"] = new_style
+
         # Rewrite inline <script> blocks
         for script in soup.find_all("script"):
-            # Use .string for simple text nodes; fall back to iterating NavigableStrings
             if script.string:
                 script.string = _rewrite_js(script.string, portal_prefix)
-            else:
-                # Script has mixed content (rare) — skip safely
-                pass
+
+        # Inject portal nav bar right after <body> opens
+        body = soup.find("body")
+        if body:
+            nav_soup = BeautifulSoup(_portal_nav_html(user, portal_prefix), "html.parser")
+            body.insert(0, nav_soup)
 
         resp_headers.pop("Content-Type", None)
         return Response(
