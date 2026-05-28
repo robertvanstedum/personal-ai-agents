@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  minimoi Portal — Flask auth gateway + reverse proxy
+
+  Starts minimoi_portal/app.py on login.
+  Proxies authenticated requests to Curator (8766) and Mein Deutsch (8767).
+  Public landing page at / — no auth required.
+
+  Port: 5001 (macOS AirPlay occupies 5000 on MacBook)
+  On Mac Mini: verify port 5000 is free; update PORTAL_PORT if switching.
+
+  PORTAL_SECRET_KEY: set a real secret in production plist on Mac Mini.
+  Generate: python3 -c "import secrets; print(secrets.token_hex(32))"
+
+  Mac Mini Production:
+  - Cloudflare Tunnel routes minimoi.ai → localhost:5001
+  - Set PORTAL_SECRET_KEY in plist EnvironmentVariables
+  - Confirm auth/users.json exists at correct path (gitignored — copy from backup)
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.vanstedum.minimoi-portal</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/vanstedum/Projects/personal-ai-agents/venv/bin/python3</string>
+        <string>/Users/vanstedum/Projects/personal-ai-agents/minimoi_portal/app.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/vanstedum/Projects/personal-ai-agents</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/vanstedum/Projects/personal-ai-agents/logs/portal_stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/vanstedum/Projects/personal-ai-agents/logs/portal_stderr.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>PORTAL_PORT</key>
+        <string>5001</string>
+    </dict>
+</dict>
+</plist>
