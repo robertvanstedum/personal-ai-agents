@@ -119,32 +119,54 @@ def logout():
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
-    """Self-service guest registration. Creates a 30-day guest account."""
+    """
+    Self-service guest registration.
+    Creates a pending account and notifies Robert via Telegram.
+    """
     if _current_user():
         return redirect(url_for("dashboard"))
 
     error = None
     if request.method == "POST":
         display_name = request.form.get("display_name", "").strip()
+        email        = request.form.get("email", "").strip().lower()
         password     = request.form.get("password", "")
 
         if not display_name:
             error = "Please enter your name."
+        elif not email or "@" not in email:
+            error = "Please enter a valid email address."
         elif len(password) < 6:
             error = "Password must be at least 6 characters."
         else:
-            expires_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-            guest = _auth.create_guest(display_name, expires_at, password)
-            # Log them in immediately
-            session.permanent = True
-            session["user"] = {
-                "username":     guest["username"],
-                "display_name": guest["display_name"],
-                "tier":         "guest",
-            }
-            return redirect(url_for("dashboard"))
+            pending = _auth.create_pending(display_name, email, password)
+            _notify_telegram_new_request(display_name, email)
+            return render_template("register.html", pending=True)
 
     return render_template("register.html", error=error)
+
+
+def _notify_telegram_new_request(display_name: str, email: str) -> None:
+    """Fire a Telegram message to Robert when a new guest requests access."""
+    try:
+        import keyring
+        token   = keyring.get_password("telegram", "bot_token")
+        chat_id = 8379221702
+        text = (
+            f"🔔 <b>New guest access request</b>\n\n"
+            f"<b>Name:</b> {display_name}\n"
+            f"<b>Email:</b> {email}\n\n"
+            f"Approve or reject at:\n"
+            f"https://minimoi.ai/admin/guests"
+        )
+        _requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": text, "parse_mode": "HTML",
+                  "disable_web_page_preview": True},
+            timeout=10,
+        )
+    except Exception as e:
+        print(f"⚠️  Telegram notification failed: {e}")
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -328,8 +350,24 @@ def guest_deep_dive():
 @app.route("/admin/guests")
 @_require_owner
 def admin_guests():
-    guests = _auth.list_guests()
-    return render_template("admin_guests.html", user=_current_user(), guests=guests)
+    guests  = _auth.list_guests()
+    pending = _auth.load_pending()
+    return render_template("admin_guests.html", user=_current_user(),
+                           guests=guests, pending=pending)
+
+
+@app.route("/admin/guests/approve/<token>", methods=["POST"])
+@_require_owner
+def admin_guests_approve(token):
+    _auth.approve_pending(token)
+    return redirect(url_for("admin_guests"))
+
+
+@app.route("/admin/guests/reject/<token>", methods=["POST"])
+@_require_owner
+def admin_guests_reject(token):
+    _auth.reject_pending(token)
+    return redirect(url_for("admin_guests"))
 
 
 @app.route("/admin/guests/create", methods=["POST"])

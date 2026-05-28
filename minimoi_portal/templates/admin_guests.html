@@ -22,6 +22,43 @@
 
   <h1 class="admin-title">Guest Access</h1>
 
+  <!-- Pending approval requests -->
+  {% if pending %}
+    <section class="admin-section pending-section">
+      <h2>⏳ Pending requests <span class="pending-count">{{ pending | length }}</span></h2>
+      <table class="guests-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Requested</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in pending %}
+            <tr>
+              <td>{{ p.display_name }}</td>
+              <td>{{ p.email }}</td>
+              <td>{{ p.requested_at[:10] }}</td>
+              <td class="pending-actions">
+                <form method="POST" action="/admin/guests/approve/{{ p.token }}"
+                      style="display:inline">
+                  <button type="submit" class="btn-approve">Approve</button>
+                </form>
+                <form method="POST" action="/admin/guests/reject/{{ p.token }}"
+                      style="display:inline"
+                      onsubmit="return confirm('Reject request from {{ p.display_name }}?')">
+                  <button type="submit" class="btn-danger-sm">Reject</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% endif %}
+
   <!-- New guest credential just created -->
   {% if new_guest %}
     <div class="credential-reveal">

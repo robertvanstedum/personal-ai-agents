@@ -38,10 +38,15 @@ def load_guests() -> list:
     return _load_json("guests.json").get("guests", [])
 
 
+def load_pending() -> list:
+    return _load_json("pending.json").get("pending", [])
+
+
 def authenticate(username: str, password: str) -> tuple:
     """
     Returns (user_dict, None) on success or (None, error_message) on failure.
     user_dict always contains 'tier': 'owner' | 'family' | 'guest'
+    Pending registrations get a clear waiting message.
     """
     username = username.strip().lower()
 
@@ -52,12 +57,11 @@ def authenticate(username: str, password: str) -> tuple:
                 return user, None
             return None, "Incorrect password."
 
-    # Check guests
+    # Check active guests
     for guest in load_guests():
         if guest["username"].lower() == username:
             if not check_password_hash(guest["password_hash"], password):
                 return None, "Incorrect password."
-            # Check expiry
             try:
                 expires_at = datetime.fromisoformat(guest["expires_at"])
                 if expires_at.tzinfo is None:
@@ -68,12 +72,20 @@ def authenticate(username: str, password: str) -> tuple:
                 return None, "Guest access configuration error."
             return guest, None
 
+    # Check pending — give a friendly waiting message
+    for pending in load_pending():
+        if pending["username"].lower() == username:
+            if check_password_hash(pending["password_hash"], password):
+                return None, "Your account is pending approval. You'll receive access once approved."
+            return None, "Incorrect password."
+
     return None, "User not found."
 
 
-def create_guest(display_name: str, expires_at_iso: str, password: str) -> dict:
+def create_guest(display_name: str, expires_at_iso: str, password: str,
+                 email: str = "") -> dict:
     """
-    Create a new guest credential. Returns the guest dict including auto-generated username.
+    Create an active guest credential. Returns the guest dict.
     expires_at_iso: ISO 8601 string e.g. '2026-06-15T00:00:00Z'
     """
     data = _load_json("guests.json")
@@ -82,20 +94,96 @@ def create_guest(display_name: str, expires_at_iso: str, password: str) -> dict:
 
     username = f"guest_{secrets.token_hex(4)}"
     guest = {
-        "username": username,
+        "username":      username,
         "password_hash": generate_password_hash(password),
-        "tier": "guest",
-        "display_name": display_name,
-        "expires_at": expires_at_iso,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "tier":          "guest",
+        "display_name":  display_name,
+        "email":         email,
+        "expires_at":    expires_at_iso,
+        "created_at":    datetime.now(timezone.utc).isoformat(),
     }
     data["guests"].append(guest)
     _write_json("guests.json", data)
     return guest
 
 
+def create_pending(display_name: str, email: str, password: str) -> dict:
+    """
+    Create a pending registration. Does NOT grant login access.
+    Returns the pending dict (includes token for admin approval link).
+    """
+    data = _load_json("pending.json")
+    if "pending" not in data:
+        data["pending"] = []
+
+    token    = secrets.token_hex(16)
+    username = f"guest_{secrets.token_hex(4)}"
+    entry = {
+        "token":         token,
+        "username":      username,
+        "password_hash": generate_password_hash(password),
+        "tier":          "guest",
+        "display_name":  display_name,
+        "email":         email,
+        "requested_at":  datetime.now(timezone.utc).isoformat(),
+    }
+    data["pending"].append(entry)
+    _write_json("pending.json", data)
+    return entry
+
+
+def approve_pending(token: str) -> dict | None:
+    """
+    Move a pending registration to active guests (30-day expiry).
+    Returns the new guest dict or None if token not found.
+    """
+    data = _load_json("pending.json")
+    pending_list = data.get("pending", [])
+
+    entry = next((p for p in pending_list if p["token"] == token), None)
+    if not entry:
+        return None
+
+    # Remove from pending
+    data["pending"] = [p for p in pending_list if p["token"] != token]
+    _write_json("pending.json", data)
+
+    # Add to active guests (30-day expiry from approval)
+    from datetime import timedelta
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+
+    guests_data = _load_json("guests.json")
+    if "guests" not in guests_data:
+        guests_data["guests"] = []
+
+    guest = {
+        "username":      entry["username"],
+        "password_hash": entry["password_hash"],
+        "tier":          "guest",
+        "display_name":  entry["display_name"],
+        "email":         entry.get("email", ""),
+        "expires_at":    expires_at,
+        "created_at":    datetime.now(timezone.utc).isoformat(),
+    }
+    guests_data["guests"].append(guest)
+    _write_json("guests.json", guests_data)
+    return guest
+
+
+def reject_pending(token: str) -> bool:
+    """Remove a pending registration. Returns True if found."""
+    data = _load_json("pending.json")
+    pending_list = data.get("pending", [])
+    new_list = [p for p in pending_list if p["token"] != token]
+    if len(new_list) == len(pending_list):
+        return False
+    data["pending"] = new_list
+    _write_json("pending.json", data)
+    return True
+
+
 def revoke_guest(username: str) -> bool:
-    """Remove a guest by username. Returns True if found and removed."""
+    """Remove an active guest by username. Returns True if found."""
     data = _load_json("guests.json")
     guests = data.get("guests", [])
     new_guests = [g for g in guests if g["username"] != username]
@@ -107,7 +195,7 @@ def revoke_guest(username: str) -> bool:
 
 
 def list_guests() -> list:
-    """Return all guests with expiry status."""
+    """Return all active guests with expiry status."""
     now = datetime.now(timezone.utc)
     result = []
     for g in load_guests():
