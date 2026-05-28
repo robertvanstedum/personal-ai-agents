@@ -81,16 +81,38 @@ def _rewrite_js(text: str, portal_prefix: str) -> str:
 def _portal_nav_html(user: dict, portal_prefix: str) -> str:
     """
     Render a slim fixed portal nav bar to inject at the top of every proxied page.
-    Self-contained inline CSS so it works regardless of the backend's own styles.
+    Self-contained inline CSS + per-backend offset rules so it works regardless of
+    the backend's own styles.
+
+    Strategy: position:fixed (not sticky) so the nav bar is removed from normal flow
+    and doesn't disrupt the Curator's display:flex body layout.
+    Companion <style> block offsets each backend's own sticky elements by 38px.
     """
     display_name = user.get("display_name", user.get("username", "")) if user else ""
 
     curator_active = "color:#c9b8ff;font-weight:600;" if portal_prefix == "/app/curator" else ""
     german_active  = "color:#c9b8ff;font-weight:600;" if portal_prefix == "/app/german"  else ""
 
+    # Per-backend layout offset so backend sticky elements don't hide under our nav.
+    # Curator body is display:flex (row) — padding-top pushes the flex row down.
+    # German body is block — padding-top pushes block content down.
+    if portal_prefix == "/app/curator":
+        offset_css = (
+            "body{padding-top:38px!important;}"
+            "nav.curator-subnav{top:38px!important;}"
+        )
+    elif portal_prefix == "/app/german":
+        offset_css = (
+            "body{padding-top:38px!important;}"
+            "nav{top:38px!important;}"
+        )
+    else:
+        offset_css = "body{padding-top:38px!important;}"
+
     return f"""
+<style id="portal-offset-css">{offset_css}</style>
 <div id="portal-nav-bar" style="
-  position:sticky;top:0;left:0;right:0;z-index:999999;
+  position:fixed;top:0;left:0;right:0;z-index:999999;
   height:38px;background:#12122a;color:#e8e8e8;
   display:flex;align-items:center;padding:0 16px;gap:0;
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -195,8 +217,6 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
             if user and user.get("tier") == "guest" and portal_prefix == "/app/german":
                 nav_html += """
 <style>
-  a[href="/app/german/woerter"],
-  a[href="/app/german/archiv"],
   a[href="/app/german/admin"] { display: none !important; }
 </style>"""
             nav_soup = BeautifulSoup(nav_html, "html.parser")
@@ -242,6 +262,10 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
     if any(t in content_type for t in ("image/", "font/", "application/font")):
         resp_headers.setdefault("Cache-Control", "public, max-age=3600")
         resp_headers.setdefault("Vary", "Accept-Encoding")
+    elif "text/html" in content_type and portal_prefix == "/app/curator":
+        # Curator briefing changes daily — never allow browser to cache it
+        resp_headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        resp_headers["Pragma"] = "no-cache"
 
     # ── Everything else: pass through as-is ──────────────────────────────
     return Response(

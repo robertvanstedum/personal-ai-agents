@@ -3262,6 +3262,18 @@ def main():
         except Exception as e:
             print(f"⚠️  Could not write curator_latest.json: {e}")
 
+        # Also save a dated JSON copy so the web UI can serve today/yesterday toggle
+        try:
+            from pathlib import Path as _Path
+            archive_dir = _Path('curator_archive')
+            archive_dir.mkdir(exist_ok=True)
+            dated_json = archive_dir / f"curator_{datetime.now().strftime('%Y-%m-%d')}.json"
+            with open(dated_json, 'w') as f:
+                json.dump(top_articles, f, indent=2, default=str)
+            print(f"💾 Wrote JSON archive to {dated_json}")
+        except Exception as e:
+            print(f"⚠️  Could not write JSON archive: {e}")
+
     # Final dry run reminder
     if dry_run:
         print()
