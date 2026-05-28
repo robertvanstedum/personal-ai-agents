@@ -45,7 +45,7 @@
           </h2>
 
           {% if a.summary %}
-            <p class="briefing-summary">{{ a.summary }}</p>
+            <p class="briefing-summary">{{ a.summary | striptags }}</p>
           {% endif %}
 
           <!-- Action buttons -->

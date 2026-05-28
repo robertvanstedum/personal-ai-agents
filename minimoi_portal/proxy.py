@@ -215,6 +215,12 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
             content_type="application/javascript; charset=utf-8",
         )
 
+    # ── Static assets (images, fonts, etc.): pass through with cache headers ─
+    # Add a 1-hour browser cache for images/fonts so they only proxy once.
+    if any(t in content_type for t in ("image/", "font/", "application/font")):
+        resp_headers.setdefault("Cache-Control", "public, max-age=3600")
+        resp_headers.setdefault("Vary", "Accept-Encoding")
+
     # ── Everything else: pass through as-is ──────────────────────────────
     return Response(
         resp.content,
