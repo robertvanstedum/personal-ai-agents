@@ -224,9 +224,15 @@ def german_root():
 def german_proxy(path):
     user = _current_user()
     if user["tier"] == "guest":
-        # Guests can see all German pages except Admin
-        if path.startswith("admin"):
-            return redirect(url_for("german_root"))
+        # Block owner-only sections — show a friendly restricted page
+        _GERMAN_OWNER_ONLY = {
+            "admin":   "Admin",
+            "woerter": "Wörter",
+            "archiv":  "Archiv",
+        }
+        for prefix, label in _GERMAN_OWNER_ONLY.items():
+            if path.startswith(prefix):
+                return render_template("guest_restricted.html", section=label)
     return _proxy.proxy_to(_cfg.GERMAN_BACKEND, path, "/app/german", user=user)
 
 

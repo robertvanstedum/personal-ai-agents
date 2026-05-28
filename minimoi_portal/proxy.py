@@ -45,6 +45,12 @@ def _rewrite_js(text: str, portal_prefix: str) -> str:
         lambda m: m.group(1) + portal_prefix + m.group(2),
         text,
     )
+    # postJSON('/...') — common helper wrapper around fetch used in German app
+    text = re.sub(
+        r"""(postJSON\s*\(\s*['"])(/[^'"?#`])""",
+        lambda m: m.group(1) + portal_prefix + m.group(2),
+        text,
+    )
     # axios.get('/...'), axios.post('/...'), etc.
     text = re.sub(
         r"""(axios\.\w+\s*\(\s*['"])(/[^'"?#`])""",
@@ -181,10 +187,19 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
             if script.string:
                 script.string = _rewrite_js(script.string, portal_prefix)
 
-        # Inject portal nav bar right after <body> opens
+        # Inject portal nav bar + any guest-specific overrides right after <body>
         body = soup.find("body")
         if body:
-            nav_soup = BeautifulSoup(_portal_nav_html(user, portal_prefix), "html.parser")
+            nav_html = _portal_nav_html(user, portal_prefix)
+            # For guest users on German: hide owner-only nav links
+            if user and user.get("tier") == "guest" and portal_prefix == "/app/german":
+                nav_html += """
+<style>
+  a[href="/app/german/woerter"],
+  a[href="/app/german/archiv"],
+  a[href="/app/german/admin"] { display: none !important; }
+</style>"""
+            nav_soup = BeautifulSoup(nav_html, "html.parser")
             body.insert(0, nav_soup)
 
         resp_headers.pop("Content-Type", None)

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ section }} — mini-moi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/portal.css">
+</head>
+<body class="login">
+
+<nav class="portal-nav">
+  <a href="/" class="portal-nav-brand">mini-moi</a>
+  <div class="portal-nav-links">
+    <a href="/app/german" class="nav-link">← Mein Deutsch</a>
+    <a href="/dashboard" class="nav-link">Dashboard</a>
+  </div>
+</nav>
+
+<main class="login-main">
+  <div class="login-card" style="text-align:center;">
+    <p style="font-size:2.5rem;margin-bottom:0.5rem;">🔒</p>
+    <h1 class="login-title">{{ section }}</h1>
+    <p style="color:var(--text-muted);margin:1rem 0 1.5rem;">
+      This section is part of the owner's personal workspace and isn't available to guests.
+    </p>
+    <a href="/app/german" class="btn-primary" style="display:inline-block;text-decoration:none;">
+      ← Back to Mein Deutsch
+    </a>
+  </div>
+</main>
+
+</body>
+</html>
