@@ -38,6 +38,13 @@ def _rewrite_js(text: str, portal_prefix: str) -> str:
         lambda m: m.group(1) + portal_prefix + m.group(2),
         text,
     )
+    # fetch(`/...`) — template literals e.g. fetch(`/api/foo?x=${bar}`)
+    # Rewrites the leading path prefix before any ${ expression or ?
+    text = re.sub(
+        r"""(fetch\s*\(\s*`)(/[^`?#$])""",
+        lambda m: m.group(1) + portal_prefix + m.group(2),
+        text,
+    )
     # axios.get('/...'), axios.post('/...'), etc.
     text = re.sub(
         r"""(axios\.\w+\s*\(\s*['"])(/[^'"?#`])""",
