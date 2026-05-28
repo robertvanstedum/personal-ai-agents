@@ -268,6 +268,19 @@
       "last_practiced": null,
       "source_sentence": "Österreichs Eishockey-Nationalteam hat den vorzeitigen Einzug ins WM-Viertelfinale verpasst. Die ÖEHV-Mannschaft musste sich Verfolger Deutschland am Samstag in Zürich 2:6 (0:0,1:2,1:4) beugen. Mit ei",
       "source_article": "Eishockey-Nationalteam unterliegt Deutschland bei WM 2:6"
+    },
+    {
+      "id": "ph_20260527_022",
+      "german": "vorzubereiten",
+      "english": "prepare",
+      "scene": "lesen",
+      "added": "2026-05-27",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Jetzt geht es los: Österreichs Nationalteam kommt am Mittwoch zusammen, um sich erstmals seit 1998 auf eine  Fußballweltmeisterschaft vorzubereiten. Ehe es nach Kalifornien ins mondäne Santa Barbara g",
+      "source_article": "WM-Startschuss im neuen „Sportinternat“"
     }
   ]
 }
