@@ -367,6 +367,7 @@ def admin_guests_approve(token):
     guest = _auth.approve_pending(token)
     if guest:
         _notify_telegram_approved(guest)
+        _send_approval_email(guest)
     return redirect(url_for("admin_guests"))
 
 
@@ -381,7 +382,7 @@ def _notify_telegram_approved(guest: dict) -> None:
         text = (
             f"✅ <b>Guest approved: {name}</b>\n\n"
             f"<b>Email:</b> {email}\n\n"
-            f"They can now sign in — give them a heads-up at that address."
+            f"Approval email sent — they can now sign in at minimoi.ai"
         )
         _requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
@@ -390,6 +391,49 @@ def _notify_telegram_approved(guest: dict) -> None:
         )
     except Exception as e:
         print(f"⚠️  Telegram approval notification failed: {e}")
+
+
+def _send_approval_email(guest: dict) -> None:
+    """Send an approval email to the guest from robert.vanstedum@gmail.com."""
+    import smtplib
+    import keyring
+    from email.mime.text import MIMEText
+
+    to_email = guest.get("email", "")
+    if not to_email:
+        return
+
+    name = guest.get("display_name", "there")
+
+    try:
+        app_password = keyring.get_password("gmail", "app_password")
+        if not app_password:
+            print("⚠️  Gmail app password not found in Keychain")
+            return
+
+        body = f"""Hi {name},
+
+Your access to mini-moi has been approved! You can sign in now at:
+
+  https://minimoi.ai/login
+
+Use the email address and password you chose when you registered.
+
+Welcome,
+Robert
+"""
+        msg = MIMEText(body)
+        msg["Subject"] = "You're in — mini-moi access approved"
+        msg["From"]    = "robert.vanstedum@gmail.com"
+        msg["To"]      = to_email
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login("robert.vanstedum@gmail.com", app_password)
+            smtp.send_message(msg)
+
+        print(f"✅ Approval email sent to {to_email}")
+    except Exception as e:
+        print(f"⚠️  Approval email failed: {e}")
 
 
 @app.route("/admin/guests/reject/<token>", methods=["POST"])
