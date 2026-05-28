@@ -88,8 +88,7 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
   <span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
   <a href="/app/curator" style="color:#e8e8e8;text-decoration:none;margin-right:14px;{curator_active}">Curator</a>
   <a href="/app/german"  style="color:#e8e8e8;text-decoration:none;{german_active}">German</a>
-  <div style="flex:1;"></div>
-  <span style="color:rgba(255,255,255,0.45);margin-right:12px;">{display_name}</span>
+  <span style="color:rgba(255,255,255,0.45);margin-left:auto;margin-right:12px;">{display_name}</span>
   <a href="/logout" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;">Sign out</a>
 </div>
 """
