@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guest Access — mini-moi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/portal.css">
+</head>
+<body class="admin">
+
+<nav class="portal-nav">
+  <a href="/" class="portal-nav-brand">mini-moi</a>
+  <div class="portal-nav-links">
+    <a href="/dashboard" class="nav-link">← Dashboard</a>
+    <a href="/logout" class="nav-link">Sign out</a>
+  </div>
+</nav>
+
+<main class="admin-main">
+
+  <h1 class="admin-title">Guest Access</h1>
+
+  <!-- New guest credential just created -->
+  {% if new_guest %}
+    <div class="credential-reveal">
+      <h2>Share these credentials</h2>
+      <p>Send to your guest — this is the only time the password is shown.</p>
+      <div class="credential-box">
+        <div class="cred-row"><span class="cred-label">URL</span><span class="cred-val">https://minimoi.ai/login</span></div>
+        <div class="cred-row"><span class="cred-label">Username</span><span class="cred-val">{{ new_guest.username }}</span></div>
+        <div class="cred-row"><span class="cred-label">Password</span><span class="cred-val">{{ new_password }}</span></div>
+        <div class="cred-row"><span class="cred-label">Display name</span><span class="cred-val">{{ new_guest.display_name }}</span></div>
+        <div class="cred-row"><span class="cred-label">Expires</span><span class="cred-val">{{ new_guest.expires_at[:10] }}</span></div>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Create new guest -->
+  <section class="admin-section">
+    <h2>Create guest credential</h2>
+    <form method="POST" action="/admin/guests/create" class="guest-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="display_name">Display name</label>
+          <input type="text" id="display_name" name="display_name" placeholder="e.g. Jane Smith" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="text" id="password" name="password" placeholder="Set a memorable password" required>
+        </div>
+        <div class="form-group">
+          <label for="expires_days">Expires in (days)</label>
+          <input type="number" id="expires_days" name="expires_days" value="7" min="1" max="90">
+        </div>
+      </div>
+      <button type="submit" class="btn-primary">Create guest →</button>
+    </form>
+  </section>
+
+  <!-- Active guests -->
+  <section class="admin-section">
+    <h2>Active guests</h2>
+    {% if guests %}
+      <table class="guests-table">
+        <thead>
+          <tr>
+            <th>Display name</th>
+            <th>Username</th>
+            <th>Expires</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for g in guests %}
+            <tr class="{% if g.expired %}expired{% endif %}">
+              <td>{{ g.display_name }}</td>
+              <td><code>{{ g.username }}</code></td>
+              <td>{{ g.expires_at[:10] }}</td>
+              <td>
+                {% if g.expired %}
+                  <span class="badge badge-expired">Expired</span>
+                {% else %}
+                  <span class="badge badge-active">Active</span>
+                {% endif %}
+              </td>
+              <td>
+                <form method="POST" action="/admin/guests/revoke/{{ g.username }}"
+                      style="display:inline"
+                      onsubmit="return confirm('Revoke access for {{ g.display_name }}?')">
+                  <button type="submit" class="btn-danger-sm">Revoke</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="no-guests">No guest credentials yet.</p>
+    {% endif %}
+  </section>
+
+</main>
+
+</body>
+</html>

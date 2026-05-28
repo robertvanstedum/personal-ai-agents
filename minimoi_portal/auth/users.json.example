@@ -1,0 +1,16 @@
+{
+  "users": [
+    {
+      "username": "robert",
+      "password_hash": "pbkdf2:sha256:...",
+      "tier": "owner",
+      "display_name": "Robert"
+    },
+    {
+      "username": "familymember",
+      "password_hash": "pbkdf2:sha256:...",
+      "tier": "family",
+      "display_name": "Family Name"
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mini-moi — Personal AI Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/portal.css">
+</head>
+<body class="landing">
+
+<nav class="portal-nav">
+  <span class="portal-nav-brand">mini-moi</span>
+  <div class="portal-nav-links">
+    <a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank">GitHub</a>
+    <a href="https://www.linkedin.com/in/robertvanstedum" target="_blank">LinkedIn</a>
+    {% if user %}
+      <a href="/dashboard" class="nav-btn">Dashboard →</a>
+    {% else %}
+      <a href="/login" class="nav-btn">Sign in</a>
+    {% endif %}
+  </div>
+</nav>
+
+<main class="landing-main">
+
+  <section class="hero">
+    <h1 class="hero-title">mini-moi</h1>
+    <p class="hero-tagline">A personal AI platform — built by one person, for one person.</p>
+    <div class="hero-actions">
+      {% if user %}
+        <a href="/dashboard" class="btn-primary">Go to Dashboard →</a>
+      {% else %}
+        <a href="mailto:robert.vanstedum@gmail.com?subject=minimoi.ai access request" class="btn-primary">Request Access</a>
+        <a href="/login" class="btn-secondary">Sign in</a>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="about-section">
+    <div class="about-grid">
+
+      <div class="about-card">
+        <h2>What this is</h2>
+        <p>
+          A personal operating system built on top of large language models.
+          Three domains running in production: a daily geopolitics and finance
+          briefing, a German language coaching pipeline, and a professional
+          coordination layer for managing work and intent across AI sessions.
+        </p>
+        <p>
+          Built from scratch, running on a Mac Mini at home, orchestrated by
+          a small team of AI agents with clearly defined roles.
+        </p>
+      </div>
+
+      <div class="about-card">
+        <h2>The platform</h2>
+        <ul class="feature-list">
+          <li><strong>Curator</strong> — RSS + X bookmarks → Grok scoring → morning briefing via Telegram</li>
+          <li><strong>Mein Deutsch</strong> — Vienna-tested language coaching: Lesen, Gespräche, Schreiben, Wörter</li>
+          <li><strong>Guild</strong> — Chief of Staff model: intent register, domain health, ops runbooks</li>
+        </ul>
+      </div>
+
+      <div class="about-card">
+        <h2>About</h2>
+        <p>
+          Built by Robert Van Stedum — TPM and solutions architect with a focus
+          on API-driven platforms, AI integration, and systems that compound
+          over time.
+        </p>
+        <p>
+          This platform is the origin. Patterns developed here move outward —
+          not the other way around.
+        </p>
+        <a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank" class="text-link">
+          View source on GitHub →
+        </a>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<footer class="portal-footer">
+  <span>mini-moi-agent-guild</span>
+  <span>·</span>
+  <a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank">GitHub</a>
+  <span>·</span>
+  <a href="https://www.linkedin.com/in/robertvanstedum" target="_blank">LinkedIn</a>
+</footer>
+
+</body>
+</html>
