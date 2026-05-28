@@ -2,10 +2,10 @@
 minimoi_portal/app.py — mini-moi portal.
 
 Public landing page + authenticated access to Curator and Mein Deutsch.
-Runs on port 5000. Cloudflare Tunnel routes minimoi.ai → here.
+Runs on port 5001. Cloudflare Tunnel routes minimoi.ai → here.
 
 Run: cd ~/Projects/personal-ai-agents && venv/bin/python3 minimoi_portal/app.py
-     PORTAL_PORT=5000 venv/bin/python3 minimoi_portal/app.py
+     PORTAL_PORT=5001 venv/bin/python3 minimoi_portal/app.py
 """
 
 import json
@@ -15,12 +15,15 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
 
+import requests as _requests
+
 # Ensure repo root is on sys.path so `minimoi_portal` resolves as a package
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from flask import (
     Flask,
     Response,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -48,8 +51,9 @@ app.secret_key = _cfg.SECRET_KEY
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=_cfg.SESSION_LIFETIME_DAYS)
 
 # Lazy imports
-from minimoi_portal import auth as _auth  # noqa: E402
-from minimoi_portal import proxy as _proxy  # noqa: E402
+from minimoi_portal import auth as _auth          # noqa: E402
+from minimoi_portal import proxy as _proxy        # noqa: E402
+from minimoi_portal import guest_data as _gdata   # noqa: E402
 
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
@@ -122,7 +126,7 @@ def dashboard():
     return render_template("dashboard.html", user=user)
 
 
-# ── Curator proxy (owner + family only) ───────────────────────────────────────
+# ── Curator proxy (owner + family only; guests get deep dive HTML only) ───────
 
 @app.route("/app/curator")
 @app.route("/app/curator/")
@@ -139,11 +143,14 @@ def curator_root():
 def curator_proxy(path):
     user = _current_user()
     if user["tier"] == "guest":
+        # Allow deep dive HTML files so guests can view their generated dives
+        if path.startswith("interests/"):
+            return _proxy.proxy_to(_cfg.CURATOR_BACKEND, path, "/app/curator")
         return redirect(url_for("guest_briefing"))
     return _proxy.proxy_to(_cfg.CURATOR_BACKEND, path, "/app/curator")
 
 
-# ── Mein Deutsch proxy (owner + family full; guest: lesen only) ───────────────
+# ── Mein Deutsch proxy (owner + family full; guest: lesen only, no admin) ────
 
 @app.route("/app/german")
 @app.route("/app/german/")
@@ -156,8 +163,11 @@ def german_root():
 @_require_login
 def german_proxy(path):
     user = _current_user()
-    # Guests: only allowed landing (/) and /lesen + its API
     if user["tier"] == "guest":
+        # Block admin for guests
+        if path.startswith("admin"):
+            return redirect(url_for("german_root"))
+        # Only allow lesen and its API endpoints
         allowed = ("lesen", "api/lesen-category", "api/lesen-refresh",
                    "api/lesen-action", "api/translate", "api/save-phrase")
         if not any(path.startswith(p) for p in allowed):
@@ -170,10 +180,9 @@ def german_proxy(path):
 @app.route("/guest/briefing")
 @_require_login
 def guest_briefing():
-    """Stripped-down today's briefing for guest users."""
+    """Daily briefing for guest users — with interaction buttons."""
     user = _current_user()
 
-    # Load today's briefing from curator_latest.json
     latest_file = REPO_DIR / "curator_latest.json"
     articles = []
     briefing_date = None
@@ -182,9 +191,9 @@ def guest_briefing():
         try:
             data = json.loads(latest_file.read_text())
             raw = data if isinstance(data, list) else data.get("articles", [])
-            # Strip sensitive/personal fields from guest view
             for a in raw[:20]:
                 articles.append({
+                    "hash_id":  a.get("hash_id", ""),
                     "rank":     a.get("rank", ""),
                     "title":    a.get("title", ""),
                     "url":      a.get("url", a.get("link", "")),
@@ -196,12 +205,92 @@ def guest_briefing():
         except Exception:
             pass
 
+    # Load this guest's existing feedback so buttons show correct state
+    user_feedback = _gdata.get_user_feedback(user["username"])
+
     return render_template(
         "guest_briefing.html",
         user=user,
         articles=articles,
         briefing_date=briefing_date,
+        user_feedback=user_feedback,
     )
+
+
+# ── Guest interaction API ─────────────────────────────────────────────────────
+
+@app.route("/guest/feedback", methods=["POST"])
+@_require_login
+def guest_feedback():
+    """Like, dislike, or save an article. Returns updated state."""
+    user = _current_user()
+    body = request.get_json(silent=True) or {}
+    hash_id = body.get("hash_id", "").strip()
+    action  = body.get("action", "").strip()
+
+    if not hash_id or action not in ("like", "dislike", "save"):
+        return jsonify({"error": "Invalid request"}), 400
+
+    state = _gdata.record_feedback(user["username"], hash_id, action)
+    return jsonify(state)
+
+
+@app.route("/guest/comment", methods=["POST"])
+@_require_login
+def guest_comment():
+    """Add a comment on an article."""
+    user = _current_user()
+    body = request.get_json(silent=True) or {}
+    hash_id = body.get("hash_id", "").strip()
+    text    = body.get("text", "").strip()
+
+    if not hash_id or not text:
+        return jsonify({"error": "Invalid request"}), 400
+
+    comment = _gdata.add_comment(user["username"], user["display_name"], hash_id, text)
+    return jsonify({"success": True, "comment": comment})
+
+
+@app.route("/guest/deep-dive", methods=["POST"])
+@_require_login
+def guest_deep_dive():
+    """
+    Trigger a fresh deep dive for an article.
+    Calls the Curator backend's /deepdive endpoint.
+    Takes ~30-60s — the browser waits (threaded Flask handles concurrent requests).
+    Returns {success, html_path} on completion.
+    """
+    user = _current_user()
+    body = request.get_json(silent=True) or {}
+    hash_id = body.get("hash_id", "").strip()
+    title   = body.get("title", "").strip()
+    summary = body.get("summary", "").strip()
+
+    if not hash_id:
+        return jsonify({"success": False, "message": "Missing article ID"}), 400
+
+    # Build interest string from article metadata
+    interest = f"Deep dive on: {title}"
+    if summary:
+        interest += f". Context: {summary[:300]}"
+
+    try:
+        resp = _requests.get(
+            f"{_cfg.CURATOR_BACKEND}/deepdive",
+            params={"hash_id": hash_id, "interest": interest},
+            timeout=90,
+        )
+        result = resp.json()
+        if result.get("success") and result.get("html_path"):
+            return jsonify({"success": True, "html_path": result["html_path"]})
+        return jsonify({
+            "success": False,
+            "message": result.get("message", "Deep dive did not complete"),
+        })
+    except _requests.exceptions.Timeout:
+        return jsonify({"success": False, "message": "Timed out — try again"}), 504
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 # ── Admin: guest management (owner only) ──────────────────────────────────────
@@ -246,7 +335,7 @@ def admin_guests_revoke(username):
 def main():
     port = _cfg.PORT
     debug = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
-    app.run(host="localhost", port=port, debug=debug)
+    app.run(host="localhost", port=port, debug=debug, threaded=True)
 
 
 if __name__ == "__main__":

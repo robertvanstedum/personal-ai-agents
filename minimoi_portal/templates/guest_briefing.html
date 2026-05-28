@@ -30,19 +30,61 @@
   {% if articles %}
     <div class="briefing-list">
       {% for a in articles %}
-        <div class="briefing-item">
+        {% set fb = user_feedback.get(a.hash_id, {}) %}
+        <div class="briefing-item" data-hash="{{ a.hash_id }}">
+
           <div class="briefing-meta">
             <span class="briefing-source">{{ a.source }}</span>
             {% if a.category %}
               <span class="briefing-cat briefing-cat-{{ a.category }}">{{ a.category }}</span>
             {% endif %}
           </div>
+
           <h2 class="briefing-item-title">
             <a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a>
           </h2>
+
           {% if a.summary %}
             <p class="briefing-summary">{{ a.summary }}</p>
           {% endif %}
+
+          <!-- Action buttons -->
+          <div class="article-actions">
+            <button class="action-btn like-btn{% if fb.get('reaction') == 'like' %} active{% endif %}"
+                    data-action="like" data-hash="{{ a.hash_id }}">
+              👍 Like
+            </button>
+            <button class="action-btn dislike-btn{% if fb.get('reaction') == 'dislike' %} active{% endif %}"
+                    data-action="dislike" data-hash="{{ a.hash_id }}">
+              👎 Dislike
+            </button>
+            <button class="action-btn save-btn{% if fb.get('saved') %} active{% endif %}"
+                    data-action="save" data-hash="{{ a.hash_id }}">
+              {% if fb.get('saved') %}🔖 Saved{% else %}🔖 Save{% endif %}
+            </button>
+            {% if a.hash_id %}
+              <button class="action-btn dive-btn"
+                      data-hash="{{ a.hash_id }}"
+                      data-title="{{ a.title | e }}"
+                      data-summary="{{ a.summary[:200] | e }}">
+                🔍 Deep Dive
+              </button>
+            {% endif %}
+            <button class="action-btn comment-toggle-btn"
+                    data-hash="{{ a.hash_id }}">
+              💬 Comment
+            </button>
+          </div>
+
+          <!-- Comment input (hidden by default) -->
+          <div class="comment-area" id="comment-area-{{ a.hash_id }}" style="display:none">
+            <textarea class="comment-input" placeholder="What do you think about this article?" rows="2"></textarea>
+            <button class="btn-submit-comment" data-hash="{{ a.hash_id }}">Post comment</button>
+          </div>
+
+          <!-- Deep dive result area -->
+          <div class="dive-result" id="dive-result-{{ a.hash_id }}" style="display:none"></div>
+
         </div>
       {% endfor %}
     </div>
@@ -53,6 +95,128 @@
   {% endif %}
 
 </main>
+
+<script>
+// ── Like / Dislike / Save ─────────────────────────────────────────────────────
+
+document.querySelectorAll('.action-btn[data-action]').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const hash   = btn.dataset.hash;
+    const action = btn.dataset.action;
+    const card   = btn.closest('.briefing-item');
+
+    btn.disabled = true;
+
+    try {
+      const resp = await fetch('/guest/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hash_id: hash, action }),
+      });
+      const state = await resp.json();
+
+      if (action === 'like' || action === 'dislike') {
+        card.querySelectorAll('.like-btn, .dislike-btn').forEach(b => b.classList.remove('active'));
+        if (state.reaction === action) btn.classList.add('active');
+      } else if (action === 'save') {
+        if (state.saved) {
+          btn.classList.add('active');
+          btn.textContent = '🔖 Saved';
+        } else {
+          btn.classList.remove('active');
+          btn.textContent = '🔖 Save';
+        }
+      }
+    } catch (e) {
+      console.error('Feedback error:', e);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+});
+
+// ── Comment toggle ────────────────────────────────────────────────────────────
+
+document.querySelectorAll('.comment-toggle-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const area = document.getElementById('comment-area-' + btn.dataset.hash);
+    const open = area.style.display !== 'none';
+    area.style.display = open ? 'none' : 'block';
+    if (!open) area.querySelector('textarea').focus();
+  });
+});
+
+// ── Comment submit ────────────────────────────────────────────────────────────
+
+document.querySelectorAll('.btn-submit-comment').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const hash = btn.dataset.hash;
+    const area = document.getElementById('comment-area-' + hash);
+    const text = area.querySelector('textarea').value.trim();
+    if (!text) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Posting...';
+
+    try {
+      await fetch('/guest/comment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hash_id: hash, text }),
+      });
+      area.querySelector('textarea').value = '';
+      btn.textContent = '✓ Posted';
+      setTimeout(() => {
+        btn.textContent = 'Post comment';
+        btn.disabled = false;
+      }, 2000);
+    } catch (e) {
+      btn.textContent = 'Post comment';
+      btn.disabled = false;
+    }
+  });
+});
+
+// ── Deep Dive ─────────────────────────────────────────────────────────────────
+
+document.querySelectorAll('.dive-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const hash    = btn.dataset.hash;
+    const title   = btn.dataset.title;
+    const summary = btn.dataset.summary;
+    const result  = document.getElementById('dive-result-' + hash);
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Generating…';
+    result.style.display = 'block';
+    result.className = 'dive-result dive-loading';
+    result.innerHTML = '<span class="dive-spinner"></span> Generating your deep dive — this takes about 30 seconds…';
+
+    try {
+      const resp = await fetch('/guest/deep-dive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hash_id: hash, title, summary }),
+      });
+      const data = await resp.json();
+
+      if (data.success && data.html_path) {
+        result.className = 'dive-result dive-ready';
+        result.innerHTML = `<a class="dive-link" href="/app/curator/${data.html_path}" target="_blank">📖 Read your deep dive →</a>`;
+      } else {
+        result.className = 'dive-result dive-error';
+        result.innerHTML = `<span>Deep dive failed: ${data.message || 'unknown error'}. Try again.</span>`;
+      }
+    } catch (e) {
+      result.className = 'dive-result dive-error';
+      result.innerHTML = '<span>Something went wrong. Try again.</span>';
+    } finally {
+      btn.textContent = '🔍 Deep Dive';
+      btn.disabled = false;
+    }
+  });
+});
+</script>
 
 </body>
 </html>
