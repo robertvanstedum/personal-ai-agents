@@ -4,9 +4,12 @@ minimoi_portal/proxy.py — Reverse proxy for Curator and Mein Deutsch backends.
 Forwards authenticated requests to the backend Flask apps and rewrites
 HTML content so all internal links resolve correctly through the portal prefix.
 
-Known limitation: JavaScript that constructs absolute URLs dynamically (e.g.
-template strings like fetch(`/api/${id}`) won't be caught by the regex
-rewrite. Good enough for internal/portfolio use at current scale.
+Rewriting strategy:
+  - HTML: tag attributes (href/src/action/data-src) + inline <script> blocks
+  - CSS:  url('/...') references
+  - JS:   external .js files — fetch/axios/url patterns rewritten
+  - Template literals (fetch(`/...`)) are NOT rewritten — known gap for
+    dynamically-constructed paths. Good enough for portfolio use.
 """
 
 import re
@@ -22,11 +25,50 @@ _HOP_BY_HOP = frozenset({
     "content-encoding", "content-length",
 })
 
+# JS content types
+_JS_TYPES = ("application/javascript", "text/javascript", "application/x-javascript")
+
+
+def _rewrite_js(text: str, portal_prefix: str) -> str:
+    """Rewrite absolute URL paths inside a JavaScript string."""
+    # fetch('/...') and fetch("/...")
+    text = re.sub(
+        r"""(fetch\s*\(\s*['"])(/[^'"?#`])""",
+        lambda m: m.group(1) + portal_prefix + m.group(2),
+        text,
+    )
+    # axios.get('/...'), axios.post('/...'), etc.
+    text = re.sub(
+        r"""(axios\.\w+\s*\(\s*['"])(/[^'"?#`])""",
+        lambda m: m.group(1) + portal_prefix + m.group(2),
+        text,
+    )
+    # url: '/...' patterns in JS objects/options
+    text = re.sub(
+        r"""(url\s*:\s*['"])(/[^'"?#`])""",
+        lambda m: m.group(1) + portal_prefix + m.group(2),
+        text,
+    )
+    # XMLHttpRequest .open("GET", '/...')
+    text = re.sub(
+        r"""(\.open\s*\(\s*['"][A-Z]+['"]\s*,\s*['"])(/[^'"?#`])""",
+        lambda m: m.group(1) + portal_prefix + m.group(2),
+        text,
+    )
+    # window.location assignments: window.location = '/...'
+    text = re.sub(
+        r"""(window\.location(?:\.href)?\s*=\s*['"])(/[^'"?#`])""",
+        lambda m: m.group(1) + portal_prefix + m.group(2),
+        text,
+    )
+    return text
+
 
 def proxy_to(backend_url: str, path: str, portal_prefix: str) -> Response:
     """
     Forward the current Flask request to backend_url/path.
-    Rewrites HTML so all internal links go through portal_prefix.
+    Rewrites URLs in HTML, CSS, and JS responses so they resolve
+    correctly through the portal prefix.
 
     portal_prefix: e.g. '/app/curator' or '/app/german'
     backend_url:   e.g. 'http://localhost:8766'
@@ -79,32 +121,19 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str) -> Response:
 
         # Rewrite tag attributes
         for tag in soup.find_all(True):
-            for attr in ("href", "src", "action", "data-src"):
+            for attr in ("href", "src", "action", "data-src", "data-url"):
                 val = tag.get(attr, "")
                 if val and val.startswith("/") and not val.startswith("//"):
                     tag[attr] = f"{portal_prefix}{val}"
 
-        # Rewrite JS fetch/XMLHttpRequest absolute paths
+        # Rewrite inline <script> blocks
         for script in soup.find_all("script"):
+            # Use .string for simple text nodes; fall back to iterating NavigableStrings
             if script.string:
-                # fetch('/...') and fetch("/...")
-                script.string = re.sub(
-                    r"""(fetch\s*\(\s*['"])(/[^'"?#])""",
-                    lambda m: m.group(1) + portal_prefix + m.group(2),
-                    script.string,
-                )
-                # axios.get('/...'), axios.post('/...'), etc.
-                script.string = re.sub(
-                    r"""(axios\.\w+\s*\(\s*['"])(/[^'"?#])""",
-                    lambda m: m.group(1) + portal_prefix + m.group(2),
-                    script.string,
-                )
-                # url: '/...' patterns in JS objects
-                script.string = re.sub(
-                    r"""(url\s*:\s*['"])(/[^'"?#])""",
-                    lambda m: m.group(1) + portal_prefix + m.group(2),
-                    script.string,
-                )
+                script.string = _rewrite_js(script.string, portal_prefix)
+            else:
+                # Script has mixed content (rare) — skip safely
+                pass
 
         resp_headers.pop("Content-Type", None)
         return Response(
@@ -128,6 +157,17 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str) -> Response:
             status=resp.status_code,
             headers=resp_headers,
             content_type="text/css; charset=utf-8",
+        )
+
+    # ── JavaScript: rewrite absolute paths in external .js files ─────────
+    if any(jt in content_type for jt in _JS_TYPES):
+        text = _rewrite_js(resp.text, portal_prefix)
+        resp_headers.pop("Content-Type", None)
+        return Response(
+            text.encode("utf-8"),
+            status=resp.status_code,
+            headers=resp_headers,
+            content_type="application/javascript; charset=utf-8",
         )
 
     # ── Everything else: pass through as-is ──────────────────────────────
