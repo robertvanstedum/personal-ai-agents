@@ -198,8 +198,8 @@ def curator_root():
 def curator_proxy(path):
     user = _current_user()
     if user["tier"] == "guest":
-        # Allow deep dive HTML files so guests can view their generated dives
-        if path.startswith("interests/"):
+        # Allow static assets and deep dive HTML — guests need these to render pages
+        if path.startswith(("interests/", "static/")):
             return _proxy.proxy_to(_cfg.CURATOR_BACKEND, path, "/app/curator", user=user)
         return redirect(url_for("guest_briefing"))
     return _proxy.proxy_to(_cfg.CURATOR_BACKEND, path, "/app/curator", user=user)
@@ -223,8 +223,9 @@ def german_proxy(path):
         # Block admin for guests
         if path.startswith("admin"):
             return redirect(url_for("german_root"))
-        # Only allow lesen and its API endpoints
-        allowed = ("lesen", "api/lesen-category", "api/lesen-refresh",
+        # Allow static assets (CSS, JS, images) — needed for all pages to render
+        # Allow lesen and its API endpoints
+        allowed = ("static", "lesen", "api/lesen-category", "api/lesen-refresh",
                    "api/lesen-action", "api/translate", "api/save-phrase")
         if not any(path.startswith(p) for p in allowed):
             return redirect(url_for("german_root"))
@@ -363,8 +364,32 @@ def admin_guests():
 @app.route("/admin/guests/approve/<token>", methods=["POST"])
 @_require_owner
 def admin_guests_approve(token):
-    _auth.approve_pending(token)
+    guest = _auth.approve_pending(token)
+    if guest:
+        _notify_telegram_approved(guest)
     return redirect(url_for("admin_guests"))
+
+
+def _notify_telegram_approved(guest: dict) -> None:
+    """Fire a Telegram reminder to Robert when he approves a guest."""
+    try:
+        import keyring
+        token   = keyring.get_password("telegram", "bot_token")
+        chat_id = 8379221702
+        name    = guest.get("display_name", "Guest")
+        email   = guest.get("email", "(no email)")
+        text = (
+            f"✅ <b>Guest approved: {name}</b>\n\n"
+            f"<b>Email:</b> {email}\n\n"
+            f"They can now sign in — give them a heads-up at that address."
+        )
+        _requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+            timeout=10,
+        )
+    except Exception as e:
+        print(f"⚠️  Telegram approval notification failed: {e}")
 
 
 @app.route("/admin/guests/reject/<token>", methods=["POST"])

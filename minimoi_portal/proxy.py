@@ -77,7 +77,7 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
 
     return f"""
 <div id="portal-nav-bar" style="
-  position:fixed;top:0;left:0;right:0;z-index:999999;
+  position:sticky;top:0;left:0;right:0;z-index:999999;
   height:38px;background:#12122a;color:#e8e8e8;
   display:flex;align-items:center;padding:0 16px;gap:0;
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -92,10 +92,6 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
   <span style="color:rgba(255,255,255,0.45);margin-right:12px;">{display_name}</span>
   <a href="/logout" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;">Sign out</a>
 </div>
-<style>
-  body {{ padding-top: 38px !important; }}
-  #portal-nav-bar a:hover {{ opacity: 0.8; }}
-</style>
 """
 
 
