@@ -18,4 +18,4 @@ SECRET_KEY = os.environ.get("PORTAL_SECRET_KEY", "dev-only-change-in-production"
 SESSION_LIFETIME_DAYS = 30
 
 # Portal runs on this port (Cloudflare Tunnel points here)
-PORT = int(os.environ.get("PORTAL_PORT", 5000))
+PORT = int(os.environ.get("PORTAL_PORT", 5001))
