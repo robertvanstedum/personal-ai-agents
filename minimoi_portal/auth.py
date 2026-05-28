@@ -46,20 +46,22 @@ def authenticate(username: str, password: str) -> tuple:
     """
     Returns (user_dict, None) on success or (None, error_message) on failure.
     user_dict always contains 'tier': 'owner' | 'family' | 'guest'
+
+    Accepts either username OR email address in the username field.
     Pending registrations get a clear waiting message.
     """
-    username = username.strip().lower()
+    login = username.strip().lower()
 
-    # Check permanent users first
+    # Check permanent users (by username or email)
     for user in load_users():
-        if user["username"].lower() == username:
+        if user["username"].lower() == login or user.get("email", "").lower() == login:
             if check_password_hash(user["password_hash"], password):
                 return user, None
             return None, "Incorrect password."
 
-    # Check active guests
+    # Check active guests (by username or email)
     for guest in load_guests():
-        if guest["username"].lower() == username:
+        if guest["username"].lower() == login or guest.get("email", "").lower() == login:
             if not check_password_hash(guest["password_hash"], password):
                 return None, "Incorrect password."
             try:
@@ -72,9 +74,9 @@ def authenticate(username: str, password: str) -> tuple:
                 return None, "Guest access configuration error."
             return guest, None
 
-    # Check pending — give a friendly waiting message
+    # Check pending — friendly waiting message
     for pending in load_pending():
-        if pending["username"].lower() == username:
+        if pending["username"].lower() == login or pending.get("email", "").lower() == login:
             if check_password_hash(pending["password_hash"], password):
                 return None, "Your account is pending approval. You'll receive access once approved."
             return None, "Incorrect password."
