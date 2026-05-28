@@ -112,11 +112,17 @@ def create_guest(display_name: str, expires_at_iso: str, password: str,
 def create_pending(display_name: str, email: str, password: str) -> dict:
     """
     Create a pending registration. Does NOT grant login access.
+    If the same email already has a pending entry, it is replaced.
     Returns the pending dict (includes token for admin approval link).
     """
     data = _load_json("pending.json")
     if "pending" not in data:
         data["pending"] = []
+
+    # Remove any previous pending entry for this email so it can be re-submitted
+    if email:
+        data["pending"] = [p for p in data["pending"]
+                           if p.get("email", "").lower() != email.lower()]
 
     token    = secrets.token_hex(16)
     username = f"guest_{secrets.token_hex(4)}"
@@ -136,9 +142,12 @@ def create_pending(display_name: str, email: str, password: str) -> dict:
 
 def approve_pending(token: str) -> dict | None:
     """
-    Move a pending registration to active guests (30-day expiry).
+    Move a pending registration to active guests (2-hour expiry).
+    If the same email already exists in guests, the old entry is replaced.
     Returns the new guest dict or None if token not found.
     """
+    from datetime import timedelta
+
     data = _load_json("pending.json")
     pending_list = data.get("pending", [])
 
@@ -150,20 +159,25 @@ def approve_pending(token: str) -> dict | None:
     data["pending"] = [p for p in pending_list if p["token"] != token]
     _write_json("pending.json", data)
 
-    # Add to active guests (30-day expiry from approval)
-    from datetime import timedelta
-    expires_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+    # 2-hour expiry from approval
+    expires_at = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
 
     guests_data = _load_json("guests.json")
     if "guests" not in guests_data:
         guests_data["guests"] = []
+
+    # Remove any existing guest entry for this email so the email can be reused
+    email = entry.get("email", "")
+    if email:
+        guests_data["guests"] = [g for g in guests_data["guests"]
+                                  if g.get("email", "").lower() != email.lower()]
 
     guest = {
         "username":      entry["username"],
         "password_hash": entry["password_hash"],
         "tier":          "guest",
         "display_name":  entry["display_name"],
-        "email":         entry.get("email", ""),
+        "email":         email,
         "expires_at":    expires_at,
         "created_at":    datetime.now(timezone.utc).isoformat(),
     }
