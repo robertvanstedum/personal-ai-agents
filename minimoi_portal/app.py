@@ -10,9 +10,13 @@ Run: cd ~/Projects/personal-ai-agents && venv/bin/python3 minimoi_portal/app.py
 
 import json
 import os
+import sys
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
+
+# Ensure repo root is on sys.path so `minimoi_portal` resolves as a package
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from flask import (
     Flask,
