@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sign in — mini-moi</title>
+  <title>Get access — mini-moi</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/portal.css">
@@ -16,31 +16,31 @@
 
 <main class="login-main">
   <div class="login-card">
-    <h1 class="login-title">Sign in</h1>
+    <h1 class="login-title">Get guest access</h1>
+    <p class="login-subtitle">Try the Curator briefing and Mein Deutsch. Guest access is active for 30 days.</p>
 
     {% if error %}
       <div class="login-error">{{ error }}</div>
     {% endif %}
 
-    <form method="POST" action="/login{% if request.args.get('next') %}?next={{ request.args.get('next') }}{% endif %}">
+    <form method="POST" action="/register">
       <div class="form-group">
-        <label for="username">Username</label>
-        <input type="text" id="username" name="username"
-               autocomplete="username" autocapitalize="none"
-               autofocus required>
+        <label for="display_name">Your name</label>
+        <input type="text" id="display_name" name="display_name"
+               placeholder="e.g. Jane Smith"
+               autocomplete="name" autofocus required>
       </div>
       <div class="form-group">
-        <label for="password">Password</label>
+        <label for="password">Choose a password</label>
         <input type="password" id="password" name="password"
-               autocomplete="current-password" required>
+               autocomplete="new-password"
+               placeholder="At least 6 characters" required>
       </div>
-      <button type="submit" class="btn-primary btn-full">Sign in →</button>
+      <button type="submit" class="btn-primary btn-full">Create guest account →</button>
     </form>
 
     <p class="login-footer">
-      <a href="/">← Back</a>
-      &nbsp;·&nbsp;
-      <a href="/register">Get guest access</a>
+      Already have an account? <a href="/login">Sign in</a>
     </p>
   </div>
 </main>

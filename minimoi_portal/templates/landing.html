@@ -18,6 +18,7 @@
     {% if user %}
       <a href="/dashboard" class="nav-btn">Dashboard →</a>
     {% else %}
+      <a href="/register" class="nav-btn-ghost">Try it →</a>
       <a href="/login" class="nav-btn">Sign in</a>
     {% endif %}
   </div>
@@ -28,11 +29,14 @@
   <section class="hero">
     <h1 class="hero-title">mini-moi</h1>
     <p class="hero-tagline"><em>Your context. Your goals. Your signal.</em></p>
-    {% if user %}
     <div class="hero-actions">
-      <a href="/dashboard" class="btn-primary">Go to Dashboard →</a>
+      {% if user %}
+        <a href="/dashboard" class="btn-primary">Go to Dashboard →</a>
+      {% else %}
+        <a href="/register" class="btn-primary">Try mini-moi →</a>
+        <a href="/login" class="btn-secondary">Sign in</a>
+      {% endif %}
     </div>
-    {% endif %}
   </section>
 
   <section class="about-section">

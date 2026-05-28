@@ -555,6 +555,51 @@ body.admin { background: var(--parch-mid); }
 
 .no-guests { color: var(--ink-light); font-size: 0.9rem; }
 
+/* ── Secondary + ghost nav buttons ─────────────────────────────────────────── */
+.btn-secondary {
+  display: inline-block;
+  font-family: var(--sans);
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.55rem 1.25rem;
+  border: 1.5px solid var(--ink);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-secondary:hover { background: var(--ink); color: var(--parchment, #f5f1e8); }
+
+.nav-btn-ghost {
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--ink-light);
+  text-decoration: none;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+.nav-btn-ghost:hover { color: var(--ink); }
+
+/* Login subtitle */
+.login-subtitle {
+  font-size: 0.9rem;
+  color: var(--ink-light);
+  margin: -0.5rem 0 1.25rem;
+  line-height: 1.5;
+}
+
+/* Hero actions (two-button row) */
+.hero-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
+}
+
 /* ── Guest article actions ──────────────────────────────────────────────────── */
 .article-actions {
   display: flex;

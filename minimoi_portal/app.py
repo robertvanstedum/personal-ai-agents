@@ -117,6 +117,36 @@ def logout():
     return redirect(url_for("landing"))
 
 
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    """Self-service guest registration. Creates a 30-day guest account."""
+    if _current_user():
+        return redirect(url_for("dashboard"))
+
+    error = None
+    if request.method == "POST":
+        display_name = request.form.get("display_name", "").strip()
+        password     = request.form.get("password", "")
+
+        if not display_name:
+            error = "Please enter your name."
+        elif len(password) < 6:
+            error = "Password must be at least 6 characters."
+        else:
+            expires_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+            guest = _auth.create_guest(display_name, expires_at, password)
+            # Log them in immediately
+            session.permanent = True
+            session["user"] = {
+                "username":     guest["username"],
+                "display_name": guest["display_name"],
+                "tier":         "guest",
+            }
+            return redirect(url_for("dashboard"))
+
+    return render_template("register.html", error=error)
+
+
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @app.route("/dashboard")
