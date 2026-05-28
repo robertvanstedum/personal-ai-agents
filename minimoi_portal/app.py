@@ -226,9 +226,7 @@ def german_proxy(path):
     if user["tier"] == "guest":
         # Block owner-only sections — show a friendly restricted page
         _GERMAN_OWNER_ONLY = {
-            "admin":   "Admin",
-            "woerter": "Wörter",
-            "archiv":  "Archiv",
+            "admin": "Admin",
         }
         for prefix, label in _GERMAN_OWNER_ONLY.items():
             if path.startswith(prefix):
