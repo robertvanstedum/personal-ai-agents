@@ -2065,10 +2065,19 @@ body.reading-mode nav {
   margin-top: 0.1rem;
 }
 
+/* Sticky tutor footer — always visible at bottom of persona list */
+.persona-list-tutor-footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--md-parch-bg);
+  border-top: 1px solid var(--md-parch-border);
+  z-index: 2;
+}
+
 .persona-list-divider {
   height: 1px;
   background: var(--md-parch-border);
-  margin: 8px 12px;
+  margin: 0;
   opacity: 0.6;
 }
 

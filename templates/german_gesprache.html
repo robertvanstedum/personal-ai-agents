@@ -38,13 +38,15 @@
     </div>
     {% endfor %}
 
-    <!-- Echter Tutor entry -->
-    <div class="persona-list-divider"></div>
-    <div class="persona-list-item" data-idx="tutor" data-name="Echter Tutor">
-      <div class="persona-avatar">👤</div>
-      <div class="persona-info">
-        <div class="persona-name">Echter Tutor</div>
-        <div class="persona-role">Human Session</div>
+    <!-- Echter Tutor — sticky at the bottom of the persona list -->
+    <div class="persona-list-tutor-footer">
+      <div class="persona-list-divider"></div>
+      <div class="persona-list-item" data-idx="tutor" data-name="Echter Tutor">
+        <div class="persona-avatar">👤</div>
+        <div class="persona-info">
+          <div class="persona-name">Echter Tutor</div>
+          <div class="persona-role">Human Session</div>
+        </div>
       </div>
     </div>
   </div>
@@ -111,9 +113,9 @@
         <button class="btn-ghost btn-sm" id="btn-copy-room">Kopieren</button>
       </div>
       {% if whereby_host_available %}
-      <details>
+      <details id="whereby-details">
         <summary class="btn-ghost btn-sm" style="cursor:pointer; display:inline-block; margin-bottom:8px;">Raum hier öffnen (als Host)</summary>
-        <iframe id="whereby-iframe" src="/api/whereby-join"
+        <iframe id="whereby-iframe"
                 allow="camera; microphone; fullscreen"
                 style="width:100%; height:420px; border:none; border-radius:8px; margin-top:6px;">
         </iframe>
@@ -503,6 +505,16 @@ document.body.classList.add('parch-mode');
   document.getElementById('btn-copy-room').addEventListener('click', () => {
     navigator.clipboard.writeText(document.getElementById('whereby-room-url').textContent);
   });
+
+  {% if whereby_host_available %}
+  // Lazy-load the Whereby iframe only when the <details> is opened
+  document.getElementById('whereby-details').addEventListener('toggle', function () {
+    if (this.open) {
+      const iframe = document.getElementById('whereby-iframe');
+      if (!iframe.src) iframe.src = '/api/whereby-join';
+    }
+  });
+  {% endif %}
 
   document.getElementById('btn-submit-tutor-transcript').addEventListener('click', async () => {
     const transcript = document.getElementById('tutor-transcript-input').value.trim();
