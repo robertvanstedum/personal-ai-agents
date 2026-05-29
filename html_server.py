@@ -40,10 +40,14 @@ from german_domain import (
 
 BASE_DIR = Path(__file__).parent
 
-# ── Tutor config ──────────────────────────────────────────────────────────────
-WHEREBY_ROOM_URL = os.environ.get("WHEREBY_ROOM_URL", "")
+# ── Tutor / Whereby config ────────────────────────────────────────────────────
+# Guest URL — safe to show in UI and share with conversation partner
+WHEREBY_ROOM_URL  = os.environ.get("WHEREBY_ROOM_URL", "https://whereby.com/roberts-german")
+# Host URL — includes roomKey JWT; never rendered in templates or client-side JS.
+# Accessed only server-side via /api/whereby-join redirect.
+WHEREBY_HOST_URL  = os.environ.get("WHEREBY_HOST_URL", "")
 # Where tutor brief tokens are persisted (readable/writable by html_server.py)
-PORTAL_AUTH_DIR  = BASE_DIR / "minimoi_portal" / "auth"
+PORTAL_AUTH_DIR   = BASE_DIR / "minimoi_portal" / "auth"
 
 app = Flask(
     __name__,
@@ -91,7 +95,8 @@ def gesprache():
     sessions = get_gesprache_sessions(limit=5)
     return render_template("german_gesprache.html", active="gesprache",
                            personas=personas, sessions=sessions,
-                           whereby_room_url=WHEREBY_ROOM_URL)
+                           whereby_room_url=WHEREBY_ROOM_URL,
+                           whereby_host_available=bool(WHEREBY_HOST_URL))
 
 
 @app.route("/ueben")
@@ -331,6 +336,17 @@ def api_persona_prompt():
     brief = build_session_brief(persona, scene, memory)
 
     return jsonify({"prompt": prompt, "session_brief": brief})
+
+
+# ── Whereby host join — redirect only, host URL never exposed to client ───────
+
+@app.route("/api/whereby-join")
+def whereby_join():
+    """Server-side redirect to Whereby host URL. Keeps the roomKey JWT off the client."""
+    from flask import redirect as _redir
+    if not WHEREBY_HOST_URL:
+        return "Kein Raum konfiguriert.", 404
+    return _redir(WHEREBY_HOST_URL)
 
 
 # ── Tutor brief — token generation (owner call from UI) ──────────────────────

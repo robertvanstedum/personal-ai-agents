@@ -105,21 +105,21 @@
     <!-- Section 2: Während der Sitzung -->
     <div class="tutor-section">
       <div class="tutor-section-label">Während der Sitzung</div>
-      {% if whereby_room_url %}
-      <p class="tutor-field-label">Sitzungsraum — teile diesen Link mit deinem Tutor:</p>
+      <p class="tutor-field-label">Teilbare Raum-URL (für deinen Gesprächspartner):</p>
       <div style="display:flex; align-items:center; gap:8px; margin:6px 0 10px;">
         <code id="whereby-room-url" class="tutor-link-code">{{ whereby_room_url }}</code>
         <button class="btn-ghost btn-sm" id="btn-copy-room">Kopieren</button>
       </div>
+      {% if whereby_host_available %}
       <details>
-        <summary class="btn-ghost btn-sm" style="cursor:pointer; display:inline-block; margin-bottom:8px;">Raum hier öffnen</summary>
-        <iframe id="whereby-iframe" src="{{ whereby_room_url }}"
+        <summary class="btn-ghost btn-sm" style="cursor:pointer; display:inline-block; margin-bottom:8px;">Raum hier öffnen (als Host)</summary>
+        <iframe id="whereby-iframe" src="/api/whereby-join"
                 allow="camera; microphone; fullscreen"
-                style="width:100%; height:400px; border:none; border-radius:8px; margin-top:6px;">
+                style="width:100%; height:420px; border:none; border-radius:8px; margin-top:6px;">
         </iframe>
       </details>
       {% else %}
-      <p class="hint">Kein Whereby-Raum konfiguriert. Setze <code>WHEREBY_ROOM_URL</code> in der Umgebung.</p>
+      <p class="hint" style="margin-top:4px;">Host-URL nicht konfiguriert — setze <code>WHEREBY_HOST_URL</code>.</p>
       {% endif %}
     </div>
 
@@ -500,11 +500,9 @@ document.body.classList.add('parch-mode');
     navigator.clipboard.writeText(document.getElementById('brief-link-url').textContent);
   });
 
-  {% if whereby_room_url %}
   document.getElementById('btn-copy-room').addEventListener('click', () => {
     navigator.clipboard.writeText(document.getElementById('whereby-room-url').textContent);
   });
-  {% endif %}
 
   document.getElementById('btn-submit-tutor-transcript').addEventListener('click', async () => {
     const transcript = document.getElementById('tutor-transcript-input').value.trim();
