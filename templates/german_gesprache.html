@@ -37,6 +37,16 @@
       </div>
     </div>
     {% endfor %}
+
+    <!-- Echter Tutor entry -->
+    <div class="persona-list-divider"></div>
+    <div class="persona-list-item" data-idx="tutor" data-name="Echter Tutor">
+      <div class="persona-avatar">👤</div>
+      <div class="persona-info">
+        <div class="persona-name">Echter Tutor</div>
+        <div class="persona-role">Human Session</div>
+      </div>
+    </div>
   </div>
 
   <!-- Right: detail + prompt -->
@@ -75,6 +85,60 @@
       <div class="prompt-label">HEUTIGE VORBEREITUNG</div>
       <pre class="session-brief-text" id="session-brief-text"></pre>
     </div>
+  </div>
+
+  <!-- ── Tutor panel (shown when Echter Tutor is selected) ─────────────────── -->
+  <div id="tutor-panel" style="display:none; flex:1; padding: 0 1.5rem 1.5rem;">
+
+    <!-- Section 1: Vor der Sitzung -->
+    <div class="tutor-section">
+      <div class="tutor-section-label">Vor der Sitzung</div>
+      <div id="tutor-brief-content" class="tutor-brief-preview"></div>
+      <button class="btn-ghost btn-sm" id="btn-generate-brief">Brief generieren →</button>
+      <div id="tutor-brief-link" style="display:none; margin-top:10px;">
+        <span class="tutor-field-label">Teilbarer Link (48h):</span>
+        <code id="brief-link-url" class="tutor-link-code"></code>
+        <button class="btn-ghost btn-sm" id="btn-copy-brief-link">Kopieren</button>
+      </div>
+    </div>
+
+    <!-- Section 2: Während der Sitzung -->
+    <div class="tutor-section">
+      <div class="tutor-section-label">Während der Sitzung</div>
+      {% if whereby_room_url %}
+      <p class="tutor-field-label">Sitzungsraum — teile diesen Link mit deinem Tutor:</p>
+      <div style="display:flex; align-items:center; gap:8px; margin:6px 0 10px;">
+        <code id="whereby-room-url" class="tutor-link-code">{{ whereby_room_url }}</code>
+        <button class="btn-ghost btn-sm" id="btn-copy-room">Kopieren</button>
+      </div>
+      <details>
+        <summary class="btn-ghost btn-sm" style="cursor:pointer; display:inline-block; margin-bottom:8px;">Raum hier öffnen</summary>
+        <iframe id="whereby-iframe" src="{{ whereby_room_url }}"
+                allow="camera; microphone; fullscreen"
+                style="width:100%; height:400px; border:none; border-radius:8px; margin-top:6px;">
+        </iframe>
+      </details>
+      {% else %}
+      <p class="hint">Kein Whereby-Raum konfiguriert. Setze <code>WHEREBY_ROOM_URL</code> in der Umgebung.</p>
+      {% endif %}
+    </div>
+
+    <!-- Section 3: Nach der Sitzung -->
+    <div class="tutor-section">
+      <div class="tutor-section-label">Nach der Sitzung</div>
+      <div class="tutor-field">
+        <label class="tutor-field-label">Tutor Name</label>
+        <input type="text" id="tutor-name-input" placeholder="z.B. Frau Weber" class="form-input tutor-input">
+      </div>
+      <div class="tutor-field">
+        <label class="tutor-field-label">Transkript einfügen</label>
+        <textarea id="tutor-transcript-input" rows="8" class="form-input tutor-input"
+                  placeholder="Speaker 1: Guten Morgen…&#10;Speaker 2: …"></textarea>
+      </div>
+      <button class="btn-primary btn-sm" id="btn-submit-tutor-transcript">Transkript einreichen</button>
+      <div id="tutor-submit-status" class="gesprache-status" style="margin-top:6px;"></div>
+    </div>
+
   </div>
 
 </div>
@@ -167,6 +231,10 @@ document.body.classList.add('parch-mode');
     selectedSceneKey = null;
     currentFullPrompt = null;
     document.getElementById('session-brief-panel').style.display = 'none';
+
+    // Ensure tutor panel is hidden and persona detail is visible
+    document.getElementById('tutor-panel').style.display = 'none';
+    document.getElementById('persona-detail').style.display = '';
 
     document.querySelectorAll('.persona-list-item').forEach(el => el.classList.remove('active'));
     document.querySelector(`.persona-list-item[data-idx="${idx}"]`).classList.add('active');
@@ -262,8 +330,12 @@ document.body.classList.add('parch-mode');
 
   document.querySelectorAll('.persona-list-item').forEach(item => {
     item.addEventListener('click', () => {
-      selectPersona(parseInt(item.dataset.idx, 10));
-      if (item.dataset.ready === 'true') showRoundModal(item);
+      if (item.dataset.idx === 'tutor') {
+        selectTutor();
+      } else {
+        selectPersona(parseInt(item.dataset.idx, 10));
+        if (item.dataset.ready === 'true') showRoundModal(item);
+      }
     });
   });
   if (personas.length > 0) selectPersona(0);
@@ -391,6 +463,81 @@ document.body.classList.add('parch-mode');
     document.getElementById('gesprache-feedback-wrap').style.display = '';
     document.getElementById('gesprache-feedback-wrap').scrollIntoView({ behavior: 'smooth' });
   }
+
+  // ── Tutor panel ────────────────────────────────────────────────────────────
+
+  function selectTutor() {
+    document.querySelectorAll('.persona-list-item').forEach(el => el.classList.remove('active'));
+    document.querySelector('.persona-list-item[data-idx="tutor"]').classList.add('active');
+    document.getElementById('persona-detail').style.display = 'none';
+    document.getElementById('tutor-panel').style.display = 'flex';
+  }
+
+  document.getElementById('btn-generate-brief').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-generate-brief');
+    btn.disabled = true;
+    btn.textContent = 'Generiere…';
+    try {
+      const res = await fetch('/api/tutor-brief/generate', { method: 'POST' });
+      const data = await res.json();
+      if (data.token) {
+        const url = window.location.origin + '/tutor-brief/' + data.token;
+        document.getElementById('brief-link-url').textContent = url;
+        document.getElementById('tutor-brief-link').style.display = '';
+        document.getElementById('tutor-brief-content').textContent = 'Brief erstellt — Link unten teilen.';
+      } else {
+        btn.textContent = 'Fehler — bitte nochmal';
+      }
+    } catch (e) {
+      btn.textContent = 'Fehler — bitte nochmal';
+    } finally {
+      btn.disabled = false;
+      if (btn.textContent === 'Generiere…') btn.textContent = 'Brief generieren →';
+    }
+  });
+
+  document.getElementById('btn-copy-brief-link').addEventListener('click', () => {
+    navigator.clipboard.writeText(document.getElementById('brief-link-url').textContent);
+  });
+
+  {% if whereby_room_url %}
+  document.getElementById('btn-copy-room').addEventListener('click', () => {
+    navigator.clipboard.writeText(document.getElementById('whereby-room-url').textContent);
+  });
+  {% endif %}
+
+  document.getElementById('btn-submit-tutor-transcript').addEventListener('click', async () => {
+    const transcript = document.getElementById('tutor-transcript-input').value.trim();
+    const tutorName  = document.getElementById('tutor-name-input').value.trim() || 'Tutor';
+    const status     = document.getElementById('tutor-submit-status');
+    if (!transcript) { status.textContent = 'Bitte Transkript einfügen.'; return; }
+
+    const btn = document.getElementById('btn-submit-tutor-transcript');
+    btn.disabled = true;
+    status.textContent = 'Analysiere…';
+
+    try {
+      const res = await fetch('/api/analyse-transcript', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript,
+          persona_name: tutorName,
+          scene: 'human_session',
+        }),
+      });
+      const data = await res.json();
+      if (data.session_id) {
+        status.textContent = `✓ Gespeichert als ${data.session_id}`;
+        document.getElementById('tutor-transcript-input').value = '';
+      } else {
+        status.textContent = `Fehler: ${data.error || 'Unbekannt'}`;
+      }
+    } catch (e) {
+      status.textContent = 'Netzwerkfehler';
+    }
+    btn.disabled = false;
+  });
 
 })();
 </script>

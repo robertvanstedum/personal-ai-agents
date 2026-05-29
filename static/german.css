@@ -2065,6 +2065,81 @@ body.reading-mode nav {
   margin-top: 0.1rem;
 }
 
+.persona-list-divider {
+  height: 1px;
+  background: var(--md-parch-border);
+  margin: 8px 12px;
+  opacity: 0.6;
+}
+
+/* ── Tutor panel ── */
+
+.tutor-section {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--md-parch-border);
+}
+.tutor-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.tutor-section-label {
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--md-text-tertiary);
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--md-parch-border);
+}
+
+.tutor-field {
+  margin-bottom: 0.75rem;
+}
+
+.tutor-field-label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--md-text-secondary);
+  margin-bottom: 0.35rem;
+}
+
+.tutor-input {
+  width: 100%;
+  background: var(--md-parch-surface);
+  border: 1px solid var(--md-parch-border);
+  border-radius: 6px;
+  padding: 0.5rem 0.65rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--md-text-primary);
+  resize: vertical;
+}
+.tutor-input:focus {
+  outline: none;
+  border-color: var(--md-accent);
+  box-shadow: 0 0 0 2px rgba(139,69,19,0.12);
+}
+
+.tutor-brief-preview {
+  font-size: 0.82rem;
+  color: var(--md-text-secondary);
+  margin-bottom: 0.75rem;
+  min-height: 1.2em;
+}
+
+.tutor-link-code {
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 0.78rem;
+  background: var(--md-parch-mid);
+  border: 1px solid var(--md-parch-border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  word-break: break-all;
+}
+
 /* ── Detail panel ── */
 
 .persona-detail {

@@ -40,6 +40,11 @@ from german_domain import (
 
 BASE_DIR = Path(__file__).parent
 
+# ── Tutor config ──────────────────────────────────────────────────────────────
+WHEREBY_ROOM_URL = os.environ.get("WHEREBY_ROOM_URL", "")
+# Where tutor brief tokens are persisted (readable/writable by html_server.py)
+PORTAL_AUTH_DIR  = BASE_DIR / "minimoi_portal" / "auth"
+
 app = Flask(
     __name__,
     template_folder=str(BASE_DIR / "templates"),
@@ -85,7 +90,8 @@ def gesprache():
         p["memory"] = get_persona_memory(DEFAULT_USER, slug)
     sessions = get_gesprache_sessions(limit=5)
     return render_template("german_gesprache.html", active="gesprache",
-                           personas=personas, sessions=sessions)
+                           personas=personas, sessions=sessions,
+                           whereby_room_url=WHEREBY_ROOM_URL)
 
 
 @app.route("/ueben")
@@ -325,6 +331,68 @@ def api_persona_prompt():
     brief = build_session_brief(persona, scene, memory)
 
     return jsonify({"prompt": prompt, "session_brief": brief})
+
+
+# ── Tutor brief — token generation (owner call from UI) ──────────────────────
+
+@app.route("/api/tutor-brief/generate", methods=["POST"])
+def api_tutor_brief_generate():
+    """Generate a 48h shareable token for the pre-session tutor brief."""
+    import secrets
+    import time
+
+    token   = secrets.token_urlsafe(16)
+    expires = int(time.time()) + 48 * 3600
+
+    # Build brief from the first/most-active persona + general scene
+    personas = get_personas()
+    memory   = get_persona_memory(DEFAULT_USER, persona_to_slug(personas[0]["name"])) if personas else {}
+    persona  = personas[0] if personas else {}
+    brief    = build_session_brief(persona, "general", memory)
+
+    PORTAL_AUTH_DIR.mkdir(parents=True, exist_ok=True)
+    briefs_file = PORTAL_AUTH_DIR / "tutor_briefs.json"
+    briefs = {}
+    if briefs_file.exists():
+        try:
+            briefs = json.loads(briefs_file.read_text())
+        except Exception:
+            briefs = {}
+
+    # Prune expired tokens
+    now = int(time.time())
+    briefs = {k: v for k, v in briefs.items() if v.get("expires", 0) > now}
+
+    briefs[token] = {"expires": expires, "brief": brief, "created": now}
+    briefs_file.write_text(json.dumps(briefs, indent=2, ensure_ascii=False))
+
+    return jsonify({"token": token, "expires": expires})
+
+
+# ── Tutor brief — public read-only view (no login required) ──────────────────
+
+@app.route("/tutor-brief/<token>")
+def tutor_brief(token):
+    """Public shareable pre-session brief for the tutor. Token expires in 48h."""
+    import time
+
+    briefs_file = PORTAL_AUTH_DIR / "tutor_briefs.json"
+    if not briefs_file.exists():
+        return "Brief nicht gefunden.", 404
+
+    try:
+        briefs = json.loads(briefs_file.read_text())
+    except Exception:
+        return "Brief nicht gefunden.", 404
+
+    entry = briefs.get(token)
+    if not entry:
+        return "Brief nicht gefunden.", 404
+    if entry.get("expires", 0) < int(time.time()):
+        return "Dieser Brief ist abgelaufen.", 410
+
+    brief = entry["brief"]
+    return render_template("tutor_brief.html", brief=brief)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

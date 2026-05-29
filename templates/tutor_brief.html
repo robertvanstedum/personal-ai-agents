@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sitzungsvorbereitung — Mein Deutsch</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* Parchment, printable, mobile-friendly */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Source Sans 3', sans-serif;
+      background: #f5f0e8;
+      color: #2a1f14;
+      max-width: 680px;
+      margin: 40px auto;
+      padding: 0 24px 60px;
+      line-height: 1.6;
+    }
+    h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.6rem;
+      font-weight: 400;
+      font-style: italic;
+      margin-bottom: 4px;
+    }
+    .meta {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: #9e9080;
+      margin-bottom: 36px;
+    }
+    .brief-content {
+      background: #faf7f2;
+      border: 1px solid rgba(42,31,20,0.12);
+      border-radius: 8px;
+      padding: 20px 24px;
+    }
+    pre {
+      white-space: pre-wrap;
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 14px;
+      line-height: 1.7;
+      color: #2a1f14;
+    }
+    .footer-meta {
+      margin-top: 32px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: #9e9080;
+      border-top: 1px solid rgba(42,31,20,0.12);
+      padding-top: 16px;
+    }
+    @media print {
+      body { background: white; margin: 0; }
+      .brief-content { border: 1px solid #ccc; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Sitzungsvorbereitung</h1>
+  <p class="meta">Mein Deutsch — privates Vorbereitungsdokument</p>
+
+  <div class="brief-content">
+    <pre>{{ brief }}</pre>
+  </div>
+
+  <p class="footer-meta">Dieses Dokument läuft in 48 Stunden ab.</p>
+</body>
+</html>
