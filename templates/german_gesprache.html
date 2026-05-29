@@ -83,22 +83,21 @@
             <summary class="session-brief-summary">🎯 Heutige Vorbereitung</summary>
             <pre class="session-brief-text" id="session-brief-text"></pre>
           </details>
+
+          <details class="nach-sitzung-details" id="transcript-details">
+            <summary class="session-brief-summary">✏️ Nach der Sitzung</summary>
+            <div class="nach-sitzung-body">
+              <textarea class="notebook-textarea nach-sitzung-textarea" id="transcript-input" rows="6"
+                placeholder="Transkript hier einfügen — z.B. aus Grok Voice&#10;&#10;Robert: Guten Morgen…&#10;Frau Berger: Guten Morgen!…"></textarea>
+              <div class="gesprache-submit-row">
+                <button class="btn-primary" id="btn-analysieren" title="Analyse des Gesprächs">Analysieren</button>
+                <span class="gesprache-status" id="analyse-status"></span>
+              </div>
+            </div>
+          </details>
         </div>
 
       </div><!-- .ueben-layout -->
-
-      <!-- Transcript submission — collapsible -->
-      <details id="transcript-details" class="gesprache-transcript-details">
-        <summary class="gesprache-transcript-summary">Nach der Sitzung — Transkript einreichen</summary>
-        <div class="gesprache-transcript">
-          <textarea class="notebook-textarea" id="transcript-input" rows="8"
-            placeholder="Transkript hier einfügen — z.B. aus Grok Voice&#10;&#10;Robert: Guten Morgen…&#10;Frau Berger: Guten Morgen!…"></textarea>
-          <div class="gesprache-submit-row">
-            <button class="btn-primary" id="btn-analysieren" title="Analyze this conversation">Analysieren</button>
-            <span class="gesprache-status" id="analyse-status"></span>
-          </div>
-        </div>
-      </details>
 
       <!-- Feedback (hidden until analysis) -->
       <div id="gesprache-feedback-wrap" style="display:none">
@@ -159,58 +158,55 @@
           </div>
         </div>
 
-        <!-- Card 2: Gespräch — During the session -->
+        <!-- Card 2: Gespräch — During + After -->
         <div class="konversation-card">
           <div class="konversation-card-label">2 · During — Gespräch</div>
           <p class="konv-hint">Start a Google Meet. Copy the meeting link from inside Meet to share with your tutor.</p>
           <button class="btn-raum-oeffnen" id="btn-open-meet">Start Google Meet →</button>
           <p class="konv-hint" style="margin-top:10px;">After the meeting, enable transcription in Meet settings so the transcript auto-saves to Google Drive.</p>
+
+          <!-- After-session: collapsible inside card -->
+          <details class="nach-sitzung-details" id="konv-transcript-details" style="margin-top:1.25rem">
+            <summary class="session-brief-summary">✏️ Nach dem Gespräch</summary>
+            <div class="konv-nachbereitung-body">
+
+              <!-- Consent gate -->
+              <label class="konv-consent-label" id="consent-label">
+                <input type="checkbox" id="consent-checkbox">
+                <span>Teilnehmer hat zugestimmt</span>
+              </label>
+
+              <!-- Transcript tools — locked until consent checked -->
+              <div id="transcript-tools" class="konv-transcript-tools konv-transcript-locked">
+                <div class="konv-field" style="margin-top:0.75rem">
+                  <label class="konv-field-label">Tutor / Gesprächspartner</label>
+                  <input type="text" id="tutor-name-input" placeholder="z.B. Frau Weber" class="tutor-input" disabled>
+                </div>
+                <div class="konv-field">
+                  <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:0.3rem;">
+                    <label class="konv-field-label" style="margin-bottom:0;">Transkript einfügen</label>
+                    <button id="btn-fetch-transcript" class="konv-drive-link"
+                            title="Neuestes Transkript von Google Drive laden" disabled>
+                      Von Drive →
+                    </button>
+                  </div>
+                  <textarea id="tutor-transcript-input" rows="5" class="tutor-input"
+                            placeholder="Aus Otter.ai kopieren und hier einfügen."
+                            disabled></textarea>
+                </div>
+                <button class="btn-ghost btn-sm" id="btn-submit-tutor-transcript"
+                        title="Sends the transcript to Claude for grammar analysis"
+                        disabled>
+                  Transkript analysieren →
+                </button>
+                <div id="tutor-submit-status" class="gesprache-status" style="margin-top:6px;"></div>
+              </div>
+
+            </div>
+          </details>
         </div>
 
       </div><!-- .konversation-cards -->
-
-      <!-- After-session: collapsible transcript panel -->
-      <details id="konv-transcript-details" class="gesprache-transcript-details">
-        <summary class="gesprache-transcript-summary">Nach dem Gespräch — Transkript einreichen</summary>
-        <div class="konv-nachbereitung-body">
-
-          <!-- Consent gate -->
-          <label class="konv-consent-label" id="consent-label">
-            <input type="checkbox" id="consent-checkbox">
-            <span>Teilnehmer hat der Aufzeichnung zugestimmt</span>
-          </label>
-          <p class="konv-hint" style="margin-top:4px; margin-bottom:0.75rem;">
-            Erforderlich, bevor ein Transkript erfasst oder eingereicht wird.
-          </p>
-
-          <!-- Transcript tools — locked until consent checked -->
-          <div id="transcript-tools" class="konv-transcript-tools konv-transcript-locked">
-            <div class="konv-field">
-              <label class="konv-field-label">Tutor / Gesprächspartner</label>
-              <input type="text" id="tutor-name-input" placeholder="z.B. Frau Weber" class="tutor-input" disabled>
-            </div>
-            <div class="konv-field">
-              <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:0.3rem;">
-                <label class="konv-field-label" style="margin-bottom:0;">Transkript — aus Otter.ai einfügen</label>
-                <button id="btn-fetch-transcript" class="konv-drive-link"
-                        title="Neuestes Transkript von Google Drive laden (einmalige Google-Anmeldung erforderlich)" disabled>
-                  Von Drive laden →
-                </button>
-              </div>
-              <textarea id="tutor-transcript-input" rows="6" class="tutor-input"
-                        placeholder="Otter.ai neben dem Gespräch öffnen → Transkript kopieren → hier einfügen."
-                        disabled></textarea>
-            </div>
-            <button class="btn-ghost btn-sm" id="btn-submit-tutor-transcript"
-                    title="Sends the transcript to Claude for grammar analysis — errors, strengths, and focus areas"
-                    disabled>
-              Transkript analysieren →
-            </button>
-            <div id="tutor-submit-status" class="gesprache-status" style="margin-top:6px;"></div>
-          </div>
-
-        </div>
-      </details>
 
     </div><!-- #pane-konversation -->
 
@@ -285,6 +281,9 @@ document.body.classList.add('parch-mode');
     selectedSceneKey = null;
     currentFullPrompt = null;
     document.getElementById('session-brief-panel').style.display = 'none';
+    // Close "Nach der Sitzung" panel when switching personas
+    const _nachDetails = document.getElementById('transcript-details');
+    if (_nachDetails) _nachDetails.removeAttribute('open');
 
     document.querySelectorAll('.persona-list-item').forEach(el => el.classList.remove('active'));
     document.querySelector(`.persona-list-item[data-idx="${idx}"]`).classList.add('active');

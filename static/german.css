@@ -2634,6 +2634,31 @@ details[open] > .gesprache-transcript-summary::before {
   margin-top: 0.5rem;
 }
 
+/* ── Nach der Sitzung — transcript collapsible in right panel ── */
+
+.nach-sitzung-details {
+  margin-top: 1.25rem;
+  border-top: 1px solid var(--md-parch-deep);
+}
+
+.nach-sitzung-body {
+  margin-top: 0.75rem;
+  padding-bottom: 0.5rem;
+}
+
+/* Compact textarea for in-panel use (overrides notebook-textarea min-height) */
+.nach-sitzung-textarea {
+  min-height: 0;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+}
+
+/* Konversation Nachbereitung inside card — tighter spacing */
+#konv-transcript-details .konv-nachbereitung-body {
+  padding-top: 0.75rem;
+  padding-bottom: 0;
+}
+
 /* ══════════════════════════════════════════════════════════════
    Wörter page
    ══════════════════════════════════════════════════════════════ */
