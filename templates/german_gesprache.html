@@ -87,38 +87,44 @@
           <details class="nach-sitzung-details" id="transcript-details">
             <summary class="session-brief-summary">✏️ Nach der Sitzung</summary>
             <div class="nach-sitzung-body">
-              <textarea class="notebook-textarea nach-sitzung-textarea" id="transcript-input" rows="6"
-                placeholder="Transkript hier einfügen — z.B. aus Grok Voice&#10;&#10;Robert: Guten Morgen…&#10;Frau Berger: Guten Morgen!…"></textarea>
-              <div class="gesprache-submit-row">
-                <button class="btn-primary" id="btn-analysieren" title="Analyse des Gesprächs">Analysieren</button>
-                <span class="gesprache-status" id="analyse-status"></span>
+              <div id="transcript-input-wrap">
+                <textarea class="notebook-textarea nach-sitzung-textarea" id="transcript-input" rows="6"
+                  placeholder="Transkript hier einfügen — z.B. aus Grok Voice&#10;&#10;Robert: Guten Morgen…&#10;Frau Berger: Guten Morgen!…"></textarea>
+                <div class="gesprache-submit-row">
+                  <button class="btn-primary" id="btn-analysieren" title="Analyse des Gesprächs">Analysieren</button>
+                  <span class="gesprache-status" id="analyse-status"></span>
+                </div>
+              </div>
+              <div id="transcript-analysiert-row" class="transcript-analysiert-row" style="display:none">
+                <span class="transcript-analysiert-label">✓ analysiert</span>
+                <button class="btn-ghost btn-sm" id="btn-transcript-bearbeiten">bearbeiten</button>
               </div>
             </div>
           </details>
+
+          <!-- Feedback — rendered inside panel after analysis -->
+          <div id="gesprache-feedback-wrap" style="display:none">
+            <hr class="gesprache-divider">
+            <div class="gesprache-section-label">Feedback</div>
+            <div class="gesprache-feedback">
+              <div class="feedback-summary" id="feedback-summary"></div>
+              <div class="feedback-block" id="feedback-errors-block" style="display:none">
+                <div class="feedback-block-label">Fehler</div>
+                <ul class="feedback-errors-list" id="feedback-errors-list"></ul>
+              </div>
+              <div class="feedback-block" id="feedback-strengths-block" style="display:none">
+                <div class="feedback-block-label">Stärken</div>
+                <ul class="feedback-strengths-list" id="feedback-strengths-list"></ul>
+              </div>
+              <div class="feedback-block" id="feedback-focus-block" style="display:none">
+                <div class="feedback-block-label">Für nächste Mal</div>
+                <p class="feedback-next-focus" id="feedback-next-focus"></p>
+              </div>
+            </div>
+          </div>
         </div>
 
       </div><!-- .ueben-layout -->
-
-      <!-- Feedback (hidden until analysis) -->
-      <div id="gesprache-feedback-wrap" style="display:none">
-        <hr class="gesprache-divider">
-        <div class="gesprache-section-label">Feedback</div>
-        <div class="gesprache-feedback">
-          <div class="feedback-summary" id="feedback-summary"></div>
-          <div class="feedback-block" id="feedback-errors-block" style="display:none">
-            <div class="feedback-block-label">Fehler</div>
-            <ul class="feedback-errors-list" id="feedback-errors-list"></ul>
-          </div>
-          <div class="feedback-block" id="feedback-strengths-block" style="display:none">
-            <div class="feedback-block-label">Stärken</div>
-            <ul class="feedback-strengths-list" id="feedback-strengths-list"></ul>
-          </div>
-          <div class="feedback-block" id="feedback-focus-block" style="display:none">
-            <div class="feedback-block-label">Für nächste Mal</div>
-            <p class="feedback-next-focus" id="feedback-next-focus"></p>
-          </div>
-        </div>
-      </div>
 
       <!-- Recent sessions -->
       {% if sessions %}
@@ -169,39 +175,45 @@
           <details class="nach-sitzung-details" id="konv-transcript-details" style="margin-top:1.25rem">
             <summary class="session-brief-summary">✏️ Nach dem Gespräch</summary>
             <div class="konv-nachbereitung-body">
+              <div id="konv-transcript-input-wrap">
 
-              <!-- Consent gate -->
-              <label class="konv-consent-label" id="consent-label">
-                <input type="checkbox" id="consent-checkbox">
-                <span>Teilnehmer hat zugestimmt</span>
-              </label>
+                <!-- Consent gate -->
+                <label class="konv-consent-label" id="consent-label">
+                  <input type="checkbox" id="consent-checkbox">
+                  <span>Teilnehmer hat zugestimmt</span>
+                </label>
 
-              <!-- Transcript tools — locked until consent checked -->
-              <div id="transcript-tools" class="konv-transcript-tools konv-transcript-locked">
-                <div class="konv-field" style="margin-top:0.75rem">
-                  <label class="konv-field-label">Tutor / Gesprächspartner</label>
-                  <input type="text" id="tutor-name-input" placeholder="z.B. Frau Weber" class="tutor-input" disabled>
-                </div>
-                <div class="konv-field">
-                  <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:0.3rem;">
-                    <label class="konv-field-label" style="margin-bottom:0;">Transkript einfügen</label>
-                    <button id="btn-fetch-transcript" class="konv-drive-link"
-                            title="Neuestes Transkript von Google Drive laden" disabled>
-                      Von Drive →
-                    </button>
+                <!-- Transcript tools — locked until consent checked -->
+                <div id="transcript-tools" class="konv-transcript-tools konv-transcript-locked">
+                  <div class="konv-field" style="margin-top:0.75rem">
+                    <label class="konv-field-label">Tutor / Gesprächspartner</label>
+                    <input type="text" id="tutor-name-input" placeholder="z.B. Frau Weber" class="tutor-input" disabled>
                   </div>
-                  <textarea id="tutor-transcript-input" rows="5" class="tutor-input"
-                            placeholder="Aus Otter.ai kopieren und hier einfügen."
-                            disabled></textarea>
+                  <div class="konv-field">
+                    <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:0.3rem;">
+                      <label class="konv-field-label" style="margin-bottom:0;">Transkript einfügen</label>
+                      <button id="btn-fetch-transcript" class="konv-drive-link"
+                              title="Neuestes Transkript von Google Drive laden" disabled>
+                        Von Drive →
+                      </button>
+                    </div>
+                    <textarea id="tutor-transcript-input" rows="5" class="tutor-input"
+                              placeholder="Aus Otter.ai kopieren und hier einfügen."
+                              disabled></textarea>
+                  </div>
+                  <button class="btn-ghost btn-sm" id="btn-submit-tutor-transcript"
+                          title="Sends the transcript to Claude for grammar analysis"
+                          disabled>
+                    Transkript analysieren →
+                  </button>
+                  <div id="tutor-submit-status" class="gesprache-status" style="margin-top:6px;"></div>
                 </div>
-                <button class="btn-ghost btn-sm" id="btn-submit-tutor-transcript"
-                        title="Sends the transcript to Claude for grammar analysis"
-                        disabled>
-                  Transkript analysieren →
-                </button>
-                <div id="tutor-submit-status" class="gesprache-status" style="margin-top:6px;"></div>
-              </div>
 
+              </div><!-- #konv-transcript-input-wrap -->
+              <div id="konv-transcript-analysiert-row" class="transcript-analysiert-row" style="display:none">
+                <span class="transcript-analysiert-label">✓ analysiert</span>
+                <button class="btn-ghost btn-sm" id="btn-konv-transcript-bearbeiten">bearbeiten</button>
+              </div>
             </div>
           </details>
         </div>
@@ -272,6 +284,29 @@ document.body.classList.add('parch-mode');
   document.getElementById('btn-tab-personas').addEventListener('click', () => switchTab('personas'));
   document.getElementById('btn-tab-konversation').addEventListener('click', () => switchTab('konversation'));
 
+  // ── Nach der Sitzung — state reset ────────────────────────────────────────
+
+  function resetNachDerSitzung() {
+    // Clear textarea and status
+    document.getElementById('transcript-input').value = '';
+    document.getElementById('analyse-status').textContent = '';
+    const btn = document.getElementById('btn-analysieren');
+    btn.disabled = false;
+    btn.textContent = 'Analysieren';
+    // Show input wrap, hide analysiert row
+    document.getElementById('transcript-input-wrap').style.display = '';
+    document.getElementById('transcript-analysiert-row').style.display = 'none';
+    // Clear and hide feedback
+    document.getElementById('feedback-summary').textContent = '';
+    document.getElementById('feedback-errors-block').style.display = 'none';
+    document.getElementById('feedback-strengths-block').style.display = 'none';
+    document.getElementById('feedback-focus-block').style.display = 'none';
+    document.getElementById('gesprache-feedback-wrap').style.display = 'none';
+    // Collapse the details panel
+    const nachDetails = document.getElementById('transcript-details');
+    if (nachDetails) nachDetails.removeAttribute('open');
+  }
+
   // ── Persona selection ──────────────────────────────────────────────────────
 
   function selectPersona(idx) {
@@ -281,9 +316,7 @@ document.body.classList.add('parch-mode');
     selectedSceneKey = null;
     currentFullPrompt = null;
     document.getElementById('session-brief-panel').style.display = 'none';
-    // Close "Nach der Sitzung" panel when switching personas
-    const _nachDetails = document.getElementById('transcript-details');
-    if (_nachDetails) _nachDetails.removeAttribute('open');
+    resetNachDerSitzung();
 
     document.querySelectorAll('.persona-list-item').forEach(el => el.classList.remove('active'));
     document.querySelector(`.persona-list-item[data-idx="${idx}"]`).classList.add('active');
@@ -449,7 +482,8 @@ document.body.classList.add('parch-mode');
     const scene = selectedSceneKey ? selectedSceneKey.replace(/_/g, ' ') : '';
 
     btn.disabled = true;
-    status.textContent = 'Analyse läuft…';
+    btn.textContent = 'Analysiere…';
+    status.textContent = '';
 
     try {
       const res = await fetch('/api/analyse-transcript', {
@@ -459,13 +493,32 @@ document.body.classList.add('parch-mode');
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || 'Fehler');
+
+      // Success: render feedback, collapse input to analysiert row, scroll panel
       renderFeedback(data.feedback);
-      status.textContent = '✓ Analyse abgeschlossen';
-      setTimeout(() => { status.textContent = ''; }, 3000);
+      document.getElementById('transcript-input-wrap').style.display = 'none';
+      document.getElementById('transcript-analysiert-row').style.display = '';
+      btn.textContent = 'Analysieren';
+      btn.disabled = false;
+
+      requestAnimationFrame(() => {
+        const panel = document.getElementById('persona-detail');
+        const wrap  = document.getElementById('gesprache-feedback-wrap');
+        const panelRect = panel.getBoundingClientRect();
+        const wrapRect  = wrap.getBoundingClientRect();
+        panel.scrollBy({ top: wrapRect.top - panelRect.top, behavior: 'smooth' });
+      });
     } catch (e) {
-      status.textContent = 'Fehler bei der Analyse.';
+      // Error: show message in feedback slot, preserve textarea, re-enable button
+      renderFeedbackError(e.message || 'Fehler bei der Analyse.');
+      btn.textContent = 'Analysieren';
+      btn.disabled = false;
     }
-    btn.disabled = false;
+  });
+
+  document.getElementById('btn-transcript-bearbeiten').addEventListener('click', () => {
+    document.getElementById('transcript-input-wrap').style.display = '';
+    document.getElementById('transcript-analysiert-row').style.display = 'none';
   });
 
   function renderFeedback(fb) {
@@ -508,7 +561,14 @@ document.body.classList.add('parch-mode');
     }
 
     document.getElementById('gesprache-feedback-wrap').style.display = '';
-    document.getElementById('gesprache-feedback-wrap').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function renderFeedbackError(msg) {
+    document.getElementById('feedback-summary').textContent = '⚠ ' + msg;
+    document.getElementById('feedback-errors-block').style.display = 'none';
+    document.getElementById('feedback-strengths-block').style.display = 'none';
+    document.getElementById('feedback-focus-block').style.display = 'none';
+    document.getElementById('gesprache-feedback-wrap').style.display = '';
   }
 
   // ── Konversation pane ─────────────────────────────────────────────────────
@@ -552,7 +612,8 @@ document.body.classList.add('parch-mode');
 
     const btn = document.getElementById('btn-submit-tutor-transcript');
     btn.disabled = true;
-    status.textContent = 'Analysiere…';
+    btn.textContent = 'Analysiere…';
+    status.textContent = '';
 
     try {
       const res = await fetch('/api/analyse-transcript', {
@@ -566,15 +627,29 @@ document.body.classList.add('parch-mode');
       });
       const data = await res.json();
       if (data.session_id) {
+        // Success: collapse tools, show analysiert row
+        document.getElementById('konv-transcript-input-wrap').style.display = 'none';
+        document.getElementById('konv-transcript-analysiert-row').style.display = '';
         status.textContent = `✓ Gespeichert als ${data.session_id}`;
-        document.getElementById('tutor-transcript-input').value = '';
       } else {
         status.textContent = `Fehler: ${data.error || 'Unbekannt'}`;
+        btn.textContent = 'Transkript analysieren →';
+        btn.disabled = false;
       }
     } catch (e) {
       status.textContent = 'Netzwerkfehler';
+      btn.textContent = 'Transkript analysieren →';
+      btn.disabled = false;
     }
+  });
+
+  document.getElementById('btn-konv-transcript-bearbeiten').addEventListener('click', () => {
+    document.getElementById('konv-transcript-input-wrap').style.display = '';
+    document.getElementById('konv-transcript-analysiert-row').style.display = 'none';
+    const btn = document.getElementById('btn-submit-tutor-transcript');
+    btn.textContent = 'Transkript analysieren →';
     btn.disabled = false;
+    document.getElementById('tutor-submit-status').textContent = '';
   });
 
   // ── Consent gate ─────────────────────────────────────────────────────────

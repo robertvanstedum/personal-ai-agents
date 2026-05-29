@@ -2659,6 +2659,21 @@ details[open] > .gesprache-transcript-summary::before {
   padding-bottom: 0;
 }
 
+/* ── Analysiert compact row (KI-Personas + Konversation) ── */
+
+.transcript-analysiert-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0 2px;
+}
+
+.transcript-analysiert-label {
+  font-size: 0.8rem;
+  color: var(--md-text-secondary);
+  font-style: italic;
+}
+
 /* ══════════════════════════════════════════════════════════════
    Wörter page
    ══════════════════════════════════════════════════════════════ */
