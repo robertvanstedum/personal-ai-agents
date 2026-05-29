@@ -10,202 +10,204 @@
       <p class="tab-description">Wähle eine Persona, starte ein Gespräch, und reiche das Transkript ein.</p>
     </div>
 
-<!-- ── Persona picker ──────────────────────────────────────────────────── -->
-<div class="ueben-layout">
+    <!-- ── Mode toggle ─────────────────────────────────────────────────────── -->
+    <div class="gesprache-toggle" role="tablist">
+      <button class="gesprache-toggle-btn active" id="btn-tab-personas" role="tab">KI-Personas</button>
+      <button class="gesprache-toggle-btn" id="btn-tab-konversation" role="tab">Konversation</button>
+    </div>
 
-  <!-- Left: persona list -->
-  <div class="persona-list" id="persona-list">
-    {% for p in personas %}
-    <div class="persona-list-item" data-idx="{{ loop.index0 }}" data-name="{{ p.name }}"
-         data-slug="{{ p.slug }}"
-         data-ready="{{ 'true' if p.memory.ready_to_archive else 'false' }}"
-         data-round="{{ p.memory.current_round }}"
-         data-sessions="{{ p.memory.active_memory.sessions_this_round }}"
-         data-round-default="{{ p.memory.round_default }}">
-      <div class="persona-avatar">{{ p.emoji or p.name[0] }}</div>
-      <div class="persona-info">
-        <div class="persona-name">
-          {{ p.name }}
-          {% if p.memory.ready_to_archive %}<span class="round-ready-dot" title="Runde abgeschlossen — Aktion erforderlich">●</span>{% endif %}
+    <!-- ── KI-Personas pane ────────────────────────────────────────────────── -->
+    <div id="pane-ki-personas">
+
+      <div class="ueben-layout">
+
+        <!-- Left: persona list -->
+        <div class="persona-list" id="persona-list">
+          {% for p in personas %}
+          <div class="persona-list-item" data-idx="{{ loop.index0 }}" data-name="{{ p.name }}"
+               data-slug="{{ p.slug }}"
+               data-ready="{{ 'true' if p.memory.ready_to_archive else 'false' }}"
+               data-round="{{ p.memory.current_round }}"
+               data-sessions="{{ p.memory.active_memory.sessions_this_round }}"
+               data-round-default="{{ p.memory.round_default }}">
+            <div class="persona-avatar">{{ p.emoji or p.name[0] }}</div>
+            <div class="persona-info">
+              <div class="persona-name">
+                {{ p.name }}
+                {% if p.memory.ready_to_archive %}<span class="round-ready-dot" title="Runde abgeschlossen — Aktion erforderlich">●</span>{% endif %}
+              </div>
+              <div class="persona-role">
+                {{ p.role }}
+                {% if p.memory.active_memory.sessions_this_round > 0 %}
+                <span class="round-counter">Runde {{ p.memory.current_round }}/{{ p.memory.round_default }}</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endfor %}
         </div>
-        <div class="persona-role">
-          {{ p.role }}
-          {% if p.memory.active_memory.sessions_this_round > 0 %}
-          <span class="round-counter">Runde {{ p.memory.current_round }}/{{ p.memory.round_default }}</span>
+
+        <!-- Right: detail + prompt -->
+        <div class="persona-detail" id="persona-detail">
+          <div class="detail-persona-header">
+            <span class="detail-avatar" id="detail-avatar"></span>
+            <div>
+              <div class="detail-name" id="detail-name"></div>
+              <div class="detail-role" id="detail-role"></div>
+            </div>
+          </div>
+          <p class="detail-description" id="detail-description"></p>
+
+          <div class="scene-list" id="scene-list"></div>
+
+          <div class="prompt-delivery" id="prompt-delivery">
+            <div class="prompt-text" id="prompt-text" style="display:none"></div>
+            <div class="prompt-actions">
+              <button class="btn-delivery" id="btn-telegram"
+                      title="Öffnet Telegram mit dem vollständigen Grok-Prompt">
+                ✈️ Telegram öffnen
+              </button>
+              <button class="btn-delivery" id="btn-copy"
+                      title="Kopiert den vollständigen Grok-Prompt in die Zwischenablage">
+                📋 Kopieren
+              </button>
+              <button class="btn-delivery" id="btn-download"
+                      title="Speichert den vollständigen Grok-Prompt als Textdatei">
+                💾 Als .txt speichern
+              </button>
+            </div>
+            <div class="prompt-toast" id="prompt-toast" style="display:none">✓ Vollständiger Prompt kopiert</div>
+          </div>
+
+          <div class="session-brief-panel" id="session-brief-panel" style="display:none">
+            <div class="prompt-label">HEUTIGE VORBEREITUNG</div>
+            <pre class="session-brief-text" id="session-brief-text"></pre>
+          </div>
+        </div>
+
+      </div><!-- .ueben-layout -->
+
+      <!-- Transcript submission -->
+      <hr class="gesprache-divider">
+      <div class="gesprache-transcript">
+        <div class="gesprache-section-label">Transkript einreichen</div>
+        <textarea class="notebook-textarea" id="transcript-input" rows="8"
+          placeholder="Transkript hier einfügen — z.B. aus Grok Voice&#10;&#10;Robert: Guten Morgen…&#10;Frau Berger: Guten Morgen!…"></textarea>
+        <div class="gesprache-submit-row">
+          <button class="btn-primary" id="btn-analysieren" title="Analyze this conversation">Analysieren</button>
+          <span class="gesprache-status" id="analyse-status"></span>
+        </div>
+      </div>
+
+      <!-- Feedback (hidden until analysis) -->
+      <div id="gesprache-feedback-wrap" style="display:none">
+        <hr class="gesprache-divider">
+        <div class="gesprache-section-label">Feedback</div>
+        <div class="gesprache-feedback">
+          <div class="feedback-summary" id="feedback-summary"></div>
+          <div class="feedback-block" id="feedback-errors-block" style="display:none">
+            <div class="feedback-block-label">Fehler</div>
+            <ul class="feedback-errors-list" id="feedback-errors-list"></ul>
+          </div>
+          <div class="feedback-block" id="feedback-strengths-block" style="display:none">
+            <div class="feedback-block-label">Stärken</div>
+            <ul class="feedback-strengths-list" id="feedback-strengths-list"></ul>
+          </div>
+          <div class="feedback-block" id="feedback-focus-block" style="display:none">
+            <div class="feedback-block-label">Für nächste Mal</div>
+            <p class="feedback-next-focus" id="feedback-next-focus"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent sessions -->
+      {% if sessions %}
+      <hr class="gesprache-divider">
+      <div class="gesprache-section-label">Letzte Sitzungen</div>
+      <div class="gesprache-sessions-list">
+        {% for s in sessions %}
+        <div class="gesprache-session-row">
+          <span class="gesprache-session-date">{{ s.date }}</span>
+          <span class="gesprache-session-persona">{{ s.persona }}</span>
+          <span class="gesprache-session-scene">{{ s.scenario }}</span>
+          <span class="gesprache-session-source">{{ s.source }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="hint" style="margin-top:0.75rem"><a href="/archiv">→ Alle Sitzungen im Archiv</a></p>
+      {% endif %}
+
+    </div><!-- #pane-ki-personas -->
+
+    <!-- ── Konversation pane ───────────────────────────────────────────────── -->
+    <div id="pane-konversation" style="display:none">
+      <div class="konversation-cards">
+
+        <!-- Card 1: Vorbereitung -->
+        <div class="konversation-card">
+          <div class="konversation-card-label">Vorbereitung</div>
+          <div id="konv-brief-preview" class="konv-brief-preview"></div>
+          <button class="btn-ghost btn-sm" id="btn-generate-brief">Brief generieren →</button>
+          <div id="konv-brief-link" style="display:none; margin-top:12px;">
+            <p class="konv-hint">Teile diesen Link mit deinem Gesprächspartner vor der Sitzung:</p>
+            <div class="konv-link-row">
+              <code id="brief-link-url" class="konv-link-code"></code>
+              <button class="btn-ghost btn-sm" id="btn-copy-brief-link">Kopieren</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2: Gespräch -->
+        <div class="konversation-card">
+          <div class="konversation-card-label">Gespräch</div>
+          <p class="konv-hint">Teile diesen Link mit deinem Gesprächspartner:</p>
+          <div class="konv-room-display">{{ whereby_room_url }}</div>
+          <button class="btn-ghost btn-sm" id="btn-copy-room">Kopieren</button>
+          {% if whereby_host_available %}
+          <div style="margin-top:12px;">
+            <button class="btn-primary btn-sm" id="btn-open-room">Raum öffnen</button>
+          </div>
+          <div id="whereby-iframe-wrap" style="display:none; margin-top:12px;">
+            <iframe id="whereby-iframe"
+                    allow="camera; microphone; fullscreen"
+                    style="width:100%; height:480px; border:none; border-radius:8px;">
+            </iframe>
+          </div>
+          {% else %}
+          <p class="hint" style="margin-top:8px; font-size:0.8rem;">Host-URL nicht konfiguriert.</p>
           {% endif %}
         </div>
-      </div>
-    </div>
-    {% endfor %}
 
-    <!-- Echter Tutor — sticky at the bottom of the persona list -->
-    <div class="persona-list-tutor-footer">
-      <div class="persona-list-divider"></div>
-      <div class="persona-list-item" data-idx="tutor" data-name="Echter Tutor">
-        <div class="persona-avatar">👤</div>
-        <div class="persona-info">
-          <div class="persona-name">Echter Tutor</div>
-          <div class="persona-role">Human Session</div>
+        <!-- Card 3: Nachbereitung -->
+        <div class="konversation-card">
+          <div class="konversation-card-label">Nachbereitung</div>
+          <div class="konv-field">
+            <label class="konv-field-label">Gesprächspartner</label>
+            <input type="text" id="tutor-name-input" placeholder="z.B. Frau Weber" class="tutor-input">
+          </div>
+          <div class="konv-field">
+            <label class="konv-field-label">Transkript</label>
+            <textarea id="tutor-transcript-input" rows="8" class="tutor-input"
+                      placeholder="Speaker 1: Guten Morgen…&#10;Speaker 2: …"></textarea>
+          </div>
+          <button class="btn-primary btn-sm" id="btn-submit-tutor-transcript">Transkript einreichen</button>
+          <div id="tutor-submit-status" class="gesprache-status" style="margin-top:6px;"></div>
+        </div>
+
+      </div><!-- .konversation-cards -->
+    </div><!-- #pane-konversation -->
+
+    <!-- Round-ready modal (used by KI-Personas pane) -->
+    <div id="round-ready-modal" class="round-modal" style="display:none" role="dialog" aria-modal="true">
+      <div class="round-modal-content">
+        <div class="round-modal-title" id="round-modal-title"></div>
+        <div class="round-modal-actions">
+          <button class="btn-primary btn-sm" id="btn-round-close" title="Start a new round with this persona">Neue Runde starten</button>
+          <button class="btn-ghost btn-sm" id="btn-round-extend" title="Extend round by 3 sessions">Verlängern +3</button>
+          <button class="btn-ghost btn-sm" id="btn-round-defer" title="Decide later">Jetzt nicht</button>
         </div>
       </div>
     </div>
-  </div>
-
-  <!-- Right: detail + prompt -->
-  <div class="persona-detail" id="persona-detail">
-    <div class="detail-persona-header">
-      <span class="detail-avatar" id="detail-avatar"></span>
-      <div>
-        <div class="detail-name" id="detail-name"></div>
-        <div class="detail-role" id="detail-role"></div>
-      </div>
-    </div>
-    <p class="detail-description" id="detail-description"></p>
-
-    <div class="scene-list" id="scene-list"></div>
-
-    <div class="prompt-delivery" id="prompt-delivery">
-      <div class="prompt-text" id="prompt-text" style="display:none"></div>
-      <div class="prompt-actions">
-        <button class="btn-delivery" id="btn-telegram"
-                title="Öffnet Telegram mit dem vollständigen Grok-Prompt">
-          ✈️ Telegram öffnen
-        </button>
-        <button class="btn-delivery" id="btn-copy"
-                title="Kopiert den vollständigen Grok-Prompt in die Zwischenablage">
-          📋 Kopieren
-        </button>
-        <button class="btn-delivery" id="btn-download"
-                title="Speichert den vollständigen Grok-Prompt als Textdatei">
-          💾 Als .txt speichern
-        </button>
-      </div>
-      <div class="prompt-toast" id="prompt-toast" style="display:none">✓ Vollständiger Prompt kopiert</div>
-    </div>
-
-    <div class="session-brief-panel" id="session-brief-panel" style="display:none">
-      <div class="prompt-label">HEUTIGE VORBEREITUNG</div>
-      <pre class="session-brief-text" id="session-brief-text"></pre>
-    </div>
-  </div>
-
-  <!-- ── Tutor panel (shown when Echter Tutor is selected) ─────────────────── -->
-  <div id="tutor-panel" style="display:none; flex:1; padding: 0 1.5rem 1.5rem;">
-
-    <!-- Section 1: Vor der Sitzung -->
-    <div class="tutor-section">
-      <div class="tutor-section-label">Vor der Sitzung</div>
-      <div id="tutor-brief-content" class="tutor-brief-preview"></div>
-      <button class="btn-ghost btn-sm" id="btn-generate-brief">Brief generieren →</button>
-      <div id="tutor-brief-link" style="display:none; margin-top:10px;">
-        <span class="tutor-field-label">Teilbarer Link (48h):</span>
-        <code id="brief-link-url" class="tutor-link-code"></code>
-        <button class="btn-ghost btn-sm" id="btn-copy-brief-link">Kopieren</button>
-      </div>
-    </div>
-
-    <!-- Section 2: Während der Sitzung -->
-    <div class="tutor-section">
-      <div class="tutor-section-label">Während der Sitzung</div>
-      <p class="tutor-field-label">Teilbare Raum-URL (für deinen Gesprächspartner):</p>
-      <div style="display:flex; align-items:center; gap:8px; margin:6px 0 10px;">
-        <code id="whereby-room-url" class="tutor-link-code">{{ whereby_room_url }}</code>
-        <button class="btn-ghost btn-sm" id="btn-copy-room">Kopieren</button>
-      </div>
-      {% if whereby_host_available %}
-      <details id="whereby-details">
-        <summary class="btn-ghost btn-sm" style="cursor:pointer; display:inline-block; margin-bottom:8px;">Raum hier öffnen (als Host)</summary>
-        <iframe id="whereby-iframe"
-                allow="camera; microphone; fullscreen"
-                style="width:100%; height:420px; border:none; border-radius:8px; margin-top:6px;">
-        </iframe>
-      </details>
-      {% else %}
-      <p class="hint" style="margin-top:4px;">Host-URL nicht konfiguriert — setze <code>WHEREBY_HOST_URL</code>.</p>
-      {% endif %}
-    </div>
-
-    <!-- Section 3: Nach der Sitzung -->
-    <div class="tutor-section">
-      <div class="tutor-section-label">Nach der Sitzung</div>
-      <div class="tutor-field">
-        <label class="tutor-field-label">Tutor Name</label>
-        <input type="text" id="tutor-name-input" placeholder="z.B. Frau Weber" class="form-input tutor-input">
-      </div>
-      <div class="tutor-field">
-        <label class="tutor-field-label">Transkript einfügen</label>
-        <textarea id="tutor-transcript-input" rows="8" class="form-input tutor-input"
-                  placeholder="Speaker 1: Guten Morgen…&#10;Speaker 2: …"></textarea>
-      </div>
-      <button class="btn-primary btn-sm" id="btn-submit-tutor-transcript">Transkript einreichen</button>
-      <div id="tutor-submit-status" class="gesprache-status" style="margin-top:6px;"></div>
-    </div>
-
-  </div>
-
-</div>
-
-<!-- ── Transcript submission ────────────────────────────────────────────── -->
-<hr class="gesprache-divider">
-<div class="gesprache-transcript">
-  <div class="gesprache-section-label">Transkript einreichen</div>
-  <textarea class="notebook-textarea" id="transcript-input" rows="8"
-    placeholder="Transkript hier einfügen — z.B. aus Grok Voice&#10;&#10;Robert: Guten Morgen…&#10;Frau Berger: Guten Morgen!…"></textarea>
-  <div class="gesprache-submit-row">
-    <button class="btn-primary" id="btn-analysieren" title="Analyze this conversation">Analysieren</button>
-    <span class="gesprache-status" id="analyse-status"></span>
-  </div>
-</div>
-
-<!-- ── Feedback (hidden until analysis) ─────────────────────────────────── -->
-<div id="gesprache-feedback-wrap" style="display:none">
-  <hr class="gesprache-divider">
-  <div class="gesprache-section-label">Feedback</div>
-  <div class="gesprache-feedback">
-    <div class="feedback-summary" id="feedback-summary"></div>
-    <div class="feedback-block" id="feedback-errors-block" style="display:none">
-      <div class="feedback-block-label">Fehler</div>
-      <ul class="feedback-errors-list" id="feedback-errors-list"></ul>
-    </div>
-    <div class="feedback-block" id="feedback-strengths-block" style="display:none">
-      <div class="feedback-block-label">Stärken</div>
-      <ul class="feedback-strengths-list" id="feedback-strengths-list"></ul>
-    </div>
-    <div class="feedback-block" id="feedback-focus-block" style="display:none">
-      <div class="feedback-block-label">Für nächste Mal</div>
-      <p class="feedback-next-focus" id="feedback-next-focus"></p>
-    </div>
-  </div>
-</div>
-
-<!-- ── Round-ready modal ─────────────────────────────────────────────────── -->
-<div id="round-ready-modal" class="round-modal" style="display:none" role="dialog" aria-modal="true">
-  <div class="round-modal-content">
-    <div class="round-modal-title" id="round-modal-title"></div>
-    <div class="round-modal-actions">
-      <button class="btn-primary btn-sm" id="btn-round-close" title="Start a new round with this persona">Neue Runde starten</button>
-      <button class="btn-ghost btn-sm" id="btn-round-extend" title="Extend round by 3 sessions">Verlängern +3</button>
-      <button class="btn-ghost btn-sm" id="btn-round-defer" title="Decide later">Jetzt nicht</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── Letzte Sitzungen ─────────────────────────────────────────────────── -->
-{% if sessions %}
-<hr class="gesprache-divider">
-<div class="gesprache-section-label">Letzte Sitzungen</div>
-<div class="gesprache-sessions-list">
-  {% for s in sessions %}
-  <div class="gesprache-session-row">
-    <span class="gesprache-session-date">{{ s.date }}</span>
-    <span class="gesprache-session-persona">{{ s.persona }}</span>
-    <span class="gesprache-session-scene">{{ s.scenario }}</span>
-    <span class="gesprache-session-source">{{ s.source }}</span>
-  </div>
-  {% endfor %}
-</div>
-<p class="hint" style="margin-top:0.75rem"><a href="/archiv">→ Alle Sitzungen im Archiv</a></p>
-{% endif %}
 
   </div><!-- .tab-content -->
   <div class="tab-panel-photo">
@@ -225,7 +227,22 @@ document.body.classList.add('parch-mode');
   let selectedSceneKey = null;
   let currentFullPrompt = null;
 
+  // ── Tab toggle ─────────────────────────────────────────────────────────────
+
+  function switchTab(tab) {
+    const isPersonas = tab === 'personas';
+    document.getElementById('pane-ki-personas').style.display = isPersonas ? '' : 'none';
+    document.getElementById('pane-konversation').style.display = isPersonas ? 'none' : '';
+    document.getElementById('btn-tab-personas').classList.toggle('active', isPersonas);
+    document.getElementById('btn-tab-konversation').classList.toggle('active', !isPersonas);
+    sessionStorage.setItem('gesprache-tab', tab);
+  }
+
+  document.getElementById('btn-tab-personas').addEventListener('click', () => switchTab('personas'));
+  document.getElementById('btn-tab-konversation').addEventListener('click', () => switchTab('konversation'));
+
   // ── Persona selection ──────────────────────────────────────────────────────
+
   function selectPersona(idx) {
     const p = personas[idx];
     if (!p) return;
@@ -233,10 +250,6 @@ document.body.classList.add('parch-mode');
     selectedSceneKey = null;
     currentFullPrompt = null;
     document.getElementById('session-brief-panel').style.display = 'none';
-
-    // Ensure tutor panel is hidden and persona detail is visible
-    document.getElementById('tutor-panel').style.display = 'none';
-    document.getElementById('persona-detail').style.display = '';
 
     document.querySelectorAll('.persona-list-item').forEach(el => el.classList.remove('active'));
     document.querySelector(`.persona-list-item[data-idx="${idx}"]`).classList.add('active');
@@ -295,6 +308,7 @@ document.body.classList.add('parch-mode');
   }
 
   // ── Round-ready modal ─────────────────────────────────────────────────────
+
   let pendingRoundSlug = null;
 
   function showRoundModal(item) {
@@ -332,17 +346,13 @@ document.body.classList.add('parch-mode');
 
   document.querySelectorAll('.persona-list-item').forEach(item => {
     item.addEventListener('click', () => {
-      if (item.dataset.idx === 'tutor') {
-        selectTutor();
-      } else {
-        selectPersona(parseInt(item.dataset.idx, 10));
-        if (item.dataset.ready === 'true') showRoundModal(item);
-      }
+      selectPersona(parseInt(item.dataset.idx, 10));
+      if (item.dataset.ready === 'true') showRoundModal(item);
     });
   });
-  if (personas.length > 0) selectPersona(0);
 
   // ── Prompt delivery ────────────────────────────────────────────────────────
+
   async function fetchAndStorePrompt(personaSlug, sceneKey) {
     currentFullPrompt = null;
     document.getElementById('session-brief-panel').style.display = 'none';
@@ -393,7 +403,8 @@ document.body.classList.add('parch-mode');
     URL.revokeObjectURL(url);
   });
 
-  // ── Transcript analysis ────────────────────────────────────────────────────
+  // ── Transcript analysis (KI-Personas pane) ────────────────────────────────
+
   document.getElementById('btn-analysieren').addEventListener('click', async () => {
     const transcript = document.getElementById('transcript-input').value.trim();
     if (!transcript) return;
@@ -466,14 +477,7 @@ document.body.classList.add('parch-mode');
     document.getElementById('gesprache-feedback-wrap').scrollIntoView({ behavior: 'smooth' });
   }
 
-  // ── Tutor panel ────────────────────────────────────────────────────────────
-
-  function selectTutor() {
-    document.querySelectorAll('.persona-list-item').forEach(el => el.classList.remove('active'));
-    document.querySelector('.persona-list-item[data-idx="tutor"]').classList.add('active');
-    document.getElementById('persona-detail').style.display = 'none';
-    document.getElementById('tutor-panel').style.display = 'flex';
-  }
+  // ── Konversation pane ─────────────────────────────────────────────────────
 
   document.getElementById('btn-generate-brief').addEventListener('click', async () => {
     const btn = document.getElementById('btn-generate-brief');
@@ -485,8 +489,8 @@ document.body.classList.add('parch-mode');
       if (data.token) {
         const url = window.location.origin + '/tutor-brief/' + data.token;
         document.getElementById('brief-link-url').textContent = url;
-        document.getElementById('tutor-brief-link').style.display = '';
-        document.getElementById('tutor-brief-content').textContent = 'Brief erstellt — Link unten teilen.';
+        document.getElementById('konv-brief-link').style.display = '';
+        document.getElementById('konv-brief-preview').textContent = 'Brief erstellt.';
       } else {
         btn.textContent = 'Fehler — bitte nochmal';
       }
@@ -503,16 +507,15 @@ document.body.classList.add('parch-mode');
   });
 
   document.getElementById('btn-copy-room').addEventListener('click', () => {
-    navigator.clipboard.writeText(document.getElementById('whereby-room-url').textContent);
+    navigator.clipboard.writeText('{{ whereby_room_url }}');
   });
 
   {% if whereby_host_available %}
-  // Lazy-load the Whereby iframe only when the <details> is opened
-  document.getElementById('whereby-details').addEventListener('toggle', function () {
-    if (this.open) {
-      const iframe = document.getElementById('whereby-iframe');
-      if (!iframe.src) iframe.src = '/api/whereby-join';
-    }
+  document.getElementById('btn-open-room').addEventListener('click', () => {
+    const iframe = document.getElementById('whereby-iframe');
+    if (!iframe.src) iframe.src = '/api/whereby-join';
+    document.getElementById('whereby-iframe-wrap').style.display = '';
+    document.getElementById('btn-open-room').style.display = 'none';
   });
   {% endif %}
 
@@ -548,6 +551,11 @@ document.body.classList.add('parch-mode');
     }
     btn.disabled = false;
   });
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+
+  if (personas.length > 0) selectPersona(0);
+  switchTab(sessionStorage.getItem('gesprache-tab') || 'personas');
 
 })();
 </script>

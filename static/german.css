@@ -2065,60 +2065,123 @@ body.reading-mode nav {
   margin-top: 0.1rem;
 }
 
-/* Sticky tutor footer — always visible at bottom of persona list */
-.persona-list-tutor-footer {
-  position: sticky;
-  bottom: 0;
-  background: var(--md-parch-bg);
-  border-top: 1px solid var(--md-parch-border);
-  z-index: 2;
-}
+/* ── Gespräche mode toggle ── */
 
-.persona-list-divider {
-  height: 1px;
-  background: var(--md-parch-border);
-  margin: 0;
-  opacity: 0.6;
-}
-
-/* ── Tutor panel ── */
-
-.tutor-section {
+.gesprache-toggle {
+  display: inline-flex;
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 999px;
+  padding: 3px;
   margin-bottom: 1.5rem;
-  padding-bottom: 1.25rem;
-  border-bottom: 1px solid var(--md-parch-border);
-}
-.tutor-section:last-child {
-  border-bottom: none;
-  margin-bottom: 0;
+  background: var(--md-parch-mid);
 }
 
-.tutor-section-label {
+.gesprache-toggle-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 6px 20px;
+  border-radius: 999px;
   font-family: 'DM Mono', 'Courier New', monospace;
-  font-size: 0.65rem;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--md-text-secondary);
+  transition: background 0.15s, color 0.15s;
+}
+
+.gesprache-toggle-btn.active {
+  background: var(--md-parch);
+  color: var(--md-text-primary);
+  box-shadow: 0 1px 4px rgba(42,31,20,0.12);
+}
+
+/* ── Konversation 3-card layout ── */
+
+.konversation-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.konversation-card {
+  background: var(--md-parch);
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+}
+
+.konversation-card-label {
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--md-text-tertiary);
-  margin-bottom: 0.75rem;
-  padding-bottom: 0.4rem;
-  border-bottom: 1px solid var(--md-parch-border);
+  color: var(--md-text-muted);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--md-parch-deep);
 }
 
-.tutor-field {
+.konv-room-display {
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--md-accent);
+  margin: 8px 0 10px;
+  word-break: break-all;
+}
+
+.konv-hint {
+  font-size: 0.8rem;
+  color: var(--md-text-secondary);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.konv-field {
   margin-bottom: 0.75rem;
 }
 
-.tutor-field-label {
+.konv-field-label {
   display: block;
   font-size: 0.75rem;
   color: var(--md-text-secondary);
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.3rem;
 }
+
+.konv-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.konv-link-code {
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 0.75rem;
+  background: var(--md-parch-mid);
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 4px;
+  padding: 3px 7px;
+  word-break: break-all;
+  flex: 1;
+}
+
+.konv-brief-preview {
+  font-size: 0.82rem;
+  color: var(--md-text-secondary);
+  min-height: 1.2em;
+  margin-bottom: 0.75rem;
+}
+
+/* ── Tutor input (reused in Nachbereitung card) ── */
 
 .tutor-input {
   width: 100%;
-  background: var(--md-parch-surface);
-  border: 1px solid var(--md-parch-border);
+  background: var(--md-parch-mid);
+  border: 1px solid var(--md-parch-deep);
   border-radius: 6px;
   padding: 0.5rem 0.65rem;
   font-family: inherit;
@@ -2129,24 +2192,11 @@ body.reading-mode nav {
 .tutor-input:focus {
   outline: none;
   border-color: var(--md-accent);
-  box-shadow: 0 0 0 2px rgba(139,69,19,0.12);
+  box-shadow: 0 0 0 2px rgba(198,138,94,0.18);
 }
 
-.tutor-brief-preview {
-  font-size: 0.82rem;
-  color: var(--md-text-secondary);
-  margin-bottom: 0.75rem;
-  min-height: 1.2em;
-}
-
-.tutor-link-code {
-  font-family: 'DM Mono', 'Courier New', monospace;
-  font-size: 0.78rem;
-  background: var(--md-parch-mid);
-  border: 1px solid var(--md-parch-border);
-  border-radius: 4px;
-  padding: 2px 6px;
-  word-break: break-all;
+@media (max-width: 900px) {
+  .konversation-cards { grid-template-columns: 1fr; }
 }
 
 /* ── Detail panel ── */
