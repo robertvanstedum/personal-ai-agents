@@ -2080,12 +2080,11 @@ body.reading-mode nav {
   border: none;
   background: transparent;
   cursor: pointer;
-  padding: 6px 20px;
+  padding: 10px 28px;
   border-radius: 999px;
-  font-family: 'DM Mono', 'Courier New', monospace;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--md-text-secondary);
   transition: background 0.15s, color 0.15s;
 }
@@ -2099,13 +2098,14 @@ body.reading-mode nav {
 /* ── Konversation 3-card layout ── */
 
 .konversation-cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
   gap: 1.25rem;
-  align-items: start;
+  align-items: flex-start;
 }
 
 .konversation-card {
+  flex: 1;
+  min-width: 0;
   background: var(--md-parch);
   border: 1px solid var(--md-parch-deep);
   border-radius: 10px;
@@ -2125,10 +2125,10 @@ body.reading-mode nav {
 
 .konv-room-display {
   font-family: 'DM Mono', 'Courier New', monospace;
-  font-size: 0.95rem;
+  font-size: 1.4rem;
   font-weight: 500;
   color: var(--md-accent);
-  margin: 8px 0 10px;
+  margin: 8px 0 12px;
   word-break: break-all;
 }
 
@@ -2149,6 +2149,46 @@ body.reading-mode nav {
   color: var(--md-text-secondary);
   margin-bottom: 0.3rem;
 }
+
+/* Consent checkbox label */
+.konv-consent-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--md-text-primary);
+  cursor: pointer;
+  margin-top: 4px;
+}
+.konv-consent-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--md-accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Locked state — dims everything below the consent checkbox */
+.konv-transcript-locked {
+  opacity: 0.4;
+  pointer-events: none;
+  user-select: none;
+}
+
+.konv-drive-link {
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 0.7rem;
+  color: var(--md-accent);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  text-decoration: none;
+}
+.konv-drive-link:hover { text-decoration: underline; }
+.konv-drive-link:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .konv-link-row {
   display: flex;
@@ -2196,8 +2236,29 @@ body.reading-mode nav {
 }
 
 @media (max-width: 900px) {
-  .konversation-cards { grid-template-columns: 1fr; }
+  .konversation-cards { flex-direction: column; }
+  .konversation-card { min-width: 100%; }
 }
+
+/* ── Raum öffnen — primary CTA in Konversation tab ── */
+
+.btn-raum-oeffnen {
+  display: block;
+  width: 100%;
+  height: 44px;
+  background: var(--md-accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 12px;
+  transition: opacity 0.15s;
+}
+.btn-raum-oeffnen:hover { opacity: 0.85; }
+.btn-raum-oeffnen:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* ── Detail panel ── */
 
@@ -2482,6 +2543,95 @@ body.reading-mode nav {
   font-size: 0.7rem;
   color: var(--md-text-muted);
   flex-shrink: 0;
+}
+
+/* ── Gespräche v2: fixed-height two-column layout ── */
+
+#pane-ki-personas .ueben-layout {
+  height: calc(100vh - 220px);
+  min-height: 380px;
+  overflow: hidden;
+}
+
+#pane-ki-personas .persona-list {
+  height: 100%;
+  max-height: none;
+}
+
+#pane-ki-personas .persona-detail {
+  height: 100%;
+  max-height: none;
+}
+
+/* ── Gespräche v2: collapsible transcript sections ── */
+
+.gesprache-transcript-details {
+  border-top: 1px solid var(--md-parch-deep);
+  margin-top: 1.25rem;
+}
+
+.gesprache-transcript-summary {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--md-text-muted);
+  cursor: pointer;
+  padding: 1rem 0;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  user-select: none;
+}
+
+.gesprache-transcript-summary::-webkit-details-marker { display: none; }
+
+.gesprache-transcript-summary::before {
+  content: '▸';
+  font-size: 0.65rem;
+  color: var(--md-accent);
+}
+
+details[open] > .gesprache-transcript-summary::before {
+  content: '▾';
+}
+
+.gesprache-transcript-details .gesprache-transcript {
+  padding-bottom: 1.5rem;
+}
+
+.konv-nachbereitung-body {
+  padding-top: 0.75rem;
+  padding-bottom: 1.5rem;
+}
+
+/* ── Gespräche v2: Heutige Vorbereitung collapsible ── */
+
+.session-brief-details {
+  margin-top: 1.25rem;
+  margin-bottom: 1rem;
+  border-top: 1px solid var(--md-parch-deep);
+}
+
+.session-brief-summary {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--md-text-secondary);
+  cursor: pointer;
+  list-style: none;
+  padding: 0.65rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  user-select: none;
+}
+
+.session-brief-summary::-webkit-details-marker { display: none; }
+
+.session-brief-details .session-brief-text {
+  margin-top: 0.5rem;
 }
 
 /* ══════════════════════════════════════════════════════════════
