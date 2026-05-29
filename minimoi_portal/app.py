@@ -53,6 +53,12 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=_cfg.SESSION_LIFETIME_
 # Without this, Flask re-sends Set-Cookie on EVERY response including images,
 # which prevents browsers from caching proxied static assets.
 app.config["SESSION_REFRESH_EACH_REQUEST"] = False
+# Secure cookie flags — required for mobile browsers on HTTPS.
+# SESSION_COOKIE_SECURE=True: only send cookie over HTTPS (not HTTP).
+# SESSION_COOKIE_SAMESITE="Lax": allow cross-site navigation (normal browser links).
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
 
 # Lazy imports
 from minimoi_portal import auth as _auth          # noqa: E402
