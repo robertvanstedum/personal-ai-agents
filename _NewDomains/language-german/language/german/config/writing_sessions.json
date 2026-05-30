@@ -1,0 +1,53 @@
+{
+  "entries": [
+    {
+      "id": "ws_20260521_082722",
+      "mode": "tagebuch",
+      "text_original": "Heute ich habe ein Kaffee in Wien getrunken. Es war sehr gut.",
+      "text_corrected": "Heute habe ich einen Kaffee in Wien getrunken. Er war sehr gut.",
+      "notes": [
+        "Word order: verb 'habe' must come second after 'Heute'",
+        "Case: 'einen' for accusative masculine object",
+        "Pronoun: 'Er' agrees with masculine noun 'Kaffee'"
+      ],
+      "timestamp": "2026-05-21T08:27:22.658509",
+      "context_title": "Was hast du heute auf Deutsch gelesen oder gehört?",
+      "user": "robert"
+    },
+    {
+      "id": "ws_20260521_230011",
+      "mode": "tagebuch",
+      "text_original": "Ich werde nächste woche ein \"Interview\" haben.  Wie sagt man das?",
+      "text_corrected": "Ich werde nächste Woche ein Interview haben. Wie sagt man das?",
+      "notes": [
+        "Capitalization: 'Woche' must be capitalized as all German nouns are capitalized."
+      ],
+      "timestamp": "2026-05-21T23:00:11.608799",
+      "context_title": "Was war heute interessant oder überraschend?"
+    },
+    {
+      "id": "ws_20260522_204837",
+      "mode": "tagebuch",
+      "text_original": "Ich bin jetzt hier zu Hause von meiner Torchter.",
+      "text_corrected": "Ich bin jetzt hier zu Hause bei meiner Tochter.",
+      "notes": [
+        "vocabulary: 'von' changed to 'bei' for location at someone's home",
+        "vocabulary: 'Torchter' corrected to 'Tochter'"
+      ],
+      "timestamp": "2026-05-22T20:48:37.733812",
+      "context_title": "Was hast du heute in Wien gesehen?"
+    },
+    {
+      "id": "ws_20260522_213413",
+      "mode": "tagebuch",
+      "text_original": "Ich bin im Haus bei meiner Torchter gekommen.",
+      "text_corrected": "Ich bin im Haus meiner Tochter angekommen.",
+      "notes": [
+        "replaced 'bei' with genitive 'meiner Tochter' for possession",
+        "changed 'gekommen' to 'angekommen' for arrival at a place"
+      ],
+      "timestamp": "2026-05-22T21:34:13.392386",
+      "context_title": "Beschreib deinen Morgen auf Deutsch."
+    }
+  ]
+}

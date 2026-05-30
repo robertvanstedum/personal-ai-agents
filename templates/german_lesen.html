@@ -1,0 +1,625 @@
+{% extends "german_base.html" %}
+{% block title %}Lesen{% endblock %}
+
+{% block content %}
+
+<!-- ── Browse state (hero only — dark) ───────────────────────────────── -->
+<div id="browse-state">
+  <!-- HERO POSITION OPTIONS
+       Option A (signage): object-position: 55% 50%
+       Option B (books):   object-position: 55% 68%  ← current
+  -->
+  <img class="hero-img" src="/static/photos/Bookstore_2.jpg"
+       alt="Franz Leo &amp; Comp. Buchhandlung Wien"
+       style="object-position: 55% 68%">
+  <div class="browse-hero-content">
+    <h1>Lesen</h1>
+    <p class="subtitle">Wiener Nachrichten — Lokales, Kultur, Sport.</p>
+  </div>
+</div>
+
+<!-- ── Parchment content area ────────────────────────────────────────── -->
+<div id="lesen-content-area" class="no-selection">
+
+  <!-- Day toggle (hidden until a category is selected) -->
+  <div class="day-toggle" id="day-toggle" style="display:none">
+    <button class="day-btn active" data-day="heute">Heute</button>
+    <button class="day-btn" data-day="gestern">Gestern</button>
+  </div>
+
+  <!-- Staleness notice (shown when pool is older than yesterday) -->
+  <div id="lesen-stale-notice" class="lesen-stale-notice" style="display:none"></div>
+
+  <!-- Category cards -->
+  <div class="lesen-cat-row">
+
+    <div class="lesen-cat-card" data-category="alltag"
+         style="background-image: url('/static/photos/croissant.jpg');
+                background-position: center 40%;">
+      <div class="cat-card-overlay"></div>
+      <div class="cat-card-content">
+        <span class="cat-emoji">☕</span>
+        <span class="cat-name">Alltag</span>
+        <span class="cat-sub">Haushalt · Sport · Alltägliches</span>
+      </div>
+    </div>
+
+    <div class="lesen-cat-card" data-category="kultur"
+         style="background-image: url('/static/photos/Museum_2.jpg');
+                background-position: center 35%;">
+      <div class="cat-card-overlay"></div>
+      <div class="cat-card-content">
+        <span class="cat-emoji">🎭</span>
+        <span class="cat-name">Kultur</span>
+        <span class="cat-sub">Musik · Kunst · Theater</span>
+      </div>
+    </div>
+
+    <div class="lesen-cat-card" data-category="politik"
+         style="background-image: url('/static/photos/Newspaper.jpg');
+                background-position: center 25%;">
+      <div class="cat-card-overlay"></div>
+      <div class="cat-card-content">
+        <span class="cat-emoji">📰</span>
+        <span class="cat-name">Politik</span>
+        <span class="cat-sub">Nachrichten · Wirtschaft</span>
+      </div>
+    </div>
+
+    <div class="lesen-cat-card" data-category="wien"
+         style="background-image: url('/static/photos/Schnitzel_and_Beer.jpg');
+                background-position: center 45%;">
+      <div class="cat-card-overlay"></div>
+      <div class="cat-card-content">
+        <span class="cat-emoji">🏛️</span>
+        <span class="cat-name">Wien</span>
+        <span class="cat-sub">Stadt · Bezirke · Lokales</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Article list (filled by JS on category select) -->
+  <div id="lesen-article-list"></div>
+
+  <!-- Empty / refresh state -->
+  <div class="strip-empty" id="lesen-empty-state" style="display:none">
+    <span class="strip-empty-text">Keine Artikel geladen.</span>
+    <button class="strip-action-btn" id="btn-artikel-laden"
+            title="Refresh article feed">Artikel laden ↻</button>
+  </div>
+
+</div>
+
+<!-- ── Reading state ─────────────────────────────────────────────────── -->
+<div id="reading-state" class="lesen-state-hidden">
+  <div class="wien-banner">
+    <span class="wien-banner-label">[Wien Stadtbild]</span>
+  </div>
+  <div class="article-bar">
+    <button class="article-bar-btn" id="btn-back-liste" title="Back to article list">← Liste</button>
+    <div class="article-bar-center">
+      <button class="article-bar-btn" id="btn-art-prev" title="Previous article">‹</button>
+      <span class="article-bar-counter" id="art-counter">1 / 1</span>
+      <button class="article-bar-btn" id="btn-art-next" title="Next article">›</button>
+    </div>
+  </div>
+  <div class="reading-body">
+    <div class="reading-article-col">
+      <div class="reading-article-scroll">
+        <h2 class="reading-headline" id="reading-headline"></h2>
+        <div class="reading-byline-row">
+          <span class="reading-byline" id="reading-byline"></span>
+          <a class="reading-art-open" id="btn-art-open" href="#"
+             target="_blank" rel="noopener">↗ Artikel öffnen</a>
+        </div>
+        <div class="reading-text selectable-text" id="reading-text"></div>
+        <div class="reading-notizen" id="reading-notizen">
+          <div class="sidebar-panel-title">Notizen</div>
+          <div class="input-with-voice">
+            <textarea class="notizen-input" id="notizen-original" rows="4"
+              placeholder="Notiz schreiben…"></textarea>
+            <button class="btn-voice" id="voice-notizen"
+                    title="Spracheingabe — funktioniert am besten in Chrome/Safari">🎤</button>
+          </div>
+          <div class="notizen-actions">
+            <button class="notizen-btn" id="btn-notizen-correct"
+                    title="Get AI grammar correction">Korrektur anfragen</button>
+            <span class="notizen-status" id="notizen-status"></span>
+          </div>
+          <div class="notizen-correction" id="notizen-correction" style="display:none">
+            <div class="notizen-correction-label">Korrektur:</div>
+            <div class="notizen-correction-text" id="notizen-correction-text"></div>
+            <textarea class="notizen-input notizen-rewrite" id="notizen-rewritten" rows="3"
+              placeholder="Neu schreiben…"></textarea>
+            <div class="notizen-actions">
+              <button class="notizen-btn notizen-btn-save" id="btn-notizen-save"
+                      title="Save note">Speichern</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="reading-footer">
+        <button class="reading-footer-btn" id="btn-mehr"
+                title="Expand full article text">＋ Mehr</button>
+        <button class="reading-footer-btn" id="btn-weniger"
+                title="Collapse article text">－ Weniger</button>
+        <button class="reading-footer-btn" id="btn-merken"
+                title="Save article for later">🔖 Merken</button>
+        <button class="reading-footer-btn" id="btn-vorlesen"
+                title="Artikel vorlesen lassen">🔊 Vorlesen</button>
+      </div>
+    </div>
+    <aside class="reading-sidebar">
+      <div class="sidebar-panel sidebar-panel-woerter">
+        <div class="sidebar-panel-title">Wörter</div>
+        <ul class="woerter-list" id="woerter-list">
+          <li class="woerter-empty-hint">Wörter markieren zum Speichern.</li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- ── Word capture popover ──────────────────────────────────────────── -->
+<div class="word-popover" id="word-popover" style="display:none">
+  <div class="popover-phrase" id="popover-phrase"></div>
+  <div class="popover-translation" id="popover-translation">Übersetzung…</div>
+  <div class="popover-timing" id="popover-timing"></div>
+  <div class="popover-actions">
+    <button class="btn-save-phrase" id="btn-save-phrase"
+            title="Save word or phrase to library">＋ In Bibliothek</button>
+    <button class="btn-close-popover" id="btn-close-popover" title="Close">✕</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+
+  // ── State ────────────────────────────────────────────────────────────
+  let categoryArticles = [];   // all articles for selected category
+  let filteredArticles = [];   // articles after day filter
+  let currentIdx      = 0;
+  let currentCategory = null;
+  let currentDay      = 'heute';
+  let heuteDate       = null;
+  let gesternDate     = null;
+  let textTruncated   = true;
+  let currentTranslation = '';
+
+  // ── Helpers ──────────────────────────────────────────────────────────
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  async function postJSON(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+
+  // ── State switching ──────────────────────────────────────────────────
+  function enterBrowse() {
+    document.body.classList.remove('reading-mode', 'parch-mode');
+    document.body.classList.add('browse-mode');
+    document.getElementById('browse-state').classList.remove('lesen-state-hidden');
+    document.getElementById('lesen-content-area').classList.remove('lesen-state-hidden');
+    document.getElementById('reading-state').classList.add('lesen-state-hidden');
+  }
+
+  function enterReading(articleId) {
+    const idx = filteredArticles.findIndex(a => a.id === articleId);
+    if (idx === -1) return;
+    currentIdx = idx;
+    document.body.classList.remove('browse-mode', 'parch-mode');
+    document.body.classList.add('reading-mode');
+    document.getElementById('browse-state').classList.add('lesen-state-hidden');
+    document.getElementById('lesen-content-area').classList.add('lesen-state-hidden');
+    document.getElementById('reading-state').classList.remove('lesen-state-hidden');
+    populateArticle(currentIdx);
+  }
+
+  // ── Category selection ────────────────────────────────────────────────
+  async function selectCategory(cat) {
+    currentCategory = cat;
+    document.getElementById('lesen-content-area').classList.remove('no-selection');
+
+    // Highlight active card
+    document.querySelectorAll('.lesen-cat-card').forEach(b => {
+      b.classList.toggle('active', b.dataset.category === cat);
+    });
+
+    // Show loading hint
+    const list = document.getElementById('lesen-article-list');
+    list.innerHTML = '<div class="lesen-loading">Wird geladen…</div>';
+    document.getElementById('lesen-empty-state').style.display = 'none';
+
+    try {
+      const res = await fetch(`/api/lesen-category?category=${encodeURIComponent(cat)}`);
+      const data = await res.json();
+      categoryArticles = data.articles || [];
+    } catch {
+      categoryArticles = [];
+    }
+
+    // Derive heute / gestern from returned articles
+    const allDates = [...new Set(categoryArticles.map(a => a.date_fetched))].sort().reverse();
+    heuteDate   = allDates[0] || null;
+    gesternDate = allDates[1] || null;
+
+    // Show/hide day toggle
+    const dayToggle = document.getElementById('day-toggle');
+    dayToggle.style.display = gesternDate ? '' : 'none';
+
+    applyDayFilter(currentDay);
+
+    // Staleness notice — show if newest article is older than yesterday
+    const staleNotice = document.getElementById('lesen-stale-notice');
+    if (staleNotice) {
+      if (heuteDate) {
+        const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+        if (heuteDate < yesterday) {
+          const days = Math.round((Date.now() - new Date(heuteDate)) / 864e5);
+          staleNotice.textContent = `Letzte Aktualisierung vor ${days} Tag${days === 1 ? '' : 'en'} — tippe auf ↻ um zu aktualisieren`;
+          staleNotice.style.display = '';
+        } else {
+          staleNotice.style.display = 'none';
+        }
+      } else {
+        staleNotice.style.display = 'none';
+      }
+    }
+  }
+
+  // ── Day filter ────────────────────────────────────────────────────────
+  function applyDayFilter(day) {
+    currentDay = day;
+    // Update active day button
+    document.querySelectorAll('.day-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.day === day);
+    });
+
+    const filterDate = day === 'heute' ? heuteDate : gesternDate;
+    filteredArticles = filterDate
+      ? categoryArticles.filter(a => a.date_fetched === filterDate)
+      : categoryArticles;
+
+    renderArticles(filteredArticles);
+  }
+
+  // ── Article row rendering ─────────────────────────────────────────────
+  function renderArticles(list) {
+    const container = document.getElementById('lesen-article-list');
+    const emptyState = document.getElementById('lesen-empty-state');
+    container.innerHTML = '';
+
+    if (list.length === 0) {
+      emptyState.style.display = '';
+      return;
+    }
+    emptyState.style.display = 'none';
+
+    list.forEach(art => {
+      const row = document.createElement('div');
+      row.className = 'lesen-article-row';
+      row.dataset.id = art.id;
+      row.innerHTML =
+        `<span class="lesen-source-tag">${escapeHtml(art.source)}</span>` +
+        `<span class="lesen-dot">·</span>` +
+        `<span class="lesen-headline">${escapeHtml(art.title)}</span>`;
+      row.addEventListener('click', () => enterReading(art.id));
+      container.appendChild(row);
+    });
+  }
+
+  // ── Article population (reading view) ────────────────────────────────
+  function populateArticle(idx) {
+    const art = filteredArticles[idx];
+    if (!art) return;
+    document.getElementById('reading-headline').textContent = art.title || '';
+    document.getElementById('reading-byline').textContent =
+      [art.source, art.date_fetched].filter(Boolean).join(' · ');
+    document.getElementById('reading-text').textContent = art.summary || '';
+    document.getElementById('art-counter').textContent =
+      `${idx + 1} / ${filteredArticles.length}`;
+    const openLink = document.getElementById('btn-art-open');
+    openLink.href = art.url || '#';
+    textTruncated = true;
+    applyTruncation();
+    const btnM = document.getElementById('btn-merken');
+    btnM.textContent = '🔖 Merken';
+    btnM.disabled = false;
+    document.getElementById('woerter-list').innerHTML =
+      '<li class="woerter-empty-hint">Wörter markieren zum Speichern.</li>';
+  }
+
+  function applyTruncation() {
+    const el = document.getElementById('reading-text');
+    el.classList.toggle('text-truncated', textTruncated);
+  }
+
+  // ── Category cards ────────────────────────────────────────────────────
+  document.querySelectorAll('.lesen-cat-card').forEach(btn => {
+    btn.addEventListener('click', () => selectCategory(btn.dataset.category));
+  });
+
+  // ── Day toggle ────────────────────────────────────────────────────────
+  document.querySelectorAll('.day-btn').forEach(btn => {
+    btn.addEventListener('click', () => applyDayFilter(btn.dataset.day));
+  });
+
+  // ── Reading navigation ────────────────────────────────────────────────
+  document.getElementById('btn-back-liste').addEventListener('click', enterBrowse);
+
+  document.getElementById('btn-art-prev').addEventListener('click', () => {
+    if (currentIdx > 0) enterReading(filteredArticles[currentIdx - 1].id);
+  });
+
+  document.getElementById('btn-art-next').addEventListener('click', () => {
+    if (currentIdx < filteredArticles.length - 1) enterReading(filteredArticles[currentIdx + 1].id);
+  });
+
+  // ── Text truncation ───────────────────────────────────────────────────
+  document.getElementById('btn-mehr').addEventListener('click', () => {
+    textTruncated = false;
+    applyTruncation();
+  });
+
+  document.getElementById('btn-weniger').addEventListener('click', () => {
+    textTruncated = true;
+    applyTruncation();
+    const scroll = document.querySelector('.reading-article-scroll');
+    if (scroll) scroll.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  // ── Merken (reading view) ─────────────────────────────────────────────
+  document.getElementById('btn-merken').addEventListener('click', async function () {
+    const art = filteredArticles[currentIdx];
+    if (!art) return;
+    await postJSON('/api/lesen-action', { article_id: art.id, action: 'pin' });
+    this.textContent = '🔖 Gemerkt';
+    this.disabled = true;
+  });
+
+  // ── Refresh feed ──────────────────────────────────────────────────────
+  const btnLaden = document.getElementById('btn-artikel-laden');
+  if (btnLaden) {
+    btnLaden.addEventListener('click', async () => {
+      btnLaden.textContent = 'Laden…';
+      btnLaden.disabled = true;
+      try {
+        await postJSON('/api/lesen-refresh', {});
+        if (currentCategory) selectCategory(currentCategory);
+        else { btnLaden.textContent = 'Artikel laden ↻'; btnLaden.disabled = false; }
+      } catch {
+        btnLaden.textContent = 'Fehler — neu versuchen';
+        btnLaden.disabled = false;
+      }
+    });
+  }
+
+  // ── Word capture ──────────────────────────────────────────────────────
+  const popover    = document.getElementById('word-popover');
+  const popPhrase  = document.getElementById('popover-phrase');
+  const popTrans   = document.getElementById('popover-translation');
+  const popTiming  = document.getElementById('popover-timing');
+  const btnSave    = document.getElementById('btn-save-phrase');
+  const btnClose   = document.getElementById('btn-close-popover');
+  const translationCache = new Map();
+  let currentPhrase = '';
+
+  let selectionTimer = null;
+  document.getElementById('reading-text').addEventListener('mouseup', () => {
+    clearTimeout(selectionTimer);
+    selectionTimer = setTimeout(handleSelection, 300);
+  });
+
+  document.addEventListener('mousedown', e => {
+    if (!popover.contains(e.target)) hidePopover();
+  });
+
+  btnClose.addEventListener('click', hidePopover);
+
+  function handleSelection() {
+    const sel = window.getSelection();
+    const phrase = sel ? sel.toString().trim() : '';
+    if (!phrase || phrase.length < 2 || phrase.length > 300) return;
+    const range = sel.getRangeAt(0);
+    const before = range.startContainer.textContent[range.startOffset - 1];
+    const after  = range.endContainer.textContent[range.endOffset];
+    if ((before && /\w/.test(before)) || (after && /\w/.test(after))) return;
+    currentPhrase = phrase;
+    currentTranslation = '';
+    const rect = range.getBoundingClientRect();
+    popPhrase.textContent = phrase;
+    popTrans.textContent = 'Übersetzung…';
+    popTiming.textContent = '';
+    btnSave.disabled = true;
+    btnSave.textContent = '＋ In Bibliothek';
+    showPopover(rect);
+    fetchTranslation(phrase);
+  }
+
+  async function fetchTranslation(phrase) {
+    const key = phrase.toLowerCase().trim();
+    if (translationCache.has(key)) {
+      currentTranslation = translationCache.get(key);
+      popTrans.textContent = currentTranslation || '(keine Übersetzung)';
+      popTiming.textContent = 'cache';
+      btnSave.disabled = !currentTranslation;
+      return;
+    }
+    const t0 = performance.now();
+    try {
+      const data = await postJSON('/api/translate', { phrase });
+      const roundTrip = Math.round(performance.now() - t0);
+      currentTranslation = data.translation || '';
+      translationCache.set(key, currentTranslation);
+      popTrans.textContent = currentTranslation || '(keine Übersetzung)';
+      btnSave.disabled = !currentTranslation;
+      const t = data.timing || {};
+      const parts = [`${roundTrip}ms`];
+      if (t.deepl_ms) parts.push(`DeepL ${t.deepl_ms}ms`);
+      else if (t.llm_ms) parts.push(`LLM ${t.llm_ms}ms`);
+      if (t.total_ms) parts.push(`server ${t.total_ms}ms`);
+      popTiming.textContent = parts.join(' · ');
+    } catch {
+      popTrans.textContent = '(Fehler)';
+      popTiming.textContent = '';
+    }
+  }
+
+  function showPopover(rect) {
+    popover.style.display = 'block';
+    const top  = rect.bottom + window.scrollY + 8;
+    const left = Math.min(rect.left, window.innerWidth - 280);
+    popover.style.top  = Math.max(8, top) + 'px';
+    popover.style.left = Math.max(8, left) + 'px';
+  }
+
+  function hidePopover() {
+    popover.style.display = 'none';
+    currentPhrase = '';
+    currentTranslation = '';
+  }
+
+  btnSave.addEventListener('click', async () => {
+    if (!currentPhrase || !currentTranslation) return;
+    const art = filteredArticles[currentIdx];
+    const contextEl = document.getElementById('reading-text');
+    const contextSentence = contextEl ? contextEl.textContent.slice(0, 200) : '';
+    btnSave.textContent = 'Speichern…';
+    btnSave.disabled = true;
+    try {
+      await postJSON('/api/save-phrase', {
+        german: currentPhrase,
+        english: currentTranslation,
+        context_sentence: contextSentence,
+        article_title: art ? art.title : '',
+      });
+      const list = document.getElementById('woerter-list');
+      const empty = list.querySelector('.woerter-empty-hint');
+      if (empty) empty.remove();
+      const li = document.createElement('li');
+      li.className = 'woerter-item';
+      li.textContent = `${currentPhrase} — ${currentTranslation}`;
+      list.prepend(li);
+      btnSave.textContent = '✓ Gespeichert';
+      setTimeout(hidePopover, 700);
+    } catch {
+      btnSave.textContent = 'Fehler';
+      btnSave.disabled = false;
+    }
+  });
+
+  // ── Notizen flow ──────────────────────────────────────────────────────
+  const btnNotizenCorrect = document.getElementById('btn-notizen-correct');
+  const btnNotizenSave    = document.getElementById('btn-notizen-save');
+  const notizenStatus     = document.getElementById('notizen-status');
+  const notizenCorrection = document.getElementById('notizen-correction');
+  const notizenCorrText   = document.getElementById('notizen-correction-text');
+  let notizenCorrected    = '';
+
+  if (btnNotizenCorrect) {
+    btnNotizenCorrect.addEventListener('click', async () => {
+      const text = document.getElementById('notizen-original').value.trim();
+      if (!text) return;
+      btnNotizenCorrect.disabled = true;
+      notizenStatus.textContent = 'Korrektur läuft…';
+      try {
+        const data = await postJSON('/api/write-correct', { text, context: '' });
+        notizenCorrected = data.corrected || text;
+        notizenCorrText.textContent = notizenCorrected;
+        notizenCorrection.style.display = 'block';
+        notizenStatus.textContent = '';
+      } catch {
+        notizenStatus.textContent = 'Fehler';
+      }
+      btnNotizenCorrect.disabled = false;
+    });
+  }
+
+  if (btnNotizenSave) {
+    btnNotizenSave.addEventListener('click', async () => {
+      const original  = document.getElementById('notizen-original').value.trim();
+      const rewritten = document.getElementById('notizen-rewritten').value.trim();
+      const art = filteredArticles[currentIdx];
+      btnNotizenSave.disabled = true;
+      btnNotizenSave.textContent = 'Speichern…';
+      try {
+        await postJSON('/api/note-save', {
+          article_id:    art ? art.id    : '',
+          article_title: art ? art.title : '',
+          original,
+          corrected:  notizenCorrected,
+          rewritten,
+        });
+        btnNotizenSave.textContent = '✓ Gespeichert';
+        setTimeout(() => {
+          document.getElementById('notizen-original').value  = '';
+          document.getElementById('notizen-rewritten').value = '';
+          notizenCorrection.style.display = 'none';
+          notizenCorrected = '';
+          btnNotizenSave.textContent = 'Speichern';
+          btnNotizenSave.disabled = false;
+          if (btnNotizenCorrect) btnNotizenCorrect.disabled = false;
+        }, 1200);
+      } catch {
+        btnNotizenSave.textContent = 'Fehler';
+        btnNotizenSave.disabled = false;
+      }
+    });
+  }
+
+  // ── Voice input on Notizen ────────────────────────────────────────────
+  (function () {
+    const btn = document.getElementById('voice-notizen');
+    const textarea = document.getElementById('notizen-original');
+    if (!btn || !textarea) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { btn.style.display = 'none'; return; }
+    let recognition = null;
+    btn.addEventListener('click', () => {
+      if (recognition) { recognition.stop(); recognition = null; btn.textContent = '🎤'; return; }
+      recognition = new SR();
+      recognition.lang = 'de-DE';
+      recognition.interimResults = false;
+      recognition.onresult = e => {
+        textarea.value += (textarea.value ? ' ' : '') + e.results[0][0].transcript;
+      };
+      recognition.onend = () => {
+        recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening');
+      };
+      recognition.onerror = () => {
+        recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening');
+      };
+      recognition.onstart = () => { btn.textContent = '⏹'; btn.classList.add('listening'); };
+      recognition.start();
+    });
+  })();
+
+  // ── Vorlesen ──────────────────────────────────────────────────────────
+  document.getElementById('btn-vorlesen').addEventListener('click', () => {
+    const text = document.getElementById('reading-text').textContent.trim();
+    if (!text || !window.speechSynthesis) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'de-DE'; u.rate = 0.9;
+    window.speechSynthesis.speak(u);
+  });
+
+  // ── Init ──────────────────────────────────────────────────────────────
+  enterBrowse();
+
+})();
+</script>
+{% endblock %}

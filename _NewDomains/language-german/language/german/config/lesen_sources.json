@@ -1,0 +1,13 @@
+{
+  "_note": "Content quality filtering (crime/violence headlines, non-German content) is a known Phase 2 issue. Requires source scoring in german_domain.py. Preferred content: local events, culture, city life. See design spec.",
+  "sources": [
+    {"name": "ORF Wien",              "url": "https://rss.orf.at/wien.xml",                    "active": true,  "category": "wien"},
+    {"name": "Vienna.at",             "url": "https://www.vienna.at/rss",                       "active": true,  "category": "wien"},
+    {"name": "Standard Kultur",       "url": "https://www.derstandard.at/rss/kultur",           "active": true,  "category": "kultur"},
+    {"name": "ORF Sport",             "url": "https://rss.orf.at/sport.xml",                    "active": true,  "category": "alltag"},
+    {"name": "Wiener Bezirksblätter", "url": "https://www.meinbezirk.at/rss",                  "active": true,  "category": "wien"},
+    {"name": "ORF Kultur",            "url": "https://rss.orf.at/kultur.xml",                   "active": true,  "category": "kultur"},
+    {"name": "ORF News",              "url": "https://rss.orf.at/news.xml",                     "active": true,  "category": "politik"},
+    {"name": "Heute",                 "url": "https://www.heute.at/rss",                        "active": true,  "category": "alltag"}
+  ]
+}

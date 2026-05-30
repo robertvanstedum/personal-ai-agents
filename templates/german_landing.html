@@ -1,0 +1,21 @@
+{% extends "german_base.html" %}
+{% block title %}Mein Deutsch{% endblock %}
+
+{% block content %}
+<div class="landing-hero">
+  <h1 class="landing-title">Mein Deutsch</h1>
+  <p class="landing-subtitle">Dein persönlicher Sprachraum</p>
+  <ul class="landing-nav">
+    <li><a href="/lesen">Lesen</a></li>
+    <li><a href="/gesprache">Gespräche</a></li>
+    <li><a href="/schreiben">Schreiben</a></li>
+    <li><a href="/woerter">Wörter</a></li>
+  </ul>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.body.classList.add('landing-mode');
+</script>
+{% endblock %}

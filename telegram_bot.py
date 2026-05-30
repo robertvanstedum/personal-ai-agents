@@ -774,6 +774,26 @@ async def _handle_german_command(update: Update, text: str):
         else:
             await update.message.reply_text("ℹ️ Watcher was not running (or pkill failed).")
 
+    elif cmd == "resetphrases":
+        verb = args.strip().lower() if args else ""
+        if not verb:
+            await update.message.reply_text("Usage: !german resetphrases [verb]")
+            return
+        pool = _load_drill_pool()
+        found = False
+        for section in ("core", "on_demand"):
+            for entry in pool.get(section, {}).get("verbs", []):
+                if isinstance(entry, dict) and entry.get("verb", "").lower() == verb:
+                    entry.pop("phrases", None)
+                    found = True
+        if found:
+            _save_drill_pool(pool)
+            await update.message.reply_text(
+                f"✅ Phrases cleared for '{verb}'. Next drill will regenerate."
+            )
+        else:
+            await update.message.reply_text(f"⚠️ Verb '{verb}' not found in pool.")
+
     elif cmd == "anki":
         anki_dir = GERMAN_DIR / "anki"
         csvs = sorted(anki_dir.glob("*.csv")) if anki_dir.exists() else []
@@ -908,6 +928,7 @@ _phrase_practice: dict = {}     # chat_id → {"phrase_id": str}; in-memory, sur
 _phrase_save_pending: dict = {}  # chat_id → {"german": str, "english": str}; awaiting yes/no confirm
 _phrase_capture_mode: dict = {}  # chat_id → {"retries": int}; waiting for second voice note
 _phrase_list_offset: dict = {}   # chat_id → int; pagination offset for phrase list
+_last_list_type: dict = {}       # chat_id → 'phrase' | 'verb'; which list was shown last (for bare "more" routing)
 
 
 # _resolve_verb, _resolve_phrases imported from german_domain (Group C)
@@ -1266,6 +1287,7 @@ async def _handle_drill_list(update) -> None:
         return
     _drill_list_state[chat_id] = {"verbs": verbs, "offset": 10}
     _save_drill_list_state()
+    _last_list_type[chat_id] = 'verb'
     await update.message.reply_text(_drill_list_page(verbs, 0))
 
 
@@ -1432,7 +1454,7 @@ async def _handle_phrase_save_confirm(update: Update, text: str) -> None:
         return
 
     word = text.strip().lower()
-    if word in {"yes", "ja", "já", "y", "yep", "correct", "save", "genau", "stimmt", "gut", "passt"}:
+    if word in {"yes", "ja", "já", "jo", "y", "yep", "correct", "save", "genau", "stimmt", "gut", "passt"}:
         today = datetime.now().date().isoformat()
         book = _load_phrasebook()
         pid = _phrase_next_id(book["phrases"], today)
@@ -1493,6 +1515,7 @@ async def _handle_phrase_list(update: Update, args: str, offset: int = 0) -> Non
         lines.append(f"— {remaining} more. Say 'phrase more' or type !phrase more —")
     lines.append("— Say 'phrase practice' or type !phrase practice [id] to drill one —")
     _phrase_list_offset[update.message.chat_id] = offset + len(page)
+    _last_list_type[update.message.chat_id] = 'phrase'
     await update.message.reply_text("\n\n".join(lines))
 
 
@@ -1549,20 +1572,29 @@ async def _handle_phrase_practice_answer(update: Update, text: str) -> None:
         await update.message.reply_text("Phrase not found — it may have been removed.")
         return
 
-    def _norm(s: str) -> str:
-        return _re.sub(r"[.,!?;:\-–]", "", s.lower()).strip()
-
-    ratio = SequenceMatcher(None, _norm(text), _norm(phrase["german"])).ratio()
-    phrase["practice_count"] = phrase.get("practice_count", 0) + 1
-    phrase["last_practiced"] = datetime.now().date().isoformat()
-    _save_phrasebook(book)
+    normalized_user = _normalize_answer(text)
+    normalized_expected = _normalize_answer(phrase["german"])
+    ratio = SequenceMatcher(None, normalized_user, normalized_expected).ratio()
 
     AGAIN = "\n\nSay 'phrase practice' or !phrase practice to try another."
     if ratio >= 0.92:
-        await update.message.reply_text(f"✅ Correct spelling.{AGAIN}")
-    else:
+        # Exact or very close — count as correct
+        phrase["practice_count"] = phrase.get("practice_count", 0) + 1
+        phrase["last_practiced"] = datetime.now().date().isoformat()
+        _save_phrasebook(book)
+        await update.message.reply_text(f"✅ Correct!{AGAIN}")
+    elif ratio >= 0.78:
+        # Near-match — accept, show exact form
+        phrase["practice_count"] = phrase.get("practice_count", 0) + 1
+        phrase["last_practiced"] = datetime.now().date().isoformat()
+        _save_phrasebook(book)
         await update.message.reply_text(
-            f"Close — correct spelling:\n{phrase['german']}{AGAIN}"
+            f"✅ Close enough!\nExact: {phrase['german']}{AGAIN}"
+        )
+    else:
+        # Wrong — don't count, prompt to try again
+        await update.message.reply_text(
+            f"❌ Try again.\nExpected something close to: {phrase['german'][:40]}…{AGAIN}"
         )
 
 
@@ -1724,10 +1756,19 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if _PHRASE_LIST_MORE_VOICE_RE.search(text):
         await _handle_phrase_list_more(update)
         return
+    # Bare "more"/"next" — route to whichever list was shown last (phrase vs verb)
+    if _DRILL_MORE_RE.search(text) and _last_list_type.get(update.message.chat_id) == 'phrase':
+        await _handle_phrase_list_more(update)
+        return
     _tm = _PHRASE_PRACTICE_VOICE_RE.search(text)
     if _tm:
         _tid = _parse_spoken_id(text[_tm.end():].strip())
         await _handle_phrase_practice(update, _tid)
+        return
+    # Phrase ID shortcut: "#010" or "drill #010" routes to phrase practice regardless of drill state
+    _pid_m = re.search(r'#(\d{1,3})\b', text)
+    if _pid_m:
+        await _handle_phrase_practice(update, f"{int(_pid_m.group(1)):03d}")
         return
     if _PHRASE_CAPTURE_RE.search(text):
         rest = _PHRASE_CAPTURE_RE.sub("", text).strip().lstrip("-—:,").strip()
@@ -1903,10 +1944,19 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
     if _PHRASE_LIST_MORE_VOICE_RE.search(text):
         await _handle_phrase_list_more(update)
         return
+    # Bare "more"/"next" — route to phrase list continuation if phrase was shown last
+    if _DRILL_MORE_RE.search(text) and _last_list_type.get(update.message.chat_id) == 'phrase':
+        await _handle_phrase_list_more(update)
+        return
     _pm = _PHRASE_PRACTICE_VOICE_RE.search(text)
     if _pm:
         _id_str = _parse_spoken_id(text[_pm.end():].strip())
         await _handle_phrase_practice(update, _id_str)
+        return
+    # Phrase ID shortcut: "#010" (unlikely via voice but handle anyway)
+    _vpid_m = re.search(r'#(\d{1,3})\b', text)
+    if _vpid_m:
+        await _handle_phrase_practice(update, f"{int(_vpid_m.group(1)):03d}")
         return
 
     # Phrase practice intercept (voice answers count too)

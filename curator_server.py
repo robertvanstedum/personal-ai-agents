@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 import re
+import html as _html
 
 BASE_DIR = Path(__file__).parent
 app = Flask(__name__, template_folder=str(BASE_DIR / 'templates'))
@@ -46,6 +47,19 @@ def _calc_time_ago(published_str, now):
             return f"{int(hours / 24)}d ago"
     except Exception:
         return 'N/A'
+
+
+def _strip_summary(text: str, max_len: int = 200) -> str:
+    """Strip HTML tags, decode entities, trim RSS footer boilerplate, cap length."""
+    if not text:
+        return ''
+    clean = _html.unescape(re.sub(r'<[^>]+>', ' ', text))
+    clean = re.sub(r'\s+', ' ', clean).strip()
+    # Drop common RSS footer lines ("The post X appeared first on Y.")
+    clean = re.sub(r'\s*The post .+ appeared first on .+\.$', '', clean, flags=re.DOTALL).strip()
+    if len(clean) > max_len:
+        clean = clean[:max_len].rsplit(' ', 1)[0] + '…'
+    return clean
 
 
 def _load_briefing_articles():
@@ -79,6 +93,7 @@ def _load_briefing_articles():
         enriched = dict(entry)
         enriched['time_ago'] = _calc_time_ago(entry.get('published', ''), now)
         enriched['score_pct'] = score_pct
+        enriched['summary'] = _strip_summary(entry.get('summary', ''))
         articles.append(enriched)
 
     return articles, day_str, date_str, model_display, briefing_date
@@ -894,6 +909,49 @@ def briefing_page():
             briefing_date=briefing_date,
         )
     return send_from_directory(BASE_DIR, 'curator_briefing.html')
+
+@app.route('/api/briefing')
+def api_briefing():
+    """Return briefing articles as JSON for a given date.
+
+    Query params:
+      date=YYYY-MM-DD  (default: today, i.e. curator_latest.json)
+
+    Reads from curator_archive/curator_YYYY-MM-DD.json when a date is supplied.
+    Falls back to curator_latest.json for today or when archive file is missing.
+    """
+    from datetime import date as _date
+    req_date = request.args.get('date', '')
+    today_str = datetime.now().strftime('%Y-%m-%d')
+
+    # Resolve which JSON file to read
+    if req_date and req_date != today_str:
+        json_path = BASE_DIR / 'curator_archive' / f'curator_{req_date}.json'
+        if not json_path.exists():
+            return jsonify({'error': f'No archive for {req_date}'}), 404
+    else:
+        json_path = BASE_DIR / 'curator_latest.json'
+        req_date = today_str
+
+    try:
+        raw = json.loads(json_path.read_text())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    now = datetime.now(timezone.utc)
+    articles = []
+    for i, entry in enumerate(raw, 1):
+        score = entry.get('final_score', 0) or 0
+        score_pct = min(100, max(0, (score / 20.0) * 100)) if score > 0 else 0
+        enriched = dict(entry)
+        enriched['time_ago'] = _calc_time_ago(entry.get('published', ''), now)
+        enriched['score_pct'] = score_pct
+        enriched['summary'] = _strip_summary(entry.get('summary', ''))
+        enriched['rank'] = i
+        articles.append(enriched)
+
+    return jsonify({'date': req_date, 'articles': articles})
+
 
 @app.route('/curator_latest.html')
 def latest_page():

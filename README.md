@@ -249,10 +249,6 @@ All three emerged from building and operating this system.
 |---|---|---|
 | ![AI Observations](docs/screenshots/ai-observations.png) | ![Deep Dives](docs/screenshots/deep-dives.png) | ![Morning Briefing](docs/screenshots/morning-briefing.png) |
 
-Second domain: German language learning with real conversation sessions,
-scaffold phrases, drill mode, and Anki cards generated from actual friction.
-Road-tested in Vienna, May 2026. Local-first, model-agnostic, open source.
-
 ## Screenshots — German Language Domain (v0.9 beta)
 
 | Landing | Lesen |
@@ -267,9 +263,9 @@ Road-tested in Vienna, May 2026. Local-first, model-agnostic, open source.
 |---|---|
 | ![Wörter](docs/screenshots/woerter.png) | ![Archiv](docs/screenshots/archiv.png) |
 
-**Admin**
-
-<img src="docs/screenshots/admin.png" width="580">
+| Admin | |
+|---|---|
+| ![Admin](docs/screenshots/admin.png) | &nbsp; |
 
 ---
 

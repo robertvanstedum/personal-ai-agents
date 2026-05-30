@@ -8,8 +8,9 @@
       "added": "2026-05-12",
       "status": "library",
       "verb_hint": "schauen",
-      "practice_count": 10,
-      "last_practiced": "2026-05-14"
+      "practice_count": 8,
+      "last_practiced": "2026-05-14",
+      "user": "robert"
     },
     {
       "id": "ph_20260512_002",
@@ -19,8 +20,9 @@
       "added": "2026-05-12",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 13,
-      "last_practiced": "2026-05-16"
+      "practice_count": 10,
+      "last_practiced": "2026-05-21",
+      "user": "robert"
     },
     {
       "id": "ph_20260512_003",
@@ -30,8 +32,9 @@
       "added": "2026-05-12",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 4,
-      "last_practiced": "2026-05-19"
+      "practice_count": 3,
+      "last_practiced": "2026-05-12",
+      "user": "robert"
     },
     {
       "id": "ph_20260512_004",
@@ -39,10 +42,11 @@
       "english": "I really liked it.",
       "scene": "",
       "added": "2026-05-12",
-      "status": "library",
+      "status": "practice",
       "verb_hint": "",
-      "practice_count": 5,
-      "last_practiced": "2026-05-16"
+      "practice_count": 4,
+      "last_practiced": "2026-05-21T23:40:46.442259",
+      "user": "robert"
     },
     {
       "id": "ph_20260512_005",
@@ -52,8 +56,9 @@
       "added": "2026-05-12",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 4,
-      "last_practiced": "2026-05-19"
+      "practice_count": 3,
+      "last_practiced": "2026-05-12",
+      "user": "robert"
     },
     {
       "id": "ph_20260513_006",
@@ -63,8 +68,9 @@
       "added": "2026-05-13",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 4,
-      "last_practiced": "2026-05-19"
+      "practice_count": 0,
+      "last_practiced": null,
+      "user": "robert"
     },
     {
       "id": "ph_20260513_007",
@@ -74,8 +80,9 @@
       "added": "2026-05-13",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 1,
-      "last_practiced": "2026-05-19"
+      "practice_count": 0,
+      "last_practiced": null,
+      "user": "robert"
     },
     {
       "id": "ph_20260513_008",
@@ -85,8 +92,9 @@
       "added": "2026-05-13",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 3,
-      "last_practiced": "2026-05-14"
+      "practice_count": 1,
+      "last_practiced": "2026-05-13",
+      "user": "robert"
     },
     {
       "id": "ph_20260513_009",
@@ -96,8 +104,9 @@
       "added": "2026-05-13",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 1,
-      "last_practiced": "2026-05-14"
+      "practice_count": 0,
+      "last_practiced": null,
+      "user": "robert"
     },
     {
       "id": "ph_20260514_010",
@@ -107,8 +116,9 @@
       "added": "2026-05-14",
       "status": "library",
       "verb_hint": "",
-      "practice_count": 1,
-      "last_practiced": "2026-05-14"
+      "practice_count": 0,
+      "last_practiced": null,
+      "user": "robert"
     },
     {
       "id": "ph_20260514_011",
@@ -118,8 +128,159 @@
       "added": "2026-05-14",
       "status": "library",
       "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "user": "robert"
+    },
+    {
+      "id": "ph_20260521_012",
+      "german": "beantragte",
+      "english": "applied for",
+      "scene": "lesen",
+      "added": "2026-05-21",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Der Wiener Reparaturbon ist bereits knapp einen Monat nach dem Start am 22. April wieder ausgeschöpft. Heuer stand ein Budget von 250.000 Euro zur Verfügung. Bereits beantragte Bons können noch eingel",
+      "source_article": "Reparaturbon schon wieder ausgeschöpft",
+      "user": "robert"
+    },
+    {
+      "id": "ph_20260521_013",
+      "german": "Behandlung",
+      "english": "treatment",
+      "scene": "lesen",
+      "added": "2026-05-21",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Seit Jänner 2026 gibt es Kassenplätze für klinisch-psychologische Behandlung. Eine Zwischenbilanz der Serviceplattform Psyhelp, die für die Vermittlung zuständig ist, zeigt, dass die Nachfrage groß is",
+      "source_article": "Kürzere Wartezeit auf psychologische Behandlung",
+      "user": "robert"
+    },
+    {
+      "id": "ph_20260521_014",
+      "german": "zuständig",
+      "english": "responsible",
+      "scene": "lesen",
+      "added": "2026-05-21",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Seit Jänner 2026 gibt es Kassenplätze für klinisch-psychologische Behandlung. Eine Zwischenbilanz der Serviceplattform Psyhelp, die für die Vermittlung zuständig ist, zeigt, dass die Nachfrage groß is",
+      "source_article": "Kürzere Wartezeit auf psychologische Behandlung",
+      "user": "robert"
+    },
+    {
+      "id": "ph_20260521_015",
+      "german": "Behandlungsplatz",
+      "english": "treatment place",
+      "scene": "lesen",
+      "added": "2026-05-21",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Seit Jänner 2026 gibt es Kassenplätze für klinisch-psychologische Behandlung. Eine Zwischenbilanz der Serviceplattform Psyhelp, die für die Vermittlung zuständig ist, zeigt, dass die Nachfrage groß is",
+      "source_article": "Kürzere Wartezeit auf psychologische Behandlung",
+      "user": "robert"
+    },
+    {
+      "id": "ph_20260521_016",
+      "german": "Ziel",
+      "english": "goal",
+      "scene": "lesen",
+      "added": "2026-05-21",
+      "status": "library",
+      "verb_hint": "",
       "practice_count": 1,
-      "last_practiced": "2026-05-15"
+      "last_practiced": "2026-05-23",
+      "source_sentence": "Die beiden Bezirksvorsteher Georg Papai und Marcus Franz (beide SPÖ) wollen die Forderung nach mehr Polizei in Floridsdorf und Favoriten mit einer Unterschriftenaktion untermauern. Ziel ist eine Disku",
+      "source_article": "Favoriten und Floridsdorf wollen mehr Polizisten",
+      "user": "robert"
+    },
+    {
+      "id": "ph_20260521_017",
+      "german": "die zunehmende Verschmutzung vorgehen",
+      "english": "tackle the increasing pollution",
+      "scene": "lesen",
+      "added": "2026-05-21",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Der Wiener Landtag hat in seiner heutigen Sitzung das Verbot der Altkleidersammelcontainer beschlossen. Die Maßnahme wurde vor einigen Wochen angekündigt. Die Stadt will damit gegen die zunehmende Ver",
+      "source_article": "Landtag beschloss Altkleidercontainerverbot",
+      "user": "robert"
+    },
+    {
+      "id": "ph_20260521_018",
+      "german": "Favoriten mit einer Unterschriftenaktion",
+      "english": "Favorites with a signature campaign",
+      "scene": "lesen",
+      "added": "2026-05-21",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Die beiden Bezirksvorsteher Georg Papai und Marcus Franz (beide SPÖ) wollen die Forderung nach mehr Polizei in Floridsdorf und Favoriten mit einer Unterschriftenaktion untermauern. Ziel ist eine Disku",
+      "source_article": "Favoriten und Floridsdorf wollen mehr Polizisten",
+      "user": "robert"
+    },
+    {
+      "id": "ph_20260521_019",
+      "german": "Die Zahl der Anträge steigt",
+      "english": "The number of applications is increasing",
+      "scene": "lesen",
+      "added": "2026-05-21",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Seit 15 Jahren gibt es in Österreich den elektronisch überwachten Hausarrest mit Fußfesseln.  Die Zahl der Anträge steigt. Wer eine Fußfessel bekommt, entscheiden Justiz und der Verein Neustart.",
+      "source_article": "Zahl der Anträge auf Fußfesseln steigt"
+    },
+    {
+      "id": "ph_20260523_020",
+      "german": "ungewöhnlichen",
+      "english": "unusual",
+      "scene": "lesen",
+      "added": "2026-05-23",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Heute Abend feiern die Wiener Festwochen die Eröffnung ihrer 75. Ausgabe mit einer ungewöhnlichen Mischung aus Punk, einem Schmusechor und norwegischem Black Metal. Erstmals findet das Event am Helden",
+      "source_article": "Festwochen eröffnen mit Patti Smith"
+    },
+    {
+      "id": "ph_20260524_021",
+      "german": "Viertelfinale",
+      "english": "Quarterfinals",
+      "scene": "lesen",
+      "added": "2026-05-24",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Österreichs Eishockey-Nationalteam hat den vorzeitigen Einzug ins WM-Viertelfinale verpasst. Die ÖEHV-Mannschaft musste sich Verfolger Deutschland am Samstag in Zürich 2:6 (0:0,1:2,1:4) beugen. Mit ei",
+      "source_article": "Eishockey-Nationalteam unterliegt Deutschland bei WM 2:6"
+    },
+    {
+      "id": "ph_20260527_022",
+      "german": "vorzubereiten",
+      "english": "prepare",
+      "scene": "lesen",
+      "added": "2026-05-27",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Jetzt geht es los: Österreichs Nationalteam kommt am Mittwoch zusammen, um sich erstmals seit 1998 auf eine  Fußballweltmeisterschaft vorzubereiten. Ehe es nach Kalifornien ins mondäne Santa Barbara g",
+      "source_article": "WM-Startschuss im neuen „Sportinternat“"
     }
   ]
 }

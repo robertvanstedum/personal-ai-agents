@@ -1,0 +1,719 @@
+{% extends "german_base.html" %}
+{% block title %}Gespräche{% endblock %}
+
+{% block content %}
+<div class="tab-layout-split">
+  <div class="tab-content">
+    <div class="tab-split-header">
+      <div class="tab-hero-label">[WIEN AUSSENAUFNAHME]</div>
+      <h1>Gespräche</h1>
+      <p class="tab-description" id="gesprache-subtitle">Wähle eine Persona, starte ein Gespräch, und reiche das Transkript ein.</p>
+    </div>
+
+    <!-- ── Mode toggle ─────────────────────────────────────────────────────── -->
+    <div class="gesprache-toggle" role="tablist">
+      <button class="gesprache-toggle-btn active" id="btn-tab-personas" role="tab">KI-Personas</button>
+      <button class="gesprache-toggle-btn" id="btn-tab-konversation" role="tab">Konversation</button>
+    </div>
+
+    <!-- ── KI-Personas pane ────────────────────────────────────────────────── -->
+    <div id="pane-ki-personas">
+
+      <div class="ueben-layout">
+
+        <!-- Left: persona list -->
+        <div class="persona-list" id="persona-list">
+          {% for p in personas %}
+          <div class="persona-list-item" data-idx="{{ loop.index0 }}" data-name="{{ p.name }}"
+               data-slug="{{ p.slug }}"
+               data-ready="{{ 'true' if p.memory.ready_to_archive else 'false' }}"
+               data-round="{{ p.memory.current_round }}"
+               data-sessions="{{ p.memory.active_memory.sessions_this_round }}"
+               data-round-default="{{ p.memory.round_default }}">
+            <div class="persona-avatar">{{ p.emoji or p.name[0] }}</div>
+            <div class="persona-info">
+              <div class="persona-name">
+                {{ p.name }}
+                {% if p.memory.ready_to_archive %}<span class="round-ready-dot" title="Runde abgeschlossen — Aktion erforderlich">●</span>{% endif %}
+              </div>
+              <div class="persona-role">
+                {{ p.role }}
+                {% if p.memory.active_memory.sessions_this_round > 0 %}
+                <span class="round-counter">Runde {{ p.memory.current_round }}/{{ p.memory.round_default }}</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- Right: detail + prompt -->
+        <div class="persona-detail" id="persona-detail">
+          <div class="detail-persona-header">
+            <span class="detail-avatar" id="detail-avatar"></span>
+            <div>
+              <div class="detail-name" id="detail-name"></div>
+              <div class="detail-role" id="detail-role"></div>
+            </div>
+          </div>
+          <p class="detail-description" id="detail-description"></p>
+
+          <div class="scene-list" id="scene-list"></div>
+
+          <div class="prompt-delivery" id="prompt-delivery">
+            <div class="prompt-text" id="prompt-text" style="display:none"></div>
+            <div class="prompt-actions">
+              <button class="btn-delivery" id="btn-telegram"
+                      title="Öffnet Telegram mit dem vollständigen Grok-Prompt">
+                ✈️ Telegram öffnen
+              </button>
+              <button class="btn-delivery" id="btn-copy"
+                      title="Kopiert den vollständigen Grok-Prompt in die Zwischenablage">
+                📋 Kopieren
+              </button>
+              <button class="btn-delivery" id="btn-download"
+                      title="Speichert den vollständigen Grok-Prompt als Textdatei">
+                💾 Als .txt speichern
+              </button>
+            </div>
+            <div class="prompt-toast" id="prompt-toast" style="display:none">✓ Vollständiger Prompt kopiert</div>
+          </div>
+
+          <details class="session-brief-details" id="session-brief-panel" style="display:none">
+            <summary class="session-brief-summary">🎯 Heutige Vorbereitung</summary>
+            <pre class="session-brief-text" id="session-brief-text"></pre>
+          </details>
+
+          <details class="nach-sitzung-details" id="transcript-details">
+            <summary class="session-brief-summary">✏️ Nach der Sitzung</summary>
+            <div class="nach-sitzung-body">
+              <div id="transcript-input-wrap">
+                <textarea class="notebook-textarea nach-sitzung-textarea" id="transcript-input" rows="6"
+                  placeholder="Transkript hier einfügen — z.B. aus Grok Voice&#10;&#10;Robert: Guten Morgen…&#10;Frau Berger: Guten Morgen!…"></textarea>
+                <div class="gesprache-submit-row">
+                  <button class="btn-primary" id="btn-analysieren" title="Analyse des Gesprächs">Analysieren</button>
+                  <span class="gesprache-status" id="analyse-status"></span>
+                </div>
+              </div>
+              <div id="transcript-analysiert-row" class="transcript-analysiert-row" style="display:none">
+                <span class="transcript-analysiert-label">✓ analysiert</span>
+                <button class="btn-ghost btn-sm" id="btn-transcript-bearbeiten">bearbeiten</button>
+              </div>
+            </div>
+          </details>
+
+          <!-- Feedback — rendered inside panel after analysis -->
+          <div id="gesprache-feedback-wrap" style="display:none">
+            <hr class="gesprache-divider">
+            <div class="gesprache-section-label">Feedback</div>
+            <div class="gesprache-feedback">
+              <div class="feedback-summary" id="feedback-summary"></div>
+              <div class="feedback-block" id="feedback-errors-block" style="display:none">
+                <div class="feedback-block-label">Fehler</div>
+                <ul class="feedback-errors-list" id="feedback-errors-list"></ul>
+              </div>
+              <div class="feedback-block" id="feedback-strengths-block" style="display:none">
+                <div class="feedback-block-label">Stärken</div>
+                <ul class="feedback-strengths-list" id="feedback-strengths-list"></ul>
+              </div>
+              <div class="feedback-block" id="feedback-focus-block" style="display:none">
+                <div class="feedback-block-label">Für nächste Mal</div>
+                <p class="feedback-next-focus" id="feedback-next-focus"></p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- .ueben-layout -->
+
+      <!-- Recent sessions -->
+      {% if sessions %}
+      <hr class="gesprache-divider">
+      <div class="gesprache-section-label">Letzte Sitzungen</div>
+      <div class="gesprache-sessions-list">
+        {% for s in sessions %}
+        <div class="gesprache-session-row">
+          <span class="gesprache-session-date">{{ s.date }}</span>
+          <span class="gesprache-session-persona">{{ s.persona }}</span>
+          <span class="gesprache-session-scene">{{ s.scenario }}</span>
+          <span class="gesprache-session-source">{{ s.source }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="hint" style="margin-top:0.75rem"><a href="/archiv">→ Alle Sitzungen im Archiv</a></p>
+      {% endif %}
+
+    </div><!-- #pane-ki-personas -->
+
+    <!-- ── Konversation pane ───────────────────────────────────────────────── -->
+    <div id="pane-konversation" style="display:none">
+      <div class="konversation-cards">
+
+        <!-- Card 1: Vorbereitung — Before the session -->
+        <div class="konversation-card">
+          <div class="konversation-card-label">1 · Before — Vorbereitung</div>
+          <p class="konv-hint">Generate a one-page brief for your tutor — covers your level, recent topics, and focus areas.</p>
+          <div id="konv-brief-preview" class="konv-brief-preview"></div>
+          <button class="btn-ghost btn-sm" id="btn-generate-brief">Generate tutor brief →</button>
+          <div id="konv-brief-link" style="display:none; margin-top:12px;">
+            <p class="konv-hint">Send this link to your tutor before the session:</p>
+            <div class="konv-link-row">
+              <code id="brief-link-url" class="konv-link-code"></code>
+              <button class="btn-ghost btn-sm" id="btn-copy-brief-link">Copy link</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2: Gespräch — During + After -->
+        <div class="konversation-card">
+          <div class="konversation-card-label">2 · During — Gespräch</div>
+          <p class="konv-hint">Start a Google Meet. Copy the meeting link from inside Meet to share with your tutor.</p>
+          <button class="btn-raum-oeffnen" id="btn-open-meet">Start Google Meet →</button>
+          <p class="konv-hint" style="margin-top:10px;">After the meeting, enable transcription in Meet settings so the transcript auto-saves to Google Drive.</p>
+
+          <!-- After-session: collapsible inside card -->
+          <details class="nach-sitzung-details" id="konv-transcript-details" style="margin-top:1.25rem">
+            <summary class="session-brief-summary">✏️ Nach dem Gespräch</summary>
+            <div class="konv-nachbereitung-body">
+              <div id="konv-transcript-input-wrap">
+
+                <!-- Consent gate -->
+                <label class="konv-consent-label" id="consent-label">
+                  <input type="checkbox" id="consent-checkbox">
+                  <span>Teilnehmer hat zugestimmt</span>
+                </label>
+
+                <!-- Transcript tools — locked until consent checked -->
+                <div id="transcript-tools" class="konv-transcript-tools konv-transcript-locked">
+                  <div class="konv-field" style="margin-top:0.75rem">
+                    <label class="konv-field-label">Tutor / Gesprächspartner</label>
+                    <input type="text" id="tutor-name-input" placeholder="z.B. Frau Weber" class="tutor-input" disabled>
+                  </div>
+                  <div class="konv-field">
+                    <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:0.3rem;">
+                      <label class="konv-field-label" style="margin-bottom:0;">Transkript einfügen</label>
+                      <button id="btn-fetch-transcript" class="konv-drive-link"
+                              title="Neuestes Transkript von Google Drive laden" disabled>
+                        Von Drive →
+                      </button>
+                    </div>
+                    <textarea id="tutor-transcript-input" rows="5" class="tutor-input"
+                              placeholder="Aus Otter.ai kopieren und hier einfügen."
+                              disabled></textarea>
+                  </div>
+                  <button class="btn-ghost btn-sm" id="btn-submit-tutor-transcript"
+                          title="Sends the transcript to Claude for grammar analysis"
+                          disabled>
+                    Transkript analysieren →
+                  </button>
+                  <div id="tutor-submit-status" class="gesprache-status" style="margin-top:6px;"></div>
+                </div>
+
+              </div><!-- #konv-transcript-input-wrap -->
+              <div id="konv-transcript-analysiert-row" class="transcript-analysiert-row" style="display:none">
+                <span class="transcript-analysiert-label">✓ analysiert</span>
+                <button class="btn-ghost btn-sm" id="btn-konv-transcript-bearbeiten">bearbeiten</button>
+              </div>
+            </div>
+          </details>
+        </div>
+
+      </div><!-- .konversation-cards -->
+
+    </div><!-- #pane-konversation -->
+
+    <!-- Round-ready modal (used by KI-Personas pane) -->
+    <div id="round-ready-modal" class="round-modal" style="display:none" role="dialog" aria-modal="true">
+      <div class="round-modal-content">
+        <div class="round-modal-title" id="round-modal-title"></div>
+        <div class="round-modal-actions">
+          <button class="btn-primary btn-sm" id="btn-round-close" title="Start a new round with this persona">Neue Runde starten</button>
+          <button class="btn-ghost btn-sm" id="btn-round-extend" title="Extend round by 3 sessions">Verlängern +3</button>
+          <button class="btn-ghost btn-sm" id="btn-round-defer" title="Decide later">Jetzt nicht</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- .tab-content -->
+  <div class="tab-panel-photo">
+    <img src="/static/photos/beer_coffee_IMG_5189.jpg" alt="Wien café counter" style="object-position: center 40%">
+  </div>
+</div><!-- .tab-layout-split -->
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.body.classList.add('parch-mode');
+(function () {
+  'use strict';
+
+  const personas = {{ personas | tojson }};
+  let selectedIdx = 0;
+  let selectedSceneKey = null;
+  let currentFullPrompt = null;
+
+  // ── Tab toggle ─────────────────────────────────────────────────────────────
+
+  const SUBTITLES = {
+    personas:     'Wähle eine Persona, starte ein Gespräch, und reiche das Transkript ein.',
+    konversation: 'Vorbereitung, Sitzung und Nachbereitung mit einem echten Gesprächspartner.',
+  };
+
+  function switchTab(tab) {
+    const isPersonas = tab === 'personas';
+    document.getElementById('pane-ki-personas').style.display = isPersonas ? '' : 'none';
+    document.getElementById('pane-konversation').style.display = isPersonas ? 'none' : '';
+    document.getElementById('btn-tab-personas').classList.toggle('active', isPersonas);
+    document.getElementById('btn-tab-konversation').classList.toggle('active', !isPersonas);
+
+    // Fix 2 — update subtitle text
+    const subtitle = document.getElementById('gesprache-subtitle');
+    if (subtitle) subtitle.textContent = SUBTITLES[tab] || SUBTITLES.personas;
+
+    // Fix 3 — hide/show photo column
+    const photo = document.querySelector('.tab-panel-photo');
+    const split = document.querySelector('.tab-layout-split');
+    if (photo && split) {
+      photo.style.display = isPersonas ? '' : 'none';
+      split.style.gridTemplateColumns = isPersonas ? '' : '1fr';
+    }
+
+    sessionStorage.setItem('gesprache-tab', tab);
+  }
+
+  document.getElementById('btn-tab-personas').addEventListener('click', () => switchTab('personas'));
+  document.getElementById('btn-tab-konversation').addEventListener('click', () => switchTab('konversation'));
+
+  // ── Nach der Sitzung — state reset ────────────────────────────────────────
+
+  function resetNachDerSitzung() {
+    // Clear textarea and status
+    document.getElementById('transcript-input').value = '';
+    document.getElementById('analyse-status').textContent = '';
+    const btn = document.getElementById('btn-analysieren');
+    btn.disabled = false;
+    btn.textContent = 'Analysieren';
+    // Show input wrap, hide analysiert row
+    document.getElementById('transcript-input-wrap').style.display = '';
+    document.getElementById('transcript-analysiert-row').style.display = 'none';
+    // Clear and hide feedback
+    document.getElementById('feedback-summary').textContent = '';
+    document.getElementById('feedback-errors-block').style.display = 'none';
+    document.getElementById('feedback-strengths-block').style.display = 'none';
+    document.getElementById('feedback-focus-block').style.display = 'none';
+    document.getElementById('gesprache-feedback-wrap').style.display = 'none';
+    // Collapse the details panel
+    const nachDetails = document.getElementById('transcript-details');
+    if (nachDetails) nachDetails.removeAttribute('open');
+  }
+
+  // ── Persona selection ──────────────────────────────────────────────────────
+
+  function selectPersona(idx) {
+    const p = personas[idx];
+    if (!p) return;
+    selectedIdx = idx;
+    selectedSceneKey = null;
+    currentFullPrompt = null;
+    document.getElementById('session-brief-panel').style.display = 'none';
+    resetNachDerSitzung();
+
+    document.querySelectorAll('.persona-list-item').forEach(el => el.classList.remove('active'));
+    document.querySelector(`.persona-list-item[data-idx="${idx}"]`).classList.add('active');
+
+    document.getElementById('detail-avatar').textContent = p.emoji || p.name[0];
+    document.getElementById('detail-name').textContent = p.name;
+    document.getElementById('detail-role').textContent = p.role;
+    document.getElementById('detail-description').textContent = p.description || '';
+
+    const sceneList = document.getElementById('scene-list');
+    sceneList.innerHTML = '';
+
+    const prompts = p.speaking_prompts || {};
+    const keys = Object.keys(prompts);
+
+    if (keys.length === 0 && p.warm_up_variants) {
+      p.warm_up_variants.forEach((variant, i) => {
+        const btn = makeSceneBtn('warm_up_' + i, variant.slice(0, 40) + (variant.length > 40 ? '…' : ''));
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          selectedSceneKey = 'warm_up_' + i;
+          document.getElementById('prompt-text').textContent = variant;
+          document.getElementById('prompt-delivery').style.display = '';
+          fetchAndStorePrompt(p.slug, 'warm_up_' + i);
+        });
+        sceneList.appendChild(btn);
+      });
+      sceneList.firstChild && sceneList.firstChild.click();
+    } else if (keys.length > 0) {
+      keys.forEach(key => {
+        const btn = makeSceneBtn(key, key.replace(/_/g, ' '));
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          selectedSceneKey = key;
+          document.getElementById('prompt-text').textContent = prompts[key];
+          document.getElementById('prompt-delivery').style.display = '';
+          fetchAndStorePrompt(p.slug, key);
+        });
+        sceneList.appendChild(btn);
+      });
+      sceneList.firstChild.click();
+    } else {
+      sceneList.innerHTML = '<p class="hint">Keine Szenen konfiguriert.</p>';
+      document.getElementById('prompt-delivery').style.display = 'none';
+    }
+  }
+
+  function makeSceneBtn(key, label) {
+    const btn = document.createElement('button');
+    btn.className = 'scene-btn';
+    btn.dataset.key = key;
+    btn.textContent = label;
+    return btn;
+  }
+
+  // ── Round-ready modal ─────────────────────────────────────────────────────
+
+  let pendingRoundSlug = null;
+
+  function showRoundModal(item) {
+    pendingRoundSlug = item.dataset.slug;
+    const round = item.dataset.round;
+    const sessions = item.dataset.sessions;
+    document.getElementById('round-modal-title').textContent =
+      `Runde ${round} abgeschlossen (${sessions} Sitzung${sessions === '1' ? '' : 'en'}).`;
+    document.getElementById('round-ready-modal').style.display = 'flex';
+  }
+
+  async function doRoundAction(action) {
+    if (!pendingRoundSlug) return;
+    document.getElementById('round-ready-modal').style.display = 'none';
+    if (action === 'defer') { pendingRoundSlug = null; return; }
+    try {
+      await fetch('/api/round-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ persona_slug: pendingRoundSlug, action }),
+      });
+      window.location.reload();
+    } catch (e) {
+      console.error('Round action failed', e);
+    }
+    pendingRoundSlug = null;
+  }
+
+  document.getElementById('btn-round-close').addEventListener('click', () => doRoundAction('close'));
+  document.getElementById('btn-round-extend').addEventListener('click', () => doRoundAction('extend'));
+  document.getElementById('btn-round-defer').addEventListener('click', () => doRoundAction('defer'));
+  document.getElementById('round-ready-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) doRoundAction('defer');
+  });
+
+  document.querySelectorAll('.persona-list-item').forEach(item => {
+    item.addEventListener('click', () => {
+      selectPersona(parseInt(item.dataset.idx, 10));
+      if (item.dataset.ready === 'true') showRoundModal(item);
+    });
+  });
+
+  // ── Prompt delivery ────────────────────────────────────────────────────────
+
+  async function fetchAndStorePrompt(personaSlug, sceneKey) {
+    currentFullPrompt = null;
+    document.getElementById('session-brief-panel').style.display = 'none';
+    try {
+      const res = await fetch(`/api/persona-prompt?persona=${encodeURIComponent(personaSlug)}&scene=${encodeURIComponent(sceneKey)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      currentFullPrompt = data.prompt;
+      const briefEl = document.getElementById('session-brief-text');
+      briefEl.textContent = data.session_brief || '';
+      document.getElementById('session-brief-panel').style.display = data.session_brief ? '' : 'none';
+    } catch (e) {
+      console.warn('persona-prompt fetch failed', e);
+    }
+  }
+
+  function getFullPrompt() {
+    return currentFullPrompt || document.getElementById('prompt-text').textContent.trim();
+  }
+
+  document.getElementById('btn-telegram').addEventListener('click', () => {
+    const url = `https://t.me/minimoi_cmd_bot?start=${encodeURIComponent(getFullPrompt())}`;
+    window.open(url, '_blank');
+  });
+
+  document.getElementById('btn-copy').addEventListener('click', () => {
+    navigator.clipboard.writeText(getFullPrompt()).then(() => {
+      const toast = document.getElementById('prompt-toast');
+      toast.style.display = 'block';
+      setTimeout(() => toast.style.display = 'none', 2500);
+    }).catch(() => {
+      const el = document.getElementById('prompt-text');
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(range);
+    });
+  });
+
+  document.getElementById('btn-download').addEventListener('click', () => {
+    const p = personas[selectedIdx];
+    const filename = `${p.name}_${selectedSceneKey || 'scene'}_prompt.txt`
+      .toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_.]/g, '');
+    const blob = new Blob([getFullPrompt()], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // ── Transcript analysis (KI-Personas pane) ────────────────────────────────
+
+  document.getElementById('btn-analysieren').addEventListener('click', async () => {
+    const transcript = document.getElementById('transcript-input').value.trim();
+    if (!transcript) return;
+    const status = document.getElementById('analyse-status');
+    const btn = document.getElementById('btn-analysieren');
+    const p = personas[selectedIdx];
+    const personaName = p ? p.name : '';
+    const scene = selectedSceneKey ? selectedSceneKey.replace(/_/g, ' ') : '';
+
+    btn.disabled = true;
+    btn.textContent = 'Analysiere…';
+    status.textContent = '';
+
+    try {
+      const res = await fetch('/api/analyse-transcript', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript, persona_name: personaName, scene }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Fehler');
+
+      // Success: render feedback, collapse input to analysiert row, scroll panel
+      renderFeedback(data.feedback);
+      document.getElementById('transcript-input-wrap').style.display = 'none';
+      document.getElementById('transcript-analysiert-row').style.display = '';
+      btn.textContent = 'Analysieren';
+      btn.disabled = false;
+
+      requestAnimationFrame(() => {
+        const panel = document.getElementById('persona-detail');
+        const wrap  = document.getElementById('gesprache-feedback-wrap');
+        const panelRect = panel.getBoundingClientRect();
+        const wrapRect  = wrap.getBoundingClientRect();
+        panel.scrollBy({ top: wrapRect.top - panelRect.top, behavior: 'smooth' });
+      });
+    } catch (e) {
+      // Error: show message in feedback slot, preserve textarea, re-enable button
+      renderFeedbackError(e.message || 'Fehler bei der Analyse.');
+      btn.textContent = 'Analysieren';
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('btn-transcript-bearbeiten').addEventListener('click', () => {
+    document.getElementById('transcript-input-wrap').style.display = '';
+    document.getElementById('transcript-analysiert-row').style.display = 'none';
+  });
+
+  function renderFeedback(fb) {
+    document.getElementById('feedback-summary').textContent = fb.overall_summary || '';
+
+    const errorsBlock = document.getElementById('feedback-errors-block');
+    const errorsList = document.getElementById('feedback-errors-list');
+    errorsList.innerHTML = '';
+    if (fb.errors && fb.errors.length) {
+      fb.errors.forEach(e => {
+        const li = document.createElement('li');
+        li.textContent = `${e.original} → ${e.correction}: ${e.explanation}`;
+        errorsList.appendChild(li);
+      });
+      errorsBlock.style.display = '';
+    } else {
+      errorsBlock.style.display = 'none';
+    }
+
+    const strengthsBlock = document.getElementById('feedback-strengths-block');
+    const strengthsList = document.getElementById('feedback-strengths-list');
+    strengthsList.innerHTML = '';
+    if (fb.strengths && fb.strengths.length) {
+      fb.strengths.forEach(s => {
+        const li = document.createElement('li');
+        li.textContent = s;
+        strengthsList.appendChild(li);
+      });
+      strengthsBlock.style.display = '';
+    } else {
+      strengthsBlock.style.display = 'none';
+    }
+
+    const focusBlock = document.getElementById('feedback-focus-block');
+    if (fb.next_focus) {
+      document.getElementById('feedback-next-focus').textContent = fb.next_focus;
+      focusBlock.style.display = '';
+    } else {
+      focusBlock.style.display = 'none';
+    }
+
+    document.getElementById('gesprache-feedback-wrap').style.display = '';
+  }
+
+  function renderFeedbackError(msg) {
+    document.getElementById('feedback-summary').textContent = '⚠ ' + msg;
+    document.getElementById('feedback-errors-block').style.display = 'none';
+    document.getElementById('feedback-strengths-block').style.display = 'none';
+    document.getElementById('feedback-focus-block').style.display = 'none';
+    document.getElementById('gesprache-feedback-wrap').style.display = '';
+  }
+
+  // ── Konversation pane ─────────────────────────────────────────────────────
+
+  document.getElementById('btn-generate-brief').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-generate-brief');
+    btn.disabled = true;
+    btn.textContent = 'Generiere…';
+    try {
+      const res = await fetch('/api/tutor-brief/generate', { method: 'POST' });
+      const data = await res.json();
+      if (data.token) {
+        const url = window.location.origin + '/tutor-brief/' + data.token;
+        document.getElementById('brief-link-url').textContent = url;
+        document.getElementById('konv-brief-link').style.display = '';
+        document.getElementById('konv-brief-preview').textContent = 'Brief erstellt.';
+      } else {
+        btn.textContent = 'Fehler — bitte nochmal';
+      }
+    } catch (e) {
+      btn.textContent = 'Fehler — bitte nochmal';
+    } finally {
+      btn.disabled = false;
+      if (btn.textContent === 'Generiere…') btn.textContent = 'Brief generieren →';
+    }
+  });
+
+  document.getElementById('btn-copy-brief-link').addEventListener('click', () => {
+    navigator.clipboard.writeText(document.getElementById('brief-link-url').textContent);
+  });
+
+  document.getElementById('btn-open-meet').addEventListener('click', () => {
+    window.open('https://meet.new', '_blank');
+  });
+
+  document.getElementById('btn-submit-tutor-transcript').addEventListener('click', async () => {
+    const transcript = document.getElementById('tutor-transcript-input').value.trim();
+    const tutorName  = document.getElementById('tutor-name-input').value.trim() || 'Tutor';
+    const status     = document.getElementById('tutor-submit-status');
+    if (!transcript) { status.textContent = 'Bitte Transkript einfügen.'; return; }
+
+    const btn = document.getElementById('btn-submit-tutor-transcript');
+    btn.disabled = true;
+    btn.textContent = 'Analysiere…';
+    status.textContent = '';
+
+    try {
+      const res = await fetch('/api/analyse-transcript', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript,
+          persona_name: tutorName,
+          scene: 'human_session',
+        }),
+      });
+      const data = await res.json();
+      if (data.session_id) {
+        // Success: collapse tools, show analysiert row
+        document.getElementById('konv-transcript-input-wrap').style.display = 'none';
+        document.getElementById('konv-transcript-analysiert-row').style.display = '';
+        status.textContent = `✓ Gespeichert als ${data.session_id}`;
+      } else {
+        status.textContent = `Fehler: ${data.error || 'Unbekannt'}`;
+        btn.textContent = 'Transkript analysieren →';
+        btn.disabled = false;
+      }
+    } catch (e) {
+      status.textContent = 'Netzwerkfehler';
+      btn.textContent = 'Transkript analysieren →';
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('btn-konv-transcript-bearbeiten').addEventListener('click', () => {
+    document.getElementById('konv-transcript-input-wrap').style.display = '';
+    document.getElementById('konv-transcript-analysiert-row').style.display = 'none';
+    const btn = document.getElementById('btn-submit-tutor-transcript');
+    btn.textContent = 'Transkript analysieren →';
+    btn.disabled = false;
+    document.getElementById('tutor-submit-status').textContent = '';
+  });
+
+  // ── Consent gate ─────────────────────────────────────────────────────────
+
+  function setTranscriptLocked(locked) {
+    const tools = document.getElementById('transcript-tools');
+    tools.classList.toggle('konv-transcript-locked', locked);
+    tools.querySelectorAll('input, textarea, button').forEach(el => {
+      el.disabled = locked;
+    });
+  }
+
+  document.getElementById('consent-checkbox').addEventListener('change', e => {
+    setTranscriptLocked(!e.target.checked);
+  });
+
+  // ── Google Drive transcript fetch ────────────────────────────────────────
+
+  document.getElementById('btn-fetch-transcript').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-fetch-transcript');
+    const orig = btn.textContent;
+    btn.textContent = 'Fetching…';
+    btn.disabled = true;
+
+    try {
+      const apiBase = window.location.pathname.replace(/\/[^/]*$/, '');
+      const res  = await fetch(apiBase + '/api/google/latest-transcript');
+      const data = await res.json();
+
+      if (res.status === 401 && data.error === 'not_authed') {
+        // Start OAuth flow — redirect current tab to auth URL
+        window.location.href = apiBase + '/api/google/auth';
+        return;
+      }
+      if (data.ok) {
+        document.getElementById('tutor-transcript-input').value = data.text;
+        btn.textContent = '✓ ' + data.file_name;
+        setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 4000);
+        return;
+      }
+      btn.textContent = data.error || 'Error';
+    } catch (e) {
+      btn.textContent = 'Network error';
+    }
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 3000);
+  });
+
+  // Show success message if returning from Google OAuth
+  if (new URLSearchParams(window.location.search).get('google_auth') === 'ok') {
+    const status = document.getElementById('tutor-submit-status');
+    if (status) {
+      status.textContent = '✓ Google Drive connected — click "Fetch from Drive" to load your transcript.';
+      setTimeout(() => { status.textContent = ''; }, 6000);
+    }
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+
+  if (personas.length > 0) selectPersona(0);
+
+  // Fix 5 — default to KI-Personas; honour ?tab=konversation URL param only
+  const _urlTab = new URLSearchParams(window.location.search).get('tab');
+  switchTab(_urlTab === 'konversation' ? 'konversation' : 'personas');
+
+})();
+</script>
+{% endblock %}

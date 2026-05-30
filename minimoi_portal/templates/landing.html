@@ -14,10 +14,11 @@
   <span class="portal-nav-brand">mini-moi</span>
   <div class="portal-nav-links">
     <a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank">GitHub</a>
-    <a href="https://www.linkedin.com/in/robertvanstedum" target="_blank">LinkedIn</a>
+    <a href="https://www.linkedin.com/in/robert-van-stedum" target="_blank">LinkedIn</a>
     {% if user %}
       <a href="/dashboard" class="nav-btn">Dashboard →</a>
     {% else %}
+      <a href="/register" class="nav-btn-ghost">Try it →</a>
       <a href="/login" class="nav-btn">Sign in</a>
     {% endif %}
   </div>
@@ -28,11 +29,14 @@
   <section class="hero">
     <h1 class="hero-title">mini-moi</h1>
     <p class="hero-tagline"><em>Your context. Your goals. Your signal.</em></p>
-    {% if user %}
     <div class="hero-actions">
-      <a href="/dashboard" class="btn-primary">Go to Dashboard →</a>
+      {% if user %}
+        <a href="/dashboard" class="btn-primary">Go to Dashboard →</a>
+      {% else %}
+        <a href="/register" class="btn-primary">Try mini-moi →</a>
+        <a href="/login" class="btn-secondary">Sign in</a>
+      {% endif %}
     </div>
-    {% endif %}
   </section>
 
   <section class="about-section">
@@ -94,7 +98,7 @@
           mini-moi is built here first. Patterns developed in this personal system
           move outward — not the other way around.
         </p>
-        <a href="https://www.linkedin.com/in/robertvanstedum" target="_blank" class="text-link">
+        <a href="https://www.linkedin.com/in/robert-van-stedum" target="_blank" class="text-link">
           LinkedIn →
         </a>
       </div>
@@ -109,7 +113,7 @@
   <span>·</span>
   <a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank">GitHub</a>
   <span>·</span>
-  <a href="https://www.linkedin.com/in/robertvanstedum" target="_blank">LinkedIn</a>
+  <a href="https://www.linkedin.com/in/robert-van-stedum" target="_blank">LinkedIn</a>
 </footer>
 
 </body>

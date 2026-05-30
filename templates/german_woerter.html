@@ -1,0 +1,609 @@
+{% extends "german_base.html" %}
+{% block title %}Wörter{% endblock %}
+
+{% block content %}
+<div class="tab-layout-split">
+  <div class="tab-content">
+    <div class="tab-split-header">
+      <div class="tab-hero-label">[NOTIZBUCH]</div>
+      <h1>Wörter</h1>
+    </div>
+<p class="tab-description">Gespeicherte Vokabeln und Phrasen — aus dem Lesen, dem Schreiben und dem Üben.</p>
+
+<!-- ── Subnav ──────────────────────────────────────────────────────────── -->
+<div class="ueben-subnav">
+  <button class="ueben-subnav-btn active" data-section="vokabeln" title="Vocabulary library">Vokabeln</button>
+  <button class="ueben-subnav-btn" data-section="drill-pool" title="Active drill queue">
+    Drill-Pool{% if drill_pool %} <span class="pool-badge">{{ drill_pool|length }}</span>{% endif %}
+  </button>
+</div>
+
+<!-- ── Vokabeln section ─────────────────────────────────────────────────── -->
+<div class="woerter-section" id="section-vokabeln">
+
+<!-- ── Filter bar ──────────────────────────────────────────────────────── -->
+<div class="woerter-filter-bar">
+  <label class="filter-label">
+    <span>Quelle <span class="filter-hint">(Herkunft)</span></span>
+    <select class="filter-select" id="filter-quelle"
+            title="Wo wurde diese Phrase gespeichert? Lesen = aus Artikeln, Telegram = vom Handy, Manuell = selbst eingegeben">
+      <option value="">Alle</option>
+      <option value="lesen">Lesen</option>
+      <option value="telegram">Telegram</option>
+      <option value="manual">Manuell</option>
+    </select>
+  </label>
+  <label class="filter-label">
+    <span>Status <span class="filter-hint">(Lernstand)</span></span>
+    <select class="filter-select" id="filter-status"
+            title="Bibliothek = gespeichert, Üben = im Drill-Pool, Prüfen = 5× korrekt, Gelernt = bestätigt gelernt">
+      <option value="">Alle</option>
+      <option value="library">Bibliothek</option>
+      <option value="practice">Üben</option>
+      <option value="review_ready">Bereit zu prüfen</option>
+      <option value="mastered">Gelernt</option>
+    </select>
+  </label>
+  <span class="filter-count" id="filter-count"></span>
+  <button class="btn-filter-reset" id="btn-reset-filters"
+          title="Show all entries">Alle anzeigen</button>
+  <a class="btn-ghost woerter-export-all" href="/api/anki-export" download
+     title="Export all vocabulary to Anki flashcard deck">Anki Export — Alle</a>
+</div>
+
+<!-- ── Word table ──────────────────────────────────────────────────────── -->
+<div class="woerter-table-wrap">
+  {% if entries %}
+  <table class="woerter-table" id="woerter-table">
+    <thead>
+      <tr>
+        <th>Deutsch</th>
+        <th>Englisch</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="woerter-tbody">
+      {% for entry in entries %}
+      <tr class="woerter-row"
+          data-id="{{ entry.id }}"
+          data-source="{{ entry.scene or '' }}"
+          data-status="{{ entry.status or 'library' }}">
+        <td class="w-german">{{ entry.german }}</td>
+        <td class="w-english">{{ entry.english }}</td>
+        <td class="w-expand-col"><button class="btn-expand" aria-label="Details" title="Show details">Details</button></td>
+      </tr>
+      <tr class="woerter-detail" id="detail-{{ entry.id }}" style="display:none"
+          data-german="{{ entry.german }}" data-english="{{ entry.english }}">
+        <td colspan="3">
+          <div class="detail-inner">
+            <div class="expand-meta">
+              <span class="expand-meta-item">
+                <span class="expand-meta-label">Quelle:</span>{{ entry.scene or '—' }}
+              </span>
+              <span class="expand-meta-item">
+                <span class="expand-meta-label">Datum:</span>{{ entry.added or '' }}
+              </span>
+              <span class="expand-meta-item">
+                <span class="expand-meta-label">Status:</span>{% if entry.status == 'practice' %}Üben{% elif entry.status == 'review_ready' %}Prüfen{% elif entry.status == 'mastered' %}Gelernt{% else %}Bibliothek{% endif %}
+              </span>
+            </div>
+            {% if entry.source_sentence %}
+            <div class="detail-context">"{{ entry.source_sentence }}"</div>
+            {% endif %}
+            {% if entry.source_article %}
+            <div class="expand-source">
+              <span class="expand-source-label">Aus Artikel:</span>
+              <span class="expand-source-text">{{ entry.source_article }}</span>
+            </div>
+            {% endif %}
+
+            <!-- Practice section -->
+            <div class="expand-practice">
+              <div class="expand-label">ÜBEN</div>
+              <div class="direction-toggle-inline">
+                <button class="dir-btn active" data-dir="de-en" title="German to English">🇩🇪 → 🇺🇸</button>
+                <button class="dir-btn" data-dir="en-de" title="English to German">🇺🇸 → 🇩🇪</button>
+              </div>
+              <div class="practice-prompt">
+                <span class="practice-prompt-text">{{ entry.german }}</span>
+                <button class="btn-voice-out btn-speak-practice"
+                        data-text="{{ entry.german }}" title="Hear pronunciation">🔊</button>
+              </div>
+              <div class="practice-input-wrap">
+                <textarea class="practice-input" placeholder="Deine Antwort…" rows="2"></textarea>
+                <div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+                  <button class="btn-voice-mic btn-voice-practice"
+                          data-direction="de-en" title="Speak your answer">🎤</button>
+                  <button class="btn-delivery btn-pruefen-practice"
+                          data-id="{{ entry.id }}" title="Check answer">Prüfen</button>
+                </div>
+              </div>
+              <div class="practice-correction" style="display:none">
+                <div class="correction-attempt result-label"></div>
+                <div class="correction-answer result-value"></div>
+                <div class="correction-notes-block" style="display:none">
+                  <ul class="drill-notes correction-notes-list"></ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="detail-actions">
+              {% if entry.status == 'library' %}
+              <button class="btn-ghost btn-promote" data-id="{{ entry.id }}" data-next="practice"
+                      title="Move to practice queue">
+                Fördern → Üben
+              </button>
+              {% elif entry.status == 'practice' %}
+              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="library"
+                      title="Demote back to library">
+                ← Bibliothek
+              </button>
+              {% elif entry.status == 'review_ready' %}
+              <button class="btn-ghost btn-promote" data-id="{{ entry.id }}" data-next="mastered"
+                      title="Mark as learned">
+                ✓ Als gelernt markieren
+              </button>
+              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="practice"
+                      title="Keep practising">
+                ← Weiter üben
+              </button>
+              {% elif entry.status == 'mastered' %}
+              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="practice"
+                      title="Practice again">
+                ← Wieder üben
+              </button>
+              {% endif %}
+              <button class="btn-ghost btn-speak" data-text="{{ entry.german }}" title="Hear pronunciation">🔊</button>
+              <a class="btn-ghost" href="/api/anki-export?status={{ entry.status }}" download
+                 title="Export to Anki flashcard deck">Anki Export</a>
+            </div>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="empty-filter-state" id="empty-filter-state" style="display:none">
+    Keine Phrasen in dieser Kategorie.
+    <a href="/lesen">Zum Lesen →</a> um neue Vokabeln zu speichern.
+  </div>
+  {% else %}
+  <div class="woerter-empty">
+    <p>Noch keine Wörter gespeichert.</p>
+    <p class="hint">Markiere Wörter beim Lesen, um sie hier zu sehen.</p>
+  </div>
+  {% endif %}
+</div>
+
+</div><!-- #section-vokabeln -->
+
+<!-- ── Drill-Pool section ──────────────────────────────────────────────── -->
+<div class="woerter-section" id="section-drill-pool" style="display:none">
+  {% if drill_pool %}
+  <div class="direction-toggle" id="direction-toggle">
+    <button class="dir-btn active" data-dir="de-en" id="dir-de-en" title="German to English">
+      🇩🇪 → 🇺🇸 Deutsch zu Englisch
+    </button>
+    <button class="dir-btn" data-dir="en-de" id="dir-en-de" title="English to German">
+      🇺🇸 → 🇩🇪 Englisch zu Deutsch
+    </button>
+  </div>
+
+  <div class="drill-stats">
+    <span id="drill-progress">0 von {{ drill_pool|length }} geübt</span>
+    <button class="btn-ghost btn-sm" id="drill-restart" title="Restart drill session">Neu starten</button>
+  </div>
+
+  <div class="drill-card" id="drill-card">
+    <div class="drill-prompt" id="drill-prompt"></div>
+    <button class="btn-voice-out" id="btn-speak-prompt" title="Hear the prompt">🔊 anhören</button>
+
+    <div class="drill-input-area" id="drill-input-area">
+      <textarea id="drill-input" placeholder="Deine Antwort hier eingeben…" rows="3"></textarea>
+      <div class="drill-input-row">
+        <button class="btn-voice-mic" id="voice-drill" title="Spracheingabe">🎤</button>
+        <button class="btn-delivery" id="btn-pruefen" title="Check answer">Prüfen</button>
+      </div>
+    </div>
+
+    <div class="drill-result-block" id="drill-result-block" style="display:none">
+      <div class="result-row">
+        <span class="result-label">Deine Antwort</span>
+        <span class="result-value" id="drill-attempt-text"></span>
+      </div>
+      <div class="result-row">
+        <span class="result-label" id="drill-answer-label">Lösung</span>
+        <span class="result-value" id="drill-answer-text"></span>
+      </div>
+      <div id="drill-corrected-block" style="display:none">
+        <div class="result-row">
+          <span class="result-label">Korrigiert</span>
+          <span class="result-value" id="drill-corrected-text"></span>
+        </div>
+        <ul class="drill-notes" id="drill-notes-list"></ul>
+      </div>
+    </div>
+
+    <div class="drill-assess" id="drill-assess" style="display:none">
+      <button class="btn-richtig" id="drill-correct" title="Mark correct">✓ Richtig</button>
+      <button class="btn-falsch"  id="drill-wrong"  title="Mark wrong">✗ Falsch</button>
+      <button class="btn-skip"    id="drill-skip"   title="Skip this card">→ Überspringen</button>
+    </div>
+  </div>
+
+  <div class="drill-done" id="drill-done" style="display:none">
+    <p>Runde abgeschlossen.</p>
+    <button class="btn-ghost" id="drill-done-restart" title="Start a new drill session">Neu starten</button>
+  </div>
+  {% else %}
+  <div class="woerter-empty">
+    <p>Keine Phrasen im Drill-Pool.</p>
+    <p class="hint">Fördere Phrasen oben mit "Fördern → Üben" um sie hier zu üben.</p>
+  </div>
+  {% endif %}
+</div><!-- #section-drill-pool -->
+
+  </div><!-- .tab-content -->
+  <div class="tab-panel-photo">
+    <img src="/static/photos/bike_trail_IMG_5464.jpg" alt="Wien Parkweg" style="object-position: center 35%">
+  </div>
+</div><!-- .tab-layout-split -->
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.body.classList.add('parch-mode');
+(function () {
+  'use strict';
+
+  const drillPool = {{ drill_pool | tojson }};
+
+  // ── Subnav ───────────────────────────────────────────────────────────
+  document.querySelectorAll('.ueben-subnav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.ueben-subnav-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.woerter-section').forEach(s => s.style.display = 'none');
+      btn.classList.add('active');
+      document.getElementById('section-' + btn.dataset.section).style.display = 'block';
+    });
+  });
+
+  // ── Row expand/collapse ──────────────────────────────────────────────
+  document.querySelectorAll('.btn-expand').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row = btn.closest('.woerter-row');
+      const id = row.dataset.id;
+      const detail = document.getElementById('detail-' + id);
+      const open = detail.style.display !== 'none';
+      detail.style.display = open ? 'none' : 'table-row';
+      btn.textContent = open ? 'Details' : 'Schließen';
+      if (!open) {
+        setTimeout(() => {
+          detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 50);
+      }
+    });
+  });
+
+  // ── Status promote/demote ────────────────────────────────────────────
+  document.querySelectorAll('.btn-promote, .btn-demote').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const next = btn.dataset.next;
+      const resp = await fetch('/api/phrase-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: next })
+      });
+      if ((await resp.json()).ok) {
+        // Reload to reflect updated status
+        window.location.reload();
+      }
+    });
+  });
+
+  // ── Voice output ─────────────────────────────────────────────────────
+  document.querySelectorAll('.btn-speak').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const text = btn.dataset.text;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'de-DE';
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    });
+  });
+
+  // ── Filter ───────────────────────────────────────────────────────────
+  const rows = Array.from(document.querySelectorAll('.woerter-row'));
+  const countEl = document.getElementById('filter-count');
+  const emptyFilterEl = document.getElementById('empty-filter-state');
+
+  function applyFilters() {
+    const quelle = document.getElementById('filter-quelle').value;
+    const status = document.getElementById('filter-status').value;
+    let visible = 0;
+    rows.forEach(row => {
+      const matchQ = !quelle || row.dataset.source === quelle;
+      const matchS = !status || row.dataset.status === status;
+      const show = matchQ && matchS;
+      row.style.display = show ? '' : 'none';
+      const detail = document.getElementById('detail-' + row.dataset.id);
+      if (detail && !show) {
+        detail.style.display = 'none';
+        const btn = row.querySelector('.btn-expand');
+        if (btn) btn.textContent = 'Details';
+      }
+      if (show) visible++;
+    });
+    countEl.textContent = visible + ' Eintr' + (visible === 1 ? 'ag' : 'äge');
+    if (emptyFilterEl) {
+      emptyFilterEl.style.display = (visible === 0 && rows.length > 0) ? 'block' : 'none';
+    }
+  }
+
+  document.getElementById('filter-quelle').addEventListener('change', applyFilters);
+  document.getElementById('filter-status').addEventListener('change', applyFilters);
+  document.getElementById('btn-reset-filters').addEventListener('click', () => {
+    document.getElementById('filter-quelle').value = '';
+    document.getElementById('filter-status').value = '';
+    applyFilters();
+  });
+  applyFilters();
+
+  // ── Wörter inline practice ────────────────────────────────────────────
+
+  // Direction toggle inside each expand
+  document.querySelectorAll('.direction-toggle-inline').forEach(toggle => {
+    const detail = toggle.closest('.woerter-detail');
+    toggle.querySelectorAll('.dir-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        toggle.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        // Update prompt text and voice mic lang
+        const dir = btn.dataset.dir;
+        const german = detail.dataset.german;
+        const english = detail.dataset.english;
+        const promptEl = toggle.closest('.expand-practice').querySelector('.practice-prompt-text');
+        promptEl.textContent = dir === 'de-en' ? german : english;
+        const micBtn = toggle.closest('.expand-practice').querySelector('.btn-voice-practice');
+        if (micBtn) micBtn.dataset.direction = dir;
+        // Reset correction block
+        const corr = toggle.closest('.expand-practice').querySelector('.practice-correction');
+        if (corr) corr.style.display = 'none';
+        const input = toggle.closest('.expand-practice').querySelector('.practice-input');
+        if (input) input.value = '';
+      });
+    });
+  });
+
+  // 🔊 speak buttons in practice section — never auto
+  document.querySelectorAll('.btn-speak-practice').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const text = btn.dataset.text;
+      if (!text || !window.speechSynthesis) return;
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'de-DE'; u.rate = 0.9;
+      window.speechSynthesis.speak(u);
+    });
+  });
+
+  // 🎤 voice input in practice section
+  document.querySelectorAll('.btn-voice-practice').forEach(btn => {
+    if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
+      btn.style.display = 'none'; return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    btn.addEventListener('click', () => {
+      if (recognition) { recognition.stop(); recognition = null; btn.textContent = '🎤'; return; }
+      const input = btn.closest('.expand-practice').querySelector('.practice-input');
+      recognition = new SR();
+      recognition.lang = btn.dataset.direction === 'de-en' ? 'en-US' : 'de-DE';
+      recognition.interimResults = false;
+      recognition.onresult = e => { input.value = e.results[0][0].transcript; };
+      recognition.onend = () => { recognition = null; btn.textContent = '🎤'; };
+      recognition.start();
+      btn.textContent = '⏹';
+    });
+  });
+
+  // Prüfen in practice section
+  document.querySelectorAll('.btn-pruefen-practice').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const expand = btn.closest('.expand-practice');
+      const detail = btn.closest('.woerter-detail');
+      const activeDir = expand.querySelector('.dir-btn.active').dataset.dir;
+      const input = expand.querySelector('.practice-input').value.trim();
+      const corr = expand.querySelector('.practice-correction');
+      if (!input) return;
+
+      corr.style.display = 'block';
+      corr.querySelector('.correction-attempt').textContent = 'Deine Antwort: ' + input;
+      corr.querySelector('.correction-notes-block').style.display = 'none';
+
+      if (activeDir === 'de-en') {
+        const english = detail.dataset.english;
+        corr.querySelector('.correction-answer').textContent = 'Lösung: ' + english;
+      } else {
+        corr.querySelector('.correction-answer').textContent = 'Wird korrigiert…';
+        const promptText = expand.querySelector('.practice-prompt-text').textContent;
+        try {
+          const res = await fetch('/api/write-correct', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: input, context: promptText })
+          });
+          const data = await res.json();
+          corr.querySelector('.correction-answer').textContent =
+            'Korrektur: ' + (data.corrected || detail.dataset.german);
+          const notes = data.notes || [];
+          if (notes.length) {
+            corr.querySelector('.correction-notes-list').innerHTML =
+              notes.map(n => `<li>${n}</li>`).join('');
+            corr.querySelector('.correction-notes-block').style.display = 'block';
+          }
+        } catch {
+          corr.querySelector('.correction-answer').textContent =
+            'Lösung: ' + detail.dataset.german;
+        }
+      }
+    });
+  });
+  // ── Drill-Pool state machine ─────────────────────────────────────────
+  if (drillPool.length > 0) {
+    const drill = {
+      queue: [...drillPool],
+      pos: 0,
+      practiced: 0,
+      direction: sessionStorage.getItem('drillDirection') || 'de-en',
+    };
+
+    function setDirection(dir) {
+      drill.direction = dir;
+      sessionStorage.setItem('drillDirection', dir);
+      document.querySelectorAll('#direction-toggle .dir-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.dir === dir);
+      });
+      showPhrase(drill.pos);
+    }
+
+    document.querySelectorAll('#direction-toggle .dir-btn').forEach(btn => {
+      btn.addEventListener('click', () => setDirection(btn.dataset.dir));
+    });
+
+    setDirection(drill.direction);
+
+    function updateProgress() {
+      document.getElementById('drill-progress').textContent =
+        `${drill.practiced} von ${drill.queue.length} geübt`;
+    }
+
+    function showPhrase(idx) {
+      if (idx >= drill.queue.length) {
+        document.getElementById('drill-card').style.display = 'none';
+        document.getElementById('drill-done').style.display = 'block';
+        return;
+      }
+      const phrase = drill.queue[idx];
+      const prompt = drill.direction === 'de-en' ? phrase.german : phrase.english;
+      document.getElementById('drill-prompt').textContent = prompt;
+      document.getElementById('drill-input').value = '';
+      document.getElementById('drill-result-block').style.display = 'none';
+      document.getElementById('drill-corrected-block').style.display = 'none';
+      document.getElementById('drill-assess').style.display = 'none';
+      document.getElementById('drill-input-area').style.display = '';
+      document.getElementById('btn-pruefen').disabled = false;
+      document.getElementById('drill-card').style.display = '';
+      document.getElementById('drill-done').style.display = 'none';
+    }
+
+    async function submitAttempt() {
+      const phrase = drill.queue[drill.pos];
+      const attempt = document.getElementById('drill-input').value.trim();
+      if (!attempt) return;
+
+      document.getElementById('btn-pruefen').disabled = true;
+      document.getElementById('drill-attempt-text').textContent = attempt;
+
+      if (drill.direction === 'de-en') {
+        document.getElementById('drill-answer-label').textContent = 'Lösung';
+        document.getElementById('drill-answer-text').textContent = phrase.english;
+        document.getElementById('drill-corrected-block').style.display = 'none';
+        document.getElementById('drill-result-block').style.display = 'block';
+        document.getElementById('drill-assess').style.display = 'flex';
+      } else {
+        document.getElementById('drill-answer-label').textContent = 'Korrektur';
+        document.getElementById('drill-answer-text').textContent = 'Wird korrigiert…';
+        document.getElementById('drill-result-block').style.display = 'block';
+
+        try {
+          const res = await fetch('/api/write-correct', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: attempt,
+              context: `Expected German for: ${phrase.english}`
+            })
+          });
+          const data = await res.json();
+          document.getElementById('drill-answer-text').textContent = data.corrected || phrase.german;
+
+          const notes = data.notes || [];
+          if (notes.length) {
+            document.getElementById('drill-corrected-text').textContent = phrase.german;
+            document.getElementById('drill-notes-list').innerHTML =
+              notes.map(n => `<li>${n}</li>`).join('');
+            document.getElementById('drill-corrected-block').style.display = 'block';
+          }
+        } catch {
+          document.getElementById('drill-answer-text').textContent = phrase.german;
+        }
+        document.getElementById('drill-assess').style.display = 'flex';
+      }
+    }
+
+    async function recordResult(result) {
+      const phrase = drill.queue[drill.pos];
+      await fetch('/api/drill-result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phrase_id: phrase.id, result })
+      });
+      if (result !== 'skip') drill.practiced++;
+      drill.pos++;
+      updateProgress();
+      showPhrase(drill.pos);
+    }
+
+    document.getElementById('btn-speak-prompt').addEventListener('click', () => {
+      const phrase = drill.queue[drill.pos];
+      if (!phrase || !window.speechSynthesis) return;
+      const u = new SpeechSynthesisUtterance(phrase.german);
+      u.lang = 'de-DE'; u.rate = 0.9;
+      window.speechSynthesis.speak(u);
+    });
+
+    const voiceDrillBtn = document.getElementById('voice-drill');
+    if (voiceDrillBtn && (window.SpeechRecognition || window.webkitSpeechRecognition)) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      let recognition = null;
+      voiceDrillBtn.addEventListener('click', () => {
+        if (recognition) { recognition.stop(); recognition = null; voiceDrillBtn.textContent = '🎤 Sprechen'; return; }
+        recognition = new SR();
+        recognition.lang = drill.direction === 'de-en' ? 'en-US' : 'de-DE';
+        recognition.interimResults = false;
+        recognition.onresult = e => {
+          document.getElementById('drill-input').value = e.results[0][0].transcript;
+        };
+        recognition.onend = () => { recognition = null; voiceDrillBtn.textContent = '🎤'; };
+        recognition.start();
+        voiceDrillBtn.textContent = '⏹';
+      });
+    } else if (voiceDrillBtn) {
+      voiceDrillBtn.style.display = 'none';
+    }
+
+    document.getElementById('btn-pruefen').addEventListener('click', submitAttempt);
+    document.getElementById('drill-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitAttempt();
+    });
+
+    document.getElementById('drill-correct').addEventListener('click', () => recordResult('correct'));
+    document.getElementById('drill-wrong').addEventListener('click',   () => recordResult('wrong'));
+    document.getElementById('drill-skip').addEventListener('click',    () => recordResult('skip'));
+
+    function restart() {
+      drill.pos = 0; drill.practiced = 0; drill.queue = [...drillPool];
+      updateProgress(); showPhrase(0);
+    }
+
+    document.getElementById('drill-restart').addEventListener('click', restart);
+    document.getElementById('drill-done-restart').addEventListener('click', restart);
+
+    updateProgress(); showPhrase(0);
+  }
+
+})();
+</script>
+{% endblock %}

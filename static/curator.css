@@ -1,0 +1,289 @@
+/* ── Curator — shared design system ────────────────────────────────────────── */
+/* All Curator pages (Daily Briefing, Library, Deep Dives, Observations, Focus) */
+/* inherit from this file. Per-page overrides live in each HTML's <style> block. */
+
+/* ── Design tokens (mirrors portal.css exactly) ─────────────────────────────── */
+:root {
+  --bg:           #f5f0e8;
+  --bg-mid:       #ede7dc;
+  --surface:      #faf7f2;
+  --surface2:     #f0ebe0;
+  --border:       rgba(42, 31, 20, 0.15);
+  --border-solid: #ddd6c8;
+
+  --text:         #2a1f14;
+  --text-muted:   #7a6558;
+  --text-dim:     #9e9080;
+
+  --accent:       #8b4513;   /* sienna — matches portal.css */
+  --accent-light: #c8703a;
+  --accent-dim:   rgba(139, 69, 19, 0.08);
+
+  /* Section identity colors — applied via [data-section] below */
+  --section-color: var(--accent);
+
+  /* State colors */
+  --liked:        #2e7d52;
+  --liked-bg:     rgba(46, 125, 82, 0.08);
+  --saved:        #1a5c8a;
+  --saved-bg:     rgba(26, 92, 138, 0.08);
+  --danger:       #b03030;
+  --danger-bg:    rgba(176, 48, 48, 0.08);
+  --warn:         #8b6e1a;
+  --warn-bg:      rgba(139, 110, 26, 0.08);
+  --ok:           #2e7d52;
+  --ok-bg:        rgba(46, 125, 82, 0.08);
+
+  /* Category colors */
+  --cat-geo:      #2d6a2d;
+  --cat-geo-bg:   rgba(45, 106, 45, 0.10);
+  --cat-money:    #2d4a8a;
+  --cat-money-bg: rgba(45, 74, 138, 0.10);
+  --cat-fiscal:   #8a6a2d;
+  --cat-fiscal-bg:rgba(138, 106, 45, 0.10);
+  --cat-other:    #6b5f4e;
+  --cat-other-bg: rgba(107, 95, 78, 0.10);
+
+  /* Typography */
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-sans:  'Source Sans 3', system-ui, sans-serif;
+  --font-mono:  'DM Mono', 'Courier New', monospace;
+
+  /* Shadow — kept as color token for backward compat with inline box-shadow usage */
+  --shadow:     rgba(42, 31, 20, 0.10);
+  --shadow-sm:  0 1px 4px rgba(42, 31, 20, 0.08);
+  --shadow-md:  0 2px 12px rgba(42, 31, 20, 0.12);
+
+  /* Backward-compat aliases used by older static pages */
+  --border2:       rgba(42, 31, 20, 0.22);
+  --accent-glow:   rgba(139, 69, 19, 0.18);
+  --ok-dim:        rgba(46, 125, 82, 0.08);
+  --ok-border:     rgba(46, 125, 82, 0.25);
+  --danger-dim:    rgba(176, 48, 48, 0.08);
+  --danger-border: rgba(176, 48, 48, 0.25);
+  --warn-dim:      rgba(139, 110, 26, 0.08);
+  --warn-border:   rgba(139, 110, 26, 0.25);
+}
+
+/* ── Section color palette ─────────────────────────────────────────────────── */
+[data-section="daily"]         { --section-color: #8b4513; }   /* sienna  */
+[data-section="library"]       { --section-color: #2d4a8a; }   /* navy    */
+[data-section="deep-dives"]    { --section-color: #5c2a7a; }   /* plum    */
+[data-section="intelligence"]  { --section-color: #2a5c3a; }   /* forest  */
+[data-section="priorities"]    { --section-color: #8b1a1a; }   /* crimson */
+[data-section="archive"]       { --section-color: #4a3a2a; }   /* umber   */
+
+/* ── Reset ─────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+
+/* ── Body ──────────────────────────────────────────────────────────────────── */
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 18% 0%, rgba(210, 190, 160, 0.35) 0%, transparent 55%),
+    radial-gradient(ellipse at 82% 100%, rgba(200, 178, 148, 0.28) 0%, transparent 50%);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+a { color: inherit; text-decoration: none; }
+
+/* ── Curator sub-nav ───────────────────────────────────────────────────────── */
+nav.curator-subnav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 44px;
+  background: rgba(245, 240, 232, 0.97);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 4px rgba(42, 31, 20, 0.06);
+  display: flex;
+  align-items: center;
+  padding: 0 1.5rem;
+}
+
+.subnav-tab {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 0 14px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s;
+  white-space: nowrap;
+}
+.subnav-tab:hover { color: var(--text); }
+.subnav-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.subnav-focus { margin-left: auto; }
+
+/* ── Page masthead ─────────────────────────────────────────────────────────── */
+/* A slim strip below the subnav giving each section a visual identity.         */
+/* The 3px left rule changes color per section via --section-color.             */
+.page-masthead {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 10px 1.5rem 10px calc(1.5rem + 3px);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: relative;
+}
+.page-masthead::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--section-color);
+}
+
+.masthead-label {
+  font-family: var(--font-serif);
+  font-size: 1.0rem;
+  font-weight: 600;
+  font-style: italic;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.masthead-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+}
+
+.masthead-right {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+/* ── Main content container ─────────────────────────────────────────────────── */
+main.page-main {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 28px 24px 80px;
+}
+
+/* ── Stat pills (shared: Library, Priorities, Index) ─────────────────────────── */
+.stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.stat-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.stat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Section header rows ────────────────────────────────────────────────────── */
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  margin-top: 28px;
+}
+.section-header-row:first-of-type { margin-top: 0; }
+
+/* ── Category chips ─────────────────────────────────────────────────────────── */
+.cat-chip {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.cat-geo_major, .cat-geo  { background: var(--cat-geo-bg);   color: var(--cat-geo);   }
+.cat-monetary             { background: var(--cat-money-bg); color: var(--cat-money); }
+.cat-fiscal               { background: var(--cat-fiscal-bg);color: var(--cat-fiscal);}
+.cat-geo_minor, .cat-geo_other, .cat-other
+                          { background: var(--cat-other-bg); color: var(--cat-other); }
+
+/* ── Action buttons (pill style) ────────────────────────────────────────────── */
+.action-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 11px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.action-btn:hover { background: var(--surface2); color: var(--text); }
+.action-btn.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+/* ── Page title typography (shared pattern) ─────────────────────────────────── */
+.page-title {
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+  font-weight: 400;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+.page-title em {
+  font-style: italic;
+  color: var(--accent);
+}
+.page-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+}

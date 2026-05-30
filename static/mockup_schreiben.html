@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schreiben • Mein Deutsch</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500&display=swap');
+
+        body {
+            margin: 0;
+            font-family: 'Inter', system-ui, sans-serif;
+            background: #F8F1E9;
+            color: #3C2F2F;
+        }
+
+        nav {
+            background: #3C2F2F;
+            color: #F5EDE4;
+            padding: 0 2.5rem;
+            display: flex;
+            align-items: center;
+            height: 70px;
+        }
+
+        .logo {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.7rem;
+            color: #C68A5E;
+            margin-right: 3rem;
+            font-style: italic;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .nav-links a {
+            color: #F5EDE4;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 1rem;
+        }
+
+        .nav-links a.active {
+            color: #C68A5E;
+            border-bottom: 2px solid #C68A5E;
+            padding-bottom: 4px;
+        }
+
+        .hero {
+            height: 320px;
+            background: linear-gradient(rgba(60, 47, 47, 0.55), rgba(60, 47, 47, 0.65)),
+                        url('/static/photos/Vera_cafe_IMG_5211_2.jpg') center 70% / cover;
+            display: flex;
+            align-items: flex-end;
+            padding: 0 2.5rem 2.5rem;
+        }
+
+        .hero-content h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: 3.2rem;
+            color: #F5EDE4;
+            margin: 0;
+        }
+
+        main {
+            max-width: 860px;
+            margin: 2.5rem auto;
+            padding: 0 2rem;
+        }
+
+        .description {
+            font-size: 1.05rem;
+            color: #6B5C52;
+            margin-bottom: 2rem;
+            line-height: 1.5;
+        }
+
+        .mode-tabs {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 2rem;
+        }
+
+        .mode-tab {
+            padding: 0.6rem 1.4rem;
+            border: 1px solid #C8B8A8;
+            border-radius: 50px;
+            background: white;
+            color: #3C2F2F;
+            font-size: 0.95rem;
+            cursor: pointer;
+        }
+
+        .mode-tab.active {
+            background: #C68A5E;
+            color: white;
+            border-color: #C68A5E;
+        }
+
+        .prompt {
+            font-size: 1.05rem;
+            color: #6B5C52;
+            margin-bottom: 1rem;
+            font-style: italic;
+        }
+
+        textarea {
+            width: 100%;
+            box-sizing: border-box;
+            height: 220px;
+            padding: 1.2rem;
+            border: 1px solid #C8B8A8;
+            border-radius: 12px;
+            font-size: 1.05rem;
+            resize: vertical;
+            background: white;
+            font-family: inherit;
+        }
+
+        .actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1rem;
+        }
+
+        .btn-primary {
+            padding: 0.65rem 1.5rem;
+            border-radius: 50px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            background: #C68A5E;
+            color: white;
+            border: none;
+        }
+
+        .mic-btn {
+            background: white;
+            border: 1px solid #C8B8A8;
+            padding: 0.6rem 0.75rem;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .history-hint {
+            margin-top: 3rem;
+            font-size: 0.9rem;
+            color: #8B7A6B;
+            border-top: 1px solid #C8B8A8;
+            padding-top: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="logo">Mein Deutsch</div>
+    <ul class="nav-links">
+        <li><a href="#">Üben</a></li>
+        <li><a href="#">Lesen</a></li>
+        <li><a href="#" class="active">Schreiben</a></li>
+        <li><a href="#">Wörter</a></li>
+        <li><a href="#">Archiv</a></li>
+        <li><a href="#">Admin</a></li>
+    </ul>
+</nav>
+
+<div class="hero">
+    <div class="hero-content">
+        <h1>Schreiben</h1>
+    </div>
+</div>
+
+<main>
+    <p class="description">Schreib auf Deutsch — mit Korrektur und Verlauf.</p>
+
+    <div class="mode-tabs">
+        <button class="mode-tab active">Tagebuch</button>
+        <button class="mode-tab">Im Kontext</button>
+        <button class="mode-tab">Wörter üben</button>
+    </div>
+
+    <p class="prompt">Beschreib ein Gespräch, das du heute geführt hast — oder schreib frei.</p>
+
+    <textarea placeholder="Schreib hier..."></textarea>
+
+    <div class="actions">
+        <button class="mic-btn">🎤</button>
+        <button class="btn-primary">Korrigieren</button>
+    </div>
+
+    <div class="history-hint">
+        <strong>Letzte Einträge</strong> — Verlauf erscheint hier nach dem ersten Eintrag.
+    </div>
+</main>
+
+</body>
+</html>

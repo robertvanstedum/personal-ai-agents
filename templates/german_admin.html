@@ -1,0 +1,202 @@
+{% extends "german_base.html" %}
+{% block title %}Admin{% endblock %}
+
+{% block content %}
+<div class="tab-in-progress-banner">Im Aufbau · v1.1</div>
+
+<div class="admin-header">
+  <h1>Admin</h1>
+  <p class="tab-description">Personas, Quellen und Systemkonfiguration. Desktop only in v1.0.</p>
+</div>
+
+<!-- ── Personas ───────────────────────────────────────────────────────── -->
+<section class="admin-section">
+  <div class="admin-section-head">
+    <h2>Personas</h2>
+    <button class="btn-ghost" id="btn-persona-create" title="Create a new persona">＋ Neue Persona</button>
+  </div>
+  <div class="admin-list" id="persona-list">
+    <div class="admin-list-item">
+      <div class="admin-item-info">
+        <span class="admin-item-name">Maria</span>
+        <span class="admin-item-meta">Kellnerin · Kaffeehaus</span>
+      </div>
+      <div class="admin-item-actions">
+        <button class="btn-ghost btn-sm" title="Edit persona">Bearbeiten</button>
+        <button class="btn-ghost btn-sm" title="Duplicate persona">Fork</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Persona Maria löschen?" title="Delete persona">Löschen</button>
+      </div>
+    </div>
+    <div class="admin-list-item">
+      <div class="admin-item-info">
+        <span class="admin-item-name">Herr Fischer</span>
+        <span class="admin-item-meta">Rezeptionist · Hotel</span>
+      </div>
+      <div class="admin-item-actions">
+        <button class="btn-ghost btn-sm" title="Edit persona">Bearbeiten</button>
+        <button class="btn-ghost btn-sm" title="Duplicate persona">Fork</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Persona Herr Fischer löschen?" title="Delete persona">Löschen</button>
+      </div>
+    </div>
+    <div class="admin-list-item">
+      <div class="admin-item-info">
+        <span class="admin-item-name">Georg</span>
+        <span class="admin-item-meta">Wirt · Lokal</span>
+      </div>
+      <div class="admin-item-actions">
+        <button class="btn-ghost btn-sm" title="Edit persona">Bearbeiten</button>
+        <button class="btn-ghost btn-sm" title="Duplicate persona">Fork</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Persona Georg löschen?" title="Delete persona">Löschen</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Runden ─────────────────────────────────────────────────────────── -->
+<section class="admin-section">
+  <div class="admin-section-head">
+    <h2>Runden-Management</h2>
+  </div>
+  <div class="admin-list" id="runden-list">
+    {% for pr in persona_rounds %}
+    <div class="admin-list-item {% if pr.ready_to_archive %}runde-ready{% endif %}">
+      <div class="admin-item-info">
+        <span class="admin-item-name">{{ pr.emoji }} {{ pr.name }}</span>
+        <span class="admin-item-meta">
+          Runde {{ pr.current_round }}/{{ pr.round_default }} · {{ pr.sessions_this_round }} Sitzung{{ 'en' if pr.sessions_this_round != 1 else '' }}
+          {% if pr.ready_to_archive %}<span class="round-ready-dot">●</span>{% endif %}
+        </span>
+      </div>
+      {% if pr.ready_to_archive %}
+      <div class="admin-item-actions">
+        <button class="btn-ghost btn-sm btn-round-action"
+                data-slug="{{ pr.slug }}" data-action="close"
+                title="Finish round & create summary">Runde abschließen</button>
+        <button class="btn-ghost btn-sm btn-round-action"
+                data-slug="{{ pr.slug }}" data-action="extend"
+                title="Add 3 more sessions to round">Verlängern +3</button>
+      </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <p class="hint" style="padding: 1rem">Noch keine Sitzungen — Runden-Daten erscheinen nach der ersten Analyse.</p>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- ── Quellen ────────────────────────────────────────────────────────── -->
+<section class="admin-section">
+  <div class="admin-section-head">
+    <h2>Quellen</h2>
+    <button class="btn-ghost" id="btn-source-add" title="Add a new article source">＋ Quelle hinzufügen</button>
+  </div>
+  <div class="admin-list" id="source-list">
+    <div class="admin-list-item">
+      <div class="admin-item-info">
+        <span class="admin-item-name">ORF Wien</span>
+        <span class="admin-item-meta admin-item-active">aktiv</span>
+      </div>
+      <div class="admin-item-actions">
+        <button class="btn-ghost btn-sm" title="Pause this source">Pausieren</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Quelle ORF Wien entfernen?" title="Remove this source">Entfernen</button>
+      </div>
+    </div>
+    <div class="admin-list-item">
+      <div class="admin-item-info">
+        <span class="admin-item-name">Vienna.at</span>
+        <span class="admin-item-meta admin-item-active">aktiv</span>
+      </div>
+      <div class="admin-item-actions">
+        <button class="btn-ghost btn-sm" title="Pause this source">Pausieren</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Quelle Vienna.at entfernen?" title="Remove this source">Entfernen</button>
+      </div>
+    </div>
+    <div class="admin-list-item">
+      <div class="admin-item-info">
+        <span class="admin-item-name">Standard Kultur</span>
+        <span class="admin-item-meta admin-item-active">aktiv</span>
+      </div>
+      <div class="admin-item-actions">
+        <button class="btn-ghost btn-sm" title="Pause this source">Pausieren</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Quelle Standard Kultur entfernen?" title="Remove this source">Entfernen</button>
+      </div>
+    </div>
+    <div class="admin-list-item">
+      <div class="admin-item-info">
+        <span class="admin-item-name">Wiener Bezirksblätter</span>
+        <span class="admin-item-meta admin-item-active">aktiv</span>
+      </div>
+      <div class="admin-item-actions">
+        <button class="btn-ghost btn-sm" title="Pause this source">Pausieren</button>
+        <button class="btn-ghost btn-sm btn-destructive" data-confirm="Quelle Wiener Bezirksblätter entfernen?" title="Remove this source">Entfernen</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── System ─────────────────────────────────────────────────────────── -->
+<section class="admin-section">
+  <h2>System</h2>
+  <div class="admin-system-grid">
+    <div class="admin-system-item">
+      <label class="admin-label">Artikel-Schwellenwert (min. aktiv)</label>
+      <input type="number" class="admin-input" value="2" min="1" max="10">
+    </div>
+    <div class="admin-system-item">
+      <label class="admin-label">LLM-Route</label>
+      <select class="admin-input">
+        <option>grok-mini → claude-haiku → ollama</option>
+        <option>claude-haiku</option>
+        <option>ollama-gemma</option>
+      </select>
+    </div>
+  </div>
+  <div class="admin-export-row">
+    <button class="btn-ghost" title="Export phrasebook to file">Phrasebook exportieren</button>
+    <button class="btn-ghost" title="Export writing history to file">Schreibverlauf exportieren</button>
+  </div>
+  <div class="admin-log-placeholder">
+    <p class="hint">Log-Viewer — Phase 2.</p>
+  </div>
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.body.classList.add('parch-mode');
+(function () {
+  'use strict';
+
+  document.querySelectorAll('.btn-destructive').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const msg = btn.dataset.confirm || 'Wirklich löschen?';
+      if (confirm(msg)) {
+        btn.closest('.admin-list-item').style.opacity = '0.4';
+        btn.disabled = true;
+      }
+    });
+  });
+
+  document.querySelectorAll('.btn-round-action').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const slug = btn.dataset.slug;
+      const action = btn.dataset.action;
+      btn.disabled = true;
+      btn.closest('.admin-list-item').style.opacity = '0.5';
+      try {
+        await fetch('/api/round-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ persona_slug: slug, action }),
+        });
+        setTimeout(() => window.location.reload(), 500);
+      } catch (e) {
+        btn.disabled = false;
+        btn.closest('.admin-list-item').style.opacity = '1';
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

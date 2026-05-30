@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}German{% endblock %} — Mein Deutsch</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/german.css?v=6">
+  {% block head %}{% endblock %}
+</head>
+<body class="{{ active }}-mode">
+
+<nav>
+  <a href="/" class="logo">Mein Deutsch</a>
+  <ul class="nav-links">
+    <li><a href="/lesen"     {% if active=='lesen' %}class="active"{% endif %} title="Read">Lesen</a></li>
+    <li><a href="/gesprache" {% if active=='gesprache' %}class="active"{% endif %} title="Conversations">Gespräche</a></li>
+    <li><a href="/schreiben" {% if active=='schreiben' %}class="active"{% endif %} title="Write">Schreiben</a></li>
+    <li><a href="/woerter"   {% if active=='woerter' %}class="active"{% endif %} title="Words / Phrasebook">Wörter</a></li>
+    <li><a href="/archiv"    {% if active=='archiv' %}class="active"{% endif %} title="Archive">Archiv</a></li>
+    <li><a href="/admin"     {% if active=='admin' %}class="active"{% endif %} title="Admin">Admin</a></li>
+  </ul>
+</nav>
+
+{% block page_strip %}{% endblock %}
+
+<main class="page">
+  {% block content %}{% endblock %}
+</main>
+
+{% block page_footer %}{% endblock %}
+
+{% block scripts %}{% endblock %}
+</body>
+</html>
