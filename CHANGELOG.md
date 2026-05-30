@@ -834,3 +834,14 @@ Commits: n/a (changes in gitignored _NewDomains/ — not tracked)
 ### Open Items → Next Phase
 - Scaffold full language-german domain structure (e.g., scripts, config.json, integration with main pipeline)
 - Test persona prompts in a sample session
+
+## 2026-05-30 — German domain: merged to main + promoted from _NewDomains
+
+**Result:** The German language domain (production, daily use since April 2026) is now merged into main and graduated from _NewDomains/ to a first-class domain. Main now describes the running system.
+
+### What landed
+- feat/german-html-interface (149 commits) merged into main — HTML server, german_domain.py (DEFAULT_USER), 11 Jinja2 templates, german.css, static/photos/
+- Graduation criteria met: active feedback loop, HTML interface in use, Telegram delivery, progress tracking, proven in real use
+
+### Open
+- Physical folder promotion (see task 1 audit) if files still live under _NewDomains/
