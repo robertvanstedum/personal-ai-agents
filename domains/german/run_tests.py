@@ -26,7 +26,7 @@ import textwrap
 from pathlib import Path
 
 PIPELINE_ROOT = Path(__file__).parent
-GERMAN_BASE = PIPELINE_ROOT / "language" / "german"
+GERMAN_BASE = PIPELINE_ROOT / "data"
 FIXTURES = PIPELINE_ROOT / "test_fixtures"
 
 sys.path.insert(0, str(PIPELINE_ROOT))
