@@ -295,7 +295,7 @@
                     <a href="{{ entry.link }}" target="_blank">{{ entry.title }}</a>
                 </h2>
 {% if entry.summary %}
-                <p class="card-summary">{{ entry.summary }}</p>
+                <p class="card-summary">{{ entry.summary | striptags | truncate(220, killwords=False) }}</p>
 {% endif %}
                 <div class="card-actions">
 {% if run_mode == 'dry-run' %}
