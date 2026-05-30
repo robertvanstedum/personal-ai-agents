@@ -20,10 +20,11 @@ from pathlib import Path
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 
-_BASE_DIR = Path(__file__).parent
-GERMAN_BASE = _BASE_DIR / "_NewDomains" / "language-german"
-GERMAN_DIR  = GERMAN_BASE / "language" / "german"
-VENV_PYTHON = _BASE_DIR / "venv" / "bin" / "python3"
+_BASE_DIR   = Path(__file__).parent          # domains/german/
+_REPO_ROOT  = _BASE_DIR.parent.parent        # repo root
+GERMAN_BASE = _BASE_DIR                      # domains/german/ (scripts run here)
+GERMAN_DIR  = _BASE_DIR / "data"             # domains/german/data/ (runtime data)
+VENV_PYTHON = _REPO_ROOT / "venv" / "bin" / "python3"
 ROBERT_CHAT_ID = 8379221702
 DEFAULT_USER = os.environ.get("GERMAN_USER", "robert")
 

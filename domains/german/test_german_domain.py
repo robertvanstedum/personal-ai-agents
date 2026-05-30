@@ -2,8 +2,8 @@
 test_german_domain.py — Test suite for german_domain.py (Group A)
 
 Usage:
-    python3 _NewDomains/language-german/test_german_domain.py
-    python3 _NewDomains/language-german/test_german_domain.py --test D03
+    python3 domains/german/test_german_domain.py
+    python3 domains/german/test_german_domain.py --test D03
     python3 test_reporter.py --stats --suite german_domain
 """
 

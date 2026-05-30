@@ -2278,8 +2278,8 @@ def _handle_webhook_german_transcript(text, chat_id, token):
     """Pass full message text to parse_transcript.py via subprocess (webhook mode)."""
     import tempfile
     send_message(token, chat_id, "⏳ Parsing German session transcript...")
-    german_dir = BASE_DIR / '_NewDomains/language-german'
-    sessions_dir = german_dir / 'language/german/sessions'
+    german_dir = BASE_DIR / 'domains' / 'german'
+    sessions_dir = german_dir / 'data' / 'sessions'
     sessions_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(mode='w', suffix='.txt',
                                      delete=False, encoding='utf-8') as f:
@@ -2289,7 +2289,7 @@ def _handle_webhook_german_transcript(text, chat_id, token):
         result = subprocess.run(
             ['python3', str(german_dir / 'parse_transcript.py'),
              '--input', tmp,
-             '--base-dir', str(german_dir / 'language/german')],
+             '--base-dir', str(german_dir / 'data')],
             capture_output=True, text=True
         )
         if result.returncode == 0:

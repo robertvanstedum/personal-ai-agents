@@ -34,8 +34,8 @@ BUNDLES = {
         ("VISION.md",        "VISION.pdf"),
     ],
     "german": [
-        ("_NewDomains/language-german/GERMAN_USER_GUIDE.md", "GERMAN_USER_GUIDE.pdf"),
-        ("_NewDomains/language-german/SPEC.md",              "GERMAN_SPEC.pdf"),
+        ("archive/german-build-2026/GERMAN_USER_GUIDE.md", "GERMAN_USER_GUIDE.pdf"),
+        ("archive/german-build-2026/SPEC.md",              "GERMAN_SPEC.pdf"),
     ],
 }
 

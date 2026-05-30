@@ -3,7 +3,7 @@
 watch_transcripts.py — Poll Dropbox inbox for German session transcripts and run pipeline.
 
 Usage:
-  cd _NewDomains/language-german
+  cd domains/german
   python3 watch_transcripts.py
 
 Stop:

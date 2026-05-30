@@ -39,7 +39,8 @@ from german_domain import (
     build_session_brief,
 )
 
-BASE_DIR = Path(__file__).parent
+BASE_DIR  = Path(__file__).parent           # domains/german/
+REPO_ROOT = BASE_DIR.parent.parent          # repo root
 
 # ── Tutor / Whereby config ────────────────────────────────────────────────────
 # Guest URL — safe to show in UI and share with conversation partner
@@ -48,7 +49,7 @@ WHEREBY_ROOM_URL  = os.environ.get("WHEREBY_ROOM_URL", "https://whereby.com/robe
 # Accessed only server-side via /api/whereby-join redirect.
 WHEREBY_HOST_URL  = os.environ.get("WHEREBY_HOST_URL", "")
 # Where tutor brief tokens are persisted (readable/writable by html_server.py)
-PORTAL_AUTH_DIR   = BASE_DIR / "minimoi_portal" / "auth"
+PORTAL_AUTH_DIR   = REPO_ROOT / "minimoi_portal" / "auth"
 
 app = Flask(
     __name__,
@@ -59,7 +60,7 @@ CORS(app)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400  # cache static files for 1 day
 
 # ── Persistent Flask secret key (needed for session during OAuth flow) ────────
-_secret_key_file = BASE_DIR / ".flask_secret"
+_secret_key_file = REPO_ROOT / ".flask_secret"
 if _secret_key_file.exists():
     app.secret_key = _secret_key_file.read_text().strip()
 else:

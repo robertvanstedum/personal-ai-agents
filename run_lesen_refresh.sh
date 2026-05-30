@@ -16,7 +16,7 @@ fi
 
 # ── Idempotency: skip if already refreshed today ─────────────────────────────
 TODAY=$(date +%Y-%m-%d)
-LESEN_JSON="$PROJECT_DIR/_NewDomains/language-german/language/german/config/lesen_articles.json"
+LESEN_JSON="$PROJECT_DIR/domains/german/data/config/lesen_articles.json"
 if [ -f "$LESEN_JSON" ]; then
     FILE_DATE=$(python3 -c "
 import json
@@ -36,6 +36,7 @@ echo "📰 Starting lesen refresh at $(date)..."
 source venv/bin/activate
 
 python3 -c "
+import sys; sys.path.insert(0, '$PROJECT_DIR/domains/german')
 from german_domain import refresh_lesen_feed
 result = refresh_lesen_feed()
 print(f'✅ Lesen refresh complete: {result}')
