@@ -222,6 +222,18 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
             nav_soup = BeautifulSoup(nav_html, "html.parser")
             body.insert(0, nav_soup)
 
+        # ── Inject per-app offset CSS so sticky elements clear the portal nav ─
+        if portal_prefix == "/app/curator":
+            offset_css = (
+                "body{padding-top:38px!important;}"
+                "nav.curator-subnav{top:38px!important;}"
+            )
+            style_tag = soup.new_tag("style")
+            style_tag.string = offset_css
+            head = soup.find("head")
+            if head:
+                head.append(style_tag)
+
         resp_headers.pop("Content-Type", None)
         return Response(
             str(soup).encode("utf-8"),

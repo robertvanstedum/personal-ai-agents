@@ -6,18 +6,124 @@
 <title>AI Observations — Curator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/curator.css">
 <style>
-/* ── Observations page — overrides & components ── */
+:root {
+  --bg: #f5f0e8;
+  --bg-texture: #ede8df;
+  --surface: #faf7f2;
+  --surface2: #f0ebe0;
+  --border: #ddd6c8;
+  --border2: #c8bfaf;
+  --text: #2a2418;
+  --text-muted: #6b5f4e;
+  --text-dim: #9e9080;
+  --accent: #8b5e2a;
+  --accent-dim: rgba(139,94,42,0.08);
+  --accent-glow: rgba(139,94,42,0.18);
+  --danger: #b03030;
+  --danger-dim: rgba(176,48,48,0.08);
+  --danger-border: rgba(176,48,48,0.25);
+  --ok: #2e7d52;
+  --ok-dim: rgba(46,125,82,0.08);
+  --ok-border: rgba(46,125,82,0.25);
+  --warn: #8b6e1a;
+  --warn-dim: rgba(139,110,26,0.08);
+  --warn-border: rgba(139,110,26,0.25);
+  --shadow: rgba(42,36,24,0.08);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Source Sans 3', sans-serif;
+  background: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* ── Sub-nav ── */
+nav.curator-subnav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 44px;
+  background: rgba(245,240,232,0.96);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 1.5rem;
+}
+.subnav-tab {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 0 14px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.subnav-tab:hover { color: var(--text); }
+.subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.subnav-focus { margin-left: auto; }
 
 /* ── Main layout ── */
 main {
   max-width: 780px;
   margin: 0 auto;
-  padding: 28px 24px 80px;
+  padding: 36px 24px 80px;
 }
 
-.page-header { margin-bottom: 20px; }
+.page-header { margin-bottom: 0; }
+
+.page-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 30px;
+  font-weight: 400;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.page-title em {
+  font-style: italic;
+  color: var(--accent);
+}
+
+.page-meta {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+  margin-top: 6px;
+}
+
+/* ── Section headers ── */
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  margin-top: 36px;
+}
 
 .section-header-row:first-of-type { margin-top: 20px; }
 
@@ -389,27 +495,20 @@ main {
 .toast.show { transform: translateY(0); opacity: 1; }
 .toast.ok   { background: var(--ok); }
 .toast.err  { background: var(--danger); }
-
 </style>
 </head>
-<body data-domain="curator" data-page="ai-observations" data-section="intelligence">
+<body data-domain="curator" data-page="ai-observations">
 
 <nav class="curator-subnav">
-  <a href="/" class="subnav-tab">Daily Briefing</a>
+  <a href="/" class="subnav-tab">Daily</a>
   <a href="/curator_library.html" class="subnav-tab">Library</a>
   <a href="/interests/2026/deep-dives/index.html" class="subnav-tab">Deep Dives</a>
   <a href="/curator_intelligence.html" class="subnav-tab active">Observations</a>
   <a href="/curator_priorities.html" class="subnav-tab subnav-focus">🎯 Focus</a>
 </nav>
 
-<div class="page-masthead">
-  <span class="masthead-label">Observations</span>
-  <span class="masthead-sub">Pattern Notes · Weekly Connections · Daily Signals</span>
-</div>
-
 <main>
   <div class="page-header">
-    <h1 class="page-title">AI <em>Observations</em></h1>
     <p class="page-meta" id="pageMeta">Loading…</p>
   </div>
 
@@ -813,10 +912,8 @@ document.addEventListener('DOMContentLoaded', () => {
 <script src="/research/static/js/annotations.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
-    if (typeof AnnotationSystem !== 'undefined') {
-      AnnotationSystem.initFloating();
-      AnnotationSystem.initSelectionPopup();
-    }
+    AnnotationSystem.initFloating();
+    AnnotationSystem.initSelectionPopup();
   });
 </script>
 </body>

@@ -6,37 +6,207 @@
 <title>Signal Priorities — Curator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/curator.css">
 <style>
-  /* ── Focus / Priorities page — overrides & components ── */
+  :root {
+    --bg: #f5f0e8;
+    --bg-texture: #ede8df;
+    --surface: #faf7f2;
+    --surface2: #f0ebe0;
+    --border: #ddd6c8;
+    --border2: #c8bfaf;
+    --text: #2a2418;
+    --text-muted: #6b5f4e;
+    --text-dim: #9e9080;
+    --accent: #8b5e2a;
+    --accent-dim: rgba(139,94,42,0.08);
+    --accent-glow: rgba(139,94,42,0.18);
+    --danger: #b03030;
+    --danger-dim: rgba(176,48,48,0.08);
+    --danger-border: rgba(176,48,48,0.25);
+    --ok: #2e7d52;
+    --ok-dim: rgba(46,125,82,0.08);
+    --ok-border: rgba(46,125,82,0.25);
+    --warn: #8b6e1a;
+    --warn-dim: rgba(139,110,26,0.08);
+    --warn-border: rgba(139,110,26,0.25);
+    --shadow: rgba(42,36,24,0.08);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Source Sans 3', sans-serif;
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    position: sticky;
+    top: 0;
+    background: rgba(245,240,232,0.94);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+    box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
+  }
+
+  .header-left {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+
+  .logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+    text-decoration: none;
+  }
+
+  .logo-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .header-nav {
+    display: flex;
+    gap: 4px;
+  }
+
+  .nav-link {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    letter-spacing: 0.05em;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+  }
+
+  .nav-link:hover { color: var(--text); background: var(--surface2); }
+  .nav-link.active {
+    color: var(--accent);
+    background: var(--accent-dim);
+    border-color: rgba(139,94,42,0.2);
+  }
+
+  /* ── Sub-nav ── */
+  nav.curator-subnav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    height: 44px;
+    background: rgba(245,240,232,0.96);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 1.5rem;
+  }
+
+  .subnav-tab {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 0 14px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s;
+  }
+
+  .subnav-tab:hover { color: var(--text); }
+  .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .subnav-focus { margin-left: auto; }
 
   /* ── Main layout ── */
   main {
     max-width: 860px;
     margin: 0 auto;
-    padding: 28px 24px 80px;
+    padding: 32px 32px 80px;
   }
 
-  .page-header { margin-bottom: 20px; }
+  /* ── Page title ── */
+  .page-header {
+    margin-bottom: 28px;
+  }
 
-  /* ── Stats bar (priorities variant: larger numbers in serif) ── */
+  .page-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 6px;
+  }
+
+  .page-title em { color: var(--accent); font-style: italic; }
+
+  .page-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Stats bar ── */
+  .stats-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+
   .stat-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     padding: 8px 16px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', monospace;
     font-size: 11px;
+    color: var(--text-muted);
     letter-spacing: 0.04em;
     box-shadow: 0 1px 3px var(--shadow);
   }
 
   .stat-pill strong {
     font-size: 18px;
-    font-family: var(--font-serif);
+    font-family: 'Playfair Display', serif;
     font-weight: 400;
     color: var(--text);
     letter-spacing: -0.02em;
+  }
+
+  .stat-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
   }
 
   /* ── Add Priority panel ── */
@@ -717,27 +887,20 @@
   }
   .feed-btn-save:hover { background: rgba(26,92,138,0.15); transform: scale(1.05); }
   .feed-action-btn:disabled { cursor: default; transform: none; }
-
 </style>
 </head>
-<body data-section="priorities">
+<body>
 
 <nav class="curator-subnav">
-  <a href="/" class="subnav-tab">Daily Briefing</a>
+  <a href="/" class="subnav-tab">Daily</a>
   <a href="/curator_library.html" class="subnav-tab">Library</a>
   <a href="/interests/2026/deep-dives/index.html" class="subnav-tab">Deep Dives</a>
   <a href="/curator_intelligence.html" class="subnav-tab">Observations</a>
   <a href="/curator_priorities.html" class="subnav-tab subnav-focus active">🎯 Focus</a>
 </nav>
 
-<div class="page-masthead">
-  <span class="masthead-label">Focus</span>
-  <span class="masthead-sub">Active Priorities · Signal Boosts · Expiry Tracking</span>
-</div>
-
 <main>
   <div class="page-header">
-    <h1 class="page-title">Signal <em>Priorities</em></h1>
     <p class="page-meta" id="pageMeta">Loading…</p>
   </div>
 

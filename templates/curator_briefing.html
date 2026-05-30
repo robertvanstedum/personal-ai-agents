@@ -1,768 +1,492 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Curator — Morning Briefing</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/research/static/css/annotations.css">
-  <link rel="stylesheet" href="/static/curator.css">
-  <style>
-    /* ── Daily Briefing — page-specific overrides (supplements curator.css) ── */
-    :root {
-      --bg:           #f5f0e8;
-      --bg-mid:       #ede7dc;
-      --surface:      #faf7f2;
-      --surface2:     #f0ebe0;
-      --border:       rgba(42, 31, 20, 0.15);
-      --shadow:       0 2px 12px rgba(42, 31, 20, 0.12);
-      --text:         #2a1f14;
-      --text-muted:   #7a6558;
-      --text-dim:     #9e9080;
-      --accent:       #8b4513;
-      --accent-light: #c8703a;
-      --accent-dim:   rgba(139, 69, 19, 0.08);
-      --font-serif: 'Playfair Display', Georgia, serif;
-      --font-sans:  'Source Sans 3', system-ui, sans-serif;
-      --font-mono:  'DM Mono', 'Courier New', monospace;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="curator-model" content="{{ model_display }}">
+    <meta name="curator-mode" content="{{ run_mode }}">
+    <meta name="curator-articles" content="{{ articles | length }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+    <title>Morning Briefing – {{ date_str }}</title>
+    <style>
+        :root {
+            --bg: #f5f0e8;
+            --bg-mid: #ede7dc;
+            --surface: #faf7f2;
+            --surface2: #f0ebe0;
+            --border: rgba(42,31,20,0.15);
+            --shadow: 0 2px 12px rgba(42,31,20,0.10);
+            --text: #2a1f14;
+            --text-muted: #7a6558;
+            --text-dim: #9e9080;
+            --accent: #8b4513;
+            --accent-light: #c8703a;
+            --accent-dim: rgba(139,69,19,0.08);
+            --font-serif: 'Playfair Display', Georgia, serif;
+            --font-sans: 'Source Sans 3', system-ui, sans-serif;
+            --font-mono: 'DM Mono', 'Courier New', monospace;
+        }
 
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { -webkit-text-size-adjust: 100%; }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    body {
-      font-family: var(--font-sans);
-      background: var(--bg);
-      color: var(--text);
-      font-size: 14px;
-      line-height: 1.5;
-      min-height: 100vh;
-    }
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg);
+            color: var(--text);
+            font-size: 14px;
+            line-height: 1.5;
+        }
 
-    a { color: inherit; text-decoration: none; }
+        /* ── Sub-nav ── */
+        nav.curator-subnav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            height: 44px;
+            background: rgba(245,240,232,0.96);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 1.5rem;
+        }
 
-    /* ── Curator sub-nav ── */
-    nav.curator-subnav {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      height: 44px;
-      background: rgba(245, 240, 232, 0.97);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border-bottom: 1px solid var(--border);
-      box-shadow: 0 1px 4px rgba(42, 31, 20, 0.06);
-      display: flex;
-      align-items: center;
-      padding: 0 1.5rem;
-      gap: 0;
-    }
+        .subnav-tab {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 0 14px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            border-bottom: 2px solid transparent;
+            transition: color 0.15s;
+        }
 
-    .subnav-tab {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-      text-decoration: none;
-      padding: 0 14px;
-      height: 44px;
-      display: flex;
-      align-items: center;
-      border-bottom: 2px solid transparent;
-      transition: color 0.15s;
-      white-space: nowrap;
-    }
-    .subnav-tab:hover { color: var(--text); }
-    .subnav-tab.active {
-      color: var(--accent);
-      border-bottom-color: var(--accent);
-    }
-    .subnav-focus { margin-left: auto; }
+        .subnav-tab:hover { color: var(--text); }
+        .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .subnav-focus { margin-left: auto; }
 
-    /* ── Main layout ── */
-    main.briefing-main {
-      max-width: 860px;
-      margin: 0 auto;
-      padding: 0 0 4rem;
-    }
+        /* ── Main layout ── */
+        main.briefing-main {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 28px 24px;
+        }
 
-    /* ── Newspaper inline rows ── */
-    .article-card {
-      display: flex;
-      align-items: baseline;
-      gap: 10px;
-      padding: 14px 20px;
-      border-bottom: 1px solid var(--border);
-      transition: background 0.1s;
-    }
-    .article-card:hover { background: rgba(139, 69, 19, 0.03); }
-    .article-card:last-child { border-bottom: none; }
+        .briefing-header {
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
 
-    /* Rank number */
-    .rank-badge {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--accent);
-      min-width: 16px;
-      flex-shrink: 0;
-      line-height: 1.6;
-    }
+        .briefing-date-label {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+        }
 
-    /* Left-border category accent bar */
-    .cat-bar {
-      width: 4px;
-      align-self: stretch;
-      border-radius: 2px;
-      flex-shrink: 0;
-      background: var(--bg-mid);
-      margin-top: 3px;
-      margin-bottom: 3px;
-    }
-    .cat-bar.cat-geo_major  { background: #2d6a2d; }
-    .cat-bar.cat-monetary   { background: #2d4a8a; }
-    .cat-bar.cat-fiscal     { background: #8a6a2d; }
-    .cat-bar.cat-other      { background: var(--text-dim); }
-    .cat-bar.cat-technology { background: #5a3a8a; }
-    .cat-bar.cat-geo_other  { background: #6a8a2d; }
+        .briefing-meta-label {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-dim);
+            letter-spacing: 0.06em;
+        }
 
-    /* Prose body — everything flows inline */
-    .row-prose {
-      flex: 1;
-      min-width: 0;
-      line-height: 1.6;
-    }
+        /* ── Article cards ── */
+        .article-list {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            background: var(--surface);
+            box-shadow: var(--shadow);
+        }
 
-    .row-source {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: var(--text-muted);
-      margin-right: 6px;
-    }
+        .article-card {
+            display: flex;
+            gap: 14px;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.1s;
+        }
 
-    .row-headline {
-      font-family: var(--font-serif);
-      font-size: 1.05rem;
-      font-weight: 600;
-      color: var(--text);
-      text-decoration: none;
-      line-height: 1.5;
-    }
-    .row-headline:hover { color: var(--accent); }
+        .article-card:last-child { border-bottom: none; }
+        .article-card:hover { background: var(--accent-dim); }
 
-    .row-summary {
-      font-family: var(--font-sans);
-      font-size: 0.88rem;
-      color: var(--text-muted);
-      margin-left: 3px;
-    }
+        .rank-badge {
+            width: 26px;
+            height: 26px;
+            background: var(--accent);
+            color: white;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
 
-    /* Right-side meta (score + time + actions) */
-    .row-meta {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      flex-shrink: 0;
-      white-space: nowrap;
-    }
+        .card-body { flex: 1; min-width: 0; }
 
-    .row-score {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: var(--text-dim);
-    }
-    .row-score.score-boosted { color: var(--accent-light); }
+        .card-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 5px;
+            flex-wrap: wrap;
+        }
 
-    .row-time {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: var(--text-dim);
-    }
+        .cat-badge {
+            font-family: var(--font-mono);
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 500;
+            padding: 2px 7px;
+            border-radius: 4px;
+            border: 1px solid transparent;
+        }
 
-    /* Icon-only action buttons */
-    .action-btn {
-      font-size: 0.85rem;
-      padding: 3px 9px;
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      background: transparent;
-      color: var(--text-muted);
-      cursor: pointer;
-      transition: all 0.15s;
-      white-space: nowrap;
-    }
-    .action-btn:hover:not(:disabled) {
-      background: var(--surface2);
-      color: var(--text);
-      border-color: rgba(42, 31, 20, 0.25);
-    }
-    .action-btn.activated {
-      background: var(--text);
-      color: var(--bg);
-      border-color: var(--text);
-    }
-    .action-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+        .cat-geo_major, .cat-geo_minor {
+            background: #e8f4e8; color: #2d6a2d; border-color: rgba(45,106,45,0.25);
+        }
+        .cat-monetary {
+            background: #e8eef8; color: #2d4a8a; border-color: rgba(45,74,138,0.25);
+        }
+        .cat-fiscal {
+            background: #f8f4e8; color: #8a6a2d; border-color: rgba(138,106,45,0.25);
+        }
+        .cat-geo_other, .cat-technology, .cat-other, .cat-unknown {
+            background: var(--bg-mid); color: var(--text-muted); border-color: var(--border);
+        }
 
-    .btn-dive {
-      background: var(--accent-dim) !important;
-      color: var(--accent) !important;
-      border-color: rgba(139, 69, 19, 0.3) !important;
-    }
-    .btn-dive:hover:not(:disabled) {
-      background: var(--accent) !important;
-      color: #fff !important;
-    }
+        .source-label {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: scale(0.9); }
-      to   { opacity: 1; transform: scale(1); }
-    }
+        .score-label {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-dim);
+            margin-left: auto;
+        }
 
-    /* ── Day toggle (Today / Yesterday) ── */
-    .day-toggle {
-      display: flex;
-      gap: 4px;
-    }
-    .day-btn {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      padding: 4px 12px;
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      background: transparent;
-      color: var(--text-muted);
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .day-btn:hover { color: var(--text); border-color: var(--text-muted); }
-    .day-btn.active {
-      background: var(--accent);
-      color: #fff;
-      border-color: var(--accent);
-    }
-    .day-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .time-label {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-dim);
+        }
 
-    /* ── Tier sections (paginated: only active visible) ── */
-    .tier-section { display: none; }
-    .tier-section.active { display: block; }
+        .card-title {
+            font-family: var(--font-serif);
+            font-size: 1.05rem;
+            font-weight: 600;
+            line-height: 1.35;
+            margin-bottom: 6px;
+        }
 
-    /* ── Single unified control bar: date · tier · nav · day toggle ── */
-    .briefing-bar {
-      display: flex;
-      align-items: center;
-      height: 40px;
-      padding: 0 16px;
-      border-bottom: 2px solid var(--border);
-      background: var(--surface);
-      gap: 0;
-      white-space: nowrap;
-    }
+        .card-title a {
+            color: var(--text);
+            text-decoration: none;
+        }
 
-    /* Date segment */
-    .bar-date {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: var(--text-muted);
-      padding-right: 12px;
-      border-right: 1px solid var(--border);
-      flex-shrink: 0;
-    }
+        .card-title a:hover { color: var(--accent); }
 
-    /* Tier name segment */
-    .bar-tier {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      padding: 0 12px;
-      border-right: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-    .bar-tier-label {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.09em;
-      color: var(--accent);
-    }
-    .bar-tier-num {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: var(--text-dim);
-    }
+        .card-summary {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            line-height: 1.55;
+            margin-bottom: 10px;
+        }
 
-    /* Prev/dots/Next navigation segment */
-    .bar-nav {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 0 12px;
-      border-right: 1px solid var(--border);
-    }
-    .bar-nav-btn {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 500;
-      letter-spacing: 0.05em;
-      color: var(--text-muted);
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 2px 4px;
-      transition: color 0.15s;
-      flex-shrink: 0;
-    }
-    .bar-nav-btn:hover:not(:disabled) { color: var(--text); }
-    .bar-nav-btn:disabled { opacity: 0.25; cursor: not-allowed; }
-    .bar-dots {
-      display: flex;
-      gap: 5px;
-      align-items: center;
-    }
-    .tier-dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: rgba(42,31,20,0.2);
-      cursor: pointer;
-      transition: all 0.15s;
-      flex-shrink: 0;
-    }
-    .tier-dot.active {
-      background: var(--accent);
-      transform: scale(1.25);
-    }
-    .tier-dot:hover:not(.active) { background: var(--text-dim); }
+        .card-actions {
+            display: flex;
+            gap: 6px;
+        }
 
-    /* Day toggle segment (right-aligned) */
-    .bar-day-toggle {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      margin-left: auto;
-      padding-left: 12px;
-    }
+        .action-btn {
+            font-size: 0.78rem;
+            font-weight: 500;
+            padding: 3px 12px;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
 
-    /* ── Loading overlay ── */
-    .list-loading {
-      text-align: center;
-      padding: 40px 20px;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--text-dim);
-    }
-  </style>
+        .action-btn:hover:not(:disabled) {
+            background: var(--bg-mid);
+            color: var(--text);
+        }
+
+        .action-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Deep dive button */
+        .btn-dive {
+            background: rgba(139,69,19,0.1) !important;
+            color: var(--accent) !important;
+            border-color: rgba(139,69,19,0.25) !important;
+        }
+        .btn-dive:hover:not(:disabled) {
+            background: rgba(139,69,19,0.18) !important;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to   { opacity: 1; transform: scale(1); }
+        }
+    </style>
+    <link rel="stylesheet" href="/research/static/css/annotations.css">
 </head>
-<body data-run-mode="{{ run_mode }}" data-domain="curator" data-page="daily" data-section="daily" data-topic=""
-      data-today="{{ briefing_date }}">
+<body data-run-mode="{{ run_mode }}" data-domain="curator" data-page="daily" data-topic="">
 
 <nav class="curator-subnav">
-  <a href="/" class="subnav-tab active">Daily Briefing</a>
-  <a href="/curator_library.html" class="subnav-tab">Library</a>
-  <a href="/interests/2026/deep-dives/index.html" class="subnav-tab">Deep Dives</a>
-  <a href="/curator_intelligence.html" class="subnav-tab">Observations</a>
-  <a href="/curator_priorities.html" class="subnav-tab subnav-focus">🎯 Focus</a>
+    <a href="/" class="subnav-tab active">Daily</a>
+    <a href="/curator_library.html" class="subnav-tab">Library</a>
+    <a href="/interests/2026/deep-dives/index.html" class="subnav-tab">Deep Dives</a>
+    <a href="/curator_intelligence.html" class="subnav-tab">Observations</a>
+    <a href="/curator_priorities.html" class="subnav-tab subnav-focus">🎯 Focus</a>
 </nav>
 
 <main class="briefing-main">
-
-  <!-- Single unified control bar -->
-  <div class="briefing-bar">
-    <span class="bar-date" id="briefingDateLabel">{{ day_str[:3] }}, {{ date_str }}</span>
-    <div class="bar-tier">
-      <span class="bar-tier-label" id="barTierLabel">Top Stories</span>
-      <span class="bar-tier-num" id="barTierNum">1–5</span>
+    <div class="briefing-header">
+        <span class="briefing-date-label">{{ day_str }}, {{ date_str }}</span>
+        <span class="briefing-meta-label">{{ model_display }}</span>
     </div>
-    <div class="bar-nav">
-      <button class="bar-nav-btn" id="btnPrev" onclick="changeTier(-1)" disabled>← Prev</button>
-      <div class="bar-dots">
-        <span class="tier-dot active" data-tier="1" onclick="goTier(1)" title="Top Stories"></span>
-        <span class="tier-dot" data-tier="2" onclick="goTier(2)" title="More Today"></span>
-        <span class="tier-dot" data-tier="3" onclick="goTier(3)" title="Also Today"></span>
-        <span class="tier-dot" data-tier="4" onclick="goTier(4)" title="In Brief"></span>
-      </div>
-      <button class="bar-nav-btn" id="btnNext" onclick="changeTier(1)">Next →</button>
-    </div>
-    <div class="bar-day-toggle">
-      <button class="day-btn active" id="btnToday" onclick="switchDay('today')">Today</button>
-      <button class="day-btn" id="btnYesterday" onclick="switchDay('yesterday')" disabled>Yesterday</button>
-    </div>
-  </div>
-
-  <div class="article-list" id="articleList">
-
-{% macro render_card(entry, rank, show_summary, dry_run) %}
-    <article class="article-card"
-             data-hash-id="{{ entry.hash_id }}"
-             data-rank="{{ rank }}"
-             data-title="{{ entry.title | replace("'", "\\'") | e }}"
-             data-url="{{ entry.link | e }}"
-             data-source="{{ entry.source | replace("'", "\\'") | e }}"
-             data-category="{{ entry.category }}">
-      <span class="rank-badge">{{ rank }}</span>
-      <span class="cat-bar cat-{{ entry.category | lower }}"></span>
-      <div class="row-prose">
-        <span class="row-source">{{ entry.source }}</span><a class="row-headline" href="{{ entry.link }}" target="_blank" rel="noopener">{{ entry.title }}</a>{% if entry.summary %}<span class="row-summary"> — {{ entry.summary }}</span>{% endif %}
-      </div>
-      <div class="row-meta">
-        {% if entry.interest_boosted %}
-          <span class="row-score score-boosted" title="Interest-boosted">{{ "%.1f" | format(entry.raw_score) }}★</span>
-        {% else %}
-          <span class="row-score">{{ "%.1f" | format(entry.raw_score) }}</span>
-        {% endif %}
-        <span class="row-time">{{ entry.time_ago }}</span>
-{% if dry_run %}
-        <button class="action-btn btn-like" disabled>👍</button>
-        <button class="action-btn btn-dislike" disabled>👎</button>
-        <button class="action-btn btn-save" disabled>💾</button>
-{% else %}
-        <button class="action-btn btn-like"    title="Like" onclick="showFeedback(this,'like',{{ rank }})">👍</button>
-        <button class="action-btn btn-dislike" title="Pass" onclick="showFeedback(this,'dislike',{{ rank }})">👎</button>
-        <button class="action-btn btn-save"    title="Save" onclick="showFeedback(this,'save',{{ rank }})">💾</button>
+    <div class="article-list">
+{% for entry in articles %}
+{% set rank = loop.index %}
+        <article class="article-card"
+                 data-hash-id="{{ entry.hash_id }}"
+                 data-rank="{{ rank }}"
+                 data-title="{{ entry.title | replace("'", "\\'") | e }}"
+                 data-url="{{ entry.link | e }}"
+                 data-source="{{ entry.source | replace("'", "\\'") | e }}"
+                 data-category="{{ entry.category }}">
+            <div class="rank-badge">{{ rank }}</div>
+            <div class="card-body">
+                <div class="card-meta">
+                    <span class="cat-badge cat-{{ entry.category | lower }}">{{ entry.category | lower }}</span>
+                    <span class="source-label">{{ entry.source }}</span>
+                    <span class="score-label">{{ "%.1f" | format(entry.raw_score) }}{% if entry.interest_boosted %} ⭐{% endif %}</span>
+                    <span class="time-label">{{ entry.time_ago }}</span>
+                </div>
+                <h2 class="card-title">
+                    <a href="{{ entry.link }}" target="_blank">{{ entry.title }}</a>
+                </h2>
+{% if entry.summary %}
+                <p class="card-summary">{{ entry.summary }}</p>
 {% endif %}
-      </div>
-    </article>
-{% endmacro %}
-
-{% set dry = (run_mode == 'dry-run') %}
-
-    <!-- Tier 1: Top Stories (1–5) — rank 1 shows summary (hero), ranks 2-5 compact -->
-    <div class="tier-section active" data-tier="1">
-      {% for entry in articles[0:5] %}
-        {{ render_card(entry, loop.index, loop.index == 1, dry) }}
-      {% endfor %}
+                <div class="card-actions">
+{% if run_mode == 'dry-run' %}
+                    <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled>👍 Like</button>
+                    <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled>👎 Pass</button>
+                    <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled>💾 Save</button>
+{% else %}
+                    <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', {{ rank }});">👍 Like</button>
+                    <button class="action-btn btn-dislike" title="Pass on this article" onclick="showFeedback(this, 'dislike', {{ rank }});">👎 Pass</button>
+                    <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', {{ rank }});">💾 Save</button>
+{% endif %}
+                </div>
+            </div>
+        </article>
+{% endfor %}
     </div>
-
-    <!-- Tier 2: More Today (6–10) — rank 6 shows summary (hero), ranks 7-10 compact -->
-    <div class="tier-section" data-tier="2">
-      {% for entry in articles[5:10] %}
-        {{ render_card(entry, loop.index + 5, loop.index == 1, dry) }}
-      {% endfor %}
-    </div>
-
-    <!-- Tier 3: Also Today (11–15) — no summaries -->
-    <div class="tier-section" data-tier="3">
-      {% for entry in articles[10:15] %}
-        {{ render_card(entry, loop.index + 10, false, dry) }}
-      {% endfor %}
-    </div>
-
-    <!-- Tier 4: In Brief (16–20) — no summaries -->
-    <div class="tier-section" data-tier="4">
-      {% for entry in articles[15:20] %}
-        {{ render_card(entry, loop.index + 15, false, dry) }}
-      {% endfor %}
-    </div>
-
-  </div>
-
 </main>
 
 <script>
-// ── Tier stepper ──────────────────────────────────────────────────────────────
-let currentTier = 1;
-const TOTAL_TIERS = 4;
-const TIER_LABELS = ['Top Stories', 'More Today', 'Also Today', 'In Brief'];
-const TIER_NUMS   = ['1–5', '6–10', '11–15', '16–20'];
-
-function goTier(n) {
-  if (n < 1 || n > TOTAL_TIERS) return;
-  // hide current
-  const prev = document.querySelector(`.tier-section[data-tier="${currentTier}"]`);
-  if (prev) prev.classList.remove('active');
-  document.querySelector(`.tier-dot[data-tier="${currentTier}"]`).classList.remove('active');
-  // show new
-  currentTier = n;
-  const next = document.querySelector(`.tier-section[data-tier="${currentTier}"]`);
-  if (next) next.classList.add('active');
-  document.querySelector(`.tier-dot[data-tier="${currentTier}"]`).classList.add('active');
-  document.getElementById('btnPrev').disabled = (currentTier === 1);
-  document.getElementById('btnNext').disabled = (currentTier === TOTAL_TIERS);
-  // update bar labels
-  const ti = currentTier - 1;
-  document.getElementById('barTierLabel').textContent = TIER_LABELS[ti];
-  document.getElementById('barTierNum').textContent = ['1–5','6–10','11–15','16–20'][ti];
-  // scroll back to top of list
-  document.getElementById('articleList').scrollIntoView({behavior:'smooth', block:'start'});
-}
-
-function changeTier(dir) { goTier(currentTier + dir); }
-
-// ── Today / Yesterday toggle ──────────────────────────────────────────────────
-(function() {
-  const todayDate = document.body.dataset.today || '';
-  const btnToday  = document.getElementById('btnToday');
-  const btnYest   = document.getElementById('btnYesterday');
-  const listEl    = document.getElementById('articleList');
-  const stepper   = document.getElementById('tierStepper');
-  const dateLabel = document.getElementById('briefingDateLabel');
-
-  function yesterdayStr(d) {
-    const dt = new Date(d + 'T12:00:00');
-    dt.setDate(dt.getDate() - 1);
-    return dt.toISOString().slice(0, 10);
-  }
-  function fmtDate(d) {
-    const dt = new Date(d + 'T12:00:00');
-    const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-    const MONS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-    return `${DAYS[dt.getDay()]}, ${MONS[dt.getMonth()]} ${dt.getDate()}, ${dt.getFullYear()}`;
-  }
-
-  const yDate = todayDate ? yesterdayStr(todayDate) : '';
-  let currentDay = 'today';
-
-  if (yDate) {
-    fetch(`/api/briefing?date=${yDate}`)
-      .then(r => { if (r.ok) btnYest.disabled = false; })
-      .catch(() => {});
-  }
-
-  function buildTierSections(articles) {
-    // Build 4 tier-section divs from flat articles array
-    const sections = [
-      { label: 'Top Stories', nums: '1–5',   slice: articles.slice(0, 5),   heroOnly: true  },
-      { label: 'More Today',  nums: '6–10',  slice: articles.slice(5, 10),  heroOnly: true  },
-      { label: 'Also Today',  nums: '11–15', slice: articles.slice(10, 15), heroOnly: false },
-      { label: 'In Brief',    nums: '16–20', slice: articles.slice(15, 20), heroOnly: false },
-    ];
-    let html = '';
-    sections.forEach((sec, si) => {
-      html += `<div class="tier-section${si === 0 ? ' active' : ''}" data-tier="${si + 1}">`;
-      sec.slice.forEach((entry, ei) => {
-        const rank = si * 5 + ei + 1;
-        const cat = (entry.category||'other').toLowerCase();
-        const score = entry.interest_boosted
-          ? `<span class="row-score score-boosted">${(+entry.raw_score).toFixed(1)}★</span>`
-          : `<span class="row-score">${(+entry.raw_score).toFixed(1)}</span>`;
-        const summaryHtml = entry.summary
-          ? `<span class="row-summary"> — ${entry.summary.replace(/[<>]/g, c => c==='<'?'&lt;':'&gt;')}</span>`
-          : '';
-        html += `
-        <article class="article-card"
-                 data-hash-id="${entry.hash_id||''}"
-                 data-rank="${rank}"
-                 data-title="${(entry.title||'').replace(/"/g,'&quot;')}"
-                 data-url="${entry.link||''}"
-                 data-source="${(entry.source||'').replace(/"/g,'&quot;')}"
-                 data-category="${cat}">
-          <span class="rank-badge">${rank}</span>
-          <span class="cat-bar cat-${cat}"></span>
-          <div class="row-prose">
-            <span class="row-source">${entry.source||''}</span><a class="row-headline" href="${entry.link||'#'}" target="_blank" rel="noopener">${entry.title||''}</a>${summaryHtml}
-          </div>
-          <div class="row-meta">
-            ${score}
-            <span class="row-time">${entry.time_ago||''}</span>
-            <button class="action-btn btn-like"    onclick="showFeedback(this,'like',${rank})">👍</button>
-            <button class="action-btn btn-dislike" onclick="showFeedback(this,'dislike',${rank})">👎</button>
-            <button class="action-btn btn-save"    onclick="showFeedback(this,'save',${rank})">💾</button>
-          </div>
-        </article>`;
-      });
-      html += '</div>';
-    });
-    return html;
-  }
-
-  window.switchDay = function(day) {
-    if (day === currentDay) return;
-    currentDay = day;
-    btnToday.classList.toggle('active', day === 'today');
-    btnYest.classList.toggle('active', day === 'yesterday');
-
-    if (day === 'today') { location.reload(); return; }
-
-    listEl.innerHTML = '<div class="list-loading">Loading…</div>';
-    const dl = document.getElementById('briefingDateLabel');
-    if (dl) { const d = new Date(yDate+'T12:00:00'); dl.textContent = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]+', '+fmtDate(yDate); }
-    fetch(`/api/briefing?date=${yDate}`)
-      .then(r => r.json())
-      .then(data => {
-        listEl.innerHTML = buildTierSections(data.articles);
-        // reset stepper
-        currentTier = 1;
-        document.querySelectorAll('.tier-dot').forEach((d, i) => d.classList.toggle('active', i === 0));
-        document.getElementById('btnPrev').disabled = true;
-        document.getElementById('btnNext').disabled = false;
-      })
-      .catch(() => { listEl.innerHTML = '<div class="list-loading">No archive for yesterday.</div>'; });
-  };
-})();
-</script>
-
-<script>
 function showFeedback(button, action, rank) {
-  const card = button.closest('.article-card');
-  const articleData = {
-    id:       card.dataset.hashId  || `row-${rank}`,
-    title:    card.dataset.title   || 'Unknown',
-    link:     card.dataset.url     || '#',
-    source:   card.dataset.source  || 'Unknown',
-    category: card.dataset.category || 'other'
-  };
+    const row = button.closest('.article-card');
+    const articleData = {
+        id: row.dataset.hashId || `row-${rank}`,
+        title: row.dataset.title || 'Unknown',
+        link: row.dataset.url || '#',
+        source: row.dataset.source || 'Unknown',
+        category: row.dataset.category || 'other'
+    };
 
-  button.style.opacity = '0.3';
-  button.disabled = true;
+    button.style.opacity = '0.3';
+    button.style.cursor = 'not-allowed';
+    button.disabled = true;
 
-  fetch('http://localhost:8766/feedback', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, rank, article: articleData })
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.success) {
-      card.querySelectorAll('.action-btn').forEach(btn => {
-        btn.disabled = true;
-        if (btn === button) {
-          btn.classList.add('activated');
-          btn.style.opacity = '1';
-        } else {
-          btn.style.opacity = '0.2';
-        }
-      });
-      showToast(data.message || `Article #${rank} ${action}d`, 'success');
-      if (action === 'like' || action === 'save') {
-        addDeepDiveButton(rank, card.dataset.hashId);
-      }
-    } else {
-      button.style.opacity = '1';
-      button.disabled = false;
-      showToast(data.message || 'Error saving feedback', 'error');
-    }
-  })
-  .catch(err => {
-    console.error('Feedback error:', err);
-    button.style.opacity = '1';
-    button.disabled = false;
-    showToast('Server error — is curator_server.py running?', 'error');
-  });
+    fetch('http://localhost:8766/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: action, rank: rank, article: articleData })
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const row = button.closest('.article-card');
+                const allBtns = row.querySelectorAll('.action-btn');
+                allBtns.forEach(function(btn) {
+                    btn.disabled = true;
+                    btn.style.cursor = 'not-allowed';
+                    if (btn === button) {
+                        btn.innerHTML = btn.textContent + ' ✓';
+                        btn.style.opacity = '1';
+                        btn.style.fontWeight = '700';
+                        btn.style.boxShadow = '0 0 0 2px currentColor';
+                    } else {
+                        btn.style.opacity = '0.2';
+                    }
+                });
+                showToast(data.message || 'Article #' + rank + ' ' + action + 'd', 'success');
+                if (action === 'like' || action === 'save') {
+                    const hashId = button.closest('.article-card').dataset.hashId;
+                    addDeepDiveButton(rank, hashId);
+                }
+            } else {
+                button.style.opacity = '1';
+                button.style.cursor = 'pointer';
+                button.disabled = false;
+                showToast(data.message || 'Error saving feedback', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Feedback error:', error);
+            button.style.opacity = '1';
+            button.style.cursor = 'pointer';
+            button.disabled = false;
+            showToast('Server error — is curator_server.py running?', 'error');
+        });
 }
 
 function showToast(message, type) {
-  const toast = document.createElement('div');
-  toast.textContent = message;
-  const bg = type === 'error' ? '#b03030' : '#2e7d52';
-  toast.style.cssText = `position:fixed;top:90px;right:20px;background:${bg};color:#fff;
-    padding:10px 18px;border-radius:6px;font-weight:500;font-size:13px;
-    box-shadow:0 4px 12px rgba(0,0,0,0.2);z-index:9999;
-    opacity:0;transform:translateY(-12px);transition:all 0.25s ease;`;
-  document.body.appendChild(toast);
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    toast.style.opacity = '1';
-    toast.style.transform = 'translateY(0)';
-  }));
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateY(-12px)';
-    setTimeout(() => toast.parentNode && toast.parentNode.removeChild(toast), 280);
-  }, 2500);
+    type = type || 'success';
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    var bgColor = (type === 'error') ? '#ef4444' : '#10b981';
+    toast.style.cssText = 'position:fixed;top:20px;right:20px;background:' + bgColor + ';color:white;padding:12px 20px;border-radius:8px;font-weight:500;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:9999;opacity:0;transform:translateY(-20px);transition:all 0.3s ease;';
+    document.body.appendChild(toast);
+    requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateY(0)';
+        });
+    });
+    setTimeout(function() {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-20px)';
+        setTimeout(function() { if (toast.parentNode) document.body.removeChild(toast); }, 300);
+    }, 2500);
 }
 
 function showDeepDiveModal(rank, hashId, diveBtn) {
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
-  const modal = document.createElement('div');
-  modal.style.cssText = 'background:#faf7f2;padding:28px;border-radius:10px;max-width:480px;width:90%;box-shadow:0 8px 32px rgba(42,31,20,0.25);font-family:system-ui,sans-serif;';
-  modal.innerHTML = `
-    <h2 style="margin:0 0 8px;font-family:'Playfair Display',serif;font-size:1.2rem;color:#2a1f14;">Deep Dive</h2>
-    <p style="color:#7a6558;font-size:0.875rem;margin-bottom:18px;line-height:1.5;">Generates a research briefing tailored to your interests (~30s, ~$0.15).</p>
-    <label style="display:block;margin-bottom:6px;font-size:0.82rem;font-weight:600;color:#4a3728;text-transform:uppercase;letter-spacing:0.05em;">What interests you?</label>
-    <textarea id="interest-input" placeholder="e.g., Geopolitical implications, economic impact, contrarian views…"
-      style="width:100%;padding:9px 11px;border:1px solid rgba(42,31,20,0.2);border-radius:6px;font-size:0.9rem;min-height:72px;font-family:inherit;margin-bottom:14px;background:#f5f0e8;color:#2a1f14;resize:vertical;"></textarea>
-    <label style="display:block;margin-bottom:6px;font-size:0.82rem;font-weight:600;color:#4a3728;text-transform:uppercase;letter-spacing:0.05em;">Focus areas (optional)</label>
-    <input id="focus-input" type="text" placeholder="e.g., Historical precedents, key players, data sources…"
-      style="width:100%;padding:9px 11px;border:1px solid rgba(42,31,20,0.2);border-radius:6px;font-size:0.9rem;font-family:inherit;margin-bottom:20px;background:#f5f0e8;color:#2a1f14;">
-    <div style="display:flex;gap:10px;justify-content:flex-end;">
-      <button id="modal-cancel"
-        style="padding:8px 18px;border:1px solid rgba(42,31,20,0.2);background:transparent;border-radius:6px;cursor:pointer;font-size:0.875rem;color:#7a6558;">Cancel</button>
-      <button id="modal-submit"
-        style="padding:8px 18px;border:none;background:#8b4513;color:#fff;border-radius:6px;cursor:pointer;font-size:0.875rem;font-weight:600;">Generate</button>
-    </div>`;
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-  document.getElementById('interest-input').focus();
-  document.getElementById('modal-cancel').onclick = () => document.body.removeChild(overlay);
-  overlay.onclick = e => { if (e.target === overlay) document.body.removeChild(overlay); };
-  document.getElementById('modal-submit').onclick = () => {
-    const interest = document.getElementById('interest-input').value.trim();
-    const focus    = document.getElementById('focus-input').value.trim();
-    if (!interest) { alert('Please describe what interests you.'); return; }
-    document.body.removeChild(overlay);
-    diveBtn.disabled = true;
-    diveBtn.textContent = '⏳ Analyzing…';
-    let url = `http://localhost:8766/deepdive?hash_id=${hashId}&interest=${encodeURIComponent(interest)}`;
-    if (focus) url += `&focus=${encodeURIComponent(focus)}`;
-    fetch(url)
-      .then(r => r.json())
-      .then(data => {
-        if (data.success && data.html_path) {
-          window.open(data.html_path, '_blank');
-          diveBtn.textContent = '📖 View Again';
-          diveBtn.disabled = false;
-          diveBtn.onclick = () => window.open(data.html_path, '_blank');
-        } else {
-          diveBtn.textContent = '✅ Done';
-          diveBtn.disabled = false;
-          showToast(data.message || 'Deep dive complete!', 'success');
-        }
-      })
-      .catch(err => {
-        console.error('Deep dive error:', err);
-        diveBtn.textContent = '❌ Failed';
-        diveBtn.disabled = false;
-        showToast('Deep dive failed. Is curator_server.py running?', 'error');
-      });
-  };
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+    var modal = document.createElement('div');
+    modal.style.cssText = 'background:white;padding:30px;border-radius:12px;max-width:500px;width:90%;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+    modal.innerHTML = '<h2 style="margin:0 0 20px 0;color:#2c3e50;">Deep Dive Analysis</h2>' +
+        '<p style="color:#666;margin-bottom:20px;">Generates a research briefing tailored to your interests.</p>' +
+        '<label style="display:block;margin-bottom:8px;font-weight:600;color:#2c3e50;">What interests you about this article?</label>' +
+        '<textarea id="interest-input" placeholder="e.g., Geopolitical implications, economic impact..." style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;min-height:80px;font-family:inherit;margin-bottom:20px;box-sizing:border-box;"></textarea>' +
+        '<label style="display:block;margin-bottom:8px;font-weight:600;color:#2c3e50;">Specific focus areas? (optional)</label>' +
+        '<input id="focus-input" type="text" placeholder="e.g., Historical precedents, key players..." style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;font-family:inherit;margin-bottom:20px;box-sizing:border-box;">' +
+        '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
+        '<button id="modal-cancel" style="padding:10px 20px;border:1px solid #ddd;background:white;border-radius:6px;cursor:pointer;font-weight:500;">Cancel</button>' +
+        '<button id="modal-submit" style="padding:10px 20px;border:none;background:#f39c12;color:white;border-radius:6px;cursor:pointer;font-weight:500;">Generate (~30s, $0.15)</button>' +
+        '</div>';
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    document.getElementById('interest-input').focus();
+
+    document.getElementById('modal-cancel').onclick = function() { document.body.removeChild(overlay); };
+
+    document.getElementById('modal-submit').onclick = function() {
+        var interest = document.getElementById('interest-input').value.trim();
+        var focus = document.getElementById('focus-input').value.trim();
+        if (!interest) { alert('Please describe what interests you about this article.'); return; }
+        document.body.removeChild(overlay);
+        diveBtn.disabled = true;
+        diveBtn.textContent = '⏳ Analyzing...';
+        diveBtn.style.opacity = '0.6';
+        var url = 'http://localhost:8766/deepdive?hash_id=' + hashId + '&interest=' + encodeURIComponent(interest);
+        if (focus) url += '&focus=' + encodeURIComponent(focus);
+        fetch(url)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success && data.html_path) {
+                    window.open(data.html_path, '_blank');
+                    diveBtn.textContent = '✅ View Again';
+                    diveBtn.style.background = '#27ae60';
+                    diveBtn.disabled = false;
+                    diveBtn.style.opacity = '1';
+                    diveBtn.onclick = function() { window.open(data.html_path, '_blank'); };
+                } else {
+                    diveBtn.textContent = '✅ Done';
+                    diveBtn.disabled = false;
+                    diveBtn.style.opacity = '1';
+                    showToast(data.message || 'Deep dive complete!', 'success');
+                }
+            })
+            .catch(function(error) {
+                console.error('Deep dive error:', error);
+                diveBtn.textContent = '❌ Failed';
+                diveBtn.style.background = '#e74c3c';
+                diveBtn.disabled = false;
+                diveBtn.style.opacity = '1';
+                showToast('Deep dive failed. Is curator_server.py running?', 'error');
+            });
+    };
+
+    overlay.onclick = function(e) { if (e.target === overlay) document.body.removeChild(overlay); };
 }
 
 function addDeepDiveButton(rank, hashId) {
-  const cards = document.querySelectorAll('.article-card');
-  for (const card of cards) {
-    const badge = card.querySelector('.rank-badge');
-    if (badge && badge.textContent.trim() === String(rank)) {
-      const actions = card.querySelector('.row-meta');
-      if (!actions || actions.querySelector('.btn-dive')) return;
-      const diveBtn = document.createElement('button');
-      diveBtn.className = 'action-btn btn-dive';
-      diveBtn.textContent = '🔍 Deep Dive';
-      diveBtn.style.animation = 'fadeIn 0.3s ease';
-      const isDryRun = document.body.getAttribute('data-run-mode') === 'dry-run';
-      if (isDryRun) {
-        diveBtn.disabled = true;
-        diveBtn.title = 'Dry run — disabled';
-      } else {
-        diveBtn.onclick = () => showDeepDiveModal(rank, hashId, diveBtn);
-      }
-      actions.appendChild(diveBtn);
-      break;
+    var cards = document.querySelectorAll('.article-card');
+    for (var i = 0; i < cards.length; i++) {
+        var card = cards[i];
+        if (card.dataset.rank == rank) {
+            var cardActions = card.querySelector('.card-actions');
+            if (!cardActions || cardActions.querySelector('.btn-dive')) return;
+            var diveBtn = document.createElement('button');
+            diveBtn.className = 'action-btn btn-dive';
+            diveBtn.textContent = '🔖 Dive';
+            var isDryRun = document.body.getAttribute('data-run-mode') === 'dry-run';
+            if (isDryRun) {
+                diveBtn.title = 'Dry run — buttons disabled';
+                diveBtn.disabled = true;
+            } else {
+                diveBtn.title = 'Request deep dive analysis (~30s, ~$0.15)';
+                diveBtn.onclick = (function(r, h, b) {
+                    return function() { showDeepDiveModal(r, h, b); };
+                })(rank, hashId, diveBtn);
+            }
+            diveBtn.style.animation = 'fadeIn 0.3s ease';
+            cardActions.insertBefore(diveBtn, cardActions.firstChild);
+            break;
+        }
     }
-  }
 }
 </script>
 
 <script src="/research/static/js/annotations.js"></script>
 <script>
-  document.addEventListener('DOMContentLoaded', () => {
-    if (typeof AnnotationSystem !== 'undefined') {
-      AnnotationSystem.initFloating();
-      AnnotationSystem.initSelectionPopup();
-    }
-  });
+    document.addEventListener('DOMContentLoaded', () => {
+        AnnotationSystem.initFloating();
+        AnnotationSystem.initSelectionPopup();
+    });
 </script>
-
 </body>
 </html>
