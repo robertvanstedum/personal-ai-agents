@@ -23,6 +23,7 @@ These shape every choice that follows.
 3. **Domains stay independent.** Thin adapters and summary contracts. The spine *connects* the domains; it does not absorb them.
 4. **Standards over bespoke.** Adopt the converged open standards — MCP, AGENTS.md, OpenAI-compatible APIs — so the system interops and stays unlocked from any one vendor. Writing custom agent plumbing in 2026 is writing technical debt.
 5. **Investigate before committing — and keep investigating after.** For load-bearing choices — the spine above all — prototype on real Curator and German data before locking. And because the landscape shifts under any locked choice, the investigation never fully ends; it becomes a standing function (see *The Chief of Staff as technology radar*).
+6. **Bones first, then deepen with input.** Put the structure in place early — light, simple, working end to end — and deepen it incrementally as the leader guides it. A light insight-and-learning loop that round-trips correctly beats an elaborate one that doesn't, and the skeleton being real from day one is what lets it grow under direction rather than being rebuilt.
 
 ---
 
@@ -30,34 +31,34 @@ These shape every choice that follows.
 
 ```mermaid
 flowchart TB
-    subgraph IF [Interfaces]
-        TG[Telegram] 
-        HT[HTML / Portal / Hub]
-    end
-    subgraph DM [Domains — independent]
-        CU[Curator]
-        DE[Mein Deutsch]
-        GU[Guild]
-    end
-    GW[Model gateway<br/>routing · A/B · cost tracking]
-    subgraph MD [Models — swappable]
-        AN[Anthropic]
-        XA[xAI]
-        LO[Local · Ollama]
-    end
-    subgraph SP [The spine]
-        RE[(Relational<br/>Postgres)]
-        GR[(Graph + temporal memory)]
-        VE[(Vectors)]
-    end
-    IO[Interop · MCP tools / A2A agents]
+ subgraph IF [Interfaces]
+ TG[Telegram]
+ HT[HTML / Portal / Hub]
+ end
+ subgraph DM [Domains — independent]
+ CU[Curator]
+ DE[Mein Deutsch]
+ GU[Guild]
+ end
+ GW[Model gateway<br/>routing · A/B · cost tracking]
+ subgraph MD [Models — swappable]
+ AN[Anthropic]
+ XA[xAI]
+ LO[Local · Ollama]
+ end
+ subgraph SP [The spine]
+ RE[(Relational<br/>Postgres)]
+ GR[(Graph + temporal memory)]
+ VE[(Vectors)]
+ end
+ IO[Interop · MCP tools / A2A agents]
 
-    IF --> DM
-    DM --> GW --> MD
-    DM --> SP
-    GU <--> SP
-    DM <--> IO
-    GU <--> IO
+ IF --> DM
+ DM --> GW --> MD
+ DM --> SP
+ GU <--> SP
+ DM <--> IO
+ GU <--> IO
 ```
 
 Four decisions define the build. Three of the four have a settled standard; the spine is the one that needs a real bake-off.
@@ -144,9 +145,9 @@ This very document was run #1 of that loop, performed by hand. The function is t
 Phases 1–2 of the charter, made concrete. The theme is *prove the loop, not the breadth.*
 
 - **Week 1 — Foundations.** Ship the look-and-feel cleanups (Hub + Curator standardization, specced separately). Establish `AGENTS.md` + importing `CLAUDE.md` so Claude and Cursor are aligned from here forward. Stand up the model gateway (LiteLLM, pinned ≥ v1.83.0); route existing domain model calls through it; capture a baseline cost-per-call.
-- **Week 2 — Spine bake-off.** Stand up Candidate A (Postgres + AGE + pgvector) and Candidate B (Postgres + Neo4j + Graphiti) locally. Load one month of real Curator + German data into each. Write the 10–15 temporal/cross-domain benchmark queries.
-- **Week 3 — Decide and migrate.** Pick the spine on the evidence. Begin migrating domain data into the chosen store *behind the summary contract* — the Hub already reads the contract, so nothing downstream changes.
-- **Week 4 — First intelligence loop.** One real "remember → adjust" behavior, end to end (e.g., Curator novelty/feedback memory, or German error-pattern memory — the persistent `Mein Frau → Meine Frau` class of correction), writing to and reading from the spine. One loop working beats five half-built.
+- **Week 2 — Spine bake-off.** Stand up Candidate A (Postgres + AGE + pgvector) and Candidate B (Postgres + Neo4j + Graphiti) locally. Load one month of real Curator + German data into each. Write the 10–15 temporal/cross-domain benchmark queries. Add a short Candidate C probe: spin up RyuGraph (embedded) on the same dataset for ~2 hours and clock startup time and query latency — near-zero ops, completes the picture before committing RAM. **Time-box the whole investigation to 3 days.** The decision rule (real data + benchmark queries) protects against a bad pick; the box protects against the rabbit hole. Decide on the evidence and move.
+- **Week 3 — Decide and migrate; lay the Chief-of-Staff bones.** Pick the spine on the evidence. Begin migrating domain data into the chosen store *behind the summary contract* — the Hub already reads the contract, so nothing downstream changes. In the same week, stand up the **skeleton of the Chief of Staff, cross-domain from day one** — light, not elaborate. It reads across all domains through the summary contract that already exists (the Hub's per-domain aggregation *is* the first cross-domain read), and it does the simplest useful thing: notice what's fresh, what's stale, what's waiting. Bones now; depth later, under the leader's direction. No premature MCP — the cross-domain read rides the contract, not an interface built ahead of an unsettled spine.
+- **Week 4 — First intelligence loop.** One real "remember → adjust" behavior, end to end: **Curator feedback → adjusted briefing weights tomorrow** — highest leverage because it runs on data you already have and you feel the win immediately. The constraint that makes it count: it must **round-trip the new spine** — write the feedback to and read the weights from the chosen store, not shortcut through the existing `curator_preferences.json`. The point of the week is to prove the remember→adjust→spine loop works end to end, so a demo that bypasses the spine is a win that didn't validate the thing it was for. Keep it light — one loop working, bones in place to deepen later — beats five half-built.
 
 Throughout: every internal capability an agent calls gets exposed as an MCP server as it's built.
 
@@ -154,9 +155,9 @@ Throughout: every internal capability an agent calls gets exposed as an MCP serv
 
 ## July–September evolution
 
-- **July — Deepen the intelligence.** Build the cross-domain model of the user in the temporal graph (language goals × research interests × work intent as connected, time-aware facts). Expand the remember/adjust loops per domain. Stand up the **Chief-of-Staff function** as a real service over the spine: the intent register, the domain-health watch (which also powers the Hub's failure alerts), and the technology radar (scan/flag/advise/recommend, on a cadence) reusing Curator's pipeline pointed inward at the stack.
+- **July — Deepen the intelligence.** Build the cross-domain model of the user in the temporal graph (language goals × research interests × work intent as connected, time-aware facts). Expand the remember/adjust loops per domain. **Deepen** the Chief-of-Staff skeleton stood up in June into a fuller service over the spine: the intent register, the domain-health watch (which also powers the Hub's failure alerts), and the technology radar (scan/flag/advise/recommend, on a cadence) reusing Curator's pipeline pointed inward at the stack. First concrete radar output: a nightly job that reads the `requirements/` folder and the repo's git history and produces one readable **"Stack Radar — June 2026"** markdown — small, real, and run #2 of the loop this document was run #1 of.
 - **August — Agent coordination.** Introduce A2A for agent-to-agent delegation; let the Chief-of-Staff agent coordinate the domain agents through it. Begin exposing select capabilities for cross-agent use. Model and assistant routing become data-driven from gateway metrics rather than judgment calls.
-- **September — Extendability and hardening.** Generalize the operating model beyond a single user — the charter's "extendable" claim made real. Align with the Q3 2026 MCP/A2A joint spec. Add observability (OpenTelemetry across the protocol layer). Graduate Guild from `_NewDomains` into a first-class domain.
+- **September — Extendability and hardening.** Generalize the operating model beyond a single user — the charter's "extendable" claim made real, and made *testable*: a concrete milestone — an invite link that works for one family member, giving them a read-only view of their own domain cards. A promise you can check beats one you assert. Align with the Q3 2026 MCP/A2A joint spec. Add observability (OpenTelemetry across the protocol layer). Graduate Guild from `_NewDomains` into a first-class domain.
 
 ---
 
@@ -164,7 +165,7 @@ Throughout: every internal capability an agent calls gets exposed as an MCP serv
 
 - **Spine:** A vs B vs C, decided on the real-data benchmark — not before.
 - **Memory build-vs-buy:** owned markdown-vault + semantic search vs Graphiti / Mem0 / Cognee. Likely a hybrid (owned vault + one engine).
-- **Chief-of-Staff split:** how much of its logic is deterministic (scheduling, health) vs model-driven (intent synthesis).
+- **Chief-of-Staff split:** the cross-domain bones go in early on the summary contract; the open part is how much of the *deepened* logic is deterministic (scheduling, health) vs model-driven (intent synthesis, radar judgment) — settled as it grows under direction, not up front.
 - **Local model tier:** which local models earn their place behind the gateway, decided by A/B.
 
 ---

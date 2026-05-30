@@ -44,20 +44,20 @@ It is built and proven against one real person's daily life, which is what keeps
 
 ```mermaid
 flowchart TB
-    H([Human — intent and feedback])
-    subgraph platform [mini-moi]
-        direction LR
-        C[Curator<br/>research and news]
-        D[Mein Deutsch<br/>language]
-        G[Guild<br/>operating model and intelligence]
-    end
-    S[(Shared spine<br/>Postgres + Neo4j)]
-    H --> C
-    H --> D
-    H --> G
-    C --> S
-    D --> S
-    G <--> S
+ H([Human — intent and feedback])
+ subgraph platform [mini-moi]
+ direction LR
+ C[Curator<br/>research and news]
+ D[Mein Deutsch<br/>language]
+ G[Guild<br/>operating model and intelligence]
+ end
+ S[(Shared spine<br/>Postgres + Neo4j)]
+ H --> C
+ H --> D
+ H --> G
+ C --> S
+ D --> S
+ G <--> S
 ```
 
 The functional domains are independent — three proud, standalone systems, not a monolith. What unites them is approach and a shared goal: a system that learns *you* — why you're doing the thing, where you're going, and what you specifically struggle with.

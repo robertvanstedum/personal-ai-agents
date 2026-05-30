@@ -5,17 +5,114 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../../../static/curator.css">
     <title>Deep Dive Archive</title>
     <style>
-        /* ── Deep Dives index — overrides ── */
+        :root {
+            --bg: #f5f0e8;
+            --bg-texture: #ede8df;
+            --surface: #faf7f2;
+            --surface2: #f0ebe0;
+            --border: #ddd6c8;
+            --text: #2a2418;
+            --text-muted: #6b5f4e;
+            --text-dim: #9e9080;
+            --accent: #8b5e2a;
+            --accent-dim: rgba(139,94,42,0.08);
+            --shadow: rgba(42,36,24,0.08);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Source Sans 3', sans-serif;
+            background: var(--bg);
+            background-image:
+                radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
+            color: var(--text);
+            min-height: 100vh;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        header {
+            border-bottom: 0.5px solid var(--border);
+            padding: 0 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 60px;
+            position: sticky;
+            top: 0;
+            background: rgba(245,240,232,0.95);
+            backdrop-filter: blur(12px);
+            z-index: 100;
+        }
+
+        .header-left { display: flex; align-items: baseline; gap: 16px; }
+
+        .logo {
+            font-family: 'Playfair Display', serif;
+            font-size: 20px;
+            color: var(--accent);
+            letter-spacing: -0.02em;
+            text-decoration: none;
+        }
+
+        .logo-sub {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .header-nav { display: flex; gap: 4px; }
+
+        .nav-link {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            letter-spacing: 0.05em;
+            transition: all 0.15s;
+            border: 1px solid transparent;
+        }
+
+        .nav-link:hover { color: var(--text); background: var(--surface2); }
+
+        .nav-link.active {
+            color: var(--accent);
+            background: var(--accent-dim);
+            border-color: rgba(139,94,42,0.2);
+        }
+
         main {
             max-width: 900px;
             margin: 0 auto;
-            padding: 28px 24px 60px;
+            padding: 36px 32px 60px;
         }
 
-        .page-header { margin-bottom: 28px; }
+        .page-header { margin-bottom: 36px; }
+
+        .page-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 28px;
+            font-weight: 400;
+            color: var(--text);
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+            margin-bottom: 6px;
+        }
+
+        .page-meta {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            letter-spacing: 0.04em;
+        }
 
         /* ── Section ── */
         .section {
@@ -195,24 +292,25 @@
         }
     </style>
 </head>
-<body data-section="deep-dives">
-<nav class="curator-subnav">
-  <a href="../../../" class="subnav-tab">Daily Briefing</a>
-  <a href="../../../curator_library.html" class="subnav-tab">Library</a>
-  <a href="../../../interests/2026/deep-dives/index.html" class="subnav-tab active">Deep Dives</a>
-  <a href="../../../curator_intelligence.html" class="subnav-tab">Observations</a>
-  <a href="../../../curator_priorities.html" class="subnav-tab subnav-focus">🎯 Focus</a>
-</nav>
-
-<div class="page-masthead">
-  <span class="masthead-label">Deep Dives</span>
-  <span class="masthead-sub">Research Threads · Source Analysis</span>
-</div>
+<body>
+<header>
+  <div class="header-left">
+    <a href="../../../" class="logo">📚 Curator</a>
+    <span class="logo-sub">Deep Dives</span>
+  </div>
+  <nav class="header-nav">
+    <a href="../../../" class="nav-link">Daily</a>
+    <a href="../../../curator_library.html" class="nav-link">Library</a>
+    <a href="../../../interests/2026/deep-dives/index.html" class="nav-link active">Deep Dives</a>
+    <a href="../../../curator_priorities.html" class="nav-link">Priorities</a>
+    <a href="../../../curator_intelligence.html" class="nav-link">AI Observations</a>
+  </nav>
+</header>
 
 <main>
     <div class="page-header">
         <h1 class="page-title">Deep Dive Archive</h1>
-        <p class="page-meta">5 deeper dives · 25 deep dives</p>
+        <p class="page-meta">5 deeper dives · 26 deep dives</p>
     </div>
 
     <div class="section" id="section-threads">
@@ -232,15 +330,16 @@
 
     <div class="section" id="section-articles">
       <div class="section-hdr">
-        <span class="section-name">Deep dives <span class="section-count">25</span></span>
+        <span class="section-name">Deep dives <span class="section-count">26</span></span>
         <button class="toggle-btn" onclick="toggleSection('section-articles', this)">show all</button>
       </div>
       <div class="section-body">
+        <a class="row row-article" href="/research/deep-dive/fef95"><span class="row-date-col">May 29, 2026</span><span class="row-source">Geopolitical Futures</span><span class="row-title">For the Quad, Flexibility Is Not Weakness</span><span class="row-action">Read analysis &#8594;</span></a>
         <a class="row row-article" href="/research/deep-dive/55618"><span class="row-date-col">May 28, 2026</span><span class="row-source">Fed On The Economy</span><span class="row-title">1776 and the Economics of Government</span><span class="row-action">Read analysis &#8594;</span></a>
         <a class="row row-article" href="/research/deep-dive/f4d71"><span class="row-date-col">May 2, 2026</span><span class="row-source">Al Jazeera</span><span class="row-title">Spirit Airlines begins ‘wind-down’, cancels all flights over fuel crisis</span><span class="row-action">Read analysis &#8594;</span></a>
         <a class="row row-article" href="/research/deep-dive/43c03"><span class="row-date-col">Mar 27, 2026</span><span class="row-source">War on the Rocks</span><span class="row-title">Hellscape Taiwan: A Porcupine Defense in the Drone Age</span><span class="row-action">Read analysis &#8594;</span></a>
         <a class="row row-article" href="/research/deep-dive/7129d"><span class="row-date-col">Mar 26, 2026</span><span class="row-source">Geopolitical Futures</span><span class="row-title">How Iran Is Repricing Geography</span><span class="row-action">Read analysis &#8594;</span></a>
-        <a class="row row-article" href="/research/deep-dive/57f27"><span class="row-date-col">Mar 25, 2026</span><span class="row-source">ZeroHedge</span><span class="row-title">Israel Seeks To Disrupt Russian-Iranian Arms Transfer Route In The Caspian Sea</span><span class="row-action">Read analysis &#8594;</span></a>
+        <a class="row row-article row-hidden" href="/research/deep-dive/57f27"><span class="row-date-col">Mar 25, 2026</span><span class="row-source">ZeroHedge</span><span class="row-title">Israel Seeks To Disrupt Russian-Iranian Arms Transfer Route In The Caspian Sea</span><span class="row-action">Read analysis &#8594;</span></a>
         <a class="row row-article row-hidden" href="/research/deep-dive/bc66a"><span class="row-date-col">Mar 23, 2026</span><span class="row-source">arXiv q-fin</span><span class="row-title">Generalized Stock Price Prediction for Multiple Stocks Combined with News Fusion</span><span class="row-action">Read analysis &#8594;</span></a>
         <a class="row row-article row-hidden" href="/research/deep-dive/f41de"><span class="row-date-col">Mar 20, 2026</span><span class="row-source">Deutsche Welle</span><span class="row-title">Iran war: Why gold prices are not soaring</span><span class="row-action">Read analysis &#8594;</span></a>
         <a class="row row-article row-hidden" href="/research/deep-dive/a0c43"><span class="row-date-col">Mar 1, 2026</span><span class="row-source">The Big Picture</span><span class="row-title">10 Weekend Reads</span><span class="row-action">Read analysis &#8594;</span></a>
@@ -261,7 +360,7 @@
         <a class="row row-article row-hidden" href="/research/deep-dive/435ce"><span class="row-date-col">Feb 20, 2026</span><span class="row-source">Geopolitical Futures</span><span class="row-title">Why Trump is Not to Blame for Europe’s Predicament | George Friedman</span><span class="row-action">Read analysis &#8594;</span></a>
         <a class="row row-article row-hidden" href="/research/deep-dive/93439"><span class="row-date-col">Feb 20, 2026</span><span class="row-source">Deutsche Welle</span><span class="row-title">Trump sweeping tariffs struck down: What happens next?</span><span class="row-action">Read analysis &#8594;</span></a>
         <a class="row row-article row-hidden" href="/research/deep-dive/90610"><span class="row-date-col">Feb 19, 2026</span><span class="row-source">ZeroHedge</span><span class="row-title">Futures Slide As Iran War Risks Add To Growing AI Disruption Fears; Oil Surges</span><span class="row-action">Read analysis &#8594;</span></a>
-        <div class="expand-footer" onclick="expandSection('section-articles')">+ 20 more deep dives</div>
+        <div class="expand-footer" onclick="expandSection('section-articles')">+ 21 more deep dives</div>
       </div>
     </div>
 </main>
