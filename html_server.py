@@ -8,8 +8,9 @@ Run: venv/bin/python3 html_server.py
 
 import json
 import os
+import secrets
 from pathlib import Path
-from flask import Flask, render_template, redirect, request, jsonify
+from flask import Flask, render_template, redirect, request, jsonify, session
 from flask_cors import CORS
 from german_domain import (
     GERMAN_DIR,
@@ -56,6 +57,18 @@ app = Flask(
 )
 CORS(app)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400  # cache static files for 1 day
+
+# ── Persistent Flask secret key (needed for session during OAuth flow) ────────
+_secret_key_file = BASE_DIR / ".flask_secret"
+if _secret_key_file.exists():
+    app.secret_key = _secret_key_file.read_text().strip()
+else:
+    app.secret_key = secrets.token_hex(32)
+    _secret_key_file.write_text(app.secret_key)
+
+# ── Google Drive OAuth config ─────────────────────────────────────────────────
+GOOGLE_SCOPES        = ["https://www.googleapis.com/auth/drive.readonly"]
+GOOGLE_REDIRECT_URI  = "http://localhost:8767/api/google/callback"
 
 
 # ── Page routes ───────────────────────────────────────────────────────────────
@@ -345,7 +358,7 @@ def whereby_join():
     """Server-side redirect to Whereby host URL. Keeps the roomKey JWT off the client."""
     from flask import redirect as _redir
     if not WHEREBY_HOST_URL:
-        return "Kein Raum konfiguriert.", 404
+        return jsonify({"error": "Kein Raum konfiguriert."}), 404
     return _redir(WHEREBY_HOST_URL)
 
 
@@ -409,6 +422,130 @@ def tutor_brief(token):
 
     brief = entry["brief"]
     return render_template("tutor_brief.html", brief=brief)
+
+
+# ── Google Drive OAuth ───────────────────────────────────────────────────────
+
+def _google_client_config():
+    import keyring
+    client_id     = keyring.get_password("google_oauth", "client_id")
+    client_secret = keyring.get_password("google_oauth", "client_secret")
+    if not client_id or not client_secret:
+        return None
+    return {
+        "web": {
+            "client_id":     client_id,
+            "client_secret": client_secret,
+            "auth_uri":      "https://accounts.google.com/o/oauth2/auth",
+            "token_uri":     "https://oauth2.googleapis.com/token",
+            "redirect_uris": [GOOGLE_REDIRECT_URI],
+        }
+    }
+
+
+def _get_google_credentials():
+    """Return valid Credentials or None if not authorised."""
+    import keyring
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request as GRequest
+
+    client_id     = keyring.get_password("google_oauth", "client_id")
+    client_secret = keyring.get_password("google_oauth", "client_secret")
+    refresh_token = keyring.get_password("google_oauth", "refresh_token")
+
+    if not all([client_id, client_secret, refresh_token]):
+        return None
+
+    creds = Credentials(
+        token=None,
+        refresh_token=refresh_token,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=client_id,
+        client_secret=client_secret,
+        scopes=GOOGLE_SCOPES,
+    )
+    creds.refresh(GRequest())
+    return creds
+
+
+@app.route("/api/google/status")
+def api_google_status():
+    import keyring
+    client_id     = keyring.get_password("google_oauth", "client_id")
+    refresh_token = keyring.get_password("google_oauth", "refresh_token")
+    return jsonify({
+        "configured": bool(client_id),
+        "authed":     bool(refresh_token),
+    })
+
+
+@app.route("/api/google/auth")
+def api_google_auth():
+    from google_auth_oauthlib.flow import Flow
+    cfg = _google_client_config()
+    if not cfg:
+        return (
+            "Google OAuth credentials not configured. "
+            "Store client_id and client_secret in keyring under service 'google_oauth'."
+        ), 503
+
+    flow = Flow.from_client_config(cfg, scopes=GOOGLE_SCOPES,
+                                   redirect_uri=GOOGLE_REDIRECT_URI)
+    auth_url, state = flow.authorization_url(access_type="offline", prompt="consent")
+    session["google_oauth_state"] = state
+    return redirect(auth_url)
+
+
+@app.route("/api/google/callback")
+def api_google_callback():
+    import keyring
+    from google_auth_oauthlib.flow import Flow
+
+    cfg = _google_client_config()
+    flow = Flow.from_client_config(
+        cfg, scopes=GOOGLE_SCOPES,
+        redirect_uri=GOOGLE_REDIRECT_URI,
+        state=session.get("google_oauth_state"),
+    )
+    flow.fetch_token(authorization_response=request.url)
+    creds = flow.credentials
+    keyring.set_password("google_oauth", "refresh_token", creds.refresh_token)
+    return redirect("/gesprache?tab=konversation&google_auth=ok")
+
+
+@app.route("/api/google/latest-transcript")
+def api_google_latest_transcript():
+    from googleapiclient.discovery import build
+
+    creds = _get_google_credentials()
+    if not creds:
+        return jsonify({"error": "not_authed", "auth_url": "/api/google/auth"}), 401
+
+    service = build("drive", "v3", credentials=creds)
+
+    # Search for the most recently modified Google Doc with "transcript" in the name
+    results = service.files().list(
+        q=(
+            "(name contains 'transcript' or name contains 'Transcript') "
+            "and mimeType='application/vnd.google-apps.document' "
+            "and trashed=false"
+        ),
+        orderBy="modifiedTime desc",
+        pageSize=5,
+        fields="files(id, name, modifiedTime)",
+    ).execute()
+
+    files = results.get("files", [])
+    if not files:
+        return jsonify({"error": "No transcript files found in Drive."}), 404
+
+    # Export the newest as plain text
+    file_id   = files[0]["id"]
+    file_name = files[0]["name"]
+    content   = service.files().export(fileId=file_id, mimeType="text/plain").execute()
+    text = content.decode("utf-8") if isinstance(content, bytes) else str(content)
+
+    return jsonify({"ok": True, "text": text, "file_name": file_name})
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

@@ -215,6 +215,37 @@ def curator_proxy(path):
     return _proxy.proxy_to(_cfg.CURATOR_BACKEND, path, "/app/curator", user=user)
 
 
+# ── Top-level Curator static-file passthroughs ────────────────────────────────
+# Several links inside Curator pages are built via JS template literals or
+# direct hrefs that land at the portal top-level (not under /app/curator/).
+# These catch-alls forward them to the Curator backend transparently.
+
+@app.route("/interests/<path:path>")
+@_require_login
+def interests_passthrough(path):
+    user = _current_user()
+    return _proxy.proxy_to(_cfg.CURATOR_BACKEND, "interests/" + path, "/app/curator", user=user)
+
+# curator_priorities.html, curator_library.html, curator_intelligence.html,
+# curator_index.html — linked directly from within Curator pages
+_CURATOR_TOP_LEVEL = {
+    "curator_priorities.html",
+    "curator_library.html",
+    "curator_intelligence.html",
+    "curator_briefing.html",
+    "curator_index.html",
+}
+
+@app.route("/<path:filename>")
+@_require_login
+def curator_static_passthrough(filename):
+    if filename in _CURATOR_TOP_LEVEL:
+        user = _current_user()
+        return _proxy.proxy_to(_cfg.CURATOR_BACKEND, filename, "/app/curator", user=user)
+    from flask import abort
+    abort(404)
+
+
 # ── Mein Deutsch proxy (owner + family full; guest: lesen only, no admin) ────
 
 @app.route("/app/german")
