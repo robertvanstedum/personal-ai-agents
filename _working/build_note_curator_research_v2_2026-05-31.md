@@ -79,6 +79,9 @@ First-class record with `id`, optional `name`, `member_tags`, `member_topics`. L
 
 **Run from repo root: `~/Projects/personal-ai-agents/`**
 
+**Test design:** T1–T13 are fully non-destructive (read-only or `--dry-run`). Run them any time, any order, no cleanup.
+T14 is the one exception: `pull contextual` genuinely requires a real group record in groups.json to read from, so it does a real write + one-liner reset at the end. The cleanup brings Groups back to 0 so the next run starts clean.
+
 ### T1 — Status overview
 ```bash
 python3 tools/curator_research.py status
