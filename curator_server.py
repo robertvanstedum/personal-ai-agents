@@ -84,7 +84,7 @@ def _load_briefing_articles():
 
     # Derive briefing_date and model_display from first article if available
     briefing_date = raw[0].get('briefing_date', today.strftime('%Y-%m-%d')) if raw else today.strftime('%Y-%m-%d')
-    model_display = 'grok-3-mini'  # default; curator_latest.json does not store model name
+    model_display = raw[0].get('briefing_model', 'grok-4-1') if raw else 'grok-4-1'
 
     articles = []
     for entry in raw:
