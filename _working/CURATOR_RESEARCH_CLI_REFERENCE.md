@@ -1,7 +1,7 @@
 # Curator Research CLI — Reference
 
-**File:** `curator_research.py`
-**Invoke:** `python3 curator_research.py <command> [args]`
+**File:** `tools/curator_research.py`
+**Invoke:** `python3 tools/curator_research.py <command> [args]`
 **Branch:** `feat/curator-research-v2` (to be merged to main)
 
 ---
@@ -32,15 +32,15 @@ deliberate command you type.
 ### See what's active
 
 ```bash
-python3 curator_research.py status
+python3 tools/curator_research.py status
 ```
 Shows: Source count, Topics by state (active-pull / dormant / paused / one-shot /
 closed), Group count, tag alias count, and a warning if any active-pull topic is
 past its expiry date.
 
 ```bash
-python3 curator_research.py topics
-python3 curator_research.py topics --status active-pull
+python3 tools/curator_research.py topics
+python3 tools/curator_research.py topics --status active-pull
 ```
 
 ---
@@ -49,20 +49,20 @@ python3 curator_research.py topics --status active-pull
 
 ```bash
 # Start a research pull (dormant → active-pull)
-python3 curator_research.py activate quad-flexibility-not
-python3 curator_research.py activate quad-flexibility-not --days 7
+python3 tools/curator_research.py activate quad-flexibility-not
+python3 tools/curator_research.py activate quad-flexibility-not --days 7
 
 # Pause a running pull (banks remaining days)
-python3 curator_research.py pause china-rise --note "pausing while I read Arrighi"
+python3 tools/curator_research.py pause china-rise --note "pausing while I read Arrighi"
 
 # Resume a paused pull (restores banked days)
-python3 curator_research.py activate china-rise
+python3 tools/curator_research.py activate china-rise
 
 # Close (terminal — use when done, not just paused)
-python3 curator_research.py close hellscape-taiwan-porcupine --note "archived"
+python3 tools/curator_research.py close hellscape-taiwan-porcupine --note "archived"
 
 # Check and close any topic that ran past its expiry
-python3 curator_research.py auto-stop
+python3 tools/curator_research.py auto-stop
 ```
 
 ---
@@ -74,10 +74,10 @@ it expects:
 
 ```bash
 # Single topic
-python3 curator_research.py pull narrow quad-flexibility-not
+python3 tools/curator_research.py pull narrow quad-flexibility-not
 
 # All topics in a group (merged queries, deduplicated)
-python3 curator_research.py pull contextual grp_001
+python3 tools/curator_research.py pull contextual grp_001
 ```
 
 Output is JSON, suitable for piping or copy-pasting into the session runner:
@@ -98,14 +98,14 @@ Output is JSON, suitable for piping or copy-pasting into the session runner:
 
 **From today's briefing** (article hash ID is shown in the daily briefing page):
 ```bash
-python3 curator_research.py promote-feed abc123def quad,india,china \
+python3 tools/curator_research.py promote-feed abc123def quad,india,china \
   --note "Good framing of the access-denial problem" \
   --topics quad-flexibility-not
 ```
 
 **Add a book or paper manually:**
 ```bash
-python3 curator_research.py promote-manual book \
+python3 tools/curator_research.py promote-manual book \
   "The Rise and Fall of Great Powers" \
   geopolitics,hegemony,longue-duree \
   --reference "Kennedy, Paul. 1987. Random House." \
@@ -113,7 +113,7 @@ python3 curator_research.py promote-manual book \
   --date 1987 --date-precision year \
   --topics empire-landpower
 
-python3 curator_research.py promote-manual article \
+python3 tools/curator_research.py promote-manual article \
   "Quad 2.0 and the Indo-Pacific Order" \
   quad,india,japan,australia \
   --url https://example.com/article \
@@ -124,14 +124,14 @@ python3 curator_research.py promote-manual article \
 already saved via the briefing UI — these predate Sources):
 ```bash
 # Preview first
-python3 curator_research.py migrate-signals --dry-run
+python3 tools/curator_research.py migrate-signals --dry-run
 
 # Then commit when ready
-python3 curator_research.py migrate-signals
+python3 tools/curator_research.py migrate-signals
 ```
 After migration, tag each source:
 ```bash
-python3 curator_research.py sources   # find the new src_YYYYMMDD_NNN ids
+python3 tools/curator_research.py sources   # find the new src_YYYYMMDD_NNN ids
 # tagging not yet a CLI command — edit sources.json directly or via promote-*
 ```
 
@@ -141,19 +141,19 @@ python3 curator_research.py sources   # find the new src_YYYYMMDD_NNN ids
 
 ```bash
 # All sources
-python3 curator_research.py sources
+python3 tools/curator_research.py sources
 
 # Filter by topic
-python3 curator_research.py sources --topics quad-flexibility-not
+python3 tools/curator_research.py sources --topics quad-flexibility-not
 
 # Filter by tag
-python3 curator_research.py sources --tags quad,india
+python3 tools/curator_research.py sources --tags quad,india
 
 # Full detail for one source
-python3 curator_research.py source src_20260531_001
+python3 tools/curator_research.py source src_20260531_001
 
 # See what topics a source might link to (tag overlap, no write)
-python3 curator_research.py suggest-links src_20260531_001
+python3 tools/curator_research.py suggest-links src_20260531_001
 ```
 
 ---
@@ -162,16 +162,16 @@ python3 curator_research.py suggest-links src_20260531_001
 
 ```bash
 # Create a group (grouping related topics — no AI, just a record)
-python3 curator_research.py create-group \
+python3 tools/curator_research.py create-group \
   --name "Indo-Pacific Buffer" \
   --topics quad-flexibility-not,china-rise \
   --tags quad,china,indo-pacific
 
 # List groups
-python3 curator_research.py groups
+python3 tools/curator_research.py groups
 
 # Pull context across a group (merged queries from all member topics)
-python3 curator_research.py pull contextual grp_001
+python3 tools/curator_research.py pull contextual grp_001
 ```
 
 ---
@@ -183,7 +183,7 @@ Edit that file directly — it's a hand-maintained map. No UI, no AI.
 
 ```bash
 # See current aliases
-python3 curator_research.py tag-aliases
+python3 tools/curator_research.py tag-aliases
 ```
 
 Example `tag_aliases.json`:
@@ -235,17 +235,17 @@ All commands are subprocess-safe. Exit codes: `0` success, `1` error.
 
 ```bash
 # Smoke test: module loads and data files are readable
-python3 curator_research.py status && echo "OK"
+python3 tools/curator_research.py status && echo "OK"
 
 # Verify a known topic exists and is in the right state
-python3 curator_research.py topics --status active-pull | grep "quad-flexibility-not"
+python3 tools/curator_research.py topics --status active-pull | grep "quad-flexibility-not"
 
 # Verify pull context produces valid JSON
-python3 curator_research.py pull narrow quad-flexibility-not | python3 -m json.tool > /dev/null && echo "valid JSON"
+python3 tools/curator_research.py pull narrow quad-flexibility-not | python3 -m json.tool > /dev/null && echo "valid JSON"
 
 # Dry-run migration is always safe to include in CI
-python3 curator_research.py migrate-signals --dry-run
-python3 curator_research.py migrate-threads --dry-run
+python3 tools/curator_research.py migrate-signals --dry-run
+python3 tools/curator_research.py migrate-threads --dry-run
 ```
 
 To call from Python test code directly (no subprocess overhead):

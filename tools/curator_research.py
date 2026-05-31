@@ -1,13 +1,20 @@
 """
-curator_research.py — Curator research-area data layer.
+tools/curator_research.py — Curator research-area data layer + CLI.
 
-Manages Sources, Topics (Step 2), and Groups (Step 4).
+Manages Sources, Topics, and Groups for the Curator research gathering tier.
 This module is pure data: load, save, query. No Flask, no LLM calls.
+
+Usage (CLI):
+  python3 tools/curator_research.py status
+  python3 tools/curator_research.py topics --status active-pull
+  python3 tools/curator_research.py pull narrow <slug>
+  python3 tools/curator_research.py --help
 
 Data files (all under _NewDomains/research-intelligence/data/):
   sources/sources.json   — Source records (append-only, one flat array)
   tag_aliases.json       — Hand-edited alias map: {"prc": "china", "quad-security": "quad"}
-  threads/{slug}/thread.json  — Topic records (existing, extended in Step 2)
+  threads/{slug}/thread.json  — Topic records
+  groups/groups.json     — Group records
 
 Governing constraint: spend follows attention.
 Nothing in this module triggers an AI call or background process.
@@ -22,7 +29,7 @@ from datetime import timedelta
 from typing import Optional
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-_REPO_ROOT    = Path(__file__).parent
+_REPO_ROOT    = Path(__file__).parent.parent   # tools/ is one level below repo root
 _RESEARCH_DIR = _REPO_ROOT / "_NewDomains" / "research-intelligence" / "data"
 _SOURCES_FILE = _RESEARCH_DIR / "sources" / "sources.json"
 _ALIASES_FILE = _RESEARCH_DIR / "tag_aliases.json"
