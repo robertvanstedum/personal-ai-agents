@@ -91,6 +91,8 @@ context/
 _working/*
 # Build notes are permanent reasoning artifacts — commit them
 !_working/build_note_*.md
+# CLI and tool reference docs — permanent, commit them
+!_working/CURATOR_RESEARCH_CLI_REFERENCE.md
 
 # Finance domain — private data
 domains/finance/statements/
