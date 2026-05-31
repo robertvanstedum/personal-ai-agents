@@ -152,14 +152,22 @@
         <!-- Card 1: Vorbereitung — Before the session -->
         <div class="konversation-card">
           <div class="konversation-card-label">1 · Before — Vorbereitung</div>
-          <p class="konv-hint">Generate a one-page brief for your tutor — covers your level, recent topics, and focus areas.</p>
-          <div id="konv-brief-preview" class="konv-brief-preview"></div>
-          <button class="btn-ghost btn-sm" id="btn-generate-brief">Generate tutor brief →</button>
-          <div id="konv-brief-link" style="display:none; margin-top:12px;">
-            <p class="konv-hint">Send this link to your tutor before the session:</p>
-            <div class="konv-link-row">
+          <p class="konv-hint">Was möchtest du heute üben? Dein Tutor bekommt diesen Brief vor der Sitzung.</p>
+
+          <div class="konv-field">
+            <label class="konv-field-label" for="konv-session-notes">Schwerpunkte für heute</label>
+            <textarea id="konv-session-notes" class="tutor-input" rows="4"
+              placeholder="z.B. Adjektivendungen üben, Café-Vokabular, Meinungen ausdrücken…"></textarea>
+          </div>
+
+          <button class="btn-ghost btn-sm" id="btn-generate-brief">Brief für Tutor erstellen →</button>
+          <span id="konv-brief-status" class="gesprache-status"></span>
+
+          <div id="konv-brief-result" style="display:none; margin-top:12px;">
+            <div id="konv-brief-preview" class="konv-brief-preview"></div>
+            <div class="konv-link-row" style="margin-top:8px;">
               <code id="brief-link-url" class="konv-link-code"></code>
-              <button class="btn-ghost btn-sm" id="btn-copy-brief-link">Copy link</button>
+              <button class="btn-ghost btn-sm" id="btn-copy-brief-link">Link kopieren</button>
             </div>
           </div>
         </div>
@@ -573,26 +581,44 @@ document.body.classList.add('parch-mode');
 
   // ── Konversation pane ─────────────────────────────────────────────────────
 
-  document.getElementById('btn-generate-brief').addEventListener('click', async () => {
-    const btn = document.getElementById('btn-generate-brief');
-    btn.disabled = true;
-    btn.textContent = 'Generiere…';
+  // Pre-fill textarea with suggestion from last human tutor session
+  (async () => {
     try {
-      const res = await fetch('/api/tutor-brief/generate', { method: 'POST' });
+      const res = await fetch('/api/tutor-brief/suggestion');
+      const data = await res.json();
+      if (data.suggestion) {
+        document.getElementById('konv-session-notes').value = data.suggestion;
+      }
+    } catch (e) { /* silently ignore — textarea stays empty */ }
+  })();
+
+  document.getElementById('btn-generate-brief').addEventListener('click', async () => {
+    const btn    = document.getElementById('btn-generate-brief');
+    const status = document.getElementById('konv-brief-status');
+    const notes  = document.getElementById('konv-session-notes').value;
+    btn.disabled = true;
+    btn.textContent = 'Erstelle Brief…';
+    status.textContent = '';
+    try {
+      const res = await fetch('/api/tutor-brief/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_notes: notes }),
+      });
       const data = await res.json();
       if (data.token) {
         const url = window.location.origin + '/tutor-brief/' + data.token;
         document.getElementById('brief-link-url').textContent = url;
-        document.getElementById('konv-brief-link').style.display = '';
-        document.getElementById('konv-brief-preview').textContent = 'Brief erstellt.';
+        document.getElementById('konv-brief-preview').textContent = data.brief_text || '';
+        document.getElementById('konv-brief-result').style.display = '';
       } else {
-        btn.textContent = 'Fehler — bitte nochmal';
+        status.textContent = 'Fehler — bitte nochmal versuchen.';
       }
     } catch (e) {
-      btn.textContent = 'Fehler — bitte nochmal';
+      status.textContent = 'Fehler — bitte nochmal versuchen.';
     } finally {
       btn.disabled = false;
-      if (btn.textContent === 'Generiere…') btn.textContent = 'Brief generieren →';
+      btn.textContent = 'Brief für Tutor erstellen →';
     }
   });
 
@@ -710,9 +736,9 @@ document.body.classList.add('parch-mode');
 
   if (personas.length > 0) selectPersona(0);
 
-  // Fix 5 — default to KI-Personas; honour ?tab=konversation URL param only
+  // Restore last tab: URL param → sessionStorage → default KI-Personas
   const _urlTab = new URLSearchParams(window.location.search).get('tab');
-  switchTab(_urlTab === 'konversation' ? 'konversation' : 'personas');
+  switchTab(_urlTab || sessionStorage.getItem('gesprache-tab') || 'personas');
 
 })();
 </script>

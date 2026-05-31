@@ -1510,6 +1510,58 @@ def build_session_brief(persona: dict, scene: str, memory: dict) -> str:
     return "\n".join(lines)
 
 
+def build_tutor_brief(session_notes: str) -> str:
+    """Short tutor-facing brief built from Robert's own session intent notes.
+
+    This is the human-tutor brief — not KI-persona prompt material.
+    Keeps it to meeting-note length: tutor reads it in 30 seconds.
+    """
+    progress = safe_read_json(_PROGRESS_FILE)
+    total_sessions = progress.get("total_sessions", 0)
+
+    notes_block = session_notes.strip() if session_notes and session_notes.strip() \
+        else "Keine spezifischen Schwerpunkte angegeben."
+
+    lines = [
+        "Mein Deutsch — Vorbereitung",
+        f"Sitzungen gesamt: {total_sessions}",
+        "",
+        "Was ich heute üben möchte:",
+        notes_block,
+    ]
+    return "\n".join(lines)
+
+
+def get_last_human_session_suggestion() -> str:
+    """Return a suggestion string from the most recent human tutor session, or ''.
+
+    Looks for the newest session file in _SESSIONS_DIR where scenario == 'human_session'.
+    Returns next_focus from reviewer output if available, else top error, else ''.
+    """
+    sessions_dir = GERMAN_DIR / "sessions"
+    if not sessions_dir.exists():
+        return ""
+
+    # Collect all session JSON files, newest first
+    session_files = sorted(sessions_dir.glob("*.json"), reverse=True)
+    for sf in session_files:
+        try:
+            data = safe_read_json(sf)
+            if data.get("scenario") != "human_session":
+                continue
+            rv = data.get("reviewer_output", {})
+            if isinstance(rv, dict):
+                nf = rv.get("next_focus", "").strip()
+                if nf:
+                    return nf
+                errors = rv.get("errors", [])
+                if errors and isinstance(errors[0], dict):
+                    return errors[0].get("explanation", "").strip()
+        except Exception:
+            continue
+    return ""
+
+
 # ─── Gespräche — transcript analysis (HTML interface) ────────────────────────
 
 _SESSIONS_DIR = GERMAN_DIR / "sessions"

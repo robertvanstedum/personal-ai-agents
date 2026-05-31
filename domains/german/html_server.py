@@ -37,6 +37,8 @@ from german_domain import (
     extend_round,
     assemble_session_prompt,
     build_session_brief,
+    build_tutor_brief,
+    get_last_human_session_suggestion,
 )
 
 BASE_DIR  = Path(__file__).parent           # domains/german/
@@ -365,20 +367,32 @@ def whereby_join():
 
 # ── Tutor brief — token generation (owner call from UI) ──────────────────────
 
+@app.route("/api/tutor-brief/suggestion")
+def api_tutor_brief_suggestion():
+    """Return a pre-fill suggestion for the session-notes textarea.
+    Pulled from the most recent human_session file — next_focus or top error.
+    Returns {"suggestion": ""} when no human session exists yet.
+    """
+    suggestion = get_last_human_session_suggestion()
+    return jsonify({"suggestion": suggestion})
+
+
 @app.route("/api/tutor-brief/generate", methods=["POST"])
 def api_tutor_brief_generate():
-    """Generate a 48h shareable token for the pre-session tutor brief."""
-    import secrets
+    """Generate a 48h shareable token for the pre-session tutor brief.
+    Accepts optional JSON body: {"session_notes": "..."}.
+    Returns token, expires, and brief_text for inline preview.
+    """
     import time
 
     token   = secrets.token_urlsafe(16)
     expires = int(time.time()) + 48 * 3600
 
-    # Build brief from the first/most-active persona + general scene
-    personas = get_personas()
-    memory   = get_persona_memory(DEFAULT_USER, persona_to_slug(personas[0]["name"])) if personas else {}
-    persona  = personas[0] if personas else {}
-    brief    = build_session_brief(persona, "general", memory)
+    # Robert's typed intent — optional; empty string is valid
+    body         = request.get_json(silent=True) or {}
+    session_notes = body.get("session_notes", "")
+
+    brief = build_tutor_brief(session_notes)
 
     PORTAL_AUTH_DIR.mkdir(parents=True, exist_ok=True)
     briefs_file = PORTAL_AUTH_DIR / "tutor_briefs.json"
@@ -396,7 +410,7 @@ def api_tutor_brief_generate():
     briefs[token] = {"expires": expires, "brief": brief, "created": now}
     briefs_file.write_text(json.dumps(briefs, indent=2, ensure_ascii=False))
 
-    return jsonify({"token": token, "expires": expires})
+    return jsonify({"token": token, "expires": expires, "brief_text": brief})
 
 
 # ── Tutor brief — public read-only view (no login required) ──────────────────
