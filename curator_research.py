@@ -787,7 +787,9 @@ suggest_topic_links() — read-only tag-overlap suggestion (no auto-link).
 Robert is always the gate; nothing links automatically.
 """
 
-_CURATOR_LATEST = _REPO_ROOT / "curator_latest.json"
+_CURATOR_LATEST  = _REPO_ROOT / "curator_latest.json"
+_GROUPS_FILE     = _RESEARCH_DIR / "groups" / "groups.json"
+_AGENT_CONFIG    = _REPO_ROOT / "_NewDomains" / "research-intelligence" / "agent" / "config.json"
 
 
 def _load_feed() -> list[dict]:
@@ -1003,3 +1005,298 @@ def suggest_topic_links(source: dict, resolve: bool = True) -> list[dict]:
             })
 
     return sorted(suggestions, key=lambda x: x["overlap_count"], reverse=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 4 — Group primitive + pull scoping
+# ═══════════════════════════════════════════════════════════════════════════════
+"""
+Group schema:
+  id             — grp_YYYYMMDD_NNN
+  name           — optional human label (a Group with no Leaning = what concept calls a Theme)
+  member_tags    — list of tag strings (stored as entered, alias-resolved at read time)
+  member_topics  — list of Topic slugs (explicit membership)
+  leaning        — None here; Leaning attaches in a later PLAN
+  note           — optional
+  created_at     — ISO timestamp
+  schema_version — "1.0"
+
+Storage: _NewDomains/research-intelligence/data/groups/groups.json (flat array)
+
+Pull scoping:
+  narrow_pull_context(slug)       — one Topic's queries + tags + motivation
+  contextual_pull_context(group_id) — merged across all member Topics
+Both return a plain dict the session runner can consume directly.
+"""
+
+GROUP_SCHEMA_VERSION = "1.0"
+
+
+# ── Group I/O ─────────────────────────────────────────────────────────────────
+
+def _load_groups() -> list[dict]:
+    try:
+        return json.loads(_GROUPS_FILE.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def _save_groups(groups: list[dict]) -> None:
+    _GROUPS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _GROUPS_FILE.write_text(
+        json.dumps(groups, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+
+def _group_next_id(groups: list[dict]) -> str:
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    prefix = f"grp_{today}_"
+    existing = [
+        int(g["id"][len(prefix):])
+        for g in groups
+        if g.get("id", "").startswith(prefix) and g["id"][len(prefix):].isdigit()
+    ]
+    return f"{prefix}{max(existing, default=0) + 1:03d}"
+
+
+def _load_session_searches() -> dict[str, list[str]]:
+    """Load session_searches from agent config.json. Returns {} if unavailable."""
+    try:
+        cfg = json.loads(_AGENT_CONFIG.read_text(encoding="utf-8"))
+        return cfg.get("session_searches", {})
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+# ── Group CRUD ────────────────────────────────────────────────────────────────
+
+def create_group(
+    *,
+    name: Optional[str] = None,
+    member_tags: Optional[list[str]] = None,
+    member_topics: Optional[list[str]] = None,
+    note: Optional[str] = None,
+) -> dict:
+    """
+    Create a first-class Group record.
+    name is optional — unnamed Groups are valid (neutral Themes).
+    member_tags and member_topics can be empty; add them after creation.
+    Leaning slot exists as None — Leaning is built in a later PLAN.
+    """
+    groups = _load_groups()
+    group: dict = {
+        "id":            _group_next_id(groups),
+        "name":          name,
+        "member_tags":   list(member_tags) if member_tags else [],
+        "member_topics": list(member_topics) if member_topics else [],
+        "leaning":       None,          # attachment point — not yet built
+        "note":          note,
+        "created_at":    datetime.now(timezone.utc).isoformat(),
+        "schema_version": GROUP_SCHEMA_VERSION,
+    }
+    groups.append(group)
+    _save_groups(groups)
+    return group
+
+
+def get_group(group_id: str) -> Optional[dict]:
+    """Return a Group by ID, or None."""
+    return next((g for g in _load_groups() if g.get("id") == group_id), None)
+
+
+def get_groups(
+    *,
+    tags: Optional[list[str]] = None,
+    topic_slug: Optional[str] = None,
+    resolve: bool = True,
+) -> list[dict]:
+    """
+    Return Groups matching filters (AND logic).
+    tags       — Group must contain at least one matching member_tag
+    topic_slug — Group must have the topic in member_topics
+    """
+    groups = _load_groups()
+
+    if tags:
+        filter_tags = set(resolve_tags(tags) if resolve else tags)
+        groups = [
+            g for g in groups
+            if filter_tags & set(resolve_tags(g.get("member_tags", [])) if resolve else g.get("member_tags", []))
+        ]
+
+    if topic_slug:
+        groups = [g for g in groups if topic_slug in g.get("member_topics", [])]
+
+    return groups
+
+
+def update_group(
+    group_id: str,
+    *,
+    name: Optional[str] = None,
+    note: Optional[str] = None,
+) -> Optional[dict]:
+    """Update mutable fields on a Group. Returns updated Group or None if not found."""
+    groups = _load_groups()
+    for g in groups:
+        if g.get("id") == group_id:
+            if name is not None:
+                g["name"] = name
+            if note is not None:
+                g["note"] = note
+            _save_groups(groups)
+            return g
+    return None
+
+
+def add_tag_to_group(group_id: str, tag: str) -> Optional[dict]:
+    """Add a tag to a Group's member_tags (idempotent). Stored as entered."""
+    groups = _load_groups()
+    for g in groups:
+        if g.get("id") == group_id:
+            tags = g.setdefault("member_tags", [])
+            if tag not in tags:
+                tags.append(tag)
+                _save_groups(groups)
+            return g
+    return None
+
+
+def add_topic_to_group(group_id: str, slug: str) -> Optional[dict]:
+    """
+    Add a Topic to a Group's member_topics (idempotent).
+    Also adds the group_id to the Source records linked to that Topic.
+    Does NOT auto-link anything — Robert's explicit action only.
+    """
+    groups = _load_groups()
+    for g in groups:
+        if g.get("id") == group_id:
+            topics = g.setdefault("member_topics", [])
+            if slug not in topics:
+                topics.append(slug)
+                _save_groups(groups)
+            return g
+    return None
+
+
+def remove_topic_from_group(group_id: str, slug: str) -> Optional[dict]:
+    """Remove a Topic from a Group's member_topics."""
+    groups = _load_groups()
+    for g in groups:
+        if g.get("id") == group_id:
+            g["member_topics"] = [t for t in g.get("member_topics", []) if t != slug]
+            _save_groups(groups)
+            return g
+    return None
+
+
+# ── Pull scoping ──────────────────────────────────────────────────────────────
+
+def narrow_pull_context(slug: str) -> dict:
+    """
+    Return pull context for a single Topic — queries, tags, motivation.
+    This is the dict passed to the session runner for a narrow (one-Topic) pull.
+
+    Keys:
+      scope       — "narrow"
+      topic_slug  — the slug
+      status      — Topic status
+      tags        — Topic's tags (alias-resolved)
+      queries     — session_searches[slug] from agent config (empty list if none configured)
+      motivation  — Topic's motivation text
+    """
+    topic = _load_topic(slug)
+    if topic is None:
+        raise ValueError(f"Topic not found: {slug!r}")
+
+    searches = _load_session_searches()
+    return {
+        "scope":       "narrow",
+        "topic_slug":  slug,
+        "status":      topic.get("status"),
+        "tags":        resolve_tags(topic.get("tags", [])),
+        "queries":     searches.get(slug, []),
+        "motivation":  topic.get("motivation", ""),
+    }
+
+
+def contextual_pull_context(group_id: str) -> dict:
+    """
+    Return pull context for a whole Group — merged queries and tags from all
+    member Topics, deduped. This is the dict passed to the session runner for
+    a contextual (whole-Group) pull.
+
+    Keys:
+      scope         — "contextual"
+      group_id      — the Group's ID
+      group_name    — Group name (may be None)
+      member_topics — list of slugs in the Group
+      tags          — union of all member Topic tags (alias-resolved, deduped)
+      queries       — merged session_searches from all member Topics (deduped, order preserved)
+      motivations   — dict of {slug: motivation} for all member Topics
+    """
+    group = get_group(group_id)
+    if group is None:
+        raise ValueError(f"Group not found: {group_id!r}")
+
+    searches = _load_session_searches()
+    member_slugs = group.get("member_topics", [])
+
+    merged_tags: list[str] = []
+    seen_tags: set[str] = set()
+    merged_queries: list[str] = []
+    seen_queries: set[str] = set()
+    motivations: dict[str, str] = {}
+
+    # Also include the Group's own member_tags
+    for tag in resolve_tags(group.get("member_tags", [])):
+        if tag not in seen_tags:
+            seen_tags.add(tag)
+            merged_tags.append(tag)
+
+    for slug in member_slugs:
+        topic = _load_topic(slug)
+        if not topic:
+            continue
+        # Merge tags
+        for tag in resolve_tags(topic.get("tags", [])):
+            if tag not in seen_tags:
+                seen_tags.add(tag)
+                merged_tags.append(tag)
+        # Merge queries
+        for q in searches.get(slug, []):
+            if q not in seen_queries:
+                seen_queries.add(q)
+                merged_queries.append(q)
+        # Collect motivations
+        motivations[slug] = topic.get("motivation", "")
+
+    return {
+        "scope":         "contextual",
+        "group_id":      group_id,
+        "group_name":    group.get("name"),
+        "member_topics": member_slugs,
+        "tags":          merged_tags,
+        "queries":       merged_queries,
+        "motivations":   motivations,
+    }
+
+
+# ── Groups summary ────────────────────────────────────────────────────────────
+
+def groups_summary() -> dict:
+    """Return counts and a compact list of all Groups."""
+    groups = _load_groups()
+    return {
+        "total": len(groups),
+        "groups": [
+            {
+                "id":            g.get("id"),
+                "name":          g.get("name"),
+                "member_topics": g.get("member_topics", []),
+                "member_tags":   g.get("member_tags", []),
+                "has_leaning":   g.get("leaning") is not None,
+            }
+            for g in groups
+        ],
+    }
