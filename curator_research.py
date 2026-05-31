@@ -765,3 +765,241 @@ def topics_summary() -> dict:
         "by_status":  by_status,
         "active":     active_list,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 3 — Promotion-by-tag flow
+# ═══════════════════════════════════════════════════════════════════════════════
+"""
+Three entry paths into the Source record:
+
+  promote_feed_article()   — daily feed article (curator_latest.json) → Source
+  promote_session_find()   — research session find (URL + title) → Source
+  promote_manual()         — Robert adds directly (book, paper, link) → Source
+
+All three call add_source() internally and share dedup logic (URL match).
+cost_to_act is inferred or supplied:
+  free  — web article/post readable without extra cost
+  dive  — needs a Scan/Dive session to get value
+  book  — physical or paid source, requires conscious acquisition step
+
+suggest_topic_links() — read-only tag-overlap suggestion (no auto-link).
+Robert is always the gate; nothing links automatically.
+"""
+
+_CURATOR_LATEST = _REPO_ROOT / "curator_latest.json"
+
+
+def _load_feed() -> list[dict]:
+    """Load today's scored feed articles. Returns empty list if unavailable."""
+    try:
+        return json.loads(_CURATOR_LATEST.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def _url_already_saved(url: str) -> Optional[dict]:
+    """Return existing Source if this URL is already in sources.json, else None."""
+    if not url:
+        return None
+    for s in _load_sources():
+        if s.get("url") == url:
+            return s
+    return None
+
+
+def _parse_feed_date(published: str) -> tuple[str, str]:
+    """
+    Parse a feed article's published string to (date, precision).
+    Handles ISO strings and stringified datetime objects.
+    Returns ('', 'unknown') on failure.
+    """
+    if not published:
+        return ("", "unknown")
+    try:
+        # Handle 'YYYY-MM-DD HH:MM:SS+HH:MM' and similar
+        dt = datetime.fromisoformat(str(published).replace("Z", "+00:00").split(".")[0])
+        return (dt.strftime("%Y-%m-%d"), "day")
+    except (ValueError, TypeError):
+        return ("", "unknown")
+
+
+# ── Entry path 1: daily feed article ─────────────────────────────────────────
+
+def promote_feed_article(
+    hash_id: str,
+    tags: list[str],
+    *,
+    note: Optional[str] = None,
+    topics: Optional[list[str]] = None,
+) -> dict:
+    """
+    Promote a daily-feed article to a first-class Source.
+
+    Looks up the article by hash_id in curator_latest.json.
+    Deduplicates by URL — returns existing Source if already saved.
+    cost_to_act is always 'free' (feed articles are web-readable).
+    Robert supplies tags; topics are optional explicit links.
+
+    Raises ValueError if hash_id not found in today's feed.
+    """
+    feed = _load_feed()
+    article = next((a for a in feed if a.get("hash_id") == hash_id), None)
+    if article is None:
+        raise ValueError(f"hash_id {hash_id!r} not found in curator_latest.json")
+
+    url = article.get("link", "")
+    existing = _url_already_saved(url)
+    if existing:
+        print(f"  ⏭  Already saved: {existing['id']} — {existing['title'][:55]}")
+        return existing
+
+    date, precision = _parse_feed_date(article.get("published", ""))
+
+    return add_source(
+        type          = "article",
+        title         = article.get("title", ""),
+        url           = url,
+        origin        = "curator-found",
+        tags          = tags,
+        note          = note,
+        topics        = topics or [],
+        cost_to_act   = "free",
+        date          = date,
+        date_precision= precision,
+    )
+
+
+# ── Entry path 2: research session find ──────────────────────────────────────
+
+def promote_session_find(
+    url: str,
+    title: str,
+    tags: list[str],
+    *,
+    cost_to_act: str = "free",
+    note: Optional[str] = None,
+    topics: Optional[list[str]] = None,
+    origin_session: Optional[str] = None,
+    date: Optional[str] = None,
+    date_precision: str = "unknown",
+    source_type: str = "article",
+) -> dict:
+    """
+    Promote a research-session find (Scan or Dive appendix entry) to a Source.
+
+    cost_to_act:
+      'free' — web article/post, directly readable
+      'dive' — needs a Scan/Dive session to extract value (e.g. dense academic paper)
+      'book' — physical or paid, requires acquisition step
+
+    Deduplicates by URL. Robert supplies tags and topics.
+    """
+    if cost_to_act not in COST_TO_ACT:
+        raise ValueError(f"cost_to_act must be one of {COST_TO_ACT}")
+
+    existing = _url_already_saved(url)
+    if existing:
+        print(f"  ⏭  Already saved: {existing['id']} — {existing['title'][:55]}")
+        return existing
+
+    return add_source(
+        type           = source_type,
+        title          = title,
+        url            = url,
+        origin         = "session-find",
+        origin_session = origin_session,
+        tags           = tags,
+        note           = note,
+        topics         = topics or [],
+        cost_to_act    = cost_to_act,
+        date           = date,
+        date_precision = date_precision,
+    )
+
+
+# ── Entry path 3: manual add ─────────────────────────────────────────────────
+
+def promote_manual(
+    source_type: str,
+    title: str,
+    tags: list[str],
+    *,
+    url: Optional[str] = None,
+    reference: Optional[str] = None,
+    cost_to_act: Optional[str] = None,
+    note: Optional[str] = None,
+    topics: Optional[list[str]] = None,
+    date: Optional[str] = None,
+    date_precision: str = "unknown",
+) -> dict:
+    """
+    Robert adds a Source directly — book, paper, article found outside the feed.
+
+    cost_to_act defaults:
+      book  → 'book'
+      paper → 'dive'
+      article/post → 'free'
+
+    url or reference must be provided (not both required; books often have reference only).
+    Deduplicates by URL when url is present.
+    """
+    if source_type not in SOURCE_TYPES:
+        raise ValueError(f"source_type must be one of {SOURCE_TYPES}")
+
+    if url:
+        existing = _url_already_saved(url)
+        if existing:
+            print(f"  ⏭  Already saved: {existing['id']} — {existing['title'][:55]}")
+            return existing
+
+    # Infer cost_to_act if not supplied
+    if cost_to_act is None:
+        cost_to_act = {
+            "book":    "book",
+            "paper":   "dive",
+            "article": "free",
+            "post":    "free",
+        }.get(source_type, "free")
+
+    return add_source(
+        type           = source_type,
+        title          = title,
+        url            = url,
+        reference      = reference,
+        origin         = "added-by-robert",
+        tags           = tags,
+        note           = note,
+        topics         = topics or [],
+        cost_to_act    = cost_to_act,
+        date           = date,
+        date_precision = date_precision,
+    )
+
+
+# ── Tag-overlap suggestion (read-only, no auto-link) ─────────────────────────
+
+def suggest_topic_links(source: dict, resolve: bool = True) -> list[dict]:
+    """
+    Return Topics whose tags overlap with the Source's tags.
+    Read-only — does not modify anything. Robert decides whether to link.
+
+    Returns list of {slug, status, overlapping_tags} sorted by overlap count desc.
+    """
+    source_tags = set(resolve_tags(source.get("tags", [])) if resolve else source.get("tags", []))
+    if not source_tags:
+        return []
+
+    suggestions = []
+    for topic in _all_topics():
+        topic_tags = set(resolve_tags(topic.get("tags", [])) if resolve else topic.get("tags", []))
+        overlap = source_tags & topic_tags
+        if overlap:
+            suggestions.append({
+                "slug":            topic.get("slug", topic.get("topic", "")),
+                "status":          topic.get("status", ""),
+                "overlapping_tags": sorted(overlap),
+                "overlap_count":   len(overlap),
+            })
+
+    return sorted(suggestions, key=lambda x: x["overlap_count"], reverse=True)
