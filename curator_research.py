@@ -1300,3 +1300,386 @@ def groups_summary() -> dict:
             for g in groups
         ],
     }
+
+
+# ── CLI ───────────────────────────────────────────────────────────────────────
+# Run with:  python curator_research.py <command> [args]
+# This is the primary interface until Flask routes are added.
+
+def _cli_status(_args) -> None:
+    """Print overview: Sources, Topics by state, Groups, tag aliases."""
+    sources = _load_sources()
+    all_topics = _all_topics()
+    groups = _load_groups()
+    aliases = _load_tag_aliases()
+
+    state_counts: dict[str, int] = {}
+    for t in all_topics:
+        s = t.get("status", "unknown")
+        state_counts[s] = state_counts.get(s, 0) + 1
+
+    today = datetime.now(timezone.utc).date().isoformat()
+    overdue = [
+        t for t in all_topics
+        if t.get("status") == "active-pull" and t.get("expires") and t["expires"] < today
+    ]
+
+    print("=== Curator Research — Status ===")
+    print(f"Sources    : {len(sources)}")
+    print(f"Topics     : {len(all_topics)}")
+    for state in ("active-pull", "dormant", "paused", "one-shot", "closed"):
+        if state in state_counts:
+            print(f"  {state:<18}: {state_counts[state]}")
+    print(f"Groups     : {len(groups)}")
+    print(f"Tag aliases: {len(aliases)}")
+
+    if overdue:
+        print(f"\n⚠  {len(overdue)} active-pull topic(s) past expiry — run `auto-stop` to close them:")
+        for t in overdue:
+            print(f"   {t.get('slug', '?')} (expires {t.get('expires')})")
+
+
+def _cli_topics(args) -> None:
+    """List Topics, optionally filtered by status."""
+    all_topics = _all_topics()
+    if args.status:
+        all_topics = [t for t in all_topics if t.get("status") == args.status]
+    if not all_topics:
+        msg = f"No topics found with status={args.status!r}." if args.status else "No topics found."
+        print(msg)
+        return
+    print(f"{'SLUG':<32} {'STATUS':<16} {'EXPIRES':<12} {'SESS':>4}  TAGS")
+    print("─" * 90)
+    for t in all_topics:
+        slug     = t.get("slug", t.get("topic", "?"))
+        status   = t.get("status", "?")
+        expires  = t.get("expires") or "—"
+        sessions = str(t.get("session_count", 0))
+        tags     = ", ".join(t.get("tags", [])) or "—"
+        print(f"{slug:<32} {status:<16} {expires:<12} {sessions:>4}  {tags}")
+
+
+def _cli_activate(args) -> None:
+    topic = activate_topic(args.slug, duration_days=args.days, note=args.note or "")
+    print(f"Activated : {topic['slug']}")
+    print(f"  Status  : {topic['status']}")
+    print(f"  Expires : {topic.get('expires')}")
+    print(f"  Duration: {topic.get('duration_days')} days")
+
+
+def _cli_pause(args) -> None:
+    topic = pause_topic(args.slug, note=args.note or "")
+    remaining = topic.get("remaining_days", "?")
+    print(f"Paused: {topic['slug']} — {remaining} day(s) banked for resume")
+
+
+def _cli_close(args) -> None:
+    topic = close_topic(args.slug, note=args.note or "")
+    print(f"Closed: {topic['slug']}")
+
+
+def _cli_auto_stop(_args) -> None:
+    stopped = auto_stop_check()
+    if stopped:
+        for t in stopped:
+            print(f"Auto-stopped: {t['slug']} (expired {t.get('expires')}) → dormant")
+    else:
+        print("No topics past expiry — nothing changed.")
+
+
+def _cli_groups(_args) -> None:
+    summary = groups_summary()
+    if not summary["groups"]:
+        print("No groups.")
+        return
+    print(f"{'ID':<20} {'NAME':<24} {'TOPICS'}")
+    print("─" * 80)
+    for g in summary["groups"]:
+        gid    = g["id"]
+        name   = g.get("name") or "—"
+        topics = ", ".join(g["member_topics"]) if g["member_topics"] else "—"
+        tags   = ", ".join(g["member_tags"]) if g["member_tags"] else ""
+        leaning = " [Leaning]" if g["has_leaning"] else ""
+        extra  = f"  tags: {tags}" if tags else ""
+        print(f"{gid:<20} {name:<24} {topics}{leaning}{extra}")
+
+
+def _cli_create_group(args) -> None:
+    member_tags   = [t.strip() for t in args.tags.split(",") if t.strip()]   if args.tags   else []
+    member_topics = [t.strip() for t in args.topics.split(",") if t.strip()] if args.topics else []
+    group = create_group(
+        name=args.name,
+        member_tags=member_tags,
+        member_topics=member_topics,
+        note=args.note or "",
+    )
+    print(f"Created group: {group['id']}" + (f" ({group['name']})" if group.get("name") else ""))
+    print(f"  Topics: {', '.join(group['member_topics']) or '—'}")
+    print(f"  Tags  : {', '.join(group['member_tags']) or '—'}")
+
+
+def _cli_sources(args) -> None:
+    filter_tags   = [t.strip() for t in args.tags.split(",") if t.strip()]   if args.tags   else None
+    filter_topics = [t.strip() for t in args.topics.split(",") if t.strip()] if args.topics else None
+    sources = get_sources(tags=filter_tags, topics=filter_topics, resolve=args.resolve)
+    if not sources:
+        print("No sources found.")
+        return
+    print(f"{'ID':<22} {'TYPE':<9} {'DATE':<12} {'COST':<6}  {'TAGS':<30} TITLE")
+    print("─" * 105)
+    for s in sources:
+        sid   = s.get("id", "?")
+        stype = s.get("type", "?")
+        date  = (s.get("date") or "—")[:10]
+        cost  = s.get("cost_to_act", "free")
+        tags  = ", ".join(s.get("tags", []))[:28]
+        title = (s.get("title") or "")[:46]
+        print(f"{sid:<22} {stype:<9} {date:<12} {cost:<6}  {tags:<30} {title}")
+
+
+def _cli_source_detail(args) -> None:
+    """Print full detail for one Source."""
+    source = get_source_by_id(args.source_id)
+    if not source:
+        import sys
+        print(f"Source not found: {args.source_id}", file=sys.stderr)
+        raise SystemExit(1)
+    print(json.dumps(source, indent=2, ensure_ascii=False))
+
+
+def _cli_promote_feed(args) -> None:
+    tags        = [t.strip() for t in args.tags.split(",") if t.strip()]
+    topics_list = [t.strip() for t in args.topics.split(",") if t.strip()] if args.topics else []
+    source = promote_feed_article(args.hash_id, tags, note=args.note or "", topics=topics_list)
+    print(f"Promoted: {source['id']}")
+    print(f"  Title : {source.get('title', '—')}")
+    print(f"  Tags  : {', '.join(source.get('tags', []))}")
+    print(f"  Topics: {', '.join(source.get('topics', [])) or '—'}")
+    links = suggest_topic_links(source)
+    if links:
+        print(f"  Suggested topic links (tag overlap):")
+        for lnk in links:
+            print(f"    {lnk['slug']:<28} overlap: {', '.join(lnk['overlap_tags'])}")
+
+
+def _cli_promote_manual(args) -> None:
+    tags        = [t.strip() for t in args.tags.split(",") if t.strip()]
+    topics_list = [t.strip() for t in args.topics.split(",") if t.strip()] if args.topics else []
+    source = promote_manual(
+        source_type=args.type,
+        title=args.title,
+        tags=tags,
+        url=args.url or "",
+        reference=args.reference or "",
+        cost_to_act=args.cost_to_act or "free",
+        note=args.note or "",
+        topics=topics_list,
+        date=args.date or "",
+        date_precision=args.date_precision or "unknown",
+    )
+    print(f"Added  : {source['id']}")
+    print(f"  Title: {source.get('title', '—')}")
+    print(f"  Type : {source.get('type')}")
+    print(f"  Tags : {', '.join(source.get('tags', []))}")
+    links = suggest_topic_links(source)
+    if links:
+        print(f"  Suggested topic links (tag overlap):")
+        for lnk in links:
+            print(f"    {lnk['slug']:<28} overlap: {', '.join(lnk['overlap_tags'])}")
+
+
+def _cli_migrate_signals(args) -> None:
+    # migrate_article_signals prints its own formatted output
+    migrate_article_signals(dry_run=args.dry_run)
+
+
+def _cli_migrate_threads(args) -> None:
+    results = migrate_threads_to_topics(dry_run=args.dry_run)
+    mode    = "[DRY RUN] " if args.dry_run else ""
+    print(f"{mode}Migrate thread.json files → Topics schema v2 (idempotent)")
+    for r in results:
+        print(f"  [{r.get('action', '?')}] {r.get('slug', '?')}")
+
+
+def _cli_pull(args) -> None:
+    """Print pull context for the session runner — JSON output."""
+    if args.scope == "narrow":
+        ctx = narrow_pull_context(args.target)
+    else:
+        ctx = contextual_pull_context(args.target)
+    print(json.dumps(ctx, indent=2, ensure_ascii=False))
+
+
+def _cli_suggest_links(args) -> None:
+    """Suggest topic links for a Source by ID."""
+    import sys
+    source = get_source_by_id(args.source_id)
+    if not source:
+        print(f"Source not found: {args.source_id}", file=sys.stderr)
+        raise SystemExit(1)
+    links = suggest_topic_links(source, resolve=True)
+    if not links:
+        print("No topic link suggestions (no tag overlap found).")
+        return
+    print(f"Suggested topic links for {args.source_id}:")
+    for lnk in links:
+        print(f"  {lnk['slug']:<32} overlap: {', '.join(lnk['overlap_tags'])}")
+
+
+def _cli_tag_aliases(_args) -> None:
+    """Print all tag aliases."""
+    aliases = _load_tag_aliases()
+    if not aliases:
+        print("No tag aliases defined. Edit: _NewDomains/research-intelligence/data/tag_aliases.json")
+        return
+    print(f"{'ALIAS':<24} → CANONICAL")
+    print("─" * 40)
+    for alias, canonical in sorted(aliases.items()):
+        print(f"  {alias:<22} → {canonical}")
+
+
+if __name__ == "__main__":
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(
+        prog="python curator_research.py",
+        description=(
+            "Curator research data layer — Sources, Topics, Groups.\n"
+            "Primary CLI interface until Flask routes are added."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    # ── status ──
+    sub.add_parser("status", help="Overview: Sources, Topics by state, Groups, aliases.")
+
+    # ── topics ──
+    p_topics = sub.add_parser("topics", help="List Topics.")
+    p_topics.add_argument("--status", metavar="STATE",
+        help="Filter by state: dormant | active-pull | paused | one-shot | closed")
+
+    # ── activate ──
+    p_act = sub.add_parser("activate", help="Activate a Topic (dormant → active-pull).")
+    p_act.add_argument("slug")
+    p_act.add_argument("--days", type=int, default=None,
+        help="Duration in days (default: topic's configured duration_days).")
+    p_act.add_argument("--note", help="Optional note recorded in state_history.")
+
+    # ── pause ──
+    p_pause = sub.add_parser("pause", help="Pause an active-pull Topic (banks remaining days).")
+    p_pause.add_argument("slug")
+    p_pause.add_argument("--note")
+
+    # ── close ──
+    p_close = sub.add_parser("close", help="Close a Topic (terminal state).")
+    p_close.add_argument("slug")
+    p_close.add_argument("--note")
+
+    # ── auto-stop ──
+    sub.add_parser("auto-stop", help="Move expired active-pull Topics → dormant.")
+
+    # ── groups ──
+    sub.add_parser("groups", help="List Groups.")
+
+    # ── create-group ──
+    p_cg = sub.add_parser("create-group", help="Create a new Group.")
+    p_cg.add_argument("--name", help="Human-readable name.")
+    p_cg.add_argument("--topics", metavar="slug,slug",
+        help="Comma-separated topic slugs to include as members.")
+    p_cg.add_argument("--tags", metavar="tag,tag",
+        help="Comma-separated member tags (in addition to topic tags).")
+    p_cg.add_argument("--note")
+
+    # ── sources ──
+    p_src = sub.add_parser("sources", help="List Sources (all, or filtered).")
+    p_src.add_argument("--tags", metavar="tag,tag", help="Filter by tag(s) — any match.")
+    p_src.add_argument("--topics", metavar="slug,slug", help="Filter by topic slug(s).")
+    p_src.add_argument("--resolve", action="store_true",
+        help="Resolve tag aliases before filtering (default: off for speed).")
+
+    # ── source ──
+    p_sd = sub.add_parser("source", help="Print full detail for one Source.")
+    p_sd.add_argument("source_id", help="Source ID, e.g. src_20260531_001")
+
+    # ── promote-feed ──
+    p_pf = sub.add_parser("promote-feed",
+        help="Save an article from today's briefing as a Source.")
+    p_pf.add_argument("hash_id",
+        help="Article hash ID from curator_latest.json (shown in briefing).")
+    p_pf.add_argument("tags", metavar="tag,tag",
+        help="Comma-separated tags to attach.")
+    p_pf.add_argument("--note", help="Your note on this source.")
+    p_pf.add_argument("--topics", metavar="slug,slug",
+        help="Comma-separated topic slugs to link.")
+
+    # ── promote-manual ──
+    p_pm = sub.add_parser("promote-manual",
+        help="Add a book, paper, or post as a Source manually.")
+    p_pm.add_argument("type", choices=sorted(SOURCE_TYPES))
+    p_pm.add_argument("title")
+    p_pm.add_argument("tags", metavar="tag,tag")
+    p_pm.add_argument("--url")
+    p_pm.add_argument("--reference", help="Bibliographic reference (books/papers).")
+    p_pm.add_argument("--cost-to-act", choices=sorted(COST_TO_ACT), default="free",
+        dest="cost_to_act")
+    p_pm.add_argument("--note")
+    p_pm.add_argument("--topics", metavar="slug,slug")
+    p_pm.add_argument("--date", help="Publication date: YYYY, YYYY-MM, or YYYY-MM-DD.")
+    p_pm.add_argument("--date-precision",
+        choices=sorted(DATE_PRECISIONS), default="unknown", dest="date_precision")
+
+    # ── migrate-signals ──
+    p_ms = sub.add_parser("migrate-signals",
+        help="Migrate saved articles from article_signals.json → Sources.")
+    p_ms.add_argument("--dry-run", action="store_true",
+        help="Preview what would be promoted without writing anything.")
+
+    # ── migrate-threads ──
+    p_mt = sub.add_parser("migrate-threads",
+        help="Upgrade thread.json files to Topics schema v2 (idempotent).")
+    p_mt.add_argument("--dry-run", action="store_true")
+
+    # ── pull ──
+    p_pull = sub.add_parser("pull",
+        help="Print pull context (queries + scope) for the session runner.")
+    p_pull.add_argument("scope", choices=["narrow", "contextual"],
+        help="narrow = single topic; contextual = whole group.")
+    p_pull.add_argument("target",
+        help="Topic slug (narrow) or Group ID (contextual).")
+
+    # ── suggest-links ──
+    p_sl = sub.add_parser("suggest-links",
+        help="Suggest which Topics a Source might link to (tag overlap, read-only).")
+    p_sl.add_argument("source_id")
+
+    # ── tag-aliases ──
+    sub.add_parser("tag-aliases", help="List all tag aliases.")
+
+    # ── dispatch ──
+    args = parser.parse_args()
+    handlers = {
+        "status":          _cli_status,
+        "topics":          _cli_topics,
+        "activate":        _cli_activate,
+        "pause":           _cli_pause,
+        "close":           _cli_close,
+        "auto-stop":       _cli_auto_stop,
+        "groups":          _cli_groups,
+        "create-group":    _cli_create_group,
+        "sources":         _cli_sources,
+        "source":          _cli_source_detail,
+        "promote-feed":    _cli_promote_feed,
+        "promote-manual":  _cli_promote_manual,
+        "migrate-signals": _cli_migrate_signals,
+        "migrate-threads": _cli_migrate_threads,
+        "pull":            _cli_pull,
+        "suggest-links":   _cli_suggest_links,
+        "tag-aliases":     _cli_tag_aliases,
+    }
+    try:
+        handlers[args.command](args)
+    except (ValueError, FileNotFoundError, KeyError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
