@@ -3401,6 +3401,8 @@ def main():
     # Write today's briefing pool for intelligence layer (WS5 Phase B)
     if not dry_run:
         try:
+            if top_articles:
+                top_articles[0]['briefing_model'] = xai_model_variant if model == 'grok-4-1' else model
             with open('curator_latest.json', 'w') as f:
                 json.dump(top_articles, f, indent=2, default=str)
             print(f"💾 Wrote {len(top_articles)} articles to curator_latest.json")

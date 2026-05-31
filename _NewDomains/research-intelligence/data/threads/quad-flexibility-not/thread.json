@@ -1,0 +1,38 @@
+{
+  "id": "quad-flexibility-not-2026",
+  "topic": "quad-flexibility-not",
+  "version": 1,
+  "status": "active-pull",
+  "opened": "2026-05-30T03:06:50+00:00",
+  "closed": null,
+  "retired": false,
+  "auto_close_days": 30,
+  "duration_days": 5,
+  "expires": "2026-06-03",
+  "deeper_dive_generated": false,
+  "deeper_dive_path": null,
+  "last_session_date": null,
+  "session_count": 0,
+  "links_to": [],
+  "links_from": [],
+  "motivation": "This group seems the most important in the world as a buffer to China, not an enemy but a potentially strong group.  Will it help I'd like to know more about past actions and futures plans, even if just speculation.\n\n**Focus:** Key players, Asia",
+  "prior_belief": "",
+  "wrap_up": null,
+  "retired_reason": null,
+  "created_by": "robert",
+  "schema_version": "2.0",
+  "slug": "quad-flexibility-not",
+  "tags": [],
+  "activated_at": "2026-05-30T03:06:50+00:00",
+  "paused_at": null,
+  "remaining_days": null,
+  "state_history": [
+    {
+      "from": null,
+      "to": "active-pull",
+      "at": "2026-05-31T15:53:10.780071+00:00",
+      "by": "migration",
+      "note": "migrated from thread schema v1 (was: 'active')"
+    }
+  ]
+}
