@@ -20,5 +20,19 @@
   "wrap_up": null,
   "retired_reason": null,
   "created_by": "robert",
-  "schema_version": "1.0"
+  "schema_version": "2.0",
+  "slug": "strait-of-hormuz",
+  "tags": [],
+  "activated_at": null,
+  "paused_at": null,
+  "remaining_days": null,
+  "state_history": [
+    {
+      "from": null,
+      "to": "closed",
+      "at": "2026-05-31T15:53:10.780487+00:00",
+      "by": "migration",
+      "note": "migrated from thread schema v1 (was: 'closed')"
+    }
+  ]
 }

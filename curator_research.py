@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from datetime import timedelta
 from typing import Optional
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
@@ -25,6 +26,7 @@ _REPO_ROOT    = Path(__file__).parent
 _RESEARCH_DIR = _REPO_ROOT / "_NewDomains" / "research-intelligence" / "data"
 _SOURCES_FILE = _RESEARCH_DIR / "sources" / "sources.json"
 _ALIASES_FILE = _RESEARCH_DIR / "tag_aliases.json"
+_TOPICS_DIR   = _RESEARCH_DIR / "threads"   # reuses existing thread dir
 
 # ── Schema constants ──────────────────────────────────────────────────────────
 SOURCE_TYPES      = {"article", "post", "paper", "book"}
@@ -347,3 +349,419 @@ def sources_summary() -> dict:
         summary["by_origin"][s.get("origin", "?")] = summary["by_origin"].get(s.get("origin", "?"), 0) + 1
         summary["by_cost_to_act"][s.get("cost_to_act", "?")] = summary["by_cost_to_act"].get(s.get("cost_to_act", "?"), 0) + 1
     return summary
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 2 — Topic state machine
+# ═══════════════════════════════════════════════════════════════════════════════
+"""
+Topic schema (extends existing thread.json, schema_version 2.0):
+
+  slug          — URL-safe identifier, directory name under threads/
+  status        — dormant | active-pull | one-shot | paused | closed
+  tags          — list of strings, stored as entered (alias-resolved at read time)
+  duration_days — engagement gate duration (default 14); used when activating
+  activated_at  — ISO timestamp of last move to active-pull (None if never)
+  expires       — YYYY-MM-DD computed from activated_at + duration_days (None if dormant)
+  paused_at     — ISO timestamp when paused (None if not paused)
+  remaining_days — days left at pause time; used to recompute expires on resume
+  state_history  — list of {from, to, at, by, note} — full audit trail
+
+Inherits from thread.json (preserved, not overwritten):
+  motivation, prior_belief, session_count, links_to, links_from, wrap_up, etc.
+"""
+
+# ── Topic constants ───────────────────────────────────────────────────────────
+TOPIC_STATES = {"dormant", "active-pull", "one-shot", "paused", "closed"}
+
+VALID_TRANSITIONS: dict[str, set[str]] = {
+    "dormant":      {"active-pull", "one-shot", "closed"},
+    "active-pull":  {"dormant", "paused", "closed"},
+    "one-shot":     {"closed"},
+    "paused":       {"active-pull", "closed"},
+    "closed":       set(),   # terminal — no exits
+}
+
+DEFAULT_DURATION_DAYS = 14
+TOPIC_SCHEMA_VERSION  = "2.0"
+
+
+# ── Topic I/O ─────────────────────────────────────────────────────────────────
+
+def _topic_path(slug: str) -> Path:
+    return _TOPICS_DIR / slug / "thread.json"
+
+
+def _load_topic(slug: str) -> Optional[dict]:
+    p = _topic_path(slug)
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def _save_topic(topic: dict) -> None:
+    p = _topic_path(topic["slug"])
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(topic, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _all_topic_slugs() -> list[str]:
+    if not _TOPICS_DIR.exists():
+        return []
+    return [d.name for d in sorted(_TOPICS_DIR.iterdir()) if (d / "thread.json").exists()]
+
+
+def _all_topics() -> list[dict]:
+    topics = []
+    for slug in _all_topic_slugs():
+        t = _load_topic(slug)
+        if t:
+            topics.append(t)
+    return topics
+
+
+def _compute_expires(activated_at: str, duration_days: int) -> str:
+    """Return YYYY-MM-DD expiry date from ISO activated_at + duration_days."""
+    dt = datetime.fromisoformat(activated_at.replace("Z", "+00:00"))
+    return (dt + timedelta(days=duration_days)).strftime("%Y-%m-%d")
+
+
+def _append_state_history(topic: dict, from_state: Optional[str], to_state: str,
+                           by: str = "robert", note: str = "") -> None:
+    topic.setdefault("state_history", []).append({
+        "from": from_state,
+        "to":   to_state,
+        "at":   datetime.now(timezone.utc).isoformat(),
+        "by":   by,
+        "note": note,
+    })
+
+
+# ── Topic creation ────────────────────────────────────────────────────────────
+
+def create_topic(
+    slug: str,
+    motivation: str,
+    *,
+    tags: Optional[list[str]] = None,
+    status: str = "dormant",
+    duration_days: int = DEFAULT_DURATION_DAYS,
+    note: str = "",
+) -> dict:
+    """
+    Create a new Topic (writes thread.json under threads/{slug}/).
+    Raises if topic already exists or slug is invalid.
+    status must be dormant or one-shot at creation.
+    """
+    if status not in {"dormant", "one-shot"}:
+        raise ValueError(f"New Topics must start as dormant or one-shot, got {status!r}")
+    if _topic_path(slug).exists():
+        raise FileExistsError(f"Topic already exists: {slug}")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    topic: dict = {
+        "slug":            slug,
+        "topic":           slug,           # legacy field — kept for backward compat
+        "status":          status,
+        "tags":            list(tags) if tags else [],
+        "motivation":      motivation,
+        "prior_belief":    "",
+        "duration_days":   duration_days,
+        "activated_at":    None,
+        "expires":         None,
+        "paused_at":       None,
+        "remaining_days":  None,
+        "session_count":   0,
+        "links_to":        [],
+        "links_from":      [],
+        "wrap_up":         None,
+        "created_at":      now_iso,
+        "state_history":   [],
+        "schema_version":  TOPIC_SCHEMA_VERSION,
+    }
+    _append_state_history(topic, None, status, note=note or "created")
+    _save_topic(topic)
+    return topic
+
+
+# ── State transitions ─────────────────────────────────────────────────────────
+
+def _transition(slug: str, to_state: str, by: str = "robert", note: str = "") -> dict:
+    """
+    Generic state transition with validation. Returns updated Topic.
+    Raises ValueError on invalid transition or unknown slug.
+    """
+    topic = _load_topic(slug)
+    if topic is None:
+        raise ValueError(f"Topic not found: {slug!r}")
+
+    from_state = topic.get("status")
+    if to_state not in VALID_TRANSITIONS.get(from_state, set()):
+        raise ValueError(
+            f"Invalid transition {from_state!r} → {to_state!r} for topic {slug!r}"
+        )
+
+    _append_state_history(topic, from_state, to_state, by=by, note=note)
+    topic["status"] = to_state
+    _save_topic(topic)
+    return topic
+
+
+def activate_topic(
+    slug: str,
+    *,
+    duration_days: Optional[int] = None,
+    note: str = "",
+) -> dict:
+    """
+    Move Topic to active-pull. Sets activated_at, computes expires.
+    Works from dormant or paused. For resume from paused, uses remaining_days
+    if duration_days not supplied.
+    """
+    topic = _load_topic(slug)
+    if topic is None:
+        raise ValueError(f"Topic not found: {slug!r}")
+
+    from_state = topic.get("status")
+    if from_state not in {"dormant", "paused"}:
+        raise ValueError(f"Can only activate from dormant or paused, not {from_state!r}")
+
+    # Duration: explicit arg > remaining days from pause > topic default > global default
+    if duration_days is not None:
+        days = duration_days
+    elif from_state == "paused" and topic.get("remaining_days"):
+        days = topic["remaining_days"]
+    else:
+        days = topic.get("duration_days") or DEFAULT_DURATION_DAYS
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    topic["activated_at"]   = now_iso
+    topic["expires"]        = _compute_expires(now_iso, days)
+    topic["duration_days"]  = days
+    topic["paused_at"]      = None
+    topic["remaining_days"] = None
+
+    _append_state_history(topic, from_state, "active-pull", note=note or f"activated, expires {topic['expires']}")
+    topic["status"] = "active-pull"
+    _save_topic(topic)
+    return topic
+
+
+def pause_topic(slug: str, *, note: str = "") -> dict:
+    """
+    Pause an active-pull Topic. Saves remaining_days so resume can restore the gate.
+    """
+    topic = _load_topic(slug)
+    if topic is None:
+        raise ValueError(f"Topic not found: {slug!r}")
+    if topic.get("status") != "active-pull":
+        raise ValueError(f"Can only pause active-pull Topics, not {topic.get('status')!r}")
+
+    now = datetime.now(timezone.utc)
+    topic["paused_at"] = now.isoformat()
+
+    # Compute remaining days from expiry
+    expires_str = topic.get("expires")
+    if expires_str:
+        expires_dt = datetime.strptime(expires_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        remaining = max(0, (expires_dt - now).days)
+    else:
+        remaining = topic.get("duration_days") or DEFAULT_DURATION_DAYS
+    topic["remaining_days"] = remaining
+
+    _append_state_history(topic, "active-pull", "paused", note=note or f"{remaining}d remaining")
+    topic["status"] = "paused"
+    _save_topic(topic)
+    return topic
+
+
+def close_topic(slug: str, *, note: str = "") -> dict:
+    """Move a Topic to closed (terminal). Accepts any non-closed state."""
+    topic = _load_topic(slug)
+    if topic is None:
+        raise ValueError(f"Topic not found: {slug!r}")
+    if topic.get("status") == "closed":
+        return topic   # idempotent
+
+    _append_state_history(topic, topic.get("status"), "closed", note=note or "closed")
+    topic["status"] = "closed"
+    _save_topic(topic)
+    return topic
+
+
+def downgrade_topic(slug: str, *, note: str = "") -> dict:
+    """Move an active-pull Topic back to dormant (manual downgrade, not auto-stop)."""
+    return _transition(slug, "dormant", note=note or "manually downgraded to dormant")
+
+
+# ── Engagement gate ───────────────────────────────────────────────────────────
+
+def auto_stop_check() -> list[dict]:
+    """
+    Scan all active-pull Topics. Move any with expires < today to dormant.
+    Returns list of Topics that were auto-stopped.
+
+    Call this at the start of each curator run (no AI cost — pure date math).
+    """
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    stopped: list[dict] = []
+
+    for slug in _all_topic_slugs():
+        topic = _load_topic(slug)
+        if not topic:
+            continue
+        if topic.get("status") != "active-pull":
+            continue
+        expires = topic.get("expires")
+        if expires and expires < today:
+            _append_state_history(
+                topic, "active-pull", "dormant",
+                by="system",
+                note=f"auto-stopped: expired {expires}",
+            )
+            topic["status"] = "dormant"
+            _save_topic(topic)
+            stopped.append(topic)
+            print(f"  ⏹  Auto-stopped Topic: {slug} (expired {expires})")
+
+    return stopped
+
+
+# ── Queries ───────────────────────────────────────────────────────────────────
+
+def get_topics(
+    *,
+    status: Optional[str] = None,
+    tags: Optional[list[str]] = None,
+    resolve: bool = True,
+) -> list[dict]:
+    """
+    Return Topics matching filters (AND logic).
+    status — exact match (dormant | active-pull | one-shot | paused | closed)
+    tags   — at least one tag matches (alias-resolved if resolve=True)
+    """
+    topics = _all_topics()
+
+    if status:
+        topics = [t for t in topics if t.get("status") == status]
+
+    if tags:
+        filter_tags = set(resolve_tags(tags) if resolve else tags)
+        topics = [
+            t for t in topics
+            if filter_tags & set(resolve_tags(t.get("tags", [])) if resolve else t.get("tags", []))
+        ]
+
+    return topics
+
+
+def get_topic(slug: str) -> Optional[dict]:
+    """Return a single Topic by slug, or None."""
+    return _load_topic(slug)
+
+
+def update_topic_tags(slug: str, tags: list[str]) -> Optional[dict]:
+    """Replace tag list on a Topic. Stored as entered."""
+    topic = _load_topic(slug)
+    if topic is None:
+        return None
+    topic["tags"] = list(tags)
+    _save_topic(topic)
+    return topic
+
+
+# ── Migration: thread.json v1 → Topic v2 ─────────────────────────────────────
+
+def migrate_threads_to_topics(dry_run: bool = True) -> list[dict]:
+    """
+    Migrate existing thread.json files (schema_version 1.0) to Topic v2.
+
+    Mapping:
+      status "active"  → "active-pull" (engagement gate fields set to None if missing)
+      status "closed"  → "closed"
+      status anything else → "dormant"
+      retired = True   → "closed"
+
+    Adds: slug, tags, activated_at, paused_at, remaining_days, state_history,
+          schema_version 2.0. Preserves all existing fields unchanged.
+
+    dry_run=True: prints plan, writes nothing.
+    dry_run=False: updates files in place.
+    """
+    slugs = _all_topic_slugs()
+    results: list[dict] = []
+
+    print(f"\n{'DRY RUN — migrate threads' if dry_run else 'Migrating threads':─^60}")
+    for slug in slugs:
+        topic = _load_topic(slug)
+        if not topic:
+            continue
+
+        if topic.get("schema_version") == TOPIC_SCHEMA_VERSION:
+            print(f"  ⏭  Already v2.0: {slug}")
+            continue
+
+        old_status = topic.get("status", "")
+        retired = topic.get("retired", False)
+
+        if retired or old_status == "closed":
+            new_status = "closed"
+        elif old_status == "active":
+            new_status = "active-pull"
+        else:
+            new_status = "dormant"
+
+        print(f"  {'→' if not dry_run else '?'} {slug}: {old_status!r} → {new_status!r}")
+
+        if not dry_run:
+            # Preserve all existing fields, add new ones
+            topic["slug"]           = slug
+            topic["tags"]           = topic.get("tags", [])
+            topic["activated_at"]   = topic.get("opened") if new_status == "active-pull" else None
+            topic["paused_at"]      = None
+            topic["remaining_days"] = None
+            topic["state_history"]  = [{
+                "from": None,
+                "to":   new_status,
+                "at":   datetime.now(timezone.utc).isoformat(),
+                "by":   "migration",
+                "note": f"migrated from thread schema v1 (was: {old_status!r})",
+            }]
+            topic["status"]         = new_status
+            topic["schema_version"] = TOPIC_SCHEMA_VERSION
+            _save_topic(topic)
+
+        results.append(topic)
+
+    print("─" * 60)
+    return results
+
+
+# ── Topic summary ─────────────────────────────────────────────────────────────
+
+def topics_summary() -> dict:
+    """Return counts by status, plus list of active Topic slugs with expiry."""
+    topics = _all_topics()
+    by_status: dict[str, int] = {}
+    active_list = []
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    for t in topics:
+        st = t.get("status", "?")
+        by_status[st] = by_status.get(st, 0) + 1
+        if st == "active-pull":
+            expires = t.get("expires", "no expiry")
+            expired = expires != "no expiry" and expires < today
+            active_list.append({
+                "slug":    t.get("slug", t.get("topic", "?")),
+                "expires": expires,
+                "expired": expired,
+                "tags":    t.get("tags", []),
+            })
+
+    return {
+        "total":      len(topics),
+        "by_status":  by_status,
+        "active":     active_list,
+    }
