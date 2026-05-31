@@ -201,33 +201,42 @@ python3 tools/curator_research.py --help
 
 ---
 
-### T13 — Create group (write test — creates then verify, no permanent side effect if deleted)
+### T13 — Create group (dry-run — fully non-destructive)
 ```bash
 python3 tools/curator_research.py create-group \
   --name "Indo-Pacific Test" \
   --topics quad-flexibility-not,china-rise \
-  --tags quad,china,test
-python3 tools/curator_research.py groups
+  --tags quad,china,test \
+  --dry-run
 python3 tools/curator_research.py status
 ```
 **Expect:**
-- `create-group` prints `Created group: grp_001 (Indo-Pacific Test)`
-- `groups` shows the group with `quad-flexibility-not, china-rise` in Topics column
-- `status` shows `Groups     : 1`
+- `create-group` prints `[DRY RUN] Would create group: grp_20260531_001 (Indo-Pacific Test)`
+- `  Topics: quad-flexibility-not, china-rise`
+- `  Tags  : quad, china, test`
+- `  (nothing written to disk)`
+- `status` still shows `Groups     : 0`
 
-After verifying, clean up:
-```bash
-# Manual cleanup: delete grp_001 entry from _NewDomains/research-intelligence/data/groups/groups.json
-# (reset to [])
-```
+How `--dry-run` works: the full record is built and assigned an ID (so you can see exactly what would be written), but the final `_save_groups()` call is skipped. The moment the command exits, nothing changed on disk. No cleanup needed.
 
 ---
 
-### T14 — Contextual pull context (requires group from T13 to exist first)
+### T14 — Contextual pull context (self-contained — no prior write needed)
 ```bash
-python3 tools/curator_research.py pull contextual grp_001 | python3 -m json.tool > /dev/null && echo "PASS: valid JSON"
+# Create a real group just for this test, then clean it up afterward
+python3 tools/curator_research.py create-group \
+  --name "Indo-Pacific Test" \
+  --topics quad-flexibility-not,china-rise
+python3 tools/curator_research.py pull contextual grp_20260531_001 | python3 -m json.tool > /dev/null && echo "PASS: valid JSON"
+# Cleanup: reset groups.json to []
+python3 -c "
+import json; from pathlib import Path
+p = Path('_NewDomains/research-intelligence/data/groups/groups.json')
+p.write_text('[]')
+print('groups.json reset to []')
+"
 ```
-**Expect:** Valid JSON with `"scope": "contextual"`, `"group_id": "grp_001"`, merged queries from both member topics.
+**Expect:** Valid JSON with `"scope": "contextual"`, `"group_id": "grp_20260531_001"`, merged queries from both member topics.
 
 ---
 

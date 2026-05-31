@@ -1083,12 +1083,15 @@ def create_group(
     member_tags: Optional[list[str]] = None,
     member_topics: Optional[list[str]] = None,
     note: Optional[str] = None,
+    dry_run: bool = False,
 ) -> dict:
     """
     Create a first-class Group record.
     name is optional — unnamed Groups are valid (neutral Themes).
     member_tags and member_topics can be empty; add them after creation.
     Leaning slot exists as None — Leaning is built in a later PLAN.
+
+    dry_run=True: builds and returns the record but does NOT write to disk.
     """
     groups = _load_groups()
     group: dict = {
@@ -1101,8 +1104,9 @@ def create_group(
         "created_at":    datetime.now(timezone.utc).isoformat(),
         "schema_version": GROUP_SCHEMA_VERSION,
     }
-    groups.append(group)
-    _save_groups(groups)
+    if not dry_run:
+        groups.append(group)
+        _save_groups(groups)
     return group
 
 
@@ -1419,10 +1423,14 @@ def _cli_create_group(args) -> None:
         member_tags=member_tags,
         member_topics=member_topics,
         note=args.note or "",
+        dry_run=args.dry_run,
     )
-    print(f"Created group: {group['id']}" + (f" ({group['name']})" if group.get("name") else ""))
+    prefix = "[DRY RUN] Would create" if args.dry_run else "Created"
+    print(f"{prefix} group: {group['id']}" + (f" ({group['name']})" if group.get("name") else ""))
     print(f"  Topics: {', '.join(group['member_topics']) or '—'}")
     print(f"  Tags  : {', '.join(group['member_tags']) or '—'}")
+    if args.dry_run:
+        print("  (nothing written to disk)")
 
 
 def _cli_sources(args) -> None:
@@ -1598,6 +1606,9 @@ if __name__ == "__main__":
     p_cg.add_argument("--tags", metavar="tag,tag",
         help="Comma-separated member tags (in addition to topic tags).")
     p_cg.add_argument("--note")
+    p_cg.add_argument("--dry-run", action="store_true",
+        help="Preview what would be created without writing to disk.",
+        dest="dry_run")
 
     # ── sources ──
     p_src = sub.add_parser("sources", help="List Sources (all, or filtered).")
