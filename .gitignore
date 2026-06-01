@@ -33,9 +33,9 @@ server.log
 interests/ratings.json
 interests/TEMPLATE.md
 interests/2026-*.md
-interests/2026/deep-dives/*.md
-interests/2026/deep-dives/*.html
-!interests/2026/deep-dives/index.html
+interests/2026/scans/*.md
+interests/2026/scans/*.html
+!interests/2026/scans/index.html
 
 # Deep dive system (generated content)
 curator_cache/

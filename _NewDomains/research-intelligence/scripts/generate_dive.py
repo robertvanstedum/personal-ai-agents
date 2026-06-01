@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-generate_deeper_dive.py — Deeper Dive POC
+generate_dive.py — Dive (thread-level analysis)
+Formerly generate_deeper_dive.py — renamed to Dive per v2 naming.
 
 Two-agent analysis for a research thread:
   Agent 1 (Synthesizer): honest synthesis of what the research found
@@ -8,10 +9,10 @@ Two-agent analysis for a research thread:
 
 Usage:
   cd _NewDomains/research-intelligence
-  python scripts/generate_deeper_dive.py --topic strait-of-hormuz
-  python scripts/generate_deeper_dive.py --topic strait-of-hormuz --dry-run
+  python scripts/generate_dive.py --topic strait-of-hormuz
+  python scripts/generate_dive.py --topic strait-of-hormuz --dry-run
 
-Output: data/deeper_dives/{topic}-deeper-dive-NNN.md
+Output: data/dives/{topic}-dive-NNN.md
 """
 
 import argparse
@@ -28,7 +29,7 @@ ROOT         = Path(__file__).resolve().parent.parent   # _NewDomains/research-i
 TOPICS_DIR   = ROOT / 'topics'
 THREADS_DIR  = ROOT / 'data' / 'threads'
 ANNOTATIONS_DIR = ROOT / 'data' / 'annotations' / 'research'
-OUTPUT_DIR   = ROOT / 'data' / 'deeper_dives'
+OUTPUT_DIR   = ROOT / 'data' / 'dives'
 READING_ROOM = ROOT / 'data' / 'reading_room'
 PROMPTS_DIR  = ROOT / 'prompts' / 'v1'
 
@@ -345,16 +346,16 @@ def assemble_essay(data: dict, s_out: str, c_out: str, total_cost: float) -> str
 # ── Output / stubs ────────────────────────────────────────────────────────────
 
 def next_output_path(topic: str) -> Path:
-    """Return next sequential output path: {topic}-deeper-dive-NNN.md"""
+    """Return next sequential output path: {topic}-dive-NNN.md (legacy: {topic}-deeper-dive-NNN.md also counted)"""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    existing = list(OUTPUT_DIR.glob(f'{topic}-deeper-dive-*.md'))
+    existing = list(OUTPUT_DIR.glob(f'{topic}-*.md'))
     nums = []
     for f in existing:
-        m = re.search(r'-deeper-dive-(\d+)\.md$', f.name)
+        m = re.search(r'-(?:deeper-dive|dive)-(\d+)\.md$', f.name)
         if m:
             nums.append(int(m.group(1)))
     n = (max(nums) + 1) if nums else 1
-    return OUTPUT_DIR / f'{topic}-deeper-dive-{n:03d}.md'
+    return OUTPUT_DIR / f'{topic}-dive-{n:03d}.md'
 
 
 def create_reading_room_stub(topic: str) -> None:
@@ -376,12 +377,12 @@ def create_reading_room_stub(topic: str) -> None:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description='Generate a Deeper Dive essay for a research thread')
+    parser = argparse.ArgumentParser(description='Generate a Dive essay for a research thread')
     parser.add_argument('--topic',   required=True, help='Topic slug (e.g. strait-of-hormuz)')
     parser.add_argument('--dry-run', action='store_true',
                         help='Print prompts and data summary without calling the API')
     parser.add_argument('--output-path', type=Path, default=None,
-                        help='Override output path (default: auto-numbered in data/deeper_dives/)')
+                        help='Override output path (default: auto-numbered in data/dives/)')
     args = parser.parse_args()
 
     topic = args.topic

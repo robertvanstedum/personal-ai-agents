@@ -420,12 +420,12 @@
 
   .action-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
 
-  .action-btn.deep-dive {
+  .action-btn.scan {
     border-color: rgba(122,46,110,0.3);
     color: var(--bookmarked);
     background: var(--bookmarked-bg);
   }
-  .action-btn.deep-dive:hover { border-color: var(--bookmarked); background: rgba(122,46,110,0.15); }
+  .action-btn.scan:hover { border-color: var(--bookmarked); background: rgba(122,46,110,0.15); }
 
   .action-btn.start-dive {
     border-color: rgba(139,94,42,0.3);
@@ -695,7 +695,7 @@
 <nav class="curator-subnav">
   <a href="/" class="subnav-tab">Daily</a>
   <a href="/curator_library.html" class="subnav-tab active">Library</a>
-  <a href="/interests/2026/deep-dives/index.html" class="subnav-tab">Deep Dives</a>
+  <a href="/interests/2026/scans/index.html" class="subnav-tab">Scans &amp; Dives</a>
   <a href="/curator_intelligence.html" class="subnav-tab">Observations</a>
   <a href="/curator_priorities.html" class="subnav-tab subnav-focus">🎯 Focus</a>
 </nav>
@@ -882,7 +882,7 @@ function render() {
     // Deep dive button: show existing dive OR offer to start one
     let diveBtn = '';
     if (a.deep_dive_url) {
-      diveBtn = `<a class="action-btn deep-dive" href="${escHtml(a.deep_dive_url)}" target="_blank" title="View deep dive">🔭 View Dive →</a>`;
+      diveBtn = `<a class="action-btn scan" href="${escHtml(a.deep_dive_url)}" target="_blank" title="View scan">🔭 View Scan →</a>`;
     } else if (a.hash_id) {
       diveBtn = `<button class="action-btn start-dive" data-hash-id="${escHtml(a.hash_id||'')}">✨ Start Dive</button>`;
     }

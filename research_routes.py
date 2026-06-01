@@ -28,7 +28,8 @@ research_bp = Blueprint('research', __name__)
 
 # Path to the research-intelligence project (relative to this file's location)
 RESEARCH_ROOT  = Path(__file__).resolve().parent / '_NewDomains' / 'research-intelligence'
-DEEP_DIVES_DIR = Path(__file__).resolve().parent / 'interests' / '2026' / 'deep-dives'
+SCANS_DIR      = Path(__file__).resolve().parent / 'interests' / '2026' / 'scans'
+DIVES_DIR      = RESEARCH_ROOT / 'data' / 'dives'
 
 # Ensure agent/ modules are importable — done once at import time, not per-request
 if str(RESEARCH_ROOT) not in sys.path:
@@ -509,7 +510,7 @@ def api_research_dashboard():
         thread_dd_generated = _thread.deeper_dive_generated if _thread else False
         thread_dd_path      = _thread.deeper_dive_path      if _thread else None
 
-        # Compute session count at time of last deeper dive (for repeatable dive gate)
+        # Compute session count at time of last Dive (for repeatable dive gate)
         sessions_at_last_dive = 0
         if thread_dd_generated and thread_dd_path:
             _dd_full = RESEARCH_ROOT / thread_dd_path
@@ -741,37 +742,37 @@ def _dd_state_active() -> bool:
     return True
 
 
-def _next_dd_output_path(topic: str) -> Path:
-    """Return next sequential output path: {topic}-deeper-dive-NNN.md"""
+def _next_dive_output_path(topic: str) -> Path:
+    """Return next sequential output path for a Dive: {topic}-dive-NNN.md"""
     import re as _re2
-    dd_dir = RESEARCH_ROOT / 'data' / 'deeper_dives'
+    dd_dir = DIVES_DIR
     dd_dir.mkdir(parents=True, exist_ok=True)
-    existing = list(dd_dir.glob(f'{topic}-deeper-dive-*.md'))
+    # Support both legacy deeper-dive-NNN and new dive-NNN naming
+    existing = list(dd_dir.glob(f'{topic}-*.md'))
     nums = []
     for f in existing:
-        m = _re2.search(r'-deeper-dive-(\d+)\.md$', f.name)
+        m = _re2.search(r'-(?:deeper-dive|dive)-(\d+)\.md$', f.name)
         if m:
             nums.append(int(m.group(1)))
     n = (max(nums) + 1) if nums else 1
-    return dd_dir / f'{topic}-deeper-dive-{n:03d}.md'
+    return dd_dir / f'{topic}-dive-{n:03d}.md'
 
 
-@research_bp.route('/research/deeper-dive-result/<stem>')
-def research_deeper_dive_result(stem: str):
+@research_bp.route('/research/dive-result/<stem>')
+def research_dive_result(stem: str):
     """
-    Serve a research Deeper Dive output file by filename stem.
-    GET /research/deeper-dive-result/strait-of-hormuz-deeper-dive-005
+    Serve a research Dive output file by filename stem.
+    GET /research/dive-result/strait-of-hormuz-deeper-dive-005
 
-    Renders the markdown file from data/deeper_dives/ as a styled read-only page.
+    Renders the markdown file from data/dives/ as a styled read-only page.
     """
     # Sanitise: only slug-safe characters
     if not _re.match(r'^[a-zA-Z0-9_-]+$', stem):
         return "invalid filename", 400
 
-    dd_dir  = RESEARCH_ROOT / 'data' / 'deeper_dives'
-    md_path = dd_dir / f'{stem}.md'
+    md_path = DIVES_DIR / f'{stem}.md'
     if not md_path.exists():
-        return f"Deeper Dive '{stem}' not found", 404
+        return f"Dive '{stem}' not found", 404
 
     raw   = md_path.read_text()
     title = stem.replace('-', ' ').title()
@@ -857,27 +858,27 @@ def research_deeper_dive_result(stem: str):
 </html>""", 200, {'Content-Type': 'text/html'}
 
 
-@research_bp.route('/research/deeper-dive-confirm')
-def research_deeper_dive_confirm():
+@research_bp.route('/research/dive-confirm')
+def research_dive_confirm():
     """
     Confirmation page before generating a Deeper Dive.
-    GET /research/deeper-dive-confirm?topic=strait-of-hormuz
+    GET /research/dive-confirm?topic=strait-of-hormuz
     """
     topic = request.args.get('topic', '').strip()
     if not topic:
         return "topic parameter required", 400
 
-    html = RESEARCH_ROOT / 'web' / 'deeper_dive_confirm.html'
+    html = RESEARCH_ROOT / 'web' / 'dive_confirm.html'
     if not html.exists():
-        return "deeper_dive_confirm.html not found", 404
+        return "dive_confirm.html not found", 404
     return html.read_text(), 200, {'Content-Type': 'text/html'}
 
 
-@research_bp.route('/api/research/deeper-dive-confirm-data')
-def api_research_deeper_dive_confirm_data():
+@research_bp.route('/api/research/dive-confirm-data')
+def api_research_dive_confirm_data():
     """
     Return thread metadata for the Deeper Dive confirmation page.
-    GET /api/research/deeper-dive-confirm-data?topic=strait-of-hormuz
+    GET /api/research/dive-confirm-data?topic=strait-of-hormuz
     """
     from agent.threads import load_thread
     topic = request.args.get('topic', '').strip()
@@ -925,14 +926,14 @@ def api_research_deeper_dive_confirm_data():
     })
 
 
-@research_bp.route('/api/research/generate-deeper-dive', methods=['POST'])
-def api_research_generate_deeper_dive():
+@research_bp.route('/api/research/generate-dive', methods=['POST'])
+def api_research_generate_dive():
     """
-    Spawn a Deeper Dive generation for a topic as a non-blocking subprocess.
-    POST /api/research/generate-deeper-dive
+    Spawn a Dive generation for a topic as a non-blocking subprocess.
+    POST /api/research/generate-dive
     Body: {"topic": "strait-of-hormuz"}
     Returns immediately — generation runs in background.
-    Poll GET /api/research/generate-deeper-dive/status for completion.
+    Poll GET /api/research/generate-dive/status for completion.
     """
     global _dd_proc
 
@@ -952,7 +953,7 @@ def api_research_generate_deeper_dive():
         }), 409
 
     out_path = _next_dd_output_path(topic)
-    script   = RESEARCH_ROOT / 'scripts' / 'generate_deeper_dive.py'
+    script   = RESEARCH_ROOT / 'scripts' / 'generate_dive.py'
 
     try:
         proc = subprocess.Popen(
@@ -964,7 +965,7 @@ def api_research_generate_deeper_dive():
             stderr=subprocess.STDOUT,
         )
     except (OSError, subprocess.SubprocessError) as e:
-        print(f"[generate-deeper-dive] OSError: {e}", file=sys.stderr)
+        print(f"[generate-dive] OSError: {e}", file=sys.stderr)
         return jsonify({"ok": False, "error": f"failed to launch: {e}"}), 500
 
     _dd_proc = proc
@@ -981,11 +982,11 @@ def api_research_generate_deeper_dive():
     return jsonify({"ok": True, "topic": topic, "pid": proc.pid})
 
 
-@research_bp.route('/api/research/generate-deeper-dive/status')
-def api_research_generate_deeper_dive_status():
+@research_bp.route('/api/research/generate-dive/status')
+def api_research_generate_dive_status():
     """
-    Check if a Deeper Dive generation is currently running.
-    GET /api/research/generate-deeper-dive/status
+    Check if a Dive generation is currently running.
+    GET /api/research/generate-dive/status
     Returns: {running: bool, topic, output_path} or {running: false}
     """
     global _dd_proc
@@ -1114,14 +1115,14 @@ def api_research_thread_create():
 @research_bp.route('/api/research/spawn-thread', methods=['POST'])
 def api_research_spawn_thread():
     """
-    Spawn a new research thread from a deep dive.
+    Spawn a new research thread from a Scan or Dive.
     POST /api/research/spawn-thread
     Body: {
       "topic": "taiwan-defense",
       "motivation": "...",
       "queries": ["query 1", "query 2"],
-      "deep_dive_id": "43c03",
-      "deep_dive_title": "...",
+      "scan_id": "43c03",
+      "scan_title": "...",
       "duration_days": 5
     }
     duration_days is stored as metadata only — no scheduling is wired.
@@ -1508,7 +1509,7 @@ def _dd_md_to_html(text: str) -> str:
     return '\n'.join(parts)
 
 
-def _parse_deep_dive_bibliography(md_path: Path) -> list:
+def _parse_scan_bibliography(md_path: Path) -> list:
     """
     Parse '## 7. Sources & Further Reading' (or similar) from a deep dive .md.
     Returns list of {raw, title, url, has_url, author, bracket_note}.
@@ -1551,7 +1552,7 @@ def _parse_deep_dive_bibliography(md_path: Path) -> list:
     return items
 
 
-def _parse_deep_dive_md(md_path: Path) -> dict:
+def _parse_scan_md(md_path: Path) -> dict:
     """Parse a deep dive .md file into structured data for Flask rendering."""
     text  = md_path.read_text()
     lines = text.split('\n')
@@ -1603,7 +1604,7 @@ def _parse_deep_dive_md(md_path: Path) -> dict:
         'title':        title,
         'metadata':     metadata,
         'analysis_html': _dd_md_to_html(analysis_raw),
-        'bibliography':  _parse_deep_dive_bibliography(md_path),
+        'bibliography':  _parse_scan_bibliography(md_path),
         'cost':         cost_m.group(3) if cost_m else None,
         'tokens_in':    cost_m.group(1) if cost_m else None,
         'tokens_out':   cost_m.group(2) if cost_m else None,
@@ -1615,24 +1616,24 @@ def _find_dd_md(hash_id: str):
     # Sanitise: only lowercase hex + length guard
     if not _re.match(r'^[a-f0-9]{5}$', hash_id):
         return None
-    matches = list(DEEP_DIVES_DIR.glob(f'{hash_id}-*.md'))
+    matches = list(SCANS_DIR.glob(f'{hash_id}-*.md'))
     return matches[0] if matches else None
 
 
 # ── HTML: Deep Dive viewer ─────────────────────────────────────────────────────
 
-@research_bp.route('/research/deep-dive/<hash_id>')
-def research_deep_dive_view(hash_id: str):
+@research_bp.route('/research/scan/<hash_id>')
+def research_scan_view(hash_id: str):
     """
-    Serve a deep dive page dynamically from its .md source.
+    Serve a Scan page dynamically from its .md source.
     Renders bibliography with "Add to Research" buttons.
-    GET /research/deep-dive/03624
+    GET /research/scan/03624
     """
     md_path = _find_dd_md(hash_id)
     if not md_path:
-        return f"Deep dive '{hash_id}' not found", 404
+        return f"Scan '{hash_id}' not found", 404
 
-    dd      = _parse_deep_dive_md(md_path)
+    dd      = _parse_scan_md(md_path)
     title   = _html_lib.escape(dd['title'])
     meta    = dd['metadata']
     bib     = dd['bibliography']
@@ -1786,13 +1787,13 @@ def research_deep_dive_view(hash_id: str):
   <link rel="stylesheet" href="/research/static/css/nav.css">
   <script src="/research/static/js/nav.js"></script>
 </head>
-<body data-domain="curator" data-page="deep-dive" data-ref-id="{_html_lib.escape(hash_id)}">
+<body data-domain="curator" data-page="scan" data-ref-id="{_html_lib.escape(hash_id)}">
 <header>
   <a href="/" class="site-brand">mini-moi · CURATOR</a>
   <nav class="header-nav">
     <a href="/" class="nav-link">Daily</a>
     <a href="/curator_library.html" class="nav-link">Library</a>
-    <a href="/interests/2026/deep-dives/index.html" class="nav-link active">Deep Dives</a>
+    <a href="/interests/2026/scans/index.html" class="nav-link active">Scans &amp; Dives</a>
     <a href="/curator_intelligence.html" class="nav-link">Observations</a>
     <a href="/research/dashboard" class="nav-link">Research</a>
     <div class="nav-more-wrapper">
@@ -1859,7 +1860,7 @@ def research_deep_dive_view(hash_id: str):
       has_url:      btn.dataset.hasUrl === 'true',
       author:       btn.dataset.author,
       raw:          btn.dataset.raw,
-      deep_dive_id: HASH_ID,
+      scan_id: HASH_ID,
     }};
     try {{
       const res  = await fetch('/api/research/inbox/add', {{
@@ -1895,7 +1896,7 @@ def research_deep_dive_view(hash_id: str):
   document.addEventListener('DOMContentLoaded', async () => {{
     const container = document.getElementById('st-queries');
     try {{
-      const res  = await fetch('/api/research/deep-dives/{_html_lib.escape(hash_id)}/bibliography');
+      const res  = await fetch('/api/research/scans/{_html_lib.escape(hash_id)}/bibliography');
       const data = await res.json();
       if (!data.ok || !data.items.length) {{
         container.innerHTML = '<span style="color:var(--text-dim);font-size:0.85rem">No bibliography items found.</span>';
@@ -1939,8 +1940,8 @@ def research_deep_dive_view(hash_id: str):
           topic,
           motivation,
           queries,
-          deep_dive_id: HASH_ID,
-          deep_dive_title: document.querySelector('h1') ? document.querySelector('h1').textContent : '',
+          scan_id: HASH_ID,
+          scan_title: document.querySelector('h1') ? document.querySelector('h1').textContent : '',
           duration_days: duration,
         }}),
       }});
@@ -1976,18 +1977,18 @@ def research_deep_dive_view(hash_id: str):
 
 # ── API: Deep Dives ────────────────────────────────────────────────────────────
 
-@research_bp.route('/api/research/deep-dives')
-def api_research_deep_dives_list():
+@research_bp.route('/api/research/scans')
+def api_research_scans_list():
     """
-    List all deep dive .md files.
-    GET /api/research/deep-dives
-    Returns: {ok, deep_dives: [{hash_id, title, filename}]}
+    List all Scan .md files.
+    GET /api/research/scans
+    Returns: {ok, scans: [{hash_id, title, filename}]}
     """
-    if not DEEP_DIVES_DIR.exists():
-        return jsonify({"ok": True, "deep_dives": []})
+    if not SCANS_DIR.exists():
+        return jsonify({"ok": True, "scans": []})
 
     results = []
-    for f in sorted(DEEP_DIVES_DIR.glob('*.md'), reverse=True):
+    for f in sorted(SCANS_DIR.glob('*.md'), reverse=True):
         parts   = f.stem.split('-', 1)
         hash_id = parts[0] if parts else f.stem
         title   = ''
@@ -1998,20 +1999,20 @@ def api_research_deep_dives_list():
             pass
         results.append({'hash_id': hash_id, 'title': title, 'filename': f.name})
 
-    return jsonify({"ok": True, "deep_dives": results})
+    return jsonify({"ok": True, "scans": results})
 
 
-@research_bp.route('/api/research/deep-dives/<hash_id>/bibliography')
-def api_research_deep_dive_bibliography(hash_id: str):
+@research_bp.route('/api/research/scans/<hash_id>/bibliography')
+def api_research_scan_bibliography(hash_id: str):
     """
-    Return parsed bibliography items for a deep dive.
-    GET /api/research/deep-dives/03624/bibliography
+    Return parsed bibliography items for a Scan.
+    GET /api/research/scans/03624/bibliography
     Returns: {ok, hash_id, items: [{raw, title, url, has_url, author, bracket_note}]}
     """
     md_path = _find_dd_md(hash_id)
     if not md_path:
-        return jsonify({"ok": False, "error": f"deep dive '{hash_id}' not found"}), 404
-    items = _parse_deep_dive_bibliography(md_path)
+        return jsonify({"ok": False, "error": f"scan '{hash_id}' not found"}), 404
+    items = _parse_scan_bibliography(md_path)
     return jsonify({"ok": True, "hash_id": hash_id, "items": items})
 
 
@@ -2029,7 +2030,7 @@ def api_research_inbox_add():
     has_url     = bool(body.get('has_url', False))
     author      = body.get('author', '').strip()
     raw         = body.get('raw', '').strip()
-    deep_dive_id = body.get('deep_dive_id', '').strip()
+    deep_dive_id = body.get('scan_id', body.get('deep_dive_id', '')).strip()  # accept both old and new key
 
     if not title and not raw:
         return jsonify({"ok": False, "error": "title or raw required"}), 400
@@ -2042,8 +2043,8 @@ def api_research_inbox_add():
         "id":           new_id,
         "topic":        None,
         "status":       "unassigned",
-        "source":       "deep_dive",
-        "deep_dive_id": deep_dive_id,
+        "source":   "scan",
+        "scan_id":  deep_dive_id,
         "title":        title or raw[:120],
         "url":          url,
         "has_url":      has_url,
