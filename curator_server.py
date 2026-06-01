@@ -335,18 +335,19 @@ def api_library():
 @app.route('/api/priority', methods=['POST'])
 def api_add_priority():
     """
-    Add a new priority to priorities.json.
-    
-    Expects JSON:
-    {
-      "label": "Tigray Conflict",
-      "keywords": ["Tigray", "Ethiopia"],
-      "boost": 2.0,
-      "expires_days": 3  // optional, days from now
-    }
+    DEPRECATED — Priority creation retired in Step 2 of Leaning tier.
+    Boosting now flows through Topic activation. Existing priorities expire naturally.
     """
+    return jsonify({
+        'success': False,
+        'message': 'Priority creation is retired. Activate a Topic to boost matching articles.',
+        'retired': True,
+    }), 410
+
+def _api_add_priority_legacy():
+    """Kept for reference — no longer reachable."""
     data = request.get_json()
-    
+
     if not data:
         return jsonify({'success': False, 'message': 'No data provided'}), 400
     
