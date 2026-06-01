@@ -81,17 +81,21 @@ def check_taiwan_relevance(output):
 
     Uses [N/M] title lines rather than Score: explanation lines — titles are
     more complete and don't get truncated the way explanation snippets do.
+
+    Matching is case-insensitive — source titles may capitalise keywords
+    ('Porcupine', 'Taiwan') that appear lowercase in the keyword list.
     """
-    taiwan_keywords = ['Taiwan', 'ODC', 'TSMC', 'cross-strait', 'porcupine',
-                       'PRC', 'Taipei', 'NCCU']
+    taiwan_keywords = ['taiwan', 'odc', 'tsmc', 'cross-strait', 'porcupine',
+                       'prc', 'taipei', 'nccu']
     title_lines = re.findall(r'\[\d+/\d+\]\s+.*', output)
     if not title_lines:
         return False  # No title lines found — inconclusive
     relevant = sum(
-        any(kw in line for kw in taiwan_keywords)
+        any(kw in line.lower() for kw in taiwan_keywords)
         for line in title_lines
     )
     ratio = relevant / len(title_lines)
+    print(f'  Taiwan relevance ratio: {relevant}/{len(title_lines)} = {ratio*100:.1f}%')
     return ratio >= 0.80
 
 
