@@ -226,6 +226,17 @@ def interests_passthrough(path):
     user = _current_user()
     return _proxy.proxy_to(_cfg.CURATOR_BACKEND, "interests/" + path, "/app/curator", user=user)
 
+# /research/* and /api/research/* — linked from JS-generated HTML in the
+# briefing (Topics strip hrefs, Leanings links) which the proxy can't rewrite.
+@app.route("/research", methods=["GET", "POST"])
+@app.route("/research/", methods=["GET", "POST"])
+@app.route("/research/<path:path>", methods=["GET", "POST", "DELETE", "PATCH"])
+@_require_login
+def research_passthrough(path=""):
+    user = _current_user()
+    sub = ("research/" + path) if path else "research"
+    return _proxy.proxy_to(_cfg.CURATOR_BACKEND, sub, "/app/curator", user=user)
+
 # curator_priorities.html, curator_library.html, curator_intelligence.html,
 # curator_index.html — linked directly from within Curator pages
 _CURATOR_TOP_LEVEL = {
