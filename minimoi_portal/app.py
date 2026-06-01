@@ -237,6 +237,21 @@ def research_passthrough(path=""):
     sub = ("research/" + path) if path else "research"
     return _proxy.proxy_to(_cfg.CURATOR_BACKEND, sub, "/app/curator", user=user)
 
+# /deepdive and /api/* — JS builds these as variable URLs so the proxy
+# regex can't rewrite them; forward them straight to the Curator backend.
+# proxy_to() already appends request.query_string automatically.
+@app.route("/deepdive", methods=["GET"])
+@_require_login
+def deepdive_passthrough():
+    user = _current_user()
+    return _proxy.proxy_to(_cfg.CURATOR_BACKEND, "deepdive", "/app/curator", user=user)
+
+@app.route("/api/<path:path>", methods=["GET", "POST", "DELETE", "PATCH"])
+@_require_login
+def api_passthrough(path):
+    user = _current_user()
+    return _proxy.proxy_to(_cfg.CURATOR_BACKEND, "api/" + path, "/app/curator", user=user)
+
 # curator_priorities.html, curator_library.html, curator_intelligence.html,
 # curator_index.html — linked directly from within Curator pages
 _CURATOR_TOP_LEVEL = {
