@@ -1154,7 +1154,7 @@ def trigger_deepdive(hash_id, interest, focus=''):
                     return {
                         'success': True,
                         'message': 'Deep dive complete!',
-                        'html_path': str(html_rel_path)
+                        'html_path': '/' + str(html_rel_path)
                     }
                 else:
                     print(f"⚠️  HTML not found at {html_full_path}")
