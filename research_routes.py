@@ -2157,6 +2157,111 @@ def research_static(filename):
 
 # ── Leanings — UI page ────────────────────────────────────────────────────────
 
+@research_bp.route('/api/research/topics/status', methods=['GET'])
+def api_topics_status():
+    """
+    Return all Topics with state, expiry, and session count.
+    Reads data/threads/*/thread.json directly — no config.json dependency.
+    """
+    threads_dir = RESEARCH_ROOT / 'data' / 'threads'
+    topics = []
+    if threads_dir.exists():
+        import re as _re3
+        from datetime import date as _date2
+        _sess_re  = _re3.compile(r'^[a-z][a-z0-9-]*\.md$')
+        _static   = {"CONTEXT.md", "ORIGIN.md", "STORY_FOR_CLAUDE_AI.md", "README.md"}
+        for topic_dir in sorted(threads_dir.iterdir()):
+            thread_file = topic_dir / 'thread.json'
+            if not thread_file.exists():
+                continue
+            t      = json.loads(thread_file.read_text())
+            slug   = t.get('topic', topic_dir.name)
+            status = t.get('status', 'dormant')
+            expires = t.get('expires')
+
+            days_remaining = None
+            if expires:
+                try:
+                    days_remaining = (_date2.fromisoformat(expires) - _date2.today()).days
+                except Exception:
+                    pass
+
+            # Session count from topics/ directory
+            topics_dir = RESEARCH_ROOT / 'topics' / slug
+            session_count = 0
+            last_session  = None
+            if topics_dir.exists():
+                sessions = [
+                    p for p in topics_dir.iterdir()
+                    if p.is_file()
+                    and _sess_re.match(p.name)
+                    and p.name not in _static
+                    and not p.name.startswith("sources-candidates-")
+                ]
+                session_count = len(sessions)
+                if sessions:
+                    newest = max(sessions, key=lambda p: p.stat().st_mtime)
+                    last_session = datetime.fromtimestamp(newest.stat().st_mtime).strftime("%Y-%m-%d")
+
+            topics.append({
+                "slug":           slug,
+                "status":         status,
+                "expires":        expires,
+                "days_remaining": days_remaining,
+                "duration_days":  t.get('duration_days'),
+                "session_count":  session_count,
+                "last_session":   last_session,
+                "motivation":     (t.get('motivation') or '')[:100],
+            })
+
+    return jsonify({"ok": True, "topics": topics})
+
+
+@research_bp.route('/api/research/topic/<slug>/activate', methods=['POST'])
+def api_activate_topic(slug: str):
+    """
+    Activate a dormant or paused Topic.
+    Body (optional): {duration_days: int, note: str}
+    """
+    thread_file = RESEARCH_ROOT / 'data' / 'threads' / slug / 'thread.json'
+    if not thread_file.exists():
+        return jsonify({"ok": False, "error": f"topic '{slug}' not found"}), 404
+
+    body        = request.get_json() or {}
+    note        = body.get('note', '')
+    t           = json.loads(thread_file.read_text())
+    from_status = t.get('status', 'dormant')
+
+    if from_status not in {'dormant', 'paused'}:
+        return jsonify({"ok": False, "error": f"can only activate from dormant or paused, not '{from_status}'"}), 400
+
+    days    = int(body.get('duration_days') or t.get('duration_days') or 14)
+    now     = datetime.now(timezone.utc)
+    expires = (now.date() + timedelta(days=days)).isoformat()
+
+    t['status']         = 'active-pull'
+    t['activated_at']   = now.isoformat()
+    t['expires']        = expires
+    t['duration_days']  = days
+    t['paused_at']      = None
+    t['remaining_days'] = None
+
+    if 'state_history' not in t:
+        t['state_history'] = []
+    t['state_history'].append({
+        "from": from_status,
+        "to":   "active-pull",
+        "at":   now.isoformat(),
+        "by":   "briefing-ui",
+        "note": note or f"activated from briefing, expires {expires}",
+    })
+
+    thread_file.write_text(json.dumps(t, indent=2))
+    return jsonify({"ok": True, "slug": slug, "status": "active-pull", "expires": expires, "duration_days": days})
+
+
+# ── Leanings — UI page ────────────────────────────────────────────────────────
+
 @research_bp.route('/research/leanings')
 def research_leanings_ui():
     """Serve the Leanings page."""

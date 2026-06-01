@@ -172,8 +172,42 @@
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 0.06em;
-            margin-bottom: 1rem;
+            margin-bottom: 0.75rem;
         }
+
+        /* ── Topics strip ── */
+        #topics-strip {
+            display: flex; align-items: center; gap: 6px;
+            flex-wrap: wrap; margin-bottom: 1rem;
+        }
+        #topics-strip-label {
+            font-family: var(--font-mono); font-size: 0.65rem;
+            text-transform: uppercase; letter-spacing: 0.1em;
+            color: var(--text-dim); margin-right: 2px;
+        }
+        .topic-pill {
+            display: inline-flex; align-items: center; gap: 5px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 999px; padding: 3px 10px 3px 8px;
+            font-size: 0.72rem; font-family: var(--font-mono);
+            line-height: 1.2;
+        }
+        .tp-active  { border-color: rgba(46,125,82,0.45); background: rgba(46,125,82,0.06); }
+        .tp-paused  { border-color: rgba(139,110,26,0.45); background: rgba(139,110,26,0.06); }
+        .tp-dormant { border-color: rgba(158,144,128,0.3); }
+        .tp-oneshot { border-color: rgba(26,92,138,0.4); background: rgba(26,92,138,0.06); }
+        .tp-dot     { font-size: 0.65rem; flex-shrink: 0; }
+        .tp-name    { color: var(--text); text-decoration: none; font-weight: 500; }
+        .tp-name:hover { color: var(--accent); }
+        .tp-sub     { color: var(--text-dim); font-size: 0.68rem; }
+        .tp-activate-btn {
+            font-family: var(--font-mono); font-size: 0.62rem;
+            background: var(--accent); color: white;
+            border: none; border-radius: 999px; padding: 1px 7px;
+            cursor: pointer; margin-left: 2px; line-height: 1.6;
+        }
+        .tp-activate-btn:hover { background: #7a521f; }
+        .tp-activate-btn:disabled { opacity: 0.5; cursor: default; }
 
         /* ── Table ── */
         .briefing-table {
@@ -440,6 +474,13 @@
 
 <main>
     <div class="briefing-date">Sunday, May 31, 2026</div>
+
+    <!-- Topics strip — loaded client-side, hidden until topics exist -->
+    <div id="topics-strip" style="display:none;">
+      <span id="topics-strip-label">Topics</span>
+      <div id="topics-pills" style="display:contents;"></div>
+    </div>
+
     <div class="briefing-table">
         <table>
             <thead>
@@ -1336,6 +1377,80 @@ This is setting the stage f</a>
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') closeInvestigateModal();
     });
+
+    // ── Topics strip ──────────────────────────────────────────────────────────
+
+    function loadTopicsStrip() {
+        fetch('/api/research/topics/status')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (!data.ok) return;
+                var visible = (data.topics || []).filter(function(t) {
+                    return t.status !== 'closed' && t.status !== 'retired' && t.status !== 'archived';
+                });
+                if (!visible.length) return;
+
+                var html = visible.map(renderTopicPill).join('');
+                document.getElementById('topics-pills').innerHTML = html;
+                document.getElementById('topics-strip').style.display = 'flex';
+            })
+            .catch(function() { /* silent — Topics strip is informational */ });
+    }
+
+    function renderTopicPill(t) {
+        var cfg = {
+            'active-pull': { cls: 'tp-active',  dot: '●', dotColor: '#2e7d52' },
+            'paused':      { cls: 'tp-paused',  dot: '◐', dotColor: '#8b6e1a' },
+            'dormant':     { cls: 'tp-dormant', dot: '○', dotColor: '#9e9080' },
+            'one-shot':    { cls: 'tp-oneshot', dot: '◆', dotColor: '#1a5c8a' },
+        }[t.status] || { cls: 'tp-dormant', dot: '?', dotColor: '#9e9080' };
+
+        var sub = t.status;
+        if (t.status === 'active-pull') {
+            sub = t.days_remaining !== null
+                ? t.days_remaining + 'd left · ' + t.session_count + ' sessions'
+                : 'active';
+        } else if (t.status === 'dormant') {
+            sub = t.session_count ? t.session_count + ' sessions' : 'no sessions';
+        } else if (t.status === 'paused') {
+            sub = 'paused';
+        }
+
+        var activateBtn = (t.status === 'dormant' || t.status === 'paused')
+            ? '<button class="tp-activate-btn" onclick="quickActivate(\'' + esc(t.slug) + '\',this)">Activate</button>'
+            : '';
+
+        return '<div class="topic-pill ' + cfg.cls + '">' +
+            '<span class="tp-dot" style="color:' + cfg.dotColor + '">' + cfg.dot + '</span>' +
+            '<a class="tp-name" href="/research/dashboard" title="' + esc(t.motivation || '') + '">' + esc(t.slug) + '</a>' +
+            '<span class="tp-sub">' + esc(sub) + '</span>' +
+            activateBtn +
+            '</div>';
+    }
+
+    function quickActivate(slug, btn) {
+        btn.disabled = true;
+        btn.textContent = '…';
+        fetch('/api/research/topic/' + slug + '/activate', { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    showToast('Topic "' + slug + '" activated', 'success');
+                    loadTopicsStrip();
+                } else {
+                    showToast('Error: ' + (data.error || 'failed'), 'error');
+                    btn.disabled = false;
+                    btn.textContent = 'Activate';
+                }
+            })
+            .catch(function(e) {
+                showToast('Error: ' + e.message, 'error');
+                btn.disabled = false;
+                btn.textContent = 'Activate';
+            });
+    }
+
+    loadTopicsStrip();
 
     </script>
 
