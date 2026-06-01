@@ -241,15 +241,112 @@
             cursor: not-allowed;
         }
 
-        /* Deep dive button */
-        .btn-dive {
-            background: rgba(139,69,19,0.1) !important;
-            color: var(--accent) !important;
-            border-color: rgba(139,69,19,0.25) !important;
+        /* Investigate button */
+        .btn-investigate {
+            background: var(--accent) !important;
+            color: white !important;
+            font-weight: 600 !important;
         }
-        .btn-dive:hover:not(:disabled) {
-            background: rgba(139,69,19,0.18) !important;
+        .btn-investigate:hover:not(:disabled) { background: #7a521f !important; }
+
+        /* ── Topics strip ── */
+        #topics-strip {
+            display: flex; align-items: center; gap: 6px;
+            flex-wrap: wrap; margin-bottom: 1rem;
         }
+        #topics-strip-label {
+            font-family: var(--font-mono); font-size: 0.65rem;
+            text-transform: uppercase; letter-spacing: 0.1em;
+            color: var(--text-dim); margin-right: 2px;
+        }
+        .topic-pill {
+            display: inline-flex; align-items: center; gap: 5px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 999px; padding: 3px 10px 3px 8px;
+            font-size: 0.72rem; font-family: var(--font-mono); line-height: 1.2;
+        }
+        .tp-active  { border-color: rgba(46,125,82,0.45); background: rgba(46,125,82,0.06); }
+        .tp-paused  { border-color: rgba(139,110,26,0.45); background: rgba(139,110,26,0.06); }
+        .tp-dormant { border-color: rgba(158,144,128,0.3); }
+        .tp-oneshot { border-color: rgba(26,92,138,0.4); background: rgba(26,92,138,0.06); }
+        .tp-dot     { font-size: 0.65rem; flex-shrink: 0; }
+        .tp-name    { color: var(--text); text-decoration: none; font-weight: 500; }
+        .tp-name:hover { color: var(--accent); }
+        .tp-sub     { color: var(--text-dim); font-size: 0.68rem; }
+        .tp-activate-btn {
+            font-family: var(--font-mono); font-size: 0.62rem;
+            background: var(--accent); color: white;
+            border: none; border-radius: 999px; padding: 1px 7px;
+            cursor: pointer; margin-left: 2px; line-height: 1.6;
+        }
+        .tp-activate-btn:hover { background: #7a521f; }
+        .tp-activate-btn:disabled { opacity: 0.5; cursor: default; }
+
+        /* ── Investigate modal ── */
+        #investigate-modal {
+            background: #faf7f2; border: 1px solid #ddd6c8;
+            border-radius: 12px; box-shadow: 0 8px 32px rgba(42,36,24,0.22);
+            width: 520px; max-width: 94vw;
+            font-family: var(--font-sans); font-size: 14px;
+            color: #2a2418; overflow: hidden;
+        }
+        .inv-header {
+            display: flex; align-items: flex-start; justify-content: space-between;
+            padding: 18px 20px 14px; border-bottom: 1px solid #ddd6c8;
+            background: #f0ebe0;
+        }
+        .inv-article-title {
+            font-family: var(--font-serif); font-size: 0.95rem; font-weight: 600;
+            line-height: 1.3; color: #2a2418; max-width: 420px;
+        }
+        .inv-article-source {
+            font-family: var(--font-mono); font-size: 10px;
+            text-transform: uppercase; letter-spacing: 0.08em;
+            color: #9e9080; margin-top: 3px;
+        }
+        .inv-close {
+            background: none; border: none; cursor: pointer;
+            font-size: 1rem; color: #9e9080; padding: 0 0 0 12px; line-height: 1;
+        }
+        .inv-close:hover { color: #2a2418; }
+        .inv-tabs { display: flex; border-bottom: 1px solid #ddd6c8; background: #f5f0e8; }
+        .inv-tab {
+            flex: 1; padding: 10px 0; border: none; background: transparent;
+            cursor: pointer; font-family: var(--font-mono);
+            font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
+            color: #9e9080; border-bottom: 2px solid transparent;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .inv-tab.active { color: #8b5e2a; border-bottom-color: #8b5e2a; }
+        .inv-tab:hover:not(.active) { color: #6b5f4e; }
+        .inv-pane { display: none; padding: 18px 20px 20px; }
+        .inv-pane.active { display: block; }
+        .inv-hint { font-size: 0.8rem; color: #6b5f4e; margin-bottom: 12px; line-height: 1.5; }
+        .inv-label {
+            display: block; font-size: 0.75rem; font-weight: 600;
+            color: #6b5f4e; margin-bottom: 4px; margin-top: 0;
+        }
+        .inv-input, .inv-select, .inv-textarea {
+            width: 100%; font-family: inherit; font-size: 0.875rem;
+            background: #f5f0e8; border: 1px solid #c8bfaf;
+            border-radius: 6px; padding: 8px 10px; color: #2a2418;
+            outline: none; box-sizing: border-box;
+        }
+        .inv-input:focus, .inv-select:focus, .inv-textarea:focus { border-color: #8b5e2a; }
+        .inv-textarea { resize: vertical; min-height: 64px; }
+        .inv-duration-row { display: flex; gap: 8px; }
+        .inv-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+        .inv-btn {
+            font-family: var(--font-mono); font-size: 11px;
+            text-transform: uppercase; letter-spacing: 0.06em;
+            padding: 8px 16px; border-radius: 6px; cursor: pointer;
+            border: 1px solid #ddd6c8; background: #f0ebe0;
+            color: #2a2418; transition: background 0.15s;
+        }
+        .inv-btn:hover { background: #e5ddd0; }
+        .inv-btn-primary { background: #8b5e2a; color: white; border-color: #8b5e2a; }
+        .inv-btn-primary:hover { background: #7a521f; }
+        .inv-status { font-size: 0.78rem; color: #6b5f4e; }
 
         @keyframes fadeIn {
             from { opacity: 0; transform: scale(0.9); }
@@ -263,7 +360,7 @@
 <nav class="curator-subnav">
     <a href="/" class="subnav-tab active">Daily</a>
     <a href="/curator_library.html" class="subnav-tab">Library</a>
-    <a href="/interests/2026/deep-dives/index.html" class="subnav-tab">Deep Dives</a>
+    <a href="/interests/2026/scans/index.html" class="subnav-tab">Scans &amp; Dives</a>
     <a href="/curator_intelligence.html" class="subnav-tab">Observations</a>
     <a href="/curator_priorities.html" class="subnav-tab subnav-focus">🎯 Focus</a>
 </nav>
@@ -272,6 +369,10 @@
     <div class="briefing-header">
         <span class="briefing-date-label">{{ day_str }}, {{ date_str }}</span>
         <span class="briefing-meta-label">{{ model_display }}</span>
+    </div>
+    <div id="topics-strip" style="display:none;">
+        <span id="topics-strip-label">Topics</span>
+        <div id="topics-pills" style="display:contents;"></div>
     </div>
     <div class="article-list">
 {% for entry in articles %}
@@ -305,7 +406,7 @@
 {% else %}
                     <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', {{ rank }});">👍 Like</button>
                     <button class="action-btn btn-dislike" title="Pass on this article" onclick="showFeedback(this, 'dislike', {{ rank }});">👎 Pass</button>
-                    <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', {{ rank }});">💾 Save</button>
+                    <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', {{ rank }});">💾 Save</button>
 {% endif %}
                 </div>
             </div>
@@ -315,170 +416,373 @@
 </main>
 
 <script>
+// ── HTML-escape helper ───────────────────────────────────────────────────────
+function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Feedback (Like / Pass / Save) ───────────────────────────────────────────
 function showFeedback(button, action, rank) {
-    const row = button.closest('.article-card');
-    const articleData = {
-        id: row.dataset.hashId || `row-${rank}`,
-        title: row.dataset.title || 'Unknown',
-        link: row.dataset.url || '#',
-        source: row.dataset.source || 'Unknown',
+    var row = button.closest('.article-card');
+    var articleData = {
+        id:       row.dataset.hashId || ('row-' + rank),
+        title:    row.dataset.title  || 'Unknown',
+        link:     row.dataset.url    || '#',
+        source:   row.dataset.source || 'Unknown',
         category: row.dataset.category || 'other'
     };
 
     button.style.opacity = '0.3';
-    button.style.cursor = 'not-allowed';
+    button.style.cursor  = 'not-allowed';
     button.disabled = true;
 
-    fetch('http://localhost:8766/feedback', {
-        method: 'POST',
+    fetch('/feedback', {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: action, rank: rank, article: articleData })
+        body:    JSON.stringify({ action: action, rank: rank, article: articleData })
     })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const row = button.closest('.article-card');
-                const allBtns = row.querySelectorAll('.action-btn');
-                allBtns.forEach(function(btn) {
-                    btn.disabled = true;
-                    btn.style.cursor = 'not-allowed';
-                    if (btn === button) {
-                        btn.innerHTML = btn.textContent + ' ✓';
-                        btn.style.opacity = '1';
-                        btn.style.fontWeight = '700';
-                        btn.style.boxShadow = '0 0 0 2px currentColor';
-                    } else {
-                        btn.style.opacity = '0.2';
-                    }
-                });
-                showToast(data.message || 'Article #' + rank + ' ' + action + 'd', 'success');
-                if (action === 'like' || action === 'save') {
-                    const hashId = button.closest('.article-card').dataset.hashId;
-                    addDeepDiveButton(rank, hashId);
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            var allBtns = row.querySelectorAll('.action-btn');
+            allBtns.forEach(function(btn) {
+                btn.disabled = true;
+                btn.style.cursor = 'not-allowed';
+                if (btn === button) {
+                    btn.innerHTML = btn.textContent + ' ✓';
+                    btn.style.opacity    = '1';
+                    btn.style.fontWeight = '700';
+                    btn.style.boxShadow  = '0 0 0 2px currentColor';
+                } else {
+                    btn.style.opacity = '0.2';
                 }
-            } else {
-                button.style.opacity = '1';
-                button.style.cursor = 'pointer';
-                button.disabled = false;
-                showToast(data.message || 'Error saving feedback', 'error');
+            });
+            showToast(data.message || 'Article #' + rank + ' ' + action + 'd', 'success');
+            if (action === 'like' || action === 'save') {
+                var hashId = button.closest('.article-card').dataset.hashId;
+                addInvestigateButton(rank, hashId);
             }
-        })
-        .catch(error => {
-            console.error('Feedback error:', error);
+        } else {
             button.style.opacity = '1';
-            button.style.cursor = 'pointer';
+            button.style.cursor  = 'pointer';
             button.disabled = false;
-            showToast('Server error — is curator_server.py running?', 'error');
-        });
+            showToast(data.message || 'Error saving feedback', 'error');
+        }
+    })
+    .catch(function(error) {
+        console.error('Feedback error:', error);
+        button.style.opacity = '1';
+        button.style.cursor  = 'pointer';
+        button.disabled = false;
+        showToast('Server error — is curator_server.py running?', 'error');
+    });
 }
 
+// ── Toast ────────────────────────────────────────────────────────────────────
 function showToast(message, type) {
     type = type || 'success';
-    const toast = document.createElement('div');
+    var toast = document.createElement('div');
     toast.textContent = message;
     var bgColor = (type === 'error') ? '#ef4444' : '#10b981';
     toast.style.cssText = 'position:fixed;top:20px;right:20px;background:' + bgColor + ';color:white;padding:12px 20px;border-radius:8px;font-weight:500;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:9999;opacity:0;transform:translateY(-20px);transition:all 0.3s ease;';
     document.body.appendChild(toast);
     requestAnimationFrame(function() {
         requestAnimationFrame(function() {
-            toast.style.opacity = '1';
+            toast.style.opacity   = '1';
             toast.style.transform = 'translateY(0)';
         });
     });
     setTimeout(function() {
-        toast.style.opacity = '0';
+        toast.style.opacity   = '0';
         toast.style.transform = 'translateY(-20px)';
         setTimeout(function() { if (toast.parentNode) document.body.removeChild(toast); }, 300);
     }, 2500);
 }
 
-function showDeepDiveModal(rank, hashId, diveBtn) {
-    var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
-    var modal = document.createElement('div');
-    modal.style.cssText = 'background:white;padding:30px;border-radius:12px;max-width:500px;width:90%;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
-    modal.innerHTML = '<h2 style="margin:0 0 20px 0;color:#2c3e50;">Deep Dive Analysis</h2>' +
-        '<p style="color:#666;margin-bottom:20px;">Generates a research briefing tailored to your interests.</p>' +
-        '<label style="display:block;margin-bottom:8px;font-weight:600;color:#2c3e50;">What interests you about this article?</label>' +
-        '<textarea id="interest-input" placeholder="e.g., Geopolitical implications, economic impact..." style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;min-height:80px;font-family:inherit;margin-bottom:20px;box-sizing:border-box;"></textarea>' +
-        '<label style="display:block;margin-bottom:8px;font-weight:600;color:#2c3e50;">Specific focus areas? (optional)</label>' +
-        '<input id="focus-input" type="text" placeholder="e.g., Historical precedents, key players..." style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;font-family:inherit;margin-bottom:20px;box-sizing:border-box;">' +
-        '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
-        '<button id="modal-cancel" style="padding:10px 20px;border:1px solid #ddd;background:white;border-radius:6px;cursor:pointer;font-weight:500;">Cancel</button>' +
-        '<button id="modal-submit" style="padding:10px 20px;border:none;background:#f39c12;color:white;border-radius:6px;cursor:pointer;font-weight:500;">Generate (~30s, $0.15)</button>' +
-        '</div>';
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-    document.getElementById('interest-input').focus();
+// ── Investigate modal ────────────────────────────────────────────────────────
+var _inv = { hashId: '', title: '', url: '', source: '', btn: null };
 
-    document.getElementById('modal-cancel').onclick = function() { document.body.removeChild(overlay); };
-
-    document.getElementById('modal-submit').onclick = function() {
-        var interest = document.getElementById('interest-input').value.trim();
-        var focus = document.getElementById('focus-input').value.trim();
-        if (!interest) { alert('Please describe what interests you about this article.'); return; }
-        document.body.removeChild(overlay);
-        diveBtn.disabled = true;
-        diveBtn.textContent = '⏳ Analyzing...';
-        diveBtn.style.opacity = '0.6';
-        var url = 'http://localhost:8766/deepdive?hash_id=' + hashId + '&interest=' + encodeURIComponent(interest);
-        if (focus) url += '&focus=' + encodeURIComponent(focus);
-        fetch(url)
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.success && data.html_path) {
-                    window.open(data.html_path, '_blank');
-                    diveBtn.textContent = '✅ View Again';
-                    diveBtn.style.background = '#27ae60';
-                    diveBtn.disabled = false;
-                    diveBtn.style.opacity = '1';
-                    diveBtn.onclick = function() { window.open(data.html_path, '_blank'); };
-                } else {
-                    diveBtn.textContent = '✅ Done';
-                    diveBtn.disabled = false;
-                    diveBtn.style.opacity = '1';
-                    showToast(data.message || 'Deep dive complete!', 'success');
-                }
-            })
-            .catch(function(error) {
-                console.error('Deep dive error:', error);
-                diveBtn.textContent = '❌ Failed';
-                diveBtn.style.background = '#e74c3c';
-                diveBtn.disabled = false;
-                diveBtn.style.opacity = '1';
-                showToast('Deep dive failed. Is curator_server.py running?', 'error');
-            });
-    };
-
-    overlay.onclick = function(e) { if (e.target === overlay) document.body.removeChild(overlay); };
+function openInvestigateModal(hashId, title, url, source, btn) {
+    _inv = { hashId: hashId, title: title, url: url, source: source, btn: btn };
+    document.getElementById('inv-article-title').textContent  = title;
+    document.getElementById('inv-article-source').textContent = source || '';
+    switchInvTab('scan');
+    document.getElementById('investigate-overlay').style.display = 'flex';
+    document.getElementById('inv-scan-interest').focus();
 }
 
-function addDeepDiveButton(rank, hashId) {
+function closeInvestigateModal() {
+    document.getElementById('investigate-overlay').style.display = 'none';
+    ['inv-scan-interest','inv-scan-focus','inv-track-slug',
+     'inv-track-motivation','inv-lean-new-title','inv-lean-note'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    ['inv-track-status','inv-lean-status'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = '';
+    });
+}
+
+function switchInvTab(tab) {
+    document.querySelectorAll('.inv-tab').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.tab === tab);
+    });
+    document.querySelectorAll('.inv-pane').forEach(function(p) {
+        p.classList.toggle('active', p.id === 'inv-pane-' + tab);
+    });
+    if (tab === 'lean') loadLeaningsForModal();
+}
+
+// Tab 1: Scan
+function runScan() {
+    var interest = document.getElementById('inv-scan-interest').value.trim();
+    var focus    = document.getElementById('inv-scan-focus').value.trim();
+    if (!interest) { document.getElementById('inv-scan-interest').focus(); return; }
+
+    closeInvestigateModal();
+    var btn = _inv.btn;
+    btn.disabled    = true;
+    btn.textContent = '⏳ Scanning…';
+
+    var url = '/deepdive?hash_id=' + _inv.hashId + '&interest=' + encodeURIComponent(interest);
+    if (focus) url += '&focus=' + encodeURIComponent(focus);
+
+    fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success && data.html_path) {
+            window.open(data.html_path, '_blank');
+            btn.textContent = '✅ View Scan';
+            btn.disabled = false;
+            btn.onclick = function() { window.open(data.html_path, '_blank'); };
+        } else {
+            btn.textContent = '✅ Done';
+            btn.disabled = false;
+            showToast(data.message || 'Scan complete!', 'success');
+        }
+    })
+    .catch(function(e) {
+        btn.textContent = '❌ Failed';
+        btn.disabled = false;
+        showToast('Scan failed: ' + e.message, 'error');
+    });
+}
+
+// Tab 2: Track as Topic
+function runTrack() {
+    var slug       = document.getElementById('inv-track-slug').value.trim()
+                        .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    var motivation = document.getElementById('inv-track-motivation').value.trim();
+    var days       = parseInt(document.getElementById('inv-track-days').value) || 14;
+    var statusEl   = document.getElementById('inv-track-status');
+
+    if (!slug) { statusEl.textContent = 'Topic slug required.'; return; }
+    statusEl.textContent = 'Creating topic…';
+
+    fetch('/api/research/spawn-thread', {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify({
+            topic:         slug,
+            motivation:    motivation || ('Research triggered from: ' + _inv.title),
+            queries:       [slug.replace(/-/g, ' ')],
+            duration_days: days,
+            scan_id:       _inv.hashId,
+            scan_title:    _inv.title,
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            statusEl.textContent = 'Topic "' + slug + '" created.';
+            showToast('Topic "' + slug + '" created — ' + days + 'd active pull', 'success');
+            setTimeout(closeInvestigateModal, 800);
+        } else {
+            statusEl.textContent = 'Error: ' + (data.error || 'failed');
+        }
+    })
+    .catch(function(e) { statusEl.textContent = 'Error: ' + e.message; });
+}
+
+// Tab 3: Add to Leaning
+function loadLeaningsForModal() {
+    var sel = document.getElementById('inv-lean-select');
+    sel.innerHTML = '<option value="">Loading…</option>';
+    fetch('/api/research/leanings')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        var leanings = data.leanings || [];
+        sel.innerHTML = '<option value="">— add to existing leaning —</option>' +
+            leanings.map(function(l) {
+                var label = {question:'?', leaning:'→', hold:'✓'}[l.state] || '';
+                return '<option value="' + l.id + '">' + label + ' ' + l.title + '</option>';
+            }).join('');
+        if (!leanings.length) {
+            sel.innerHTML = '<option value="">— no leanings yet, create below —</option>';
+        }
+    })
+    .catch(function() { sel.innerHTML = '<option value="">Error loading leanings</option>'; });
+}
+
+function runLean() {
+    var leaningId = document.getElementById('inv-lean-select').value;
+    var newTitle  = document.getElementById('inv-lean-new-title').value.trim();
+    var stance    = document.getElementById('inv-lean-stance').value;
+    var note      = document.getElementById('inv-lean-note').value.trim();
+    var statusEl  = document.getElementById('inv-lean-status');
+
+    if (!leaningId && !newTitle) {
+        statusEl.textContent = 'Select a leaning or enter a new leaning title.';
+        return;
+    }
+    statusEl.textContent = 'Saving…';
+
+    function doAddEvidence(id) {
+        return fetch('/api/research/leanings/' + id + '/evidence', {
+            method:  'POST',
+            headers: {'Content-Type': 'application/json'},
+            body:    JSON.stringify({
+                title: _inv.title, url: _inv.url,
+                source: _inv.source, stance: stance, note: note,
+            })
+        }).then(function(r) { return r.json(); });
+    }
+
+    var promise;
+    if (leaningId) {
+        promise = doAddEvidence(leaningId);
+    } else {
+        promise = fetch('/api/research/leanings', {
+            method:  'POST',
+            headers: {'Content-Type': 'application/json'},
+            body:    JSON.stringify({title: newTitle, state: 'question'})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.ok) throw new Error(data.error);
+            return doAddEvidence(data.leaning.id);
+        });
+    }
+
+    promise
+    .then(function(data) {
+        if (!data.ok) throw new Error(data.error);
+        statusEl.textContent = 'Added.';
+        showToast('Evidence added to leaning', 'success');
+        setTimeout(closeInvestigateModal, 600);
+    })
+    .catch(function(e) { statusEl.textContent = 'Error: ' + e.message; });
+}
+
+// Append Investigate button after like/save
+function addInvestigateButton(rank, hashId) {
     var cards = document.querySelectorAll('.article-card');
     for (var i = 0; i < cards.length; i++) {
         var card = cards[i];
         if (card.dataset.rank == rank) {
             var cardActions = card.querySelector('.card-actions');
-            if (!cardActions || cardActions.querySelector('.btn-dive')) return;
-            var diveBtn = document.createElement('button');
-            diveBtn.className = 'action-btn btn-dive';
-            diveBtn.textContent = '🔖 Dive';
+            if (!cardActions || cardActions.querySelector('.btn-investigate')) return;
+
+            var btn = document.createElement('button');
+            btn.className   = 'action-btn btn-investigate';
+            btn.textContent = '🔍 Investigate →';
+
             var isDryRun = document.body.getAttribute('data-run-mode') === 'dry-run';
             if (isDryRun) {
-                diveBtn.title = 'Dry run — buttons disabled';
-                diveBtn.disabled = true;
+                btn.title    = 'Dry run — disabled';
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
             } else {
-                diveBtn.title = 'Request deep dive analysis (~30s, ~$0.15)';
-                diveBtn.onclick = (function(r, h, b) {
-                    return function() { showDeepDiveModal(r, h, b); };
-                })(rank, hashId, diveBtn);
+                btn.title = 'Investigate — Scan, Track as Topic, or add to Leaning';
+                var t = card.dataset.title  || '';
+                var u = card.dataset.url    || '';
+                var s = card.dataset.source || '';
+                btn.onclick = (function(h, ti, ur, so, b) {
+                    return function() { openInvestigateModal(h, ti, ur, so, b); };
+                })(hashId, t, u, s, btn);
             }
-            diveBtn.style.animation = 'fadeIn 0.3s ease';
-            cardActions.insertBefore(diveBtn, cardActions.firstChild);
+            btn.style.animation = 'fadeIn 0.3s ease';
+            cardActions.insertBefore(btn, cardActions.firstChild);
             break;
         }
     }
 }
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeInvestigateModal();
+});
+
+// ── Topics strip ─────────────────────────────────────────────────────────────
+function loadTopicsStrip() {
+    fetch('/api/research/topics/status')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (!data.ok) return;
+        var visible = (data.topics || []).filter(function(t) {
+            return t.status !== 'closed' && t.status !== 'retired' && t.status !== 'archived';
+        });
+        if (!visible.length) return;
+        document.getElementById('topics-pills').innerHTML = visible.map(renderTopicPill).join('');
+        document.getElementById('topics-strip').style.display = 'flex';
+    })
+    .catch(function() { /* silent — informational only */ });
+}
+
+function renderTopicPill(t) {
+    var cfg = ({
+        'active-pull': { cls: 'tp-active',  dot: '●', dotColor: '#2e7d52' },
+        'paused':      { cls: 'tp-paused',  dot: '◐', dotColor: '#8b6e1a' },
+        'dormant':     { cls: 'tp-dormant', dot: '○', dotColor: '#9e9080' },
+        'one-shot':    { cls: 'tp-oneshot', dot: '◆', dotColor: '#1a5c8a' },
+    })[t.status] || { cls: 'tp-dormant', dot: '?', dotColor: '#9e9080' };
+
+    var sub = t.status;
+    if (t.status === 'active-pull') {
+        sub = t.days_remaining !== null && t.days_remaining !== undefined
+            ? t.days_remaining + 'd left · ' + t.session_count + ' sessions'
+            : 'active';
+    } else if (t.status === 'dormant') {
+        sub = t.session_count ? t.session_count + ' sessions' : 'no sessions';
+    } else if (t.status === 'paused') {
+        sub = 'paused';
+    }
+
+    var activateBtn = (t.status === 'dormant' || t.status === 'paused')
+        ? '<button class="tp-activate-btn" onclick="quickActivate(\'' + esc(t.slug) + '\',this)">Activate</button>'
+        : '';
+
+    return '<div class="topic-pill ' + cfg.cls + '">' +
+        '<span class="tp-dot" style="color:' + cfg.dotColor + '">' + cfg.dot + '</span>' +
+        '<a class="tp-name" href="/research/dashboard" title="' + esc(t.motivation || '') + '">' + esc(t.slug) + '</a>' +
+        '<span class="tp-sub">' + esc(sub) + '</span>' +
+        activateBtn +
+        '</div>';
+}
+
+function quickActivate(slug, btn) {
+    btn.disabled    = true;
+    btn.textContent = '…';
+    fetch('/api/research/topic/' + slug + '/activate', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            showToast('Topic "' + slug + '" activated', 'success');
+            loadTopicsStrip();
+        } else {
+            showToast('Error: ' + (data.error || 'failed'), 'error');
+            btn.disabled    = false;
+            btn.textContent = 'Activate';
+        }
+    })
+    .catch(function(e) {
+        showToast('Error: ' + e.message, 'error');
+        btn.disabled    = false;
+        btn.textContent = 'Activate';
+    });
+}
+
+loadTopicsStrip();
 </script>
 
 <script src="/research/static/js/annotations.js"></script>
@@ -488,5 +792,86 @@ function addDeepDiveButton(rank, hashId) {
         AnnotationSystem.initSelectionPopup();
     });
 </script>
+
+<!-- ── Investigate modal ─────────────────────────────────────────────────── -->
+<div id="investigate-overlay" style="display:none; position:fixed; inset:0; background:rgba(42,36,24,0.55); z-index:10000; align-items:center; justify-content:center;" onclick="if(event.target===this)closeInvestigateModal();">
+  <div id="investigate-modal">
+    <div class="inv-header">
+      <div>
+        <div class="inv-article-title" id="inv-article-title"></div>
+        <div class="inv-article-source" id="inv-article-source"></div>
+      </div>
+      <button class="inv-close" onclick="closeInvestigateModal()">✕</button>
+    </div>
+    <div class="inv-tabs">
+      <button class="inv-tab active" data-tab="scan"  onclick="switchInvTab('scan')">🔭 Scan</button>
+      <button class="inv-tab"        data-tab="track" onclick="switchInvTab('track')">🗓 Track</button>
+      <button class="inv-tab"        data-tab="lean"  onclick="switchInvTab('lean')">📎 Lean</button>
+    </div>
+    <!-- Scan pane -->
+    <div class="inv-pane active" id="inv-pane-scan">
+      <p class="inv-hint">Generate an article-level analysis with bibliography tailored to your interests (~30s, ~$0.15).</p>
+      <label class="inv-label">What interests you about this article?</label>
+      <textarea id="inv-scan-interest" class="inv-textarea" rows="3"
+        placeholder="e.g. Geopolitical implications, economic impact, contrarian perspectives…"></textarea>
+      <label class="inv-label" style="margin-top:10px;">Focus areas (optional)</label>
+      <input id="inv-scan-focus" class="inv-input" type="text"
+        placeholder="e.g. Historical precedents, key players, data sources…">
+      <div class="inv-actions">
+        <button class="inv-btn inv-btn-primary" onclick="runScan()">Run Scan →</button>
+        <button class="inv-btn" onclick="closeInvestigateModal()">Cancel</button>
+      </div>
+    </div>
+    <!-- Track pane -->
+    <div class="inv-pane" id="inv-pane-track">
+      <p class="inv-hint">Create an active research Topic. Sessions will run searches on this subject for the duration you choose.</p>
+      <label class="inv-label">Topic slug <span style="color:var(--text-dim);font-weight:400;">(letters, numbers, hyphens)</span></label>
+      <input id="inv-track-slug" class="inv-input" type="text"
+        placeholder="e.g. quad-alliance-cohesion" autocomplete="off">
+      <label class="inv-label" style="margin-top:10px;">Motivation (optional)</label>
+      <textarea id="inv-track-motivation" class="inv-textarea" rows="2"
+        placeholder="Why are you tracking this? What's your prior belief?"></textarea>
+      <label class="inv-label" style="margin-top:10px;">Duration</label>
+      <div class="inv-duration-row">
+        <select id="inv-track-days" class="inv-select">
+          <option value="3">3 days</option>
+          <option value="7">7 days</option>
+          <option value="14" selected>14 days</option>
+          <option value="30">30 days</option>
+        </select>
+      </div>
+      <div class="inv-actions">
+        <button class="inv-btn inv-btn-primary" onclick="runTrack()">Create Topic →</button>
+        <button class="inv-btn" onclick="closeInvestigateModal()">Cancel</button>
+        <span class="inv-status" id="inv-track-status"></span>
+      </div>
+    </div>
+    <!-- Lean pane -->
+    <div class="inv-pane" id="inv-pane-lean">
+      <p class="inv-hint">Attach this article as evidence to a belief you're tracking.</p>
+      <label class="inv-label">Add to existing leaning</label>
+      <select id="inv-lean-select" class="inv-select" style="width:100%;">
+        <option value="">Loading…</option>
+      </select>
+      <label class="inv-label" style="margin-top:10px;">— or create a new leaning —</label>
+      <input id="inv-lean-new-title" class="inv-input" type="text"
+        placeholder="New leaning statement e.g. The Quad will hold under pressure">
+      <label class="inv-label" style="margin-top:10px;">Stance</label>
+      <select id="inv-lean-stance" class="inv-select" style="width:100%;">
+        <option value="supports">▲ Supports</option>
+        <option value="complicates">▽ Complicates</option>
+        <option value="neutral" selected>○ Neutral</option>
+      </select>
+      <label class="inv-label" style="margin-top:10px;">Note (optional)</label>
+      <input id="inv-lean-note" class="inv-input" type="text"
+        placeholder="One-line reaction or observation">
+      <div class="inv-actions">
+        <button class="inv-btn inv-btn-primary" onclick="runLean()">Add Evidence →</button>
+        <button class="inv-btn" onclick="closeInvestigateModal()">Cancel</button>
+        <span class="inv-status" id="inv-lean-status"></span>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
