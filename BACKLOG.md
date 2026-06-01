@@ -37,6 +37,13 @@ _Promoted to active work by Robert's decision only. OpenClaw can add items. Only
 | B-014 | **BUG: Telegram delivery not working** | ✅ Fixed 2026-03-25. Root cause: `telegram_bot.py` polling mode was using `bot_token` (same as OpenClaw), blocking inbound. Fixed by routing `run_bot_mode()` to `polling_bot_token` from keychain. |
 | B-011 | **Card edge definition (refinement day)** | Card borders blend into parchment background, especially at the rail/content boundary. Fix: increase `--border2` contrast slightly, or add `box-shadow: 0 1px 4px rgba(42,36,24,0.10), 0 0 0 1px rgba(42,36,24,0.06)` to `.weekly-card`, `.topic-card`, and equivalent card classes across all domains. Warm light tan border or 10–15% opacity drop shadow. CSS-only, low effort. |
 
+## Test Suite Integrity
+
+| # | Item | Notes |
+|---|------|-------|
+| B-020 | **Fix or quarantine German Test 8 (ORCHESTRATOR.md)** | `domains/german/run_tests.py` Test 8 is deliberately archived but still shows as a known red on every run. Pattern: a suite with "known reds" is quietly decaying — each red-that-means-stop becomes harder to see when others red-that-means-fine exist. Fix: mark it explicitly as SKIP with a reason string so the runner skips it and reports N-1 tests run, not N tests with 1 known fail. See session notes 2026-06-01. |
+| B-021 | **Recalibrate or quarantine Curator UAT Taiwan-relevance check** | `tests/research_uat.py` check `3_taiwan_relevance_gte80pct` fails against live search results (ran 2026-06-01, returned <80% relevance). The check tests content of web search results which vary with each run — it is an environmental check, not a regression check. Two options: (1) lower threshold to a realistic floor (e.g. 60%) based on two-run data, (2) mark it explicitly as `ENV_CHECK` that does not gate merges. Leaving it as a hard gate creates the same decay risk as Test 8: "oh, that red is just the flaky one." Part of tomorrow's regression-script work. |
+
 ## Job Search
 
 | # | Item | Notes |
@@ -54,4 +61,4 @@ _Promoted to active work by Robert's decision only. OpenClaw can add items. Only
 
 ---
 
-_Last updated: 2026-03-29 by Claude Code_
+_Last updated: 2026-06-01 by Claude Code_

@@ -95,6 +95,8 @@ _working/*
 !_working/CURATOR_RESEARCH_CLI_REFERENCE.md
 # Confirmed design decision docs — permanent, commit them
 !_working/CURATOR_DESIGN_DECISIONS_*.md
+# STATE docs — on-disk reality snapshots, permanent record, commit them
+!_working/CURATOR_STATE_*.md
 
 # Finance domain — private data
 domains/finance/statements/
