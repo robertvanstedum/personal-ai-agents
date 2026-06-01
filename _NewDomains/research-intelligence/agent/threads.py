@@ -53,7 +53,7 @@ class ThreadRecord(BaseModel):
     id:                     str
     topic:                  str
     version:                int = 1
-    status:                 str = "active"       # active | expired | closed | archived | retired
+    status:                 str = "active"       # active | active-pull | paused | dormant | one-shot | expired | closed | archived | retired
     opened:                 str
     closed:                 Optional[str] = None
     retired:                bool = False
@@ -76,8 +76,12 @@ class ThreadRecord(BaseModel):
     @field_validator("status")
     @classmethod
     def valid_status(cls, v):
-        if v not in {"active", "expired", "closed", "archived", "retired"}:
-            raise ValueError(f"status must be active | expired | closed | archived | retired — got '{v}'")
+        allowed = {
+            "active", "active-pull", "paused", "dormant", "one-shot",
+            "expired", "closed", "archived", "retired",
+        }
+        if v not in allowed:
+            raise ValueError(f"status must be one of {sorted(allowed)} — got '{v}'")
         return v
 
 
