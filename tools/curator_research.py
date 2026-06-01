@@ -1553,6 +1553,69 @@ def _cli_tag_aliases(_args) -> None:
         print(f"  {alias:<22} → {canonical}")
 
 
+# ── Leaning CLI handlers ─────────────────────────────────────────────────────
+
+def _cli_leanings(args):
+    """List all leanings."""
+    sys.path.insert(0, str(_REPO_ROOT / "_NewDomains" / "research-intelligence"))
+    from agent.leanings import list_leanings, needs_badge
+    leanings = list_leanings()
+    if not leanings:
+        print("No leanings yet. Use 'create-leaning' to add one.")
+        return
+    state_label = {"question": "Question", "leaning": "Leaning ", "hold": "Hold    "}
+    print(f"{'STATE':<10} {'ID':<10} {'EV':>4} {'UPD':>12}  TITLE")
+    print("─" * 72)
+    for l in leanings:
+        sl    = state_label.get(l["state"], l["state"])
+        ev    = len(l.get("evidence", []))
+        badge = " [NEW]" if needs_badge(l) else ""
+        print(f"  {sl:<10} {l['id']:<10} {ev:>3}  {l.get('updated','?'):>12}  {l['title']}{badge}")
+
+
+def _cli_create_leaning(args):
+    """Create a new leaning."""
+    sys.path.insert(0, str(_REPO_ROOT / "_NewDomains" / "research-intelligence"))
+    from agent.leanings import create_leaning
+    leaning = create_leaning(
+        title  = args.title,
+        state  = args.state,
+        topics = [t.strip() for t in args.topics.split(",")] if args.topics else [],
+        notes  = args.notes or "",
+    )
+    print(f"Created: {leaning['id']}  [{leaning['state']}]  {leaning['title']}")
+
+
+def _cli_leaning_state(args):
+    """Advance a leaning's state."""
+    sys.path.insert(0, str(_REPO_ROOT / "_NewDomains" / "research-intelligence"))
+    from agent.leanings import update_leaning
+    l = update_leaning(args.id, state=args.state)
+    if l is None:
+        print(f"Error: leaning '{args.id}' not found.", file=sys.stderr)
+        sys.exit(1)
+    print(f"Updated {l['id']}: state → {l['state']}")
+
+
+def _cli_add_evidence(args):
+    """Add an evidence item to a leaning."""
+    sys.path.insert(0, str(_REPO_ROOT / "_NewDomains" / "research-intelligence"))
+    from agent.leanings import add_evidence
+    ev = add_evidence(
+        leaning_id = args.id,
+        title      = args.title,
+        url        = args.url or "",
+        source     = args.source or "",
+        stance     = args.stance,
+        note       = args.note or "",
+    )
+    if ev is None:
+        print(f"Error: leaning '{args.id}' not found.", file=sys.stderr)
+        sys.exit(1)
+    sym = {"supports": "▲", "complicates": "▽", "neutral": "○"}.get(ev["stance"], "○")
+    print(f"Added evidence {ev['id']}  {sym} {ev['stance']}  {ev['title']}")
+
+
 if __name__ == "__main__":
     import argparse
     import sys
@@ -1675,6 +1738,32 @@ if __name__ == "__main__":
     # ── tag-aliases ──
     sub.add_parser("tag-aliases", help="List all tag aliases.")
 
+    # ── leanings ──
+    sub.add_parser("leanings", help="List all Leanings with state and evidence count.")
+
+    # ── create-leaning ──
+    p_cl = sub.add_parser("create-leaning", help="Create a new Leaning.")
+    p_cl.add_argument("title", help="Statement being leaned toward.")
+    p_cl.add_argument("--state", choices=["question", "leaning", "hold"], default="question")
+    p_cl.add_argument("--topics", metavar="slug,slug",
+        help="Comma-separated Topic slugs to link.")
+    p_cl.add_argument("--notes", help="Optional personal note.")
+
+    # ── leaning-state ──
+    p_ls = sub.add_parser("leaning-state", help="Advance a Leaning's state.")
+    p_ls.add_argument("id", help="Leaning ID (8-char hex).")
+    p_ls.add_argument("state", choices=["question", "leaning", "hold"])
+
+    # ── add-evidence ──
+    p_ae = sub.add_parser("add-evidence", help="Add an evidence item to a Leaning.")
+    p_ae.add_argument("id", help="Leaning ID.")
+    p_ae.add_argument("title", help="Title of the source or article.")
+    p_ae.add_argument("--url", help="URL (optional).")
+    p_ae.add_argument("--source", help="Publication or author.")
+    p_ae.add_argument("--stance", choices=["supports", "complicates", "neutral"],
+        default="neutral")
+    p_ae.add_argument("--note", help="One-line reaction.")
+
     # ── dispatch ──
     args = parser.parse_args()
     handlers = {
@@ -1695,6 +1784,10 @@ if __name__ == "__main__":
         "pull":            _cli_pull,
         "suggest-links":   _cli_suggest_links,
         "tag-aliases":     _cli_tag_aliases,
+        "leanings":        _cli_leanings,
+        "create-leaning":  _cli_create_leaning,
+        "leaning-state":   _cli_leaning_state,
+        "add-evidence":    _cli_add_evidence,
     }
     try:
         handlers[args.command](args)

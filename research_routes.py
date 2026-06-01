@@ -2153,3 +2153,200 @@ def research_static(filename):
     from flask import send_from_directory
     static_dir = RESEARCH_ROOT / 'web' / 'static'
     return send_from_directory(str(static_dir), filename)
+
+
+# ── Leanings — UI page ────────────────────────────────────────────────────────
+
+@research_bp.route('/research/leanings')
+def research_leanings_ui():
+    """Serve the Leanings page."""
+    html = RESEARCH_ROOT / 'web' / 'leanings.html'
+    if not html.exists():
+        return "leanings.html not found", 404
+    return html.read_text(), 200, {'Content-Type': 'text/html'}
+
+
+# ── Leanings — API ────────────────────────────────────────────────────────────
+
+@research_bp.route('/api/research/leanings', methods=['GET'])
+def api_list_leanings():
+    """List all leanings, with badge flag for each."""
+    try:
+        from agent.leanings import list_leanings, needs_badge
+        leanings = list_leanings()
+        for l in leanings:
+            l['badge'] = needs_badge(l)
+        return jsonify({"ok": True, "leanings": leanings, "count": len(leanings)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@research_bp.route('/api/research/leanings', methods=['POST'])
+def api_create_leaning():
+    """Create a new leaning. Body: {title, state?, topics?, notes?}"""
+    body  = request.get_json() or {}
+    title = body.get("title", "").strip()
+    if not title:
+        return jsonify({"ok": False, "error": "title required"}), 400
+    try:
+        from agent.leanings import create_leaning
+        leaning = create_leaning(
+            title  = title,
+            state  = body.get("state", "question"),
+            topics = body.get("topics", []),
+            notes  = body.get("notes", ""),
+        )
+        return jsonify({"ok": True, "leaning": leaning}), 201
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@research_bp.route('/api/research/leanings/<leaning_id>', methods=['GET'])
+def api_get_leaning(leaning_id):
+    """Get a single leaning by ID."""
+    try:
+        from agent.leanings import get_leaning, needs_badge
+        leaning = get_leaning(leaning_id)
+        if leaning is None:
+            return jsonify({"ok": False, "error": "not found"}), 404
+        leaning['badge'] = needs_badge(leaning)
+        return jsonify({"ok": True, "leaning": leaning})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@research_bp.route('/api/research/leanings/<leaning_id>', methods=['PATCH'])
+def api_update_leaning(leaning_id):
+    """Update title, state, notes, or topics. Body: {title?, state?, notes?, topics?}"""
+    body = request.get_json() or {}
+    try:
+        from agent.leanings import update_leaning
+        leaning = update_leaning(leaning_id, **{
+            k: v for k, v in body.items()
+            if k in ("title", "state", "notes", "topics")
+        })
+        if leaning is None:
+            return jsonify({"ok": False, "error": "not found"}), 404
+        return jsonify({"ok": True, "leaning": leaning})
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@research_bp.route('/api/research/leanings/<leaning_id>', methods=['DELETE'])
+def api_delete_leaning(leaning_id):
+    """Delete a leaning."""
+    try:
+        from agent.leanings import delete_leaning
+        ok = delete_leaning(leaning_id)
+        if not ok:
+            return jsonify({"ok": False, "error": "not found"}), 404
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@research_bp.route('/api/research/leanings/<leaning_id>/evidence', methods=['POST'])
+def api_add_evidence(leaning_id):
+    """Add an evidence item. Body: {title, url, source?, stance?, note?}"""
+    body  = request.get_json() or {}
+    title = body.get("title", "").strip()
+    url   = body.get("url", "").strip()
+    if not title:
+        return jsonify({"ok": False, "error": "title required"}), 400
+    try:
+        from agent.leanings import add_evidence
+        ev = add_evidence(
+            leaning_id = leaning_id,
+            title      = title,
+            url        = url,
+            source     = body.get("source", ""),
+            stance     = body.get("stance", "neutral"),
+            note       = body.get("note", ""),
+        )
+        if ev is None:
+            return jsonify({"ok": False, "error": "leaning not found"}), 404
+        return jsonify({"ok": True, "evidence": ev}), 201
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@research_bp.route('/api/research/leanings/<leaning_id>/evidence/<ev_id>', methods=['DELETE'])
+def api_remove_evidence(leaning_id, ev_id):
+    """Remove an evidence item from a leaning."""
+    try:
+        from agent.leanings import remove_evidence
+        ok = remove_evidence(leaning_id, ev_id)
+        if not ok:
+            return jsonify({"ok": False, "error": "not found"}), 404
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@research_bp.route('/api/research/leanings/<leaning_id>/teammate-read', methods=['POST'])
+def api_teammate_read(leaning_id):
+    """
+    Trigger an on-demand Sonnet teammate read for a leaning.
+    Reads linked thread session summaries as context.
+    Budget-gated: ~$0.01-0.02 per call.
+    """
+    try:
+        from agent.leanings import get_leaning, build_teammate_prompt, store_teammate_read
+        import keyring
+        import anthropic as _anthropic
+
+        leaning = get_leaning(leaning_id)
+        if leaning is None:
+            return jsonify({"ok": False, "error": "leaning not found"}), 404
+
+        # Gather brief excerpts from linked thread sessions (free text, no API call)
+        thread_summaries = []
+        for topic in leaning.get("topics", []):
+            thread_dir = RESEARCH_ROOT / "data" / "threads" / topic
+            if not thread_dir.exists():
+                continue
+            sessions = sorted(thread_dir.glob("*.md"))[-3:]  # last 3 sessions
+            for s in sessions:
+                text = s.read_text()
+                # Extract the findings section (first 400 chars is enough for context)
+                excerpt = text[:600].replace('\n', ' ').strip()
+                thread_summaries.append(f"[{topic}] {excerpt}…")
+
+        system_prompt, user_prompt = build_teammate_prompt(leaning, thread_summaries)
+
+        api_key = keyring.get_password("anthropic", "api_key")
+        if not api_key:
+            return jsonify({"ok": False, "error": "Anthropic API key not found in keyring"}), 500
+
+        client = _anthropic.Anthropic(api_key=api_key)
+        msg = client.messages.create(
+            model      = "claude-sonnet-4-5",
+            max_tokens = 512,
+            system     = system_prompt,
+            messages   = [{"role": "user", "content": user_prompt}],
+        )
+        text = msg.content[0].text.strip()
+
+        tokens_in  = msg.usage.input_tokens
+        tokens_out = msg.usage.output_tokens
+        cost_usd   = (tokens_in * 3.0 + tokens_out * 15.0) / 1_000_000
+
+        tr = store_teammate_read(leaning_id, text)
+
+        return jsonify({
+            "ok":         True,
+            "text":       text,
+            "tokens_in":  tokens_in,
+            "tokens_out": tokens_out,
+            "cost_usd":   round(cost_usd, 4),
+            "teammate_read": tr,
+        })
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
