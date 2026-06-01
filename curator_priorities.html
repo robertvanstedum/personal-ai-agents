@@ -209,7 +209,7 @@
     flex-shrink: 0;
   }
 
-  /* ── Add Priority panel ── */
+  /* ── Add Priority panel (retired — kept as tombstone) ── */
   .add-panel {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -894,7 +894,7 @@
 <nav class="curator-subnav">
   <a href="/" class="subnav-tab">Daily</a>
   <a href="/curator_library.html" class="subnav-tab">Library</a>
-  <a href="/interests/2026/deep-dives/index.html" class="subnav-tab">Deep Dives</a>
+  <a href="/interests/2026/scans/index.html" class="subnav-tab">Scans &amp; Dives</a>
   <a href="/curator_intelligence.html" class="subnav-tab">Observations</a>
   <a href="/curator_priorities.html" class="subnav-tab subnav-focus active">🎯 Focus</a>
 </nav>
@@ -919,44 +919,11 @@
     </div>
   </div>
 
-  <!-- Add Priority panel -->
-  <div class="add-panel">
-    <button class="add-panel-toggle" id="addToggle" onclick="toggleAddForm()">
-      <span>+ ADD NEW PRIORITY</span>
-      <span class="toggle-icon">+</span>
-    </button>
-    <div class="add-form" id="addForm">
-      <div class="form-grid">
-        <div class="form-group">
-          <label class="form-label" for="inputLabel">Label</label>
-          <input class="form-input" id="inputLabel" type="text" placeholder="e.g. Tigray Conflict" autocomplete="off">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="inputBoost">Boost</label>
-          <input class="form-input" id="inputBoost" type="number" step="0.5" min="1" max="10" value="2.0">
-        </div>
-        <div class="form-group full">
-          <label class="form-label" for="inputKeywords">Keywords <span class="form-hint">(comma-separated)</span></label>
-          <input class="form-input" id="inputKeywords" type="text" placeholder="Tigray, Ethiopia, TPLF" autocomplete="off">
-        </div>
-        <div class="form-group full">
-          <label class="form-label">Expires in</label>
-          <div class="expiry-options" id="expiryOptions">
-            <button class="expiry-btn" data-days="1" onclick="selectExpiry(this)">1d</button>
-            <button class="expiry-btn" data-days="3" onclick="selectExpiry(this)">3d</button>
-            <button class="expiry-btn" data-days="7" onclick="selectExpiry(this)">7d</button>
-            <button class="expiry-btn selected" data-days="14" onclick="selectExpiry(this)">14d</button>
-            <button class="expiry-btn" data-days="30" onclick="selectExpiry(this)">30d</button>
-            <button class="expiry-btn" data-days="" onclick="selectExpiry(this)">No expiry</button>
-          </div>
-        </div>
-      </div>
-      <div class="form-actions">
-        <button class="btn-primary" id="addSubmitBtn" onclick="submitAdd()">Add Priority</button>
-        <button class="btn-ghost" onclick="resetAddForm()">Clear</button>
-        <span class="form-status" id="formStatus"></span>
-      </div>
-    </div>
+  <!-- Deprecation notice (Priorities → Topic state, Step 2 of Leaning tier) -->
+  <div style="background: var(--warn-dim); border: 1px solid var(--warn-border); border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; font-size: 0.82rem; color: var(--text-muted);">
+    <strong style="color: var(--warn);">Focus priorities are being retired.</strong>
+    Boosting now flows through Topic activation — activate a Topic and it lifts matching articles in the briefing automatically.
+    Existing priorities below expire on their own schedule and won't be renewed here.
   </div>
 
   <!-- Priority list -->
@@ -974,34 +941,6 @@
 <script>
   const API = '';  // same origin
 
-  // ── Expiry selector ─────────────────────────────────────────
-  let selectedExpiryDays = 14;
-
-  function selectExpiry(btn) {
-    document.querySelectorAll('#expiryOptions .expiry-btn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    selectedExpiryDays = btn.dataset.days === '' ? null : parseInt(btn.dataset.days);
-  }
-
-  // ── Toggle add form ─────────────────────────────────────────
-  function toggleAddForm() {
-    const form = document.getElementById('addForm');
-    const toggle = document.getElementById('addToggle');
-    const open = form.classList.toggle('visible');
-    toggle.classList.toggle('open', open);
-  }
-
-  function resetAddForm() {
-    document.getElementById('inputLabel').value = '';
-    document.getElementById('inputKeywords').value = '';
-    document.getElementById('inputBoost').value = '2.0';
-    document.querySelectorAll('#expiryOptions .expiry-btn').forEach(b => {
-      b.classList.toggle('selected', b.dataset.days === '14');
-    });
-    selectedExpiryDays = 14;
-    hideFormStatus();
-  }
-
   // ── Toast ───────────────────────────────────────────────────
   function showToast(msg, type = 'ok') {
     const t = document.getElementById('toast');
@@ -1009,17 +948,6 @@
     t.className = `toast ${type} show`;
     clearTimeout(t._timer);
     t._timer = setTimeout(() => { t.classList.remove('show'); }, 3000);
-  }
-
-  // ── Form status ─────────────────────────────────────────────
-  function showFormStatus(msg, isError = false) {
-    const s = document.getElementById('formStatus');
-    s.textContent = msg;
-    s.className = `form-status visible${isError ? ' error' : ''}`;
-  }
-
-  function hideFormStatus() {
-    document.getElementById('formStatus').className = 'form-status';
   }
 
   // ── Relative expiry display ─────────────────────────────────
@@ -1318,40 +1246,6 @@
     }
   }
 
-  // ── Add priority ────────────────────────────────────────────
-  async function submitAdd() {
-    const label    = document.getElementById('inputLabel').value.trim();
-    const keywords = document.getElementById('inputKeywords').value.trim();
-    const boost    = parseFloat(document.getElementById('inputBoost').value) || 2.0;
-
-    if (!label)    { showFormStatus('Label is required.', true); return; }
-    if (!keywords) { showFormStatus('At least one keyword is required.', true); return; }
-
-    const btn = document.getElementById('addSubmitBtn');
-    btn.disabled = true;
-    showFormStatus('Adding…');
-
-    const body = { label, keywords, boost };
-    if (selectedExpiryDays) body.expires_days = selectedExpiryDays;
-
-    try {
-      const res  = await fetch('/api/priority', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-      const data = await res.json();
-      if (data.success) {
-        showToast(`Priority "${label}" added`);
-        resetAddForm();
-        toggleAddForm();
-        await loadPriorities();
-      } else {
-        showFormStatus(data.message || 'Error adding priority.', true);
-      }
-    } catch (err) {
-      showFormStatus('Network error: ' + err.message, true);
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
   // ── Delete priority ─────────────────────────────────────────
   async function deletePriority(id, label) {
     if (!confirm(`Delete priority "${label}"?`)) return;
@@ -1464,19 +1358,6 @@
   function escAttr(str) {
     return String(str).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
-
-  // ── Keyboard shortcuts ───────────────────────────────────────
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') {
-      // Close add form if open
-      const form = document.getElementById('addForm');
-      if (form.classList.contains('visible')) toggleAddForm();
-    }
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      const form = document.getElementById('addForm');
-      if (form.classList.contains('visible')) submitAdd();
-    }
-  });
 
   // ── Init ─────────────────────────────────────────────────────
   loadPriorities();

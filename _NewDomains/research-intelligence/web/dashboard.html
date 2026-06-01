@@ -611,7 +611,7 @@
       if (t.deeper_dive_generated && t.deeper_dive_path) {
         // Derive URL: data/deeper_dives/strait-of-hormuz-deeper-dive-005.md → stem
         const stem = t.deeper_dive_path.split('/').pop().replace(/\.md$/, '');
-        ddLink = `<span class="btn-view-dd" onclick="event.stopPropagation();window.location='/research/deeper-dive-result/${encodeURIComponent(stem)}'">View Deeper Dive →</span>`;
+        ddLink = `<span class="btn-view-dd" onclick="event.stopPropagation();window.location='/research/dive-result/${encodeURIComponent(stem)}'">View Deeper Dive →</span>`;
       }
       row.innerHTML = `
         <span class="thread-name">${t.topic}</span>
@@ -633,7 +633,7 @@
         <span class="thread-name">${t.topic}</span>
         <span class="thread-stats">${statsText}</span>
         <span class="thread-expired-badge">Ready to close</span>
-        <a class="btn-deeper-dive" href="/research/deeper-dive-confirm?topic=${encodeURIComponent(t.topic)}">✦ Deeper Dive</a>
+        <a class="btn-deeper-dive" href="/research/dive-confirm?topic=${encodeURIComponent(t.topic)}">✦ Deeper Dive</a>
         <button class="btn-archive" onclick="archiveThread(event, '${t.topic}')">Archive</button>
         <span class="thread-last-run">${lastRun}</span>
       `;
@@ -666,7 +666,7 @@
       <span class="thread-running-badge">running…</span>
       <button class="thread-run-btn" onclick="runSession(event, '${t.topic}')">▶</button>
       ${canGenerateDD
-        ? `<span class="btn-view-dd" onclick="event.stopPropagation();window.location='/research/deeper-dive-confirm?topic=${encodeURIComponent(t.topic)}'">Generate Deeper Dive →</span>`
+        ? `<span class="btn-view-dd" onclick="event.stopPropagation();window.location='/research/dive-confirm?topic=${encodeURIComponent(t.topic)}'">Generate Deeper Dive →</span>`
         : `<span class="thread-last-run">${lastRun}</span>`}
     `;
     return row;
@@ -804,7 +804,7 @@
       return;
     }
     try {
-      const res  = await fetch('/api/research/generate-deeper-dive/status');
+      const res  = await fetch('/api/research/generate-dive/status');
       const data = await res.json();
       if (!data.running) {
         _ddGeneratingTopic = null;
@@ -818,7 +818,7 @@
 
   async function restoreDDState() {
     try {
-      const res  = await fetch('/api/research/generate-deeper-dive/status');
+      const res  = await fetch('/api/research/generate-dive/status');
       const data = await res.json();
       if (data.running && data.topic) {
         _ddGeneratingTopic = data.topic;

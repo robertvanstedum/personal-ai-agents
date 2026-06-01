@@ -103,7 +103,7 @@ SHARED_NAV_HTML = """
   <nav class="header-nav">
     <a href="/" class="nav-link {briefing_active}">Daily</a>
     <a href="/curator_library.html" class="nav-link {library_active}">Library</a>
-    <a href="/interests/2026/deep-dives/index.html" class="nav-link {deepdives_active}">Deep Dives</a>
+    <a href="/interests/2026/scans/index.html" class="nav-link {deepdives_active}">Scans &amp; Dives</a>
     <a href="/curator_priorities.html" class="nav-link {priorities_active}">Priorities</a>
     <a href="/curator_intelligence.html" class="nav-link {intelligence_active}">AI Observations</a>
   </nav>
@@ -293,16 +293,16 @@ def api_library():
                 }
 
     # ── 3. Resolve deep_dive_url for each article ─────────────────────────────
-    # Scan deep-dives directory to catch dives not recorded in curator_history.json
-    deep_dives_dir = BASE_DIR / 'interests' / '2026' / 'deep-dives'
+    # Scan scans/ directory to catch dives not recorded in curator_history.json
+    scans_dir = BASE_DIR / 'interests' / '2026' / 'scans'
     dive_url_map = {}  # hash_id -> web URL
-    if deep_dives_dir.exists():
-        for f in deep_dives_dir.glob('*.html'):
+    if scans_dir.exists():
+        for f in scans_dir.glob('*.html'):
             if f.name == 'index.html':
                 continue
             parts = f.name.split('-', 1)
             if len(parts) >= 1 and len(parts[0]) == 5:
-                dive_url_map[parts[0]] = f'/interests/2026/deep-dives/{f.name}'
+                dive_url_map[parts[0]] = f'/interests/2026/scans/{f.name}'
 
     for art in articles.values():
         hash_id = art.get('hash_id')
@@ -335,18 +335,19 @@ def api_library():
 @app.route('/api/priority', methods=['POST'])
 def api_add_priority():
     """
-    Add a new priority to priorities.json.
-    
-    Expects JSON:
-    {
-      "label": "Tigray Conflict",
-      "keywords": ["Tigray", "Ethiopia"],
-      "boost": 2.0,
-      "expires_days": 3  // optional, days from now
-    }
+    DEPRECATED — Priority creation retired in Step 2 of Leaning tier.
+    Boosting now flows through Topic activation. Existing priorities expire naturally.
     """
+    return jsonify({
+        'success': False,
+        'message': 'Priority creation is retired. Activate a Topic to boost matching articles.',
+        'retired': True,
+    }), 410
+
+def _api_add_priority_legacy():
+    """Kept for reference — no longer reachable."""
     data = request.get_json()
-    
+
     if not data:
         return jsonify({'success': False, 'message': 'No data provided'}), 400
     
@@ -1153,7 +1154,7 @@ def trigger_deepdive(hash_id, interest, focus=''):
                     return {
                         'success': True,
                         'message': 'Deep dive complete!',
-                        'html_path': str(html_rel_path)
+                        'html_path': '/' + str(html_rel_path)
                     }
                 else:
                     print(f"⚠️  HTML not found at {html_full_path}")

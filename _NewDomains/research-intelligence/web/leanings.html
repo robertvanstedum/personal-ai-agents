@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leanings — Research Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/research/static/css/nav.css">
+  <style>
+    :root {
+      --bg: #f5f0e8;
+      --surface: #faf7f2;
+      --surface2: #f0ebe0;
+      --border: #ddd6c8;
+      --border2: #c8bfaf;
+      --text: #2a2418;
+      --text-muted: #6b5f4e;
+      --text-dim: #9e9080;
+      --accent: #8b5e2a;
+      --accent-dim: rgba(139,94,42,0.08);
+      --shadow: rgba(42,36,24,0.08);
+      --ok: #2e7d52;
+      --ok-dim: rgba(46,125,82,0.08);
+      --warn: #8b6e1a;
+      --warn-dim: rgba(139,110,26,0.1);
+      --blue: #1a5c8a;
+      --blue-dim: rgba(26,92,138,0.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Source Sans 3', sans-serif;
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+      display: flex;
+      align-items: flex-start;
+    }
+
+    /* ── Main content ── */
+    .main-content { flex: 1; min-width: 0; padding: 32px 40px 80px; max-width: 860px; }
+
+    .page-header { margin-bottom: 28px; }
+    .page-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.7rem; font-weight: 600; margin-bottom: 4px;
+    }
+    .page-sub { font-size: 0.82rem; color: var(--text-muted); }
+
+    /* ── State chips ── */
+    .state-chip {
+      display: inline-block; font-family: 'DM Mono', monospace;
+      font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em;
+      padding: 2px 8px; border-radius: 999px; font-weight: 500;
+    }
+    .state-question { background: var(--blue-dim); color: var(--blue); }
+    .state-leaning  { background: var(--warn-dim); color: var(--warn); }
+    .state-hold     { background: var(--ok-dim); color: var(--ok); }
+
+    /* ── Stance chips ── */
+    .stance-supports    { color: var(--ok); }
+    .stance-complicates { color: #b43c3c; }
+    .stance-neutral     { color: var(--text-dim); }
+
+    /* ── Badge ── */
+    .badge {
+      display: inline-block; background: var(--accent); color: white;
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      padding: 1px 6px; border-radius: 999px; margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    /* ── Add form ── */
+    .add-form-wrap {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 18px 20px; margin-bottom: 24px;
+    }
+    .add-form-title {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-dim); margin-bottom: 12px;
+    }
+    .form-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+    .form-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 180px; }
+    .form-label { font-size: 0.75rem; color: var(--text-muted); }
+    .form-input, .form-select {
+      font-family: inherit; font-size: 0.875rem;
+      background: var(--bg); border: 1px solid var(--border2);
+      border-radius: 6px; padding: 7px 10px; color: var(--text);
+      outline: none;
+    }
+    .form-input:focus, .form-select:focus { border-color: var(--accent); }
+    .form-input.wide { flex: 2; min-width: 280px; }
+    .btn {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      padding: 8px 16px; border-radius: 6px; cursor: pointer;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); transition: background 0.15s;
+    }
+    .btn:hover { background: var(--surface2); }
+    .btn-primary {
+      background: var(--accent); color: white; border-color: var(--accent);
+    }
+    .btn-primary:hover { background: #7a521f; }
+    .btn-sm { padding: 4px 10px; font-size: 10px; }
+    .btn-danger { color: #b43c3c; border-color: rgba(180,60,60,0.3); }
+    .btn-danger:hover { background: rgba(180,60,60,0.06); }
+
+    /* ── Leaning cards ── */
+    .leaning-list { display: flex; flex-direction: column; gap: 14px; }
+    .leaning-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden;
+    }
+    .leaning-card-head {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 18px; cursor: pointer; user-select: none;
+    }
+    .leaning-card-head:hover { background: var(--accent-dim); }
+    .leaning-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1rem; font-weight: 600; flex: 1;
+    }
+    .leaning-meta { font-size: 0.78rem; color: var(--text-dim); }
+    .leaning-topics { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+    .topic-tag {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 4px; padding: 1px 7px; color: var(--text-muted);
+    }
+    .expand-icon { color: var(--text-dim); font-size: 1rem; transition: transform 0.15s; }
+    .expand-icon.open { transform: rotate(90deg); }
+
+    /* ── Leaning body (expanded) ── */
+    .leaning-body { display: none; border-top: 1px solid var(--border); padding: 18px 20px; }
+    .leaning-body.open { display: block; }
+
+    .section-label {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-dim); margin-bottom: 10px;
+      padding-bottom: 6px; border-bottom: 1px solid var(--border);
+    }
+
+    /* Evidence list */
+    .evidence-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+    .evidence-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 12px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 6px;
+    }
+    .stance-sym { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+    .ev-body { flex: 1; min-width: 0; }
+    .ev-title { font-size: 0.88rem; font-weight: 500; margin-bottom: 2px; }
+    .ev-title a { color: var(--accent); text-decoration: none; }
+    .ev-title a:hover { text-decoration: underline; }
+    .ev-meta { font-size: 0.75rem; color: var(--text-dim); }
+    .ev-note { font-size: 0.78rem; color: var(--text-muted); margin-top: 3px; font-style: italic; }
+    .ev-actions { display: flex; gap: 6px; align-items: flex-start; }
+
+    /* Add evidence form */
+    .add-ev-wrap {
+      background: var(--bg); border: 1px dashed var(--border2);
+      border-radius: 6px; padding: 12px 14px; margin-bottom: 16px;
+    }
+    .add-ev-toggle { font-size: 0.8rem; color: var(--accent); cursor: pointer; background: none; border: none; padding: 0; }
+    .add-ev-toggle:hover { text-decoration: underline; }
+    .add-ev-form { display: none; margin-top: 10px; }
+    .add-ev-form.visible { display: block; }
+    .add-ev-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+    .add-ev-grid .full { grid-column: 1/-1; }
+
+    /* Teammate read */
+    .teammate-read-wrap {
+      background: var(--accent-dim); border: 1px solid rgba(139,94,42,0.15);
+      border-radius: 8px; padding: 14px 16px; margin-top: 4px;
+    }
+    .teammate-read-text { font-size: 0.88rem; line-height: 1.65; white-space: pre-wrap; }
+    .teammate-read-meta { font-size: 0.72rem; color: var(--text-dim); margin-top: 8px; }
+    .teammate-read-empty { font-size: 0.82rem; color: var(--text-muted); padding: 10px 0; }
+
+    /* State editor */
+    .state-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .state-options { display: flex; gap: 6px; }
+    .state-btn {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      padding: 4px 12px; border-radius: 999px; cursor: pointer;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text-muted); transition: all 0.15s;
+    }
+    .state-btn.active-question { background: var(--blue-dim); color: var(--blue); border-color: rgba(26,92,138,0.3); }
+    .state-btn.active-leaning  { background: var(--warn-dim);  color: var(--warn);  border-color: rgba(139,110,26,0.3); }
+    .state-btn.active-hold     { background: var(--ok-dim);    color: var(--ok);    border-color: rgba(46,125,82,0.3); }
+
+    /* Notes */
+    .notes-area {
+      width: 100%; font-family: inherit; font-size: 0.875rem;
+      background: var(--bg); border: 1px solid var(--border2);
+      border-radius: 6px; padding: 8px 10px; color: var(--text);
+      resize: vertical; min-height: 60px; outline: none;
+    }
+    .notes-area:focus { border-color: var(--accent); }
+
+    .action-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .status-msg { font-size: 0.78rem; color: var(--text-muted); align-self: center; }
+    .status-msg.err { color: #b43c3c; }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state p { margin-top: 8px; font-size: 0.85rem; }
+
+    @media (max-width: 700px) {
+      .main-content { padding: 20px 16px 60px; }
+      .add-ev-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- nav rail injected by nav.css / research_routes.py pattern -->
+<nav class="domain-rail">
+  <div class="rail-domain">
+    <span class="rail-icon">🔬</span>
+    <span class="rail-label">Research</span>
+  </div>
+  <a class="rail-link" href="/research/dashboard">Dashboard</a>
+  <a class="rail-link" href="/research/sessions">Sessions</a>
+  <a class="rail-link active" href="/research/leanings">Leanings</a>
+  <a class="rail-link" href="/research/observe">Observations</a>
+  <a class="rail-link" href="/interests/2026/scans/index.html">Scans &amp; Dives</a>
+</nav>
+
+<div class="main-content">
+  <div class="page-header">
+    <h1 class="page-title">Leanings</h1>
+    <p class="page-sub">Beliefs in progress — from open question to held position.</p>
+  </div>
+
+  <!-- New leaning form -->
+  <div class="add-form-wrap">
+    <div class="add-form-title">New Leaning</div>
+    <div class="form-row">
+      <div class="form-field" style="flex:3">
+        <label class="form-label" for="newTitle">Statement</label>
+        <input class="form-input" id="newTitle" type="text"
+          placeholder="e.g. The Quad will hold under sustained pressure" autocomplete="off">
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="newState">Starting state</label>
+        <select class="form-select" id="newState">
+          <option value="question">Question</option>
+          <option value="leaning">Leaning</option>
+          <option value="hold">Hold</option>
+        </select>
+      </div>
+      <div style="align-self: flex-end;">
+        <button class="btn btn-primary" onclick="createLeaning()">Add →</button>
+      </div>
+    </div>
+    <div id="createStatus" class="status-msg" style="margin-top:8px;"></div>
+  </div>
+
+  <!-- Leaning list -->
+  <div id="leaningList" class="leaning-list">
+    <div class="empty-state">Loading…</div>
+  </div>
+</div>
+
+<script>
+// ── Data ─────────────────────────────────────────────────────────────────────
+
+let leanings = [];
+
+async function loadLeanings() {
+  try {
+    const res  = await fetch('/api/research/leanings');
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    leanings = data.leanings;
+    renderList();
+  } catch (e) {
+    document.getElementById('leaningList').innerHTML =
+      `<div class="empty-state"><p>Error loading leanings: ${esc(e.message)}</p></div>`;
+  }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+
+function renderList() {
+  const el = document.getElementById('leaningList');
+  if (!leanings.length) {
+    el.innerHTML = `<div class="empty-state">
+      <div style="font-size:2rem">🤔</div>
+      <p>No leanings yet. Add one above to start tracking a belief.</p>
+    </div>`;
+    return;
+  }
+  el.innerHTML = leanings.map(renderCard).join('');
+}
+
+function renderCard(l) {
+  const stateClass = `state-${l.state}`;
+  const stateLabel = {question:'Question', leaning:'Leaning', hold:'Hold'}[l.state] || l.state;
+  const badge = l.badge ? `<span class="badge">new</span>` : '';
+  const evCount = l.evidence ? l.evidence.length : 0;
+  const topicTags = (l.topics || []).map(t =>
+    `<span class="topic-tag">${esc(t)}</span>`).join('');
+
+  const trSection = renderTeammateRead(l);
+  const evSection = renderEvidence(l);
+  const stateButtons = ['question','leaning','hold'].map(s => {
+    const active = s === l.state ? ` active-${s}` : '';
+    return `<button class="state-btn${active}" onclick="setState('${esc(l.id)}','${s}',this)">${
+      {question:'Question',leaning:'Leaning',hold:'Hold'}[s]
+    }</button>`;
+  }).join('');
+
+  return `<div class="leaning-card" id="card-${l.id}">
+  <div class="leaning-card-head" onclick="toggleCard('${esc(l.id)}')">
+    <span class="expand-icon" id="icon-${l.id}">›</span>
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span class="leaning-title">${esc(l.title)}</span>
+        <span class="state-chip ${stateClass}">${stateLabel}</span>
+        ${badge}
+      </div>
+      <div style="margin-top:3px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span class="leaning-meta">${evCount} evidence · ${esc(l.updated)}</span>
+        <div class="leaning-topics">${topicTags}</div>
+      </div>
+    </div>
+  </div>
+  <div class="leaning-body" id="body-${l.id}">
+    <!-- State -->
+    <div class="state-row">
+      <span class="section-label" style="border:none;padding:0;margin:0;">State</span>
+      <div class="state-options">${stateButtons}</div>
+    </div>
+
+    <!-- Evidence -->
+    <div class="section-label">Evidence (${evCount})</div>
+    ${evSection}
+
+    <!-- Add evidence toggle -->
+    <div class="add-ev-wrap">
+      <button class="add-ev-toggle" onclick="toggleAddEv('${esc(l.id)}')">+ Add evidence</button>
+      <div class="add-ev-form" id="add-ev-${l.id}">
+        <div class="add-ev-grid">
+          <div class="form-field full">
+            <label class="form-label">Title</label>
+            <input class="form-input" id="ev-title-${l.id}" type="text" placeholder="Article or source title" autocomplete="off">
+          </div>
+          <div class="form-field">
+            <label class="form-label">URL (optional)</label>
+            <input class="form-input" id="ev-url-${l.id}" type="url" placeholder="https://…">
+          </div>
+          <div class="form-field">
+            <label class="form-label">Source</label>
+            <input class="form-input" id="ev-source-${l.id}" type="text" placeholder="Publication / author">
+          </div>
+          <div class="form-field">
+            <label class="form-label">Stance</label>
+            <select class="form-select" id="ev-stance-${l.id}">
+              <option value="supports">▲ Supports</option>
+              <option value="complicates">▽ Complicates</option>
+              <option value="neutral" selected>○ Neutral</option>
+            </select>
+          </div>
+          <div class="form-field full">
+            <label class="form-label">Note (optional)</label>
+            <input class="form-input" id="ev-note-${l.id}" type="text" placeholder="One-line reaction or observation">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-primary btn-sm" onclick="addEvidence('${esc(l.id)}')">Add evidence</button>
+          <button class="btn btn-sm" onclick="toggleAddEv('${esc(l.id)}')">Cancel</button>
+          <span class="status-msg" id="ev-status-${l.id}"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Teammate read -->
+    <div class="section-label">Teammate Read${badge}</div>
+    ${trSection}
+    <div class="action-row">
+      <button class="btn btn-sm" id="tr-btn-${l.id}" onclick="getTeammateRead('${esc(l.id)}')">
+        ${l.badge ? '🔔 Get updated read' : l.teammate_read ? '↺ Refresh read' : 'Get teammate read'}
+      </button>
+      <span class="status-msg" id="tr-status-${l.id}"></span>
+    </div>
+
+    <!-- Notes -->
+    <div class="section-label" style="margin-top:16px;">Notes</div>
+    <textarea class="notes-area" id="notes-${l.id}" rows="2"
+      placeholder="Personal notes on this leaning…"
+      onblur="saveNotes('${esc(l.id)}')">${esc(l.notes || '')}</textarea>
+
+    <!-- Danger zone -->
+    <div class="action-row" style="margin-top:16px;">
+      <button class="btn btn-sm btn-danger" onclick="deleteLeaning('${esc(l.id)}','${esc(l.title)}')">Delete leaning</button>
+    </div>
+  </div>
+</div>`;
+}
+
+function renderEvidence(l) {
+  if (!l.evidence || !l.evidence.length) {
+    return `<div class="evidence-list"><div style="font-size:0.82rem;color:var(--text-muted);padding:6px 0;">No evidence attached yet.</div></div>`;
+  }
+  const stanceSym = {supports:'▲', complicates:'▽', neutral:'○'};
+  const stanceClass = {supports:'stance-supports', complicates:'stance-complicates', neutral:'stance-neutral'};
+  const rows = l.evidence.map(e => `
+    <div class="evidence-item">
+      <span class="stance-sym ${stanceClass[e.stance] || ''}">${stanceSym[e.stance] || '○'}</span>
+      <div class="ev-body">
+        <div class="ev-title">${e.url
+          ? `<a href="${esc(e.url)}" target="_blank">${esc(e.title)}</a>`
+          : esc(e.title)}</div>
+        <div class="ev-meta">${esc(e.stance)} · ${esc(e.source || '')} · ${esc(e.added)}</div>
+        ${e.note ? `<div class="ev-note">${esc(e.note)}</div>` : ''}
+      </div>
+      <div class="ev-actions">
+        <button class="btn btn-sm btn-danger" onclick="removeEvidence('${esc(l.id)}','${esc(e.id)}')">✕</button>
+      </div>
+    </div>`).join('');
+  return `<div class="evidence-list">${rows}</div>`;
+}
+
+function renderTeammateRead(l) {
+  if (!l.teammate_read) {
+    return `<div class="teammate-read-empty">No read yet. Click "Get teammate read" to trigger a Sonnet synthesis (~$0.01).</div>`;
+  }
+  const tr = l.teammate_read;
+  return `<div class="teammate-read-wrap">
+    <div class="teammate-read-text">${esc(tr.text)}</div>
+    <div class="teammate-read-meta">Generated ${tr.generated_at ? tr.generated_at.slice(0,10) : '?'} · ${tr.evidence_count_at_read || 0} evidence items at read time</div>
+  </div>`;
+}
+
+// ── Interactions ──────────────────────────────────────────────────────────────
+
+function toggleCard(id) {
+  const body = document.getElementById(`body-${id}`);
+  const icon = document.getElementById(`icon-${id}`);
+  const open = body.classList.toggle('open');
+  icon.classList.toggle('open', open);
+}
+
+function toggleAddEv(id) {
+  const form = document.getElementById(`add-ev-${id}`);
+  form.classList.toggle('visible');
+}
+
+async function createLeaning() {
+  const title = document.getElementById('newTitle').value.trim();
+  const state = document.getElementById('newState').value;
+  const statusEl = document.getElementById('createStatus');
+  if (!title) { statusEl.textContent = 'Title required.'; statusEl.className = 'status-msg err'; return; }
+  statusEl.textContent = 'Creating…'; statusEl.className = 'status-msg';
+  try {
+    const res  = await fetch('/api/research/leanings', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({title, state}),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    document.getElementById('newTitle').value = '';
+    statusEl.textContent = '';
+    await loadLeanings();
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message;
+    statusEl.className = 'status-msg err';
+  }
+}
+
+async function setState(id, state, btn) {
+  try {
+    const res  = await fetch(`/api/research/leanings/${id}`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({state}),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    // Update state buttons in place
+    const card = document.getElementById(`card-${id}`);
+    card.querySelectorAll('.state-btn').forEach(b => {
+      b.className = 'state-btn';
+    });
+    btn.classList.add(`active-${state}`);
+    // Update state chip in header
+    const chip = card.querySelector('.state-chip');
+    chip.className = `state-chip state-${state}`;
+    chip.textContent = {question:'Question', leaning:'Leaning', hold:'Hold'}[state];
+    // Update local data
+    const l = leanings.find(x => x.id === id);
+    if (l) l.state = state;
+  } catch (e) {
+    alert('Error updating state: ' + e.message);
+  }
+}
+
+async function addEvidence(id) {
+  const title  = document.getElementById(`ev-title-${id}`).value.trim();
+  const url    = document.getElementById(`ev-url-${id}`).value.trim();
+  const source = document.getElementById(`ev-source-${id}`).value.trim();
+  const stance = document.getElementById(`ev-stance-${id}`).value;
+  const note   = document.getElementById(`ev-note-${id}`).value.trim();
+  const status = document.getElementById(`ev-status-${id}`);
+  if (!title) { status.textContent = 'Title required.'; status.className = 'status-msg err'; return; }
+  status.textContent = 'Adding…'; status.className = 'status-msg';
+  try {
+    const res  = await fetch(`/api/research/leanings/${id}/evidence`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({title, url, source, stance, note}),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    status.textContent = '';
+    await loadLeanings();
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+    status.className = 'status-msg err';
+  }
+}
+
+async function removeEvidence(leaningId, evId) {
+  if (!confirm('Remove this evidence item?')) return;
+  try {
+    const res  = await fetch(`/api/research/leanings/${leaningId}/evidence/${evId}`, {method: 'DELETE'});
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    await loadLeanings();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function getTeammateRead(id) {
+  const btn    = document.getElementById(`tr-btn-${id}`);
+  const status = document.getElementById(`tr-status-${id}`);
+  btn.disabled = true;
+  btn.textContent = 'Thinking…';
+  status.textContent = 'Calling Sonnet (~10s)…'; status.className = 'status-msg';
+  try {
+    const res  = await fetch(`/api/research/leanings/${id}/teammate-read`, {method: 'POST'});
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    status.textContent = `$${data.cost_usd} · ${data.tokens_in}in ${data.tokens_out}out`;
+    status.className = 'status-msg';
+    await loadLeanings();
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+    status.className = 'status-msg err';
+    btn.disabled = false;
+    btn.textContent = 'Get teammate read';
+  }
+}
+
+async function saveNotes(id) {
+  const notes = document.getElementById(`notes-${id}`).value;
+  try {
+    await fetch(`/api/research/leanings/${id}`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({notes}),
+    });
+  } catch (_) { /* silent */ }
+}
+
+async function deleteLeaning(id, title) {
+  if (!confirm(`Delete leaning "${title}"? This cannot be undone.`)) return;
+  try {
+    const res  = await fetch(`/api/research/leanings/${id}`, {method: 'DELETE'});
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    await loadLeanings();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+
+function esc(str) {
+  return String(str || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadLeanings();
+</script>
+
+</body>
+</html>

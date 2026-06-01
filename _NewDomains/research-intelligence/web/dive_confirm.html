@@ -389,7 +389,7 @@
   async function boot() {
     if (!topic) { showError('No topic specified in URL'); return; }
     try {
-      const res  = await fetch(`/api/research/deeper-dive-confirm-data?topic=${encodeURIComponent(topic)}`);
+      const res  = await fetch(`/api/research/dive-confirm-data?topic=${encodeURIComponent(topic)}`);
       const data = await res.json();
       if (!data.ok) { showError(data.error || 'Failed to load thread data'); return; }
 
@@ -410,7 +410,7 @@
     document.getElementById('btn-generate').disabled = true;
     document.getElementById('btn-archive').disabled  = true;
     try {
-      const res  = await fetch('/api/research/generate-deeper-dive', {
+      const res  = await fetch('/api/research/generate-dive', {
         method:  'POST',
         headers: {'Content-Type': 'application/json'},
         body:    JSON.stringify({topic}),

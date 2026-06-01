@@ -218,10 +218,11 @@ def resolve_article_reference(ref):
     
     return hash_id, article_data
 
-def generate_deep_dive(hash_id, article_data, initial_interest, dive_focus=None):
+def generate_scan(hash_id, article_data, initial_interest, dive_focus=None):
     """
-    Generate deep dive analysis using Sonnet
-    
+    Generate a Scan (article-level analysis) using Sonnet.
+    Formerly called generate_deep_dive — renamed to Scan per v2 naming.
+
     Returns: (markdown_content, cost, output_path) or (None, None, None) on error
     """
     from datetime import datetime
@@ -272,7 +273,7 @@ Provide CONCISE analysis covering:
 Keep sections 1-6 concise. Make section 7 (Sources) the most detailed and useful.
 Write directly - no preamble."""
 
-    print("🧠 Calling Sonnet for deep dive analysis...")
+    print("🧠 Calling Sonnet for scan analysis...")
     
     try:
         response = client.messages.create(
@@ -291,7 +292,7 @@ Write directly - no preamble."""
         # Create output path
         slug = re.sub(r'[^a-z0-9]+', '-', article_data['title'].lower())[:50].strip('-')
         today = datetime.now().strftime("%Y-%m-%d")
-        output_dir = Path(__file__).parent / "interests" / "2026" / "deep-dives"
+        output_dir = Path(__file__).parent / "interests" / "2026" / "scans"
         output_dir.mkdir(parents=True, exist_ok=True)
         
         output_path = output_dir / f"{hash_id}-{slug}.md"
@@ -315,7 +316,7 @@ Write directly - no preamble."""
         markdown += f"""
 ---
 
-## Deep Dive Analysis
+## Scan Analysis
 
 {content}
 
@@ -329,7 +330,7 @@ Write directly - no preamble."""
             f.write(markdown)
         
         # Also save HTML version
-        html = generate_deep_dive_html(
+        html = generate_scan_html(
             hash_id, article_data, initial_interest, dive_focus,
             content, cost, input_tokens, output_tokens
         )
@@ -340,20 +341,20 @@ Write directly - no preamble."""
         return markdown, cost, str(output_path)
         
     except Exception as e:
-        print(f"❌ Error generating deep dive: {e}")
+        print(f"❌ Error generating scan: {e}")
         return None, None, None
 
-def regenerate_deep_dives_index():
-    """Regenerate deep dives index.html after creating a new deep dive"""
+def regenerate_scans_index():
+    """Regenerate scans/index.html after creating a new Scan (formerly regenerate_scans_index)"""
     from datetime import datetime
-    deep_dives_dir = Path(__file__).parent / "interests" / "2026" / "deep-dives"
+    scans_dir = Path(__file__).parent / "interests" / "2026" / "scans"
 
-    if not deep_dives_dir.exists():
+    if not scans_dir.exists():
         return
 
-    # ── Scan curator deep dives (existing) ───────────────────────────────────
-    deep_dives = []
-    for md_file in deep_dives_dir.glob("*.md"):
+    # ── Collect Scans (article-level analyses) ───────────────────────────────
+    scans = []
+    for md_file in scans_dir.glob("*.md"):
         with open(md_file, 'r') as f:
             content = f.read()
 
@@ -371,21 +372,21 @@ def regenerate_deep_dives_index():
             except Exception:
                 date_obj = datetime.now()
 
-            deep_dives.append({
+            scans.append({
                 'title':   title,
                 'source':  source,
                 'date':    date_obj,
                 'hash_id': hash_id,
             })
 
-    deep_dives.sort(key=lambda x: x['date'], reverse=True)
+    scans.sort(key=lambda x: x['date'], reverse=True)
 
-    # ── Scan research deeper dives ────────────────────────────────────────────
-    research_dd_dir = Path(__file__).parent / "_NewDomains" / "research-intelligence" / "data" / "deeper_dives"
-    deeper_dives = []
+    # ── Collect Dives (thread-level analyses) ────────────────────────────────
+    research_dd_dir = Path(__file__).parent / "_NewDomains" / "research-intelligence" / "data" / "dives"
+    dives = []
 
     if research_dd_dir.exists():
-        for md_file in research_dd_dir.glob("*-deeper-dive-*.md"):
+        for md_file in research_dd_dir.glob("*.md"):
             with open(md_file, 'r') as f:
                 content = f.read()
 
@@ -434,7 +435,7 @@ def regenerate_deep_dives_index():
                 stats_parts.append(cost)
             stats = ' · '.join(stats_parts)
 
-            deeper_dives.append({
+            dives.append({
                 'topic':   topic,
                 'stem':    stem,
                 'date':    date_obj,
@@ -442,7 +443,7 @@ def regenerate_deep_dives_index():
                 'excerpt': excerpt,
             })
 
-    deeper_dives.sort(key=lambda x: x['date'], reverse=True)
+    dives.sort(key=lambda x: x['date'], reverse=True)
 
     # ── Build rows (new layout: collapsed sections, hover-reveal actions) ────────
 
@@ -451,15 +452,15 @@ def regenerate_deep_dives_index():
 
     # Thread rows
     thread_rows_html = ''
-    for i, dd in enumerate(deeper_dives):
+    for i, dd in enumerate(dives):
         formatted_date = dd['date'].strftime("%b %-d, %Y")
-        url = f'/research/deeper-dive-result/{dd["stem"]}'
+        url = f'/research/dive-result/{dd["stem"]}'
         excerpt_html = f'<span class="row-excerpt">{dd["excerpt"]}</span>' if dd['excerpt'] else ''
         hidden_cls = ' row-hidden' if i >= THREAD_LIMIT else ''
         thread_rows_html += f'        <a class="row row-thread{hidden_cls}" href="{url}"><span class="row-badge">Thread</span><span class="row-main"><span class="row-title">{dd["topic"]}</span>{excerpt_html}</span><span class="row-meta">{dd["stats"]}</span><span class="row-date">{formatted_date}</span><span class="row-action">Read &#8594;</span></a>\n'
 
-    thread_more = len(deeper_dives) - THREAD_LIMIT
-    thread_toggle_style = ' style="display:none"' if len(deeper_dives) <= THREAD_LIMIT else ''
+    thread_more = len(dives) - THREAD_LIMIT
+    thread_toggle_style = ' style="display:none"' if len(dives) <= THREAD_LIMIT else ''
     thread_footer_html = ''
     if thread_more > 0:
         label = f'+ {thread_more} more thread{"s" if thread_more != 1 else ""}'
@@ -467,35 +468,35 @@ def regenerate_deep_dives_index():
 
     # Article rows
     article_rows_html = ''
-    for i, dive in enumerate(deep_dives):
+    for i, dive in enumerate(scans):
         formatted_date = dive['date'].strftime("%b %-d, %Y")
-        url = f'/research/deep-dive/{dive["hash_id"]}'
+        url = f'/research/scan/{dive["hash_id"]}'
         hidden_cls = ' row-hidden' if i >= ARTICLE_LIMIT else ''
         article_rows_html += f'        <a class="row row-article{hidden_cls}" href="{url}"><span class="row-date-col">{formatted_date}</span><span class="row-source">{dive["source"]}</span><span class="row-title">{dive["title"]}</span><span class="row-action">Read analysis &#8594;</span></a>\n'
 
     if not article_rows_html:
-        article_rows_html = '        <div class="row-empty">No deep dives yet. Like or save an article, then click 🔖 Deep Dive!</div>\n'
+        article_rows_html = '        <div class="row-empty">No scans yet. Like or save an article, then click 🔭 Scan!</div>\n'
 
-    article_more = len(deep_dives) - ARTICLE_LIMIT
-    article_toggle_style = ' style="display:none"' if len(deep_dives) <= ARTICLE_LIMIT else ''
+    article_more = len(scans) - ARTICLE_LIMIT
+    article_toggle_style = ' style="display:none"' if len(scans) <= ARTICLE_LIMIT else ''
     article_footer_html = ''
     if article_more > 0:
-        label = f'+ {article_more} more deep dive{"s" if article_more != 1 else ""}'
+        label = f'+ {article_more} more scan{"s" if article_more != 1 else ""}'
         article_footer_html = f'        <div class="expand-footer" onclick="expandSection(\'section-articles\')">{label}</div>\n'
 
     # Count line
     count_parts = []
-    if deeper_dives:
-        count_parts.append(f'{len(deeper_dives)} deeper dive{"s" if len(deeper_dives) != 1 else ""}')
-    count_parts.append(f'{len(deep_dives)} deep dive{"s" if len(deep_dives) != 1 else ""}')
+    if dives:
+        count_parts.append(f'{len(dives)} dive{"s" if len(dives) != 1 else ""}')
+    count_parts.append(f'{len(scans)} scan{"s" if len(scans) != 1 else ""}')
     count_label = ' · '.join(count_parts)
 
     # Deeper Dives section block (only if entries exist)
     threads_section_html = ''
-    if deeper_dives:
+    if dives:
         threads_section_html = f'''    <div class="section" id="section-threads">
       <div class="section-hdr">
-        <span class="section-name">Deeper dives <span class="section-count">{len(deeper_dives)}</span></span>
+        <span class="section-name">Dives <span class="section-count">{len(dives)}</span></span>
         <button class="toggle-btn"{thread_toggle_style} onclick="toggleSection(\'section-threads\', this)">show all</button>
       </div>
       <div class="section-body">
@@ -510,7 +511,7 @@ def regenerate_deep_dives_index():
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-    <title>Deep Dive Archive</title>
+    <title>Scans &amp; Dives</title>
     <style>
         :root {{
             --bg: #f5f0e8;
@@ -801,12 +802,12 @@ def regenerate_deep_dives_index():
 <header>
   <div class="header-left">
     <a href="../../../" class="logo">📚 Curator</a>
-    <span class="logo-sub">Deep Dives</span>
+    <span class="logo-sub">Scans &amp; Dives</span>
   </div>
   <nav class="header-nav">
     <a href="../../../" class="nav-link">Daily</a>
     <a href="../../../curator_library.html" class="nav-link">Library</a>
-    <a href="../../../interests/2026/deep-dives/index.html" class="nav-link active">Deep Dives</a>
+    <a href="../../../interests/2026/scans/index.html" class="nav-link active">Scans &amp; Dives</a>
     <a href="../../../curator_priorities.html" class="nav-link">Priorities</a>
     <a href="../../../curator_intelligence.html" class="nav-link">AI Observations</a>
   </nav>
@@ -814,14 +815,14 @@ def regenerate_deep_dives_index():
 
 <main>
     <div class="page-header">
-        <h1 class="page-title">Deep Dive Archive</h1>
+        <h1 class="page-title">Scans &amp; Dives</h1>
         <p class="page-meta">{count_label}</p>
     </div>
 
 {threads_section_html}
     <div class="section" id="section-articles">
       <div class="section-hdr">
-        <span class="section-name">Deep dives <span class="section-count">{len(deep_dives)}</span></span>
+        <span class="section-name">Scans <span class="section-count">{len(scans)}</span></span>
         <button class="toggle-btn"{article_toggle_style} onclick="toggleSection(\'section-articles\', this)">show all</button>
       </div>
       <div class="section-body">
@@ -845,15 +846,15 @@ function expandSection(sectionId) {{
 </body>
 </html>'''
 
-    index_file = deep_dives_dir / "index.html"
+    index_file = scans_dir / "index.html"
     with open(index_file, 'w') as f:
         f.write(html)
 
-    total = len(deeper_dives) + len(deep_dives)
-    print(f"📑 Deep dives index updated ({len(deeper_dives)} deeper + {len(deep_dives)} deep = {total} total)")
+    total = len(dives) + len(scans)
+    print(f"📑 Scans & Dives index updated ({len(dives)} dives + {len(scans)} scans = {total} total)")
 
-def generate_deep_dive_html(hash_id, article_data, initial_interest, dive_focus, analysis_content, cost, input_tokens, output_tokens):
-    """Generate HTML version of deep dive analysis"""
+def generate_scan_html(hash_id, article_data, initial_interest, dive_focus, analysis_content, cost, input_tokens, output_tokens):
+    """Generate HTML version of a Scan (formerly generate_deep_dive_html)"""
     from datetime import datetime
     
     today = datetime.now().strftime("%Y-%m-%d")
@@ -865,7 +866,7 @@ def generate_deep_dive_html(hash_id, article_data, initial_interest, dive_focus,
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-    <title>{article_data['title']} - Deep Dive</title>
+    <title>{article_data['title']} - Scan</title>
     <style>
         :root {{
             --bg: #f5f0e8;
@@ -1075,12 +1076,12 @@ def generate_deep_dive_html(hash_id, article_data, initial_interest, dive_focus,
 <header>
   <div class="header-left">
     <a href="../../../" class="logo">📚 Curator</a>
-    <span class="logo-sub">Deep Dive</span>
+    <span class="logo-sub">Scan</span>
   </div>
   <nav class="header-nav">
     <a href="../../../" class="nav-link">Daily</a>
     <a href="../../../curator_library.html" class="nav-link">Library</a>
-    <a href="../../../interests/2026/deep-dives/index.html" class="nav-link active">Deep Dives</a>
+    <a href="../../../interests/2026/scans/index.html" class="nav-link active">Scans &amp; Dives</a>
     <a href="../../../curator_priorities.html" class="nav-link">Priorities</a>
     <a href="../../../curator_intelligence.html" class="nav-link">AI Observations</a>
   </nav>
@@ -1108,7 +1109,7 @@ def generate_deep_dive_html(hash_id, article_data, initial_interest, dive_focus,
     html += """        </div>
         
         <div class="analysis">
-            <h2>Deep Dive Analysis</h2>
+            <h2>Scan Analysis</h2>
 """
     
     # Convert markdown analysis to basic HTML
@@ -1116,8 +1117,8 @@ def generate_deep_dive_html(hash_id, article_data, initial_interest, dive_focus,
     
     # Strip ALL "Deep Dive Analysis" headings from AI output (we add it in template)
     # Run twice to handle duplicate headings that sometimes appear
-    analysis_content = re.sub(r'^##\s+Deep Dive Analysis\s*\n', '', analysis_content, flags=re.IGNORECASE | re.MULTILINE)
-    analysis_content = re.sub(r'^##\s+Deep Dive Analysis\s*\n', '', analysis_content, flags=re.IGNORECASE | re.MULTILINE)
+    analysis_content = re.sub(r'^##\s+(Deep Dive|Scan) Analysis\s*\n', '', analysis_content, flags=re.IGNORECASE | re.MULTILINE)
+    analysis_content = re.sub(r'^##\s+(Deep Dive|Scan) Analysis\s*\n', '', analysis_content, flags=re.IGNORECASE | re.MULTILINE)
     
     # Check if there's a Sources/Bibliography section
     has_sources = bool(re.search(r'^## (Sources|Bibliography|Further Reading|References)', analysis_content, flags=re.MULTILINE))
@@ -1522,7 +1523,7 @@ def main():
                 print()
                 
                 # Prompt for deep dive focus (optional)
-                print("Add focus areas for deep dive? (Enter to skip)")
+                print("Add focus areas for scan? (Enter to skip)")
                 dive_focus = input("> ").strip()
                 print()
         else:
@@ -1531,15 +1532,15 @@ def main():
                 lines = sys.stdin.read().strip().split('\n')
                 dive_focus = lines[1] if len(lines) > 1 else ""
             else:
-                print("Add focus areas for deep dive? (Enter to skip)")
+                print("Add focus areas for scan? (Enter to skip)")
                 dive_focus = input("> ").strip()
                 print()
         
         # Generate deep dive
-        markdown, cost, output_path = generate_deep_dive(hash_id, article_data, like_comment, dive_focus)
+        markdown, cost, output_path = generate_scan(hash_id, article_data, like_comment, dive_focus)
         
         if output_path:
-            print("✅ Deep dive generated!")
+            print("✅ Scan generated!")
             print(f"   📄 Saved to: {output_path}")
             print(f"   💰 Cost: ${cost:.4f}")
             
@@ -1556,10 +1557,10 @@ def main():
                 with open(history_file, 'w') as f:
                     json.dump(history, f, indent=2)
             
-            # Regenerate deep dives index
-            regenerate_deep_dives_index()
+            # Regenerate scans index
+            regenerate_scans_index()
         else:
-            print("❌ Deep dive generation failed")
+            print("❌ Scan generation failed")
         
         return
     

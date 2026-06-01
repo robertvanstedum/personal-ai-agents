@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "leanings": [
+    {
+      "id": "db74b053",
+      "title": "Hungry and Poland, any alignment of interests and could it help Hungry catch up?",
+      "state": "question",
+      "created": "2026-06-01",
+      "updated": "2026-06-01",
+      "topics": [],
+      "evidence": [
+        {
+          "id": "ev-2c4650",
+          "title": "How America Lost Its Most Important Defense Tech Habit",
+          "url": "https://warontherocks.com/cogs-of-war/how-america-lost-its-most-important-defense-tech-habit/",
+          "source": "War on the Rocks",
+          "stance": "neutral",
+          "added": "2026-06-01",
+          "note": ""
+        }
+      ],
+      "teammate_read": {
+        "text": "## Assessment\n**Unresolved\u2014evidence doesn't touch the question.** The single source is about American defense tech habits, not Hungary-Poland relations or economic convergence. You have zero data on Hungarian-Polish interests, trade patterns, institutional alignment, or development trajectories. This is a placeholder belief with no evidentiary foundation yet.\n\n## Implication\n**If right:** Hungary could leverage Poland's stronger EU position, manufacturing base, and NATO integration as a developmental scaffold\u2014possibly gaining technology transfer, supply chain integration, or institutional knowledge. Poland gets a regional partner that diversifies dependence on Western Europe.\n\n**If wrong:** Hungary wastes political capital on a partnership that doesn't deliver catch-up growth. More importantly, you might miss that Hungary's actual constraint is governance quality or EU fund access, not lack of regional partnerships. Poland itself is still catching up; partnering with another middle-income country rarely accelerates convergence.\n\n## What's Missing\n**Comparative data on Hungary vs. Poland's economic trajectories since 2010**, especially FDI patterns, EU structural fund absorption rates, and export complexity. If Poland is pulling away *despite* similar starting conditions, the partnership theory weakens unless you can identify specific complementarities. Need concrete evidence of aligned interests beyond geographic proximity.",
+        "generated_at": "2026-06-01T03:11:47.078063+00:00",
+        "evidence_count_at_read": 1
+      },
+      "notes": ""
+    }
+  ]
+}
