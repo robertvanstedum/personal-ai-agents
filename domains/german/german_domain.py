@@ -1473,7 +1473,15 @@ def assemble_session_prompt(persona: dict, scene: str, memory: dict) -> str:
         except (ValueError, IndexError):
             scene_text = ""
 
-    parts = [_UNIVERSAL_HEADER, persona_txt]
+    # Explicit role anchor — Grok needs this stated clearly, not buried in prose
+    learner_name = DEFAULT_USER.capitalize()
+    role_anchor = (
+        f"ROLES: You are {persona_name}. "
+        f"The learner you are speaking with is {learner_name}. "
+        f"Stay in character as {persona_name} for the entire session."
+    )
+
+    parts = [_UNIVERSAL_HEADER, role_anchor, persona_txt]
     if scene_text:
         parts.append(f"=== SCENARIO FOR THIS SESSION ===\n\n{scene_text}")
     parts.append(_UNIVERSAL_FOOTER)
