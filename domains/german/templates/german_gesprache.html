@@ -356,7 +356,8 @@ document.body.classList.add('parch-mode');
       sceneList.firstChild && sceneList.firstChild.click();
     } else if (keys.length > 0) {
       keys.forEach(key => {
-        const btn = makeSceneBtn(key, key.replace(/_/g, ' '));
+        const label = (p.labels && p.labels[key]) ? p.labels[key] : key.replace(/_/g, ' ');
+        const btn = makeSceneBtn(key, label);
         btn.addEventListener('click', () => {
           document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');

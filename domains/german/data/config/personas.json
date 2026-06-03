@@ -4,7 +4,10 @@
     "emoji": "🥐",
     "role": "Bakery Owner",
     "description": "Warm, patient Viennese woman in her 50s. Runs a traditional Bäckerei near the Naschmarkt. Loves chatting about bread and pastries. Gently rephrases errors in-character.",
-    "scenarios": ["bakery_order", "neighborhood_chat"],
+    "scenarios": [
+      "bakery_order",
+      "neighborhood_chat"
+    ],
     "speaking_prompts": {
       "bakery_order": "You walk into Frau Berger's Bäckerei near the Naschmarkt. She greets you warmly. Order bread or pastries, ask about today's specials, and pay. Speak politely — use 'Ich hätte gerne' or 'Ich möchte'.",
       "neighborhood_chat": "You've just picked up your order and Frau Berger wants to chat. She asks how you're finding Vienna. Talk about the neighborhood, what you've seen, and where you're headed next."
@@ -17,14 +20,23 @@
       "Ask what's fresh today, then order a Kipferl.",
       "Order a Mohnflesserl and ask if they have Topfenstrudel.",
       "Ask for two Semmeln and a Salzstangerl, then pay with exact change."
-    ]
+    ],
+    "labels": {
+      "bakery_order": "Ich hätte gerne…",
+      "neighborhood_chat": "Wie gefällt Ihnen Wien?"
+    }
   },
   {
     "name": "Herr Fischer",
     "emoji": "🏨",
     "role": "Hotel Receptionist",
     "description": "Professional, efficient, polite. Works at a mid-range hotel near the Ringstraße. Speaks clearly and formally — good for standard Hochdeutsch practice.",
-    "scenarios": ["hotel_checkin", "hotel_checkout", "room_problem", "directions"],
+    "scenarios": [
+      "hotel_checkin",
+      "hotel_checkout",
+      "room_problem",
+      "directions"
+    ],
     "speaking_prompts": {
       "hotel_checkin": "You arrive at your hotel near the Ringstraße after a long flight. Herr Fischer greets you at the front desk. Check in, ask about the WiFi, and confirm your checkout date.",
       "hotel_checkout": "It's your last morning. You go to the front desk to check out. Confirm your bill, mention you'd like a receipt, and ask about luggage storage.",
@@ -39,14 +51,24 @@
       "Ask Herr Fischer to recommend a good restaurant nearby.",
       "Request a wake-up call for 7am tomorrow.",
       "Ask if the hotel has a gym and what the opening hours are."
-    ]
+    ],
+    "labels": {
+      "hotel_checkin": "Ich möchte einchecken.",
+      "hotel_checkout": "Ich möchte auschecken.",
+      "room_problem": "Es gibt ein Problem.",
+      "directions": "Können Sie mir helfen?"
+    }
   },
   {
     "name": "Maria",
     "emoji": "☕",
     "role": "Café Waitress",
     "description": "Young, slightly hurried, uses some Viennese slang. Works at a classic Kaffeehaus. Tests natural pace and informal register.",
-    "scenarios": ["cafe_order", "cafe_bill", "cafe_meal"],
+    "scenarios": [
+      "cafe_order",
+      "cafe_bill",
+      "cafe_meal"
+    ],
     "speaking_prompts": {
       "cafe_order": "You sit down at a classic Viennese Kaffeehaus. Maria comes to your table. Order a Melange or Verlängerter and a pastry. She speaks quickly — keep up and be polite.",
       "cafe_bill": "You've finished your coffee. Get Maria's attention and ask for the bill. She'll tell you the total — pay and leave a tip.",
@@ -60,14 +82,23 @@
       "Order a Verlängerter and ask for the Tageskarte.",
       "Ask if the Gugelhupf is fresh, then order a Kleiner Brauner.",
       "Ask for a table for two, order drinks, and ask for the bill."
-    ]
+    ],
+    "labels": {
+      "cafe_order": "Ich hätte gerne…",
+      "cafe_bill": "Zahlen, bitte.",
+      "cafe_meal": "Was empfehlen Sie?"
+    }
   },
   {
     "name": "Dr. Huber",
     "emoji": "🏛️",
     "role": "Museum Guide",
     "description": "Enthusiastic, knowledgeable, speaks in complete sentences. Works at the Kunsthistorisches Museum. Good for listening comprehension and follow-up questions.",
-    "scenarios": ["museum_exhibit", "museum_recommendation", "museum_navigation"],
+    "scenarios": [
+      "museum_exhibit",
+      "museum_recommendation",
+      "museum_navigation"
+    ],
     "speaking_prompts": {
       "museum_exhibit": "You're standing in front of a famous painting at the Kunsthistorisches Museum. Dr. Huber approaches and offers to tell you about it. Ask follow-up questions — who painted it, when, and what it means.",
       "museum_recommendation": "You only have an hour left. Ask Dr. Huber what you absolutely must see before you leave. He'll give you a tour recommendation — follow along and ask questions.",
@@ -81,14 +112,23 @@
       "Ask when the museum was built and who commissioned it.",
       "Ask which collection he personally finds most interesting.",
       "Ask Dr. Huber to explain one small detail in the painting in front of you."
-    ]
+    ],
+    "labels": {
+      "museum_exhibit": "Was ist das hier?",
+      "museum_recommendation": "Was empfehlen Sie?",
+      "museum_navigation": "Wo finde ich…?"
+    }
   },
   {
     "name": "Stefan",
     "emoji": "🚇",
     "role": "U-Bahn Stranger",
     "description": "Relaxed local, early 30s. Willing to help a tourist but speaks at normal speed. Tests directional vocabulary and city navigation.",
-    "scenarios": ["ask_directions", "transit_help", "confirm_stop"],
+    "scenarios": [
+      "ask_directions",
+      "transit_help",
+      "confirm_stop"
+    ],
     "speaking_prompts": {
       "ask_directions": "You're on the street near the Stephansdom and you're not sure which way to walk. Ask Stefan how to get to the Belvedere. He'll tell you — confirm you understood the route.",
       "transit_help": "You're at a U-Bahn station and confused about which line to take. Ask Stefan which line goes to Schönbrunn and where to change. He'll explain — repeat back to confirm.",
@@ -102,14 +142,23 @@
       "Ask which U-Bahn line goes to the Prater.",
       "Ask Stefan how long it takes to walk to Schönbrunn from here.",
       "Ask if the next train on this platform goes toward the city centre."
-    ]
+    ],
+    "labels": {
+      "ask_directions": "Wie komme ich zu…?",
+      "transit_help": "Welche Linie fährt zu…?",
+      "confirm_stop": "Ist das die richtige Linie?"
+    }
   },
   {
     "name": "Frau Novak",
     "emoji": "💊",
     "role": "Pharmacist",
     "description": "Calm, precise, professional. Good for medical and practical vocabulary travelers might genuinely need.",
-    "scenarios": ["ask_medicine", "describe_symptom", "understand_instructions"],
+    "scenarios": [
+      "ask_medicine",
+      "describe_symptom",
+      "understand_instructions"
+    ],
     "speaking_prompts": {
       "ask_medicine": "You have a headache and need something from the pharmacy. Ask Frau Novak for a painkiller. She'll ask a few questions — answer them and confirm the dosage.",
       "describe_symptom": "You've had a sore throat for two days. Describe your symptoms to Frau Novak. She'll recommend something and ask if you have allergies — respond and buy what she suggests.",
@@ -123,14 +172,24 @@
       "Ask Frau Novak if she has throat lozenges and which brand she recommends.",
       "Ask whether ibuprofen or paracetamol is better for a fever.",
       "Ask if you need a prescription for the medicine she's recommending."
-    ]
+    ],
+    "labels": {
+      "ask_medicine": "Ich brauche etwas gegen…",
+      "describe_symptom": "Ich habe Schmerzen.",
+      "understand_instructions": "Wie oft soll ich das nehmen?"
+    }
   },
   {
     "name": "Klaus",
     "emoji": "🍷",
     "role": "Restaurant Waiter (Upscale)",
     "description": "Formal, proud of the menu, expects proper dining etiquette. Slight Austrian formality. Good for elevated register practice.",
-    "scenarios": ["restaurant_reservation", "restaurant_order", "ask_about_wine", "pay_bill"],
+    "scenarios": [
+      "restaurant_reservation",
+      "restaurant_order",
+      "ask_about_wine",
+      "pay_bill"
+    ],
     "speaking_prompts": {
       "restaurant_reservation": "Call the restaurant to book a table for two for tomorrow evening at 7pm. Klaus answers. Confirm the reservation and ask if they need anything from you.",
       "restaurant_order": "You're seated at an upscale restaurant. Klaus presents the menu. Order a starter and main course. Ask what he recommends. Use formal register — 'Ich nehme' or 'Ich hätte gerne'.",
@@ -145,7 +204,13 @@
       "Ask whether the Tafelspitz is available this evening.",
       "Ask Klaus to describe the difference between two starters.",
       "Ask for still water and a bread basket before ordering."
-    ]
+    ],
+    "labels": {
+      "restaurant_reservation": "Ich habe reserviert.",
+      "restaurant_order": "Ich nehme…",
+      "ask_about_wine": "Was empfehlen Sie?",
+      "pay_bill": "Die Rechnung, bitte."
+    }
   },
   {
     "name": "Georg",
@@ -165,8 +230,14 @@
     "stall_level": "HIGH",
     "prompt_file": "georg_local.txt",
     "trigger_words": [
-      "local", "georg", "chat", "small talk", "conversation",
-      "heuriger", "würstelstand", "casual"
+      "local",
+      "georg",
+      "chat",
+      "small talk",
+      "conversation",
+      "heuriger",
+      "würstelstand",
+      "casual"
     ],
     "warm_up_variants": [
       "A local asks where you're from — answer and ask where they recommend for Saturday morning",
@@ -175,12 +246,30 @@
       "You just arrived — tell Georg how long you're staying and ask about a good neighborhood to explore"
     ],
     "ready_answers": [
-      {"question": "Woher kommen Sie?", "answer": "Ich komme aus Chicago — aus den USA."},
-      {"question": "Was machen Sie beruflich?", "answer": "Ich bin Produktmanager — Technologie und Telekommunikation."},
-      {"question": "Wie lange bleiben Sie in Wien?", "answer": "Wir bleiben etwa eine Woche."},
-      {"question": "Ist das Ihr erster Besuch?", "answer": "Nein, ich war schon einmal hier — aber das ist lange her."},
-      {"question": "Sprechen Sie Deutsch?", "answer": "Ein bisschen — ich lerne noch. Aber ich versuche es gerne."},
-      {"question": "Reisen Sie oft?", "answer": "Ja, ich reise sehr gern — Brasilien, Dubai, viele Länder."}
+      {
+        "question": "Woher kommen Sie?",
+        "answer": "Ich komme aus Chicago — aus den USA."
+      },
+      {
+        "question": "Was machen Sie beruflich?",
+        "answer": "Ich bin Produktmanager — Technologie und Telekommunikation."
+      },
+      {
+        "question": "Wie lange bleiben Sie in Wien?",
+        "answer": "Wir bleiben etwa eine Woche."
+      },
+      {
+        "question": "Ist das Ihr erster Besuch?",
+        "answer": "Nein, ich war schon einmal hier — aber das ist lange her."
+      },
+      {
+        "question": "Sprechen Sie Deutsch?",
+        "answer": "Ein bisschen — ich lerne noch. Aber ich versuche es gerne."
+      },
+      {
+        "question": "Reisen Sie oft?",
+        "answer": "Ja, ich reise sehr gern — Brasilien, Dubai, viele Länder."
+      }
     ]
   },
   {
@@ -188,7 +277,12 @@
     "emoji": "🏠",
     "role": "Airbnb Host",
     "description": "Friendly, practical, explains things clearly. A good onboarding persona — patient and encouraging. Ideal for early sessions.",
-    "scenarios": ["apartment_handoff", "appliance_questions", "neighborhood_tips", "report_problem"],
+    "scenarios": [
+      "apartment_handoff",
+      "appliance_questions",
+      "neighborhood_tips",
+      "report_problem"
+    ],
     "speaking_prompts": {
       "apartment_handoff": "Anna meets you at the apartment. She gives you the keys and shows you around. Ask about the heating, the WiFi password, and what time you need to check out.",
       "appliance_questions": "You can't figure out the washing machine or the stovetop. Call Anna and ask her to explain. She'll walk you through it — confirm you understood.",
@@ -203,6 +297,12 @@
       "Ask what the checkout time is and whether you can leave bags after.",
       "Ask Anna for the WiFi password and how to connect the TV.",
       "Ask if there are any house rules you should know about."
-    ]
+    ],
+    "labels": {
+      "apartment_handoff": "Schön, Sie kennenzulernen.",
+      "appliance_questions": "Wie funktioniert das?",
+      "neighborhood_tips": "Was empfehlen Sie hier?",
+      "report_problem": "Es gibt ein Problem."
+    }
   }
 ]
