@@ -23,6 +23,16 @@ import requests
 import argparse
 from pathlib import Path
 from datetime import datetime
+
+# Ensure the moved german domain is on the path before any german_domain import.
+# german_domain.py lives at domains/german/ since the 2026-05-30 promotion.
+# A stale __pycache__/german_domain.cpython-*.pyc at repo root can shadow this
+# if not explicitly resolved first.
+_REPO_ROOT = Path(__file__).parent
+_GERMAN_DOMAIN_DIR = _REPO_ROOT / "domains" / "german"
+if str(_GERMAN_DOMAIN_DIR) not in sys.path:
+    sys.path.insert(0, str(_GERMAN_DOMAIN_DIR))
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, ContextTypes
 from telegram.ext import filters
