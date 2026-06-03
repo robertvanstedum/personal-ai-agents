@@ -98,6 +98,18 @@ def _load_briefing_articles():
 
     return articles, day_str, date_str, model_display, briefing_date
 
+
+def _load_radar_articles():
+    """Load on-radar articles from curator_radar.json. Returns [] if missing or empty."""
+    radar_path = BASE_DIR / 'curator_radar.json'
+    if not radar_path.exists():
+        return []
+    try:
+        data = json.loads(radar_path.read_text())
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
 # Shared navigation HTML
 SHARED_NAV_HTML = """
   <nav class="header-nav">
@@ -879,6 +891,7 @@ def index():
             model_display=model_display,
             run_mode='production',
             briefing_date=briefing_date,
+            radar_articles=_load_radar_articles(),
         )
     return send_from_directory(BASE_DIR, 'curator_latest.html')
 

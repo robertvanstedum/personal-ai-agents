@@ -362,6 +362,7 @@
     <a href="/curator_library.html" class="subnav-tab">Library</a>
     <a href="/interests/2026/scans/index.html" class="subnav-tab">Scans &amp; Dives</a>
     <a href="/curator_intelligence.html" class="subnav-tab">Observations</a>
+    <a href="/research/dashboard" class="subnav-tab">Research</a>
     <a href="/curator_priorities.html" class="subnav-tab subnav-focus">🎯 Focus</a>
 </nav>
 
@@ -413,6 +414,46 @@
         </article>
 {% endfor %}
     </div>
+
+{% if radar_articles %}
+<details class="radar-section">
+  <summary class="radar-summary">
+    📡 On Radar — {{ radar_articles|length }} article{{ 's' if radar_articles|length != 1 else '' }} matching active Topics
+    <span class="radar-hint">(not in today's top 20)</span>
+  </summary>
+  <div class="radar-body">
+    <table class="radar-table">
+      <thead>
+        <tr><th>Article</th><th>Source</th><th>Topic</th></tr>
+      </thead>
+      <tbody>
+        {% for a in radar_articles %}
+        <tr class="radar-row">
+          <td class="radar-title"><a href="{{ a.link }}" target="_blank" rel="noopener">{{ a.title }}</a></td>
+          <td class="radar-source">{{ a.source }}</td>
+          <td class="radar-topic">📡 {{ a._radar_topics | join(', ') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+<style>
+.radar-section { margin: 1.5rem 0; border: 1px solid var(--border); border-radius: 6px; background: var(--surface2); }
+.radar-summary { padding: 0.75rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); user-select: none; list-style: none; }
+.radar-summary::-webkit-details-marker { display: none; }
+.radar-hint { font-weight: 400; font-size: 0.8rem; color: var(--text-dim); margin-left: 0.5rem; }
+.radar-body { padding: 0 0.5rem 0.75rem; }
+.radar-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.radar-table th { text-align: left; padding: 0.4rem 0.75rem; color: var(--text-dim); font-weight: 500; border-bottom: 1px solid var(--border); }
+.radar-row td { padding: 0.4rem 0.75rem; border-bottom: 1px solid var(--border); }
+.radar-title a { color: var(--text); text-decoration: none; }
+.radar-title a:hover { color: var(--accent); text-decoration: underline; }
+.radar-source { color: var(--text-muted); white-space: nowrap; }
+.radar-topic { color: var(--text-dim); font-size: 0.8rem; white-space: nowrap; }
+</style>
+{% endif %}
+
 </main>
 
 <script>

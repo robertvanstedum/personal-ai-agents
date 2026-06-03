@@ -1614,16 +1614,87 @@ def _fetch_web_search_candidates(
     return candidates
 
 
-def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanical',
-           fallback_on_error: bool = False, xai_model: str = 'grok-4-1-fast-reasoning', temperature: float = 0.0) -> List[Dict]:
+def get_active_topic_tags() -> dict:
+    """Return {slug: [match_terms]} for all active-pull Topics. Reads JSON — no DB needed.
+    Used for dormant section routing: string-match remaining candidates against these terms.
+    Returns empty dict gracefully if the threads directory doesn't exist.
+
+    Match terms are derived from:
+      1. Explicit tags on the thread record (when populated)
+      2. Slug tokens (split on '-', drop noise words) — reliable fallback since
+         slugs like 'gold-geopolitics' or 'china-rise' are descriptive by design.
     """
-    Fetch all feeds, score, rank, return top N
-    
+    _NOISE = {"not", "and", "or", "the", "a", "an", "of", "in", "for", "to", "vs"}
+    threads_dir = Path("_NewDomains/research-intelligence/data/threads")
+    if not threads_dir.exists():
+        return {}
+    result = {}
+    for thread_file in threads_dir.glob("*/thread.json"):
+        try:
+            t = json.loads(thread_file.read_text())
+            if t.get("status") in ("active", "active-pull"):
+                slug = t.get("slug", thread_file.parent.name)
+                explicit_tags = [tag.lower() for tag in t.get("tags", []) if tag]
+                slug_terms = [w for w in slug.lower().split("-") if w and w not in _NOISE]
+                result[slug] = explicit_tags if explicit_tags else slug_terms
+        except Exception:
+            pass
+    return result
+
+
+def find_radar_articles(pool: List[Dict], top_ids: set, topic_tags: dict,
+                        cap: int = 10) -> List[Dict]:
+    """Return up to `cap` articles from `pool` that match active Topic tags
+    but are NOT already in the top selection.
+
+    Matching: case-insensitive substring check of each tag against
+    article title + source. Deterministic — no AI, no scoring.
+    One item, one place: top_ids are excluded.
+    """
+    if not topic_tags:
+        return []
+
+    radar = []
+    seen_ids = set(top_ids)
+
+    for article in pool:
+        aid = article.get("hash_id") or article.get("link", "")
+        if aid in seen_ids:
+            continue
+
+        text = f"{article.get('title', '')} {article.get('source', '')}".lower()
+        matched_topics = []
+        for slug, tags in topic_tags.items():
+            if any(tag and tag in text for tag in tags):
+                matched_topics.append(slug)
+
+        if matched_topics:
+            article = dict(article)  # don't mutate original
+            article["_radar_topics"] = matched_topics
+            radar.append(article)
+            seen_ids.add(aid)
+
+        if len(radar) >= cap:
+            break
+
+    # Sort by score descending within the radar section
+    radar.sort(key=lambda x: x.get("final_score", x.get("score", 0)), reverse=True)
+    return radar[:cap]
+
+
+def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanical',
+           fallback_on_error: bool = False, xai_model: str = 'grok-4-1-fast-reasoning',
+           temperature: float = 0.0, return_pool: bool = False):
+    """
+    Fetch all feeds, score, rank, return top N.
+
     Args:
         top_n: Number of articles to return
         diversity_weight: How much to penalize source over-representation (0-1)
         mode: 'mechanical', 'ai', 'ai-two-stage', 'xai', or 'hybrid'
         fallback_on_error: Auto-fallback to mechanical if API fails
+        return_pool: If True, return (top_articles, all_scored_entries) tuple
+                     instead of just top_articles. Used by dormant-section routing.
         xai_model: Which xAI model to use ('grok-3-mini' or 'grok-4-1-fast-reasoning')
     
     MODES:
@@ -1926,7 +1997,9 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
     print("\n🏷️  Category distribution in top 20:")
     for category, count in sorted(category_counts.items(), key=lambda x: x[1], reverse=True):
         print(f"   {category}: {count} articles")
-    
+
+    if return_pool:
+        return selected, all_entries
     return selected
 
 def format_output(entries: List[Dict]) -> str:
@@ -1996,7 +2069,8 @@ def format_telegram(entries: List[Dict]) -> str:
     
     return output
 
-def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "production") -> str:
+def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "production",
+                radar_articles: List[Dict] = None) -> str:
     """Format as table HTML (unified briefing platform style)
     
     Args:
@@ -2832,6 +2906,84 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
         transform: scale(1.05);
     }
     </style>
+"""
+
+    # ── Dormant / On Radar section ────────────────────────────────────────────
+    # Collapsed by default. Only shown when active Topics produced tag matches
+    # in the remaining candidate pool. No AI — deterministic string-match only.
+    if radar_articles:
+        radar_rows = ""
+        for a in radar_articles:
+            title   = a.get("title", "Untitled")
+            source  = a.get("source", "")
+            link    = a.get("link", "#")
+            topics  = ", ".join(a.get("_radar_topics", []))
+            radar_rows += f"""
+            <tr class="radar-row">
+                <td class="radar-title"><a href="{link}" target="_blank" rel="noopener">{title}</a></td>
+                <td class="radar-source">{source}</td>
+                <td class="radar-topic">📡 {topics}</td>
+            </tr>"""
+
+        html += f"""
+<details class="radar-section">
+  <summary class="radar-summary">
+    📡 On Radar — {len(radar_articles)} article{"s" if len(radar_articles) != 1 else ""} matching active Topics
+    <span class="radar-hint">(not in today's top 20)</span>
+  </summary>
+  <div class="radar-body">
+    <table class="radar-table">
+      <thead>
+        <tr>
+          <th>Article</th>
+          <th>Source</th>
+          <th>Topic</th>
+        </tr>
+      </thead>
+      <tbody>{radar_rows}
+      </tbody>
+    </table>
+  </div>
+</details>
+<style>
+.radar-section {{
+  margin: 2rem 0 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}}
+.radar-summary {{
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  user-select: none;
+  list-style: none;
+}}
+.radar-summary::-webkit-details-marker {{ display: none; }}
+.radar-hint {{
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-left: 0.5rem;
+}}
+.radar-body {{ padding: 0 0.5rem 0.75rem; }}
+.radar-table {{ width: 100%; border-collapse: collapse; font-size: 0.85rem; }}
+.radar-table th {{
+  text-align: left; padding: 0.4rem 0.75rem;
+  color: var(--text-dim); font-weight: 500;
+  border-bottom: 1px solid var(--border);
+}}
+.radar-row td {{ padding: 0.4rem 0.75rem; border-bottom: 1px solid var(--border2); }}
+.radar-title a {{ color: var(--text); text-decoration: none; }}
+.radar-title a:hover {{ color: var(--accent); text-decoration: underline; }}
+.radar-source {{ color: var(--text-muted); white-space: nowrap; }}
+.radar-topic {{ color: var(--text-dim); font-size: 0.8rem; white-space: nowrap; }}
+</style>
+"""
+
+    html += """
 </div><!-- /.main-content -->
 </body>
 </html>
@@ -3208,7 +3360,9 @@ def main():
     
     # Run curation
     try:
-        top_articles = curate(top_n=20, mode=mode, fallback_on_error=fallback_on_error, xai_model=xai_model_variant, temperature=temperature)
+        top_articles, all_scored = curate(top_n=20, mode=mode, fallback_on_error=fallback_on_error,
+                                           xai_model=xai_model_variant, temperature=temperature,
+                                           return_pool=True)
     except (ValueError, RuntimeError) as e:
         # API error with no fallback - exit with error
         print(f"\n💥 Curation failed: {e}")
@@ -3283,7 +3437,18 @@ def main():
     
     # HTML generation
     run_mode = "dry-run" if dry_run else "production"
-    html_content = format_html(top_articles, model=model, run_mode=run_mode)
+    # ── Dormant / On Radar pass ───────────────────────────────────────────────
+    # Deterministic tag-match against remaining candidates. No AI, no scoring.
+    # One item, one place — top_articles excluded by hash_id.
+    topic_tags   = get_active_topic_tags()
+    top_ids      = {a.get("hash_id") or a.get("link", "") for a in top_articles}
+    radar_articles = find_radar_articles(all_scored, top_ids, topic_tags, cap=10)
+    if radar_articles:
+        print(f"📡 On Radar: {len(radar_articles)} article(s) matching active Topics")
+    # ─────────────────────────────────────────────────────────────────────────
+
+    html_content = format_html(top_articles, model=model, run_mode=run_mode,
+                               radar_articles=radar_articles or None)
     
     # Create dated archive (skip in dry run)
     import os
@@ -3408,6 +3573,15 @@ def main():
             print(f"💾 Wrote {len(top_articles)} articles to curator_latest.json")
         except Exception as e:
             print(f"⚠️  Could not write curator_latest.json: {e}")
+
+        # Write radar articles so the Flask server can surface them in the briefing
+        try:
+            with open('curator_radar.json', 'w') as f:
+                json.dump(radar_articles, f, indent=2, default=str)
+            if radar_articles:
+                print(f"📡 Wrote {len(radar_articles)} radar article(s) to curator_radar.json")
+        except Exception as e:
+            print(f"⚠️  Could not write curator_radar.json: {e}")
 
         # Also save a dated JSON copy so the web UI can serve today/yesterday toggle
         try:
