@@ -415,13 +415,18 @@
 {% endfor %}
     </div>
 
-{% if radar_articles %}
 <details class="radar-section">
   <summary class="radar-summary">
-    📡 On Radar — {{ radar_articles|length }} article{{ 's' if radar_articles|length != 1 else '' }} matching active Topics
-    <span class="radar-hint">(not in today's top 20)</span>
+    📡 On Radar
+    {% if radar_articles %}
+      — {{ radar_articles|length }} article{{ 's' if radar_articles|length != 1 else '' }} matching active Topics
+      <span class="radar-hint">(not in today's top 20)</span>
+    {% else %}
+      <span class="radar-hint">— no matches from active Topics today</span>
+    {% endif %}
   </summary>
   <div class="radar-body">
+    {% if radar_articles %}
     <table class="radar-table">
       <thead>
         <tr><th>Article</th><th>Source</th><th>Topic</th></tr>
@@ -436,6 +441,9 @@
         {% endfor %}
       </tbody>
     </table>
+    {% else %}
+    <p class="radar-empty">Topics watching: empire-landpower · china-rise · gold-geopolitics · quad-flexibility-not · polls-open-colombia. Matches will appear here when today's articles touch these subjects.</p>
+    {% endif %}
   </div>
 </details>
 <style>
@@ -451,6 +459,7 @@
 .radar-title a:hover { color: var(--accent); text-decoration: underline; }
 .radar-source { color: var(--text-muted); white-space: nowrap; }
 .radar-topic { color: var(--text-dim); font-size: 0.8rem; white-space: nowrap; }
+.radar-empty { color: var(--text-dim); font-size: 0.82rem; padding: 0.5rem 0.75rem; margin: 0; }
 </style>
 {% endif %}
 
