@@ -454,7 +454,12 @@ document.body.classList.add('parch-mode');
     // Browsers cannot auto-paste into other apps; user pastes with Cmd+V / long-press.
     const prompt = getFullPrompt();
     const toast = document.getElementById('prompt-toast');
-    const openTelegram = () => window.open('tg://resolve?domain=minimoi_cmd_bot', '_blank');
+    const openTelegram = () => {
+      // Try native app first (tg://). If not installed, browser does nothing —
+      // fallback timer opens the web version after 1.5s.
+      window.location.href = 'tg://resolve?domain=minimoi_cmd_bot';
+      setTimeout(() => window.open('https://t.me/minimoi_cmd_bot', '_blank'), 1500);
+    };
     if (navigator.clipboard && prompt) {
       navigator.clipboard.writeText(prompt).then(() => {
         toast.textContent = '✓ Prompt kopiert — Telegram öffnet, dann Cmd+V einfügen';
