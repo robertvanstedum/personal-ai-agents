@@ -448,45 +448,44 @@ document.body.classList.add('parch-mode');
     return currentFullPrompt || document.getElementById('prompt-text').textContent.trim();
   }
 
-  document.getElementById('btn-telegram').addEventListener('click', async () => {
-    // Send the full prompt to Telegram via the server (bot API call).
-    // On mobile, long-press the message in the chat to copy, then paste into Grok Voice.
-    // No clipboard transfer needed across devices.
+  document.getElementById('btn-telegram').addEventListener('click', () => {
+    // IMPORTANT: window.open must be called synchronously within the click handler.
+    // After any await, the browser loses the user-gesture context and blocks popups.
+    // Strategy: open Telegram immediately, then fire the API call in background.
     const toast = document.getElementById('prompt-toast');
     const p = personas[currentPersonaIdx];
-    const openTelegram = () => {
-      // Use window.open for both — avoids navigating the current page.
-      // tg:// opens native app; web fallback fires after 3s if app not installed.
-      window.open('tg://resolve?domain=minimoi_cmd_bot', '_blank');
-      setTimeout(() => window.open('https://t.me/minimoi_cmd_bot', '_blank'), 3000);
-    };
 
+    // Open Telegram NOW — while user gesture is still active
+    window.open('tg://resolve?domain=minimoi_cmd_bot', '_blank');
+    setTimeout(() => window.open('https://t.me/minimoi_cmd_bot', '_blank'), 3000);
+
+    // Show sending state
     toast.textContent = '⏳ Sende Prompt an Telegram…';
     toast.style.display = 'block';
 
-    try {
-      const res = await fetch('/api/send-to-telegram', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          persona_name: p.name,
-          scene_key: selectedSceneKey || '',
-        }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        toast.textContent = '✓ Prompt gesendet — in Telegram öffnen und long-press zum Kopieren';
-      } else {
-        toast.textContent = '⚠ Senden fehlgeschlagen — Prompt wird in die Zwischenablage kopiert';
-        navigator.clipboard && navigator.clipboard.writeText(getFullPrompt()).catch(() => {});
-      }
-    } catch (e) {
-      toast.textContent = '⚠ Netzwerkfehler — Prompt wird in die Zwischenablage kopiert';
+    // Fire-and-forget API call — updates toast when done
+    fetch('/api/send-to-telegram', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        persona_name: p.name,
+        scene_key: selectedSceneKey || '',
+      }),
+    })
+    .then(res => res.json())
+    .then(data => {
+      toast.textContent = data.ok
+        ? '✓ Prompt gesendet — long-press in Telegram zum Kopieren'
+        : '⚠ Senden fehlgeschlagen — Prompt in Zwischenablage kopiert';
+      if (!data.ok) navigator.clipboard && navigator.clipboard.writeText(getFullPrompt()).catch(() => {});
+    })
+    .catch(() => {
+      toast.textContent = '⚠ Netzwerkfehler — Prompt in Zwischenablage kopiert';
       navigator.clipboard && navigator.clipboard.writeText(getFullPrompt()).catch(() => {});
-    }
-
-    setTimeout(() => { toast.style.display = 'none'; toast.textContent = '✓ Vollständiger Prompt kopiert'; }, 5000);
-    openTelegram();
+    })
+    .finally(() => {
+      setTimeout(() => { toast.style.display = 'none'; toast.textContent = '✓ Vollständiger Prompt kopiert'; }, 5000);
+    });
   });
 
   document.getElementById('btn-copy').addEventListener('click', () => {
