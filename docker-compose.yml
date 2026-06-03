@@ -1,29 +1,50 @@
 version: '3.8'
 
+# Usage:
+#   Start:  docker compose up -d
+#   Stop:   docker compose stop        ← frees RAM, keeps data
+#   Reset:  docker compose down -v     ← wipes volumes (start fresh)
+#
+# Memory budget when both running: ~1GB total (Neo4j 512m + Postgres 256m + overhead)
+# restart: no — containers do NOT auto-start with Docker Desktop
+
 services:
   neo4j:
-    image: neo4j:latest
+    image: neo4j:5
     container_name: neo4j-context-graph
-    restart: unless-stopped
+    restart: "no"
     environment:
-      - NEO4J_AUTH=neo4j/simple123   # your existing password
+      - NEO4J_AUTH=neo4j/simple123
+      # JVM heap caps — keeps Neo4j under 512MB on a dev machine
+      - NEO4J_server_memory_heap_initial__size=256m
+      - NEO4J_server_memory_heap_max__size=512m
+      - NEO4J_server_memory_pagecache_size=128m
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "7474:7474"   # browser UI
+      - "7687:7687"   # Bolt (Python driver)
     volumes:
       - neo4j-data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 768m
 
   postgres:
-    image: postgres:latest
+    image: postgres:16
     container_name: postgres-ai-agents
-    restart: unless-stopped
+    restart: "no"
     environment:
-      - POSTGRES_PASSWORD=simple123   # keep or change
+      - POSTGRES_PASSWORD=simple123
       - POSTGRES_DB=personal_agents
+      - POSTGRES_USER=minimoi
     ports:
       - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql   # ← CHANGED: removed /data
+      - postgres-data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
 volumes:
   neo4j-data:
