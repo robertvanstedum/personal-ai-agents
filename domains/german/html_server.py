@@ -388,6 +388,10 @@ def api_send_to_telegram():
     if len(message) > 4096:
         message = message[:4090] + "\n…"
 
+    # rvsopenbot (bot_token) is the right choice here — it sends but does not poll,
+    # so it has no message handler that could misinterpret the system prompt as a command.
+    # minimoi_cmd_bot (polling_bot_token) is deliberately excluded: its message handler
+    # would receive the prompt and attempt to match it against German session triggers.
     bot_token = keyring.get_password("telegram", "bot_token")
     if not bot_token:
         return jsonify({"ok": False, "error": "bot token not configured"}), 500
