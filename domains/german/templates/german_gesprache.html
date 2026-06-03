@@ -453,7 +453,7 @@ document.body.classList.add('parch-mode');
     // After any await, the browser loses the user-gesture context and blocks popups.
     // Strategy: open Telegram immediately, then fire the API call in background.
     const toast = document.getElementById('prompt-toast');
-    const p = personas[currentPersonaIdx];
+    const p = personas[selectedIdx];
 
     // Open Telegram NOW — while user gesture is still active
     window.open('tg://resolve?domain=minimoi_cmd_bot', '_blank');
