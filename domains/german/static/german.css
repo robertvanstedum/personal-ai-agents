@@ -2393,8 +2393,13 @@ body.reading-mode nav {
 
 .prompt-toast {
   font-size: 0.85rem;
-  color: var(--md-accent);
+  font-weight: 600;
+  color: var(--md-parch);
+  background: var(--md-accent);
+  border-radius: 6px;
+  padding: 0.4rem 0.75rem;
   margin-top: 0.5rem;
+  display: inline-block;
 }
 
 /* ── Mobile: stack columns ── */

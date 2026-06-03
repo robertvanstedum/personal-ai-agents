@@ -455,7 +455,9 @@ document.body.classList.add('parch-mode');
     const toast = document.getElementById('prompt-toast');
     const p = personas[currentPersonaIdx];
     const openTelegram = () => {
-      window.location.href = 'tg://resolve?domain=minimoi_cmd_bot';
+      // Use window.open for both — avoids navigating the current page.
+      // tg:// opens native app; web fallback fires after 3s if app not installed.
+      window.open('tg://resolve?domain=minimoi_cmd_bot', '_blank');
       setTimeout(() => window.open('https://t.me/minimoi_cmd_bot', '_blank'), 3000);
     };
 
