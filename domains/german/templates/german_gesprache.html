@@ -64,7 +64,7 @@
             <div class="prompt-text" id="prompt-text" style="display:none"></div>
             <div class="prompt-actions">
               <button class="btn-delivery" id="btn-telegram"
-                      title="Öffnet Telegram mit dem vollständigen Grok-Prompt">
+                      title="Kopiert den Prompt und öffnet Telegram — dort einfügen">
                 ✈️ Telegram öffnen
               </button>
               <button class="btn-delivery" id="btn-copy"
@@ -449,8 +449,22 @@ document.body.classList.add('parch-mode');
   }
 
   document.getElementById('btn-telegram').addEventListener('click', () => {
-    const url = `https://t.me/minimoi_cmd_bot?start=${encodeURIComponent(getFullPrompt())}`;
-    window.open(url, '_blank');
+    // Telegram's ?start= parameter is limited to 64 chars — nowhere near enough
+    // for a full system prompt. Copy prompt to clipboard first, then open the bot.
+    // User pastes the prompt into Grok Voice after arriving in Telegram.
+    const prompt = getFullPrompt();
+    const openTelegram = () => window.open('https://t.me/minimoi_cmd_bot', '_blank');
+    if (navigator.clipboard && prompt) {
+      navigator.clipboard.writeText(prompt).then(() => {
+        const toast = document.getElementById('prompt-toast');
+        toast.textContent = '✓ Prompt kopiert — in Telegram einfügen';
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; toast.textContent = '✓ Vollständiger Prompt kopiert'; }, 3000);
+        openTelegram();
+      }).catch(() => openTelegram());
+    } else {
+      openTelegram();
+    }
   });
 
   document.getElementById('btn-copy').addEventListener('click', () => {
