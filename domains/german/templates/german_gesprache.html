@@ -449,19 +449,24 @@ document.body.classList.add('parch-mode');
   }
 
   document.getElementById('btn-telegram').addEventListener('click', () => {
-    // Telegram's ?start= parameter is limited to 64 chars — nowhere near enough
-    // for a full system prompt. Copy prompt to clipboard first, then open the bot.
-    // User pastes the prompt into Grok Voice after arriving in Telegram.
+    // Copy prompt first, then open native Telegram app via tg:// scheme.
+    // tg:// opens the desktop/mobile app directly — avoids also opening the web page.
+    // Browsers cannot auto-paste into other apps; user pastes with Cmd+V / long-press.
     const prompt = getFullPrompt();
-    const openTelegram = () => window.open('https://t.me/minimoi_cmd_bot', '_blank');
+    const toast = document.getElementById('prompt-toast');
+    const openTelegram = () => window.open('tg://resolve?domain=minimoi_cmd_bot', '_blank');
     if (navigator.clipboard && prompt) {
       navigator.clipboard.writeText(prompt).then(() => {
-        const toast = document.getElementById('prompt-toast');
-        toast.textContent = '✓ Prompt kopiert — in Telegram einfügen';
+        toast.textContent = '✓ Prompt kopiert — Telegram öffnet, dann Cmd+V einfügen';
         toast.style.display = 'block';
-        setTimeout(() => { toast.style.display = 'none'; toast.textContent = '✓ Vollständiger Prompt kopiert'; }, 3000);
+        setTimeout(() => { toast.style.display = 'none'; toast.textContent = '✓ Vollständiger Prompt kopiert'; }, 4000);
         openTelegram();
-      }).catch(() => openTelegram());
+      }).catch(() => {
+        toast.textContent = '⚠ Kopieren fehlgeschlagen — manuell kopieren und einfügen';
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; toast.textContent = '✓ Vollständiger Prompt kopiert'; }, 4000);
+        openTelegram();
+      });
     } else {
       openTelegram();
     }
