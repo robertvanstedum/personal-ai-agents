@@ -1451,14 +1451,33 @@ def _find_persona_prompt_file(persona_name: str) -> Path | None:
 
 
 def assemble_session_prompt(persona: dict, scene: str, memory: dict) -> str:
-    """Full Grok Voice system prompt: UNIVERSAL_HEADER + persona .txt + UNIVERSAL_FOOTER."""
+    """Full Grok Voice system prompt: UNIVERSAL_HEADER + persona .txt + scene + UNIVERSAL_FOOTER.
+
+    The scene text is injected as a SCENARIO block so the user can paste the entire
+    output directly into Grok Voice without any extra setup step.
+    """
     persona_name = persona.get("name", "")
     prompt_file = _find_persona_prompt_file(persona_name)
     if prompt_file and prompt_file.exists():
         persona_txt = prompt_file.read_text(encoding="utf-8").strip()
     else:
         persona_txt = persona.get("description", f"You are {persona_name}.")
-    return "\n\n".join([_UNIVERSAL_HEADER, persona_txt, _UNIVERSAL_FOOTER])
+
+    # Resolve scene text from speaking_prompts or warm_up_variants
+    scene_text = persona.get("speaking_prompts", {}).get(scene, "")
+    if not scene_text and scene.startswith("warm_up_"):
+        try:
+            idx = int(scene.rsplit("_", 1)[-1])
+            variants = persona.get("warm_up_variants", [])
+            scene_text = variants[idx] if idx < len(variants) else ""
+        except (ValueError, IndexError):
+            scene_text = ""
+
+    parts = [_UNIVERSAL_HEADER, persona_txt]
+    if scene_text:
+        parts.append(f"=== SCENARIO FOR THIS SESSION ===\n\n{scene_text}")
+    parts.append(_UNIVERSAL_FOOTER)
+    return "\n\n".join(parts)
 
 
 def build_session_brief(persona: dict, scene: str, memory: dict) -> str:
