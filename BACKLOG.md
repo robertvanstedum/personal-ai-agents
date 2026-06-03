@@ -58,7 +58,11 @@ _Promoted to active work by Robert's decision only. OpenClaw can add items. Only
 |---|------|--------|
 | B-010 | **Sessions page** | 2026-03-25 |
 | B-014 | **BUG: Telegram polling token conflict** | 2026-03-25 |
+| B-022 | **BUG: stale german_domain.pyc at repo root** — ghost `.pyc` from before the 2026-05-30 domain promotion caused telegram_bot.py to load old GERMAN_BASE (`_NewDomains/language-german/`). Fix: deleted stale cache, added explicit `sys.path.insert(0, domains/german/)` in telegram_bot.py. | 2026-06-03 |
+| B-023 | **BUG: telegram_bot.py --base-dir language/german/** — all 11 subprocess calls to German pipeline scripts used old relative path. With cwd=`domains/german/`, the correct path is `data/`. reviewer.py crash on every transcript submission. Fix: s/language\/german\//data\//g. | 2026-06-03 |
+| B-020 | **German Test 8 quarantine** | 2026-06-03 |
+| B-021 | **Curator UAT Taiwan-relevance ENV_CHECK** | 2026-06-03 |
 
 ---
 
-_Last updated: 2026-06-01 by Claude Code_
+_Last updated: 2026-06-03 by Claude Code_
