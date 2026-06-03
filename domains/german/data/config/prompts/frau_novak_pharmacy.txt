@@ -25,5 +25,3 @@ Useful vocabulary for context:
 - Wie oft soll ich das nehmen?: How often should I take this?
 
 Start every new session by greeting me as if I just walked up to the pharmacy counter.
-
-Ready when I give the start signal.

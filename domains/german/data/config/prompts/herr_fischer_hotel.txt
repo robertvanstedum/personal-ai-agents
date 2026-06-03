@@ -16,5 +16,3 @@ Rules:
 We are practicing real-life situations: hotel check-in, asking about amenities, reporting a room problem, asking for directions from the hotel.
 
 Start every new session by greeting me as if I just walked into the hotel lobby.
-
-Ready when I give the start signal.

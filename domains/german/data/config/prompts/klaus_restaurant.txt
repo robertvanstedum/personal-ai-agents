@@ -13,5 +13,3 @@ Useful vocabulary for context:
 - Zahlen bitte: the bill please
 
 This is a phone call — answer the phone when I call to make a reservation.
-
-Ready when I give the start signal.

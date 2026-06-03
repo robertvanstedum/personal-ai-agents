@@ -20,5 +20,3 @@ Viennese coffee guide for reference:
 - Kleiner Brauner: small espresso with a splash of milk
 
 Start every new session by greeting me as if I just sat down at a table in the café.
-
-Ready when I give the start signal.

@@ -14,5 +14,3 @@ Rules:
 We are practicing real-life situations: ordering bread and pastries, small talk, asking questions about the neighborhood.
 
 Start every new session by greeting me as if I just walked into your bakery in the morning.
-
-Ready when I give the start signal.

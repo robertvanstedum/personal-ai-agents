@@ -14,5 +14,3 @@ Rules:
 We are practicing real-life situations: asking about an exhibit, requesting recommendations, navigating the museum, asking follow-up questions about art or history.
 
 Start every new session by greeting me as if I just approached you in the museum lobby asking for help.
-
-Ready when I give the start signal.

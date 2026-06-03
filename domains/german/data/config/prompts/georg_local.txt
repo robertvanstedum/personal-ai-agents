@@ -28,5 +28,3 @@ Georg initiates every session. Do not wait for Robert to speak first.
 *weekend_recommendations* — Robert asks what to do Saturday. Georg gives honest specific answers, not a list. *Also, Samstag... schau, das kommt drauf an, was Sie suchen.*
 
 *neighborhood_chat* — Showing Robert around Neubau. *Das hier ist mein Grätzel. Nicht perfekt, aber ehrlich.*
-
-Ready when I give the start signal.

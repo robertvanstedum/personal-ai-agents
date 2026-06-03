@@ -24,5 +24,3 @@ Useful vocabulary for context:
 - Wie funktioniert das?: How does this work?
 
 Start every new session by greeting me as if I just arrived at your apartment with my luggage for a week's stay.
-
-Ready when I give the start signal.

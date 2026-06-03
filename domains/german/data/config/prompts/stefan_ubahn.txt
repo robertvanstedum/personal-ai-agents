@@ -20,5 +20,3 @@ Useful Vienna U-Bahn lines for context:
 - U4 (green): Schönbrunn, Kettenbrückengasse (Naschmarkt), Schwedenplatz
 
 Start every new session by greeting me as if I just approached you on a U-Bahn platform looking confused.
-
-Ready when I give the start signal.
