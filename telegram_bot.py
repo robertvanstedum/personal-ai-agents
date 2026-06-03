@@ -626,7 +626,7 @@ async def _handle_german_transcript(update: Update, text: str):
     await update.message.reply_text("📥 Transcript saved. Running pipeline…")
 
     out, err, rc = await _arun(
-        [str(VENV_PYTHON), "parse_transcript.py", "--stdin", "--base-dir", "language/german/"],
+        [str(VENV_PYTHON), "parse_transcript.py", "--stdin", "--base-dir", "data/"],
         input=text, cwd=str(GERMAN_BASE)
     )
     if rc != 0:
@@ -636,7 +636,7 @@ async def _handle_german_transcript(update: Update, text: str):
         return
 
     reviewer_out, reviewer_err, rc = await _arun(
-        [str(VENV_PYTHON), "reviewer.py", "--latest", "--base-dir", "language/german/"],
+        [str(VENV_PYTHON), "reviewer.py", "--latest", "--base-dir", "data/"],
         cwd=str(GERMAN_BASE)
     )
     if rc != 0:
@@ -648,7 +648,7 @@ async def _handle_german_transcript(update: Update, text: str):
         await update.message.reply_text(f"<pre>{escape(reviewer_out.strip())}</pre>", parse_mode="HTML")
 
     out, err, rc = await _arun(
-        [str(VENV_PYTHON), "status.py", "--base-dir", "language/german/"],
+        [str(VENV_PYTHON), "status.py", "--base-dir", "data/"],
         cwd=str(GERMAN_BASE)
     )
     if rc != 0:
@@ -676,7 +676,7 @@ async def _handle_german_command(update: Update, text: str):
 
     if cmd == "status":
         out, err, rc = await _arun(
-            [str(VENV_PYTHON), "status.py", "--base-dir", "language/german/"],
+            [str(VENV_PYTHON), "status.py", "--base-dir", "data/"],
             cwd=str(GERMAN_BASE)
         )
         reply = out if rc == 0 else f"❌ status.py failed:\n{err[:400]}"
@@ -702,7 +702,7 @@ async def _handle_german_command(update: Update, text: str):
     elif cmd == "session":
         out, err, rc = await _arun(
             [str(VENV_PYTHON), "get_german_session.py",
-             "--base-dir", "language/german/", "--dropbox", "--send"],
+             "--base-dir", "data/", "--dropbox", "--send"],
             timeout=300, cwd=str(GERMAN_BASE)
         )
         if rc != 0:
@@ -722,7 +722,7 @@ async def _handle_german_command(update: Update, text: str):
                 pass
         out, err, rc = await _arun(
             [str(VENV_PYTHON), "get_german_session.py",
-             "--base-dir", "language/german/",
+             "--base-dir", "data/",
              "--drill", str(drill_n),
              "--dropbox", "--send"],
             timeout=300, cwd=str(GERMAN_BASE)
@@ -736,7 +736,7 @@ async def _handle_german_command(update: Update, text: str):
 
     elif cmd == "today":
         out, err, rc = await _arun(
-            [str(VENV_PYTHON), "reviewer.py", "--latest", "--base-dir", "language/german/"],
+            [str(VENV_PYTHON), "reviewer.py", "--latest", "--base-dir", "data/"],
             cwd=str(GERMAN_BASE)
         )
         reply = out if rc == 0 else f"❌ reviewer.py failed:\n{err[:400]}"
@@ -761,7 +761,7 @@ async def _handle_german_command(update: Update, text: str):
     elif cmd == "writing":
         out, err, rc = await _arun(
             [str(VENV_PYTHON), "get_german_session.py",
-             "--base-dir", "language/german/", "--dropbox", "--send", "--writing"],
+             "--base-dir", "data/", "--dropbox", "--send", "--writing"],
             timeout=300, cwd=str(GERMAN_BASE)
         )
         if rc != 0:
@@ -895,7 +895,7 @@ async def _start_repeat_session(update, persona_name: str, scenario: str) -> Non
         extra += ["--scenario", scenario]
     out, err, rc = await _arun(
         [str(VENV_PYTHON), "get_german_session.py",
-         "--base-dir", "language/german/", "--dropbox", "--send"] + extra,
+         "--base-dir", "data/", "--dropbox", "--send"] + extra,
         timeout=300, cwd=str(GERMAN_BASE)
     )
     if rc != 0:
@@ -909,7 +909,7 @@ async def _start_keyword_session(update, persona_name: str, scenario: str) -> No
         extra += ["--scenario", scenario]
     out, err, rc = await _arun(
         [str(VENV_PYTHON), "get_german_session.py",
-         "--base-dir", "language/german/", "--dropbox", "--send"] + extra,
+         "--base-dir", "data/", "--dropbox", "--send"] + extra,
         timeout=300, cwd=str(GERMAN_BASE)
     )
     if rc != 0:
@@ -920,7 +920,7 @@ async def _handle_skip_lesson(update) -> None:
     """Skip the current lesson and advance the rotation to the next persona/scenario."""
     out, err, rc = await _arun(
         [str(VENV_PYTHON), "get_german_session.py",
-         "--base-dir", "language/german/", "--skip"],
+         "--base-dir", "data/", "--skip"],
         timeout=60, cwd=str(GERMAN_BASE)
     )
     if rc != 0:
