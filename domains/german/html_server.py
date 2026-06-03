@@ -39,6 +39,7 @@ from german_domain import (
     build_session_brief,
     build_tutor_brief,
     get_last_human_session_suggestion,
+    ROBERT_CHAT_ID,
 )
 
 BASE_DIR  = Path(__file__).parent           # domains/german/
@@ -352,6 +353,54 @@ def api_persona_prompt():
     brief = build_session_brief(persona, scene, memory)
 
     return jsonify({"prompt": prompt, "session_brief": brief})
+
+
+# ── Send Grok Voice prompt to Telegram ───────────────────────────────────────
+
+@app.route("/api/send-to-telegram", methods=["POST"])
+def api_send_to_telegram():
+    """Assemble the full Grok Voice system prompt and send it to Robert's
+    Telegram chat via the bot. On mobile, Robert can copy the message and
+    paste it directly into Grok Voice — no clipboard transfer needed."""
+    import keyring
+    import requests as _requests
+
+    data = request.json or {}
+    persona_name = data.get("persona_name", "")
+    scene_key    = data.get("scene_key", "")
+
+    personas = get_personas()
+    persona  = next((p for p in personas if p["name"] == persona_name), None)
+    if not persona:
+        return jsonify({"ok": False, "error": "persona not found"}), 404
+
+    memory = get_persona_memory(DEFAULT_USER, persona_to_slug(persona_name))
+    prompt = assemble_session_prompt(persona, scene_key, memory)
+
+    # Header line so it's easy to identify in the chat
+    scene_label = scene_key.replace("_", " ").title() if scene_key else ""
+    header = f"🎙 Grok Voice — {persona_name}"
+    if scene_label:
+        header += f" / {scene_label}"
+    message = f"{header}\n\n{prompt}"
+
+    # Telegram message limit is 4096 chars
+    if len(message) > 4096:
+        message = message[:4090] + "\n…"
+
+    bot_token = keyring.get_password("telegram", "bot_token")
+    if not bot_token:
+        return jsonify({"ok": False, "error": "bot token not configured"}), 500
+
+    resp = _requests.post(
+        f"https://api.telegram.org/bot{bot_token}/sendMessage",
+        json={"chat_id": ROBERT_CHAT_ID, "text": message},
+        timeout=10,
+    )
+
+    if resp.ok:
+        return jsonify({"ok": True})
+    return jsonify({"ok": False, "error": resp.text}), 502
 
 
 # ── Whereby host join — redirect only, host URL never exposed to client ───────
