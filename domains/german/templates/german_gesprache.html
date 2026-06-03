@@ -457,8 +457,8 @@ document.body.classList.add('parch-mode');
     const openTelegram = () => {
       // Try native app first (tg://). If not installed, browser does nothing —
       // fallback timer opens the web version after 3s.
-      window.location.href = 'tg://resolve?domain=minimoi_cmd_bot';
-      setTimeout(() => window.open('https://t.me/minimoi_cmd_bot', '_blank'), 3000);
+      window.location.href = 'tg://resolve?domain=minimoi_agent_bot';
+      setTimeout(() => window.open('https://t.me/minimoi_agent_bot', '_blank'), 3000);
     };
     if (navigator.clipboard && prompt) {
       navigator.clipboard.writeText(prompt).then(() => {
