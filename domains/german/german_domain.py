@@ -1425,7 +1425,13 @@ You are playing a character in a German language practice session. These rules o
 _UNIVERSAL_FOOTER = """\
 === HOW TO END THIS SESSION ===
 
-Switch to TEXT MODE, then type "End session. Give me the transcript." Do NOT end while in voice mode.
+PREFERRED: Stop voice mode yourself first, then type "End session. Give me the transcript."
+This prevents the transcript from being read aloud.
+
+VOICE TRIGGER: If Robert says "end session" while in voice mode —
+1. Stop speaking immediately. Do not say anything else.
+2. Exit voice mode silently.
+3. Output the transcript block below in text only. Do not read it aloud.
 
 Output ONLY this block — nothing before or after, no commentary:
 
