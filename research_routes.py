@@ -2460,3 +2460,38 @@ def api_teammate_read(leaning_id):
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ── Source promotion from daily feed ─────────────────────────────────────────
+
+@research_bp.route('/api/research/sources/promote', methods=['POST'])
+def api_research_sources_promote():
+    """
+    POST /api/research/sources/promote
+    Body: { hash_id, tags (comma-separated string), note (optional) }
+
+    Promotes a daily-feed article to a first-class Source record in sources.json.
+    Calls promote_feed_article() from curator_research.py.
+    Deduplicates by URL — safe to call multiple times on the same article.
+    """
+    data    = request.json or {}
+    hash_id = data.get("hash_id", "").strip()
+    tags_raw = data.get("tags", "")
+    note    = (data.get("note") or "").strip() or None
+
+    if not hash_id:
+        return jsonify({"ok": False, "error": "hash_id required"}), 400
+
+    tags = [t.strip().lower() for t in tags_raw.split(",") if t.strip()]
+    if not tags:
+        return jsonify({"ok": False, "error": "at least one tag required"}), 400
+
+    try:
+        sys.path.insert(0, str(Path(__file__).parent / "tools"))
+        from curator_research import promote_feed_article
+        source = promote_feed_article(hash_id=hash_id, tags=tags, note=note)
+        return jsonify({"ok": True, "source_id": source.get("id"), "title": source.get("title")})
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500

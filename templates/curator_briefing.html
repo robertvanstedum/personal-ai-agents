@@ -461,7 +461,6 @@
 .radar-topic { color: var(--text-dim); font-size: 0.8rem; white-space: nowrap; }
 .radar-empty { color: var(--text-dim); font-size: 0.82rem; padding: 0.5rem 0.75rem; margin: 0; }
 </style>
-{% endif %}
 
 </main>
 
@@ -617,6 +616,37 @@ function runScan() {
         btn.disabled = false;
         showToast('Scan failed: ' + e.message, 'error');
     });
+}
+
+// Tab 4: Save as Source
+function runSource() {
+    var tags     = document.getElementById('inv-source-tags').value.trim();
+    var note     = document.getElementById('inv-source-note').value.trim();
+    var statusEl = document.getElementById('inv-source-status');
+
+    if (!tags) { statusEl.textContent = 'At least one tag required.'; return; }
+    statusEl.textContent = 'Saving…';
+
+    fetch('/api/research/sources/promote', {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify({
+            hash_id: _inv.hashId,
+            tags:    tags,
+            note:    note || null,
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            statusEl.textContent = '✅ Saved — ' + (data.title || data.source_id);
+            showToast('Source saved: ' + (data.title || data.source_id), 'success');
+            setTimeout(closeInvestigateModal, 900);
+        } else {
+            statusEl.textContent = 'Error: ' + (data.error || 'failed');
+        }
+    })
+    .catch(function(e) { statusEl.textContent = 'Error: ' + e.message; });
 }
 
 // Tab 2: Track as Topic
@@ -854,9 +884,10 @@ loadTopicsStrip();
       <button class="inv-close" onclick="closeInvestigateModal()">✕</button>
     </div>
     <div class="inv-tabs">
-      <button class="inv-tab active" data-tab="scan"  onclick="switchInvTab('scan')">🔭 Scan</button>
-      <button class="inv-tab"        data-tab="track" onclick="switchInvTab('track')">🗓 Track</button>
-      <button class="inv-tab"        data-tab="lean"  onclick="switchInvTab('lean')">📎 Lean</button>
+      <button class="inv-tab active" data-tab="scan"   onclick="switchInvTab('scan')">🔭 Scan</button>
+      <button class="inv-tab"        data-tab="track"  onclick="switchInvTab('track')">🗓 Track</button>
+      <button class="inv-tab"        data-tab="lean"   onclick="switchInvTab('lean')">📎 Lean</button>
+      <button class="inv-tab"        data-tab="source" onclick="switchInvTab('source')">🗂 Source</button>
     </div>
     <!-- Scan pane -->
     <div class="inv-pane active" id="inv-pane-scan">
@@ -919,6 +950,21 @@ loadTopicsStrip();
         <button class="inv-btn inv-btn-primary" onclick="runLean()">Add Evidence →</button>
         <button class="inv-btn" onclick="closeInvestigateModal()">Cancel</button>
         <span class="inv-status" id="inv-lean-status"></span>
+      </div>
+    </div>
+    <!-- Source pane -->
+    <div class="inv-pane" id="inv-pane-source">
+      <p class="inv-hint">Save this article as a tagged Source in the research archive. Use this when an article is worth keeping for later — not a specific belief, just worth tagging and filing.</p>
+      <label class="inv-label">Tags <span style="color:var(--text-dim);font-weight:400;">(comma-separated, e.g. gold,china,quad)</span></label>
+      <input id="inv-source-tags" class="inv-input" type="text"
+        placeholder="gold, china, empire" autocomplete="off">
+      <label class="inv-label" style="margin-top:10px;">Note (optional)</label>
+      <textarea id="inv-source-note" class="inv-textarea" rows="2"
+        placeholder="One-line reaction or why this is worth keeping"></textarea>
+      <div class="inv-actions">
+        <button class="inv-btn inv-btn-primary" onclick="runSource()">Save as Source →</button>
+        <button class="inv-btn" onclick="closeInvestigateModal()">Cancel</button>
+        <span class="inv-status" id="inv-source-status"></span>
       </div>
     </div>
   </div>

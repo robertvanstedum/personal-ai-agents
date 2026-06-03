@@ -31,6 +31,9 @@ def seed(driver):
     with driver.session() as s:
 
         # ── Topics ────────────────────────────────────────────────────────────
+        # Stopwords excluded from slug-derived tags (too generic to be useful edges)
+        _STOP = {"and", "or", "the", "of", "a", "an", "in", "to", "for",
+                 "with", "not", "vs", "via", "by", "at", "on"}
         topics = list_topics()
         for t in topics:
             s.run(
@@ -39,6 +42,18 @@ def seed(driver):
                 slug=t["slug"], name=t["slug"], status=t["status"],
                 tags=t.get("tags") or []
             )
+            # Create Topic→Tag edges from explicit tags first
+            tag_terms = [tag.lower() for tag in (t.get("tags") or [])]
+            # Fall back to slug tokens when no explicit tags set
+            if not tag_terms:
+                tag_terms = [w for w in t["slug"].split("-") if w not in _STOP and len(w) > 2]
+            for term in tag_terms:
+                s.run(
+                    "MERGE (tag:Tag {name: $term}) "
+                    "WITH tag MATCH (topic:Topic {slug: $slug}) "
+                    "MERGE (topic)-[:TAGGED]->(tag)",
+                    term=term, slug=t["slug"]
+                )
         print(f"  Topics:   {len(topics)} nodes")
 
         # ── Sources ───────────────────────────────────────────────────────────

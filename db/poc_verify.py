@@ -42,17 +42,29 @@ def q1_postgres_topics():
 
 
 def q2_neo4j_traversal():
-    """Neo4j traversal: Topics within 2 hops of gold-geopolitics."""
-    print("\n── Q2: Topics within 2 hops of gold-geopolitics (Neo4j) ────")
-    related = get_related_topics("gold-geopolitics", hops=2)
-    if related:
-        for t in related:
-            print(f"  {t['slug']:<35} status={t['status']}")
+    """Neo4j traversal: all Topic pairs connected via shared Tags or Sources."""
+    print("\n── Q2: Connected Topic pairs via shared Tags/Sources (Neo4j) ─")
+    from neo4j import GraphDatabase as _GDB
+    drv = _GDB.driver("bolt://localhost:7687", auth=("neo4j", "simple123"))
+    with drv.session() as s:
+        result = s.run(
+            "MATCH (t1:Topic)-[:TAGGED]->(tag:Tag)<-[:TAGGED]-(t2:Topic) "
+            "WHERE t1.slug < t2.slug "
+            "RETURN t1.slug AS a, t2.slug AS b, collect(tag.name) AS shared_tags "
+            "ORDER BY size(collect(tag.name)) DESC"
+        )
+        pairs = [(r["a"], r["b"], r["shared_tags"]) for r in result]
+
+    if pairs:
+        print(f"  {len(pairs)} connected pair(s):")
+        for a, b, tags in pairs:
+            print(f"  {a} ↔ {b}  via: {tags}")
     else:
-        print("  (no related topics found — expected at current data scale)")
+        print("  No topic pairs connected yet via shared tags")
+
     counts = get_node_counts()
     print(f"\n  Graph node counts: {counts}")
-    return True  # Neo4j responded — that's the pass condition
+    return True
 
 
 def q3_cross_system():
