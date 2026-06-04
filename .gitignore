@@ -123,3 +123,7 @@ _NewDomains/guild/job-search/**
 !_NewDomains/guild/job-search/.gitkeep
 _NewDomains/guild/new-ventures/job-search/**
 !_NewDomains/guild/new-ventures/job-search/.gitkeep
+!_working/curator-redesign/
+!_working/curator-redesign/*.pdf
+!_working/german-redesign/
+!_working/german-redesign/*.pdf
