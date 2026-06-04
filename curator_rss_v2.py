@@ -3464,15 +3464,18 @@ def main():
             f.write(html_content)
         print(f"📁 Archive saved to {archive_path}")
         
-        # Save as "latest" (fix relative paths for root directory)
-        latest_file = "curator_latest.html"
+        # Save as "latest" — anchor to repo root so cwd never matters
+        _repo_root = Path(__file__).parent
+        latest_file = str(_repo_root / "curator_latest.html")
         latest_html = html_content.replace('href="../', 'href="')
         with open(latest_file, "w") as f:
             f.write(latest_html)
         print(f"🔖 Latest briefing: {latest_file}")
-        
-        # Backward compatibility
-        with open("curator_briefing.html", "w") as f:
+
+        # Backward compatibility — static pre-render at repo root
+        # NOTE: this is curator_briefing.html (root), NOT templates/curator_briefing.html
+        # The Jinja2 template in templates/ is never touched by this script.
+        with open(_repo_root / "curator_briefing.html", "w") as f:
             f.write(latest_html)
         
         # Generate index
