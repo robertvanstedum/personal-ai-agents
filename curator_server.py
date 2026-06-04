@@ -110,6 +110,67 @@ def _load_radar_articles():
     except Exception:
         return []
 
+
+# ── Landing page data helpers ─────────────────────────────────────────────────
+
+def _get_latest_briefing_date() -> str:
+    """Return formatted date string from latest briefing JSON. Falls back to dash."""
+    try:
+        raw = json.loads((BASE_DIR / 'curator_latest.json').read_text())
+        if raw:
+            d = raw[0].get('briefing_date') or raw[0].get('date', '')
+            if d:
+                from datetime import datetime as _dt
+                return _dt.strptime(d[:10], '%Y-%m-%d').strftime('%A, %B %-d, %Y')
+    except Exception:
+        pass
+    return '—'
+
+
+def _get_latest_article_count() -> int:
+    """Return count of articles in latest briefing. Falls back to 0."""
+    try:
+        raw = json.loads((BASE_DIR / 'curator_latest.json').read_text())
+        return len(raw)
+    except Exception:
+        return 0
+
+
+def _get_topics_summary() -> dict:
+    """Count topics by status from threads directory. Falls back to all zeros."""
+    threads_dir = BASE_DIR / '_NewDomains' / 'research-intelligence' / 'data' / 'threads'
+    result = {'total': 0, 'active': 0, 'dormant': 0}
+    try:
+        for f in threads_dir.glob('*/thread.json'):
+            t = json.loads(f.read_text())
+            status = t.get('status', '')
+            result['total'] += 1
+            if status in ('active', 'active-pull'):
+                result['active'] += 1
+            elif status in ('dormant', 'paused'):
+                result['dormant'] += 1
+    except Exception:
+        pass
+    return result
+
+
+def _get_leanings_summary() -> dict:
+    """Count leanings by state from leanings.json. Falls back to all zeros."""
+    leanings_path = (BASE_DIR / '_NewDomains' / 'research-intelligence' /
+                     'data' / 'leanings' / 'leanings.json')
+    result = {'total': 0, 'question': 0, 'leaning': 0, 'hold': 0}
+    try:
+        raw = json.loads(leanings_path.read_text())
+        leanings = raw.get('leanings', raw) if isinstance(raw, dict) else raw
+        for lean in leanings:
+            result['total'] += 1
+            state = lean.get('state', 'question')
+            if state in result:
+                result[state] += 1
+    except Exception:
+        pass
+    return result
+
 # Shared navigation HTML
 SHARED_NAV_HTML = """
   <nav class="header-nav">
@@ -878,8 +939,23 @@ def api_intelligence_respond():
 
 
 @app.route('/')
+@app.route('/landing')
 def index():
-    """Root URL — serve briefing from Jinja2 template when JSON exists."""
+    """Root URL — Curator landing page (masthead + card catalog)."""
+    from flask import session as _session
+    return render_template(
+        'curator_landing.html',
+        briefing_date=_get_latest_briefing_date(),
+        article_count=_get_latest_article_count(),
+        topics=_get_topics_summary(),
+        leanings=_get_leanings_summary(),
+        username=_session.get('username', 'Robert'),
+    )
+
+
+@app.route('/briefing')
+def briefing():
+    """Daily briefing — previously served at /."""
     result = _load_briefing_articles()
     if result is not None:
         articles, day_str, date_str, model_display, briefing_date = result

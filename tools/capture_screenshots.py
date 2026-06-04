@@ -27,10 +27,11 @@ WORKING          = REPO_ROOT / "_working"
 # ── page definitions ───────────────────────────────────────────────────────
 
 CURATOR_PAGES = {
-    "briefing":           "http://localhost:8766/",
-    "library":            "http://localhost:8766/library",
-    "observations":       "http://localhost:8766/intelligence",
-    "focus":              "http://localhost:8766/priorities",
+    "landing":            "http://localhost:8766/",
+    "briefing":           "http://localhost:8766/briefing",
+    "library":            "http://localhost:8766/curator_library.html",
+    "observations":       "http://localhost:8766/curator_intelligence.html",
+    "focus":              "http://localhost:8766/curator_priorities.html",
     "research_dashboard": "http://localhost:8766/research/dashboard",
     "scans_index":        "http://localhost:8766/interests/2026/scans/index.html",
 }
