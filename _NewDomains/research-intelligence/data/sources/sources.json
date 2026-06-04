@@ -1,1 +1,62 @@
-[]
+[
+  {
+    "id": "src_20260603_001",
+    "type": "article",
+    "title": "China’s AI Heist",
+    "url": "https://www.foreignaffairs.com/china/chinas-ai-heist",
+    "reference": null,
+    "origin": "curator-found",
+    "origin_session": null,
+    "date": "2026-05-29",
+    "date_precision": "day",
+    "tags": [
+      "china"
+    ],
+    "note": null,
+    "cost_to_act": "free",
+    "topics": [],
+    "groups": [],
+    "saved_at": "2026-06-03T23:36:10.922273+00:00",
+    "schema_version": "1.0"
+  },
+  {
+    "id": "src_20260603_002",
+    "type": "article",
+    "title": "AI’s Macroeconomic Challenges and Promises",
+    "url": "https://libertystreeteconomics.newyorkfed.org/2026/05/ais-macroeconomic-challenges-and-promises/",
+    "reference": null,
+    "origin": "curator-found",
+    "origin_session": null,
+    "date": "2026-05-20",
+    "date_precision": "day",
+    "tags": [
+      "ai economic impact"
+    ],
+    "note": null,
+    "cost_to_act": "free",
+    "topics": [],
+    "groups": [],
+    "saved_at": "2026-06-03T23:37:35.826560+00:00",
+    "schema_version": "1.0"
+  },
+  {
+    "id": "src_20260603_003",
+    "type": "article",
+    "title": "China’s AI Governance Offensive Threatens U.S. Tech Leadership",
+    "url": "https://warontherocks.com/cogs-of-war/chinas-ai-governance-offensive-threatens-u-s-tech-leadership/",
+    "reference": null,
+    "origin": "curator-found",
+    "origin_session": null,
+    "date": "2026-05-21",
+    "date_precision": "day",
+    "tags": [
+      "ai - china"
+    ],
+    "note": null,
+    "cost_to_act": "free",
+    "topics": [],
+    "groups": [],
+    "saved_at": "2026-06-03T23:38:32.649779+00:00",
+    "schema_version": "1.0"
+  }
+]

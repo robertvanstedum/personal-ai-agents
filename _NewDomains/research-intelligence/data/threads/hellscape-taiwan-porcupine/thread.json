@@ -20,7 +20,6 @@
   "retired_reason": null,
   "created_by": "robert",
   "schema_version": "2.0",
-  "motivation": "I suspect that Tawain wants to fight China more that other countries want it to.  I think it wants a credible defense so it can stay an independent trading country with both China and the West. But, it is culturally Chinese and China is probably it's biggest partner.  I suspect it want to have a real Hong Kong type deal, and that would be a win-win.  China used the Filippines as a trading post going back to Spaniards.  Taiwan could be the trading post if they reach a deal, which they would both want rather than war.",
   "slug": "hellscape-taiwan-porcupine",
   "tags": [],
   "activated_at": null,
@@ -34,5 +33,6 @@
       "by": "migration",
       "note": "migrated from thread schema v1 (was: 'closed')"
     }
-  ]
+  ],
+  "motivation": "I suspect that Tawain wants to fight China more that other countries want it to.  I think it wants a credible defense so it can stay an independent trading country with both China and the West. But, it is culturally Chinese and China is probably it's biggest partner.  I suspect it want to have a real Hong Kong type deal, and that would be a win-win.  China used the Filippines as a trading post going back to Spaniards.  Taiwan could be the trading post if they reach a deal, which they would both want rather than war."
 }

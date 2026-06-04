@@ -25,6 +25,57 @@
         "evidence_count_at_read": 1
       },
       "notes": ""
+    },
+    {
+      "id": "5fe38be6",
+      "title": "Capital Investment hits earning for several years",
+      "state": "question",
+      "created": "2026-06-03",
+      "updated": "2026-06-03",
+      "topics": [],
+      "evidence": [
+        {
+          "id": "ev-85b807",
+          "title": "AI\u2019s Macroeconomic Challenges and Promises",
+          "url": "https://libertystreeteconomics.newyorkfed.org/2026/05/ais-macroeconomic-challenges-and-promises/",
+          "source": "NY Fed Liberty Street",
+          "stance": "supports",
+          "added": "2026-06-03",
+          "note": ""
+        },
+        {
+          "id": "ev-291996",
+          "title": "How Trade Policy Is Changing: From Broad Rules to Targeted Restrictions",
+          "url": "https://www.stlouisfed.org/on-the-economy/2026/may/how-trade-policy-is-changing-broad-rules-targeted-restrictions",
+          "source": "Fed On The Economy",
+          "stance": "supports",
+          "added": "2026-06-03",
+          "note": ""
+        }
+      ],
+      "teammate_read": null,
+      "notes": ""
+    },
+    {
+      "id": "00a9a037",
+      "title": "Gold and Monetary Reset",
+      "state": "question",
+      "created": "2026-06-03",
+      "updated": "2026-06-03",
+      "topics": [],
+      "evidence": [
+        {
+          "id": "ev-99718c",
+          "title": "This is what Druckenmiller thinks about Kevin Warsh\n\nThis is setting the stage f",
+          "url": "https://x.com/Globalflows/status/2018173643566764503",
+          "source": "X/@Globalflows",
+          "stance": "supports",
+          "added": "2026-06-03",
+          "note": ""
+        }
+      ],
+      "teammate_read": null,
+      "notes": ""
     }
   ]
 }

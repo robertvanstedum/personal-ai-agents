@@ -100,6 +100,19 @@ Every build phase follows this sequence:
 
 **Testing convention:** All build-phase test suites use test_reporter.py at repo root. Three-line setup: import TestReporter, instantiate with suite name, call runner.finish(). Results write to _working/ as dated markdown.
 
+**Testing Discipline (enforced from 2026-06-03)**
+
+**If you cannot run an end-to-end test, say so explicitly.**  
+Do not commit and say "done." Flag it: "I cannot test this — please test or say proceed."
+
+Major changes require one of:
+- A real test you can run (curl, pytest, direct invocation)
+- Robert testing it live and confirming
+- Robert explicitly saying "proceed without test"
+
+Unit tests (run_tests.py, research_uat.py) are always run before committing.
+End-to-end UI/bot flows must be tested by Robert — coding agents cannot open browsers or Telegram.
+
 **Build note convention (multi-step refactors):** Each Group extraction in the German domain refactor produces a _working/build_note_group_[letter].md file committed alongside the code change. This is the detailed reasoning behind what moved and why — separate from the high-level spec in docs/. Standard pattern for all future multi-step refactors.
 
 .gitignore exception: !_working/build_note_*.md (test reports stay ephemeral; build notes commit).
