@@ -225,6 +225,10 @@ led me there."*
 
 See [ROADMAP.md](ROADMAP.md) for full detail.
 
+**Intelligence layer architecture and design:**
+- [`docs/INTELLIGENCE_LAYER.md`](docs/INTELLIGENCE_LAYER.md) — architecture, AI concept reference, build sequence
+- [`docs/DESIGN_SESSION_INTELLIGENCE_LAYER_2026-06-03.md`](docs/DESIGN_SESSION_INTELLIGENCE_LAYER_2026-06-03.md) — design session, June 2026
+
 ---
 
 ## Upstream Contributions
