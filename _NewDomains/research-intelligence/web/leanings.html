@@ -37,9 +37,42 @@
       color: var(--text);
       min-height: 100vh;
       font-size: 14px;
-      display: flex;
-      align-items: flex-start;
+      display: block;
     }
+
+    /* ── Subnav ── */
+    nav.curator-subnav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: 44px;
+      background: rgba(245,240,232,0.96);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 1.5rem;
+    }
+    .subnav-tab {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 0 14px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s;
+    }
+    .subnav-tab:hover { color: var(--text); }
+    .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .subnav-focus { margin-left: auto; }
+
+    /* ── Page layout (rail + content) ── */
+    .page-layout { display: flex; align-items: flex-start; min-height: calc(100vh - 44px); }
 
     /* ── Main content ── */
     .main-content { flex: 1; min-width: 0; padding: 32px 40px 80px; max-width: 860px; }
@@ -221,6 +254,17 @@
   </style>
 </head>
 <body>
+
+<nav class="curator-subnav">
+  <a href="/briefing" class="subnav-tab">Daily</a>
+  <a href="/curator_library.html" class="subnav-tab">Reading Room</a>
+  <a href="/interests/2026/scans/index.html" class="subnav-tab">Scans &amp; Dives</a>
+  <a href="/research/leanings" class="subnav-tab active">Leanings</a>
+  <a href="/archive" class="subnav-tab">Archive</a>
+  <a href="/research/dashboard" class="subnav-tab subnav-focus">Desk</a>
+</nav>
+
+<div class="page-layout">
 
 <!-- nav rail injected by nav.css / research_routes.py pattern -->
 <nav class="domain-rail">
@@ -595,5 +639,6 @@ function esc(str) {
 loadLeanings();
 </script>
 
+</div><!-- /.page-layout -->
 </body>
 </html>

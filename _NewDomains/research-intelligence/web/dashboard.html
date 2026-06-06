@@ -31,9 +31,42 @@
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
-      display: flex;
-      align-items: flex-start;
+      display: block;
     }
+
+    /* ── Subnav ── */
+    nav.curator-subnav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: 44px;
+      background: rgba(245,240,232,0.96);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 1.5rem;
+    }
+    .subnav-tab {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 0 14px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s;
+    }
+    .subnav-tab:hover { color: var(--text); }
+    .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .subnav-focus { margin-left: auto; }
+
+    /* ── Page layout (rail + content) ── */
+    .page-layout { display: flex; align-items: flex-start; min-height: calc(100vh - 44px); }
 
     .container {
       max-width: 780px;
@@ -444,6 +477,17 @@
   </style>
 </head>
 <body>
+
+<nav class="curator-subnav">
+  <a href="/briefing" class="subnav-tab">Daily</a>
+  <a href="/curator_library.html" class="subnav-tab">Reading Room</a>
+  <a href="/interests/2026/scans/index.html" class="subnav-tab">Scans &amp; Dives</a>
+  <a href="/research/leanings" class="subnav-tab">Leanings</a>
+  <a href="/archive" class="subnav-tab">Archive</a>
+  <a href="/research/dashboard" class="subnav-tab subnav-focus active">Desk</a>
+</nav>
+
+<div class="page-layout">
 <aside class="domain-rail">
   <button class="rail-toggle" id="railToggle" title="Toggle rail">‹</button>
   <nav class="rail-nav">
@@ -467,24 +511,6 @@
   <a href="/curator_priorities.html" class="rail-settings" title="Settings">⚙</a>
 </aside>
 <div class="main-content">
-  <header style="background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 28px; height: 52px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100;">
-    <div style="display: flex; align-items: baseline; gap: 10px;">
-      <a href="/" style="font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 600; color: var(--text); text-decoration: none; letter-spacing: -0.02em;">mini-moi</a>
-      <span style="font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 0.06em; text-transform: uppercase;">Research</span>
-    </div>
-    <nav class="header-nav" style="display: flex; gap: 4px;">
-      <a href="/research/sessions" class="nav-link">Threads</a>
-      <a href="/research/observe" class="nav-link">AI Feedback</a>
-      <div class="nav-more-wrapper">
-        <button class="nav-more-btn">···</button>
-        <div class="nav-more-dropdown">
-          <a href="/research/dashboard" class="active">Dashboard</a>
-          <a href="/research/candidates">Queries</a>
-          <a href="/research/save">Save</a>
-        </div>
-      </div>
-    </nav>
-  </header>
   <div class="container">
 
   <h1>Research Intelligence</h1>
@@ -844,5 +870,6 @@
 })();
 </script>
 <script src="/research/static/js/nav.js"></script>
+</div><!-- /.page-layout -->
 </body>
 </html>
