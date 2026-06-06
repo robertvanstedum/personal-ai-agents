@@ -48,3 +48,9 @@ beautifulsoup4>=4.14.0
 Flask==3.1.3
 flask-cors==6.0.2
 deepl==1.30.0
+
+# ── Screenshot / PDF tooling (tools/capture_screenshots.py) ──────────────────
+# Install once: pip3 install playwright img2pdf
+# Then: python3 -m playwright install chromium
+playwright>=1.40.0
+img2pdf>=0.5.1

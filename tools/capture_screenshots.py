@@ -9,6 +9,13 @@ Usage:
 
 Run before/after UI commits to document the state of the UI.
 Archives previous current/ screenshots to archive/YYYY-MM-DD/ first.
+Each screenshot gets an injected label bar: page name + timestamp.
+PNG files land in docs/screenshots/<domain>/current/.
+A combined PDF lands in _working/<domain>-redesign/baseline_YYYY-MM-DD.pdf.
+
+Dependencies (not in base requirements — install once per machine):
+    pip3 install playwright img2pdf
+    python3 -m playwright install chromium
 """
 
 import sys
