@@ -41,8 +41,6 @@ CURATOR_PAGES = {
     "leanings":      "http://localhost:8766/research/leanings",
     "archive":       "http://localhost:8766/archive",
     "desk":          "http://localhost:8766/research/dashboard",
-    "observations":  "http://localhost:8766/curator_intelligence.html",
-    "priorities":    "http://localhost:8766/curator_priorities.html",
 }
 
 GERMAN_PAGES = {
