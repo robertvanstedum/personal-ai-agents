@@ -71,11 +71,8 @@
     .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
     .subnav-focus { margin-left: auto; }
 
-    /* ── Page layout (rail + content) ── */
-    .page-layout { display: flex; align-items: flex-start; min-height: calc(100vh - 44px); }
-
     /* ── Main content ── */
-    .main-content { flex: 1; min-width: 0; padding: 32px 40px 80px; max-width: 860px; }
+    .main-content { padding: 32px 40px 80px; max-width: 860px; margin: 0 auto; }
 
     .page-header { margin-bottom: 28px; }
     .page-title {
@@ -251,6 +248,30 @@
       .main-content { padding: 20px 16px 60px; }
       .add-ev-grid { grid-template-columns: 1fr; }
     }
+
+    /* ── AI Observations section ── */
+    .obs-section { margin-top: 3rem; }
+    .section-divider { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+    .section-divider hr { flex: 1; border: none; border-top: 1px solid var(--border); }
+    .divider-label { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-muted); white-space: nowrap; }
+    .obs-date-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+    .obs-section-title { font-family: 'DM Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+    .obs-date-nav { display: flex; align-items: center; gap: 0.5rem; }
+    .obs-date-btn { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--accent); background: none; border: none; cursor: pointer; padding: 2px 6px; }
+    .obs-date-btn:disabled { color: var(--border2); cursor: default; }
+    .obs-date-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-muted); }
+    .obs-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 0.75rem; }
+    .obs-tag { font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); display: block; margin-bottom: 0.5rem; }
+    .obs-body { font-size: 0.9rem; line-height: 1.6; color: var(--text); }
+    .obs-body p { margin-bottom: 0.5rem; }
+    .obs-body p:last-child { margin-bottom: 0; }
+    .obs-empty { font-size: 0.88rem; color: var(--text-dim); font-style: italic; padding: 0.75rem 0; margin: 0; }
+    .weekly-details { margin-top: 1.5rem; }
+    .weekly-details > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 0.5rem; padding: 4px 0; }
+    .weekly-details > summary::before { content: '›'; font-family: 'DM Mono', monospace; color: var(--accent); transition: transform 0.15s; display: inline-block; }
+    .weekly-details[open] > summary::before { transform: rotate(90deg); }
+    .weekly-details > summary::-webkit-details-marker { display: none; }
+    .weekly-body { margin-top: 1rem; }
   </style>
 </head>
 <body>
@@ -262,21 +283,6 @@
   <a href="/research/leanings" class="subnav-tab active">Leanings</a>
   <a href="/archive" class="subnav-tab">Archive</a>
   <a href="/research/dashboard" class="subnav-tab subnav-focus">Desk</a>
-</nav>
-
-<div class="page-layout">
-
-<!-- nav rail injected by nav.css / research_routes.py pattern -->
-<nav class="domain-rail">
-  <div class="rail-domain">
-    <span class="rail-icon">🔬</span>
-    <span class="rail-label">Research</span>
-  </div>
-  <a class="rail-link" href="/research/dashboard">Dashboard</a>
-  <a class="rail-link" href="/research/sessions">Sessions</a>
-  <a class="rail-link active" href="/research/leanings">Leanings</a>
-  <a class="rail-link" href="/research/observe">Observations</a>
-  <a class="rail-link" href="/interests/2026/scans/index.html">Scans &amp; Dives</a>
 </nav>
 
 <div class="main-content">
@@ -312,6 +318,28 @@
   <!-- Leaning list -->
   <div id="leaningList" class="leaning-list">
     <div class="empty-state">Loading…</div>
+  </div>
+
+  <!-- ── AI Observations section ── -->
+  <div class="obs-section">
+    <div class="section-divider">
+      <hr><span class="divider-label">AI observations</span><hr>
+    </div>
+
+    <div class="obs-date-bar">
+      <span class="obs-section-title">Today's observations</span>
+      <span class="obs-date-nav">
+        <button class="obs-date-btn" id="btnObsPrev" onclick="shiftObsDate(-1)">← prev</button>
+        <span class="obs-date-label" id="obsDateLabel"></span>
+        <button class="obs-date-btn" id="btnObsToday" onclick="loadObservations('')">today →</button>
+      </span>
+    </div>
+    <div id="obsDaily"><p class="obs-empty">Loading…</p></div>
+
+    <details class="weekly-details">
+      <summary class="obs-section-title">Weekly connections</summary>
+      <div class="weekly-body" id="obsWeekly"></div>
+    </details>
   </div>
 </div>
 
@@ -637,8 +665,60 @@ function esc(str) {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadLeanings();
+
+// ── AI Observations ───────────────────────────────────────────────────────────
+let _obsDate = '';
+const OBS_LABELS = {
+  topic_velocity: 'Topic Velocity', discovery_candidate: 'Discovery',
+  source_anomaly: 'Source Anomaly', blind_spot: 'Blind Spot',
+  lateral_connections: 'Connections'
+};
+
+async function loadObservations(dateStr) {
+  const url = dateStr ? `/api/intelligence/latest?date=${dateStr}` : '/api/intelligence/latest';
+  let data;
+  try { data = await fetch(url).then(r => r.json()); }
+  catch {
+    document.getElementById('obsDaily').innerHTML = '<p class="obs-empty">Could not load observations.</p>';
+    return;
+  }
+
+  _obsDate = data.today || '';
+  document.getElementById('obsDateLabel').textContent = _obsDate
+    ? new Date(_obsDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : '';
+  document.getElementById('btnObsPrev').disabled  = !data.has_prev;
+  document.getElementById('btnObsToday').disabled = !!data.is_today;
+
+  const daily = (data.daily?.observations || []).filter(o => o.type !== 'lateral_connections');
+  document.getElementById('obsDaily').innerHTML = daily.length
+    ? daily.map(obsCard).join('')
+    : '<p class="obs-empty">No observations for this date.</p>';
+
+  const weekly = data.weekly?.observations || [];
+  document.getElementById('obsWeekly').innerHTML = weekly.length
+    ? weekly.map(obsCard).join('')
+    : '<p class="obs-empty">No weekly connections yet.</p>';
+}
+
+function shiftObsDate(days) {
+  const base = _obsDate || new Date().toISOString().substring(0, 10);
+  const d = new Date(base + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  loadObservations(d.toISOString().substring(0, 10));
+}
+
+function obsCard(obs) {
+  const label = OBS_LABELS[obs.type] || obs.type;
+  const body  = (obs.content || '')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+  return `<div class="obs-card"><span class="obs-tag">${label}</span><div class="obs-body"><p>${body}</p></div></div>`;
+}
+
+loadObservations('');
 </script>
 
-</div><!-- /.page-layout -->
 </body>
 </html>
