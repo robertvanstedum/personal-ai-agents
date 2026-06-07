@@ -612,7 +612,7 @@
       row.className = 'thread-row thread-generating';
       row.style.cursor = 'default';
       row.innerHTML = `
-        <span class="thread-name">${t.topic}</span>
+        <span class="thread-name">${t.topic.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</span>
         <span class="thread-stats">${statsText}</span>
         <span class="thread-generating-badge">✦ generating…</span>
       `;
@@ -644,7 +644,7 @@
         ddLink = `<span class="btn-view-dd" onclick="event.stopPropagation();window.location='/research/dive-result/${encodeURIComponent(stem)}'">View Deeper Dive →</span>`;
       }
       row.innerHTML = `
-        <span class="thread-name">${t.topic}</span>
+        <span class="thread-name">${t.topic.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</span>
         <span class="thread-stats">${statsText}</span>
         <span class="thread-spacer"></span>
         <span class="thread-running-badge">running…</span>
@@ -660,7 +660,7 @@
       row.className = 'thread-row thread-expired';
       row.style.cursor = 'default';
       row.innerHTML = `
-        <span class="thread-name">${t.topic}</span>
+        <span class="thread-name">${t.topic.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</span>
         <span class="thread-stats">${statsText}</span>
         <span class="thread-expired-badge">Ready to close</span>
         <a class="btn-deeper-dive" href="/research/dive-confirm?topic=${encodeURIComponent(t.topic)}">✦ Deeper Dive</a>
@@ -690,7 +690,7 @@
     const canGenerateDD = t.session_count > (t.sessions_at_last_dive || 0)
                           && t.session_count >= 2;
     row.innerHTML = `
-      <span class="thread-name">${t.topic}</span>
+      <span class="thread-name">${t.topic.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</span>
       <span class="thread-stats">${statsText}</span>
       <span class="thread-spacer"></span>
       <span class="thread-running-badge">running…</span>
