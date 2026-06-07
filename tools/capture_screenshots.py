@@ -11,7 +11,7 @@ Run before/after UI commits to document the state of the UI.
 Archives previous current/ screenshots to archive/YYYY-MM-DD/ first.
 Each screenshot gets an injected label bar: page name + timestamp.
 PNG files land in docs/screenshots/<domain>/current/.
-A combined PDF lands in _working/<domain>-redesign/baseline_YYYY-MM-DD.pdf.
+A combined PDF lands in _working/<domain>-redesign/baseline_YYYY-MM-DD_HHMM.pdf.
 
 Dependencies (not in base requirements — install once per machine):
     pip3 install playwright img2pdf
@@ -133,7 +133,7 @@ def capture_domain(domain: str, pages: dict):
             import img2pdf
             working_dir = WORKING / f"{domain}-redesign"
             working_dir.mkdir(parents=True, exist_ok=True)
-            pdf_path = working_dir / f"baseline_{date.today()}.pdf"
+            pdf_path = working_dir / f"baseline_{datetime.now().strftime('%Y-%m-%d_%H%M')}.pdf"
             with open(pdf_path, "wb") as f:
                 f.write(img2pdf.convert(captured))
             print(f"  PDF: {pdf_path.relative_to(REPO_ROOT)}")
