@@ -1073,7 +1073,8 @@ def _archive_dives():
             stem  = f.stem  # e.g. hellscape-taiwan-porcupine-deeper-dive-001
             parts = stem.rsplit('-deeper-dive-', 1)
             topic = parts[0] if len(parts) == 2 else stem
-            dives.append({'topic': topic, 'file': f.name, 'slug': stem})
+            title = ' '.join(w.capitalize() for w in topic.split('-'))
+            dives.append({'topic': topic, 'title': title, 'file': f.name, 'slug': stem})
     except Exception:
         pass
     return dives

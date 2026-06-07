@@ -53,9 +53,9 @@
 
     /* ── Main layout ── */
     main {
-      max-width: 860px;
+      max-width: 900px;
       margin: 0 auto;
-      padding: 32px 40px 80px;
+      padding: 36px 32px 80px;
     }
 
     /* ── Page header ── */
@@ -291,9 +291,9 @@ function scanRow(s) {
 }
 
 function diveRow(d) {
-  return `<div class="archive-row" data-search="${d.topic} dive">
+  return `<div class="archive-row" data-search="${d.title} dive">
     <span class="dive-badge">Thread</span>
-    <span class="row-title">${esc(d.topic)}</span>
+    <span class="row-title">${esc(d.title)}</span>
     <a class="row-action" href="/research/dive-result/${encodeURIComponent(d.slug)}">View →</a>
   </div>`;
 }
