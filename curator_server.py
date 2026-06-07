@@ -979,24 +979,6 @@ def briefing():
 def library_page():
     return send_from_directory(BASE_DIR, 'curator_library.html')
 
-@app.route('/curator_priorities.html')
-def priorities_page():
-    return send_from_directory(BASE_DIR, 'curator_priorities.html')
-
-@app.route('/curator_intelligence.html')
-def intelligence_page():
-    return send_from_directory(BASE_DIR, 'curator_intelligence.html')
-
-@app.route('/observations')
-def observations_redirect():
-    """Phase 3: Observations folded into Leanings — redirect old URL."""
-    return redirect('/research/leanings', 301)
-
-@app.route('/priorities')
-def priorities_redirect():
-    """Phase 3: Priorities being retired — redirect to Daily."""
-    return redirect('/briefing', 301)
-
 # ── Archive data helpers (Phase 5) ────────────────────────────────────────────
 
 def _archive_daily_editions():
