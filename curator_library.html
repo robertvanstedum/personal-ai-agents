@@ -399,40 +399,20 @@
 
   .actions-cell { white-space: nowrap; }
 
-  .action-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    border-radius: 5px;
+  /* Text-link action pattern (replaces pill buttons) */
+  .arch-link {
     font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.04em;
-    text-decoration: none;
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    background: var(--bg);
-    cursor: pointer;
-    transition: all 0.15s;
-    margin-right: 4px;
-    box-shadow: 0 1px 2px var(--shadow);
-  }
-
-  .action-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
-
-  .action-btn.scan {
-    border-color: rgba(122,46,110,0.3);
-    color: var(--bookmarked);
-    background: var(--bookmarked-bg);
-  }
-  .action-btn.scan:hover { border-color: var(--bookmarked); background: rgba(122,46,110,0.15); }
-
-  .action-btn.start-dive {
-    border-color: rgba(139,94,42,0.3);
+    font-size: 0.75rem;
     color: var(--accent);
-    background: var(--accent-dim);
+    text-decoration: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    margin-right: 10px;
+    white-space: nowrap;
   }
-  .action-btn.start-dive:hover { border-color: var(--accent); background: var(--accent-glow); }
+  .arch-link:hover { text-decoration: underline; }
 
   /* ── Appearances ── */
   .appearances {
@@ -883,9 +863,9 @@ function render() {
     // Deep dive button: show existing dive OR offer to start one
     let diveBtn = '';
     if (a.deep_dive_url) {
-      diveBtn = `<a class="action-btn scan" href="${escHtml(a.deep_dive_url)}" target="_blank" title="View scan">🔭 View Scan →</a>`;
+      diveBtn = `<a class="arch-link" href="${escHtml(a.deep_dive_url)}" target="_blank">View scan →</a>`;
     } else if (a.hash_id) {
-      diveBtn = `<button class="action-btn start-dive" data-hash-id="${escHtml(a.hash_id||'')}">✨ Start Dive</button>`;
+      diveBtn = `<button class="arch-link" data-hash-id="${escHtml(a.hash_id||'')}">Start dive →</button>`;
     }
 
     return `<tr style="animation-delay:${Math.min(i*20,300)}ms" onclick="window.open('${escHtml(a.url)}','_blank')">
@@ -903,14 +883,14 @@ function render() {
       </td>
       <td><span class="type-badge type-${a.type}">${typeLabel}</span></td>
       <td class="actions-cell" onclick="event.stopPropagation()">
-        <a class="action-btn" href="${escHtml(a.url)}" target="_blank" rel="noopener">↗ Read</a>
+        <a class="arch-link" href="${escHtml(a.url)}" target="_blank" rel="noopener">Read →</a>
         ${diveBtn}
       </td>
     </tr>`;
   }).join('');
 
   // Attach event listeners to Start Dive buttons
-  document.querySelectorAll('.start-dive').forEach(btn => {
+  document.querySelectorAll('[data-hash-id]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const article = allArticles.find(a => a.hash_id === btn.dataset.hashId);
