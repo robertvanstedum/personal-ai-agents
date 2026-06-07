@@ -405,7 +405,8 @@ def _parse_session_log() -> dict:
 
 @research_bp.route('/research')
 def research_home():
-    return redirect('/research/sessions')
+    """Phase 4: /research now redirects to the Desk."""
+    return redirect('/research/dashboard', 301)
 
 @research_bp.route('/research/dashboard')
 def research_dashboard_ui():
