@@ -8,7 +8,7 @@ Usage:
 Then open curator_latest.html or curator_library.html in browser
 """
 
-from flask import Flask, request, jsonify, send_from_directory, render_template
+from flask import Flask, request, jsonify, send_from_directory, render_template, redirect
 from flask_cors import CORS
 import json
 import os
@@ -20,7 +20,10 @@ import re
 import html as _html
 
 BASE_DIR = Path(__file__).parent
-app = Flask(__name__, template_folder=str(BASE_DIR / 'templates'))
+app = Flask(__name__,
+            template_folder=str(BASE_DIR / 'templates'),
+            static_folder=str(BASE_DIR / 'static'),
+            static_url_path='/static')
 CORS(app)  # Enable CORS for all routes
 
 
@@ -972,6 +975,7 @@ def briefing():
     return send_from_directory(BASE_DIR, 'curator_latest.html')
 
 @app.route('/curator_library.html')
+@app.route('/reading-room')
 def library_page():
     return send_from_directory(BASE_DIR, 'curator_library.html')
 
@@ -982,6 +986,64 @@ def priorities_page():
 @app.route('/curator_intelligence.html')
 def intelligence_page():
     return send_from_directory(BASE_DIR, 'curator_intelligence.html')
+
+@app.route('/observations')
+def observations_redirect():
+    """Phase 3: Observations folded into Leanings — redirect old URL."""
+    return redirect('/research/leanings', 301)
+
+@app.route('/priorities')
+def priorities_redirect():
+    """Phase 3: Priorities being retired — redirect to Daily."""
+    return redirect('/briefing', 301)
+
+@app.route('/archive')
+def archive_page():
+    """Archive — placeholder page (Phase 5 will add full browse UI)."""
+    from flask import Response
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Archive — Curator</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#F5F0E8; --text:#2A1F14; --accent:#C68A5E; --rule:#C4B49A; --muted:#8A7060; --dim:#A89880; --card-bg:#EDE7DC; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: Georgia, serif; min-height: 100vh; }
+    nav.curator-subnav { position: sticky; top: 0; z-index: 100; background: rgba(245,240,232,0.96); backdrop-filter: blur(8px); border-bottom: 1px solid var(--rule); display: flex; align-items: center; padding: 0 1.5rem; height: 44px; }
+    .subnav-tab { font-family: 'DM Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); text-decoration: none; padding: 0 14px; height: 44px; display: flex; align-items: center; border-bottom: 2px solid transparent; transition: color 0.15s; }
+    .subnav-tab:hover { color: var(--text); }
+    .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .subnav-focus { margin-left: auto; }
+    .placeholder { max-width: 520px; margin: 6rem auto; text-align: center; }
+    .placeholder-label { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--dim); margin-bottom: 1.2rem; }
+    .placeholder-title { font-size: 2.2rem; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 1rem; }
+    .placeholder-rule { border: none; border-top: 1px solid var(--rule); width: 60%; margin: 0 auto 1.2rem; }
+    .placeholder-body { font-size: 0.92rem; line-height: 1.7; color: var(--muted); font-style: italic; }
+    .placeholder-back { display: inline-block; margin-top: 2rem; font-family: 'DM Mono', monospace; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+<nav class="curator-subnav">
+  <a href="/briefing" class="subnav-tab">Daily</a>
+  <a href="/curator_library.html" class="subnav-tab">Reading Room</a>
+  <a href="/interests/2026/scans/index.html" class="subnav-tab">Scans &amp; Dives</a>
+  <a href="/research/leanings" class="subnav-tab">Leanings</a>
+  <a href="/archive" class="subnav-tab active">Archive</a>
+  <a href="/research/dashboard" class="subnav-tab subnav-focus">Desk</a>
+</nav>
+<div class="placeholder">
+  <div class="placeholder-label">Coming — Phase 5</div>
+  <h1 class="placeholder-title">Archive</h1>
+  <hr class="placeholder-rule">
+  <p class="placeholder-body">Everything kept, and searchable over time.<br>Daily editions &middot; Scans &middot; Dives &middot; Observations &middot; Sources.</p>
+  <a href="/" class="placeholder-back">&#8592; Back to Curator</a>
+</div>
+</body>
+</html>"""
+    return Response(html, mimetype='text/html')
 
 @app.route('/curator_briefing.html')
 def briefing_page():

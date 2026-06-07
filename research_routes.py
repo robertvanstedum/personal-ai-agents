@@ -1733,12 +1733,11 @@ def research_scan_view(hash_id: str):
     }}
     *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{ font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.65; }}
-    header {{ border-bottom: 1px solid var(--border); padding: 0 32px; height: 52px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; background: var(--surface); }}
-    .site-brand {{ font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 600; color: var(--text); text-decoration: none; letter-spacing: -0.02em; }}
-    .header-nav {{ display: flex; gap: 4px; }}
-    .nav-link {{ font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.05em; color: var(--text-muted); text-decoration: none; padding: 6px 14px; border-radius: 6px; border: 1px solid transparent; transition: all 0.15s; }}
-    .nav-link:hover {{ color: var(--text); background: var(--surface2); }}
-    .nav-link.active {{ color: var(--accent); background: var(--accent-dim); border-color: rgba(139,94,42,0.2); }}
+    nav.curator-subnav {{ position: sticky; top: 0; z-index: 100; height: 44px; background: rgba(245,240,232,0.96); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 1.5rem; }}
+    .subnav-tab {{ font-family: 'DM Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); text-decoration: none; padding: 0 14px; height: 44px; display: flex; align-items: center; border-bottom: 2px solid transparent; transition: color 0.15s; }}
+    .subnav-tab:hover {{ color: var(--text); }}
+    .subnav-tab.active {{ color: var(--accent); border-bottom-color: var(--accent); }}
+    .subnav-focus {{ margin-left: auto; }}
     main {{ max-width: 780px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }}
     h1 {{ font-family: 'Playfair Display', serif; font-size: 1.75rem; font-weight: normal; line-height: 1.3; margin-bottom: 1.25rem; }}
     .meta-block {{ background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 2rem; font-size: 0.88rem; }}
@@ -1793,22 +1792,14 @@ def research_scan_view(hash_id: str):
   <script src="/research/static/js/nav.js"></script>
 </head>
 <body data-domain="curator" data-page="scan" data-ref-id="{_html_lib.escape(hash_id)}">
-<header>
-  <a href="/" class="site-brand">mini-moi · CURATOR</a>
-  <nav class="header-nav">
-    <a href="/" class="nav-link">Daily</a>
-    <a href="/curator_library.html" class="nav-link">Library</a>
-    <a href="/interests/2026/scans/index.html" class="nav-link active">Scans &amp; Dives</a>
-    <a href="/curator_intelligence.html" class="nav-link">Observations</a>
-    <a href="/research/dashboard" class="nav-link">Research</a>
-    <div class="nav-more-wrapper">
-      <button class="nav-more-btn">···</button>
-      <div class="nav-more-dropdown">
-        <a href="/curator_priorities.html">Priorities</a>
-      </div>
-    </div>
-  </nav>
-</header>
+<nav class="curator-subnav">
+  <a href="/briefing" class="subnav-tab">Daily</a>
+  <a href="/curator_library.html" class="subnav-tab">Reading Room</a>
+  <a href="/interests/2026/scans/index.html" class="subnav-tab active">Scans &amp; Dives</a>
+  <a href="/research/leanings" class="subnav-tab">Leanings</a>
+  <a href="/archive" class="subnav-tab">Archive</a>
+  <a href="/research/dashboard" class="subnav-tab subnav-focus">Desk</a>
+</nav>
 <main>
   <h1>{title}</h1>
   <div class="meta-block">

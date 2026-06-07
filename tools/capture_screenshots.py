@@ -9,12 +9,19 @@ Usage:
 
 Run before/after UI commits to document the state of the UI.
 Archives previous current/ screenshots to archive/YYYY-MM-DD/ first.
+Each screenshot gets an injected label bar: page name + timestamp.
+PNG files land in docs/screenshots/<domain>/current/.
+A combined PDF lands in _working/<domain>-redesign/baseline_YYYY-MM-DD.pdf.
+
+Dependencies (not in base requirements — install once per machine):
+    pip3 install playwright img2pdf
+    python3 -m playwright install chromium
 """
 
 import sys
 import shutil
 from pathlib import Path
-from datetime import date
+from datetime import date, datetime
 from playwright.sync_api import sync_playwright
 import time
 
@@ -27,13 +34,15 @@ WORKING          = REPO_ROOT / "_working"
 # ── page definitions ───────────────────────────────────────────────────────
 
 CURATOR_PAGES = {
-    "landing":            "http://localhost:8766/",
-    "briefing":           "http://localhost:8766/briefing",
-    "library":            "http://localhost:8766/curator_library.html",
-    "observations":       "http://localhost:8766/curator_intelligence.html",
-    "focus":              "http://localhost:8766/curator_priorities.html",
-    "research_dashboard": "http://localhost:8766/research/dashboard",
-    "scans_index":        "http://localhost:8766/interests/2026/scans/index.html",
+    "landing":       "http://localhost:8766/",
+    "daily":         "http://localhost:8766/briefing",
+    "reading_room":  "http://localhost:8766/curator_library.html",
+    "scans_dives":   "http://localhost:8766/interests/2026/scans/index.html",
+    "leanings":      "http://localhost:8766/research/leanings",
+    "archive":       "http://localhost:8766/archive",
+    "desk":          "http://localhost:8766/research/dashboard",
+    "observations":  "http://localhost:8766/curator_intelligence.html",
+    "priorities":    "http://localhost:8766/curator_priorities.html",
 }
 
 GERMAN_PAGES = {
@@ -82,8 +91,31 @@ def capture_domain(domain: str, pages: dict):
             try:
                 page.goto(url, timeout=15000, wait_until="networkidle")
                 time.sleep(1)  # let JS settle
+
+                # Inject label overlay: page name + timestamp
+                ts = datetime.now().strftime("%Y-%m-%d  %H:%M")
+                label_text = f"{name.upper().replace('_', ' ')}  ·  {ts}"
+                page.evaluate(f"""() => {{
+                    const bar = document.createElement('div');
+                    bar.id = '__screenshot_label__';
+                    bar.style.cssText = [
+                        'position:fixed', 'bottom:0', 'left:0', 'right:0',
+                        'z-index:99999', 'background:#2A1F14',
+                        'color:#F5F0E8', 'font-family:monospace',
+                        'font-size:13px', 'letter-spacing:0.06em',
+                        'padding:6px 16px', 'text-align:left',
+                        'border-top:2px solid #C68A5E'
+                    ].join(';');
+                    bar.textContent = {repr(label_text)};
+                    document.body.appendChild(bar);
+                }}""")
+
                 out_path = current_dir / f"{name}.png"
                 page.screenshot(path=str(out_path), full_page=True)
+
+                # Remove label before next page
+                page.evaluate("() => { const b = document.getElementById('__screenshot_label__'); if(b) b.remove(); }")
+
                 captured.append(str(out_path))
                 print(f"    ✓ {name}.png")
             except Exception as e:
