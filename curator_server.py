@@ -997,8 +997,125 @@ def priorities_redirect():
     """Phase 3: Priorities being retired — redirect to Daily."""
     return redirect('/briefing', 301)
 
+# ── Archive data helpers (Phase 5) ────────────────────────────────────────────
+
+def _archive_daily_editions():
+    """Sorted list of daily editions from curator_archive/. Most recent first."""
+    archive_dir = BASE_DIR / 'curator_archive'
+    editions = []
+    seen = set()
+    try:
+        for f in sorted(archive_dir.glob('curator_*.html'), reverse=True):
+            parts = f.stem.replace('curator_', '').split('-')
+            if len(parts) >= 3:
+                date_str = '-'.join(parts[:3])
+                if date_str in seen:
+                    continue
+                seen.add(date_str)
+                count = 0
+                json_f = archive_dir / f'curator_{date_str}.json'
+                if json_f.exists():
+                    try:
+                        count = len(json.loads(json_f.read_text()))
+                    except Exception:
+                        pass
+                editions.append({'date': date_str, 'count': count, 'file': f.name})
+    except Exception:
+        pass
+    return editions
+
+
+def _archive_sources():
+    """Bookmarked articles from curator_history.json. Most recent first."""
+    hist_path = BASE_DIR / 'curator_history.json'
+    articles = []
+    try:
+        hist = json.loads(hist_path.read_text())
+        for art in hist.values():
+            if art.get('bookmarked'):
+                articles.append({
+                    'date':   art.get('bookmark_date') or art.get('first_seen', ''),
+                    'title':  art.get('title', ''),
+                    'source': art.get('source', ''),
+                    'url':    art.get('url', ''),
+                })
+        articles.sort(key=lambda x: x['date'], reverse=True)
+    except Exception:
+        pass
+    return articles
+
+
+def _archive_scans():
+    """Scan list parsed from interests/2026/scans/index.html."""
+    from bs4 import BeautifulSoup
+    idx = BASE_DIR / 'interests' / '2026' / 'scans' / 'index.html'
+    scans = []
+    try:
+        soup = BeautifulSoup(idx.read_text(), 'html.parser')
+        for row in soup.select('.row-article'):
+            scans.append({
+                'date':   (row.select_one('.row-date-col') or type('_', (), {'text': ''})()).text.strip(),
+                'title':  (row.select_one('.row-title')    or type('_', (), {'text': ''})()).text.strip(),
+                'source': (row.select_one('.row-source')   or type('_', (), {'text': ''})()).text.strip(),
+                'url':    row.get('href', ''),
+            })
+    except Exception:
+        pass
+    return scans
+
+
+def _archive_dives():
+    """Deeper-dive summaries from the dives data directory."""
+    dives_dir = BASE_DIR / '_NewDomains' / 'research-intelligence' / 'data' / 'dives'
+    dives = []
+    try:
+        for f in sorted(dives_dir.glob('*.md'), reverse=True):
+            stem  = f.stem  # e.g. hellscape-taiwan-porcupine-deeper-dive-001
+            parts = stem.rsplit('-deeper-dive-', 1)
+            topic = parts[0] if len(parts) == 2 else stem
+            dives.append({'topic': topic, 'file': f.name, 'slug': stem})
+    except Exception:
+        pass
+    return dives
+
+
+def _archive_observations():
+    """Daily intelligence observation dates from ~/.openclaw/workspace/."""
+    workspace = Path.home() / '.openclaw' / 'workspace'
+    entries = []
+    try:
+        for f in sorted(workspace.glob('intelligence_*.json'), reverse=True):
+            stem = f.stem
+            if 'weekly' in stem:
+                continue
+            raw = stem.replace('intelligence_', '')
+            if len(raw) == 8:
+                date_str = f'{raw[:4]}-{raw[4:6]}-{raw[6:]}'
+                try:
+                    data = json.loads(f.read_text())
+                    count = len(data.get('observations', []))
+                except Exception:
+                    count = 0
+                entries.append({'date': date_str, 'count': count})
+    except Exception:
+        pass
+    return entries
+
+
 @app.route('/archive')
 def archive_page():
+    """Archive — live browse page (Phase 5)."""
+    return render_template('curator_archive.html',
+        daily_editions = _archive_daily_editions(),
+        sources        = _archive_sources(),
+        scans          = _archive_scans(),
+        dives          = _archive_dives(),
+        observations   = _archive_observations(),
+    )
+
+
+# ── (legacy placeholder kept below for reference — removed Phase 5) ──────────
+def _archive_page_placeholder():
     """Archive — placeholder page (Phase 5 will add full browse UI)."""
     from flask import Response
     html = """<!DOCTYPE html>
@@ -1044,6 +1161,8 @@ def archive_page():
 </body>
 </html>"""
     return Response(html, mimetype='text/html')
+# ────────────────────────────────────────────────────────────────────────────
+
 
 @app.route('/curator_briefing.html')
 def briefing_page():

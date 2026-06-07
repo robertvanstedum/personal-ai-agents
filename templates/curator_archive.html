@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Archive — Curator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:         #F5F0E8;
+      --surface:    #faf7f2;
+      --surface2:   #f0ebe0;
+      --text:       #2A1F14;
+      --text-muted: #6b5f4e;
+      --text-dim:   #9e9080;
+      --accent:     #8b5e2a;
+      --accent-dim: rgba(139,94,42,0.08);
+      --border:     #ddd6c8;
+      --border2:    #C4B49A;
+      --rule:       #C4B49A;
+      --shadow:     rgba(42,31,20,0.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Source Sans 3', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    /* ── Subnav (standardized Phase 2) ── */
+    nav.curator-subnav {
+      position: sticky; top: 0; z-index: 100;
+      height: 44px;
+      background: rgba(245,240,232,0.96);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 1.5rem;
+    }
+    .subnav-tab {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-muted); text-decoration: none;
+      padding: 0 14px; height: 44px;
+      display: flex; align-items: center;
+      border-bottom: 2px solid transparent; transition: color 0.15s;
+    }
+    .subnav-tab:hover { color: var(--text); }
+    .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .subnav-focus { margin-left: auto; }
+
+    /* ── Main layout ── */
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 32px 40px 80px;
+    }
+
+    /* ── Page header ── */
+    .page-header { margin-bottom: 24px; }
+    .page-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.7rem; font-weight: 400; margin-bottom: 4px;
+    }
+    .page-sub { font-size: 0.85rem; color: var(--text-muted); }
+
+    /* ── Search bar ── */
+    .search-wrap { margin-bottom: 2rem; }
+    .search-input {
+      width: 100%; padding: 10px 14px;
+      font-family: 'Source Sans 3', sans-serif; font-size: 14px;
+      color: var(--text); background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px;
+      outline: none; transition: border-color 0.15s;
+    }
+    .search-input:focus { border-color: var(--accent); }
+
+    /* ── Section ── */
+    .archive-section { margin-bottom: 2.5rem; }
+    .section-head {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: 0;
+    }
+    .section-kicker {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-dim);
+    }
+    .section-count {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      color: var(--text-dim); opacity: 0.6; margin-left: 8px;
+    }
+    .show-all-link {
+      font-family: 'DM Mono', monospace; font-size: 0.7rem;
+      color: var(--accent); text-decoration: none; cursor: pointer;
+    }
+    .show-all-link:hover { text-decoration: underline; }
+
+    /* ── Rows ── */
+    .archive-rows { margin-top: 6px; }
+    .archive-row {
+      display: flex; align-items: baseline; gap: 12px;
+      padding: 9px 0;
+      border-bottom: 0.5px solid var(--rule);
+      font-size: 13px;
+    }
+    .archive-row:last-child { border-bottom: none; }
+    .row-date {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-muted); white-space: nowrap; min-width: 100px;
+      flex-shrink: 0;
+    }
+    .row-title { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .row-title.muted { font-weight: 400; color: var(--text-muted); }
+    .row-source { font-size: 11px; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
+    .row-action { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent); text-decoration: none; white-space: nowrap; flex-shrink: 0; }
+    .row-action:hover { text-decoration: underline; }
+    .row-meta { font-size: 11px; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
+    .dive-badge {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-dim); border: 1px solid var(--border2);
+      border-radius: 3px; padding: 1px 5px; white-space: nowrap; flex-shrink: 0;
+    }
+
+    /* ── Show more row ── */
+    .show-more-row {
+      padding: 8px 0; font-size: 12px; color: var(--text-muted);
+      cursor: pointer; border-bottom: none;
+    }
+    .show-more-row:hover { color: var(--accent); }
+
+    /* ── Empty state ── */
+    .archive-empty {
+      font-size: 0.85rem; color: var(--text-dim); font-style: italic;
+      padding: 10px 0;
+    }
+
+    /* ── Search results ── */
+    .search-results { display: none; }
+    .search-results-header {
+      font-size: 12px; color: var(--text-muted); margin-bottom: 1rem;
+    }
+    .result-type-badge {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-dim); border: 1px solid var(--border2);
+      border-radius: 3px; padding: 1px 5px; flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+<nav class="curator-subnav">
+  <a href="/briefing" class="subnav-tab">Daily</a>
+  <a href="/curator_library.html" class="subnav-tab">Reading Room</a>
+  <a href="/interests/2026/scans/index.html" class="subnav-tab">Scans &amp; Dives</a>
+  <a href="/research/leanings" class="subnav-tab">Leanings</a>
+  <a href="/archive" class="subnav-tab active">Archive</a>
+  <a href="/research/dashboard" class="subnav-tab subnav-focus">Desk</a>
+</nav>
+
+<main>
+  <div class="page-header">
+    <h1 class="page-title">Archive</h1>
+    <p class="page-sub">Everything kept, and searchable over time.</p>
+  </div>
+
+  <div class="search-wrap">
+    <input class="search-input" id="searchInput" type="text"
+      placeholder="Search across all archives…" autocomplete="off">
+  </div>
+
+  <!-- Search results (shown when query active) -->
+  <div class="search-results" id="searchResults">
+    <div class="search-results-header" id="searchHeader"></div>
+    <div class="archive-rows" id="searchRows"></div>
+  </div>
+
+  <!-- Five sections (hidden when search active) -->
+  <div id="allSections">
+
+    <!-- Daily editions -->
+    <div class="archive-section">
+      <div class="section-head">
+        <span>
+          <span class="section-kicker">Daily editions</span>
+          <span class="section-count" id="cnt-daily"></span>
+        </span>
+      </div>
+      <div class="archive-rows" id="rows-daily"></div>
+    </div>
+
+    <!-- Sources -->
+    <div class="archive-section">
+      <div class="section-head">
+        <span>
+          <span class="section-kicker">Sources</span>
+          <span class="section-count" id="cnt-sources"></span>
+        </span>
+        <span class="show-all-link" onclick="showAll('sources')">show all →</span>
+      </div>
+      <div class="archive-rows" id="rows-sources"></div>
+    </div>
+
+    <!-- Scans -->
+    <div class="archive-section">
+      <div class="section-head">
+        <span>
+          <span class="section-kicker">Scans</span>
+          <span class="section-count" id="cnt-scans"></span>
+        </span>
+        <span class="show-all-link" onclick="showAll('scans')">show all →</span>
+      </div>
+      <div class="archive-rows" id="rows-scans"></div>
+    </div>
+
+    <!-- Dives -->
+    <div class="archive-section">
+      <div class="section-head">
+        <span>
+          <span class="section-kicker">Dives</span>
+          <span class="section-count" id="cnt-dives"></span>
+        </span>
+      </div>
+      <div class="archive-rows" id="rows-dives"></div>
+    </div>
+
+    <!-- Observations -->
+    <div class="archive-section">
+      <div class="section-head">
+        <span>
+          <span class="section-kicker">Observations</span>
+          <span class="section-count" id="cnt-obs"></span>
+        </span>
+      </div>
+      <div class="archive-rows" id="rows-obs"></div>
+    </div>
+
+  </div><!-- /#allSections -->
+</main>
+
+<script>
+// ── Data (injected server-side) ───────────────────────────────────────────────
+const DATA = {
+  daily:   {{ daily_editions | tojson }},
+  sources: {{ sources | tojson }},
+  scans:   {{ scans | tojson }},
+  dives:   {{ dives | tojson }},
+  obs:     {{ observations | tojson }},
+};
+
+const PAGE_SIZE = 3;
+const expanded  = { daily: false, sources: false, scans: false, dives: false, obs: false };
+
+// ── Date formatting ────────────────────────────────────────────────────────────
+function fmtDate(iso) {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso + 'T12:00:00');
+    return d.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+  } catch { return iso; }
+}
+
+// ── Row builders ──────────────────────────────────────────────────────────────
+function dailyRow(ed) {
+  const summary = ed.count ? `${ed.count} articles` : '';
+  // TODO: archive daily editions as dated files for historical browse once
+  //       briefing pipeline writes per-date archives.
+  return `<div class="archive-row" data-search="${ed.date} ${summary}">
+    <span class="row-date">${fmtDate(ed.date)}</span>
+    <span class="row-title muted">${summary || '—'}</span>
+  </div>`;
+}
+
+function sourceRow(a) {
+  return `<div class="archive-row" data-search="${a.title} ${a.source} ${a.date}">
+    <span class="row-date">${fmtDate(a.date)}</span>
+    <span class="row-title">${esc(a.title)}</span>
+    <span class="row-source">${esc(a.source)}</span>
+  </div>`;
+}
+
+function scanRow(s) {
+  return `<div class="archive-row" data-search="${s.title} ${s.source} ${s.date}">
+    <span class="row-date">${s.date || '—'}</span>
+    <span class="row-title">${esc(s.title)}</span>
+    <span class="row-source">${esc(s.source)}</span>
+  </div>`;
+}
+
+function diveRow(d) {
+  return `<div class="archive-row" data-search="${d.topic} dive">
+    <span class="dive-badge">Thread</span>
+    <span class="row-title">${esc(d.topic)}</span>
+    <a class="row-action" href="/research/dive-result/${encodeURIComponent(d.slug)}">View →</a>
+  </div>`;
+}
+
+function obsRow(o) {
+  const label = o.count ? `${o.count} observation${o.count !== 1 ? 's' : ''}` : 'Observations';
+  return `<div class="archive-row" data-search="${o.date} ${label}">
+    <span class="row-date">${fmtDate(o.date)}</span>
+    <span class="row-title muted">${label}</span>
+    <a class="row-action" href="/research/leanings?date=${o.date}">View →</a>
+  </div>`;
+}
+
+// ── Section rendering ─────────────────────────────────────────────────────────
+function renderSection(key, items, rowFn, counterId, rowsId) {
+  document.getElementById(counterId).textContent = items.length;
+  const el   = document.getElementById(rowsId);
+  const show = expanded[key] ? items : items.slice(0, PAGE_SIZE);
+  let html   = show.map(rowFn).join('');
+  if (!items.length) {
+    html = `<p class="archive-empty">Nothing archived yet.</p>`;
+  } else if (!expanded[key] && items.length > PAGE_SIZE) {
+    const more = items.length - PAGE_SIZE;
+    html += `<div class="archive-row show-more-row" onclick="showAll('${key}')">+ ${more} more ${key}</div>`;
+  }
+  el.innerHTML = html;
+}
+
+function showAll(key) {
+  expanded[key] = true;
+  renderAll();
+}
+
+function renderAll() {
+  renderSection('daily',   DATA.daily,   dailyRow,  'cnt-daily',   'rows-daily');
+  renderSection('sources', DATA.sources, sourceRow, 'cnt-sources', 'rows-sources');
+  renderSection('scans',   DATA.scans,   scanRow,   'cnt-scans',   'rows-scans');
+  renderSection('dives',   DATA.dives,   diveRow,   'cnt-dives',   'rows-dives');
+  renderSection('obs',     DATA.obs,     obsRow,    'cnt-obs',     'rows-obs');
+}
+
+// ── Search ────────────────────────────────────────────────────────────────────
+const allItems = [
+  ...DATA.daily.map(x   => ({...x, _type: 'EDITION',     _row: dailyRow(x)})),
+  ...DATA.sources.map(x => ({...x, _type: 'SOURCE',      _row: sourceRow(x)})),
+  ...DATA.scans.map(x   => ({...x, _type: 'SCAN',        _row: scanRow(x)})),
+  ...DATA.dives.map(x   => ({...x, _type: 'DIVE',        _row: diveRow(x)})),
+  ...DATA.obs.map(x     => ({...x, _type: 'OBSERVATION', _row: obsRow(x)})),
+];
+
+function runSearch(q) {
+  const sections = document.getElementById('allSections');
+  const results  = document.getElementById('searchResults');
+  const header   = document.getElementById('searchHeader');
+  const rows     = document.getElementById('searchRows');
+
+  if (!q) {
+    sections.style.display = '';
+    results.style.display  = 'none';
+    return;
+  }
+
+  sections.style.display = 'none';
+  results.style.display  = '';
+
+  const ql      = q.toLowerCase();
+  const matches = allItems.filter(x => {
+    const hay = `${x.title || ''} ${x.source || ''} ${x.date || ''} ${x.topic || ''}`.toLowerCase();
+    return hay.includes(ql);
+  }).sort((a, b) => (b.date || '') > (a.date || '') ? 1 : -1);
+
+  header.textContent = matches.length
+    ? `Results for "${q}"`
+    : `No results for "${q}".`;
+
+  rows.innerHTML = matches.length
+    ? matches.map(x => `<div class="archive-row" data-search="">
+        <span class="result-type-badge">${x._type}</span>
+        ${x._row.replace(/^<div[^>]*>/, '').replace(/<\/div>$/, '')}
+       </div>`).join('')
+    : '';
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+renderAll();
+document.getElementById('searchInput').addEventListener('input', e => runSearch(e.target.value.trim()));
+</script>
+</body>
+</html>
