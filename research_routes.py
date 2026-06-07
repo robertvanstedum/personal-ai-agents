@@ -403,10 +403,6 @@ def _parse_session_log() -> dict:
 
 # ── HTML: Dashboard ───────────────────────────────────────────────────────────
 
-@research_bp.route('/research')
-def research_home():
-    return redirect('/research/sessions')
-
 @research_bp.route('/research/dashboard')
 def research_dashboard_ui():
     """Serve the research dashboard overview page."""

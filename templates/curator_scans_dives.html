@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scans &amp; Dives — Curator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:         #f5f0e8;
+      --bg-texture: #ede8df;
+      --surface:    #faf7f2;
+      --surface2:   #f0ebe0;
+      --border:     #ddd6c8;
+      --text:       #2a2418;
+      --text-muted: #6b5f4e;
+      --text-dim:   #9e9080;
+      --accent:     #8b5e2a;
+      --accent-dim: rgba(139,94,42,0.08);
+      --shadow:     rgba(42,36,24,0.08);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Source Sans 3', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── Subnav ── */
+    nav.curator-subnav {
+      position: sticky; top: 0; z-index: 100;
+      height: 44px;
+      background: rgba(245,240,232,0.96);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 1.5rem;
+    }
+    .subnav-tab {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-muted); text-decoration: none;
+      padding: 0 14px; height: 44px;
+      display: flex; align-items: center;
+      border-bottom: 2px solid transparent; transition: color 0.15s;
+    }
+    .subnav-tab:hover { color: var(--text); }
+    .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .subnav-focus { margin-left: auto; }
+
+    /* ── Main ── */
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 36px 32px 60px;
+    }
+
+    /* ── Page header ── */
+    .page-header { margin-bottom: 36px; }
+    .page-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.7rem; font-weight: 400; margin-bottom: 4px;
+    }
+    .page-meta {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px; color: var(--text-dim); letter-spacing: 0.04em;
+    }
+
+    /* ── Section ── */
+    .section { margin-bottom: 36px; }
+    .section-hdr {
+      display: flex; align-items: baseline;
+      justify-content: space-between;
+      padding-bottom: 9px;
+      border-bottom: 0.5px solid var(--border);
+      margin-bottom: 0;
+    }
+    .section-name {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim);
+    }
+    .section-count {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-dim); opacity: 0.6; margin-left: 6px;
+    }
+    .toggle-btn {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.06em; color: var(--accent);
+      background: none; border: none; cursor: pointer; padding: 0;
+    }
+    .toggle-btn:hover { text-decoration: underline; }
+
+    /* ── Rows ── */
+    .row {
+      display: flex; align-items: baseline; gap: 14px;
+      padding: 11px 6px;
+      border-bottom: 0.5px solid var(--border);
+      text-decoration: none; color: inherit;
+      transition: background 0.1s;
+    }
+    .row:last-of-type { border-bottom: none; }
+    .row:hover { background: rgba(139,94,42,0.04); }
+    .row-hidden { display: none !important; }
+
+    /* Thread row parts */
+    .row-badge {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      background: #fef3c7; color: #92400e;
+      border: 0.5px solid #f59e0b; border-radius: 3px;
+      padding: 2px 6px; white-space: nowrap; flex-shrink: 0;
+    }
+    .row-main { flex: 1; min-width: 0; }
+    .row-title {
+      font-size: 13px; font-weight: 600; color: var(--text);
+      display: block; line-height: 1.4;
+    }
+    .row:hover .row-title { color: var(--accent); }
+    .row-excerpt {
+      font-size: 12px; color: var(--text-dim); font-style: italic;
+      display: block; margin-top: 2px; line-height: 1.4;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 520px;
+    }
+    .row-meta {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-dim); white-space: nowrap; flex-shrink: 0;
+    }
+    .row-thread .row-date {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-dim); white-space: nowrap; flex-shrink: 0;
+    }
+    .row-action {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--accent); white-space: nowrap; flex-shrink: 0;
+    }
+
+    /* Article row parts */
+    .row-date-col {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-dim); white-space: nowrap; flex-shrink: 0; width: 88px;
+    }
+    .row-source {
+      font-size: 12px; color: var(--text-muted); font-weight: 500;
+      white-space: nowrap; flex-shrink: 0; width: 150px;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+  </style>
+</head>
+<body>
+
+<nav class="curator-subnav">
+  <a href="/briefing" class="subnav-tab">Daily</a>
+  <a href="/curator_library.html" class="subnav-tab">Reading Room</a>
+  <a href="/scans-dives" class="subnav-tab active">Scans &amp; Dives</a>
+  <a href="/research/leanings" class="subnav-tab">Leanings</a>
+  <a href="/archive" class="subnav-tab">Archive</a>
+  <a href="/research/dashboard" class="subnav-tab subnav-focus">Desk</a>
+</nav>
+
+<main>
+  <div class="page-header">
+    <h1 class="page-title">Scans &amp; Dives</h1>
+    <p class="page-meta">{{ dives|length }} dives &middot; {{ scans|length }} scans</p>
+  </div>
+
+  <!-- Dives section -->
+  <div class="section">
+    <div class="section-hdr">
+      <span>
+        <span class="section-name">Dives</span>
+        <span class="section-count">{{ dives|length }}</span>
+      </span>
+      {% if dives|length > 3 %}
+      <button class="toggle-btn" id="dives-toggle" onclick="toggleSection('dives')">show all →</button>
+      {% endif %}
+    </div>
+
+    {% if dives %}
+      {% for dive in dives %}
+      <a class="row row-thread{% if loop.index > 3 %} row-hidden{% endif %}" href="{{ dive.href }}">
+        <span class="row-badge">Thread</span>
+        <span class="row-main">
+          <span class="row-title">{{ dive.title }}</span>
+          {% if dive.excerpt %}
+          <span class="row-excerpt">{{ dive.excerpt }}</span>
+          {% endif %}
+        </span>
+        {% if dive.meta %}<span class="row-meta">{{ dive.meta }}</span>{% endif %}
+        {% if dive.date %}<span class="row-date">{{ dive.date }}</span>{% endif %}
+        <span class="row-action">Read →</span>
+      </a>
+      {% endfor %}
+    {% else %}
+      <p style="padding:16px 6px;font-size:0.85rem;color:var(--text-dim)">No dives yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- Scans section -->
+  <div class="section">
+    <div class="section-hdr">
+      <span>
+        <span class="section-name">Scans</span>
+        <span class="section-count">{{ scans|length }}</span>
+      </span>
+      {% if scans|length > 3 %}
+      <button class="toggle-btn" id="scans-toggle" onclick="toggleSection('scans')">show all →</button>
+      {% endif %}
+    </div>
+
+    {% if scans %}
+      {% for scan in scans %}
+      <a class="row row-article{% if loop.index > 3 %} row-hidden{% endif %}" href="{{ scan.href }}">
+        <span class="row-date-col">{{ scan.date }}</span>
+        <span class="row-source">{{ scan.source }}</span>
+        <span class="row-main"><span class="row-title">{{ scan.title }}</span></span>
+      </a>
+      {% endfor %}
+    {% else %}
+      <p style="padding:16px 6px;font-size:0.85rem;color:var(--text-dim)">No scans yet.</p>
+    {% endif %}
+  </div>
+</main>
+
+<script>
+function toggleSection(name) {
+  const btn = document.getElementById(name + '-toggle');
+  document.querySelectorAll('.row-' + (name === 'dives' ? 'thread' : 'article') + '.row-hidden')
+    .forEach(r => r.classList.remove('row-hidden'));
+  if (btn) btn.style.display = 'none';
+}
+</script>
+</body>
+</html>

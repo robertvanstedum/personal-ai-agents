@@ -257,7 +257,7 @@
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 2px 12px var(--shadow);
-    background: var(--surface);
+    background: var(--bg);
   }
 
   table { width: 100%; border-collapse: collapse; }
@@ -399,40 +399,20 @@
 
   .actions-cell { white-space: nowrap; }
 
-  .action-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    border-radius: 5px;
+  /* Text-link action pattern (replaces pill buttons) */
+  .arch-link {
     font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.04em;
-    text-decoration: none;
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    background: var(--bg);
-    cursor: pointer;
-    transition: all 0.15s;
-    margin-right: 4px;
-    box-shadow: 0 1px 2px var(--shadow);
-  }
-
-  .action-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
-
-  .action-btn.scan {
-    border-color: rgba(122,46,110,0.3);
-    color: var(--bookmarked);
-    background: var(--bookmarked-bg);
-  }
-  .action-btn.scan:hover { border-color: var(--bookmarked); background: rgba(122,46,110,0.15); }
-
-  .action-btn.start-dive {
-    border-color: rgba(139,94,42,0.3);
+    font-size: 0.75rem;
     color: var(--accent);
-    background: var(--accent-dim);
+    text-decoration: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    margin-right: 10px;
+    white-space: nowrap;
   }
-  .action-btn.start-dive:hover { border-color: var(--accent); background: var(--accent-glow); }
+  .arch-link:hover { text-decoration: underline; }
 
   /* ── Appearances ── */
   .appearances {
@@ -653,6 +633,35 @@
     .controls { gap: 6px; }
     .modal { margin: 16px; padding: 20px; }
   }
+
+  /* ── Reading queue bar ── */
+  .queue-bar {
+    border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px;
+    margin-bottom: 12px; display: flex; align-items: center; gap: 16px;
+    background: var(--surface2);
+  }
+  .queue-meta { display: flex; flex-direction: column; gap: 3px; min-width: 100px; }
+  .queue-label {
+    font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text-dim);
+  }
+  .queue-counter { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); }
+  .queue-article { flex: 1; min-width: 0; }
+  .queue-title { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .queue-source { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .queue-controls { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .queue-btn {
+    font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted);
+    background: none; border: 1px solid var(--border); border-radius: 5px;
+    padding: 4px 10px; cursor: pointer; white-space: nowrap;
+  }
+  .queue-btn:disabled { color: var(--border2); cursor: default; }
+  .queue-read {
+    font-family: 'DM Mono', monospace; font-size: 11px; color: var(--surface);
+    background: var(--accent); border-radius: 5px; padding: 5px 12px;
+    text-decoration: none; white-space: nowrap;
+  }
+  .queue-read:hover { opacity: 0.88; }
 </style>
 </head>
 <body>
@@ -744,6 +753,23 @@
     <span class="result-count" id="result-count"></span>
   </div>
 
+  <!-- Reading queue bar (above filter row) -->
+  <div class="queue-bar" id="queueBar" style="display:none">
+    <div class="queue-meta">
+      <span class="queue-label">Reading queue</span>
+      <span class="queue-counter" id="qCounter"></span>
+    </div>
+    <div class="queue-article">
+      <div class="queue-title" id="qTitle"></div>
+      <div class="queue-source" id="qSource"></div>
+    </div>
+    <div class="queue-controls">
+      <button class="queue-btn" id="qPrev" onclick="qMove(-1)">← prev</button>
+      <a class="queue-read" id="qRead" target="_blank" rel="noopener">Read →</a>
+      <button class="queue-btn" id="qNext" onclick="qMove(1)">next →</button>
+    </div>
+  </div>
+
   <div class="table-wrap">
     <div class="loading" id="loading">Loading your library</div>
     <table id="library-table" style="display:none">
@@ -782,6 +808,10 @@ let categoryFilter = 'all';
 let searchQuery = '';
 let showXPosts = false;
 
+// Queue state
+let _qList = [];
+let _qPos  = 0;
+
 // Active dive state
 let diveArticle = null;
 
@@ -794,6 +824,10 @@ async function loadData() {
     allArticles = data.articles || [];
     updateStats();
     render();
+    // Apply ?q=N URL param after first render (render() sets _qList)
+    const qParam = parseInt(new URLSearchParams(location.search).get('q') || '1', 10);
+    _qPos = Math.max(0, Math.min(_qList.length - 1, qParam - 1));
+    qRender();
     document.getElementById('loading').style.display = 'none';
     document.getElementById('library-table').style.display = 'table';
   } catch (err) {
@@ -816,6 +850,27 @@ function updateStats() {
     document.getElementById('meta-line').textContent =
       `${allArticles.length} articles saved · ${fmt(dates[0])} – ${fmt(dates[dates.length-1])}`;
   }
+}
+
+// ── Reading queue ──────────────────────────────────────────────────────────
+function qRender() {
+  const bar = document.getElementById('queueBar');
+  if (!_qList.length) { bar.style.display = 'none'; return; }
+  bar.style.display = '';
+  const a = _qList[_qPos];
+  const fmt = d => d ? new Date(d.substring(0,10)+'T12:00:00')
+    .toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '';
+  document.getElementById('qTitle').textContent   = a.title || '(untitled)';
+  document.getElementById('qSource').textContent  = [a.source, fmt(a.date)].filter(Boolean).join(' · ');
+  document.getElementById('qCounter').textContent = `${_qPos + 1} of ${_qList.length}`;
+  document.getElementById('qRead').href           = a.url || '#';
+  document.getElementById('qPrev').disabled = _qPos === 0;
+  document.getElementById('qNext').disabled = _qPos === _qList.length - 1;
+}
+function qMove(dir) {
+  _qPos = Math.max(0, Math.min(_qList.length - 1, _qPos + dir));
+  history.replaceState(null, '', '?q=' + (_qPos + 1));
+  qRender();
 }
 
 // ── Filter & sort ──────────────────────────────────────────────────────────
@@ -845,6 +900,13 @@ function filteredArticles() {
 // ── Render ─────────────────────────────────────────────────────────────────
 function render() {
   const rows  = filteredArticles();
+
+  // Update queue (reset position when filter changes after initial load)
+  const wasLoaded = _qList.length > 0;
+  _qList = rows;
+  if (wasLoaded) { _qPos = 0; history.replaceState(null, '', '?q=1'); }
+  qRender();
+
   const tbody = document.getElementById('table-body');
   const empty = document.getElementById('empty-state');
   const count = document.getElementById('result-count');
@@ -883,9 +945,9 @@ function render() {
     // Deep dive button: show existing dive OR offer to start one
     let diveBtn = '';
     if (a.deep_dive_url) {
-      diveBtn = `<a class="action-btn scan" href="${escHtml(a.deep_dive_url)}" target="_blank" title="View scan">🔭 View Scan →</a>`;
+      diveBtn = `<a class="arch-link" href="${escHtml(a.deep_dive_url)}" target="_blank">View scan →</a>`;
     } else if (a.hash_id) {
-      diveBtn = `<button class="action-btn start-dive" data-hash-id="${escHtml(a.hash_id||'')}">✨ Start Dive</button>`;
+      diveBtn = `<button class="arch-link" data-hash-id="${escHtml(a.hash_id||'')}">Start dive →</button>`;
     }
 
     return `<tr style="animation-delay:${Math.min(i*20,300)}ms" onclick="window.open('${escHtml(a.url)}','_blank')">
@@ -903,14 +965,14 @@ function render() {
       </td>
       <td><span class="type-badge type-${a.type}">${typeLabel}</span></td>
       <td class="actions-cell" onclick="event.stopPropagation()">
-        <a class="action-btn" href="${escHtml(a.url)}" target="_blank" rel="noopener">↗ Read</a>
+        <a class="arch-link" href="${escHtml(a.url)}" target="_blank" rel="noopener">Read →</a>
         ${diveBtn}
       </td>
     </tr>`;
   }).join('');
 
   // Attach event listeners to Start Dive buttons
-  document.querySelectorAll('.start-dive').forEach(btn => {
+  document.querySelectorAll('[data-hash-id]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const article = allArticles.find(a => a.hash_id === btn.dataset.hashId);

@@ -11,7 +11,7 @@ Run before/after UI commits to document the state of the UI.
 Archives previous current/ screenshots to archive/YYYY-MM-DD/ first.
 Each screenshot gets an injected label bar: page name + timestamp.
 PNG files land in docs/screenshots/<domain>/current/.
-A combined PDF lands in _working/<domain>-redesign/baseline_YYYY-MM-DD.pdf.
+A combined PDF lands in _working/<domain>-redesign/baseline_YYYY-MM-DD_HHMM.pdf.
 
 Dependencies (not in base requirements — install once per machine):
     pip3 install playwright img2pdf
@@ -37,12 +37,10 @@ CURATOR_PAGES = {
     "landing":       "http://localhost:8766/",
     "daily":         "http://localhost:8766/briefing",
     "reading_room":  "http://localhost:8766/curator_library.html",
-    "scans_dives":   "http://localhost:8766/interests/2026/scans/index.html",
+    "scans_dives":   "http://localhost:8766/scans-dives",
     "leanings":      "http://localhost:8766/research/leanings",
     "archive":       "http://localhost:8766/archive",
     "desk":          "http://localhost:8766/research/dashboard",
-    "observations":  "http://localhost:8766/curator_intelligence.html",
-    "priorities":    "http://localhost:8766/curator_priorities.html",
 }
 
 GERMAN_PAGES = {
@@ -133,7 +131,7 @@ def capture_domain(domain: str, pages: dict):
             import img2pdf
             working_dir = WORKING / f"{domain}-redesign"
             working_dir.mkdir(parents=True, exist_ok=True)
-            pdf_path = working_dir / f"baseline_{date.today()}.pdf"
+            pdf_path = working_dir / f"baseline_{datetime.now().strftime('%Y-%m-%d_%H%M')}.pdf"
             with open(pdf_path, "wb") as f:
                 f.write(img2pdf.convert(captured))
             print(f"  PDF: {pdf_path.relative_to(REPO_ROOT)}")

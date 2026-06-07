@@ -65,8 +65,6 @@
     .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
     .subnav-focus { margin-left: auto; }
 
-    /* ── Page layout (rail + content) ── */
-    .page-layout { display: flex; align-items: flex-start; min-height: calc(100vh - 44px); }
 
     .container {
       max-width: 780px;
@@ -237,7 +235,7 @@
     }
     .rail-settings:hover { color: var(--accent); }
 
-    .main-content { flex: 1; min-width: 0; overflow-x: hidden; min-height: 100vh; background: var(--bg); }
+    .main-content { overflow-x: hidden; min-height: 100vh; background: var(--bg); }
 
     /* ── Budget bar (demoted — slim status line, no card) ── */
     .budget-row {
@@ -300,7 +298,7 @@
 
     .thread-name {
       font-size: 0.95rem;
-      color: var(--accent);
+      color: var(--text);
       flex-shrink: 0;
     }
 
@@ -474,6 +472,19 @@
       .topic-stats { gap: 1rem; }
       .stat-value  { font-size: 1.2rem; }
     }
+
+    /* ── Thread section kickers ── */
+    .thread-section-kicker {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+      padding: 1.5rem 0 0.5rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0;
+    }
+    .thread-section-kicker:first-child { padding-top: 0.25rem; }
   </style>
 </head>
 <body>
@@ -481,39 +492,16 @@
 <nav class="curator-subnav">
   <a href="/briefing" class="subnav-tab">Daily</a>
   <a href="/curator_library.html" class="subnav-tab">Reading Room</a>
-  <a href="/interests/2026/scans/index.html" class="subnav-tab">Scans &amp; Dives</a>
+  <a href="/scans-dives" class="subnav-tab">Scans &amp; Dives</a>
   <a href="/research/leanings" class="subnav-tab">Leanings</a>
   <a href="/archive" class="subnav-tab">Archive</a>
   <a href="/research/dashboard" class="subnav-tab subnav-focus active">Desk</a>
 </nav>
 
-<div class="page-layout">
-<aside class="domain-rail">
-  <button class="rail-toggle" id="railToggle" title="Toggle rail">‹</button>
-  <nav class="rail-nav">
-    <a href="/" class="rail-item" data-domain="curator">
-      <span class="rail-icon">🗞</span>
-      <span class="rail-label">CURATOR</span>
-    </a>
-    <a href="/research/dashboard" class="rail-item active" data-domain="research">
-      <span class="rail-icon">🔬</span>
-      <span class="rail-label">RESEARCH</span>
-    </a>
-    <a href="/language" class="rail-item">
-      <span class="rail-icon">💬</span>
-      <span class="rail-label">LANGUAGE</span>
-    </a>
-    <a href="/jobs" class="rail-item">
-      <span class="rail-icon">💼</span>
-      <span class="rail-label">JOBS</span>
-    </a>
-  </nav>
-  <a href="/curator_priorities.html" class="rail-settings" title="Settings">⚙</a>
-</aside>
 <div class="main-content">
   <div class="container">
 
-  <h1>Research Intelligence</h1>
+  <h1>The Desk</h1>
   <p class="subtitle">Your active research threads</p>
 
   <div class="budget-row" id="budget-row" style="display:none">
@@ -570,13 +558,22 @@
       (b.used >= b.warn  ? ' over' :
        b.used >= b.warn * 0.85 ? ' warn' : '');
 
-    // Thread list — skip archived and retired; they are preserved on disk but not shown
+    // Thread list — two groups: Active (sessions > 0) and Not yet run (sessions === 0)
     const container = document.getElementById('thread-list');
     container.innerHTML = '';
-    for (const t of data.topics) {
-      if (t.status === 'archived' || t.status === 'retired') continue;
-      const row = buildRow(t);
-      if (row) container.appendChild(row);
+
+    const visible = data.topics.filter(t => t.status !== 'archived' && t.status !== 'retired');
+    const active  = visible.filter(t => t.session_count > 0)
+                           .sort((a, b) => b.session_count - a.session_count);
+    const unrun   = visible.filter(t => t.session_count === 0);
+
+    if (active.length) {
+      container.appendChild(sectionKicker('Active'));
+      active.forEach(t => { const row = buildRow(t); if (row) container.appendChild(row); });
+    }
+    if (unrun.length) {
+      container.appendChild(sectionKicker('Not yet run'));
+      unrun.forEach(t => { const row = buildRow(t); if (row) container.appendChild(row); });
     }
 
     // Status bar
@@ -586,6 +583,13 @@
     } else {
       bar.innerHTML = '<span class="agent-idle"></span> Agent idle · last refreshed ' + now;
     }
+  }
+
+  function sectionKicker(label) {
+    const el = document.createElement('div');
+    el.className = 'thread-section-kicker';
+    el.textContent = label;
+    return el;
   }
 
   function buildRow(t) {
@@ -608,7 +612,7 @@
       row.className = 'thread-row thread-generating';
       row.style.cursor = 'default';
       row.innerHTML = `
-        <span class="thread-name">${t.topic}</span>
+        <span class="thread-name">${t.topic.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</span>
         <span class="thread-stats">${statsText}</span>
         <span class="thread-generating-badge">✦ generating…</span>
       `;
@@ -640,7 +644,7 @@
         ddLink = `<span class="btn-view-dd" onclick="event.stopPropagation();window.location='/research/dive-result/${encodeURIComponent(stem)}'">View Deeper Dive →</span>`;
       }
       row.innerHTML = `
-        <span class="thread-name">${t.topic}</span>
+        <span class="thread-name">${t.topic.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</span>
         <span class="thread-stats">${statsText}</span>
         <span class="thread-spacer"></span>
         <span class="thread-running-badge">running…</span>
@@ -656,7 +660,7 @@
       row.className = 'thread-row thread-expired';
       row.style.cursor = 'default';
       row.innerHTML = `
-        <span class="thread-name">${t.topic}</span>
+        <span class="thread-name">${t.topic.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</span>
         <span class="thread-stats">${statsText}</span>
         <span class="thread-expired-badge">Ready to close</span>
         <a class="btn-deeper-dive" href="/research/dive-confirm?topic=${encodeURIComponent(t.topic)}">✦ Deeper Dive</a>
@@ -686,7 +690,7 @@
     const canGenerateDD = t.session_count > (t.sessions_at_last_dive || 0)
                           && t.session_count >= 2;
     row.innerHTML = `
-      <span class="thread-name">${t.topic}</span>
+      <span class="thread-name">${t.topic.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</span>
       <span class="thread-stats">${statsText}</span>
       <span class="thread-spacer"></span>
       <span class="thread-running-badge">running…</span>
@@ -861,15 +865,7 @@
 </script>
 </div>
 </div>
-<script>
-(function() {
-  var toggle = document.getElementById('railToggle');
-  if (toggle) toggle.addEventListener('click', function() {
-    document.querySelector('.domain-rail').classList.toggle('collapsed');
-  });
-})();
-</script>
 <script src="/research/static/js/nav.js"></script>
-</div><!-- /.page-layout -->
+</div><!-- /.main-content -->
 </body>
 </html>
