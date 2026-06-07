@@ -65,8 +65,6 @@
     .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
     .subnav-focus { margin-left: auto; }
 
-    /* ── Page layout (rail + content) ── */
-    .page-layout { display: flex; align-items: flex-start; min-height: calc(100vh - 44px); }
 
     .container {
       max-width: 780px;
@@ -237,7 +235,7 @@
     }
     .rail-settings:hover { color: var(--accent); }
 
-    .main-content { flex: 1; min-width: 0; overflow-x: hidden; min-height: 100vh; background: var(--bg); }
+    .main-content { overflow-x: hidden; min-height: 100vh; background: var(--bg); }
 
     /* ── Budget bar (demoted — slim status line, no card) ── */
     .budget-row {
@@ -487,33 +485,10 @@
   <a href="/research/dashboard" class="subnav-tab subnav-focus active">Desk</a>
 </nav>
 
-<div class="page-layout">
-<aside class="domain-rail">
-  <button class="rail-toggle" id="railToggle" title="Toggle rail">‹</button>
-  <nav class="rail-nav">
-    <a href="/" class="rail-item" data-domain="curator">
-      <span class="rail-icon">🗞</span>
-      <span class="rail-label">CURATOR</span>
-    </a>
-    <a href="/research/dashboard" class="rail-item active" data-domain="research">
-      <span class="rail-icon">🔬</span>
-      <span class="rail-label">RESEARCH</span>
-    </a>
-    <a href="/language" class="rail-item">
-      <span class="rail-icon">💬</span>
-      <span class="rail-label">LANGUAGE</span>
-    </a>
-    <a href="/jobs" class="rail-item">
-      <span class="rail-icon">💼</span>
-      <span class="rail-label">JOBS</span>
-    </a>
-  </nav>
-  <a href="/curator_priorities.html" class="rail-settings" title="Settings">⚙</a>
-</aside>
 <div class="main-content">
   <div class="container">
 
-  <h1>Research Intelligence</h1>
+  <h1>The Desk</h1>
   <p class="subtitle">Your active research threads</p>
 
   <div class="budget-row" id="budget-row" style="display:none">
@@ -861,15 +836,7 @@
 </script>
 </div>
 </div>
-<script>
-(function() {
-  var toggle = document.getElementById('railToggle');
-  if (toggle) toggle.addEventListener('click', function() {
-    document.querySelector('.domain-rail').classList.toggle('collapsed');
-  });
-})();
-</script>
 <script src="/research/static/js/nav.js"></script>
-</div><!-- /.page-layout -->
+</div><!-- /.main-content -->
 </body>
 </html>
