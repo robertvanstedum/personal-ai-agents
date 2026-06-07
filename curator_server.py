@@ -8,7 +8,7 @@ Usage:
 Then open curator_latest.html or curator_library.html in browser
 """
 
-from flask import Flask, request, jsonify, send_from_directory, render_template
+from flask import Flask, request, jsonify, send_from_directory, render_template, redirect
 from flask_cors import CORS
 import json
 import os
@@ -984,9 +984,18 @@ def priorities_page():
     return send_from_directory(BASE_DIR, 'curator_priorities.html')
 
 @app.route('/curator_intelligence.html')
-@app.route('/observations')
 def intelligence_page():
     return send_from_directory(BASE_DIR, 'curator_intelligence.html')
+
+@app.route('/observations')
+def observations_redirect():
+    """Phase 3: Observations folded into Leanings — redirect old URL."""
+    return redirect('/research/leanings', 301)
+
+@app.route('/priorities')
+def priorities_redirect():
+    """Phase 3: Priorities being retired — redirect to Daily."""
+    return redirect('/briefing', 301)
 
 @app.route('/archive')
 def archive_page():
