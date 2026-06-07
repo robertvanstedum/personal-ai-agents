@@ -35,59 +35,35 @@
             line-height: 1.5;
         }
 
-        header {
-            border-bottom: 0.5px solid var(--border);
-            padding: 0 32px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            height: 60px;
+        nav.curator-subnav {
             position: sticky;
             top: 0;
-            background: rgba(245,240,232,0.95);
-            backdrop-filter: blur(12px);
             z-index: 100;
+            height: 44px;
+            background: rgba(245,240,232,0.96);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 1.5rem;
         }
-
-        .header-left { display: flex; align-items: baseline; gap: 16px; }
-
-        .logo {
-            font-family: 'Playfair Display', serif;
-            font-size: 20px;
-            color: var(--accent);
-            letter-spacing: -0.02em;
-            text-decoration: none;
-        }
-
-        .logo-sub {
+        .subnav-tab {
             font-family: 'DM Mono', monospace;
             font-size: 11px;
-            color: var(--text-dim);
-            letter-spacing: 0.08em;
             text-transform: uppercase;
-        }
-
-        .header-nav { display: flex; gap: 4px; }
-
-        .nav-link {
-            font-family: 'DM Mono', monospace;
-            font-size: 11px;
+            letter-spacing: 0.08em;
             color: var(--text-muted);
             text-decoration: none;
-            padding: 6px 14px;
-            border-radius: 6px;
-            letter-spacing: 0.05em;
-            transition: all 0.15s;
-            border: 1px solid transparent;
+            padding: 0 14px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            border-bottom: 2px solid transparent;
+            transition: color 0.15s;
         }
-
-        .nav-link:hover { color: var(--text); background: var(--surface2); }
-
-        .nav-link.active {
-            color: var(--accent);
-            background: var(--accent-dim);
-            border-color: rgba(139,94,42,0.2);
-        }
+        .subnav-tab:hover { color: var(--text); }
+        .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .subnav-focus { margin-left: auto; }
 
         main {
             max-width: 900px;
@@ -293,19 +269,14 @@
     </style>
 </head>
 <body>
-<header>
-  <div class="header-left">
-    <a href="../../../" class="logo">📚 Curator</a>
-    <span class="logo-sub">Scans &amp; Dives</span>
-  </div>
-  <nav class="header-nav">
-    <a href="../../../" class="nav-link">Daily</a>
-    <a href="../../../curator_library.html" class="nav-link">Library</a>
-    <a href="../../../interests/2026/scans/index.html" class="nav-link active">Scans &amp; Dives</a>
-    <a href="../../../curator_priorities.html" class="nav-link">Priorities</a>
-    <a href="../../../curator_intelligence.html" class="nav-link">AI Observations</a>
-  </nav>
-</header>
+<nav class="curator-subnav">
+  <a href="/briefing" class="subnav-tab">Daily</a>
+  <a href="/curator_library.html" class="subnav-tab">Reading Room</a>
+  <a href="/interests/2026/scans/index.html" class="subnav-tab active">Scans &amp; Dives</a>
+  <a href="/research/leanings" class="subnav-tab">Leanings</a>
+  <a href="/archive" class="subnav-tab">Archive</a>
+  <a href="/research/dashboard" class="subnav-tab subnav-focus">Desk</a>
+</nav>
 
 <main>
     <div class="page-header">
