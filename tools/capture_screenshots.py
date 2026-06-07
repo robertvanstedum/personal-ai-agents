@@ -37,7 +37,7 @@ CURATOR_PAGES = {
     "landing":       "http://localhost:8766/",
     "daily":         "http://localhost:8766/briefing",
     "reading_room":  "http://localhost:8766/curator_library.html",
-    "scans_dives":   "http://localhost:8766/interests/2026/scans/index.html",
+    "scans_dives":   "http://localhost:8766/scans-dives",
     "leanings":      "http://localhost:8766/research/leanings",
     "archive":       "http://localhost:8766/archive",
     "desk":          "http://localhost:8766/research/dashboard",

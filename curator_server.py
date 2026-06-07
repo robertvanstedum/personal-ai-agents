@@ -1097,6 +1097,42 @@ def archive_page():
     )
 
 
+# ── Scans & Dives helpers (Flask route) ───────────────────────────────────────
+
+def _scans_dives_data():
+    """Parse dives and scans from the generated static index file."""
+    from bs4 import BeautifulSoup
+    idx = BASE_DIR / 'interests' / '2026' / 'scans' / 'index.html'
+    dives, scans = [], []
+    try:
+        soup = BeautifulSoup(idx.read_text(), 'html.parser')
+        for row in soup.select('.row-thread'):
+            dives.append({
+                'href':    row.get('href', ''),
+                'title':   (row.select_one('.row-title')   or type('_', (), {'text': ''})()).text.strip(),
+                'excerpt': (row.select_one('.row-excerpt') or type('_', (), {'text': ''})()).text.strip(),
+                'meta':    (row.select_one('.row-meta')    or type('_', (), {'text': ''})()).text.strip(),
+                'date':    (row.select_one('.row-date')    or type('_', (), {'text': ''})()).text.strip(),
+            })
+        for row in soup.select('.row-article'):
+            scans.append({
+                'href':   row.get('href', ''),
+                'date':   (row.select_one('.row-date-col') or type('_', (), {'text': ''})()).text.strip(),
+                'source': (row.select_one('.row-source')   or type('_', (), {'text': ''})()).text.strip(),
+                'title':  (row.select_one('.row-title')    or type('_', (), {'text': ''})()).text.strip(),
+            })
+    except Exception:
+        pass
+    return dives, scans
+
+
+@app.route('/scans-dives')
+def scans_dives_page():
+    """Scans & Dives — Flask-rendered page."""
+    dives, scans = _scans_dives_data()
+    return render_template('curator_scans_dives.html', dives=dives, scans=scans)
+
+
 # ── (legacy placeholder kept below for reference — removed Phase 5) ──────────
 def _archive_page_placeholder():
     """Archive — placeholder page (Phase 5 will add full browse UI)."""
