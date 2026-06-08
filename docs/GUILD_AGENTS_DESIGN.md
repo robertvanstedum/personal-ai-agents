@@ -20,7 +20,7 @@
 | Memory compaction | See Section 5a. Weekly (Operations) and monthly (CoS) with Haiku/Sonnet respectively. |
 | Telegram channels | Two separate channels. Operations = terse system register. CoS = thoughtful intelligence partner. |
 | Ollama for graph jobs | `mistral:7b` for Phase 5 reasoning tasks (cluster detection, path suggestion). `gemma3:1b` for high-frequency triage. |
-| Guild branch approach | Do NOT full-merge — 38 commits behind main, 8+ conflict files. Cherry-pick only the `db/` files from guild onto main. |
+| Guild branch approach | Do NOT full-merge — 38 commits behind main, 8+ conflict files. Cherry-pick only the `db/` files from guild onto main + `domains/guild/` reorg. Full 38-commit merge deferred indefinitely to avoid conflicts. |
 | PostgreSQL | Resolved: `docker compose up -d` — `docker-compose.yml` exists with Postgres + Neo4j. Database `personal_agents`, port 5432. Q8 closed. |
 | launchd naming | `com.user.*` for new persistent agent services (ports 8768 and 8769). |
 | Port allocations | 8768 Operations · 8769 CoS · no conflicts with existing 8766/8767/5001. |

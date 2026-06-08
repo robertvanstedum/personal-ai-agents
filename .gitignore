@@ -99,6 +99,8 @@ _working/*
 !_working/CURATOR_DESIGN_DECISIONS_*.md
 # STATE docs — on-disk reality snapshots, permanent record, commit them
 !_working/CURATOR_STATE_*.md
+# Feature specs — approved specs queued for build, permanent record, commit them
+!_working/feature_*.md
 
 # Finance domain — private data
 domains/finance/statements/
