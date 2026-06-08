@@ -78,6 +78,26 @@ join the same way: read the shared context, contribute, no restructuring require
 - Robert is always the decision point between agents.
 - Any agent can be swapped without losing platform continuity.
 
+### The Build Team
+
+How mini-moi is actually built. Every session operates within this structure.
+
+| Role | Agent | Responsibility | Hard boundary |
+|------|-------|---------------|---------------|
+| Decision maker | **Robert** | Strategy, final call, confirms before every push | Owns everything |
+| Design lead | **Claude.ai** | Architecture, design sessions, artifact creation | Does NOT touch git |
+| Implementation | **Claude Code** | All git operations, builds, commits | Only thing that commits and pushes |
+| Memory & agent patterns | **OpenClaw** | Persistent memory, file ops, provides git commands | Does NOT run git |
+| Parallel reviewer | **Grok** | Second pair of eyes, technical clarifier, honest push-back | Does NOT touch git |
+
+**How it works in practice:**
+- One agent active at a time. Robert is the decision point between agents.
+- Design before build. Every significant change has a design session (Claude.ai) before implementation (Claude Code).
+- Grok reviews in parallel — not in sequence. Drop any design decision, code snippet, or open question into a Grok thread and get instant validation or push-back without interrupting the Claude flow.
+- Confirmation bias countermeasure: no single agent has immunity. Grok's role is explicitly to challenge. The goal is honest signal, not agreement.
+- Test before commit. If it can't be tested, say so — don't commit and claim done.
+- Robert confirms before every push on any production-touching or visual change.
+
 ---
 
 ## 3. The Core Problem This Solves
