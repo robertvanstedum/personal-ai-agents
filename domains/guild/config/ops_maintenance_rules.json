@@ -1,0 +1,51 @@
+{
+  "tier_1": {
+    "description": "Act silently, log it",
+    "actions": [
+      {"trigger": "disk_usage_pct > 75", "action": "archive_screenshots_older_than_days",
+       "params": {"days": 30, "exclude": "current/"}},
+      {"trigger": "log_file_age_days > 60", "action": "compress_and_archive"},
+      {"trigger": "launchd_service_failed", "action": "restart_once_verify",
+       "params": {"wait_seconds": 120}},
+      {"trigger": "cron_missed_within_day", "action": "rerun_once"}
+    ]
+  },
+  "tier_2": {
+    "description": "Act and notify CoS",
+    "actions": [
+      {"trigger": "daily_briefing_missed_scheduled_time", "action": "rerun_and_notify_cos"},
+      {"trigger": "disk_usage_pct > 85", "action": "emergency_cleanup_and_notify_cos"}
+    ]
+  },
+  "tier_3": {
+    "description": "Escalate to CoS with options — CoS decides if Robert hears",
+    "triggers": [
+      "service_restarted_3_times_in_1_hour",
+      "disk_growth_unexpected_source",
+      "cron_failing_multiple_cycles"
+    ]
+  },
+  "tier_4": {
+    "description": "Escalate CoS + Robert immediately",
+    "triggers": [
+      "service_down_minutes > 15",
+      "disk_usage_pct > 95",
+      "data_integrity_anomaly"
+    ],
+    "notify_robert_directly": true
+  },
+  "maintenance_schedule": {
+    "daily": "health_check_log_summary",
+    "weekly_day": "sunday",
+    "weekly_tasks": [
+      "disk_audit", "log_file_review",
+      "launchd_status_report", "memory_compaction_ops"
+    ],
+    "monthly_day": 1,
+    "monthly_tasks": [
+      "log_rotation", "screenshot_baseline_cleanup_check",
+      "db_vacuum", "memory_archive_ops"
+    ]
+  },
+  "service_down_threshold_minutes": 15
+}

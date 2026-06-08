@@ -1269,8 +1269,28 @@ def language_coming():
     return send_from_directory(BASE_DIR, 'language_coming.html')
 
 @app.route('/jobs')
-def jobs_coming():
-    return send_from_directory(BASE_DIR, 'jobs_coming.html')
+def career_focus():
+    """Career Focus pipeline — Phase 1 scaffold, CoS populates in Phase 3."""
+    opportunities = []
+    try:
+        import psycopg2, psycopg2.extras
+        conn = psycopg2.connect(
+            "postgresql://minimoi:simple123@localhost:5432/personal_agents",
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, title, company, geo, opportunity_type, warm_lead, "
+                "fit_score, status, date_found FROM jobs.career_opportunities "
+                "WHERE status != 'rejected' ORDER BY date_found DESC"
+            )
+            opportunities = list(cur.fetchall())
+        conn.close()
+    except Exception:
+        pass  # DB not running — show empty pipeline
+    return render_template('career_focus.html',
+                           opportunities=opportunities,
+                           total=len(opportunities))
 
 @app.route('/interests/<path:filepath>')
 def serve_interests(filepath):

@@ -101,6 +101,8 @@ _working/*
 !_working/CURATOR_STATE_*.md
 # Feature specs — approved specs queued for build, permanent record, commit them
 !_working/feature_*.md
+# Handoff docs — design→build handoffs, permanent record, commit them
+!_working/handoff_*.md
 
 # Finance domain — private data
 domains/finance/statements/
@@ -131,3 +133,4 @@ _NewDomains/guild/new-ventures/job-search/**
 !_working/curator-redesign/*.pdf
 !_working/german-redesign/
 !_working/german-redesign/*.pdf
+domains/guild/data/linkedin_connections.csv
