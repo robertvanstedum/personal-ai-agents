@@ -23,6 +23,7 @@ from pathlib import Path
 
 import keyring
 import requests
+from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, jsonify, request
 from openai import OpenAI
 
@@ -406,6 +407,31 @@ _state = {
 }
 _state_lock = threading.Lock()
 
+# ── Loop state (updated by each run) ─────────────────────────────────────────
+
+_loop_state: dict[str, dict] = {
+    "loop_a": {"name": "career_focus_scout", "last_run": None, "last_result": None, "error": None},
+    "loop_b": {"name": "german_watch",       "last_run": None, "last_result": None, "error": None},
+    "loop_c": {"name": "curator_scout",      "last_run": None, "last_result": None, "error": None},
+    "loop_d": {"name": "novelty_watch",      "last_run": None, "last_result": None, "error": None},
+}
+_loop_lock = threading.Lock()
+
+
+def _run_loop(loop_id: str, fn):
+    """Wrapper that records last_run, result, and any error for /loops status."""
+    try:
+        result = fn()
+        with _loop_lock:
+            _loop_state[loop_id]["last_run"] = datetime.now(timezone.utc).isoformat()
+            _loop_state[loop_id]["last_result"] = result
+            _loop_state[loop_id]["error"] = None
+    except Exception as e:
+        log.error("Loop %s error: %s", loop_id, e)
+        with _loop_lock:
+            _loop_state[loop_id]["last_run"] = datetime.now(timezone.utc).isoformat()
+            _loop_state[loop_id]["error"] = str(e)
+
 def _inc_chat():
     with _state_lock:
         _state["chat_count"] += 1
@@ -510,7 +536,8 @@ def _handle_tg_text(text: str, token: str, chat_id: str):
             _tg_send(token, chat_id,
                 "💬 <b>Chief of Staff</b> — ask me anything.\n"
                 "Example: <code>!cos check disk space</code>\n"
-                "Example: <code>!cos what's on my agenda this week?</code>")
+                "Example: <code>!cos what's on my agenda this week?</code>\n"
+                "Or just type naturally — no prefix needed.")
             return
 
         _tg_send(token, chat_id, "⏳ Thinking…")
@@ -522,6 +549,16 @@ def _handle_tg_text(text: str, token: str, chat_id: str):
             _log_file("chat_error", str(e))
             _tg_send(token, chat_id, f"❌ CoS error: {e}")
         return
+
+    # ── Plain text — route to CoS chat (no prefix required) ──────────────────
+    _tg_send(token, chat_id, "⏳ Thinking…")
+    try:
+        reply = _chat(text)
+        _inc_chat()
+        _tg_send(token, chat_id, reply)
+    except Exception as e:
+        _log_file("chat_error", str(e))
+        _tg_send(token, chat_id, f"❌ CoS error: {e}")
 
 
 def _telegram_poll_loop():
@@ -563,13 +600,16 @@ def _telegram_poll_loop():
                 if not text:
                     continue
 
+                log.info(f"Telegram message received: {text[:60]!r}")
+
                 lower = text.lower()
-                if lower.startswith("!ops") or lower.startswith("!cos") or lower.startswith("!chief"):
-                    threading.Thread(
-                        target=_handle_tg_text,
-                        args=(text, token, chat_id),
-                        daemon=True,
-                    ).start()
+                # !ops / !cos / !chief go to the command handler
+                # Everything else routes to CoS chat (OpenClaw-style natural language)
+                threading.Thread(
+                    target=_handle_tg_text,
+                    args=(text, token, chat_id),
+                    daemon=True,
+                ).start()
 
         except requests.exceptions.Timeout:
             pass  # normal long-poll timeout, loop again
@@ -616,6 +656,14 @@ def health():
     return jsonify({"ok": True})
 
 
+@app.route("/loops")
+def loops_status():
+    """Intelligence loop status — last run time and result per loop."""
+    with _loop_lock:
+        snap = {k: dict(v) for k, v in _loop_state.items()}
+    return jsonify(snap)
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -626,6 +674,7 @@ def main():
    /chat    — conversational endpoint (POST {{\"text\": \"...\"}})
    /status  — agent state
    /health  — liveness probe
+   /loops   — intelligence loop status
 """)
 
     # 1. Check DB availability
@@ -646,12 +695,52 @@ def main():
     t.start()
     print("   Thread started: tg-poll (rvsopenbot)")
 
-    # 4. Mark running
+    # 4. Import loops (deferred so CoS starts even if a loop has an import error)
+    try:
+        from domains.guild.agents.loops.cos_job_search  import run_career_focus_scout
+        from domains.guild.agents.loops.cos_german_watch import run_german_watch
+        from domains.guild.agents.loops.cos_curator_watch import run_curator_scout
+        from domains.guild.agents.loops.cos_novelty_watch import run_novelty_watch
+        loops_ok = True
+    except Exception as e:
+        log.error("Loop import failed — scheduler disabled: %s", e)
+        print(f"   ⚠️  Loop import failed: {e}")
+        loops_ok = False
+
+    # 5. Start APScheduler (only if loops imported cleanly)
+    if loops_ok:
+        scheduler = BackgroundScheduler()
+        # Loop A — twice daily
+        scheduler.add_job(
+            lambda: _run_loop("loop_a", run_career_focus_scout),
+            "cron", hour="6,18", id="loop_a", misfire_grace_time=600
+        )
+        # Loop B — weekly Sunday 09:00
+        scheduler.add_job(
+            lambda: _run_loop("loop_b", run_german_watch),
+            "cron", day_of_week="sun", hour=9, id="loop_b", misfire_grace_time=600
+        )
+        # Loop C — weekly Sunday 10:00
+        scheduler.add_job(
+            lambda: _run_loop("loop_c", run_curator_scout),
+            "cron", day_of_week="sun", hour=10, id="loop_c", misfire_grace_time=600
+        )
+        # Loop D — 1st and 15th of month 08:00
+        scheduler.add_job(
+            lambda: _run_loop("loop_d", run_novelty_watch),
+            "cron", day="1,15", hour=8, id="loop_d", misfire_grace_time=600
+        )
+        scheduler.start()
+        print("   Scheduler: loop_a(6+18h) loop_b(Sun 9h) loop_c(Sun 10h) loop_d(1st+15th 8h) ✅")
+    else:
+        print("   Scheduler: disabled (loop import error — see logs)")
+
+    # 6. Mark running
     with _state_lock:
         _state["state"] = "running"
     print(f"   State: running\n")
 
-    # 5. Serve
+    # 7. Serve
     app.run(host="localhost", port=PORT, debug=False)
 
 

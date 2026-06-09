@@ -54,3 +54,4 @@ deepl==1.30.0
 # Then: python3 -m playwright install chromium
 playwright>=1.40.0
 img2pdf>=0.5.1
+tavily-python
