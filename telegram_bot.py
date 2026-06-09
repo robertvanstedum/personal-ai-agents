@@ -1722,6 +1722,86 @@ async def _handle_phrase_capture_input(update: Update, text: str) -> None:
     )
 
 
+# ─── Operations agent commands ────────────────────────────────────────────────
+
+OPS_URL = "http://localhost:8768"
+
+async def _handle_ops_command(update: Update, text: str):
+    """!ops [disk|status|log|help] — query the Operations agent."""
+    parts = text.strip().split()
+    cmd = parts[1].lower() if len(parts) > 1 else "status"
+
+    async def _reply(msg):
+        await update.message.reply_text(msg, parse_mode="HTML")
+
+    if cmd == "help":
+        await _reply(
+            "⚙️ <b>Operations commands</b>\n"
+            "  <code>!ops disk</code>    — disk usage + service summary\n"
+            "  <code>!ops status</code>  — full agent state\n"
+            "  <code>!ops log</code>     — last 5 maintenance actions\n"
+            "  <code>!ops help</code>    — this list"
+        )
+        return
+
+    try:
+        if cmd in ("disk", "status"):
+            r = requests.get(f"{OPS_URL}/status", timeout=5)
+            d = r.json()
+            la = d.get("last_action") or {}
+            disk_pct  = la.get("disk_pct", "?")
+            services  = la.get("services", "?")
+            uptime_s  = d.get("uptime_seconds", 0)
+            uptime_h  = uptime_s // 3600
+            uptime_m  = (uptime_s % 3600) // 60
+            escalations = d.get("open_escalations", 0)
+            checks    = d.get("checks_run", 0)
+
+            if cmd == "disk":
+                esc_note = f"\n⚠️ Open escalations: {escalations}" if escalations else ""
+                await _reply(
+                    f"⚙️ <b>Disk</b> — {disk_pct}% used\n"
+                    f"Services: {services}\n"
+                    f"Checks run: {checks}{esc_note}"
+                )
+            else:
+                esc_icon = "⚠️" if escalations else "✅"
+                await _reply(
+                    f"⚙️ <b>Operations</b> — {d.get('state', '?')}\n"
+                    f"Uptime: {uptime_h}h {uptime_m}m\n"
+                    f"Checks run: {checks}\n"
+                    f"Disk: {disk_pct}%  •  Services: {services}\n"
+                    f"{esc_icon} Open escalations: {escalations}"
+                )
+
+        elif cmd == "log":
+            r = requests.get(f"{OPS_URL}/log", timeout=5)
+            rows = r.json()[:5]
+            if not rows:
+                await _reply("⚙️ No maintenance log entries yet.")
+                return
+            lines = ["⚙️ <b>Last 5 maintenance actions</b>"]
+            for row in rows:
+                ts   = (row.get("timestamp") or "")[:16].replace("T", " ")
+                tier = row.get("tier", "?")
+                act  = row.get("action", "?")
+                out  = (row.get("outcome") or "")[:60]
+                auto = " ✅" if row.get("auto_resolved") else ""
+                lines.append(f"[T{tier}] {ts}  {act}{auto}\n  {out}")
+            await _reply("\n\n".join(lines))
+
+        else:
+            await _reply(
+                f"Unknown ops command: <code>{cmd}</code>\n"
+                "Try <code>!ops help</code>"
+            )
+
+    except requests.exceptions.ConnectionError:
+        await _reply("❌ Operations agent unreachable (port 8768). Is it running?")
+    except Exception as e:
+        await _reply(f"❌ !ops error: {e}")
+
+
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Route plain text messages — German transcript, !german commands, fallback."""
     if not update.message or not update.message.text:
@@ -1734,6 +1814,11 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     # !phrase commands always route directly — never intercepted by drill or practice state
     if text.lower().startswith("!phrase"):
         await _handle_phrase_command(update, text)
+        return
+
+    # !ops commands — Operations agent queries
+    if text.lower().startswith("!ops"):
+        await _handle_ops_command(update, text)
         return
 
     # Phrase save confirmation intercepts before drill state
