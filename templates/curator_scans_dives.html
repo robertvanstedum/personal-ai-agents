@@ -229,10 +229,24 @@
 
 <script>
 function toggleSection(name) {
-  const btn = document.getElementById(name + '-toggle');
-  document.querySelectorAll('.row-' + (name === 'dives' ? 'thread' : 'article') + '.row-hidden')
-    .forEach(r => r.classList.remove('row-hidden'));
-  if (btn) btn.style.display = 'none';
+  const btn      = document.getElementById(name + '-toggle');
+  const rowClass = '.row-' + (name === 'dives' ? 'thread' : 'article');
+  const expanded = btn.dataset.expanded === '1';
+
+  if (expanded) {
+    // Collapse: re-hide rows past index 3
+    document.querySelectorAll(rowClass).forEach((r, i) => {
+      if (i >= 3) r.classList.add('row-hidden');
+    });
+    btn.textContent   = 'show all →';
+    btn.dataset.expanded = '0';
+  } else {
+    // Expand
+    document.querySelectorAll(rowClass + '.row-hidden')
+      .forEach(r => r.classList.remove('row-hidden'));
+    btn.textContent   = '← show less';
+    btn.dataset.expanded = '1';
+  }
 }
 </script>
 </body>
