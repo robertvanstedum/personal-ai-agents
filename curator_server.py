@@ -1033,19 +1033,31 @@ def _archive_sources():
     return articles
 
 
+def _scan_md_meta(md_path):
+    """Extract title, source, date, hash_id from a scan .md file."""
+    text = md_path.read_text()
+    title_m = re.match(r'^# (.+)', text)
+    title   = title_m.group(1).strip() if title_m else md_path.stem
+    source_m = re.search(r'\*\*Source:\*\*\s*(.+)', text)
+    source   = source_m.group(1).strip() if source_m else ''
+    date_m   = re.search(r'\*\*Date:\*\*\s*(.+)', text)
+    date     = date_m.group(1).strip() if date_m else ''
+    hash_id  = md_path.stem.split('-')[0]
+    return {'title': title, 'source': source, 'date': date, 'hash_id': hash_id}
+
+
 def _archive_scans():
-    """Scan list parsed from interests/2026/scans/index.html."""
-    from bs4 import BeautifulSoup
-    idx = BASE_DIR / 'interests' / '2026' / 'scans' / 'index.html'
+    """Scan list read directly from interests/2026/scans/*.md files."""
+    scans_dir = BASE_DIR / 'interests' / '2026' / 'scans'
     scans = []
     try:
-        soup = BeautifulSoup(idx.read_text(), 'html.parser')
-        for row in soup.select('.row-article'):
+        for md in sorted(scans_dir.glob('*.md'), reverse=True):
+            m = _scan_md_meta(md)
             scans.append({
-                'date':   (row.select_one('.row-date-col') or type('_', (), {'text': ''})()).text.strip(),
-                'title':  (row.select_one('.row-title')    or type('_', (), {'text': ''})()).text.strip(),
-                'source': (row.select_one('.row-source')   or type('_', (), {'text': ''})()).text.strip(),
-                'url':    row.get('href', ''),
+                'date':   m['date'],
+                'title':  m['title'],
+                'source': m['source'],
+                'url':    f'/research/scan/{m["hash_id"]}',
             })
     except Exception:
         pass
@@ -1106,36 +1118,44 @@ def archive_page():
 # ── Scans & Dives helpers (Flask route) ───────────────────────────────────────
 
 def _scans_dives_data():
-    """Parse dives and scans from the generated static index file."""
-    from bs4 import BeautifulSoup
-    idx = BASE_DIR / 'interests' / '2026' / 'scans' / 'index.html'
-    dives, scans = [], []
+    """Build scans and dives lists directly from .md files — no index.html dependency."""
+    scans, dives = [], []
+
+    # ── Scans from interests/2026/scans/*.md ─────────────────────────────────
+    scans_dir = BASE_DIR / 'interests' / '2026' / 'scans'
     try:
-        soup = BeautifulSoup(idx.read_text(), 'html.parser')
-        for row in soup.select('.row-thread'):
-            dives.append({
-                'href':    row.get('href', ''),
-                'title':   (row.select_one('.row-title')   or type('_', (), {'text': ''})()).text.strip(),
-                'excerpt': (row.select_one('.row-excerpt') or type('_', (), {'text': ''})()).text.strip(),
-                'meta':    (row.select_one('.row-meta')    or type('_', (), {'text': ''})()).text.strip(),
-                'date':    (row.select_one('.row-date')    or type('_', (), {'text': ''})()).text.strip(),
-            })
-        for row in soup.select('.row-article'):
-            raw_href = row.get('href', '')
-            # Rewrite static scan hrefs to the Flask dynamic scan view.
-            # Static format: /interests/2026/scans/<hash>-<slug>.html
-            # Flask format:  /research/scan/<hash>
-            import re as _re_href
-            _m = _re_href.search(r'/scans/([0-9a-f]{5})-', raw_href)
-            scan_href = f'/research/scan/{_m.group(1)}' if _m else raw_href
+        for md in sorted(scans_dir.glob('*.md'), reverse=True):
+            m = _scan_md_meta(md)
             scans.append({
-                'href':   scan_href,
-                'date':   (row.select_one('.row-date-col') or type('_', (), {'text': ''})()).text.strip(),
-                'source': (row.select_one('.row-source')   or type('_', (), {'text': ''})()).text.strip(),
-                'title':  (row.select_one('.row-title')    or type('_', (), {'text': ''})()).text.strip(),
+                'href':   f'/research/scan/{m["hash_id"]}',
+                'date':   m['date'],
+                'source': m['source'],
+                'title':  m['title'],
             })
     except Exception:
         pass
+
+    # ── Dives from data/dives/*.md ────────────────────────────────────────────
+    dives_dir = BASE_DIR / '_NewDomains' / 'research-intelligence' / 'data' / 'dives'
+    try:
+        for f in sorted(dives_dir.glob('*.md'), reverse=True):
+            text    = f.read_text()
+            title_m = re.match(r'^#\s+DEEPER DIVE:\s*(.+)', text, re.IGNORECASE)
+            title   = title_m.group(1).strip() if title_m else ' '.join(
+                w.capitalize() for w in f.stem.split('-')
+            )
+            date_m  = re.search(r'Generated:\s*(\d{4}-\d{2}-\d{2})', text)
+            date    = date_m.group(1) if date_m else ''
+            dives.append({
+                'href':    f'/research/dive-result/{f.stem}',
+                'title':   title,
+                'excerpt': '',
+                'meta':    date,
+                'date':    date,
+            })
+    except Exception:
+        pass
+
     return dives, scans
 
 
