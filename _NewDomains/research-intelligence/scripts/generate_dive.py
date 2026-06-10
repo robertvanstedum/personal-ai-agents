@@ -378,6 +378,27 @@ def create_reading_room_stub(topic: str) -> None:
     print(f"  Reading room stub: {stub_path.relative_to(ROOT)}")
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _first_pass_excerpt(text: str, max_len: int = 500) -> str:
+    """Extract the first substantive prose paragraph from a markdown synthesis.
+    Strips heading markers and bold/italic symbols so the excerpt reads as
+    plain text in the portal's Initial Draft section.
+    """
+    # Strip markdown heading lines (## 1. WHAT THE RESEARCH FOUND, etc.)
+    lines = [l for l in text.splitlines() if not re.match(r'^#{1,6}\s', l)]
+    plain = '\n'.join(lines)
+    # Strip bold/italic markers
+    plain = re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', plain)
+    plain = re.sub(r'_{1,2}([^_]+)_{1,2}', r'\1', plain)
+    # Find first paragraph with real prose (> 80 chars)
+    for para in re.split(r'\n{2,}', plain):
+        para = para.strip().lstrip('- •').strip()
+        if len(para) > 80:
+            return para[:max_len] + ('…' if len(para) > max_len else '')
+    return plain.strip()[:max_len]
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -505,7 +526,7 @@ def main() -> None:
             'key_change':       _ch_result.key_change,
             'challenge_points': _ch_result.challenge_points,
             'exchange_id':      _ch_result.exchange_id,
-            'first_pass_summary': _ch_result.first_pass[:300],
+            'first_pass_summary': _first_pass_excerpt(_ch_result.first_pass),
         }, indent=2))
         print(f"  Challenger sidecar: {_meta_path.relative_to(ROOT)}")
 

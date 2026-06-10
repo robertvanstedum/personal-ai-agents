@@ -765,7 +765,14 @@ def _build_challenger_html(ch: dict) -> str:
     accepted_count  = ch.get('accepted_count', 0)
     rejected_count  = ch.get('rejected_count', 0)
     key_change      = _html_lib.escape(ch.get('key_change', ''))
-    first_pass_sum  = _html_lib.escape(ch.get('first_pass_summary', ''))
+    # Strip residual markdown symbols from first_pass_summary before display
+    _fps_raw = ch.get('first_pass_summary', '') or ''
+    _fps_raw = _re.sub(r'^#{1,6}\s+.*$', '', _fps_raw, flags=_re.MULTILINE)
+    _fps_raw = _re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', _fps_raw)
+    _fps_raw = _re.sub(r'\*+', '', _fps_raw)            # unpaired asterisks
+    _fps_raw = _re.sub(r'_{1,2}([^_]+)_{1,2}', r'\1', _fps_raw)
+    _fps_raw = _re.sub(r'_+', '', _fps_raw).strip()
+    first_pass_sum  = _html_lib.escape(_fps_raw)
 
     points_html = ''
     for p in points:
