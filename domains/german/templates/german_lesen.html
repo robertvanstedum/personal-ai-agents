@@ -227,7 +227,18 @@
     document.getElementById('lesen-content-area').classList.add('lesen-state-hidden');
     document.getElementById('reading-state').classList.remove('lesen-state-hidden');
     populateArticle(currentIdx);
+    // Push reading state so browser back returns to browse instead of leaving Lesen
+    history.pushState({ lesenMode: 'reading', articleId }, '');
   }
+
+  // Browser back button: if in reading mode, go to browse — do NOT leave the page
+  window.addEventListener('popstate', e => {
+    if (document.body.classList.contains('reading-mode')) {
+      // Back pressed while reading an article → return to article list
+      enterBrowse();
+    }
+    // If already in browse mode, let the browser navigate away normally
+  });
 
   // ── Category selection ────────────────────────────────────────────────
   async function selectCategory(cat) {
@@ -429,6 +440,33 @@
   });
 
   btnClose.addEventListener('click', hidePopover);
+
+  // ── Draggable popover ─────────────────────────────────────────────
+  let _popDrag = null;
+
+  popover.addEventListener('mousedown', e => {
+    if (e.target.closest('button, a')) return;   // don't intercept action buttons
+    e.preventDefault();                           // prevent text selection during drag
+    _popDrag = {
+      startX:   e.clientX,
+      startY:   e.clientY,
+      origTop:  parseInt(popover.style.top,  10) || 0,
+      origLeft: parseInt(popover.style.left, 10) || 0,
+    };
+    popover.style.cursor = 'grabbing';
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!_popDrag) return;
+    const top  = _popDrag.origTop  + (e.clientY - _popDrag.startY);
+    const left = _popDrag.origLeft + (e.clientX - _popDrag.startX);
+    popover.style.top  = Math.max(4, top)  + 'px';
+    popover.style.left = Math.max(4, left) + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (_popDrag) { _popDrag = null; popover.style.cursor = ''; }
+  });
 
   function handleSelection() {
     const sel = window.getSelection();

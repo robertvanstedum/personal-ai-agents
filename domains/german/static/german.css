@@ -673,6 +673,8 @@ body.parch-mode .session-preview {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  cursor: grab;
+  user-select: none;
 }
 
 .popover-phrase {
@@ -688,6 +690,8 @@ body.parch-mode .session-preview {
   color: var(--text-muted);
   margin-bottom: 0.4rem;
   min-height: 1.3em;
+  max-height: 8em;
+  overflow-y: auto;
 }
 
 .popover-timing {
@@ -703,6 +707,8 @@ body.parch-mode .session-preview {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  cursor: default;
+  user-select: auto;
 }
 
 .btn-save-phrase {
