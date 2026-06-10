@@ -179,7 +179,7 @@ SHARED_NAV_HTML = """
   <nav class="header-nav">
     <a href="/" class="nav-link {briefing_active}">Daily</a>
     <a href="/curator_library.html" class="nav-link {library_active}">Library</a>
-    <a href="/interests/2026/scans/index.html" class="nav-link {deepdives_active}">Scans &amp; Dives</a>
+    <a href="/scans-dives" class="nav-link {deepdives_active}">Scans &amp; Dives</a>
     <a href="/curator_priorities.html" class="nav-link {priorities_active}">Priorities</a>
     <a href="/curator_intelligence.html" class="nav-link {intelligence_active}">AI Observations</a>
   </nav>
@@ -1178,7 +1178,7 @@ def _archive_page_placeholder():
 <nav class="curator-subnav">
   <a href="/briefing" class="subnav-tab">Daily</a>
   <a href="/curator_library.html" class="subnav-tab">Reading Room</a>
-  <a href="/interests/2026/scans/index.html" class="subnav-tab">Scans &amp; Dives</a>
+  <a href="/scans-dives" class="subnav-tab">Scans &amp; Dives</a>
   <a href="/research/leanings" class="subnav-tab">Leanings</a>
   <a href="/archive" class="subnav-tab active">Archive</a>
   <a href="/research/dashboard" class="subnav-tab subnav-focus">Desk</a>
@@ -1304,6 +1304,21 @@ def career_focus():
     return render_template('career_focus.html',
                            opportunities=opportunities,
                            total=len(opportunities))
+
+@app.route('/interests/2026/scans/<path:filename>')
+def redirect_old_scan(filename):
+    """
+    Redirect old static scan HTML files to the Flask scan view.
+    Registered before serve_interests so it takes priority for scan paths.
+    """
+    if filename == 'index.html':
+        return redirect('/scans-dives', 301)
+    m = re.match(r'^([0-9a-f]{5})-', filename)
+    if m:
+        return redirect(f'/research/scan/{m.group(1)}', 301)
+    # Non-HTML files (.md, etc.) — serve as-is
+    return send_from_directory(BASE_DIR / 'interests' / '2026' / 'scans', filename)
+
 
 @app.route('/interests/<path:filepath>')
 def serve_interests(filepath):
