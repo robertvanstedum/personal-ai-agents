@@ -1,0 +1,84 @@
+{
+  "challenger": {
+    "primary_model":       "claude-sonnet-4-6",
+    "primary_provider":    "anthropic",
+    "challenger_model":    "grok-4-1-fast-reasoning",
+    "challenger_provider": "xai",
+    "store_exchanges":     true,
+    "domains": {
+      "curator_deep_dive": {
+        "enabled": true,
+        "show_process": true,
+        "challenger_prompt": "curator_challenger_v1",
+        "final_review_prompt": "curator_final_v1"
+      },
+      "curator_briefing": {
+        "enabled": false,
+        "show_process": false
+      },
+      "research_deeper_dive": {
+        "enabled": true,
+        "show_process": true,
+        "challenger_prompt": "research_challenger_v1",
+        "final_review_prompt": "research_final_v1"
+      },
+      "research_observe": {
+        "enabled": false,
+        "show_process": false
+      },
+      "german_writing": {
+        "enabled": true,
+        "show_process": true,
+        "challenger_prompt": "german_writing_challenger_v1",
+        "final_review_prompt": "german_writing_final_v1"
+      },
+      "german_transcript": {
+        "enabled": true,
+        "show_process": false,
+        "challenger_prompt": "german_transcript_challenger_v1",
+        "final_review_prompt": "german_transcript_final_v1"
+      },
+      "german_conversation": {
+        "enabled": false,
+        "show_process": false
+      },
+      "guild_cos_analysis": {
+        "enabled": true,
+        "show_process": false,
+        "challenger_prompt": "guild_cos_challenger_v1",
+        "final_review_prompt": "guild_cos_final_v1"
+      },
+      "guild_career_assessment": {
+        "enabled": true,
+        "show_process": false,
+        "challenger_prompt": "guild_career_challenger_v1",
+        "final_review_prompt": "guild_career_final_v1"
+      }
+    },
+    "prompts": {
+      "curator_challenger_v1": "You are reviewing a research synthesis on the topic: {topic_name}.\n\nYour job is to strengthen this analysis, not validate it. Be specific and actionable.\nLook for things that would materially improve the conclusion, not things that are merely interesting.\n\nFor each finding, classify it as exactly one of:\n- factual_challenge: a claim that is overstated, understated, or based on dated evidence\n- missing_angle: a genuine perspective or dimension the analysis did not consider\n- evidence_quality: cited evidence is weak, single-source, or more than 2 years old on a fast-moving topic\n- missing_connection: a connection to adjacent threads ({related_threads}) not made\n- framing_alternative: a different framing that materially changes the conclusion\n\nDo NOT return scope_extension items — do not expand the thread focus.\nDo NOT validate points the analysis already makes well.\n\nReturn JSON array only, no other text:\n[{\"type\": \"...\", \"description\": \"one sentence max\", \"impact\": \"high|medium|low\"}]\n\nMaximum 5 items. Prioritize factual_challenge and missing_angle above all others.\nIf you find fewer than 3 substantive points, return fewer. Do not pad.\n\nAnalysis to review:\n{first_pass}\n\nSource material:\n{sources_summary}",
+
+      "curator_final_v1": "You wrote the following analysis. A challenger has reviewed it and found {n} issues.\n\nFor each challenge, decide: accept (incorporate into the final) or reject.\n\nRejection criteria — reject if ANY of these apply:\n- The challenge is accurate but outside this thread's current focus\n- Incorporating it would make the analysis longer without strengthening its core argument\n- The point is already addressed, even implicitly, in the analysis\n- The challenge is a matter of opinion without evidentiary support\n\nAfter deciding on each challenge, write the final synthesis.\nThe final must be genuinely richer than the first pass where challenges were accepted.\nDo not simply append challenged points — weave them in.\n\nReturn JSON only, no other text:\n{\"decisions\": [{\"challenge_index\": 0, \"accepted\": true, \"reason\": \"one phrase if rejected\"}], \"final\": \"the complete final synthesis text\"}\n\nYour first-pass analysis:\n{first_pass}\n\nChallenges:\n{challenges}",
+
+      "research_challenger_v1": "You are reviewing a research synthesis on the topic: {topic_name}.\n\nYour job is to strengthen this analysis, not validate it. Be specific and actionable.\nLook for things that would materially improve the conclusion, not things that are merely interesting.\n\nFor each finding, classify it as exactly one of:\n- factual_challenge: a claim that is overstated, understated, or based on dated evidence\n- missing_angle: a genuine perspective or dimension the analysis did not consider\n- evidence_quality: cited evidence is weak, single-source, or more than 2 years old on a fast-moving topic\n- missing_connection: a connection to adjacent threads ({related_threads}) not made\n- framing_alternative: a different framing that materially changes the conclusion\n\nDo NOT return scope_extension items.\nDo NOT validate points the analysis already makes well.\n\nReturn JSON array only, no other text:\n[{\"type\": \"...\", \"description\": \"one sentence max\", \"impact\": \"high|medium|low\"}]\n\nMaximum 5 items. If you find fewer than 3 substantive points, return fewer. Do not pad.\n\nAnalysis to review:\n{first_pass}\n\nSource material:\n{sources_summary}",
+
+      "research_final_v1": "You wrote the following analysis. A challenger has reviewed it and found {n} issues.\n\nFor each challenge, decide: accept (incorporate into the final) or reject.\n\nRejection criteria — reject if ANY of these apply:\n- The challenge is accurate but outside this thread's current focus\n- Incorporating it would make the analysis longer without strengthening its core argument\n- The point is already addressed, even implicitly, in the analysis\n- The challenge is a matter of opinion without evidentiary support\n\nReturn JSON only, no other text:\n{\"decisions\": [{\"challenge_index\": 0, \"accepted\": true, \"reason\": \"one phrase if rejected\"}], \"final\": \"the complete final synthesis text\"}\n\nYour first-pass analysis:\n{first_pass}\n\nChallenges:\n{challenges}",
+
+      "german_writing_challenger_v1": "You are helping a B1-B2 German learner internalize natural idiomatic usage.\nYou are reviewing a German writing correction and its English translation.\n\nYour ONLY focus is natural language equivalence — not grammar (already corrected):\n\n1. translation_nuance: Is the English translation how a native speaker would actually say this in this context? Flag if too literal or unnatural.\n   Example: \"Zahlen bitte\" -> \"Pay please\" is too literal; \"Check, please\" is correct.\n\n2. correction_nuance: Is the corrected German natural for this context and register? Technically correct but stilted or overly formal counts as an issue.\n\nDo NOT suggest grammar corrections — those are handled separately.\nDo NOT flag minor stylistic preferences.\n\nReturn JSON array only, no other text:\n[{\"type\": \"translation_nuance|correction_nuance\", \"description\": \"what the issue is and what the natural version would be\", \"impact\": \"high|medium|low\"}]\n\nMaximum 3 items. If there are no genuine issues, return an empty array [].\n\nOriginal text: {original}\nCorrected German: {corrected_german}\nEnglish translation: {english_translation}\nContext: {context}",
+
+      "german_writing_final_v1": "You corrected a German text and provided an English translation.\nA challenger has reviewed your translation and correction for natural language equivalence.\n\nFor each challenge: accept (update your correction or translation) or reject.\nRejection criteria: the challenge is a stylistic preference, not a genuine naturalness issue.\n\nReturn JSON only, no other text:\n{\"decisions\": [{\"challenge_index\": 0, \"accepted\": true, \"reason\": \"if rejected\"}], \"final_corrected_german\": \"...\", \"final_english_translation\": \"...\", \"nuance_note\": \"one sentence explaining any idiomatic choices, if relevant\"}\n\nYour correction: {corrected_german}\nYour translation: {english_translation}\nChallenges: {challenges}",
+
+      "german_transcript_challenger_v1": "You are reviewing a German language learning session transcript.\nThe learner is at B1-B2 level.\n\nReview for:\n1. translation_nuance: English translations that are technically correct but not what a native speaker would say in context\n2. correction_nuance: German corrections that are grammatically right but sound unnatural or register-inappropriate\n\nDo NOT assess grammar — focus only on naturalness and register.\n\nReturn JSON array only:\n[{\"type\": \"translation_nuance|correction_nuance\", \"description\": \"specific issue and natural alternative\", \"impact\": \"high|medium|low\"}]\n\nMaximum 4 items. Return empty array [] if no genuine issues found.\n\nTranscript excerpt:\n{transcript_excerpt}",
+
+      "german_transcript_final_v1": "You analyzed a German learning session. A challenger reviewed your analysis for natural language equivalence.\n\nFor each challenge: accept or reject.\n\nReturn JSON only:\n{\"decisions\": [{\"challenge_index\": 0, \"accepted\": true, \"reason\": \"if rejected\"}], \"final_analysis\": \"...\", \"nuance_notes\": \"any idiomatic observations worth highlighting for the learner\"}\n\nYour analysis: {first_pass}\nChallenges: {challenges}",
+
+      "guild_career_challenger_v1": "You are reviewing a career opportunity fit assessment for Robert van Stedum.\nRobert is a technology leader with 30 years in telecom, satellite, IoT and production agentic AI systems.\n\nReview the fit assessment for:\n- framing_alternative: is there a framing of Robert's background that would make this fit stronger or weaker?\n- logic_gap: does the conclusion follow from the evidence cited?\n- missing_angle: is there a dimension of fit (culture, growth trajectory, timing) not considered?\n- factual_challenge: is any claim about the role or Robert's background overstated?\n\nReturn JSON array only:\n[{\"type\": \"...\", \"description\": \"one sentence\", \"impact\": \"high|medium|low\"}]\n\nMaximum 3 items. Only return items that would materially change a go/no-go decision.\n\nFit assessment to review:\n{first_pass}\n\nRole details:\n{opportunity_details}",
+
+      "guild_career_final_v1": "You wrote a career fit assessment. A challenger reviewed it.\n\nFor each challenge: accept or reject based on whether it materially changes the go/no-go signal.\n\nReturn JSON only:\n{\"decisions\": [{\"challenge_index\": 0, \"accepted\": true, \"reason\": \"if rejected\"}], \"final\": \"the complete revised fit assessment\", \"score_change\": null}\n\nYour assessment: {first_pass}\nChallenges: {challenges}",
+
+      "guild_cos_challenger_v1": "You are reviewing a Chief of Staff domain health analysis for mini-moi.\n\nReview for:\n- factual_challenge: any claim about system state that may be outdated or overstated\n- missing_angle: a domain dimension not considered (cost, user engagement, technical debt)\n- framing_alternative: a different read of the same data that changes the recommended action\n- logic_gap: recommendation doesn't follow cleanly from the observed state\n\nReturn JSON array only:\n[{\"type\": \"...\", \"description\": \"one sentence\", \"impact\": \"high|medium|low\"}]\n\nMaximum 3 items.\n\nAnalysis to review:\n{first_pass}",
+
+      "guild_cos_final_v1": "You wrote a domain health analysis. A challenger reviewed it.\n\nFor each challenge: accept or reject.\n\nReturn JSON only:\n{\"decisions\": [{\"challenge_index\": 0, \"accepted\": true, \"reason\": \"if rejected\"}], \"final\": \"the complete revised analysis\"}\n\nYour analysis: {first_pass}\nChallenges: {challenges}"
+    }
+  }
+}

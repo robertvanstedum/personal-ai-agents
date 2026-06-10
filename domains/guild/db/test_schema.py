@@ -72,7 +72,7 @@ def run():
         "WHERE table_schema = 'guild' ORDER BY table_name"
     )
     guild_tables = {r["table_name"] for r in cur.fetchall()}
-    for t in ("agent_feedback", "cos_agenda", "design_log"):
+    for t in ("agent_feedback", "challenger_exchanges", "cos_agenda", "design_log"):
         check(f"  guild.{t}", t in guild_tables)
 
     print("\njobs.* tables:")
@@ -146,6 +146,8 @@ def run():
         check("  robert_ro can SELECT research.topics", True)
         ro_cur.execute("SELECT count(*) FROM guild.cos_agenda")
         check("  robert_ro can SELECT guild.cos_agenda", True)
+        ro_cur.execute("SELECT count(*) FROM guild.challenger_exchanges")
+        check("  robert_ro can SELECT guild.challenger_exchanges", True)
         ro_conn.close()
     except Exception as e:
         check("  robert_ro read access", False, str(e))
