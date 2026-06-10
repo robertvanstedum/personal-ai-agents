@@ -1533,7 +1533,11 @@ def api_research_sessions_list():
                     [f for f in td.glob('*.md') if not f.name.startswith('sources-') and f.name != 'CONTEXT.md' and not f.name.isupper()],
                     reverse=True
                 )
-                result.append({"topic": td.name, "count": len(sessions)})
+                # Skip topics where every session is scan_synthetic scaffolding
+                real_sessions = [f for f in sessions
+                                 if _parse_session_header(f.read_text()).get('scan_synthetic') != 'true']
+                if real_sessions:
+                    result.append({"topic": td.name, "count": len(real_sessions)})
         return jsonify({"ok": True, "topics": result})
 
     topic_dir = RESEARCH_ROOT / 'topics' / topic
@@ -1552,6 +1556,8 @@ def api_research_sessions_list():
     for f in session_files:
         text = f.read_text()
         hdr  = _parse_session_header(text)
+        if hdr.get('scan_synthetic') == 'true':
+            continue   # scaffolding — not a real research session
         sessions.append({
             'id':               hdr.get('session', f.stem),
             'date':             hdr.get('date', ''),
@@ -1850,6 +1856,7 @@ topic: {topic}
 cost: $0.0000
 duration: 1min
 sources_reviewed: {len(bib)}
+scan_synthetic: true
 <!-- END HEADER -->
 
 ## Research Question
