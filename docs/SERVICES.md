@@ -59,6 +59,7 @@ All services run under `~/Library/LaunchAgents/`. Log files in `logs/`.
 | `com.user.curator-server` | `curator_server.py` | 8766 | Curator Flask service |
 | `com.vanstedum.minimoi-portal` | `minimoi_portal/` | 5001 | Portal (Cloudflare tunnel target) |
 | `com.user.telegram-feedback-bot` | `telegram_bot.py` | — | minimoi_cmd_bot polling (German + Curator) |
+| `com.user.private-sync` | `scripts/sync_private_repo.sh` | — | Nightly 02:00 — syncs memory/config to mini-moi-private |
 
 ### Telegram bots
 | Bot | Token keyring key | Role |
@@ -103,6 +104,30 @@ Status: `curl http://localhost:8769/loops`
 ```
 launchd does not guarantee order — services must be resilient to dependencies being
 temporarily unavailable. All Guild agents use file fallback when DB is down.
+
+---
+
+## Private Repository (mini-moi-private)
+
+Repo: `git@github.com:robertvanstedum/mini-moi-private.git`
+Local clone: `~/Projects/mini-moi-private/`
+**Rule: never contains code — only data and memory files.**
+
+### What's synced
+| Path | Description |
+|---|---|
+| `data/guild/memory/*.md` | cos_memory, ops_memory, devagent_memory |
+| `data/guild/cos_agenda.json` | CoS recommendations queue |
+| `domains/guild/config/cos_context.json` | Robert's goals + CoS context |
+| `_working/archive/` | Superseded handoff/spec docs |
+
+### Sync schedule
+- **Nightly at 02:00** via `com.user.private-sync` launchd service
+- **Manual run:** `bash scripts/sync_private_repo.sh`
+- **Dry-run:** `bash scripts/sync_private_repo.sh --dry-run`
+
+The Design/Dev agent (`dev_agent.py`) detects when archive files are uncommitted
+and notifies CoS — but the actual push is always done by this script.
 
 ---
 
