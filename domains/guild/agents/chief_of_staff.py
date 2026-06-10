@@ -525,6 +525,40 @@ def _handle_tg_text(text: str, token: str, chat_id: str):
             _tg_send(token, chat_id, f"❌ !ops error: {e}")
         return
 
+    # ── !dev command ──────────────────────────────────────────────────────────
+    if lower.startswith("!dev"):
+        try:
+            d = requests.get("http://localhost:8770/status", timeout=5).json()
+            events    = d.get("events_processed", 0)
+            archived  = d.get("docs_archived", 0)
+            mem_chars = d.get("memory_chars", 0)
+            mem_cap   = d.get("memory_cap", 8000)
+            uptime_s  = d.get("uptime_seconds", 0)
+            uptime_h  = uptime_s // 3600
+            uptime_m  = (uptime_s % 3600) // 60
+            last_evt  = d.get("last_event", {})
+            watching  = d.get("watching", [])
+            last_line = ""
+            if last_evt:
+                last_line = (
+                    f"\nLast: {last_evt.get('file', '?')} "
+                    f"({last_evt.get('doc_type', '?')})"
+                )
+            _tg_send(token, chat_id,
+                f"🔍 <b>Design/Dev Agent</b>\n"
+                f"Uptime: {uptime_h}h {uptime_m}m\n"
+                f"Events processed: {events}\n"
+                f"Docs archived: {archived}\n"
+                f"Memory: {mem_chars}/{mem_cap} chars\n"
+                f"Watching: {', '.join(watching)}"
+                f"{last_line}"
+            )
+        except requests.exceptions.ConnectionError:
+            _tg_send(token, chat_id, "❌ Design/Dev agent unreachable (port 8770).")
+        except Exception as e:
+            _tg_send(token, chat_id, f"❌ !dev error: {e}")
+        return
+
     # ── !cos / !chief commands ────────────────────────────────────────────────
     if lower.startswith("!cos") or lower.startswith("!chief"):
         if lower.startswith("!cos"):
@@ -664,6 +698,65 @@ def loops_status():
     return jsonify(snap)
 
 
+@app.route("/event", methods=["POST"])
+def receive_event():
+    """
+    Receive structured events from other Guild agents (Design/Dev, Operations, loops).
+    Logs to cos.log and queues high-priority items to agenda.
+    Design/Dev pings this in parallel with Telegram for every doc event.
+    """
+    body = request.get_json(silent=True) or {}
+    source     = body.get("source", "unknown")
+    event_type = body.get("event_type", "unknown")
+    file_path  = body.get("file_path", "")
+    doc_type   = body.get("doc_type", "")
+    summary    = body.get("summary", "")
+    rule       = body.get("escalation_rule", {})
+
+    _log_file("external_event",
+              f"[{source}] {event_type}: {Path(file_path).name} — {summary[:80]}")
+
+    # Queue to agenda if priority is high/medium
+    priority = rule.get("priority", "info") if isinstance(rule, dict) else "info"
+    if priority in ("high", "medium"):
+        entry = {
+            "domain": source,
+            "description": f"[{event_type}] {Path(file_path).name}: {summary}",
+            "confidence": 0.8,
+            "loop_name": source,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        # Try DB first
+        queued_via = "file"
+        if _DB_AVAILABLE:
+            try:
+                with _db() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """INSERT INTO guild.cos_agenda
+                               (domain, description, confidence, loop_name, status, created_at)
+                               VALUES (%s, %s, %s, %s, 'pending', NOW())""",
+                            (source, entry["description"], 0.8, source),
+                        )
+                queued_via = "db"
+            except Exception as e:
+                _log_file("event_db_error", str(e))
+
+        if queued_via == "file":
+            AGENDA_FILE.parent.mkdir(parents=True, exist_ok=True)
+            existing: list = []
+            if AGENDA_FILE.exists():
+                try:
+                    existing = json.loads(AGENDA_FILE.read_text())
+                except Exception:
+                    pass
+            existing.append(entry)
+            AGENDA_FILE.write_text(json.dumps(existing, indent=2))
+
+    return jsonify({"received": True, "queued": priority in ("high", "medium")})
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -671,10 +764,11 @@ def main():
 
     print(f"""
 💼  Chief of Staff starting on port {PORT}…
-   /chat    — conversational endpoint (POST {{\"text\": \"...\"}})
+   /chat    — conversational endpoint (POST {{"text": "..."}})
    /status  — agent state
    /health  — liveness probe
    /loops   — intelligence loop status
+   /event   — receive events from Guild agents (POST)
 """)
 
     # 1. Check DB availability

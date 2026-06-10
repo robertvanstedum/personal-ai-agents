@@ -1,0 +1,41 @@
+{
+  "design_dev": {
+    "autonomy_level": 1,
+    "flag_threshold": "low",
+    "watch_paths": ["_working/", "docs/"],
+    "watch_extensions": [".md", ".json", ".sql", ".py"],
+    "max_file_size_bytes": 102400,
+    "debounce_seconds": 5,
+    "telegram_notify": true,
+    "flag_to_cos": true,
+    "memory_path": "data/guild/memory/devagent_memory.md",
+    "memory_hard_cap_chars": 8000,
+    "working_dir_management": {
+      "archive_path": "_working/archive/",
+      "trash_path": "_working/trash/",
+      "archive_after_days": 7,
+      "trash_after_days": 30,
+      "delete_from_trash_after_days": 30
+    },
+    "github": {
+      "private_remote": "private",
+      "private_push_paths": [
+        "_working/archive/",
+        "domains/guild/config/cos_context.json",
+        "data/guild/"
+      ],
+      "public_push_paths": ["docs/", "README.md", "GUILD_CHARTER.md"]
+    },
+    "escalation_rules": {
+      "build_failed":           {"cos_action": "flag_to_robert",  "priority": "high"},
+      "build_completed":        {"cos_action": "log_only",        "priority": "info"},
+      "doc_created":            {"cos_action": "log_only",        "priority": "info"},
+      "doc_superseded":         {"cos_action": "log_only",        "priority": "low"},
+      "doc_conflict":           {"cos_action": "flag_to_robert",  "priority": "high"},
+      "private_repo_stale":     {"cos_action": "remind_robert",   "priority": "medium"},
+      "working_dir_stale":      {"cos_action": "suggest_cleanup", "priority": "low"},
+      "memory_cap_approaching": {"cos_action": "suggest_cleanup", "priority": "medium"}
+    },
+    "notes": "Level 1 = watch, log, notify, manage _working/. Raise autonomy_level to unlock more."
+  }
+}

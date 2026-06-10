@@ -89,6 +89,8 @@ context/
 
 # Working/scratch files — short-term, not for repo
 _working/*
+# Design/Dev agent: trash is local only, archive is committed via private remote
+_working/trash/
 # Build notes are permanent reasoning artifacts — commit them
 !_working/build_note_*.md
 !_working/BUILD_PLAN_*.md
