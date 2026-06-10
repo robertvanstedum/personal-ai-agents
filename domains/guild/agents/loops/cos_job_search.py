@@ -406,7 +406,12 @@ def _filter_pass(candidates: list[dict], ctx: dict) -> list[dict]:
             f"- A news article about a company expanding (no specific job): score ≤ 3\n"
             f"- An aggregator page listing many unrelated jobs: score ≤ 4\n"
             f"- A direct job listing URL (careers.*, jobs.*, linkedin job, indeed job): score normally\n"
-            f"Return JSON only: {{\"score\": N, \"reason\": \"one line\", \"is_job_listing\": true/false}}\n\n"
+            f"STALENESS rules — return score: 0 immediately if any of these are true:\n"
+            f"- Snippet or title mentions 'no longer accepting', 'position filled', 'job closed', 'expired'\n"
+            f"- Snippet shows 'reposted' with a date more than 14 days ago (e.g. 'reposted 1 month ago', 'reposted 3 weeks ago')\n"
+            f"- Snippet contains an explicit posting date older than 14 days\n"
+            f"- Any signal the role is closed or applications are not being accepted\n"
+            f"Return JSON only: {{\"score\": N, \"reason\": \"one line\", \"is_job_listing\": true/false, \"stale\": true/false}}\n\n"
             f"Candidate: {narrative}\n"
             f"Target roles: {roles_str}\n\n"
             f"Title: {c.get('title', '')}\n"
@@ -427,7 +432,10 @@ def _filter_pass(candidates: list[dict], ctx: dict) -> list[dict]:
                     raw = raw[4:]
             parsed = json.loads(raw)
             score = float(parsed.get("score", 0))
-            if score >= 5:
+            stale = parsed.get("stale", False)
+            if stale:
+                logger.debug("Stale/closed listing dropped: %s", c.get("title", "")[:60])
+            elif score >= 5:
                 c["_filter_score"] = score
                 c["_is_job_listing"] = parsed.get("is_job_listing", False)
                 shortlist.append(c)
