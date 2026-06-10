@@ -54,6 +54,13 @@ Career intelligence. Written by CoS Loop A.
 
 ## Adding a new schema (pattern to follow)
 
+**Hard rules — both must be in the same migration file, same PR:**
+- `robert_ro` SELECT grant goes in the migration, not as a follow-up fix
+- `test_schema.py` updated with the new schema/tables before the PR merges
+
+The research schema migration (2026-06-10) needed a follow-up fix for the
+robert_ro grant — that's the gap this pattern is designed to prevent.
+
 1. **Add to `init_db.sql`** — create schema, grant minimoi + robert_ro:
    ```sql
    CREATE SCHEMA IF NOT EXISTS german;
@@ -64,26 +71,29 @@ Career intelligence. Written by CoS Loop A.
    ALTER DEFAULT PRIVILEGES IN SCHEMA german GRANT SELECT ON TABLES TO robert_ro;
    ```
 
-2. **Create a `schema_<domain>.sql`** file — all tables prefixed with `schema_name.`:
+2. **Create a `schema_<domain>.sql`** file — tables prefixed with `schema_name.`,
+   and include the `robert_ro` grant for tables that already exist:
    ```sql
    CREATE TABLE IF NOT EXISTS german.sessions (
        id         TEXT PRIMARY KEY,
        ...
    );
+   -- Grant read access on any tables created above (covers existing tables;
+   -- ALTER DEFAULT PRIVILEGES in init_db.sql covers future tables)
+   GRANT SELECT ON ALL TABLES IN SCHEMA german TO robert_ro;
    ```
 
-3. **Qualify every SQL reference** in Python — always `schema.table`, never bare table name:
+3. **Update `test_schema.py`** — add the new schema and every new table
+   to the relevant check blocks before the PR merges. The test must pass
+   at 100% on the first run with the migration applied.
+
+4. **Qualify every SQL reference** in Python — always `schema.table`, never bare:
    ```python
    cur.execute("SELECT * FROM german.sessions WHERE id = %s", (session_id,))
    ```
 
-4. **Run the smoke test** to confirm:
-   ```bash
-   venv/bin/python3 domains/guild/db/test_schema.py
-   ```
-   Add the new schema and its tables to `test_schema.py` before merging.
-
-5. **Document here** — add a row to the tables section above.
+5. **Document here** — add a row to the tables section above, and update
+   the Bootstrap section with the new schema file.
 
 ---
 
