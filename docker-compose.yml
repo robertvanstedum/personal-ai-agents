@@ -1,12 +1,10 @@
-version: '3.8'
-
 services:
   neo4j:
     image: neo4j:latest
     container_name: neo4j-context-graph
     restart: unless-stopped
     environment:
-      - NEO4J_AUTH=neo4j/simple123   # your existing password
+      - NEO4J_AUTH=neo4j/simple123
     ports:
       - "7474:7474"
       - "7687:7687"
@@ -18,7 +16,7 @@ services:
     container_name: postgres-ai-agents
     restart: unless-stopped
     environment:
-      - POSTGRES_PASSWORD=simple123   # keep or change
+      - POSTGRES_PASSWORD=simple123
       - POSTGRES_DB=personal_agents
     ports:
       - "5432:5432"

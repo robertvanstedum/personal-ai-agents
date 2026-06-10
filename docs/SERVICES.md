@@ -1,0 +1,126 @@
+# mini-moi Services Reference
+**Last updated:** 2026-06-09
+**Purpose:** Canonical list of all always-on services, how they start, and what manages them.
+
+---
+
+## Docker Infrastructure
+
+### Runtime: Colima (not Docker Desktop)
+Docker Desktop is GUI-only and not required at runtime. Colima provides a
+headless Docker daemon managed by Homebrew's launchd integration.
+
+| Item | Detail |
+|---|---|
+| Install | `brew install colima` |
+| Service | `brew services start colima` (runs at login, always-on) |
+| Socket | `unix:///Users/vanstedum/.colima/default/docker.sock` |
+| Context | `colima` (active — set by `docker context use colima`) |
+| Config | Default: VZ driver, aarch64, 20GB disk |
+
+**Docker Desktop** can remain installed for occasional GUI inspection but must NOT
+be relied on for daemon availability. Colima owns the daemon.
+
+### Container startup
+After Colima is ready, containers are brought up by:
+- `~/Library/LaunchAgents/com.user.docker-compose.plist`
+- Which calls `scripts/start_docker_services.sh`
+- Script waits up to 60s for Docker socket before running `docker compose up -d`
+
+### Containers (docker-compose.yml)
+| Container | Image | Ports | Restart |
+|---|---|---|---|
+| `postgres-ai-agents` | postgres:latest | 5432 | unless-stopped |
+| `neo4j-context-graph` | neo4j:latest | 7474, 7687 | unless-stopped |
+
+**Volume note (Postgres 18+):** Mount is `/var/lib/postgresql` (not `/data`).
+Postgres 18 places data in a subdirectory of this mount. Do not change to `/data`.
+
+### Database bootstrap (fresh container)
+```bash
+docker exec -i postgres-ai-agents psql -U postgres < domains/guild/db/init_db.sql
+docker exec -i postgres-ai-agents psql -U minimoi -d personal_agents < domains/guild/db/schema.sql
+docker exec -i postgres-ai-agents psql -U minimoi -d personal_agents < domains/guild/db/schema_phase4.sql
+docker exec -i postgres-ai-agents psql -U minimoi -d personal_agents < domains/guild/db/schema_phase5.sql
+```
+
+---
+
+## Application Services (launchd)
+
+All services run under `~/Library/LaunchAgents/`. Log files in `logs/`.
+
+| Label | File | Port | Scope |
+|---|---|---|---|
+| `com.user.docker-compose` | `scripts/start_docker_services.sh` | — | Starts containers after Colima |
+| `com.user.operations` | `domains/guild/agents/operations.py` | 8768 | Guild Operations agent |
+| `com.user.cos` | `domains/guild/agents/chief_of_staff.py` | 8769 | Guild Chief of Staff |
+| `com.user.devagent` | `domains/guild/agents/dev_agent.py` | 8770 | Guild Design/Dev agent |
+| `com.user.curator-server` | `curator_server.py` | 8766 | Curator Flask service |
+| `com.vanstedum.minimoi-portal` | `minimoi_portal/` | 5001 | Portal (Cloudflare tunnel target) |
+| `com.user.telegram-feedback-bot` | `telegram_bot.py` | — | minimoi_cmd_bot polling (German + Curator) |
+
+### Telegram bots
+| Bot | Token keyring key | Role |
+|---|---|---|
+| rvsopenbot | `telegram / bot_token` | CoS chat + `!ops` `!cos` `!chief` `!dev` — polling via CoS |
+| minimoi_cmd_bot | `telegram / polling_bot_token` | German drills, Curator delivery |
+| minimoi_agent_bot | separate key | OpenClaw gateway — do not use for delivery |
+
+### Cron jobs (launchd)
+| Label | Schedule | Script |
+|---|---|---|
+| `com.vanstedum.curator` | 07:00 daily | Curator run |
+| `com.vanstedum.curator-intelligence` | 07:30 daily | Intelligence layer |
+| `com.vanstedum.curator-priority-feed` | varies | Priority feed update |
+
+---
+
+## Intelligence Loops (APScheduler inside CoS)
+
+| Loop | Name | Schedule | Source |
+|---|---|---|---|
+| A | career_focus_scout | 06:00 + 18:00 daily | Tavily + Indeed RSS |
+| B | german_watch | Sunday 09:00 | sessions dir + Tavily |
+| C | curator_scout | Sunday 10:00 | Tavily per scout_for terms |
+| D | novelty_watch | 1st + 15th 08:00 | Tavily per watch_terms |
+
+Status: `curl http://localhost:8769/loops`
+
+---
+
+## Startup Order at Login
+
+```
+1. Colima (brew service)          — Docker daemon
+2. com.user.docker-compose        — waits for Colima, then: postgres + neo4j
+3. com.user.operations            — Guild Operations (8768)
+4. com.user.cos                   — Chief of Staff (8769) — APScheduler loops inside
+5. com.user.devagent              — Design/Dev agent (8770)
+6. com.user.curator-server        — Curator Flask (8766)
+7. com.vanstedum.minimoi-portal   — Portal (5001)
+8. com.user.telegram-feedback-bot — minimoi_cmd_bot polling
+```
+launchd does not guarantee order — services must be resilient to dependencies being
+temporarily unavailable. All Guild agents use file fallback when DB is down.
+
+---
+
+## Health Check
+
+```bash
+# Containers
+docker ps
+
+# Guild agents
+curl http://localhost:8768/health   # Operations
+curl http://localhost:8769/health   # CoS
+curl http://localhost:8770/health   # Design/Dev
+
+# Loops
+curl http://localhost:8769/loops
+
+# Telegram (send from rvsopenbot channel)
+!ops status
+!dev
+```
