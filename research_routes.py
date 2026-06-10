@@ -1793,17 +1793,38 @@ def _build_session_from_scan(dd: dict, hash_id: str, topic: str) -> str:
     from datetime import date as _date
     today = _date.today().isoformat()
 
-    # Extract plain-text findings from analysis HTML
-    plain = _re.sub(r'<[^>]+>', '\n', dd.get('analysis_html', ''))
-    plain = _re.sub(r'\n{2,}', '\n', plain).strip()
+    # Extract findings from numbered scan analysis sections (### 1. Title + paragraph)
+    # Prefer section-title + first sentence of body so findings are coherent, not fragments.
+    analysis_html = dd.get('analysis_html', '')
+    from bs4 import BeautifulSoup as _BS
+    _soup = _BS(analysis_html, 'html.parser')
     findings = []
-    for line in plain.splitlines():
-        line = line.strip()
-        # Skip short lines, numbered headers (1., 2., ...), and hash-style headings
-        if len(line) > 50 and not _re.match(r'^\d+\.', line) and not line.startswith('#'):
-            findings.append(line)
-        if len(findings) >= 6:
+    for h in _soup.find_all(['h3', 'h2']):
+        heading_text = h.get_text(strip=True)
+        # Only numbered sections (e.g. "1. Why This Matters")
+        if not _re.match(r'^\d+\.', heading_text):
+            continue
+        # Get the first non-empty paragraph or list item after the heading
+        sibling = h.find_next_sibling()
+        while sibling:
+            text = sibling.get_text(' ', strip=True)
+            if len(text) > 40:
+                # Take first sentence (up to 220 chars)
+                sentence = _re.split(r'(?<=[.!?])\s+', text)[0][:220]
+                findings.append(f"{heading_text}: {sentence}")
+                break
+            sibling = sibling.find_next_sibling()
+        if len(findings) >= 5:
             break
+    # Fallback: strip HTML and grab long lines
+    if not findings:
+        plain = _re.sub(r'<[^>]+>', '\n', analysis_html)
+        for line in _re.sub(r'\n{2,}', '\n', plain).strip().splitlines():
+            line = line.strip()
+            if len(line) > 60 and not _re.match(r'^\d+\.', line) and not line.startswith('#'):
+                findings.append(line)
+            if len(findings) >= 5:
+                break
     findings_text = '\n'.join(f'- {f}' for f in findings) or '- (see scan analysis)'
 
     # Build sources in the [N] domain. "title".\n    url format that generate_dive.py parses

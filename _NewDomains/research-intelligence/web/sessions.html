@@ -33,61 +33,14 @@
       color: var(--text);
       min-height: 100vh;
       font-size: 14px;
-      display: flex;
-      align-items: flex-start;
     }
 
-    /* ── Domain Rail ── */
-    .domain-rail {
-      width: 200px; min-width: 200px;
-      background: rgba(245,240,232,0.6);
-      border-right: 1px solid var(--border);
-      min-height: 100vh;
-      padding: 24px 0;
-      position: sticky; top: 0;
-      display: flex; flex-direction: column; gap: 4px;
-      z-index: 50;
-    }
-    .rail-domain {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 20px;
-      text-decoration: none;
-      font-family: 'DM Mono', monospace;
-      font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
-      color: var(--text-muted); transition: all 0.15s;
-    }
-    .rail-domain:hover { background: var(--surface2); color: var(--text); }
-    .rail-domain.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; border-right: 2px solid var(--accent); }
-    .rail-domain.coming-soon { opacity: 0.4; cursor: default; pointer-events: none; }
-    .rail-icon { font-size: 14px; }
-
-    /* ── Main Content ── */
-    .main-content { flex: 1; min-width: 0; min-height: 100vh; overflow-x: hidden; }
-
-    /* ── Header ── */
-    header {
-      border-bottom: 1px solid var(--border);
-      padding: 0 32px;
-      display: flex; align-items: center; justify-content: space-between;
-      height: 60px;
-      position: sticky; top: 0;
-      background: rgba(245,240,232,0.94);
-      backdrop-filter: blur(12px);
-      z-index: 100;
-      box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
-    }
-    .header-left { display: flex; align-items: baseline; gap: 16px; }
-    .logo { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--accent); text-decoration: none; }
-    .logo-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase; }
-    .header-nav { display: flex; gap: 4px; }
-    .nav-link {
-      font-family: 'DM Mono', monospace; font-size: 11px;
-      color: var(--text-muted); text-decoration: none;
-      padding: 6px 14px; border-radius: 6px; letter-spacing: 0.05em;
-      transition: all 0.15s; border: 1px solid transparent;
-    }
-    .nav-link:hover { color: var(--text); background: var(--surface2); }
-    .nav-link.active { color: var(--accent); background: var(--accent-dim); border-color: rgba(139,94,42,0.2); }
+    /* ── Curator subnav ── */
+    nav.curator-subnav { position: sticky; top: 0; z-index: 100; height: 44px; background: rgba(245,240,232,0.96); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 1.5rem; }
+    .subnav-tab { font-family: 'DM Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); text-decoration: none; padding: 0 14px; height: 44px; display: flex; align-items: center; border-bottom: 2px solid transparent; transition: color 0.15s; }
+    .subnav-tab:hover { color: var(--text); }
+    .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .subnav-focus { margin-left: auto; }
 
     /* ── Page Layout ── */
     main { max-width: 1100px; margin: 0 auto; padding: 32px; }
@@ -366,33 +319,14 @@
 </head>
 <body data-domain="research" data-page="sessions" data-topic="">
 
-<!-- Domain Rail -->
-<div class="domain-rail">
-  <a href="/" class="rail-domain"><span class="rail-icon">📚</span><span>Curator</span></a>
-  <a href="/research/dashboard" class="rail-domain active"><span class="rail-icon">🔬</span><span>Research</span></a>
-  <a href="/language" class="rail-domain"><span class="rail-icon">💬</span><span>Language</span></a>
-  <a href="/jobs" class="rail-domain"><span class="rail-icon">💼</span><span>Jobs</span></a>
-</div>
-
-<div class="main-content">
-<header>
-  <div class="header-left">
-    <a href="/research/dashboard" class="logo">🔬 Research</a>
-    <span class="logo-sub">Threads</span>
-  </div>
-  <nav class="header-nav">
-    <a href="/research/sessions" class="nav-link active">Threads</a>
-    <a href="/research/observe" class="nav-link">AI Feedback</a>
-    <div class="nav-more-wrapper">
-      <button class="nav-more-btn">···</button>
-      <div class="nav-more-dropdown">
-        <a href="/research/dashboard">Dashboard</a>
-        <a href="/research/candidates">Queries</a>
-        <a href="/research/save">Save</a>
-      </div>
-    </div>
-  </nav>
-</header>
+<nav class="curator-subnav">
+  <a href="/briefing" class="subnav-tab">Daily</a>
+  <a href="/curator_library.html" class="subnav-tab">Reading Room</a>
+  <a href="/scans-dives" class="subnav-tab">Scans &amp; Dives</a>
+  <a href="/research/leanings" class="subnav-tab">Leanings</a>
+  <a href="/archive" class="subnav-tab">Archive</a>
+  <a href="/research/dashboard" class="subnav-tab active subnav-focus">Desk</a>
+</nav>
 
 <main>
   <div class="page-title">Session Archive</div>
@@ -439,7 +373,6 @@
     </div>
   </div>
 </main>
-</div>
 
 <div class="toast" id="toast"></div>
 
@@ -556,8 +489,9 @@
       html += `<div class="detail-section">
         <div class="section-label">Key Findings</div>`;
       data.findings.forEach((f, i) => {
-        // Strip triage artefact "(Target 1, Target 2, …)" annotations
-        const fClean = f.replace(/\s*\(Target\s+\d+(?:,\s*Target\s+\d+)*\)\s*/g, ' ').trim();
+        // Decode any HTML entities stored in .md file, then strip triage artefacts
+        const fDecoded = decodeHtml(f);
+        const fClean = fDecoded.replace(/\s*\(Target\s+\d+(?:,\s*Target\s+\d+)*\)\s*/g, ' ').trim();
         html += `
           <div class="finding-item" id="finding-${i}">
             <div class="finding-text">${escHtml(fClean)}</div>
@@ -756,6 +690,14 @@
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  // Decode HTML entities that may already be in stored .md files (e.g. &quot; → ")
+  function decodeHtml(s) {
+    const ta = document.createElement('textarea');
+    ta.innerHTML = String(s);
+    return ta.value;
+  }
+
   function escHtml(s) {
     return String(s)
       .replace(/&/g,'&amp;').replace(/</g,'&lt;')
