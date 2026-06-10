@@ -38,7 +38,7 @@ def _conn():
 def get_topic(slug: str) -> Optional[dict]:
     with _conn() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM topics WHERE slug = %s", (slug,))
+        cur.execute("SELECT * FROM research.topics WHERE slug = %s", (slug,))
         row = cur.fetchone()
         return dict(row) if row else None
 
@@ -47,9 +47,9 @@ def list_topics(status: str = None) -> list:
     with _conn() as conn:
         cur = conn.cursor()
         if status:
-            cur.execute("SELECT * FROM topics WHERE status = %s ORDER BY slug", (status,))
+            cur.execute("SELECT * FROM research.topics WHERE status = %s ORDER BY slug", (status,))
         else:
-            cur.execute("SELECT * FROM topics ORDER BY slug")
+            cur.execute("SELECT * FROM research.topics ORDER BY slug")
         return [dict(r) for r in cur.fetchall()]
 
 
@@ -57,7 +57,7 @@ def upsert_topic(data: dict) -> None:
     with _conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            """INSERT INTO topics (slug, name, status, queries, motivation, tags,
+            """INSERT INTO research.topics (slug, name, status, queries, motivation, tags,
                                    expires, schema_version, updated_at)
                VALUES (%(slug)s, %(name)s, %(status)s, %(queries)s, %(motivation)s,
                        %(tags)s, %(expires)s, %(schema_version)s, now())
@@ -83,7 +83,7 @@ def upsert_topic(data: dict) -> None:
 def get_source(source_id: str) -> Optional[dict]:
     with _conn() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM sources WHERE id = %s", (source_id,))
+        cur.execute("SELECT * FROM research.sources WHERE id = %s", (source_id,))
         row = cur.fetchone()
         return dict(row) if row else None
 
@@ -93,11 +93,11 @@ def list_sources(tags: list = None) -> list:
         cur = conn.cursor()
         if tags:
             cur.execute(
-                "SELECT * FROM sources WHERE tags && %s ORDER BY created_at DESC",
+                "SELECT * FROM research.sources WHERE tags && %s ORDER BY created_at DESC",
                 (tags,)
             )
         else:
-            cur.execute("SELECT * FROM sources ORDER BY created_at DESC")
+            cur.execute("SELECT * FROM research.sources ORDER BY created_at DESC")
         return [dict(r) for r in cur.fetchall()]
 
 
@@ -105,7 +105,7 @@ def upsert_source(data: dict) -> None:
     with _conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            """INSERT INTO sources (id, type, title, url, origin, date_recency, tags, note)
+            """INSERT INTO research.sources (id, type, title, url, origin, date_recency, tags, note)
                VALUES (%(id)s, %(type)s, %(title)s, %(url)s, %(origin)s,
                        %(date_recency)s, %(tags)s, %(note)s)
                ON CONFLICT (id) DO UPDATE SET
@@ -128,7 +128,7 @@ def upsert_source(data: dict) -> None:
 def get_group(group_id: str) -> Optional[dict]:
     with _conn() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM groups WHERE id = %s", (group_id,))
+        cur.execute("SELECT * FROM research.groups WHERE id = %s", (group_id,))
         row = cur.fetchone()
         return dict(row) if row else None
 
@@ -136,7 +136,7 @@ def get_group(group_id: str) -> Optional[dict]:
 def list_groups() -> list:
     with _conn() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM groups ORDER BY created_at DESC")
+        cur.execute("SELECT * FROM research.groups ORDER BY created_at DESC")
         return [dict(r) for r in cur.fetchall()]
 
 
@@ -144,7 +144,7 @@ def upsert_group(data: dict) -> None:
     with _conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            """INSERT INTO groups (id, name, member_tags, member_topic_slugs)
+            """INSERT INTO research.groups (id, name, member_tags, member_topic_slugs)
                VALUES (%(id)s, %(name)s, %(member_tags)s, %(member_topic_slugs)s)
                ON CONFLICT (id) DO UPDATE SET
                  name=EXCLUDED.name, member_tags=EXCLUDED.member_tags,
@@ -163,12 +163,12 @@ def upsert_group(data: dict) -> None:
 def get_leaning(leaning_id: str) -> Optional[dict]:
     with _conn() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM leanings WHERE id = %s", (leaning_id,))
+        cur.execute("SELECT * FROM research.leanings WHERE id = %s", (leaning_id,))
         row = cur.fetchone()
         if not row:
             return None
         lean = dict(row)
-        cur.execute("SELECT * FROM evidence WHERE leaning_id = %s ORDER BY added", (leaning_id,))
+        cur.execute("SELECT * FROM research.evidence WHERE leaning_id = %s ORDER BY added", (leaning_id,))
         lean["evidence"] = [dict(r) for r in cur.fetchall()]
         return lean
 
@@ -176,7 +176,7 @@ def get_leaning(leaning_id: str) -> Optional[dict]:
 def list_leanings() -> list:
     with _conn() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM leanings ORDER BY updated_at DESC")
+        cur.execute("SELECT * FROM research.leanings ORDER BY updated_at DESC")
         return [dict(r) for r in cur.fetchall()]
 
 
@@ -184,7 +184,7 @@ def upsert_leaning(data: dict) -> None:
     with _conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            """INSERT INTO leanings (id, title, state, topics, notes, updated_at)
+            """INSERT INTO research.leanings (id, title, state, topics, notes, updated_at)
                VALUES (%(id)s, %(title)s, %(state)s, %(topics)s, %(notes)s, now())
                ON CONFLICT (id) DO UPDATE SET
                  title=EXCLUDED.title, state=EXCLUDED.state,
@@ -203,7 +203,7 @@ def add_evidence(leaning_id: str, ev: dict) -> None:
     with _conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            """INSERT INTO evidence (id, leaning_id, title, url, source, stance, added, note)
+            """INSERT INTO research.evidence (id, leaning_id, title, url, source, stance, added, note)
                VALUES (%(id)s, %(leaning_id)s, %(title)s, %(url)s, %(source)s,
                        %(stance)s, %(added)s, %(note)s)
                ON CONFLICT (id) DO UPDATE SET
@@ -227,7 +227,7 @@ def get_tag_aliases() -> dict:
     """Return {alias: canonical} mapping."""
     with _conn() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT alias, canonical FROM tag_aliases")
+        cur.execute("SELECT alias, canonical FROM research.tag_aliases")
         return {r["alias"]: r["canonical"] for r in cur.fetchall()}
 
 

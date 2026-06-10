@@ -1,14 +1,22 @@
 -- mini-moi Guild spine — PostgreSQL schema
 -- Research objects only. German sessions and curator_signals excluded.
 -- JSON is source of truth; this is a rebuildable projection.
--- Run: psql postgresql://minimoi:simple123@localhost:5432/personal_agents -f db/schema.sql
+-- Tables live in the `research` schema (migrated from public 2026-06-10).
+--
+-- Bootstrap order for a fresh container:
+--   1. init_db.sql          — users + schema grants
+--   2. schema.sql           — this file (research tables)
+--   3. schema_phase4.sql    — guild.cos_agenda, guild.agent_feedback, jobs.career_opportunities
+--   4. schema_phase5.sql    — guild.design_log
 
-CREATE TABLE IF NOT EXISTS tag_aliases (
+CREATE SCHEMA IF NOT EXISTS research;
+
+CREATE TABLE IF NOT EXISTS research.tag_aliases (
     alias      TEXT PRIMARY KEY,
     canonical  TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS topics (
+CREATE TABLE IF NOT EXISTS research.topics (
     slug            TEXT PRIMARY KEY,
     name            TEXT,
     status          TEXT,         -- dormant / active-pull / paused / one-shot / closed / archived
@@ -21,7 +29,7 @@ CREATE TABLE IF NOT EXISTS topics (
     updated_at      TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS sources (
+CREATE TABLE IF NOT EXISTS research.sources (
     id            TEXT PRIMARY KEY,
     type          TEXT,           -- article / post / paper / book
     title         TEXT,
@@ -33,7 +41,7 @@ CREATE TABLE IF NOT EXISTS sources (
     created_at    TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS groups (
+CREATE TABLE IF NOT EXISTS research.groups (
     id                   TEXT PRIMARY KEY,
     name                 TEXT,
     member_tags          TEXT[],
@@ -41,7 +49,7 @@ CREATE TABLE IF NOT EXISTS groups (
     created_at           TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS leanings (
+CREATE TABLE IF NOT EXISTS research.leanings (
     id          TEXT PRIMARY KEY,
     title       TEXT,
     state       TEXT,             -- question / leaning / hold
@@ -51,9 +59,9 @@ CREATE TABLE IF NOT EXISTS leanings (
     updated_at  TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS evidence (
+CREATE TABLE IF NOT EXISTS research.evidence (
     id          TEXT PRIMARY KEY,
-    leaning_id  TEXT REFERENCES leanings(id) ON DELETE CASCADE,
+    leaning_id  TEXT REFERENCES research.leanings(id) ON DELETE CASCADE,
     title       TEXT,
     url         TEXT,
     source      TEXT,

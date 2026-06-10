@@ -39,7 +39,7 @@ def upsert_tag_aliases(cur):
         return 0
     rows = [(alias, canonical) for alias, canonical in data.items()]
     execute_values(cur,
-        "INSERT INTO tag_aliases (alias, canonical) VALUES %s "
+        "INSERT INTO research.tag_aliases (alias, canonical) VALUES %s"
         "ON CONFLICT (alias) DO UPDATE SET canonical = EXCLUDED.canonical",
         rows)
     print(f"  tag_aliases: {len(rows)} record(s)")
@@ -57,7 +57,7 @@ def upsert_topics(cur):
         try:
             t = json.loads(thread_file.read_text())
             cur.execute(
-                """INSERT INTO topics (slug, name, status, queries, motivation, tags,
+                """INSERT INTO research.topics (slug, name, status, queries, motivation, tags,
                                        expires, schema_version, updated_at)
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,now())
                    ON CONFLICT (slug) DO UPDATE SET
@@ -95,7 +95,7 @@ def upsert_sources(cur):
     count = 0
     for s in data:
         cur.execute(
-            """INSERT INTO sources (id, type, title, url, origin, date_recency, tags, note)
+            """INSERT INTO research.sources (id, type, title, url, origin, date_recency, tags, note)
                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                ON CONFLICT (id) DO UPDATE SET
                  title=EXCLUDED.title, tags=EXCLUDED.tags, note=EXCLUDED.note""",
@@ -120,7 +120,7 @@ def upsert_groups(cur):
     count = 0
     for g in data:
         cur.execute(
-            """INSERT INTO groups (id, name, member_tags, member_topic_slugs)
+            """INSERT INTO research.groups (id, name, member_tags, member_topic_slugs)
                VALUES (%s,%s,%s,%s)
                ON CONFLICT (id) DO UPDATE SET
                  name=EXCLUDED.name, member_tags=EXCLUDED.member_tags,
@@ -148,7 +148,7 @@ def upsert_leanings(cur):
     ev_count = 0
     for lean in data:
         cur.execute(
-            """INSERT INTO leanings (id, title, state, topics, notes, updated_at)
+            """INSERT INTO research.leanings (id, title, state, topics, notes, updated_at)
                VALUES (%s,%s,%s,%s,%s,now())
                ON CONFLICT (id) DO UPDATE SET
                  title=EXCLUDED.title, state=EXCLUDED.state,
@@ -159,7 +159,7 @@ def upsert_leanings(cur):
         lean_count += 1
         for ev in lean.get("evidence", []):
             cur.execute(
-                """INSERT INTO evidence (id, leaning_id, title, url, source, stance, added, note)
+                """INSERT INTO research.evidence (id, leaning_id, title, url, source, stance, added, note)
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                    ON CONFLICT (id) DO UPDATE SET
                      stance=EXCLUDED.stance, note=EXCLUDED.note""",

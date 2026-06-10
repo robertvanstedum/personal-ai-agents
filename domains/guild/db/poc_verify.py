@@ -29,8 +29,8 @@ def q1_postgres_topics():
     cur.execute("""
         SELECT t.slug, t.status,
                COUNT(s.id) AS source_count
-        FROM topics t
-        LEFT JOIN sources s ON s.tags && t.tags
+        FROM research.topics t
+        LEFT JOIN research.sources s ON s.tags && t.tags
         GROUP BY t.slug, t.status
         ORDER BY t.status, t.slug
     """)
@@ -75,7 +75,7 @@ def q3_cross_system():
     # Step 1: find the leaning ID from Postgres
     conn = psycopg2.connect(DSN, cursor_factory=psycopg2.extras.RealDictCursor)
     cur = conn.cursor()
-    cur.execute("SELECT id, title, state FROM leanings LIMIT 1")
+    cur.execute("SELECT id, title, state FROM research.leanings LIMIT 1")
     lean = cur.fetchone()
     conn.close()
 
