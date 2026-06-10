@@ -696,6 +696,10 @@ def main():
     print("   Thread started: tg-poll (rvsopenbot)")
 
     # 4. Import loops (deferred so CoS starts even if a loop has an import error)
+    # Ensure repo root is on sys.path — needed when running under launchd where
+    # the working directory may differ from the script directory.
+    if str(BASE_DIR) not in sys.path:
+        sys.path.insert(0, str(BASE_DIR))
     try:
         from domains.guild.agents.loops.cos_job_search  import run_career_focus_scout
         from domains.guild.agents.loops.cos_german_watch import run_german_watch
