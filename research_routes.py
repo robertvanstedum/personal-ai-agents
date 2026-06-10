@@ -754,6 +754,71 @@ def _next_dive_output_path(topic: str) -> Path:
     return dd_dir / f'{topic}-dive-{n:03d}.md'
 
 
+def _build_challenger_html(ch: dict) -> str:
+    """Build the challenger process section HTML for a dive page.
+    Returns empty string when show_process is false or challenger is disabled.
+    """
+    if not ch.get('show_process') or not ch.get('enabled'):
+        return ''
+
+    points          = ch.get('challenge_points', [])
+    accepted_count  = ch.get('accepted_count', 0)
+    rejected_count  = ch.get('rejected_count', 0)
+    key_change      = _html_lib.escape(ch.get('key_change', ''))
+    first_pass_sum  = _html_lib.escape(ch.get('first_pass_summary', ''))
+
+    points_html = ''
+    for p in points:
+        accepted     = p.get('accepted', False)
+        border_color = '#C68A5E' if accepted else '#888'
+        label_color  = '#C68A5E' if accepted else '#888'
+        mark         = '✓' if accepted else '✗'
+        ptype        = _html_lib.escape(p.get('type', '').replace('_', ' '))
+        desc         = _html_lib.escape(p.get('description', ''))
+        impact_note  = ' · high impact' if p.get('impact') == 'high' else ''
+        points_html += (
+            f'<div style="margin-bottom:0.5rem;padding-left:1rem;'
+            f'border-left:2px solid {border_color};">'
+            f'<span style="font-size:0.75rem;text-transform:uppercase;'
+            f'letter-spacing:0.05em;color:{label_color};">'
+            f'{mark} {ptype}{impact_note}</span><br>{desc}</div>\n'
+        )
+
+    key_change_html = (
+        f'<div style="margin-top:0.75rem;font-style:italic;color:#666;">'
+        f'Key change: {key_change}</div>'
+        if key_change else ''
+    )
+
+    return (
+        '<div class="challenger-process" '
+        'style="margin-top:2rem;border-top:1px solid #C68A5E44;">\n'
+        '  <details>\n'
+        '    <summary style="cursor:pointer;padding:0.75rem 0;color:#C68A5E;'
+        'font-size:0.85rem;letter-spacing:0.05em;text-transform:uppercase;">\n'
+        f'      Challenger review\n'
+        f'      <span style="color:#888;font-weight:normal;text-transform:none;letter-spacing:0;">'
+        f'({len(points)} points · {accepted_count} accepted · {rejected_count} rejected)'
+        f'</span>\n'
+        '    </summary>\n'
+        '    <div style="padding:0.75rem 0 1rem 0;font-size:0.9rem;line-height:1.6;">\n'
+        f'      {points_html}{key_change_html}\n'
+        '    </div>\n'
+        '  </details>\n'
+        '  <details>\n'
+        '    <summary style="cursor:pointer;padding:0.75rem 0;color:#888;'
+        'font-size:0.85rem;letter-spacing:0.05em;text-transform:uppercase;">\n'
+        '      Initial draft\n'
+        '    </summary>\n'
+        '    <div style="padding:0.75rem 0 1rem 0;font-size:0.9rem;line-height:1.6;'
+        'color:#666;font-style:italic;">\n'
+        f'      {first_pass_sum or "(not stored)"}\n'
+        '    </div>\n'
+        '  </details>\n'
+        '</div>'
+    )
+
+
 @research_bp.route('/research/dive-result/<stem>')
 def research_dive_result(stem: str):
     """
@@ -776,6 +841,15 @@ def research_dive_result(stem: str):
     h1_m  = _re.search(r'^#\s+(.+)$', raw, _re.MULTILINE)
     if h1_m:
         title = h1_m.group(1).strip()
+
+    # Load challenger sidecar if present
+    ch_section_html = ''
+    ch_meta_path = DIVES_DIR / f'{stem}-challenger.json'
+    if ch_meta_path.exists():
+        try:
+            ch_section_html = _build_challenger_html(json.loads(ch_meta_path.read_text()))
+        except Exception:
+            pass
 
     # Lightweight markdown → HTML
     def _md_to_html(text: str) -> str:
@@ -849,6 +923,7 @@ def research_dive_result(stem: str):
 </header>
 <div class="container">
 {body_html}
+{ch_section_html}
 </div>
 </body>
 </html>""", 200, {'Content-Type': 'text/html'}
@@ -948,7 +1023,7 @@ def api_research_generate_dive():
             "error": f"A Deeper Dive is already running for '{running_topic}'. Wait for it to finish."
         }), 409
 
-    out_path = _next_dd_output_path(topic)
+    out_path = _next_dive_output_path(topic)
     script   = RESEARCH_ROOT / 'scripts' / 'generate_dive.py'
 
     try:
@@ -1036,6 +1111,105 @@ def api_research_generate_dive_status():
         "topic":      state.get('topic'),
         "started_at": state.get('started_at'),
     })
+
+
+@research_bp.route('/api/research/scan-to-dive', methods=['POST'])
+def api_research_scan_to_dive():
+    """
+    Create a thread from a scan and immediately generate a Deeper Dive.
+    POST /api/research/scan-to-dive
+    Body: {"hash_id": "03624"}
+
+    Creates a 1-session thread from the scan's content, then fires generate_dive.py
+    exactly as /api/research/generate-dive does. Returns immediately — poll
+    /api/research/generate-dive/status for completion.
+    """
+    global _dd_proc
+    from agent.threads import cmd_create
+
+    body    = request.get_json() or {}
+    hash_id = body.get('hash_id', '').strip()
+
+    if not _re.match(r'^[a-f0-9]{5}$', hash_id):
+        return jsonify({"ok": False, "error": "invalid hash_id"}), 400
+
+    md_path = _find_dd_md(hash_id)
+    if not md_path:
+        return jsonify({"ok": False, "error": f"scan '{hash_id}' not found"}), 404
+
+    if _dd_state_active():
+        try:
+            running_topic = json.loads(_DD_STATE_PATH.read_text()).get('topic', 'unknown')
+        except Exception:
+            running_topic = 'unknown'
+        return jsonify({
+            "ok": False,
+            "error": f"A Deeper Dive is already running for '{running_topic}'. Wait for it to finish."
+        }), 409
+
+    dd = _parse_scan_md(md_path)
+
+    # Auto-generate slug from title (same stop-word logic as scan page)
+    _STOP = {'a','an','the','in','on','at','of','to','and','or','for','by',
+             'with','from','is','are','was','were','be','been','as','it','its',
+             'this','that','how','why','what','when','where','who'}
+    _words = _re.sub(r'[^a-z0-9\s]', ' ', dd['title'].lower()).split()
+    _keep  = [w for w in _words if w not in _STOP and len(w) > 1][:4]
+    base_slug = '-'.join(_keep) if _keep else _re.sub(r'[^a-z0-9]+', '-', dd['title'].lower()).strip('-')[:40]
+
+    # Ensure unique slug
+    config_path = RESEARCH_ROOT / 'agent' / 'config.json'
+    try:
+        config = json.loads(config_path.read_text())
+    except Exception:
+        config = {}
+    topic  = base_slug
+    suffix = 1
+    while topic in config.get('session_searches', {}):
+        topic = f"{base_slug}-{suffix}"
+        suffix += 1
+
+    motivation = dd['metadata'].get('interest', '') or dd['title']
+
+    # Create thread record
+    cmd_create(topic, motivation or "Explore this article", "")
+
+    # Add a placeholder query so session_searches entry exists
+    config.setdefault('session_searches', {})[topic] = [dd['title'][:80]]
+    config_path.write_text(json.dumps(config, indent=2))
+
+    # Write synthetic session file
+    topics_dir = RESEARCH_ROOT / 'topics' / topic
+    topics_dir.mkdir(parents=True, exist_ok=True)
+    session_md   = _build_session_from_scan(dd, hash_id, topic)
+    session_path = topics_dir / f'{topic}-001.md'
+    session_path.write_text(session_md)
+
+    # Fire generate_dive.py subprocess (identical to api_research_generate_dive)
+    out_path = _next_dive_output_path(topic)
+    script   = RESEARCH_ROOT / 'scripts' / 'generate_dive.py'
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, str(script),
+             '--topic', topic,
+             '--output-path', str(out_path)],
+            cwd=str(RESEARCH_ROOT),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+    except (OSError, subprocess.SubprocessError) as e:
+        return jsonify({"ok": False, "error": f"failed to launch: {e}"}), 500
+
+    _dd_proc = proc
+    _DD_STATE_PATH.write_text(json.dumps({
+        "topic":       topic,
+        "output_path": str(out_path),
+        "pid":         proc.pid,
+        "started_at":  datetime.now(timezone.utc).isoformat(),
+        "status":      "running",
+    }, indent=2))
+
+    return jsonify({"ok": True, "topic": topic, "pid": proc.pid})
 
 
 # ── API: Threads ──────────────────────────────────────────────────────────────
@@ -1607,6 +1781,77 @@ def _parse_scan_md(md_path: Path) -> dict:
     }
 
 
+def _build_session_from_scan(dd: dict, hash_id: str, topic: str) -> str:
+    """Build a synthetic research session .md from a parsed scan for use by generate_dive.py."""
+    from datetime import date as _date
+    today = _date.today().isoformat()
+
+    # Extract plain-text findings from analysis HTML
+    plain = _re.sub(r'<[^>]+>', '\n', dd.get('analysis_html', ''))
+    plain = _re.sub(r'\n{2,}', '\n', plain).strip()
+    findings = []
+    for line in plain.splitlines():
+        line = line.strip()
+        # Skip short lines, numbered headers (1., 2., ...), and hash-style headings
+        if len(line) > 50 and not _re.match(r'^\d+\.', line) and not line.startswith('#'):
+            findings.append(line)
+        if len(findings) >= 6:
+            break
+    findings_text = '\n'.join(f'- {f}' for f in findings) or '- (see scan analysis)'
+
+    # Build sources in the [N] domain. "title".\n    url format that generate_dive.py parses
+    bib = dd.get('bibliography', [])
+    src_lines = []
+    for i, item in enumerate(bib[:10], 1):
+        domain = item.get('domain', '') or ''
+        if not domain and item.get('url'):
+            domain = _re.sub(r'^https?://(www\.)?', '', item['url'] or '').split('/')[0]
+        title_s = item.get('title') or item.get('raw', '')[:80]
+        url_s   = item.get('url', '') or ''
+        src_lines.append(f'[{i}] {domain}. "{title_s}".')
+        if url_s:
+            src_lines.append(f'    {url_s}')
+    sources_text = '\n'.join(src_lines) if src_lines else '(none recorded)'
+
+    return f"""# Session Findings: {topic}-001
+
+<!-- MACHINE-READABLE HEADER — do not remove or reorder these lines -->
+date: {today}
+session: {topic}-001
+topic: {topic}
+cost: $0.0000
+duration: 1min
+sources_reviewed: {len(bib)}
+<!-- END HEADER -->
+
+## Research Question
+
+Analysis of scan {hash_id}: {dd['title']}
+
+---
+
+## Key Findings
+
+{findings_text}
+
+---
+
+## Sources
+
+{sources_text}
+
+---
+
+## Threads to Continue
+
+- Deeper investigation of: {dd['title']}
+
+---
+
+*Generated from scan {hash_id} on {today}*
+"""
+
+
 def _find_dd_md(hash_id: str):
     """Return Path to the .md file for a given hash_id, or None."""
     # Sanitise: only lowercase hex + length guard
@@ -1765,6 +2010,15 @@ def research_scan_view(hash_id: str):
     .bib-empty {{ color: var(--text-muted); font-style: italic; }}
     .dd-footer {{ margin-top: 2.5rem; font-size: 0.8rem; color: var(--text-dim); font-family: 'DM Mono', monospace; }}
     #toast {{ position: fixed; bottom: 24px; right: 24px; background: #4a8c28; color: #fff; font-family: 'DM Mono', monospace; font-size: 0.82rem; padding: 10px 18px; border-radius: 6px; display: none; z-index: 200; }}
+    .dive-panel {{ margin-top: 2.5rem; padding: 1.25rem 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap; }}
+    .dive-panel-text h3 {{ font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 600; color: var(--text); margin-bottom: 0.35rem; }}
+    .dive-panel-text p {{ font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; margin: 0; }}
+    .dive-panel-text .one-session-note {{ font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--text-dim); margin-top: 0.4rem; }}
+    .btn-dive {{ font-family: 'DM Mono', monospace; font-size: 0.82rem; background: var(--accent); color: var(--surface); border: none; border-radius: 5px; padding: 9px 20px; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: opacity 0.15s; align-self: center; }}
+    .btn-dive:hover:not(:disabled) {{ opacity: 0.85; }}
+    .btn-dive:disabled {{ opacity: 0.45; cursor: not-allowed; }}
+    #dive-status {{ margin-top: 0.6rem; width: 100%; font-family: 'DM Mono', monospace; font-size: 0.78rem; color: var(--text-muted); }}
+    #dive-status.err {{ color: #8b2020; }}
     .spawn-thread-panel {{ margin-top: 3rem; padding: 1.5rem 1.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }}
     .spawn-thread-panel h2 {{ font-family: 'Playfair Display', serif; font-size: 1.1rem; font-weight: 600; margin-bottom: 1.25rem; color: var(--text); }}
     .spawn-field {{ margin-bottom: 1rem; }}
@@ -1808,6 +2062,16 @@ def research_scan_view(hash_id: str):
     <h2>Sources &amp; Further Reading</h2>
     {bib_html}
   </div>
+  <div class="dive-panel" id="dive-panel">
+    <div class="dive-panel-text">
+      <h3>→ Generate Deeper Dive</h3>
+      <p>Synthesize this article with Claude + Grok challenge pass.</p>
+      <p class="one-session-note">Note: this dive draws from a single article. For multi-session depth, use Start Research Thread below.</p>
+      <div id="dive-status"></div>
+    </div>
+    <button class="btn-dive" id="btn-dive" onclick="generateDive()">Generate Deeper Dive</button>
+  </div>
+
   <section class="spawn-thread-panel" id="spawn-thread">
     <h2>🔬 Start Research Thread</h2>
     <div class="spawn-field">
@@ -1905,6 +2169,37 @@ def research_scan_view(hash_id: str):
       container.innerHTML = '<span style="color:#8b2020;font-size:0.85rem">Could not load bibliography.</span>';
     }}
   }});
+
+  async function generateDive() {{
+    const btn    = document.getElementById('btn-dive');
+    const status = document.getElementById('dive-status');
+    btn.disabled = true;
+    btn.textContent = 'Generating…';
+    status.className = '';
+    status.textContent = 'Creating thread and launching dive…';
+    try {{
+      const res  = await fetch('/api/research/scan-to-dive', {{
+        method:  'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body:    JSON.stringify({{hash_id: HASH_ID}}),
+      }});
+      const data = await res.json();
+      if (data.ok) {{
+        status.textContent = 'Dive started — redirecting to Desk…';
+        setTimeout(() => {{ window.location.href = '/research/dashboard'; }}, 1000);
+      }} else {{
+        status.textContent = data.error || 'Failed to start dive.';
+        status.className = 'err';
+        btn.disabled = false;
+        btn.textContent = 'Generate Deeper Dive';
+      }}
+    }} catch (e) {{
+      status.textContent = 'Network error — please try again.';
+      status.className = 'err';
+      btn.disabled = false;
+      btn.textContent = 'Generate Deeper Dive';
+    }}
+  }}
 
   async function spawnThread() {{
     const btn      = document.getElementById('st-launch');

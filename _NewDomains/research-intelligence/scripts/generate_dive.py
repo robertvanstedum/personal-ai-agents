@@ -26,6 +26,10 @@ from pathlib import Path
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
 ROOT         = Path(__file__).resolve().parent.parent   # _NewDomains/research-intelligence
+REPO_ROOT    = ROOT.parent.parent                       # personal-ai-agents/
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 TOPICS_DIR   = ROOT / 'topics'
 THREADS_DIR  = ROOT / 'data' / 'threads'
 ANNOTATIONS_DIR = ROOT / 'data' / 'annotations' / 'research'
@@ -434,6 +438,42 @@ def main() -> None:
         label='Synthesizer',
     )
 
+    # ── Challenger pass (Grok cross-provider quality review) ──────────────────
+    _ch_result = None
+    try:
+        from domains.guild.services.challenger import ChallengerService as _CS
+        _sources_lines = []
+        for _sess in data['sessions']:
+            for _src in _sess['sources']:
+                _sources_lines.append(f"{_src['domain']}. \"{_src['title']}\"")
+        _related = list(dict.fromkeys(
+            s for _sess in data['sessions'] for s in _sess.get('threads', [])
+        ))
+        _ch_result = _CS().run(
+            domain="curator_deep_dive",
+            feature="deeper_dive",
+            first_pass=s_out,
+            context={
+                "topic_name":      topic,
+                "related_threads": ', '.join(_related)[:200],
+                "sources_summary": '\n'.join(_sources_lines[:20])[:1000],
+            },
+            entity_description=topic,
+        )
+        if _ch_result.enabled and not _ch_result.error:
+            s_out = _ch_result.final
+            print(f"     Challenger: {_ch_result.challenged_count} points · "
+                  f"{_ch_result.accepted_count} accepted · outputs_differ={_ch_result.outputs_differ}")
+        elif _ch_result.error:
+            print(f"     Challenger: error — {_ch_result.error} (using original synthesis)")
+        else:
+            print(f"     Challenger: disabled in config")
+    except ImportError:
+        print(f"     Challenger: ChallengerService not available — skipping")
+    except Exception as _e:
+        print(f"     Challenger: error — {_e} — skipping")
+    # ── end challenger pass ───────────────────────────────────────────────────
+
     challenger_user = build_challenger_user_prompt(data, s_out)
     c_out, c_cost = run_agent(
         client,
@@ -451,6 +491,23 @@ def main() -> None:
     out_path = args.output_path or next_output_path(topic)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(essay)
+
+    # Write challenger sidecar for portal rendering
+    if _ch_result and _ch_result.enabled and not _ch_result.error:
+        _meta_path = out_path.with_name(out_path.stem + '-challenger.json')
+        _meta_path.write_text(json.dumps({
+            'enabled':          _ch_result.enabled,
+            'show_process':     _ch_result.show_process,
+            'challenged_count': _ch_result.challenged_count,
+            'accepted_count':   _ch_result.accepted_count,
+            'rejected_count':   _ch_result.rejected_count,
+            'outputs_differ':   _ch_result.outputs_differ,
+            'key_change':       _ch_result.key_change,
+            'challenge_points': _ch_result.challenge_points,
+            'exchange_id':      _ch_result.exchange_id,
+            'first_pass_summary': _ch_result.first_pass[:300],
+        }, indent=2))
+        print(f"  Challenger sidecar: {_meta_path.relative_to(ROOT)}")
 
     create_reading_room_stub(topic)
 
