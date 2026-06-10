@@ -199,7 +199,7 @@
           <span class="section-kicker">Sources</span>
           <span class="section-count" id="cnt-sources"></span>
         </span>
-        <span class="show-all-link" onclick="showAll('sources')">show all →</span>
+        <span class="show-all-link" id="toggle-sources" onclick="toggleSection('sources')">show all →</span>
       </div>
       <div class="archive-rows" id="rows-sources"></div>
     </div>
@@ -211,7 +211,7 @@
           <span class="section-kicker">Scans</span>
           <span class="section-count" id="cnt-scans"></span>
         </span>
-        <span class="show-all-link" onclick="showAll('scans')">show all →</span>
+        <span class="show-all-link" id="toggle-scans" onclick="toggleSection('scans')">show all →</span>
       </div>
       <div class="archive-rows" id="rows-scans"></div>
     </div>
@@ -317,15 +317,23 @@ function renderSection(key, items, rowFn, counterId, rowsId) {
     html = `<p class="archive-empty">Nothing archived yet.</p>`;
   } else if (!expanded[key] && items.length > PAGE_SIZE) {
     const more = items.length - PAGE_SIZE;
-    html += `<div class="archive-row show-more-row" onclick="showAll('${key}')">+ ${more} more ${key}</div>`;
+    html += `<div class="archive-row show-more-row" onclick="toggleSection('${key}')">+ ${more} more ${key}</div>`;
+  } else if (expanded[key] && items.length > PAGE_SIZE) {
+    html += `<div class="archive-row show-more-row" onclick="toggleSection('${key}')">← show less</div>`;
   }
   el.innerHTML = html;
 }
 
-function showAll(key) {
-  expanded[key] = true;
+function toggleSection(key) {
+  expanded[key] = !expanded[key];
+  // Update header toggle link if it exists
+  const lnk = document.getElementById('toggle-' + key);
+  if (lnk) lnk.textContent = expanded[key] ? '← show less' : 'show all →';
   renderAll();
 }
+
+// Keep showAll for any legacy callers
+function showAll(key) { expanded[key] = true; renderAll(); }
 
 function renderAll() {
   renderSection('daily',   DATA.daily,   dailyRow,  'cnt-daily',   'rows-daily');
