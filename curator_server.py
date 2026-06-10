@@ -378,17 +378,23 @@ def api_library():
                 continue
             parts = f.name.split('-', 1)
             if len(parts) >= 1 and len(parts[0]) == 5:
-                dive_url_map[parts[0]] = f'/interests/2026/scans/{f.name}'
+                # Route to Flask scan view, not the old static HTML
+                dive_url_map[parts[0]] = f'/research/scan/{parts[0]}'
 
     for art in articles.values():
         hash_id = art.get('hash_id')
         dive_path = art.get('deep_dive_path')
         dive_url = None
         if dive_path:
-            # Convert absolute .md path to web URL
-            path_match = re.search(r'interests/(.+\.md)$', str(dive_path))
-            if path_match:
-                dive_url = '/interests/' + path_match.group(1).replace('.md', '.html')
+            # Rewrite history-recorded path to Flask scan view if it's a scan hash
+            hash_from_path = re.search(r'/scans/([0-9a-f]{5})-', str(dive_path))
+            if hash_from_path:
+                dive_url = f'/research/scan/{hash_from_path.group(1)}'
+            else:
+                # Fallback: convert .md path to static web URL (legacy dives)
+                path_match = re.search(r'interests/(.+\.md)$', str(dive_path))
+                if path_match:
+                    dive_url = '/interests/' + path_match.group(1).replace('.md', '.html')
         elif hash_id and hash_id in dive_url_map:
             # Dive file exists on disk but wasn't recorded in history
             dive_url = dive_url_map[hash_id]
