@@ -2052,12 +2052,13 @@ def research_scan_view(hash_id: str):
 <nav class="curator-subnav">
   <a href="/briefing" class="subnav-tab">Daily</a>
   <a href="/curator_library.html" class="subnav-tab">Reading Room</a>
-  <a href="/interests/2026/scans/index.html" class="subnav-tab active">Scans &amp; Dives</a>
+  <a href="/scans-dives" class="subnav-tab active">Scans &amp; Dives</a>
   <a href="/research/leanings" class="subnav-tab">Leanings</a>
   <a href="/archive" class="subnav-tab">Archive</a>
   <a href="/research/dashboard" class="subnav-tab subnav-focus">Desk</a>
 </nav>
 <main>
+  <p style="margin-bottom:1.5rem"><a href="/scans-dives" style="font-family:'DM Mono',monospace;font-size:0.8rem;color:var(--text-muted);text-decoration:none;letter-spacing:0.04em;">← Scans &amp; Dives</a></p>
   <h1>{title}</h1>
   <div class="meta-block">
     {meta_block}

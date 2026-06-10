@@ -1115,8 +1115,15 @@ def _scans_dives_data():
                 'date':    (row.select_one('.row-date')    or type('_', (), {'text': ''})()).text.strip(),
             })
         for row in soup.select('.row-article'):
+            raw_href = row.get('href', '')
+            # Rewrite static scan hrefs to the Flask dynamic scan view.
+            # Static format: /interests/2026/scans/<hash>-<slug>.html
+            # Flask format:  /research/scan/<hash>
+            import re as _re_href
+            _m = _re_href.search(r'/scans/([0-9a-f]{5})-', raw_href)
+            scan_href = f'/research/scan/{_m.group(1)}' if _m else raw_href
             scans.append({
-                'href':   row.get('href', ''),
+                'href':   scan_href,
                 'date':   (row.select_one('.row-date-col') or type('_', (), {'text': ''})()).text.strip(),
                 'source': (row.select_one('.row-source')   or type('_', (), {'text': ''})()).text.strip(),
                 'title':  (row.select_one('.row-title')    or type('_', (), {'text': ''})()).text.strip(),
