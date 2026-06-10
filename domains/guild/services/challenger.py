@@ -280,8 +280,9 @@ class ChallengerService:
                     else:
                         rejected += 1
 
-            result.accepted_count = accepted
-            result.rejected_count = rejected
+            # Recount from actual flag state — guards against empty/mismatched decisions
+            result.accepted_count = sum(1 for p in result.challenge_points if p.get("accepted"))
+            result.rejected_count = sum(1 for p in result.challenge_points if not p.get("accepted"))
 
             # Extract final text — key varies by domain
             for key in ("final", "final_analysis", "final_corrected_german"):
