@@ -7,7 +7,7 @@ Switch models, switch providers, go offline. The agent still knows you.
 
 Three active domains:
 
-**Curator v1.1** — Geopolitics and finance briefing. ~700 RSS and X candidates scored
+**Curator v1.2** — Geopolitics and finance briefing. ~700 RSS and X candidates scored
 daily by a reasoning model with your learned profile. Top 20 to the web portal, top 10
 to Telegram at 7 AM. In daily use since February 2026.
 
