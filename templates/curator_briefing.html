@@ -20,9 +20,9 @@
             --text: #2a1f14;
             --text-muted: #7a6558;
             --text-dim: #9e9080;
-            --accent: #8b4513;
-            --accent-light: #c8703a;
-            --accent-dim: rgba(139,69,19,0.08);
+            --accent: #8b5e2a;
+            --accent-light: #b07840;
+            --accent-dim: rgba(139,94,42,0.08);
             --font-serif: 'Playfair Display', Georgia, serif;
             --font-sans: 'Source Sans 3', system-ui, sans-serif;
             --font-mono: 'DM Mono', 'Courier New', monospace;
@@ -158,13 +158,13 @@
         }
 
         .cat-geo_major, .cat-geo_minor {
-            background: #e8f4e8; color: #2d6a2d; border-color: rgba(45,106,45,0.25);
+            background: rgba(139,94,42,0.08); color: var(--accent); border-color: rgba(139,94,42,0.25);
         }
         .cat-monetary {
-            background: #e8eef8; color: #2d4a8a; border-color: rgba(45,74,138,0.25);
+            background: var(--bg-mid); color: var(--text-muted); border-color: var(--border);
         }
         .cat-fiscal {
-            background: #f8f4e8; color: #8a6a2d; border-color: rgba(138,106,45,0.25);
+            background: rgba(139,94,42,0.06); color: var(--accent); border-color: rgba(139,94,42,0.2);
         }
         .cat-geo_other, .cat-technology, .cat-other, .cat-unknown {
             background: var(--bg-mid); color: var(--text-muted); border-color: var(--border);
@@ -214,38 +214,55 @@
             margin-bottom: 10px;
         }
 
-        .card-actions {
+        /* ── Article actions — text-link style ── */
+        .article-actions {
             display: flex;
-            gap: 6px;
+            gap: 0;
+            align-items: center;
+            margin-top: 2px;
         }
 
         .action-btn {
             font-size: 0.78rem;
-            font-weight: 500;
-            padding: 3px 12px;
-            border: 1px solid var(--border);
-            border-radius: 20px;
+            font-weight: 400;
+            font-family: inherit;
+            padding: 0;
+            border: none;
+            border-radius: 0;
             background: transparent;
-            color: var(--text-muted);
+            color: var(--accent);
             cursor: pointer;
-            transition: all 0.15s;
+            opacity: 0.65;
+            transition: opacity 0.15s;
+            letter-spacing: 0.03em;
         }
 
         .action-btn:hover:not(:disabled) {
-            background: var(--bg-mid);
-            color: var(--text);
+            opacity: 1;
+            background: transparent;
+            color: var(--accent);
         }
 
         .action-btn:disabled {
-            opacity: 0.4;
+            opacity: 0.35;
             cursor: not-allowed;
         }
 
-        /* Investigate button */
+        .action-sep {
+            color: var(--text-dim);
+            margin: 0 0.4rem;
+            font-size: 0.78rem;
+        }
+
+        /* Investigate button — overrides base text-link style */
         .btn-investigate {
             background: var(--accent) !important;
             color: white !important;
             font-weight: 600 !important;
+            opacity: 1 !important;
+            padding: 3px 12px !important;
+            border-radius: 20px !important;
+            border: 1px solid transparent !important;
         }
         .btn-investigate:hover:not(:disabled) { background: #7a521f !important; }
 
@@ -399,15 +416,19 @@
 {% if entry.summary %}
                 <p class="card-summary">{{ entry.summary | striptags | truncate(220, killwords=False) }}</p>
 {% endif %}
-                <div class="card-actions">
+                <div class="article-actions">
 {% if run_mode == 'dry-run' %}
-                    <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled>👍 Like</button>
-                    <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled>👎 Pass</button>
-                    <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled>💾 Save</button>
+                    <button class="action-btn btn-like" title="Dry run — buttons disabled" disabled>Like</button>
+                    <span class="action-sep">·</span>
+                    <button class="action-btn btn-dislike" title="Dry run — buttons disabled" disabled>Pass</button>
+                    <span class="action-sep">·</span>
+                    <button class="action-btn btn-save" title="Dry run — buttons disabled" disabled>Save</button>
 {% else %}
-                    <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', {{ rank }});">👍 Like</button>
-                    <button class="action-btn btn-dislike" title="Pass on this article" onclick="showFeedback(this, 'dislike', {{ rank }});">👎 Pass</button>
-                    <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', {{ rank }});">💾 Save</button>
+                    <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', {{ rank }});">Like</button>
+                    <span class="action-sep">·</span>
+                    <button class="action-btn btn-dislike" title="Pass on this article" onclick="showFeedback(this, 'dislike', {{ rank }});">Pass</button>
+                    <span class="action-sep">·</span>
+                    <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', {{ rank }});">Save</button>
 {% endif %}
                 </div>
             </div>
@@ -730,7 +751,7 @@ function addInvestigateButton(rank, hashId) {
     for (var i = 0; i < cards.length; i++) {
         var card = cards[i];
         if (card.dataset.rank == rank) {
-            var cardActions = card.querySelector('.card-actions');
+            var cardActions = card.querySelector('.article-actions');
             if (!cardActions || cardActions.querySelector('.btn-investigate')) return;
 
             var btn = document.createElement('button');
