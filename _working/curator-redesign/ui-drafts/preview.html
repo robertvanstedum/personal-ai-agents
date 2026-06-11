@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Curator Landing — Image Preview</title>
+<style>
+  body { font-family: Georgia, serif; background: #F5F0E8; color: #2A1F14; margin: 0; padding: 2rem; }
+  h2 { font-size: 0.8rem; font-family: monospace; text-transform: uppercase; letter-spacing: 0.12em; color: #8A7060; margin: 2rem 0 0.5rem; }
+  hr { border: none; border-top: 1px solid #C4B49A; margin: 1rem 0 2rem; }
+
+  /* ── Landing mockup ── */
+  .landing {
+    position: relative;
+    max-width: 1100px;
+    margin: 0 auto 3rem;
+    border: 1px solid #C4B49A;
+    overflow: hidden;
+    border-radius: 4px;
+  }
+  .landing-bg {
+    position: absolute; inset: 0;
+    background-size: cover;
+    background-position: center;
+    opacity: 0.18;
+    pointer-events: none;
+  }
+  .landing-content {
+    position: relative;
+    padding: 3rem 2rem 2rem;
+    text-align: center;
+  }
+  .rule { border: none; border-top: 1px solid #C4B49A; margin: 0.5rem auto; width: 80%; }
+  .title { font-size: 3.5rem; letter-spacing: 0.35em; font-weight: 400; margin: 0.3rem 0; text-transform: uppercase; }
+  .tagline { font-style: italic; color: #C68A5E; font-size: 0.95rem; margin: 0.6rem 0; }
+  .date { font-family: monospace; font-size: 0.72rem; color: #A89880; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 0.3rem; }
+
+  .cards { display: flex; justify-content: center; gap: 18px; margin: 2rem auto 2rem; flex-wrap: nowrap; }
+  .card {
+    width: 200px; flex-shrink: 0;
+    border: 1px solid #C4B49A;
+    border-radius: 2px;
+    overflow: hidden;
+    box-shadow: 2px 2px 4px rgba(0,0,0,0.08);
+    background: #EDE7DC;
+    text-align: left;
+  }
+  .card-img { width: 100%; height: 130px; object-fit: cover; display: block; }
+  .card-tab {
+    background: #2A1F14; color: #EDE7DC;
+    font-family: monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.14em;
+    padding: 4px 10px;
+  }
+  .card-body { padding: 10px 12px 8px; }
+  .card-stat { font-size: 0.82rem; line-height: 1.5; }
+  .card-dim { font-family: monospace; font-size: 0.7rem; color: #8A7060; line-height: 1.6; }
+  .card-link { font-family: monospace; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: #C68A5E; margin-top: 8px; display: block; }
+
+  .bg-label {
+    position: absolute; top: 8px; right: 10px;
+    font-family: monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: #8A7060; background: rgba(245,240,232,0.8); padding: 2px 6px; border-radius: 2px;
+  }
+</style>
+</head>
+<body>
+
+<h2>Background Option A — hero-shadow-10 (bookshop / street)</h2>
+<hr>
+<div class="landing">
+  <div class="landing-bg" style="background-image: url('latest-options/hero-shadow-10.jpg')"></div>
+  <span class="bg-label">hero-shadow-10.jpg</span>
+  <div class="landing-content">
+    <hr class="rule">
+    <div class="title">Curator</div>
+    <hr class="rule">
+    <div class="tagline">targeted search → analysis →<br>opinion/doubt → long-term archive</div>
+    <div class="date">Thursday, June 4, 2026</div>
+    <div class="cards">
+      <div class="card">
+        <div class="card-tab">Daily</div>
+        <img class="card-img" src="latest-options/daily-6.jpg" alt="Daily">
+        <div class="card-body">
+          <div class="card-stat">Thursday, June 4<br>20 articles</div>
+          <div class="card-dim">scored &amp; ranked</div>
+          <span class="card-link">Today ›</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-tab">Research</div>
+        <img class="card-img" src="latest-options/reading-7.jpg" alt="Research">
+        <div class="card-body">
+          <div class="card-stat">9 topics</div>
+          <div class="card-dim">7 active · 0 dormant<br>3 leanings</div>
+          <span class="card-link">Explore ›</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-tab">Leanings</div>
+        <img class="card-img" src="latest-options/analyzing-8.jpg" alt="Leanings">
+        <div class="card-body">
+          <div class="card-stat">3 active</div>
+          <div class="card-dim">3 questions</div>
+          <span class="card-link">Review ›</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-tab">Archive</div>
+        <img class="card-img" src="latest-options/archive-9.jpg" alt="Archive">
+        <div class="card-body">
+          <div class="card-dim">Library<br>Scans &amp; Dives<br>Observations</div>
+          <span class="card-link">Browse ›</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>Background Option B — hero-shadow-11 (neoclassical hall)</h2>
+<hr>
+<div class="landing">
+  <div class="landing-bg" style="background-image: url('latest-options/hero-shadow-11.jpg')"></div>
+  <span class="bg-label">hero-shadow-11.jpg</span>
+  <div class="landing-content">
+    <hr class="rule">
+    <div class="title">Curator</div>
+    <hr class="rule">
+    <div class="tagline">targeted search → analysis →<br>opinion/doubt → long-term archive</div>
+    <div class="date">Thursday, June 4, 2026</div>
+    <div class="cards">
+      <div class="card">
+        <div class="card-tab">Daily</div>
+        <img class="card-img" src="latest-options/daily-6.jpg" alt="Daily">
+        <div class="card-body">
+          <div class="card-stat">Thursday, June 4<br>20 articles</div>
+          <div class="card-dim">scored &amp; ranked</div>
+          <span class="card-link">Today ›</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-tab">Research</div>
+        <img class="card-img" src="latest-options/reading-7.jpg" alt="Research">
+        <div class="card-body">
+          <div class="card-stat">9 topics</div>
+          <div class="card-dim">7 active · 0 dormant<br>3 leanings</div>
+          <span class="card-link">Explore ›</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-tab">Leanings</div>
+        <img class="card-img" src="latest-options/analyzing-8.jpg" alt="Leanings">
+        <div class="card-body">
+          <div class="card-stat">3 active</div>
+          <div class="card-dim">3 questions</div>
+          <span class="card-link">Review ›</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-tab">Archive</div>
+        <img class="card-img" src="latest-options/archive-9.jpg" alt="Archive">
+        <div class="card-body">
+          <div class="card-dim">Library<br>Scans &amp; Dives<br>Observations</div>
+          <span class="card-link">Browse ›</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>No background — plain parchment (current)</h2>
+<hr>
+<div class="landing">
+  <div class="landing-content">
+    <hr class="rule">
+    <div class="title">Curator</div>
+    <hr class="rule">
+    <div class="tagline">targeted search → analysis →<br>opinion/doubt → long-term archive</div>
+    <div class="date">Thursday, June 4, 2026</div>
+    <div class="cards">
+      <div class="card">
+        <div class="card-tab">Daily</div>
+        <img class="card-img" src="latest-options/daily-6.jpg" alt="Daily">
+        <div class="card-body">
+          <div class="card-stat">Thursday, June 4<br>20 articles</div>
+          <div class="card-dim">scored &amp; ranked</div>
+          <span class="card-link">Today ›</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-tab">Research</div>
+        <img class="card-img" src="latest-options/reading-7.jpg" alt="Research">
+        <div class="card-body">
+          <div class="card-stat">9 topics</div>
+          <div class="card-dim">7 active · 0 dormant<br>3 leanings</div>
+          <span class="card-link">Explore ›</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-tab">Leanings</div>
+        <img class="card-img" src="latest-options/analyzing-8.jpg" alt="Leanings">
+        <div class="card-body">
+          <div class="card-stat">3 active</div>
+          <div class="card-dim">3 questions</div>
+          <span class="card-link">Review ›</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-tab">Archive</div>
+        <img class="card-img" src="latest-options/archive-9.jpg" alt="Archive">
+        <div class="card-body">
+          <div class="card-dim">Library<br>Scans &amp; Dives<br>Observations</div>
+          <span class="card-link">Browse ›</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
