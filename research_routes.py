@@ -926,7 +926,7 @@ def research_dive_result(stem: str):
 <body>
 <header class="page-header">
   <a href="/">mini-moi</a>
-  <a href="/research/dashboard" class="back-link">← Dashboard</a>
+  <a href="/scans-dives" class="back-link">← Scans &amp; Dives</a>
 </header>
 <div class="container">
 {body_html}
