@@ -130,6 +130,11 @@
       cursor: pointer; border-bottom: none;
     }
     .show-more-row:hover { color: var(--accent); }
+    /* Non-expandable count indicator (e.g. Daily Editions) */
+    .show-more-row.count-only {
+      cursor: default; pointer-events: none;
+    }
+    .show-more-row.count-only:hover { color: var(--text-muted); }
 
     /* ── Empty state ── */
     .archive-empty {
@@ -310,14 +315,21 @@ function obsRow(o) {
 // ── Section rendering ─────────────────────────────────────────────────────────
 function renderSection(key, items, rowFn, counterId, rowsId) {
   document.getElementById(counterId).textContent = items.length;
-  const el   = document.getElementById(rowsId);
+  const el        = document.getElementById(rowsId);
+  // Only sections with a header toggle link are expandable
+  const hasToggle = !!document.getElementById('toggle-' + key);
   const show = expanded[key] ? items : items.slice(0, PAGE_SIZE);
   let html   = show.map(rowFn).join('');
   if (!items.length) {
     html = `<p class="archive-empty">Nothing archived yet.</p>`;
   } else if (!expanded[key] && items.length > PAGE_SIZE) {
     const more = items.length - PAGE_SIZE;
-    html += `<div class="archive-row show-more-row" onclick="toggleSection('${key}')">+ ${more} more ${key}</div>`;
+    if (hasToggle) {
+      html += `<div class="archive-row show-more-row" onclick="toggleSection('${key}')">+ ${more} more ${key}</div>`;
+    } else {
+      // Count-only indicator — not clickable (e.g. Daily Editions)
+      html += `<div class="archive-row show-more-row count-only">+ ${more} more ${key}</div>`;
+    }
   } else if (expanded[key] && items.length > PAGE_SIZE) {
     html += `<div class="archive-row show-more-row" onclick="toggleSection('${key}')">← show less</div>`;
   }
