@@ -230,22 +230,24 @@
 
     <!-- Dives -->
     <div class="archive-section">
-      <div class="section-head">
+      <div class="section-head" id="dives-header">
         <span>
           <span class="section-kicker">Dives</span>
           <span class="section-count" id="cnt-dives"></span>
         </span>
+        <span class="show-all-link" id="toggle-dives" onclick="toggleSection('dives')">show all →</span>
       </div>
       <div class="archive-rows" id="rows-dives"></div>
     </div>
 
     <!-- Observations -->
     <div class="archive-section">
-      <div class="section-head">
+      <div class="section-head" id="obs-header">
         <span>
           <span class="section-kicker">Observations</span>
           <span class="section-count" id="cnt-obs"></span>
         </span>
+        <span class="show-all-link" id="toggle-obs" onclick="toggleSection('obs')">show all →</span>
       </div>
       <div class="archive-rows" id="rows-obs"></div>
     </div>
@@ -267,6 +269,7 @@ const PAGE_SIZE   = 3;
 const DAILY_BATCH = 10;
 let   _dailyShown = PAGE_SIZE;
 const expanded    = { sources: false, scans: false, dives: false, obs: false };
+// All four sections are toggleable — hasToggle check drives show/hide logic
 
 // ── Date formatting ────────────────────────────────────────────────────────────
 function fmtDate(iso) {
