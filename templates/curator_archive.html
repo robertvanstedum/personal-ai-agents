@@ -325,11 +325,16 @@ function renderSection(key, items, rowFn, counterId, rowsId) {
 }
 
 function toggleSection(key) {
+  const wasExpanded = expanded[key];
   expanded[key] = !expanded[key];
   // Update header toggle link if it exists
   const lnk = document.getElementById('toggle-' + key);
   if (lnk) lnk.textContent = expanded[key] ? '← show less' : 'show all →';
   renderAll();
+  // On collapse, scroll back to section header so the user lands at the top of the section
+  if (wasExpanded && lnk) {
+    lnk.closest('.archive-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 // Keep showAll for any legacy callers

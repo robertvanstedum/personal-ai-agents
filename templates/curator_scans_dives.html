@@ -232,20 +232,36 @@ function toggleSection(name) {
   const btn      = document.getElementById(name + '-toggle');
   const rowClass = '.row-' + (name === 'dives' ? 'thread' : 'article');
   const expanded = btn.dataset.expanded === '1';
+  const section  = btn.closest('.section');
 
   if (expanded) {
     // Collapse: re-hide rows past index 3
     document.querySelectorAll(rowClass).forEach((r, i) => {
       if (i >= 3) r.classList.add('row-hidden');
     });
-    btn.textContent   = 'show all →';
+    btn.textContent      = 'show all →';
     btn.dataset.expanded = '0';
+    // Remove bottom anchor
+    const anchor = section.querySelector('.show-less-bottom');
+    if (anchor) anchor.remove();
+    // Scroll back to section header
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } else {
     // Expand
     document.querySelectorAll(rowClass + '.row-hidden')
       .forEach(r => r.classList.remove('row-hidden'));
-    btn.textContent   = '← show less';
+    btn.textContent      = '← show less';
     btn.dataset.expanded = '1';
+    // Insert bottom anchor if not already present
+    if (!section.querySelector('.show-less-bottom')) {
+      const anchor = document.createElement('a');
+      anchor.href      = '#';
+      anchor.className = 'show-less-bottom';
+      anchor.textContent = '← show less';
+      anchor.style.cssText = 'display:block; margin-top:1rem; color:var(--accent); font-size:0.8rem; text-decoration:none; opacity:0.7;';
+      anchor.onclick = (e) => { e.preventDefault(); toggleSection(name); };
+      section.appendChild(anchor);
+    }
   }
 }
 </script>
