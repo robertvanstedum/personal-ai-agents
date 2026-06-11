@@ -281,6 +281,32 @@
       "last_practiced": null,
       "source_sentence": "Jetzt geht es los: Österreichs Nationalteam kommt am Mittwoch zusammen, um sich erstmals seit 1998 auf eine  Fußballweltmeisterschaft vorzubereiten. Ehe es nach Kalifornien ins mondäne Santa Barbara g",
       "source_article": "WM-Startschuss im neuen „Sportinternat“"
+    },
+    {
+      "id": "ph_20260607_023",
+      "german": "Persönlichkeiten",
+      "english": "Notable Figures",
+      "scene": "lesen",
+      "added": "2026-06-07",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Josef Hickersberger zählt zu den prägenden Persönlichkeiten des österreichischen Fußballs. Bei der kommenden Weltmeisterschaft traut der frühere Spieler, Meistertrainer und Teamchef dem österreichisch",
+      "source_article": "Hickersberger sieht ÖFB-Team im Achtelfinale"
+    },
+    {
+      "id": "ph_20260608_024",
+      "german": "Erdbeben",
+      "english": "Earthquake",
+      "scene": "lesen",
+      "added": "2026-06-08",
+      "status": "library",
+      "verb_hint": "",
+      "practice_count": 0,
+      "last_practiced": null,
+      "source_sentence": "Bei einem schweren Erdbeben auf den Philippinen sind nach Angaben des Zivilschutzes mindestens 19 Menschen ums Leben gekommen. 134 weitere wurden verletzt, wie der Direktor der Behörde, Junie Castillo",
+      "source_article": "Mehrere Tote bei schwerem Erdbeben auf den Philippinen"
     }
   ]
 }

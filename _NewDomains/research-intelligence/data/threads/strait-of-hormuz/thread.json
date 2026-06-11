@@ -10,7 +10,7 @@
   "duration_days": null,
   "expires": null,
   "deeper_dive_generated": true,
-  "deeper_dive_path": "data/deeper_dives/strait-of-hormuz-deeper-dive-005.md",
+  "deeper_dive_path": "data/dives/strait-of-hormuz-dive-006.md",
   "last_session_date": null,
   "session_count": 0,
   "links_to": [],
@@ -20,19 +20,5 @@
   "wrap_up": null,
   "retired_reason": null,
   "created_by": "robert",
-  "schema_version": "2.0",
-  "slug": "strait-of-hormuz",
-  "tags": [],
-  "activated_at": null,
-  "paused_at": null,
-  "remaining_days": null,
-  "state_history": [
-    {
-      "from": null,
-      "to": "closed",
-      "at": "2026-05-31T15:53:10.780487+00:00",
-      "by": "migration",
-      "note": "migrated from thread schema v1 (was: 'closed')"
-    }
-  ]
+  "schema_version": "2.0"
 }
