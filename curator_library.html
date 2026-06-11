@@ -690,7 +690,6 @@
       <button class="filter-btn" data-type="liked">Liked</button>
       <button class="filter-btn" data-type="saved">Saved</button>
     </div>
-    <button class="filter-btn" id="x-toggle" onclick="toggleXPosts()" title="Show/hide X bookmark imports">𝕏 Posts</button>
     <select class="select-filter" id="category-filter">
       <option value="all">All categories</option>
       <option value="geo_major">Geo Major</option>
@@ -757,7 +756,6 @@ let sortDir = 'desc';
 let typeFilter = 'all';
 let categoryFilter = 'all';
 let searchQuery = '';
-let showXPosts = false;
 
 // Queue state
 let _qList = [];
@@ -822,7 +820,6 @@ function qMove(dir) {
 function filteredArticles() {
   return allArticles
     .filter(a => {
-      if (!showXPosts && (a.source||'').startsWith('X/@')) return false;
       if (typeFilter !== 'all' && a.type !== typeFilter) return false;
       if (categoryFilter !== 'all' && a.category !== categoryFilter) return false;
       if (searchQuery) {
@@ -1055,13 +1052,6 @@ document.getElementById('search-input').addEventListener('input', e => {
   searchTimeout = setTimeout(() => { searchQuery = e.target.value.trim(); render(); }, 200);
 });
 
-function toggleXPosts() {
-  showXPosts = !showXPosts;
-  const btn = document.getElementById('x-toggle');
-  btn.classList.toggle('active-all', showXPosts);
-  btn.textContent = showXPosts ? '𝕏 Posts ✓' : '𝕏 Posts';
-  render();
-}
 
 // ── Init ───────────────────────────────────────────────────────────────────
 loadData();
