@@ -619,7 +619,7 @@ def guild_career():
 @_require_owner
 def update_position_status(opp_id):
     new_status = request.form.get("status", "").strip()
-    valid = {"suggested", "reviewing", "applied", "interview", "offer", "archived", "rejected"}
+    valid = {"suggested", "reviewing", "applied", "interview", "closed", "rejected"}
     if new_status in valid:
         try:
             _guild_db_execute(

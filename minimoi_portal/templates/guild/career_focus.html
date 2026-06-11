@@ -164,8 +164,7 @@
     ('reviewing',  'Reviewing',  opportunities | selectattr('status','eq','reviewing')  | list),
     ('applied',    'Applied',    opportunities | selectattr('status','eq','applied')    | list),
     ('interview',  'Interview',  opportunities | selectattr('status','eq','interview')  | list),
-    ('offer',      'Offer',      opportunities | selectattr('status','eq','offer')      | list),
-    ('archived',   'Archived',   opportunities | selectattr('status','eq','archived')  | list),
+    ('closed',     'Closed',     opportunities | selectattr('status','eq','closed')    | list),
     ('rejected',   'Rejected',   opportunities | selectattr('status','eq','rejected')  | list),
   ] %}
   {% for col_id, col_label, col_items in columns %}
@@ -202,7 +201,7 @@
           {% endif %}
           <form class="card-status-form" method="POST" action="/guild/career/positions/{{ opp.id }}/status">
             <select class="card-status-select" name="status" onchange="this.form.submit()">
-              {% for s in ['suggested','reviewing','applied','interview','offer','archived','rejected'] %}
+              {% for s in ['suggested','reviewing','applied','interview','closed','rejected'] %}
               <option value="{{ s }}"{{ ' selected' if opp.status == s else '' }}>{{ s | title }}</option>
               {% endfor %}
             </select>
