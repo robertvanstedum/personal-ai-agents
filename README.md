@@ -11,7 +11,7 @@ Three active domains:
 daily by a reasoning model with your learned profile. Top 20 to the web portal, top 10
 to Telegram at 7 AM. In daily use since February 2026.
 
-**Mein Deutsch v0.9 beta** — German language coaching pipeline. Vienna-tested. Lesen,
+**Mein Deutsch v1.0** — German language coaching pipeline. Vienna-tested. Lesen,
 Gespräche, Schreiben, Wörter. Anki cards earned from real friction, not passive review.
 
 **Guild** — Personal operating system. Chief of Staff model with autonomous agents,
