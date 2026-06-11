@@ -75,7 +75,7 @@ def _load_existing_urls() -> set[str]:
             user="minimoi", password="simple123"
         )
         cur = conn.cursor()
-        cur.execute("SELECT url FROM jobs.career_opportunities WHERE url IS NOT NULL")
+        cur.execute("SELECT url FROM pipeline.items WHERE url IS NOT NULL")
         urls = {row[0] for row in cur.fetchall()}
         cur.close()
         conn.close()
@@ -109,7 +109,7 @@ def _write_opportunity(record: dict) -> bool:
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO jobs.career_opportunities
+            INSERT INTO pipeline.items
               (title, company, geo, url, opportunity_type, fit_score, fit_narrative,
                warm_lead, warm_lead_contacts, cos_notes, source, model_used, status, created_by)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'suggested','cos_loop_a')

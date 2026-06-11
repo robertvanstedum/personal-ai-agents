@@ -595,7 +595,7 @@ def guild_career():
         "SELECT id, title, company, geo, url, opportunity_type, "
         "fit_score, fit_narrative, warm_lead, warm_lead_contacts, "
         "cos_notes, status, created_at "
-        "FROM jobs.career_opportunities "
+        "FROM pipeline.items "
         "WHERE status != 'rejected' "
         "ORDER BY fit_score DESC NULLS LAST, created_at DESC"
     )
@@ -623,7 +623,7 @@ def update_position_status(opp_id):
     if new_status in valid:
         try:
             _guild_db_execute(
-                "UPDATE jobs.career_opportunities SET status=%s WHERE id=%s",
+                "UPDATE pipeline.items SET status=%s WHERE id=%s",
                 (new_status, opp_id)
             )
         except Exception:

@@ -75,13 +75,22 @@ def run():
     for t in ("agent_feedback", "challenger_exchanges", "cos_agenda", "design_log"):
         check(f"  guild.{t}", t in guild_tables)
 
-    print("\njobs.* tables:")
+    print("\npipeline.* tables:")
     cur.execute(
         "SELECT table_name FROM information_schema.tables "
-        "WHERE table_schema = 'jobs' ORDER BY table_name"
+        "WHERE table_schema = 'pipeline' ORDER BY table_name"
     )
-    jobs_tables = {r["table_name"] for r in cur.fetchall()}
-    check("  jobs.career_opportunities", "career_opportunities" in jobs_tables)
+    pipeline_tables = {r["table_name"] for r in cur.fetchall()}
+    check("  pipeline.items", "items" in pipeline_tables)
+
+    print("\npipeline.items columns:")
+    cur.execute(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_schema='pipeline' AND table_name='items'"
+    )
+    pipeline_cols = {r["column_name"] for r in cur.fetchall()}
+    for col in ("close_reason", "priority", "closed_at", "context"):
+        check(f"  pipeline.items.{col}", col in pipeline_cols)
 
     # ── public schema is clean ────────────────────────────────────────────────
     print("\npublic schema:")

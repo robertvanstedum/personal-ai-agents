@@ -8,6 +8,7 @@
 --   2. schema.sql           — this file (research tables)
 --   3. schema_phase4.sql    — guild.cos_agenda, guild.agent_feedback, jobs.career_opportunities
 --   4. schema_phase5.sql    — guild.design_log
+--   5. schema_pipeline_v1.sql — pipeline.items (renamed from jobs.career_opportunities)
 
 CREATE SCHEMA IF NOT EXISTS research;
 
