@@ -112,17 +112,6 @@
     margin-top: 6px;
   }
 
-  /* ── Stats bar ── */
-  .stats-bar {
-    margin-bottom: 24px;
-  }
-
-  .stat-summary {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.82rem;
-    color: var(--text-muted);
-    letter-spacing: 0.04em;
-  }
 
   /* ── Controls ── */
   .controls {
@@ -691,14 +680,6 @@
     <p class="page-meta" id="meta-line">Loading articles...</p>
   </div>
 
-  <div class="stats-bar" id="stats-bar">
-    <span class="stat-summary">
-      <span id="stat-liked">—</span> liked &nbsp;·&nbsp;
-      <span id="stat-saved">—</span> saved &nbsp;·&nbsp;
-      <span id="stat-total">—</span> total
-    </span>
-  </div>
-
   <div class="controls">
     <div class="search-wrap">
       <span class="search-icon">⌕</span>
@@ -808,12 +789,6 @@ async function loadData() {
 
 // ── Stats ──────────────────────────────────────────────────────────────────
 function updateStats() {
-  const liked      = allArticles.filter(a => a.type === 'liked').length;
-  const saved      = allArticles.filter(a => a.type === 'saved').length;
-  document.getElementById('stat-liked').textContent      = liked;
-  document.getElementById('stat-saved').textContent      = saved;
-  document.getElementById('stat-total').textContent      = allArticles.length;
-
   const dates = allArticles.map(a => a.date).filter(Boolean).sort();
   if (dates.length) {
     const fmt = d => { const p = new Date(d.substring(0,23)); return isNaN(p) ? '—' : p.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}); };
