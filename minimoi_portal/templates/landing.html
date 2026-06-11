@@ -29,14 +29,6 @@
   <section class="hero">
     <h1 class="hero-title">mini-moi</h1>
     <p class="hero-tagline"><em>Your context. Your goals. Your signal.</em></p>
-    <div class="hero-actions">
-      {% if user %}
-        <a href="/dashboard" class="btn-primary">Go to Dashboard →</a>
-      {% else %}
-        <a href="/register" class="btn-primary">Try mini-moi →</a>
-        <a href="/login" class="btn-secondary">Sign in</a>
-      {% endif %}
-    </div>
   </section>
 
   <section class="about-section">
@@ -45,18 +37,15 @@
       <div class="about-card">
         <h2>What this is</h2>
         <p>
-          A personal AI agent system built around one principle: the cloud LLMs have
-          the world's knowledge — that problem is largely solved. The hard part is acting
-          in your specific situation. Your history. Your goals. Your risk tolerance.
+          LLMs have the world's knowledge. They don't have your intent, your goals,
+          your history, your risk tolerance.
         </p>
         <p>
-          General intelligence is widely available now. Specific intelligence — the kind
-          that knows you and acts for you — isn't. That's what this builds toward.
+          mini-moi builds toward specific intelligence in your context. It works with
+          cloud LLMs, stores memory locally, runs a local model, and acts together with you.
         </p>
         <p>
-          Local memory, model-agnostic pipeline, swappable LLMs. Context and preferences
-          stay with you. Switch models, switch providers, go offline — the agent still
-          knows you.
+          Focused on specific domains first. Built to grow together over time.
         </p>
       </div>
 
