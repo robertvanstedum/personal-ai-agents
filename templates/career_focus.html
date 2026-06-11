@@ -58,7 +58,7 @@
 
     /* ── Cards ── */
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
-      padding: 10px 12px; margin-bottom: 8px; cursor: pointer; transition: box-shadow 0.15s; }
+      padding: 10px 12px; margin-bottom: 8px; transition: box-shadow 0.15s; }
     .card:hover { box-shadow: 0 2px 8px rgba(42,36,24,0.10); }
     .card-title { font-size: 13px; font-weight: 500; line-height: 1.35; margin-bottom: 4px; }
     .card-company { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
@@ -67,9 +67,25 @@
       letter-spacing: 0.08em; border-radius: 3px; padding: 1px 6px; border: 1px solid; }
     .badge-employment { color: #1a5c8a; background: rgba(26,92,138,0.08); border-color: rgba(26,92,138,0.2); }
     .badge-contract   { color: #7a2e6e; background: rgba(122,46,110,0.08); border-color: rgba(122,46,110,0.2); }
-    .badge-warm       { color: #2e7d52; background: rgba(46,125,82,0.08); border-color: rgba(46,125,82,0.2); }
-    .card-score { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); margin-left: auto; }
+    .badge-warm       { color: var(--accent); background: var(--accent-dim); border-color: rgba(139,94,42,0.3); }
+    .card-score { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; margin-left: auto; }
     .card-geo { font-size: 11px; color: var(--text-dim); }
+    .card-narrative { font-size: 11px; color: var(--text-muted); font-style: italic;
+      margin-top: 6px; line-height: 1.4; display: none; }
+    .card-narrative.visible { display: block; }
+    .card-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px;
+      padding-top: 7px; border-top: 0.5px solid var(--border); }
+    .card-apply { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--accent); text-decoration: none; }
+    .card-apply:hover { text-decoration: underline; }
+    .card-status-form { margin-left: auto; }
+    .card-status-select { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--text-muted); background: var(--bg);
+      border: 1px solid var(--border); border-radius: 3px; padding: 2px 6px; cursor: pointer; }
+    .card-status-select:focus { outline: none; border-color: var(--accent); }
+    .card-toggle { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim);
+      background: none; border: none; cursor: pointer; padding: 0; letter-spacing: 0.04em; }
+    .card-toggle:hover { color: var(--text-muted); }
 
     /* ── Empty state ── */
     .empty-col { text-align: center; padding: 24px 8px; color: var(--text-dim); font-size: 12px; font-style: italic; }
@@ -113,7 +129,7 @@
 
 {% if total == 0 %}
 <div class="note-banner">
-  <b>CoS not yet running.</b> Opportunities will appear here once the Chief of Staff agent starts Loop A (job search). You can also add items manually — feature coming in Phase 3.
+  No opportunities yet. Loop A runs twice daily (06:00 and 18:00).
 </div>
 {% endif %}
 
@@ -135,20 +151,37 @@
     </div>
     {% if col_items %}
       {% for opp in col_items %}
-      <div class="card" data-type="{{ opp.opportunity_type or '' }}" data-geo="{{ opp.geo or '' | lower }}">
+      <div class="card" data-type="{{ opp.opportunity_type or '' }}" data-geo="{{ (opp.geo or '') | lower }}">
         <div class="card-title">{{ opp.title }}</div>
-        <div class="card-company">{{ opp.company }}{% if opp.geo %} · {{ opp.geo }}{% endif %}</div>
+        <div class="card-company">{{ opp.company or '' }}{% if opp.geo %} · {{ opp.geo }}{% endif %}</div>
         <div class="card-meta">
           {% if opp.opportunity_type %}
           <span class="badge badge-{{ opp.opportunity_type }}">{{ opp.opportunity_type }}</span>
           {% endif %}
           {% if opp.warm_lead %}
-          <span class="badge badge-warm">Warm lead</span>
+          <span class="badge badge-warm">⭐ Warm lead</span>
           {% endif %}
-          <span class="card-geo">{{ opp.geo or '' }}</span>
           {% if opp.fit_score %}
-          <span class="card-score">{{ opp.fit_score }}/10</span>
+          <span class="card-score" style="color:{{ opp.fit_score | score_color }}">{{ opp.fit_score }}/10</span>
           {% endif %}
+          {% if opp.fit_narrative %}
+          <button class="card-toggle" onclick="toggleNarrative(this)">reason ↓</button>
+          {% endif %}
+        </div>
+        {% if opp.fit_narrative %}
+        <div class="card-narrative">{{ opp.fit_narrative }}</div>
+        {% endif %}
+        <div class="card-actions">
+          {% if opp.url %}
+          <a class="card-apply" href="{{ opp.url }}" target="_blank" rel="noopener">Apply →</a>
+          {% endif %}
+          <form class="card-status-form" method="POST" action="/jobs/{{ opp.id }}/status">
+            <select class="card-status-select" name="status" onchange="this.form.submit()">
+              {% for s in ['suggested','reviewing','applied','interview','offer','archived','rejected'] %}
+              <option value="{{ s }}"{{ ' selected' if opp.status == s else '' }}>{{ s | title }}</option>
+              {% endfor %}
+            </select>
+          </form>
         </div>
       </div>
       {% endfor %}
@@ -161,6 +194,14 @@
 
 <script>
 let activeType = 'all', activeGeo = 'all';
+
+function toggleNarrative(btn) {
+  const card = btn.closest('.card');
+  const narr = card.querySelector('.card-narrative');
+  if (!narr) return;
+  const open = narr.classList.toggle('visible');
+  btn.textContent = open ? 'reason ↑' : 'reason ↓';
+}
 
 function filterType(btn, type) {
   document.querySelectorAll('.filters .filter-btn').forEach(b => {
