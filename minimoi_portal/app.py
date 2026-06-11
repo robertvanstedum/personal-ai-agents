@@ -536,6 +536,101 @@ def admin_guests_revoke(username):
     return redirect(url_for("admin_guests"))
 
 
+# ── Guild domain (owner-only) ─────────────────────────────────────────────────
+
+@app.template_filter('score_color')
+def score_color(score):
+    """Color-code opportunity fit scores using the Curator palette."""
+    try:
+        s = float(score)
+        if s >= 8.0: return '#8b5e2a'
+        if s >= 6.0: return '#b8860b'
+    except (TypeError, ValueError):
+        pass
+    return '#9e9080'
+
+
+def _guild_db_query(sql, params=None):
+    """Run a SELECT against the personal_agents DB. Returns list of dicts."""
+    import psycopg2, psycopg2.extras
+    conn = psycopg2.connect(
+        "postgresql://minimoi:simple123@localhost:5432/personal_agents",
+        cursor_factory=psycopg2.extras.RealDictCursor
+    )
+    with conn.cursor() as cur:
+        cur.execute(sql, params or [])
+        rows = list(cur.fetchall())
+    conn.close()
+    return rows
+
+
+def _guild_db_execute(sql, params=None):
+    """Run an INSERT/UPDATE/DELETE against the personal_agents DB."""
+    import psycopg2
+    conn = psycopg2.connect(
+        "postgresql://minimoi:simple123@localhost:5432/personal_agents"
+    )
+    with conn.cursor() as cur:
+        cur.execute(sql, params or [])
+    conn.commit()
+    conn.close()
+
+
+@app.route("/guild")
+@app.route("/guild/")
+@_require_owner
+def guild_landing():
+    return render_template("guild/guild_landing.html", user=_current_user())
+
+
+@app.route("/guild/career")
+@app.route("/guild/career/positions")
+@_require_owner
+def guild_career():
+    status_filter = request.args.get('status', 'all')
+    geo_filter    = request.args.get('geo', 'all')
+    type_filter   = request.args.get('type', 'all')
+
+    sql = (
+        "SELECT id, title, company, geo, url, opportunity_type, "
+        "fit_score, fit_narrative, warm_lead, warm_lead_contacts, "
+        "cos_notes, status, created_at "
+        "FROM jobs.career_opportunities "
+        "WHERE status != 'rejected' "
+        "ORDER BY fit_score DESC NULLS LAST, created_at DESC"
+    )
+    try:
+        opportunities = _guild_db_query(sql)
+    except Exception:
+        opportunities = []
+
+    return render_template(
+        "guild/career_focus.html",
+        opportunities=opportunities,
+        total=len(opportunities),
+        status_filter=status_filter,
+        geo_filter=geo_filter,
+        type_filter=type_filter,
+        deadline="Aug 1, 2026",
+    )
+
+
+@app.route("/guild/career/positions/<int:opp_id>/status", methods=["POST"])
+@_require_owner
+def update_position_status(opp_id):
+    new_status = request.form.get("status", "").strip()
+    valid = {"suggested", "reviewing", "applied", "interview", "offer", "archived", "rejected"}
+    if new_status in valid:
+        try:
+            _guild_db_execute(
+                "UPDATE jobs.career_opportunities SET status=%s WHERE id=%s",
+                (new_status, opp_id)
+            )
+        except Exception:
+            pass
+    return redirect(url_for("guild_career"))
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():

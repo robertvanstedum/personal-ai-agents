@@ -1301,66 +1301,10 @@ def index_page():
 def language_coming():
     return send_from_directory(BASE_DIR, 'language_coming.html')
 
-@app.template_filter('score_color')
-def score_color(score):
-    """Color-code opportunity fit scores using the Curator palette."""
-    try:
-        s = float(score)
-        if s >= 8.0: return '#8b5e2a'   # accent
-        if s >= 6.0: return '#b8860b'   # amber
-    except (TypeError, ValueError):
-        pass
-    return '#9e9080'                    # text-dim
-
-
 @app.route('/jobs')
-def career_focus():
-    """Career Focus pipeline — Loop A populates from job search."""
-    opportunities = []
-    try:
-        import psycopg2, psycopg2.extras
-        conn = psycopg2.connect(
-            "postgresql://minimoi:simple123@localhost:5432/personal_agents",
-            cursor_factory=psycopg2.extras.RealDictCursor
-        )
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT id, title, company, geo, opportunity_type, warm_lead, "
-                "warm_lead_contacts, fit_score, fit_narrative, cos_notes, url, "
-                "status, created_at FROM jobs.career_opportunities "
-                "ORDER BY fit_score DESC NULLS LAST, created_at DESC"
-            )
-            opportunities = list(cur.fetchall())
-        conn.close()
-    except Exception:
-        pass  # DB not running — show empty pipeline
-    return render_template('career_focus.html',
-                           opportunities=opportunities,
-                           total=len(opportunities))
-
-
-@app.route('/jobs/<int:opp_id>/status', methods=['POST'])
-def update_job_status(opp_id):
-    """Update opportunity pipeline status from Career Focus dropdown."""
-    new_status = request.form.get('status', '').strip()
-    valid = {'suggested','reviewing','applied','interview','offer','archived','rejected'}
-    if new_status not in valid:
-        return redirect('/jobs')
-    try:
-        import psycopg2
-        conn = psycopg2.connect(
-            "postgresql://minimoi:simple123@localhost:5432/personal_agents"
-        )
-        with conn.cursor() as cur:
-            cur.execute(
-                "UPDATE jobs.career_opportunities SET status=%s WHERE id=%s",
-                (new_status, opp_id)
-            )
-        conn.commit()
-        conn.close()
-    except Exception:
-        pass
-    return redirect('/jobs')
+def career_focus_redirect():
+    """Career Focus moved to Guild domain."""
+    return redirect('/guild/career', 301)
 
 @app.route('/interests/2026/scans/<path:filename>')
 def redirect_old_scan(filename):

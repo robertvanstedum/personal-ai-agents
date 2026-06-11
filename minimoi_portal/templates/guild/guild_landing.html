@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guild — mini-moi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Source Sans 3', sans-serif;
+      background: #f5f0e8; color: #2a2418;
+      font-size: 14px; min-height: 100vh;
+    }
+
+    /* ── Guild nav ── */
+    nav.guild-nav {
+      position: sticky; top: 0; z-index: 100;
+      background: #2a1f14;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .guild-nav-brand {
+      height: 44px; display: flex; align-items: center;
+      padding: 0 1.5rem; gap: 0;
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      letter-spacing: 0.08em;
+    }
+    .guild-nav-brand a { color: #C68A5E; text-decoration: none; }
+    .guild-nav-brand a:hover { color: #ffffff; }
+    .guild-nav-brand a.nav-active { color: #ffffff; font-weight: 600; }
+    .nav-sep { color: rgba(255,255,255,0.2); margin: 0 12px; }
+    .guild-subnav {
+      height: 36px; display: flex; align-items: center;
+      padding: 0 1.5rem; gap: 0;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,0,0,0.15);
+    }
+    .subnav-link {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: rgba(198,138,94,0.7); text-decoration: none;
+      padding: 0 14px; height: 36px;
+      display: flex; align-items: center;
+      border-bottom: 2px solid transparent;
+    }
+    .subnav-link:hover { color: #C68A5E; }
+    .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; }
+
+    /* ── Content ── */
+    main { max-width: 700px; margin: 0 auto; padding: 52px 32px 80px; }
+    h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 2rem; font-weight: 400; margin-bottom: 8px;
+    }
+    .page-meta {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: #9e9080; letter-spacing: 0.04em; margin-bottom: 40px;
+    }
+    .section-list { list-style: none; }
+    .section-item {
+      border-bottom: 0.5px solid #ddd6c8;
+      padding: 18px 0;
+    }
+    .section-item:first-child { border-top: 0.5px solid #ddd6c8; }
+    .section-link {
+      display: flex; align-items: baseline; justify-content: space-between;
+      text-decoration: none; color: inherit;
+    }
+    .section-link:hover .section-title { color: #8b5e2a; }
+    .section-title {
+      font-size: 15px; font-weight: 500; color: #2a2418;
+    }
+    .section-desc {
+      font-size: 12px; color: #9e9080; margin-top: 3px;
+    }
+    .section-arrow {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: #8b5e2a; flex-shrink: 0; margin-left: 16px;
+    }
+  </style>
+</head>
+<body>
+
+<nav class="guild-nav">
+  <div class="guild-nav-brand">
+    <a href="/dashboard">mini-moi</a>
+    <span class="nav-sep">|</span>
+    <a href="/app/curator">Curator</a>
+    <span class="nav-sep">|</span>
+    <a href="/app/german">German</a>
+    <span class="nav-sep">|</span>
+    <a href="/guild" class="nav-active">Guild</a>
+  </div>
+</nav>
+
+<main>
+  <h1>Guild</h1>
+  <p class="page-meta">Agent operations &middot; owner only</p>
+
+  <ul class="section-list">
+    <li class="section-item">
+      <a class="section-link" href="/guild/career">
+        <div>
+          <div class="section-title">Career Focus</div>
+          <div class="section-desc">Positions pipeline — Loop A runs twice daily</div>
+        </div>
+        <span class="section-arrow">→</span>
+      </a>
+    </li>
+  </ul>
+</main>
+
+</body>
+</html>

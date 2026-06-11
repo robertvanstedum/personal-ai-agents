@@ -66,6 +66,18 @@
       <div class="tile-arrow">→</div>
     </a>
 
+    {% if user.tier == 'owner' %}
+    <!-- Guild tile — owner only -->
+    <a href="/guild" class="tile tile-guild">
+      <div class="tile-icon">⚙️</div>
+      <div class="tile-content">
+        <h2 class="tile-title">Guild</h2>
+        <p class="tile-desc">Career Focus · Agent operations</p>
+      </div>
+      <div class="tile-arrow">→</div>
+    </a>
+    {% endif %}
+
   </div>
 
   {% if user.tier == 'guest' %}
