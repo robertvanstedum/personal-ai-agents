@@ -229,6 +229,7 @@ See [ROADMAP.md](ROADMAP.md) for full detail.
 - [`docs/INTELLIGENCE_LAYER.md`](docs/INTELLIGENCE_LAYER.md) — architecture, AI concept reference, build sequence
 - [`docs/DESIGN_SESSION_INTELLIGENCE_LAYER_2026-06-03.md`](docs/DESIGN_SESSION_INTELLIGENCE_LAYER_2026-06-03.md) — design session, June 2026
 - [`docs/LLM_REGISTRY.md`](docs/LLM_REGISTRY.md) — all LLM call sites, model rationale, and change log
+- [`docs/GUILD.md`](docs/GUILD.md) — personal operating system: agents, pipeline, daily briefing, communication layer
 - [`docs/GUILD_AGENTS_DESIGN.md`](docs/GUILD_AGENTS_DESIGN.md) — Chief of Staff + Operations autonomous agents
 - [`docs/GUILD_BUILD_LOG.md`](docs/GUILD_BUILD_LOG.md) — build sessions, calibration learnings, proof of value
 
