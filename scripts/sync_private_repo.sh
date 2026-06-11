@@ -20,11 +20,27 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 # Directory paths sync recursively into same structure in private repo.
 
 SYNC_PATHS=(
+    # Guild memory + config
     "data/guild/memory/cos_memory.md"
     "data/guild/memory/ops_memory.md"
     "data/guild/memory/devagent_memory.md"
     "data/guild/cos_agenda.json"
     "domains/guild/config/cos_context.json"
+
+    # Curator — daily-generated data and personal feedback signals
+    "curator_signals.json"
+    "curator_latest.html"
+    "curator_latest.json"
+    "curator_sources.json"
+    "curator_radar.json"
+
+    # German — personal learning data
+    "domains/german/data/sessions/"
+    "domains/german/data/anki/"
+    "domains/german/data/lessons/"
+    "domains/german/data/progress.json"
+
+    # Working docs archive
     "_working/archive/"
 )
 

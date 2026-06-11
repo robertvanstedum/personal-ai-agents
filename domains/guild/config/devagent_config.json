@@ -22,7 +22,16 @@
       "private_push_paths": [
         "_working/archive/",
         "domains/guild/config/cos_context.json",
-        "data/guild/"
+        "data/guild/",
+        "curator_signals.json",
+        "curator_latest.html",
+        "curator_latest.json",
+        "curator_sources.json",
+        "curator_radar.json",
+        "domains/german/data/sessions/",
+        "domains/german/data/anki/",
+        "domains/german/data/lessons/",
+        "domains/german/data/progress.json"
       ],
       "public_push_paths": ["docs/", "README.md", "GUILD_CHARTER.md"]
     },
