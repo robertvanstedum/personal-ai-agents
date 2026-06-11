@@ -1,20 +1,28 @@
 # Mini-moi — Personal AI Agent
 
-### *Mini-moi — not a general intelligence, but a specific one. Yours.*
+LLMs have the world's knowledge. They don't have your intent, your goals, your history,
+your risk tolerance. mini-moi builds toward that gap: specific intelligence in your context.
+Local memory, model-agnostic pipeline, swappable LLMs. Your context stays with you.
+Switch models, switch providers, go offline. The agent still knows you.
 
-A personal AI agent system. Local memory, local model, swappable LLMs
-when you need them — not the other way around. The goal is an agent that
-knows you, challenges you, and gets better with you over time.
+Three active domains:
 
-The first domain is geopolitics and finance (v1.1, daily use since February 2026). The second domain is German language learning (v0.9 beta). It uses the same local-first, model-agnostic pipeline for spoken practice in real Viennese scenes — with scaffold phrases, focused drill mode, and Anki cards earned only from actual friction. Health and Jobs are next.
+**Curator v1.1** — Geopolitics and finance briefing. ~700 RSS and X candidates scored
+daily by a reasoning model with your learned profile. Top 20 to the web portal, top 10
+to Telegram at 7 AM. In daily use since February 2026.
 
-Learns from your history and preferences, with deliberate friction built
-in. Not a curated feed that confirms what you already think — an agent
-that surfaces what you should be seeing, including content that cuts
-against the grain.
+**Mein Deutsch v0.9 beta** — German language coaching pipeline. Vienna-tested. Lesen,
+Gespräche, Schreiben, Wörter. Anki cards earned from real friction, not passive review.
 
-> Production system, daily use since Feb 2026. Local-first, model-agnostic,
-> designed to expand across domains — see [Where It Goes Next](#where-it-goes-next).
+**Guild** — Personal operating system. Chief of Staff model with autonomous agents,
+a career and work pipeline, and a daily executive briefing across all domains.
+
+Learns from your history and preferences, with deliberate friction built in. Not a
+curated feed that confirms what you already think — an agent that surfaces what you
+should be seeing, including content that cuts against the grain.
+
+Production system, daily use since February 2026. Local-first, model-agnostic,
+designed to expand across domains.
 
 ---
 
