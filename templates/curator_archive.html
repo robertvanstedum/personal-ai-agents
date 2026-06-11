@@ -124,17 +124,24 @@
       border-radius: 3px; padding: 1px 5px; white-space: nowrap; flex-shrink: 0;
     }
 
-    /* ── Show more row ── */
+    /* ── Show more / collapse rows ── */
     .show-more-row {
       padding: 8px 0; font-size: 12px; color: var(--text-muted);
       cursor: pointer; border-bottom: none;
     }
     .show-more-row:hover { color: var(--accent); }
-    /* Non-expandable count indicator (e.g. Daily Editions) */
-    .show-more-row.count-only {
-      cursor: default; pointer-events: none;
+    /* Bottom collapse anchor — shown at foot of expanded section */
+    .bottom-collapse {
+      text-align: right;
+      padding: 0.75rem 0;
+      border-top: 1px solid var(--border);
+      margin-top: 0.5rem;
+      font-family: 'DM Mono', monospace; font-size: 0.7rem;
+      color: var(--accent); cursor: pointer;
     }
-    .show-more-row.count-only:hover { color: var(--text-muted); }
+    .bottom-collapse:hover { text-decoration: underline; }
+    /* Daily editions: rows hidden beyond initial batch */
+    .daily-hidden { display: none; }
 
     /* ── Empty state ── */
     .archive-empty {
@@ -199,7 +206,7 @@
 
     <!-- Sources -->
     <div class="archive-section">
-      <div class="section-head">
+      <div class="section-head" id="sources-header">
         <span>
           <span class="section-kicker">Sources</span>
           <span class="section-count" id="cnt-sources"></span>
@@ -211,7 +218,7 @@
 
     <!-- Scans -->
     <div class="archive-section">
-      <div class="section-head">
+      <div class="section-head" id="scans-header">
         <span>
           <span class="section-kicker">Scans</span>
           <span class="section-count" id="cnt-scans"></span>
@@ -256,8 +263,10 @@ const DATA = {
   obs:     {{ observations | tojson }},
 };
 
-const PAGE_SIZE = 3;
-const expanded  = { daily: false, sources: false, scans: false, dives: false, obs: false };
+const PAGE_SIZE   = 3;
+const DAILY_BATCH = 10;
+let   _dailyShown = PAGE_SIZE;
+const expanded    = { sources: false, scans: false, dives: false, obs: false };
 
 // ── Date formatting ────────────────────────────────────────────────────────────
 function fmtDate(iso) {
@@ -271,9 +280,8 @@ function fmtDate(iso) {
 // ── Row builders ──────────────────────────────────────────────────────────────
 function dailyRow(ed) {
   const summary = ed.count ? `${ed.count} articles` : '';
-  // TODO: archive daily editions as dated files for historical browse once
-  //       briefing pipeline writes per-date archives.
-  return `<div class="archive-row" data-search="${ed.date} ${summary}">
+  // TODO: link to /briefing/<date> once per-date archive route exists
+  return `<div class="archive-row daily-row" data-search="${ed.date} ${summary}">
     <span class="row-date">${fmtDate(ed.date)}</span>
     <span class="row-title muted">${summary || '—'}</span>
   </div>`;
@@ -312,26 +320,68 @@ function obsRow(o) {
   </div>`;
 }
 
-// ── Section rendering ─────────────────────────────────────────────────────────
+// ── Daily Editions: paginated, rendered once at init ──────────────────────────
+function renderDailySection() {
+  const items = DATA.daily;
+  document.getElementById('cnt-daily').textContent = items.length;
+  const el = document.getElementById('rows-daily');
+  if (!items.length) {
+    el.innerHTML = '<p class="archive-empty">Nothing archived yet.</p>';
+    return;
+  }
+  // All rows rendered in DOM; rows past PAGE_SIZE start hidden
+  let html = items.map((ed, i) => {
+    const summary = ed.count ? `${ed.count} articles` : '';
+    const cls     = i >= PAGE_SIZE ? ' daily-hidden' : '';
+    return `<div class="archive-row daily-row${cls}" data-index="${i}" data-search="${ed.date} ${summary}">
+      <span class="row-date">${fmtDate(ed.date)}</span>
+      <span class="row-title muted">${summary || '—'}</span>
+    </div>`;
+  }).join('');
+  if (items.length > PAGE_SIZE) {
+    const remaining = items.length - PAGE_SIZE;
+    html += `<div id="daily-show-more" class="archive-row show-more-row" style="justify-content:flex-end;">
+      <a href="#" id="daily-expand-btn" onclick="dailyShowMore(event)"
+         style="color:var(--accent);font-family:'DM Mono',monospace;font-size:0.7rem;text-decoration:none;">
+        show more daily ↓ <span id="daily-remaining">(+ ${remaining} more)</span>
+      </a>
+    </div>`;
+  }
+  el.innerHTML = html;
+  _dailyShown = PAGE_SIZE;
+}
+
+function dailyShowMore(e) {
+  e.preventDefault();
+  const hidden = Array.from(document.querySelectorAll('.daily-row.daily-hidden'));
+  const toShow = hidden.slice(0, DAILY_BATCH);
+  toShow.forEach(r => r.classList.remove('daily-hidden'));
+  _dailyShown += toShow.length;
+  const remaining = DATA.daily.length - _dailyShown;
+  if (remaining <= 0) {
+    const btn = document.getElementById('daily-show-more');
+    if (btn) btn.style.display = 'none';
+  } else {
+    const rem = document.getElementById('daily-remaining');
+    if (rem) rem.textContent = `(+ ${remaining} more)`;
+  }
+}
+
+// ── Section rendering (Sources, Scans, Dives, Obs) ────────────────────────────
 function renderSection(key, items, rowFn, counterId, rowsId) {
   document.getElementById(counterId).textContent = items.length;
   const el        = document.getElementById(rowsId);
-  // Only sections with a header toggle link are expandable
   const hasToggle = !!document.getElementById('toggle-' + key);
-  const show = expanded[key] ? items : items.slice(0, PAGE_SIZE);
+  // Non-toggleable sections (Dives, Obs) always show all items
+  const show = hasToggle ? (expanded[key] ? items : items.slice(0, PAGE_SIZE)) : items;
   let html   = show.map(rowFn).join('');
   if (!items.length) {
-    html = `<p class="archive-empty">Nothing archived yet.</p>`;
-  } else if (!expanded[key] && items.length > PAGE_SIZE) {
+    html = '<p class="archive-empty">Nothing archived yet.</p>';
+  } else if (hasToggle && !expanded[key] && items.length > PAGE_SIZE) {
     const more = items.length - PAGE_SIZE;
-    if (hasToggle) {
-      html += `<div class="archive-row show-more-row" onclick="toggleSection('${key}')">+ ${more} more ${key}</div>`;
-    } else {
-      // Count-only indicator — not clickable (e.g. Daily Editions)
-      html += `<div class="archive-row show-more-row count-only">+ ${more} more ${key}</div>`;
-    }
-  } else if (expanded[key] && items.length > PAGE_SIZE) {
-    html += `<div class="archive-row show-more-row" onclick="toggleSection('${key}')">← show less</div>`;
+    html += `<div class="archive-row show-more-row" onclick="toggleSection('${key}')">+ ${more} more ${key}</div>`;
+  } else if (hasToggle && expanded[key] && items.length > PAGE_SIZE) {
+    html += `<div class="bottom-collapse" onclick="toggleSection('${key}')">↑ top · ← show less</div>`;
   }
   el.innerHTML = html;
 }
@@ -339,21 +389,20 @@ function renderSection(key, items, rowFn, counterId, rowsId) {
 function toggleSection(key) {
   const wasExpanded = expanded[key];
   expanded[key] = !expanded[key];
-  // Update header toggle link if it exists
   const lnk = document.getElementById('toggle-' + key);
   if (lnk) lnk.textContent = expanded[key] ? '← show less' : 'show all →';
   renderAll();
-  // On collapse, scroll back to section header so the user lands at the top of the section
-  if (wasExpanded && lnk) {
-    lnk.closest('.archive-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // On collapse, scroll to section header by ID
+  if (wasExpanded) {
+    const headerEl = document.getElementById(key + '-header');
+    if (headerEl) headerEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 }
 
-// Keep showAll for any legacy callers
 function showAll(key) { expanded[key] = true; renderAll(); }
 
 function renderAll() {
-  renderSection('daily',   DATA.daily,   dailyRow,  'cnt-daily',   'rows-daily');
+  // Daily section rendered once at init — not included here to preserve pagination state
   renderSection('sources', DATA.sources, sourceRow, 'cnt-sources', 'rows-sources');
   renderSection('scans',   DATA.scans,   scanRow,   'cnt-scans',   'rows-scans');
   renderSection('dives',   DATA.dives,   diveRow,   'cnt-dives',   'rows-dives');
@@ -407,7 +456,8 @@ function esc(s) {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-renderAll();
+renderDailySection();  // Daily: rendered once, pagination managed independently
+renderAll();           // Sources, Scans, Dives, Obs
 document.getElementById('searchInput').addEventListener('input', e => runSearch(e.target.value.trim()));
 </script>
 </body>
