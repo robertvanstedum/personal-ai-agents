@@ -7,6 +7,23 @@ Add new sessions at the top.
 
 ---
 
+## 2026-06-11 — Challenger Phase 2 + Scan → Deeper Dive (CLOSED)
+
+### Challenger Phase 2 — ChallengerService wired into Curator deep dives
+
+8 dives run in production. 5/8 outputs_differ=True (gate: 3/5 — passed).
+Acceptance rates: china-rise 2/3 · empire-landpower 2/4 · gold-geo-002 3/4 ·
+hellscape-taiwan 1/4 · strait-of-hormuz-007 2/3.
+Three 0/4 dives = strong original synthesis, not failure. Pattern validated.
+Robert visual sign-off confirmed 2026-06-11. CLOSED.
+
+### Scan → Deeper Dive — one-click promotion
+
+Route live. Thread auto-created from scan, dive generated immediately.
+Desk shows auto-created threads. CLOSED.
+
+---
+
 ## 2026-06-09 — Phase 4: CoS Intelligence Loops
 *Commits: d9f3938, 2584b37, 8aaf87c · Author: Claude Code + Robert*
 
