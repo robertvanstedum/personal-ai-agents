@@ -169,8 +169,9 @@ class ChallengerService:
             }
             final_prompt = self._get_prompt(final_prompt_key, final_vars)
 
+            final_max_tokens = dcfg.get("final_max_tokens", 4000)
             result.final_raw = self._call_anthropic(
-                result.primary_model, final_prompt
+                result.primary_model, final_prompt, max_tokens=final_max_tokens
             )
             self._parse_final(result)
 
@@ -213,7 +214,7 @@ class ChallengerService:
         )
         return (resp.choices[0].message.content or "").strip()
 
-    def _call_anthropic(self, model: str, prompt: str) -> str:
+    def _call_anthropic(self, model: str, prompt: str, max_tokens: int = 4000) -> str:
         """Round 3: Claude via Anthropic (final review)."""
         import keyring
         import anthropic
@@ -221,7 +222,7 @@ class ChallengerService:
         client = anthropic.Anthropic(api_key=api_key)
         msg = client.messages.create(
             model=model,
-            max_tokens=1200,
+            max_tokens=max_tokens,
             temperature=0.3,
             messages=[{"role": "user", "content": prompt}],
         )
