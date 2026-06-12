@@ -632,6 +632,17 @@ def guild_career():
     except Exception:
         board_count = 0
 
+    # Read targeting criteria from cos_context.json (read-only, no fallback needed)
+    try:
+        import json as _json
+        _ctx = _json.loads(
+            (__import__('pathlib').Path(__file__).parent.parent /
+             "domains/guild/config/cos_context.json").read_text()
+        )
+        targeting = _ctx.get("career_focus", {})
+    except Exception:
+        targeting = {}
+
     return render_template(
         "guild/career_focus.html",
         opportunities=opportunities,
@@ -642,6 +653,7 @@ def guild_career():
         priority_filter=priority_filter,
         board_count=board_count,
         deadline="Aug 1, 2026",
+        targeting=targeting,
     )
 
 

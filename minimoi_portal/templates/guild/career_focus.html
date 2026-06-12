@@ -186,6 +186,39 @@
       border-radius: 4px; padding: 4px 12px; cursor: pointer; margin-left: auto;
     }
     .add-btn:hover { background: rgba(139,94,42,0.14); }
+
+    /* ── Targeting panel ── */
+    .targeting-wrap { margin: 12px 32px 0; }
+    .targeting-toggle {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-dim);
+      background: none; border: none; cursor: pointer; padding: 4px 0;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .targeting-toggle:hover { color: var(--text-muted); }
+    .targeting-caret { font-size: 9px; transition: transform 0.15s; display: inline-block; }
+    .targeting-toggle.open .targeting-caret { transform: rotate(90deg); }
+    .targeting-body {
+      display: none; margin-top: 10px;
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 5px;
+      padding: 14px 18px; font-size: 12px; color: var(--text-dim);
+      line-height: 1.6;
+    }
+    .targeting-body.open { display: block; }
+    .targeting-section { margin-bottom: 10px; }
+    .targeting-section:last-child { margin-bottom: 0; }
+    .targeting-label {
+      font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-dim); opacity: 0.7;
+      display: block; margin-bottom: 3px;
+    }
+    .targeting-value { color: var(--text-muted); }
+    .targeting-pills { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px; }
+    .targeting-pill {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      color: var(--text-dim); background: var(--bg);
+      border: 1px solid var(--border); border-radius: 3px; padding: 1px 7px;
+    }
     .add-form-wrap {
       display: none; margin: 0 32px 16px;
       background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
@@ -261,6 +294,58 @@
   {% endif %}
   <button class="add-btn" onclick="toggleAddForm()">+ Add Position</button>
 </div>
+
+{# ── What I'm targeting panel ── #}
+{% if targeting %}
+<div class="targeting-wrap">
+  <button class="targeting-toggle" id="targeting-toggle" onclick="toggleTargeting()">
+    <span class="targeting-caret">▸</span> What I'm targeting
+  </button>
+  <div class="targeting-body" id="targeting-body">
+    {% if targeting.narrative %}
+    <div class="targeting-section">
+      <span class="targeting-label">Narrative</span>
+      <span class="targeting-value">{{ targeting.narrative }}</span>
+    </div>
+    {% endif %}
+    {% if targeting.target_roles %}
+    <div class="targeting-section">
+      <span class="targeting-label">Target roles</span>
+      <div class="targeting-pills">
+        {% for role in targeting.target_roles %}
+        <span class="targeting-pill">{{ role }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% if targeting.sector_focus %}
+    <div class="targeting-section">
+      <span class="targeting-label">Sector focus</span>
+      <span class="targeting-value">
+        {{ targeting.sector_focus.primary }}
+        {% if targeting.sector_focus.secondary %} · {{ targeting.sector_focus.secondary }}{% endif %}
+      </span>
+    </div>
+    {% endif %}
+    {% if targeting.geo_priority %}
+    <div class="targeting-section">
+      <span class="targeting-label">Geo priorities</span>
+      <div class="targeting-pills">
+        {% for g in targeting.geo_priority %}
+        <span class="targeting-pill">{{ g.geo }} ({{ g.mode }})</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% if targeting.mode %}
+    <div class="targeting-section">
+      <span class="targeting-label">Mode</span>
+      <span class="targeting-value">{{ targeting.mode | join(', ') }}</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 
 {# ── Add Position form ── #}
 <div class="add-form-wrap" id="add-form-wrap">
@@ -439,6 +524,13 @@
 </div>
 
 <script>
+function toggleTargeting() {
+  const body   = document.getElementById('targeting-body');
+  const toggle = document.getElementById('targeting-toggle');
+  const open   = body.classList.toggle('open');
+  toggle.classList.toggle('open', open);
+}
+
 function toggleAddForm() {
   const wrap = document.getElementById('add-form-wrap');
   wrap.classList.toggle('open');
