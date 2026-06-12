@@ -17,6 +17,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(BASE_DIR))
 
+import hashlib
 import json
 import logging
 import os
@@ -39,7 +40,9 @@ log = logging.getLogger("devagent")
 
 app = Flask(__name__)
 _cfg: dict = {}
-_pending_events: dict = {}   # debounce: path → threading.Timer
+_pending_events: dict = {}     # debounce: path → threading.Timer
+_last_processed: dict = {}     # dedup guard: path → content hash of last logged version
+_last_processed_lock = threading.Lock()
 _state = {
     "started_at": datetime.now(timezone.utc).isoformat(),
     "events_processed": 0,
@@ -95,11 +98,22 @@ class DesignDocHandler(FileSystemEventHandler):
         Batch rapid modification events into one notification.
         Files fire multiple modification events during a single save.
         5-second window collapses them into one.
+
+        After the timer fires, we remove the path from _pending_events so
+        future events don't call cancel() on an already-fired timer (which is a
+        no-op but leaves dead references and allows a new timer to start unchecked).
+        Content-hash dedup in process_doc() catches any identical re-fires that
+        slip through after the timer clears.
         """
         secs = cfg("debounce_seconds", 5)
         if path in _pending_events:
             _pending_events[path].cancel()
-        t = threading.Timer(secs, lambda: process_doc(path, event_type))
+
+        def _fire():
+            _pending_events.pop(path, None)
+            process_doc(path, event_type)
+
+        t = threading.Timer(secs, _fire)
         _pending_events[path] = t
         t.start()
 
@@ -123,6 +137,19 @@ def process_doc(file_path: str, event_type: str) -> None:
         content = path.read_text(encoding="utf-8", errors="ignore")[:2000]
     except Exception:
         return
+
+    # Dedup guard — skip if the file content hasn't changed since the last time
+    # we logged this path. Handles editors that fire multiple on_modified events
+    # for a single save (autosave chunk writes, metadata flushes, atomic renames).
+    # No time window needed: if the fingerprint is new, it's a real change; if it
+    # matches, we've already logged this exact content regardless of how many
+    # events fired.
+    content_hash = hashlib.md5(content.encode("utf-8", errors="ignore")).hexdigest()[:16]
+    with _last_processed_lock:
+        if _last_processed.get(file_path) == content_hash:
+            log.debug("Skipping duplicate: %s (content unchanged since last log)", path.name)
+            return
+        _last_processed[file_path] = content_hash
 
     cl = classify_doc(file_path, content)
     doc_type    = cl["doc_type"]
