@@ -124,6 +124,12 @@
     "competitive_watch": true
   },
 
+  "build_discipline": {
+    "_note": "staleness_days: how long a spec_ready/in_build item can go without progress before CoS flags it blocked. recently_done_grace_days: how long a done item stays on the Queue board before dropping to Build Log only. Currently both 3 — independent values, can diverge if useful.",
+    "staleness_days": 3,
+    "recently_done_grace_days": 3
+  },
+
   "mini_moi": {
     "novelty_watch": true,
     "watch_terms": [

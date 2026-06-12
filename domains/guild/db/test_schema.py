@@ -72,8 +72,19 @@ def run():
         "WHERE table_schema = 'guild' ORDER BY table_name"
     )
     guild_tables = {r["table_name"] for r in cur.fetchall()}
-    for t in ("agent_feedback", "challenger_exchanges", "cos_agenda", "design_log"):
+    for t in ("agent_feedback", "challenger_exchanges", "cos_agenda",
+              "design_log", "design_log_transitions"):
         check(f"  guild.{t}", t in guild_tables)
+
+    print("\nguild.design_log columns (build discipline):")
+    cur.execute(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_schema='guild' AND table_name='design_log'"
+    )
+    design_log_cols = {r["column_name"] for r in cur.fetchall()}
+    for col in ("status", "spec_file", "spec_title",
+                "last_transition_at", "blocked_reason", "github_issue"):
+        check(f"  guild.design_log.{col}", col in design_log_cols)
 
     print("\npipeline.* tables:")
     cur.execute(
@@ -157,6 +168,8 @@ def run():
         check("  robert_ro can SELECT guild.cos_agenda", True)
         ro_cur.execute("SELECT count(*) FROM guild.challenger_exchanges")
         check("  robert_ro can SELECT guild.challenger_exchanges", True)
+        ro_cur.execute("SELECT count(*) FROM guild.design_log_transitions")
+        check("  robert_ro can SELECT guild.design_log_transitions", True)
         ro_conn.close()
     except Exception as e:
         check("  robert_ro read access", False, str(e))

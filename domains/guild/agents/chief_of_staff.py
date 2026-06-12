@@ -126,6 +126,9 @@ _SYSTEM_PROMPT = """You are the Chief of Staff for mini-moi — Robert van Stedu
 --- OPERATIONS STATUS (live) ---
 {ops_status}
 
+--- BUILD STATE (live) ---
+{build_state}
+
 --- TODAY ---
 {date_str}
 
@@ -136,6 +139,116 @@ Hard limits (never cross these):
 - Do not make decisions that belong to Robert — recommend, don't decide
 - Do not access files or data outside what is provided in this prompt
 """
+
+
+def _read_build_state() -> str:
+    """Query guild.design_log for active items — for /chat context."""
+    try:
+        conn = _db()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT status,
+                       COALESCE(spec_title, spec_file, file_path) AS title,
+                       EXTRACT(EPOCH FROM (NOW() - last_transition_at))/86400 AS age_days,
+                       blocked_reason,
+                       github_issue
+                FROM guild.design_log
+                WHERE status IN ('spec_ready','in_build','blocked','incomplete')
+                ORDER BY
+                  CASE status
+                    WHEN 'blocked'    THEN 1
+                    WHEN 'in_build'   THEN 2
+                    WHEN 'spec_ready' THEN 3
+                    WHEN 'incomplete' THEN 4
+                  END,
+                  last_transition_at DESC
+            """)
+            rows = cur.fetchall()
+        conn.close()
+        if not rows:
+            return "No active build items."
+        lines = []
+        for status, title, age_days, blocked_reason, github_issue in rows:
+            age = f"{int(age_days)}d" if age_days else "?"
+            line = f"[{status.upper()}] {title} (age: {age})"
+            if blocked_reason:
+                line += f" — {blocked_reason}"
+            if github_issue:
+                line += f" #{github_issue}"
+            lines.append(line)
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Build state unavailable: {e}"
+
+
+def _run_build_discipline_check() -> dict:
+    """
+    Loop F — daily staleness check.
+    Flags spec_ready/in_build items past threshold as blocked.
+    Threshold from cos_context.json build_discipline.staleness_days (default 3).
+    """
+    try:
+        raw = json.loads(COS_CONTEXT_FILE.read_text())
+        threshold_days = raw.get("build_discipline", {}).get("staleness_days", 3)
+    except Exception:
+        threshold_days = 3
+
+    flagged = []
+    try:
+        conn = _db()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, COALESCE(spec_title, spec_file, file_path) AS title,
+                       status, last_transition_at
+                FROM guild.design_log
+                WHERE status IN ('spec_ready','in_build')
+                  AND last_transition_at < NOW() - INTERVAL '%s days'
+            """, (threshold_days,))
+            stale = cur.fetchall()
+
+            for log_id, title, prev_status, _ in stale:
+                cur.execute(
+                    "UPDATE guild.design_log SET status='blocked', "
+                    "blocked_reason=%s, last_transition_at=NOW() WHERE id=%s",
+                    (f"stale: no progress in {threshold_days}+ days", log_id)
+                )
+                cur.execute(
+                    "INSERT INTO guild.design_log_transitions "
+                    "(design_log_id, from_status, to_status, triggered_by, reason) "
+                    "VALUES (%s,%s,'blocked','cos_staleness',%s)",
+                    (log_id, prev_status,
+                     f"stale: no progress in {threshold_days}+ days")
+                )
+                flagged.append(title)
+
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log.error("build_discipline_check error: %s", e)
+        return {"flagged": [], "error": str(e)}
+
+    if flagged:
+        msg = (
+            f"⏰ <b>Build discipline:</b> {len(flagged)} item(s) stale "
+            f"({threshold_days}+ days) → flagged blocked\n"
+            + "\n".join(f"  • {t}" for t in flagged)
+            + "\nReview at /guild/build/queue"
+        )
+        try:
+            token   = keyring.get_password("telegram", "bot_token")
+            chat_id = os.environ.get("TELEGRAM_CHAT_ID", "8379221702")
+            if token:
+                requests.post(
+                    f"https://api.telegram.org/bot{token}/sendMessage",
+                    json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"},
+                    timeout=5,
+                )
+        except Exception:
+            pass
+
+    log.info("build_discipline_check: %d item(s) flagged stale", len(flagged))
+    return {"flagged": flagged, "threshold_days": threshold_days}
+
 
 def _build_system_prompt() -> str:
     try:
@@ -159,6 +272,7 @@ def _build_system_prompt() -> str:
     except Exception:
         ops_str = "Operations status unavailable"
 
+    build_state = _read_build_state()
     date_str = datetime.now().strftime("%A, %B %d, %Y %H:%M")
 
     return _SYSTEM_PROMPT.format(
@@ -166,6 +280,7 @@ def _build_system_prompt() -> str:
         cos_context=cos_context,
         cos_memory=cos_memory,
         ops_status=ops_str,
+        build_state=build_state,
         date_str=date_str,
     )
 
@@ -411,10 +526,11 @@ _state_lock = threading.Lock()
 # ── Loop state (updated by each run) ─────────────────────────────────────────
 
 _loop_state: dict[str, dict] = {
-    "loop_a": {"name": "career_focus_scout", "last_run": None, "last_result": None, "error": None},
-    "loop_b": {"name": "german_watch",       "last_run": None, "last_result": None, "error": None},
-    "loop_c": {"name": "curator_scout",      "last_run": None, "last_result": None, "error": None},
-    "loop_d": {"name": "novelty_watch",      "last_run": None, "last_result": None, "error": None},
+    "loop_a": {"name": "career_focus_scout",    "last_run": None, "last_result": None, "error": None},
+    "loop_b": {"name": "german_watch",           "last_run": None, "last_result": None, "error": None},
+    "loop_c": {"name": "curator_scout",          "last_run": None, "last_result": None, "error": None},
+    "loop_d": {"name": "novelty_watch",          "last_run": None, "last_result": None, "error": None},
+    "loop_f": {"name": "build_discipline_check", "last_run": None, "last_result": None, "error": None},
 }
 _loop_lock = threading.Lock()
 
@@ -806,9 +922,16 @@ def main():
         print(f"   ⚠️  Loop import failed: {e}")
         loops_ok = False
 
-    # 5. Start APScheduler (only if loops imported cleanly)
+    # 5. Start APScheduler
+    scheduler = BackgroundScheduler()
+
+    # Loop F — build discipline check (always available, no external imports)
+    scheduler.add_job(
+        lambda: _run_loop("loop_f", _run_build_discipline_check),
+        "cron", hour=7, minute=30, id="loop_f", misfire_grace_time=600
+    )
+
     if loops_ok:
-        scheduler = BackgroundScheduler()
         # Loop A — twice daily
         scheduler.add_job(
             lambda: _run_loop("loop_a", run_career_focus_scout),
@@ -829,10 +952,11 @@ def main():
             lambda: _run_loop("loop_d", run_novelty_watch),
             "cron", day="1,15", hour=8, id="loop_d", misfire_grace_time=600
         )
-        scheduler.start()
-        print("   Scheduler: loop_a(6+18h) loop_b(Sun 9h) loop_c(Sun 10h) loop_d(1st+15th 8h) ✅")
+        print("   Scheduler: loop_a(6+18h) loop_b(Sun 9h) loop_c(Sun 10h) loop_d(1st+15th 8h) loop_f(daily 7:30) ✅")
     else:
-        print("   Scheduler: disabled (loop import error — see logs)")
+        print("   Scheduler: loop_f(daily 7:30) ✅ — loop_a/b/c/d disabled (import error)")
+
+    scheduler.start()
 
     # 6. Mark running
     with _state_lock:

@@ -44,6 +44,9 @@ app = Flask(
 )
 CORS(app)
 
+# Jinja2 globals
+app.jinja_env.globals['now'] = datetime.now
+
 # Load config
 from minimoi_portal import config as _cfg  # noqa: E402
 
@@ -762,6 +765,86 @@ def add_position():
     except Exception:
         pass
     return redirect(url_for("guild_career"))
+
+
+# ── Build Clarity ─────────────────────────────────────────────────────────────
+
+@app.route("/guild/build")
+@_require_owner
+def guild_build():
+    status_filter = request.args.get('status', 'all')
+    query = "SELECT * FROM guild.design_log"
+    params = []
+    if status_filter != 'all':
+        query += " WHERE status = %s"
+        params.append(status_filter)
+    query += " ORDER BY last_transition_at DESC NULLS LAST"
+    try:
+        items = _guild_db_query(query, params or None)
+    except Exception:
+        items = []
+    return render_template("guild/build_log.html", items=items,
+                           status_filter=status_filter, user=_current_user())
+
+
+@app.route("/guild/build/queue")
+@_require_owner
+def guild_build_queue():
+    sql = """
+        SELECT * FROM guild.design_log
+        WHERE status IN ('spec_ready','in_build','blocked','incomplete')
+           OR (status = 'done'
+               AND last_transition_at > NOW() - INTERVAL '3 days')
+        ORDER BY
+          CASE status
+            WHEN 'blocked'    THEN 1
+            WHEN 'in_build'   THEN 2
+            WHEN 'spec_ready' THEN 3
+            WHEN 'incomplete' THEN 3
+            WHEN 'done'       THEN 4
+            ELSE 5
+          END,
+          last_transition_at DESC NULLS LAST
+    """
+    try:
+        items = _guild_db_query(sql)
+    except Exception:
+        items = []
+    return render_template("guild/build_queue.html", items=items,
+                           user=_current_user())
+
+
+@app.route("/guild/build/items/<int:item_id>/status", methods=["POST"])
+@_require_owner
+def update_build_status(item_id):
+    new_status = request.form.get('status')
+    note = request.form.get('note') or None
+    valid = {'spec_ready', 'in_build', 'blocked', 'done', 'deferred', 'incomplete'}
+    if new_status not in valid:
+        return redirect(url_for('guild_build_queue'))
+
+    try:
+        rows = _guild_db_query(
+            "SELECT status FROM guild.design_log WHERE id = %s", (item_id,)
+        )
+        current = rows[0]['status'] if rows else None
+
+        _guild_db_execute(
+            "UPDATE guild.design_log SET status=%s, last_transition_at=NOW(), "
+            "blocked_reason=%s WHERE id=%s",
+            (new_status, note if new_status == 'blocked' else None, item_id)
+        )
+        if current is not None:
+            _guild_db_execute(
+                "INSERT INTO guild.design_log_transitions "
+                "(design_log_id, from_status, to_status, triggered_by, reason) "
+                "VALUES (%s,%s,%s,'robert',%s)",
+                (item_id, current, new_status, note)
+            )
+    except Exception:
+        pass
+
+    return redirect(request.referrer or url_for('guild_build_queue'))
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

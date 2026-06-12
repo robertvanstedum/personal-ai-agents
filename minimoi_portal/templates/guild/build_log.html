@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Build Log — Guild</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f5f0e8; --surface: #faf7f2; --surface2: #f0ebe0;
+      --border: #ddd6c8; --text: #2a2418; --text-muted: #6b5f4e;
+      --text-dim: #9e9080; --accent: #8b5e2a; --accent-dim: rgba(139,94,42,0.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+    /* ── Guild nav ── */
+    nav.guild-nav {
+      position: sticky; top: 0; z-index: 100;
+      background: #2a1f14;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .guild-nav-brand {
+      height: 44px; display: flex; align-items: center;
+      padding: 0 1.5rem;
+      font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.08em;
+    }
+    .guild-nav-brand a { color: #C68A5E; text-decoration: none; }
+    .guild-nav-brand a:hover { color: #ffffff; }
+    .guild-nav-brand a.nav-active { color: #ffffff; font-weight: 600; }
+    .nav-sep { color: rgba(255,255,255,0.2); margin: 0 12px; }
+    .guild-subnav {
+      height: 36px; display: flex; align-items: center;
+      padding: 0 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,0,0,0.15);
+    }
+    .subnav-link {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: rgba(198,138,94,0.7); text-decoration: none;
+      padding: 0 12px; height: 36px;
+      display: flex; align-items: center;
+      border-bottom: 2px solid transparent;
+    }
+    .subnav-link:hover { color: #C68A5E; }
+    .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; }
+    .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
+
+    /* ── Page header ── */
+    .page-header {
+      padding: 24px 32px 0;
+      display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    }
+    .page-title { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 400; }
+    .page-meta { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); }
+    .header-actions {
+      margin-left: auto; display: flex; gap: 10px; align-items: center;
+    }
+    .gh-link {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-muted); text-decoration: none;
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 4px 10px;
+    }
+    .gh-link:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* ── Filters ── */
+    .filters {
+      padding: 16px 32px 0;
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .filter-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); margin-right: 4px; }
+    .filter-btn {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; padding: 4px 10px; border-radius: 4px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text-muted); text-decoration: none; cursor: pointer;
+    }
+    .filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .filter-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+    /* ── Table ── */
+    .table-wrap {
+      margin: 20px 32px 40px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--text-dim);
+      padding: 10px 14px; text-align: left;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    td {
+      padding: 11px 14px; border-bottom: 1px solid rgba(221,214,200,0.5);
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(139,94,42,0.03); }
+
+    .title-cell { max-width: 340px; }
+    .title-main { font-weight: 500; color: var(--text); }
+    .title-file {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-dim); margin-top: 2px;
+    }
+    .title-file a { color: inherit; text-decoration: none; }
+    .title-file a:hover { color: var(--accent); }
+
+    .status-badge {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; padding: 2px 7px; border-radius: 3px;
+      border: 1px solid; white-space: nowrap;
+    }
+    .s-spec_ready  { color: #2a6e4e; background: rgba(42,110,78,0.08);  border-color: rgba(42,110,78,0.25); }
+    .s-in_build    { color: #1a5c8a; background: rgba(26,92,138,0.08);  border-color: rgba(26,92,138,0.25); }
+    .s-blocked     { color: #8b2020; background: rgba(139,32,32,0.08);  border-color: rgba(139,32,32,0.25); }
+    .s-done        { color: var(--text-dim); background: rgba(0,0,0,0.04); border-color: var(--border); }
+    .s-deferred    { color: var(--text-dim); background: rgba(0,0,0,0.03); border-color: var(--border); opacity: 0.7; }
+    .s-incomplete  { color: #8b5a00; background: rgba(139,90,0,0.08);   border-color: rgba(139,90,0,0.25); }
+
+    .age-cell { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+    .gh-badge {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-muted); text-decoration: none;
+    }
+    .gh-badge:hover { color: var(--accent); }
+
+    .empty-state {
+      padding: 40px 32px; text-align: center;
+      font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim);
+    }
+  </style>
+</head>
+<body>
+
+<nav class="guild-nav">
+  <div class="guild-nav-brand">
+    <a href="/dashboard">mini-moi</a>
+    <span class="nav-sep">|</span>
+    <a href="/app/curator">Curator</a>
+    <span class="nav-sep">|</span>
+    <a href="/app/german">German</a>
+    <span class="nav-sep">|</span>
+    <a href="/guild" class="nav-active">Guild</a>
+  </div>
+  <div class="guild-subnav">
+    <a href="/guild/career" class="subnav-link">Career Focus</a>
+    <span class="subnav-dot">&nbsp;·&nbsp;</span>
+    <span class="subnav-link" style="cursor:default;opacity:0.5">Build</span>
+    <span class="subnav-dot">&nbsp;·&nbsp;</span>
+    <a href="/guild/build" class="subnav-link subnav-active">Build Log</a>
+    <span class="subnav-dot">&nbsp;·&nbsp;</span>
+    <a href="/guild/build/queue" class="subnav-link">Queue</a>
+  </div>
+</nav>
+
+<div class="page-header">
+  <h1 class="page-title">Build Log</h1>
+  <span class="page-meta">{{ items | length }} spec{{ 's' if items | length != 1 else '' }}</span>
+  <div class="header-actions">
+    <a href="https://github.com/robertvanstedum/personal-ai-agents/issues" target="_blank" rel="noopener" class="gh-link">View GitHub Issues →</a>
+  </div>
+</div>
+
+<form class="filters" method="GET" action="/guild/build">
+  <span class="filter-label">Status:</span>
+  <a href="/guild/build" class="filter-btn {% if status_filter == 'all' %}active{% endif %}">All</a>
+  <a href="/guild/build?status=in_build"   class="filter-btn {% if status_filter == 'in_build' %}active{% endif %}">In Build</a>
+  <a href="/guild/build?status=spec_ready" class="filter-btn {% if status_filter == 'spec_ready' %}active{% endif %}">Spec Ready</a>
+  <a href="/guild/build?status=incomplete" class="filter-btn {% if status_filter == 'incomplete' %}active{% endif %}">Incomplete</a>
+  <a href="/guild/build?status=blocked"    class="filter-btn {% if status_filter == 'blocked' %}active{% endif %}">Blocked</a>
+  <a href="/guild/build?status=done"       class="filter-btn {% if status_filter == 'done' %}active{% endif %}">Done</a>
+  <a href="/guild/build?status=deferred"   class="filter-btn {% if status_filter == 'deferred' %}active{% endif %}">Deferred</a>
+</form>
+
+<div class="table-wrap">
+  {% if items %}
+  <table>
+    <thead>
+      <tr>
+        <th>Spec</th>
+        <th>Status</th>
+        <th>Age</th>
+        <th>Issue</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for item in items %}
+      <tr>
+        <td class="title-cell">
+          <div class="title-main">
+            {{ item.spec_title or (item.spec_file or item.file_path or '—') | truncate(60, true, '…') }}
+          </div>
+          {% if item.spec_file %}
+          <div class="title-file">
+            <a href="#" title="{{ item.spec_file }}">{{ item.spec_file }}</a>
+          </div>
+          {% elif item.file_path %}
+          <div class="title-file">{{ item.file_path | replace('/Users/vanstedum/Projects/personal-ai-agents/', '') }}</div>
+          {% endif %}
+          {% if item.blocked_reason %}
+          <div style="font-size:11px;color:#8b2020;margin-top:3px;">⚠ {{ item.blocked_reason }}</div>
+          {% endif %}
+          {% if item.status == 'incomplete' %}
+          <div style="font-size:11px;color:#8b5a00;margin-top:3px;">⚠ incomplete spec</div>
+          {% endif %}
+        </td>
+        <td>
+          <span class="status-badge s-{{ item.status or 'unknown' }}">
+            {{ (item.status or '—').replace('_', ' ') }}
+          </span>
+        </td>
+        <td class="age-cell">
+          {% if item.last_transition_at %}
+            {% set age_sec = (now() - item.last_transition_at).total_seconds() if item.last_transition_at else 0 %}
+            {% set age_d = (age_sec / 86400) | int %}
+            {% if age_d == 0 %}today{% elif age_d == 1 %}1d{% else %}{{ age_d }}d{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if item.github_issue %}
+          <a href="https://github.com/robertvanstedum/personal-ai-agents/issues/{{ item.github_issue | replace('#','') }}"
+             target="_blank" class="gh-badge">#{{ item.github_issue | replace('#','') }}</a>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state">No build items yet — specs will appear here as Design/Dev classifies them</div>
+  {% endif %}
+</div>
+
+</body>
+</html>

@@ -107,7 +107,7 @@ class DesignDocHandler(FileSystemEventHandler):
 # ── Core processor ────────────────────────────────────────────────────────────
 
 def process_doc(file_path: str, event_type: str) -> None:
-    """Classify → maybe archive superseded → log → memory → notify Robert + CoS."""
+    """Classify → completeness check → maybe archive superseded → log → memory → notify."""
     path = Path(file_path)
 
     # Size check before read (Phase 4 lesson)
@@ -124,11 +124,27 @@ def process_doc(file_path: str, event_type: str) -> None:
     except Exception:
         return
 
-    doc_type, summary, agent_source = classify_doc(file_path, content)
+    cl = classify_doc(file_path, content)
+    doc_type    = cl["doc_type"]
+    summary     = cl["summary"]
+    agent_source = cl["agent_source"]
+    spec_title  = cl["spec_title"]
     log.info("Processed: %s → %s | %s", path.name, doc_type, summary)
 
+    # Completeness check for handoff/spec/design docs
+    build_status = None
+    completeness_failures: list[str] = []
+    if doc_type in ("handoff", "spec", "design"):
+        build_status, completeness_failures = _check_completeness(cl)
+        log.info("Completeness: %s → %s", path.name, build_status)
+        if completeness_failures:
+            _notify_incomplete(file_path, completeness_failures)
+
+    spec_file = path.name if doc_type in ("handoff", "spec", "design") else None
+
     maybe_archive_superseded(file_path, doc_type)
-    log_to_db(event_type, file_path, doc_type, summary, agent_source)
+    log_to_db(event_type, file_path, doc_type, summary, agent_source,
+              spec_file=spec_file, spec_title=spec_title, build_status=build_status)
     append_to_memory(file_path, event_type, summary)
     notify_parallel(file_path, event_type, doc_type, summary)
 
@@ -138,14 +154,17 @@ def process_doc(file_path: str, event_type: str) -> None:
             "file": path.name,
             "type": event_type,
             "doc_type": doc_type,
+            "build_status": build_status,
             "at": datetime.now(timezone.utc).isoformat(),
         }
 
 
 # ── Classification ────────────────────────────────────────────────────────────
 
-def classify_doc(file_path: str, content: str) -> tuple[str, str, str]:
-    """LLM classify — doc type and one-sentence summary.
+def classify_doc(file_path: str, content: str) -> dict:
+    """LLM classify — doc type, summary, completeness data (one call).
+    Returns dict with: doc_type, summary, agent_source, spec_title,
+    has_dod, has_commit, referenced_files.
     Uses xAI (platform convention). Falls back to filename-pattern heuristic.
     """
     try:
@@ -157,14 +176,27 @@ def classify_doc(file_path: str, content: str) -> tuple[str, str, str]:
             model="grok-4-1-fast-reasoning",
             messages=[{"role": "user", "content": (
                 "Classify this mini-moi project document. "
-                "Return JSON only, no other text:\n"
-                '{"doc_type":"handoff|spec|design|build_output|review|config|archive",'
-                '"summary":"one sentence max 20 words",'
-                '"agent_source":"claude_ai|claude_code|openclaw|grok|robert|unknown"}\n\n'
+                "Return JSON only, no other text.\n\n"
+                "Required fields:\n"
+                '  "doc_type": "handoff|spec|design|build_output|review|config|archive"\n'
+                '  "summary": "one sentence max 20 words"\n'
+                '  "agent_source": "claude_ai|claude_code|openclaw|grok|robert|unknown"\n\n'
+                "Also extract for build tracking:\n"
+                "  1. spec_title: document title from top-level # heading. "
+                "Strip any leading 'Handoff —', 'Build Spec —', 'Design —' prefix. "
+                "Null if not a spec/handoff/design doc.\n"
+                "  2. has_dod: true if the document has a section clearly meaning "
+                "'Definition of Done' (checklist of completion criteria), else false.\n"
+                "  3. has_commit: true if the document has a section clearly meaning "
+                "'Commit' (containing git commands or file paths for committing), else false.\n"
+                "  4. referenced_files: list of every _working/ path mentioned anywhere "
+                "in this document (e.g. '_working/spec_foo.md'). Empty list if none.\n\n"
+                '{"doc_type":"...","summary":"...","agent_source":"...",'
+                '"spec_title":null,"has_dod":false,"has_commit":false,"referenced_files":[]}\n\n'
                 f"Filename: {Path(file_path).name}\n"
-                f"Content preview:\n{content[:500]}"
+                f"Content preview:\n{content[:800]}"
             )}],
-            max_tokens=150,
+            max_tokens=300,
             temperature=0.1,
         )
         raw = (resp.choices[0].message.content or "") if resp.choices else "{}"
@@ -173,26 +205,74 @@ def classify_doc(file_path: str, content: str) -> tuple[str, str, str]:
             if raw.startswith("json"):
                 raw = raw[4:]
         data = json.loads(raw)
-        # isinstance checks — Phase 4 lesson
-        return (
-            data.get("doc_type", "unknown") if isinstance(data, dict) else "unknown",
-            data.get("summary", Path(file_path).name) if isinstance(data, dict) else Path(file_path).name,
-            data.get("agent_source", "unknown") if isinstance(data, dict) else "unknown",
-        )
+        if not isinstance(data, dict):
+            raise ValueError("non-dict response")
+        return {
+            "doc_type":         data.get("doc_type", "unknown"),
+            "summary":          data.get("summary", Path(file_path).name),
+            "agent_source":     data.get("agent_source", "unknown"),
+            "spec_title":       data.get("spec_title"),
+            "has_dod":          bool(data.get("has_dod", False)),
+            "has_commit":       bool(data.get("has_commit", False)),
+            "referenced_files": data.get("referenced_files", [])
+                                if isinstance(data.get("referenced_files"), list) else [],
+        }
     except Exception as e:
         log.debug("LLM classify failed (%s) — using filename heuristic", e)
 
     # Filename heuristic fallback — no LLM needed for obvious cases
     name = Path(file_path).name.lower()
     if "handoff" in name:
-        return "handoff",      f"Handoff doc: {Path(file_path).name}", "unknown"
+        return {"doc_type": "handoff",      "summary": f"Handoff doc: {Path(file_path).name}",
+                "agent_source": "unknown",  "spec_title": None,
+                "has_dod": False, "has_commit": False, "referenced_files": []}
     if "spec" in name or "final" in name:
-        return "spec",         f"Spec: {Path(file_path).name}",        "unknown"
+        return {"doc_type": "spec",         "summary": f"Spec: {Path(file_path).name}",
+                "agent_source": "unknown",  "spec_title": None,
+                "has_dod": False, "has_commit": False, "referenced_files": []}
     if "design" in name:
-        return "design",       f"Design doc: {Path(file_path).name}",  "unknown"
+        return {"doc_type": "design",       "summary": f"Design doc: {Path(file_path).name}",
+                "agent_source": "unknown",  "spec_title": None,
+                "has_dod": False, "has_commit": False, "referenced_files": []}
     if "review" in name or "build_log" in name:
-        return "build_output", f"Review: {Path(file_path).name}",      "unknown"
-    return "unknown", f"New doc: {Path(file_path).name}", "unknown"
+        return {"doc_type": "build_output", "summary": f"Review: {Path(file_path).name}",
+                "agent_source": "unknown",  "spec_title": None,
+                "has_dod": False, "has_commit": False, "referenced_files": []}
+    return {
+        "doc_type": "unknown", "summary": f"New doc: {Path(file_path).name}",
+        "agent_source": "unknown", "spec_title": None,
+        "has_dod": False, "has_commit": False, "referenced_files": [],
+    }
+
+
+def _check_completeness(classification: dict) -> tuple[str, list[str]]:
+    """
+    Completeness check for handoff/spec/design docs.
+    Returns (status, failures) where status is 'spec_ready' or 'incomplete',
+    and failures is a list of human-readable failure reasons.
+    """
+    failures = []
+    if not classification.get("has_dod"):
+        failures.append("missing Definition of Done section")
+    if not classification.get("has_commit"):
+        failures.append("missing Commit section")
+    # File existence check (reuses check_handoff_gaps logic)
+    for ref in classification.get("referenced_files", []):
+        ref_path = BASE_DIR / ref if not os.path.isabs(ref) else Path(ref)
+        if not ref_path.exists():
+            failures.append(f"referenced file not found: {ref}")
+    return ("incomplete" if failures else "spec_ready"), failures
+
+
+def _notify_incomplete(file_path: str, failures: list[str]) -> None:
+    """Notify Robert via Telegram when a spec/handoff fails completeness check."""
+    bullets = "\n".join(f"  • {f}" for f in failures)
+    msg = (
+        f"⚠️ <b>Incomplete spec:</b> {Path(file_path).name}\n"
+        f"Completeness check failed:\n{bullets}\n"
+        "Fix the doc or override status in /guild/build/queue"
+    )
+    _send_telegram(msg)
 
 
 # ── _working/ management ──────────────────────────────────────────────────────
@@ -331,7 +411,10 @@ def append_to_memory(file_path: str, event_type: str, summary: str) -> None:
 # ── DB ────────────────────────────────────────────────────────────────────────
 
 def log_to_db(event_type: str, file_path: str, doc_type: str,
-              summary: str, agent_source: str) -> None:
+              summary: str, agent_source: str,
+              spec_file: str | None = None,
+              spec_title: str | None = None,
+              build_status: str | None = None) -> None:
     try:
         import psycopg2
         conn = psycopg2.connect(
@@ -341,14 +424,51 @@ def log_to_db(event_type: str, file_path: str, doc_type: str,
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO guild.design_log "
-                "(event_type, file_path, doc_type, summary, agent_source) "
-                "VALUES (%s,%s,%s,%s,%s)",
-                (event_type, str(file_path), doc_type, summary, agent_source)
+                "(event_type, file_path, doc_type, summary, agent_source, "
+                " spec_file, spec_title, status, last_transition_at) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NOW()) "
+                "RETURNING id",
+                (event_type, str(file_path), doc_type, summary, agent_source,
+                 spec_file, spec_title, build_status)
             )
+            row = cur.fetchone()
+            log_id = row[0] if row else None
+
+            # Write initial transition row for tracked docs
+            if log_id and build_status:
+                cur.execute(
+                    "INSERT INTO guild.design_log_transitions "
+                    "(design_log_id, from_status, to_status, triggered_by) "
+                    "VALUES (%s, NULL, %s, 'design_dev')",
+                    (log_id, build_status)
+                )
         conn.commit()
         conn.close()
     except Exception:
         pass   # DB down — memory file is the fallback
+
+
+def _log_transition(design_log_id: int, from_status: str | None,
+                    to_status: str, triggered_by: str,
+                    reason: str | None = None) -> None:
+    """Write a single row to guild.design_log_transitions."""
+    try:
+        import psycopg2
+        conn = psycopg2.connect(
+            dbname="personal_agents", user="minimoi",
+            password="simple123", host="localhost", port=5432
+        )
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO guild.design_log_transitions "
+                "(design_log_id, from_status, to_status, triggered_by, reason) "
+                "VALUES (%s,%s,%s,%s,%s)",
+                (design_log_id, from_status, to_status, triggered_by, reason)
+            )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
 
 
 def _write_agenda_direct(event_type: str, file_path: str, summary: str) -> None:
@@ -429,6 +549,57 @@ def receive_external_event():
     return jsonify({"received": True})
 
 
+@app.route("/start-build", methods=["POST"])
+def start_build():
+    """
+    Signal that Claude Code has started work on a spec.
+    Flips status → in_build and writes a transition row.
+    Called once at the start of each build: scripts/start_build.sh <spec-filename>
+    """
+    data = request.get_json(silent=True) or {}
+    spec_file = data.get("spec_file")
+    if not spec_file:
+        return jsonify({"error": "spec_file required"}), 400
+
+    try:
+        import psycopg2
+        conn = psycopg2.connect(
+            dbname="personal_agents", user="minimoi",
+            password="simple123", host="localhost", port=5432
+        )
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, status FROM guild.design_log "
+                "WHERE spec_file = %s ORDER BY id DESC LIMIT 1",
+                (spec_file,)
+            )
+            row = cur.fetchone()
+            if not row:
+                conn.close()
+                return jsonify({"error": f"spec_file not found in design_log: {spec_file}"}), 404
+
+            log_id, current_status = row
+            cur.execute(
+                "UPDATE guild.design_log SET status='in_build', "
+                "last_transition_at=NOW() WHERE id=%s",
+                (log_id,)
+            )
+            cur.execute(
+                "INSERT INTO guild.design_log_transitions "
+                "(design_log_id, from_status, to_status, triggered_by) "
+                "VALUES (%s,%s,'in_build','claude_code')",
+                (log_id, current_status)
+            )
+        conn.commit()
+        conn.close()
+        log.info("start-build: %s → in_build (was: %s)", spec_file, current_status)
+        return jsonify({"status": "in_build", "spec_file": spec_file,
+                        "previous_status": current_status})
+    except Exception as e:
+        log.error("start-build error: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+
 # ── Watcher thread ────────────────────────────────────────────────────────────
 
 def _start_watcher() -> None:
@@ -466,8 +637,9 @@ def main():
 
     print(f"""
 🔍  Design/Dev Agent starting on port {PORT}…
-   /status  — agent state and memory usage
-   /health  — liveness probe
+   /status       — agent state and memory usage
+   /health       — liveness probe
+   /start-build  — POST {{spec_file}} to flip status → in_build
    Watching: {cfg('watch_paths', ['_working/'])}
    Autonomy level: {cfg('autonomy_level', 1)}
    Debounce: {cfg('debounce_seconds', 5)}s
