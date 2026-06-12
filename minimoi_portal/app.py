@@ -654,23 +654,6 @@ def guild_career():
     except Exception:
         opportunities = []
 
-    # Pipeline board positions (all qualifying — unfiltered, shown as second section)
-    board_sql = (
-        "SELECT id, title, company, geo, url, opportunity_type, "
-        "fit_score, fit_narrative, warm_lead, warm_lead_contacts, "
-        "cos_notes, status, priority, close_reason, closed_at, created_at "
-        "FROM pipeline.items "
-        "WHERE (priority = TRUE AND status = 'applied') "
-        "OR status = 'reviewing' "
-        "OR status = 'interview' "
-        "OR (status = 'closed' AND closed_at > NOW() - INTERVAL '5 days') "
-        "ORDER BY priority DESC NULLS LAST, fit_score DESC NULLS LAST, created_at DESC"
-    )
-    try:
-        positions = _guild_db_query(board_sql)
-    except Exception:
-        positions = []
-
     # Read targeting criteria from cos_context.json (read-only, no fallback needed)
     try:
         import json as _json
@@ -686,7 +669,6 @@ def guild_career():
         "guild/career_focus.html",
         opportunities=opportunities,
         total=len(opportunities),
-        positions=positions,
         status_filter=status_filter,
         geo_filter=geo_filter,
         type_filter=type_filter,
@@ -699,7 +681,22 @@ def guild_career():
 @app.route("/guild/career/active")
 @_require_owner
 def guild_career_active():
-    return redirect("/guild/career#pipeline", 302)
+    sql = (
+        "SELECT id, title, company, geo, url, opportunity_type, "
+        "fit_score, fit_narrative, warm_lead, warm_lead_contacts, "
+        "cos_notes, status, priority, close_reason, closed_at, created_at "
+        "FROM pipeline.items "
+        "WHERE (priority = TRUE AND status = 'applied') "
+        "OR status = 'reviewing' "
+        "OR status = 'interview' "
+        "OR (status = 'closed' AND closed_at > NOW() - INTERVAL '5 days') "
+        "ORDER BY priority DESC NULLS LAST, fit_score DESC NULLS LAST, created_at DESC"
+    )
+    try:
+        positions = _guild_db_query(sql)
+    except Exception:
+        positions = []
+    return render_template("guild/career_active.html", positions=positions, deadline="Aug 1, 2026")
 
 
 @app.route("/guild/career/positions/<int:opp_id>/status", methods=["POST"])
@@ -730,12 +727,14 @@ def update_position_status(opp_id):
                 )
         except Exception:
             pass
-    return redirect(url_for("guild_career"))
+    dest = "guild_career_active" if referrer == "active" else "guild_career"
+    return redirect(url_for(dest))
 
 
 @app.route("/guild/career/positions/<int:opp_id>/priority", methods=["POST"])
 @_require_owner
 def toggle_position_priority(opp_id):
+    referrer = request.form.get("_referrer", "positions")
     try:
         _guild_db_execute(
             "UPDATE pipeline.items SET priority = NOT COALESCE(priority, FALSE) WHERE id=%s",
@@ -743,7 +742,8 @@ def toggle_position_priority(opp_id):
         )
     except Exception:
         pass
-    return redirect(url_for("guild_career"))
+    dest = "guild_career_active" if referrer == "active" else "guild_career"
+    return redirect(url_for(dest))
 
 
 @app.route("/guild/career/positions/add", methods=["POST"])

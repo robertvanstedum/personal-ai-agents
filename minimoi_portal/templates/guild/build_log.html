@@ -48,24 +48,16 @@
     .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; }
     .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
 
-    /* ── Secondary nav (section sub-pages) ── */
-    .guild-secondary-nav {
-      height: 30px; display: flex; align-items: center;
-      padding: 0 1.5rem;
-      border-top: 1px solid rgba(255,255,255,0.04);
-      background: rgba(0,0,0,0.08);
-    }
-    .sec-link {
-      font-family: 'DM Mono', monospace; font-size: 9px;
-      text-transform: uppercase; letter-spacing: 0.08em;
-      color: rgba(198,138,94,0.45); text-decoration: none;
-      padding: 0 10px; height: 30px;
+    .subnav-back {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: rgba(198,138,94,0.4); text-decoration: none;
+      padding: 0 14px 0 0; height: 36px;
       display: flex; align-items: center;
-      border-bottom: 2px solid transparent;
+      margin-right: 10px;
+      border-right: 1px solid rgba(255,255,255,0.1);
     }
-    .sec-link:hover { color: rgba(198,138,94,0.75); }
-    .sec-link.sec-active { color: #C68A5E; border-bottom-color: rgba(198,138,94,0.45); }
-    .sec-dot { color: rgba(255,255,255,0.12); font-size: 9px; }
+    .subnav-back:hover { color: rgba(198,138,94,0.75); }
 
     /* ── Page header ── */
     .page-header {
@@ -246,14 +238,10 @@
     <a href="/guild" class="nav-active">Guild</a>
   </div>
   <div class="guild-subnav">
-    <a href="/guild/career" class="subnav-link">Career Focus</a>
+    <a href="/guild" class="subnav-back">← Guild</a>
+    <a href="/guild/build" class="subnav-link subnav-active">Build Log</a>
     <span class="subnav-dot">&nbsp;·&nbsp;</span>
-    <a href="/guild/build" class="subnav-link subnav-active">Build</a>
-  </div>
-  <div class="guild-secondary-nav">
-    <a href="/guild/build" class="sec-link sec-active">Build Log</a>
-    <span class="sec-dot">&nbsp;·&nbsp;</span>
-    <a href="/guild/build/queue" class="sec-link">Queue</a>
+    <a href="/guild/build/queue" class="subnav-link">Queue</a>
   </div>
 </nav>
 

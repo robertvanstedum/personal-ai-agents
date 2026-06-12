@@ -47,6 +47,16 @@
     .subnav-link:hover { color: #C68A5E; }
     .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; }
     .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
+    .subnav-back {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: rgba(198,138,94,0.4); text-decoration: none;
+      padding: 0 14px 0 0; height: 36px;
+      display: flex; align-items: center;
+      margin-right: 10px;
+      border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    .subnav-back:hover { color: rgba(198,138,94,0.75); }
 
     /* ── Page header ── */
     .page-header {
@@ -204,13 +214,10 @@
     <a href="/guild" class="nav-active">Guild</a>
   </div>
   <div class="guild-subnav">
-    <span class="subnav-link" style="cursor:default;opacity:0.5">Career Focus</span>
-    <span class="subnav-dot">&nbsp;·&nbsp;</span>
+    <a href="/guild" class="subnav-back">← Guild</a>
     <a href="/guild/career" class="subnav-link">Positions</a>
     <span class="subnav-dot">&nbsp;·&nbsp;</span>
     <a href="/guild/career/active" class="subnav-link subnav-active">Active Pipeline</a>
-    <span class="subnav-dot">&nbsp;&nbsp;|&nbsp;&nbsp;</span>
-    <a href="/guild/build" class="subnav-link">Build</a>
   </div>
 </nav>
 
