@@ -15,6 +15,10 @@
   (Build Log/Queue display), numbered completeness-check prompt, documented
   config comment. Implementation detail in build spec; schema list below
   updated for consistency.
+- v0.5 (07:05) — Claude Code commit-time correction: replaced all "Haiku"
+  references with `grok-4-1-fast-reasoning` — the model `dev_agent.py`
+  actually runs (platform is xAI-only). No change to mechanism or
+  "zero net new LLM calls" framing, naming accuracy only.
 
 ---
 
@@ -97,10 +101,10 @@ is meaningless unless something specific causes a transition.
 ### `design → spec_ready` (automatic, existing infrastructure + one addition)
 
 The Design/Dev agent already does this (Phase 5, Level 1): file watcher
-detects a new/modified file in `_working/`, Haiku classifies it, logs to
+detects a new/modified file in `_working/`, `grok-4-1-fast-reasoning` classifies it, logs to
 `guild.design_log`.
 
-**New addition — completeness check, same Haiku call:**
+**New addition — completeness check, same `grok-4-1-fast-reasoning` call:**
 
 When Design/Dev classifies a doc as `handoff` or `spec`, it also checks for
 three things (extend the existing classification prompt, no new LLM call):
@@ -153,7 +157,7 @@ When Claude Code reports a Definition of Done is complete (as has happened
 all session — "all checks pass," "Robert sign-off confirmed"):
 
 1. Design/Dev drafts a build log entry from: the original spec's Definition
-   of Done checklist + the commit history since `in_build` began. Haiku
+   of Done checklist + the commit history since `in_build` began. `grok-4-1-fast-reasoning`
    summarizes.
 2. Drafted entry goes to Robert (Telegram or portal) for confirmation —
    same visual sign-off pattern already in use.
@@ -269,15 +273,16 @@ Not before.
 
 | Function | Model | Why |
 |---|---|---|
-| Doc classification + completeness check | Haiku | Already the pattern (Design/Dev), cheap, mechanical |
-| Commit-message scan for state transition | None (regex/string match) | No judgment needed |
-| Build log entry drafting | Haiku | Summarization from structured input (DoD checklist + commits) |
+| Doc classification + completeness check | `grok-4-1-fast-reasoning` | Already the pattern (Design/Dev, dev_agent.py), xAI platform |
+| `start-build` signal | None (explicit endpoint call) | No judgment needed |
+| Build log entry drafting | `grok-4-1-fast-reasoning` | Summarization from structured input (DoD checklist + commits) |
 | Daily Briefing Build section | Whatever generates the Daily Briefing overall | Data assembly, not new generation — feeds existing (not-yet-built) briefing |
 | Staleness check | None (date comparison) | Mechanical |
-| `/chat` "what's in flight" | CoS's existing `/chat` chain (Grok→Haiku→mistral) | Already exists, just reads new data |
+| `/chat` "what's in flight" | CoS existing `/chat` chain (Grok→mistral fallback) | Already exists, just reads new data |
 
-**Net new LLM calls: zero.** The completeness check extends an existing Haiku
-call (classification). Build log drafting uses Haiku for a new but simple
+**Net new LLM calls: zero.** The completeness check extends an existing
+`grok-4-1-fast-reasoning` call (classification). Build log drafting uses
+`grok-4-1-fast-reasoning` for a new but simple
 summarization. Everything else is data reads and string/date comparisons.
 
 ---

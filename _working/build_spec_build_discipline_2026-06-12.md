@@ -11,6 +11,9 @@ state model, mechanics, Grok review). This doc is the "what to build."*
 - v0.2 (06:56) — Grok final review, three polish items incorporated:
   `spec_title` column + extraction, explicit numbered completeness-check
   prompt, documented config comment
+- v0.3 (07:05) — Claude Code commit-time correction: "Haiku" → 
+  `grok-4-1-fast-reasoning` throughout (platform is xAI-only;
+  `dev_agent.py` already runs this model for classification)
 
 ---
 
@@ -46,11 +49,12 @@ grants on `guild.design_log_transitions`.
 
 ## Part 2 — Design/Dev agent extensions (port 8770)
 
-### 2a — Completeness check + title extraction (extend existing Haiku classification)
+### 2a — Completeness check + title extraction (extend existing `grok-4-1-fast-reasoning` classification)
 
 When Design/Dev classifies a new/modified `_working/` doc as `handoff` or
-`spec`, the same Haiku call also extracts four things. Explicit and numbered
-in the prompt — reduces ambiguity in what Haiku is checking:
+`spec`, the same `grok-4-1-fast-reasoning` call (already running in
+`dev_agent.py`) also extracts four things. Explicit and numbered in the
+prompt — reduces ambiguity in what the model is checking:
 
 ```
 Additionally, extract the following for build tracking. Respond as JSON:
@@ -79,7 +83,7 @@ Additionally, extract the following for build tracking. Respond as JSON:
 }
 ```
 
-**Completeness logic (code, not Haiku):**
+**Completeness logic (code, not the model):**
 
 ```python
 referenced_exist = all(os.path.exists(f) for f in referenced_files)
@@ -88,8 +92,8 @@ status = 'spec_ready' if complete else 'incomplete'
 ```
 
 This is the same three checks as before (DoD section, Commit section,
-referenced files exist) — now explicit and numbered for Haiku, with checks
-1-2 and 4's *extraction* done by Haiku, but existence-checking (part of
+referenced files exist) — now explicit and numbered for the model, with
+checks 1-2 and 4's *extraction* done by the model, but existence-checking (part of
 check 4) and the final boolean logic done in code. Check 3's existence
 verification reuses `scripts/check_handoff_gaps.py` logic.
 
@@ -151,7 +155,8 @@ Claude Code runs this once at the start of work on a spec.
 
 When an `in_build` item's Definition of Done is confirmed complete (Robert
 sign-off, same pattern as all session), Design/Dev drafts a build log entry:
-Haiku summarizes the original DoD checklist + commits since `last_transition_at`.
+`grok-4-1-fast-reasoning` summarizes the original DoD checklist + commits
+since `last_transition_at`.
 Drafted entry presented to Robert for confirmation. On confirmation:
 `status = 'done'`, `last_transition_at = NOW()`, transition row written
 (`triggered_by = 'robert'`), entry appended to `docs/GUILD_BUILD_LOG.md`.
@@ -333,7 +338,8 @@ Add "Build" to the main Guild nav alongside "Career Focus."
       `incomplete` ones
 - [ ] `incomplete` items notify Robert + Claude.ai with specific failures
 - [ ] `/start-build` endpoint live, `scripts/start_build.sh` works
-- [ ] Build log entry drafting on DoD confirmation (existing pattern + Haiku draft)
+- [ ] Build log entry drafting on DoD confirmation (existing pattern +
+      `grok-4-1-fast-reasoning` draft)
 - [ ] Every status change writes a `design_log_transitions` row
 
 **CoS:**
