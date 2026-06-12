@@ -104,11 +104,15 @@
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: rgba(139,94,42,0.03); }
 
-    .title-cell { max-width: 340px; }
-    .title-main { font-weight: 500; color: var(--text); }
+    .title-cell { max-width: 400px; }
+    .title-main { font-weight: 500; color: var(--text); line-height: 1.3; }
+    .title-summary {
+      font-size: 12px; color: var(--text-muted);
+      margin-top: 3px; line-height: 1.4;
+    }
     .title-file {
       font-family: 'DM Mono', monospace; font-size: 10px;
-      color: var(--text-dim); margin-top: 2px;
+      color: var(--text-dim); margin-top: 4px;
     }
     .title-file a { color: inherit; text-decoration: none; }
     .title-file a:hover { color: var(--accent); }
@@ -196,14 +200,21 @@
       <tr>
         <td class="title-cell">
           <div class="title-main">
-            {{ item.spec_title or (item.spec_file or item.file_path or '—') | truncate(60, true, '…') }}
+            {% if item.spec_title %}
+              {{ item.spec_title }}
+            {% elif item.spec_file %}
+              {{ item.spec_file | clean_spec_title }}
+            {% else %}
+              {{ item.file_path | clean_spec_title or '—' }}
+            {% endif %}
           </div>
-          {% if item.spec_file %}
-          <div class="title-file">
-            <a href="#" title="{{ item.spec_file }}">{{ item.spec_file }}</a>
-          </div>
-          {% elif item.file_path %}
-          <div class="title-file">{{ item.file_path | replace('/Users/vanstedum/Projects/personal-ai-agents/', '') }}</div>
+          {% set summary = item.summary or '' %}
+          {% if summary and not summary.lower().startswith('new doc:') and not summary.lower().startswith('handoff doc:') and not summary.lower().startswith('spec:') %}
+          <div class="title-summary">{{ summary | truncate(90, true, '…') }}</div>
+          {% endif %}
+          {% set display_file = item.spec_file or (item.file_path or '' | replace('/Users/vanstedum/Projects/personal-ai-agents/', '')) %}
+          {% if display_file %}
+          <div class="title-file">{{ display_file }}</div>
           {% endif %}
           {% if item.blocked_reason %}
           <div style="font-size:11px;color:#8b2020;margin-top:3px;">⚠ {{ item.blocked_reason }}</div>

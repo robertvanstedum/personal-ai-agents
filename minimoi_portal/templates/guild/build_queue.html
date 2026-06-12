@@ -180,13 +180,23 @@
 {% macro board_card(item) %}
 {% set item_id = item.id %}
 {% set status  = item.status or '' %}
-{% set title   = item.spec_title or item.spec_file or item.file_path or '(untitled)' %}
+{% if item.spec_title %}
+  {% set title = item.spec_title %}
+{% elif item.spec_file %}
+  {% set title = item.spec_file | clean_spec_title %}
+{% else %}
+  {% set title = item.file_path | clean_spec_title or '(untitled)' %}
+{% endif %}
 {% set age_days = ((now() - item.last_transition_at).total_seconds() / 86400) | int if item.last_transition_at else 0 %}
 {% set age_str  = 'today' if age_days == 0 else (age_days|string + 'd') %}
+{% set summary = item.summary or '' %}
 
 <div class="card {% if status == 'done' %}card-done{% endif %}" id="card-{{ item_id }}">
   <div class="card-top">
-    <div class="card-title">{{ title | truncate(80, true, '…') }}</div>
+    <div class="card-title">{{ title | truncate(70, true, '…') }}</div>
+    {% if summary and not summary.lower().startswith('new doc:') and not summary.lower().startswith('handoff doc:') and not summary.lower().startswith('spec:') %}
+    <div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">{{ summary | truncate(70, true, '…') }}</div>
+    {% endif %}
     <div class="card-meta">
       <span>{{ age_str }}</span>
       {% if status == 'incomplete' %}

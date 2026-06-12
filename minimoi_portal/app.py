@@ -46,7 +46,38 @@ CORS(app)
 
 # Jinja2 globals — timezone-aware so it subtracts cleanly from psycopg2 timestamps
 from datetime import timezone as _tz
+import re as _re
 app.jinja_env.globals['now'] = lambda: datetime.now(_tz.utc)
+
+def _clean_spec_title(spec_file: str) -> str:
+    """Convert a spec filename to a human-readable title.
+    e.g. 'build_spec_cos_build_discipline_2026-06-12.md' → 'CoS Build Discipline'
+    """
+    if not spec_file:
+        return ""
+    name = spec_file
+    # Strip directory prefix if present
+    name = name.rsplit("/", 1)[-1]
+    # Strip extension
+    name = _re.sub(r'\.\w+$', '', name)
+    # Strip date suffix (e.g. _2026-06-12 or -2026-06-12)
+    name = _re.sub(r'[-_]\d{4}-\d{2}-\d{2}.*$', '', name)
+    # Strip common doc-type prefixes
+    for prefix in ("build_spec_", "spec_", "handoff_", "design_", "feature_", "plan_"):
+        if name.lower().startswith(prefix):
+            name = name[len(prefix):]
+            break
+    # Replace underscores/hyphens with spaces, title-case
+    name = name.replace("_", " ").replace("-", " ")
+    # Title-case with known abbreviation handling
+    words = name.split()
+    result = []
+    caps = {"cos", "ai", "db", "api", "llm", "tpm", "ui", "ux", "poc"}
+    for w in words:
+        result.append(w.upper() if w.lower() in caps else w.capitalize())
+    return " ".join(result)
+
+app.jinja_env.filters['clean_spec_title'] = _clean_spec_title
 
 # Load config
 from minimoi_portal import config as _cfg  # noqa: E402
