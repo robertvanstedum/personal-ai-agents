@@ -108,6 +108,9 @@ _working/trash/
 !_working/spec_*.md.pdf
 # Handoff docs — design→build handoffs, permanent record, commit them
 !_working/handoff_*.md
+# Plan docs — design plans from OpenClaw/Claude.ai, permanent record, commit them
+!_working/plan_*.md
+!_working/plan_*.md.pdf
 
 # Finance domain — private data
 domains/finance/statements/
