@@ -44,8 +44,9 @@ app = Flask(
 )
 CORS(app)
 
-# Jinja2 globals
-app.jinja_env.globals['now'] = datetime.now
+# Jinja2 globals — timezone-aware so it subtracts cleanly from psycopg2 timestamps
+from datetime import timezone as _tz
+app.jinja_env.globals['now'] = lambda: datetime.now(_tz.utc)
 
 # Load config
 from minimoi_portal import config as _cfg  # noqa: E402
