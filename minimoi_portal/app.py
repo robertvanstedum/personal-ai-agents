@@ -873,6 +873,24 @@ def update_build_status(item_id):
                 "VALUES (%s,%s,%s,'robert',%s)",
                 (item_id, current, new_status, note)
             )
+
+        # On done/deferred, ask Design/Dev to move the file out of _working/.
+        # Non-blocking and non-fatal — if the agent is down or file is already gone, ignore.
+        if new_status in ('done', 'deferred'):
+            spec_rows = _guild_db_query(
+                "SELECT spec_file FROM guild.design_log WHERE id = %s", (item_id,)
+            )
+            spec_file = spec_rows[0]['spec_file'] if spec_rows else None
+            if spec_file:
+                try:
+                    _requests.post(
+                        'http://localhost:8770/archive-spec',
+                        json={'spec_file': spec_file},
+                        timeout=2,
+                    )
+                except Exception:
+                    pass
+
     except Exception:
         pass
 

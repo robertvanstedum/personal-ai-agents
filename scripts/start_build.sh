@@ -22,7 +22,7 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST localhost:8770/start-build \
     -d "{\"spec_file\": \"${SPEC_FILE}\"}")
 
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n-1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 
 if [[ "$HTTP_CODE" == "200" ]]; then
     echo "✅ Build started: ${SPEC_FILE}"

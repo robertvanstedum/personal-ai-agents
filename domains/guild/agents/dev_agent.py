@@ -156,7 +156,14 @@ def process_doc(file_path: str, event_type: str) -> None:
     summary     = cl["summary"]
     agent_source = cl["agent_source"]
     spec_title  = cl["spec_title"]
-    log.info("Processed: %s → %s | %s", path.name, doc_type, summary)
+    log.info("Classified: %s → %s | %s", path.name, doc_type, summary)
+
+    # Only spec-track docs (handoff / spec / design) get logged, notified, and
+    # written to memory. Plans, notes, release docs, build outputs, config —
+    # no design_log row, no Telegram ping, no memory entry. Zero footprint.
+    if doc_type not in ("handoff", "spec", "design"):
+        log.debug("Non-spec-track (%s) — skipping log/notify/memory: %s", doc_type, path.name)
+        return
 
     # Completeness check for handoff/spec/design docs
     build_status = None
@@ -576,6 +583,35 @@ def receive_external_event():
     return jsonify({"received": True})
 
 
+@app.route("/archive-spec", methods=["POST"])
+def archive_spec():
+    """
+    Move a spec file from _working/ to _working/archive/YYYY-MM/.
+    Called by the portal when a spec's status flips to done or deferred.
+    Non-fatal if the file is already gone (already archived, moved manually, etc.).
+    """
+    data = request.get_json(silent=True) or {}
+    spec_file = data.get("spec_file")
+    if not spec_file:
+        return jsonify({"error": "spec_file required"}), 400
+
+    src = BASE_DIR / "_working" / spec_file
+    if not src.exists():
+        log.info("archive-spec: file not in _working/ (already archived or never there): %s", spec_file)
+        return jsonify({"archived": False, "reason": "file not found in _working/"})
+
+    archive_dir = BASE_DIR / "_working" / "archive" / datetime.now().strftime("%Y-%m")
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    dest = archive_dir / spec_file
+    try:
+        src.rename(dest)
+        log.info("archive-spec: %s → archive/%s/", spec_file, datetime.now().strftime("%Y-%m"))
+        return jsonify({"archived": True, "dest": str(dest.relative_to(BASE_DIR))})
+    except Exception as e:
+        log.error("archive-spec failed: %s", e)
+        return jsonify({"error": str(e), "archived": False}), 500
+
+
 @app.route("/start-build", methods=["POST"])
 def start_build():
     """
@@ -666,6 +702,7 @@ def main():
 🔍  Design/Dev Agent starting on port {PORT}…
    /status       — agent state and memory usage
    /health       — liveness probe
+   /archive-spec — POST {{spec_file}} to move file from _working/ to archive/
    /start-build  — POST {{spec_file}} to flip status → in_build
    Watching: {cfg('watch_paths', ['_working/'])}
    Autonomy level: {cfg('autonomy_level', 1)}
