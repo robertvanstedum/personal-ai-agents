@@ -1,0 +1,255 @@
+{
+  "session_id": "2026-05-07_001",
+  "date": "2026-05-07",
+  "persona": "Georg",
+  "scenario": "neighborhood_chat",
+  "duration_estimate_min": 20,
+  "mode": "writing",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Georg",
+      "text": "Grüß Gott! Na, setzen Sie sich doch. Ich bin der Georg. Sind Sie zum ersten Mal in Wien oder schon öfter hier?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Es ist meine ersten Mal in Wien. Ich möchte lieber spazieren gehen durch der Stadt."
+    },
+    {
+      "speaker": "Georg",
+      "text": "Ah, Ihr erstes Mal? Das ist ja schön! Spazieren durch die Stadt ist eine super Idee, besonders jetzt. Na, wo möchten Sie denn hin? Vielleicht vom Stephansplatz Richtung Naschmarkt oder eher in ein ruhigeres Grätzel wie Neubau? Was machen Sie eigentlich beruflich, wenn ich fragen darf? Bleiben Sie länger in Wien?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was würden Sie mir empfehlen?"
+    },
+    {
+      "speaker": "Georg",
+      "text": "Na, für einen ersten Spaziergang würde ich Ihnen den Weg vom Stephansdom zum Naschmarkt empfehlen. Früh am Morgen ist es dort noch gemütlich, nicht so voll mit Touristen. Oder gehen Sie einfach Richtung Neubau - da gibt’s echte Grätzel-Atmosphäre ohne Ketten. Und Sie? Kommen Sie aus Amerika? Wie lange bleiben Sie denn in Wien?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was bedeutet \"Grätzel\" ?"
+    },
+    {
+      "speaker": "Georg",
+      "text": "Grätzel? Ach, das ist einfach unser Wiener Wort für ein Stadtviertel, ein kleines, echtes Viertel mit eigenem Charakter. Nicht so groß wie ein Bezirk, sondern eher gemütlich und überschaubar. In Neubau zum Beispiel ist mein Grätzel voller kleiner Cafés und Läden, wo die Leute wirklich wohnen. Wollen wir da mal zusammen spazieren gehen? Oder bleiben wir erst beim Naschmarkt?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich muß meine Frau abholen. Könner wir später in ein kleiner Café in Neubau?"
+    },
+    {
+      "speaker": "Georg",
+      "text": "Na, klar! „Ich muss meine Frau abholen“ - und dann „Können wir später in ein kleines Café in Neubau?“ klingt gut. Servus, kein Problem. Holen Sie Ihre Frau ruhig ab. In Neubau gibt’s ein sehr gemütliches kleines Café in der Burggasse, das „Café Merkur“ - nichts Touristenmäßiges, einfach gute Kaffee und ruhige Ecke. Wann passt es Ihnen? So gegen 16 Uhr? Ich kann dort auf Sie beide warten. Wie lange bleiben Sie denn insgesamt in Wien?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wir bleiben eine Woche. Gibt mir seine Nummer von Handy, für text später."
+    },
+    {
+      "speaker": "Georg",
+      "text": "Na, eine Woche ist perfekt für Wien! „Gib mir seine Nummer von Handy“ - besser: „Geben Sie mir Ihre Handynummer, damit wir später texten können.“ Servus, klar. Meine Nummer ist 0676 9876543. Schreiben Sie mir einfach, wenn Sie mit Ihrer Frau fertig sind. Dann treffen wir uns gemütlich im kleinen Café in der Burggasse in Neubau. Bis später!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Genau. Geben Sir mir Ihre Handynummer, damit wir später texten können."
+    },
+    {
+      "speaker": "Georg",
+      "text": "Na, genau! „Geben Sie mir Ihre Handynummer“ - das klingt schon viel besser. Also, meine Nummer ist 0676 9876543. Schreiben Sie mir einfach, wenn Sie mit Ihrer Frau fertig sind. Dann treffen wir uns gemütlich im Café in der Burggasse. Bis bald! Ich freu mich schon."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Es freut mir auch."
+    },
+    {
+      "speaker": "Georg",
+      "text": "Na, „Es freut mich auch“ - genau richtig! Servus, super. Dann bis später im Café in der Burggasse. Ich freu mich wirklich, Sie und Ihre Frau kennenzulernen. Kommen Sie einfach, wann es passt - ich bin eh flexibel. Schreiben Sie mir, ja? Servus!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Noch eine frage. Was bedeutet einfach?"
+    },
+    {
+      "speaker": "Georg",
+      "text": "Na, „Noch eine Frage“ - perfekt! „Einfach“ bedeutet hier so viel wie „nur“ oder „ganz normal“ - also nichts Besonderes, keine Touristenfalle, sondern einfach gute Kaffee und ruhige Atmosphäre. Genau das mag ich in Neubau. Sonst noch was? Ich bin schon gespannt auf Ihre Frau. Schreiben Sie mir einfach, wenn Sie Zeit haben. Servus!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "ok, auf änglish, \"simply\" danke ich."
+    },
+    {
+      "speaker": "Georg",
+      "text": "Na, „auf Englisch“ meinen Sie? Und „danke“ statt „danke ich“ - das passt schon. „Einfach“ heißt wirklich „simply“ oder „just“ - also ganz normal, ohne Schnickschnack. Genau. Ich warte auf Ihre Nachricht. Bis später im Café! Servus!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Tchüss."
+    },
+    {
+      "speaker": "Georg",
+      "text": "Servus! „Tschüss“ heißt es - aber passt schon. Bis später im Café, ich freu mich! Schreiben Sie mir einfach. Servus!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert completed a realistic neighborhood conversation in Vienna, successfully using polite Sie-register throughout most of the session and asking for clarification on vocabulary when needed. His main recurring weaknesses are incorrect adjective endings and article cases, plus one notable verb conjugation error. Overall engagement was strong and communicative goals were met.",
+    "errors": [
+      {
+        "type": "gender",
+        "original": "meine ersten Mal",
+        "correction": "mein erstes Mal",
+        "explanation": "'Mal' is neuter (das Mal), so the possessive pronoun and adjective must both be neuter nominative: 'mein erstes'.",
+        "context": "Es ist meine ersten Mal in Wien."
+      },
+      {
+        "type": "word_order",
+        "original": "Ich möchte lieber spazieren gehen durch der Stadt",
+        "correction": "Ich möchte lieber durch die Stadt spazieren gehen",
+        "explanation": "Prepositional phrases generally precede the infinitive cluster in German, and 'durch' governs the accusative, so 'die Stadt' not 'der Stadt'.",
+        "context": "Ich möchte lieber spazieren gehen durch der Stadt."
+      },
+      {
+        "type": "gender",
+        "original": "durch der Stadt",
+        "correction": "durch die Stadt",
+        "explanation": "'Durch' always takes the accusative, and 'Stadt' is feminine, so accusative is 'die Stadt', not 'der Stadt'.",
+        "context": "Ich möchte lieber spazieren gehen durch der Stadt."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Könner wir später in ein kleiner Café",
+        "correction": "Können wir später in ein kleines Café",
+        "explanation": "'Können' is the correct infinitive/first-person-plural form; 'Könner' is not a German word. Additionally the adjective 'kleiner' should be 'kleines' (neuter accusative after indefinite article).",
+        "context": "Ich muß meine Frau abholen. Könner wir später in ein kleiner Café in Neubau?"
+      },
+      {
+        "type": "missing_article",
+        "original": "Können wir später in ein kleiner Café in Neubau?",
+        "correction": "Können wir uns später in einem kleinen Café in Neubau treffen?",
+        "explanation": "A finite verb is missing from the sentence (e.g. 'treffen'), and the location requires dative 'einem kleinen Café', not accusative 'ein kleines'.",
+        "context": "Könner wir später in ein kleiner Café in Neubau?"
+      },
+      {
+        "type": "register",
+        "original": "Gibt mir seine Nummer von Handy, für text später.",
+        "correction": "Geben Sie mir Ihre Handynummer, damit wir später texten können.",
+        "explanation": "Robert used informal imperative ('Gibt mir') and third-person possessive ('seine') instead of maintaining the polite Sie-register he used elsewhere; 'von Handy' is also non-standard where a compound noun 'Handynummer' is preferred.",
+        "context": "Gibt mir seine Nummer von Handy, für text später."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Es freut mir auch.",
+        "correction": "Es freut mich auch.",
+        "explanation": "'Sich freuen' / 'freuen' takes an accusative object: 'mich', not the dative 'mir'.",
+        "context": "Es freut mir auch."
+      },
+      {
+        "type": "vocabulary",
+        "original": "danke ich",
+        "correction": "danke",
+        "explanation": "'Danke' is used as a standalone interjection in German; adding 'ich' makes it sound like a conjugated verb phrase and is unnatural here.",
+        "context": "ok, auf änglish, 'simply' danke ich."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 2,
+      "word_order": 1,
+      "missing_article": 1,
+      "verb_conjugation": 2,
+      "vocabulary": 1,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "das Grätzel",
+        "english": "small neighbourhood / local quarter (Viennese dialect)",
+        "note": "new this session – Robert correctly asked for clarification and understood the explanation",
+        "tags": [
+          "austrian-german",
+          "dialect",
+          "anki"
+        ]
+      },
+      {
+        "german": "einfach",
+        "english": "simply / just",
+        "note": "new this session – Robert asked for the meaning and confirmed understanding",
+        "tags": [
+          "high-frequency",
+          "anki"
+        ]
+      },
+      {
+        "german": "das Stadtviertel",
+        "english": "city district / neighbourhood",
+        "note": "used correctly by Georg in explanation; Robert should add to active vocabulary",
+        "tags": [
+          "anki"
+        ]
+      },
+      {
+        "german": "spazieren gehen",
+        "english": "to go for a walk",
+        "note": "used correctly in intent, though word order needed adjustment",
+        "tags": [
+          "separable-verb",
+          "anki"
+        ]
+      },
+      {
+        "german": "die Handynummer",
+        "english": "mobile phone number",
+        "note": "needs practice – Robert used the non-standard 'Nummer von Handy' instead of the compound noun",
+        "tags": [
+          "compound-noun",
+          "anki"
+        ]
+      },
+      {
+        "german": "damit … können",
+        "english": "so that … can (purpose clause)",
+        "note": "used correctly after Georg's model; Robert successfully repeated the structure",
+        "tags": [
+          "subordinate-clause",
+          "anki"
+        ]
+      },
+      {
+        "german": "Servus / Tschüss / Grüß Gott",
+        "english": "Hi / Bye / Hello (Austrian greetings)",
+        "note": "new this session – exposure to Austrian register variation",
+        "tags": [
+          "austrian-german",
+          "greetings"
+        ]
+      }
+    ],
+    "strengths": [
+      "Maintained the formal Sie-register consistently throughout most of the conversation, appropriate for talking to an unfamiliar adult.",
+      "Proactively asked for vocabulary clarification ('Was bedeutet Grätzel?' and 'Was bedeutet einfach?'), showing good learner strategies.",
+      "Successfully repeated and self-corrected the Handynummer sentence after Georg's model, demonstrating active uptake of feedback.",
+      "Used modal verbs (möchte, muss, können) in structurally correct positions in most utterances.",
+      "Kept the conversation flowing naturally and achieved all real-world communicative goals of the scenario (asking for a meeting, exchanging contact details, saying goodbye)."
+    ],
+    "next_focus": "Adjective endings after indefinite articles (ein/eine/ein): practice the full nominative/accusative/dative table for all three genders, focusing on neuter nouns like 'Café' and 'Mal', since Robert consistently produced wrong endings (kleiner → kleines, ersten → erstes) in this session."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "scaffold_delivered": [
+    "Ich hätte gerne einen kleinen Brauner, bitte.",
+    "Was empfehlen Sie heute?",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_used": [
+    "Ich hätte gerne einen kleinen Brauner, bitte.",
+    "Was empfehlen Sie heute?"
+  ],
+  "scaffold_avoided": [
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_deployment_rate": "2/3 scaffold phrases used"
+}

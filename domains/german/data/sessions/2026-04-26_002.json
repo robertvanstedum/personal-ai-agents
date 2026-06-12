@@ -1,0 +1,31 @@
+{
+  "session_id": "2026-04-26_002",
+  "date": "2026-04-26",
+  "persona": "Anna",
+  "scenario": "apartment_handoff",
+  "duration_estimate_min": 9,
+  "mode": "voice anna: hallo! schön, dass du da bist. komm rein. hier sind die schlüssel. ich zeig dir schnell alles. hast du schon fragen zur heizung oder zum wlan? robert: ich habe frage über die wlan. anna: klar! das wlan-passwort ist „wienwillkommen2026“. einfach verbinden und das eingeben. funktioniert überall super. sonst noch was? robert: ich hoffe, dass der hertz. anna: die heizung? die ist ganz einfach. du drehst einfach am thermostat, und robert: ich, ich nicht, nicht brauch heizung. sie, ich hoffe, die, die heizung nicht brauchen. anna: ach, kein problem, im moment ist’s eh noch warm. aber falls du sie doch mal brauchst, einfach am thermostat drehen. wie lange bleibst du eigentlich? robert: vier, vier tage. anna: vier tage, perfekt. und vergiss nicht: am abreisetag bis elf uhr auschecken, ja? dann hast du noch genug zeit. alles klar? robert: ja, klar. anna: gut. dann wünsch ich dir eine schöne zeit in wien! wenn was ist, ruf einfach an. robert: äh, genau. anna: tschüss und viel spaß! robert: danke, danke dir. anna: bitte, gern geschehen. —",
+  "source": "manual",
+  "raw_transcript": [],
+  "reviewer_output": {
+    "overall_summary": "Review parse failed — see reviewer_raw_output in session file.",
+    "errors": [],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 0,
+      "vocabulary": 0,
+      "register": 0
+    },
+    "vocabulary_highlights": [],
+    "strengths": [],
+    "next_focus": ""
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "reviewer_raw_output": "The transcript appears to be empty - no conversation content was provided beyond the header information. I cannot analyze a session without actual dialogue.\n\nPlease provide the full transcript of the conversation between Robert and Anna, and I will return the requested JSON analysis."
+}

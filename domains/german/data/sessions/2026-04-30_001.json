@@ -1,0 +1,193 @@
+{
+  "session_id": "2026-04-30_001",
+  "date": "2026-04-30",
+  "persona": "Herr Fischer",
+  "scenario": "room_problem",
+  "duration_estimate_min": 12,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Herr Fischer",
+      "text": "Guten Tag! Willkommen zurück in unserem Hotel. Wie kann ich Ihnen helfen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich habe ein Problem."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ein Problem? Das tut mir leid. Worum geht es genau?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Die Dusche in das Zimmer ist kaputt."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ach, die Dusche in Ihrem Zimmer funktioniert nicht? Das ist ärgerlich. Möchten Sie, dass wir jemanden schicken, der die Dusche repariert, oder"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Es gibt kein kalt water, Wasser."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Verstehe, es gibt nur heißes Wasser oder gar kein kaltes Wasser in der Dusche. Das ist wirklich unangenehm. Möchten Sie, dass wir sofort jemanden hochschicken, um das zu reparieren, oder soll ich versuchen, Ihnen ein anderes Zimmer anzubieten?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Genau. Es gibt kein heißes Wasser."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Kein heißes Wasser? Das ist natürlich nicht akzeptabel. Ich lasse sofort jemanden in"
+    },
+    {
+      "speaker": "Ihr Robert",
+      "text": "Nur kalt."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Nur kaltes Wasser, das ist wirklich schlecht. Ich schicke gleich jemanden hoch, der das prüft und repariert. Welche Zimmernummer haben Sie bitte?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "512."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Danke. Zimmer 512. Jemand wird in wenigen Minuten bei Ihnen sein und die Dusche in Ordnung bringen. Selbstverständlich, bitte entschuldigen Sie die Unannehmlichkeiten."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich warte dort."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Danke, dass Sie warten. Der Techniker ist schon auf dem Weg zu Zimmer 512. Ich hoffe, es ist gleich alles wieder in Ordnung."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke schon."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Bitte sehr. Falls Sie doch noch etwas brauchen, melden Sie sich einfach bei uns."
+    },
+    {
+      "speaker": "Robert",
+      "text": "I"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Entschuldigung, ich habe Sie nicht ganz verstanden. Möchten Sie noch etwas sagen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Session."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ich habe Ihre Zimmernummer schon notiert. Der -EN"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully navigated a hotel complaint scenario in German, communicating the core problem (broken shower, water temperature issue) despite limited vocabulary. The session was short and functional, but revealed key gaps in case usage, code-switching, and precise vocabulary. Robert's persistence in clarifying (correcting himself from 'kein heißes' to 'nur kalt') shows good communicative intent.",
+    "errors": [
+      {
+        "type": "gender",
+        "original": "in das Zimmer",
+        "correction": "im Zimmer (in dem Zimmer)",
+        "explanation": "After 'in' expressing location (not movement), the dative case is required: 'das Zimmer' becomes 'dem Zimmer', contracted to 'im'.",
+        "context": "Die Dusche in das Zimmer ist kaputt."
+      },
+      {
+        "type": "vocabulary",
+        "original": "kein kalt water",
+        "correction": "kein kaltes Wasser",
+        "explanation": "Robert mixed English ('water') into the German sentence and omitted the adjective ending; 'kalt' must take the strong adjective ending '-es' after 'kein' in the neuter nominative.",
+        "context": "Es gibt kein kalt water, Wasser."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Danke schon",
+        "correction": "Danke schön",
+        "explanation": "'Danke schon' is not a standard phrase; the correct expression is 'Danke schön' (thank you very much), where 'schön' means 'nicely/beautifully' as an intensifier.",
+        "context": "Danke schon."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 0,
+      "vocabulary": 2,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "kaputt",
+        "english": "broken / not working",
+        "note": "used correctly",
+        "tags": [
+          "hotel",
+          "complaints",
+          "adjective"
+        ]
+      },
+      {
+        "german": "Es gibt kein ...",
+        "english": "There is no ...",
+        "note": "used correctly as a structure, though adjective ending inside needed practice",
+        "tags": [
+          "existential",
+          "negation",
+          "anki"
+        ]
+      },
+      {
+        "german": "kaltes Wasser / heißes Wasser",
+        "english": "cold water / hot water",
+        "note": "needs practice — adjective endings after 'kein' in neuter (kein kaltes Wasser)",
+        "tags": [
+          "adjective_endings",
+          "anki",
+          "hotel"
+        ]
+      },
+      {
+        "german": "Ich warte dort.",
+        "english": "I'll wait there.",
+        "note": "used correctly — simple and natural",
+        "tags": [
+          "hotel",
+          "phrases"
+        ]
+      },
+      {
+        "german": "Danke schön",
+        "english": "Thank you very much",
+        "note": "needs practice — Robert produced 'Danke schon' (already) instead",
+        "tags": [
+          "politeness",
+          "anki",
+          "phrases"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert communicated the essential complaint clearly enough for Herr Fischer to understand and take action.",
+      "He self-corrected mid-sentence ('kein kalt water, Wasser'), showing awareness of his own error.",
+      "He used 'Es gibt kein ...' as a grammatical structure correctly in context.",
+      "He maintained formal register throughout without being prompted.",
+      "Short, direct sentences ('Nur kalt.', 'Ich warte dort.') were effective and grammatically clean."
+    ],
+    "next_focus": "Adjective endings after 'kein' in all three genders (kein kaltes Wasser, kein heißes Wasser, keine saubere Handtuch) — practice with hotel and everyday vocabulary using the nominative and accusative cases first."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

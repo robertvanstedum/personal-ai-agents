@@ -1,0 +1,263 @@
+{
+  "session_id": "2026-05-02_002",
+  "date": "2026-05-02",
+  "persona": "Maria",
+  "scenario": "Viennese café waitress",
+  "duration_estimate_min": 12,
+  "mode": "writing",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Grüß dich! Setz dich nur hin, bei uns ist’s heute wieder richtig busy. Was darf’s denn sein? Eine Melange, ein Verlängerter oder vielleicht ein Einspänner? Der Gugelhupf ist frisch aus dem Ofen, magst du was dazu?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wir haben Hunger. Könner wir die Tagskarte sehen?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Klar, ihr habt Hunger - super! Können wir die Tagskarte sehen? Hier, bitte. Heute gibt’s auch frischen Apfelstrudel. Was nehmt ihr denn? Einen Kleinen Braunen dazu vielleicht? Ich hol gleich die Karte!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte gern ein Wasser mit spritz und meine Frau einen Verlängerung."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Ein Wasser mit Sprudel für dich und einen Verlängerten für deine Frau - kommt sofort. Braucht ihr noch was zum Essen? Der Gugelhupf passt super dazu. Ich bin gleich zurück!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wir ezählen zwei Gugelhupf, bitte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne, ihr nehmt zwei Gugelhupf - super Wahl! Kommt gleich mit den Getränken. Sonst noch was? Ich beeil mich!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Der Gugelhupf war sehr lecker. Magen wir. Und, nahmen wir jetzt die Rechtnung, bitte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Freut mich, dass der Gugelhupf so lecker war! Nehmen wir jetzt die Rechnung, bitte? Ja, sofort. Zusammen oder getrennt? Ich bring sie gleich rüber."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Selbsvastenlich zusammen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Selbstverständlich zusammen, kein Problem! Hier die Rechnung - macht 28 Euro. Passt so oder möchtest du mit Karte zahlen? Danke fürs Kommen!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Hier ist meine Karte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Danke! Die Karte funktioniert, hier dein Beleg. War schön, euch zu haben - kommt bald wieder! Servus und einen schönen Tag noch!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Vielen dank. Bis nextus mal."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Vielen Dank! Bis zum nächsten Mal, gell? Komm gern wieder - servus!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully navigated a complete café interaction in German, covering ordering, requesting the bill, and farewells. His communication was functional and comprehensible throughout, but he made consistent errors in verb conjugation (especially 'können'), noun gender and case endings, and vocabulary precision. With focused work on adjective declension and irregular plurals, his accuracy will improve significantly.",
+    "errors": [
+      {
+        "type": "verb_conjugation",
+        "original": "Könner wir die Tagskarte sehen?",
+        "correction": "Können wir die Tageskarte sehen?",
+        "explanation": "'Können' is the correct infinitive/first-person plural form; 'Könner' is not a German word, and the day's menu card is 'Tageskarte' (with an -e- linking element).",
+        "context": "Könner wir die Tagskarte sehen?"
+      },
+      {
+        "type": "vocabulary",
+        "original": "ein Wasser mit spritz",
+        "correction": "ein Wasser mit Sprudel / ein Sprudelwasser",
+        "explanation": "'Spritz' is not standard German for sparkling water; the correct term is 'Sprudel' or 'Sprudelwasser', and as a noun it must be capitalised.",
+        "context": "Ich möchte gern ein Wasser mit spritz und meine Frau einen Verlängerung."
+      },
+      {
+        "type": "gender",
+        "original": "einen Verlängerung",
+        "correction": "einen Verlängerten",
+        "explanation": "'Verlängerter' (extended coffee) is a nominalised adjective (masculine) requiring the accusative form 'einen Verlängerten', not the feminine noun form 'Verlängerung' (which means 'extension/prolongation').",
+        "context": "Ich möchte gern ein Wasser mit spritz und meine Frau einen Verlängerung."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Wir ezählen zwei Gugelhupf",
+        "correction": "Wir nehmen zwei Gugelhupf",
+        "explanation": "'Ezählen' (likely intended as 'bestellen' or 'nehmen') is not a German word; in café ordering contexts 'nehmen' (to take/have) or 'bestellen' (to order) are the correct verbs.",
+        "context": "Wir ezählen zwei Gugelhupf, bitte."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Magen wir",
+        "correction": "Machen wir (das) / Das haben wir gern gemacht",
+        "explanation": "'Magen' is not a verb; the intended expression is likely 'Machen wir' (let's do it / done deal) or a similar affirmative phrase.",
+        "context": "Der Gugelhupf war sehr lecker. Magen wir."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "nahmen wir jetzt die Rechtnung",
+        "correction": "Könnten wir jetzt die Rechnung haben? / Wir hätten gern die Rechnung.",
+        "explanation": "'Nahmen' is simple past of 'nehmen' and is grammatically and pragmatically wrong here; requesting the bill requires a polite present-tense construction such as 'Könnten wir die Rechnung haben?' or 'Wir hätten gern die Rechnung.'",
+        "context": "Und, nahmen wir jetzt die Rechtnung, bitte."
+      },
+      {
+        "type": "vocabulary",
+        "original": "die Rechtnung",
+        "correction": "die Rechnung",
+        "explanation": "The correct noun is 'Rechnung' (bill/invoice); 'Rechtnung' is a mispronunciation/misspelling.",
+        "context": "Und, nahmen wir jetzt die Rechtnung, bitte."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Selbsvastenlich",
+        "correction": "Selbstverständlich",
+        "explanation": "'Selbstverständlich' (of course/naturally) was heavily mispronounced; breaking it into syllables — selbst-ver-ständ-lich — will help with production.",
+        "context": "Selbsvastenlich zusammen."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Bis nextus mal",
+        "correction": "Bis zum nächsten Mal",
+        "explanation": "Robert inserted the English word 'next' with a pseudo-Latin ending; the correct German farewell phrase is 'Bis zum nächsten Mal' (until next time).",
+        "context": "Vielen dank. Bis nextus mal."
+      },
+      {
+        "type": "register",
+        "original": "Vielen dank",
+        "correction": "Vielen Dank",
+        "explanation": "'Dank' is a noun and must be capitalised in German; this is a basic orthographic/register point worth reinforcing.",
+        "context": "Vielen dank. Bis nextus mal."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 3,
+      "vocabulary": 5,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "die Melange",
+        "english": "Viennese coffee with steamed milk (similar to a flat white)",
+        "note": "introduced by Maria, not yet used by Robert — worth learning",
+        "tags": [
+          "vienna",
+          "café",
+          "food-and-drink"
+        ]
+      },
+      {
+        "german": "der Verlängerte",
+        "english": "extended/long black coffee (Viennese style)",
+        "note": "needs practice — Robert used wrong form 'Verlängerung'",
+        "tags": [
+          "vienna",
+          "café",
+          "nominalised-adjective"
+        ]
+      },
+      {
+        "german": "der Gugelhupf",
+        "english": "ring-shaped bundt cake popular in Austria",
+        "note": "used correctly and consistently",
+        "tags": [
+          "vienna",
+          "food-and-drink",
+          "anki"
+        ]
+      },
+      {
+        "german": "das Sprudelwasser / mit Sprudel",
+        "english": "sparkling water",
+        "note": "needs practice — Robert said 'mit spritz' instead",
+        "tags": [
+          "food-and-drink",
+          "anki"
+        ]
+      },
+      {
+        "german": "die Rechnung",
+        "english": "the bill / invoice",
+        "note": "needs practice — mispronounced as 'Rechtnung'",
+        "tags": [
+          "café",
+          "anki"
+        ]
+      },
+      {
+        "german": "Selbstverständlich",
+        "english": "of course / naturally / certainly",
+        "note": "needs practice — heavily mispronounced",
+        "tags": [
+          "anki",
+          "common-phrases"
+        ]
+      },
+      {
+        "german": "Bis zum nächsten Mal",
+        "english": "until next time",
+        "note": "needs practice — Robert substituted English 'next'",
+        "tags": [
+          "anki",
+          "farewells"
+        ]
+      },
+      {
+        "german": "Ich möchte gern …",
+        "english": "I would like … (polite request)",
+        "note": "used correctly — good register awareness",
+        "tags": [
+          "politeness",
+          "ordering"
+        ]
+      },
+      {
+        "german": "getrennt / zusammen",
+        "english": "separately / together (re: the bill)",
+        "note": "understood correctly in context — receptive knowledge confirmed",
+        "tags": [
+          "café",
+          "anki"
+        ]
+      },
+      {
+        "german": "Servus",
+        "english": "informal Austrian/Bavarian hello and goodbye",
+        "note": "regional register — introduced by Maria, worth noting",
+        "tags": [
+          "vienna",
+          "register",
+          "greetings"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert used 'Ich möchte gern …' correctly for a polite order, demonstrating good register awareness.",
+      "He successfully initiated a multi-turn interaction covering ordering, follow-up ordering, and paying — completing the full scenario arc.",
+      "He used 'meine Frau' correctly to refer to his wife, showing awareness of possessive pronouns.",
+      "He understood Maria's Austrian vocabulary (Melange, Verlängerter, Gugelhupf, Servus) from context without asking for clarification, indicating solid receptive comprehension.",
+      "Basic sentence structure (subject–verb–object) was largely maintained throughout, making his utterances consistently comprehensible."
+    ],
+    "next_focus": "Practise nominalised adjectives used as café menu items — particularly masculine accusative forms such as 'einen Verlängerten', 'einen Kleinen Braunen', 'einen Einspänner' — and drill the polite bill-request formula 'Wir hätten gern die Rechnung' to replace the incorrect simple-past construction."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

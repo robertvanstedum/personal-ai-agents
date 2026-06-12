@@ -1,0 +1,65 @@
+---SESSION---
+Date: 2026-04-21
+Persona: Herr Fischer
+Scenario: hotel_checkin
+Duration: 15
+
+[paste your full transcript here]
+---END---
+Herr Fischer: Guten Tag und herzlich willkommen im Hotel Fischer am Ring!  
+Ich bin Herr Fischer, der Rezeptionist. Schön, dass Sie da sind.  
+Wie kann ich Ihnen heute helfen? Möchten Sie einchecken, eine Frage zu unserem Haus stellen oder etwas anderes?  
+Bitte sehr, ich stehe Ihnen gerne zur Verfügung.
+
+Robert: Ich möchte einchecken.
+Herr Fischer: Aber natürlich! Herzlich willkommen.  
+Auf welchen Namen ist die Reservierung, bitte? Und für wie viele Nächte bleiben Sie bei uns?
+Robert: Mein Name ist Robert van Stedum.
+Herr Fischer: Vielen Dank. Ich schaue gleich nach, Herr van Stedum.  
+Eine Reservierung für zwei Nächte auf Ihren Namen — das passt perfekt.  
+
+Herr Fischer: Haben Sie eine Zimmer
+Robert: Und
+Herr Fischer: Haben Sie eine Zimmerpräferenz? Wir hätten ein schönes Zimmer zur Ring
+Robert: Ich bin hier mit meiner Frau, Vera Santos.
+Herr Fischer: Ah, wunderbar — dann ist die Reservierung für zwei Personen.  
+Vielen Dank, Herr van Stedum und Frau Santos.  
+Wir haben ein Doppelzimmer mit Stadtblick für Sie vorbereitet, Zimmer 312 im dritten Stock.  
+Hier ist Ihre Zimmerkarte. Frühstück gibt es von sieben bis zehn Uhr im ersten Stock. Brauchen Sie noch Hilfe mit dem Gepäck?
+
+Robert: Nein, ich brauche keine Hilfe.
+Herr Fischer: Sehr gerne. Dann wünsche ich Ihnen einen angenehmen Aufenthalt bei uns!  
+Falls Sie irgendetwas brauchen — einfach anrufen oder zur Rezeption kommen
+
+Robert: Ich nicht bin so alt.
+
+Herr Fischer: Gern geschehen, Herr van Stedum.  
+
+Herr Fischer: Haben Sie sonst noch etwas auf dem Herzen?
+Robert: Ich, äh, was ist der Internet?
+Herr Fischer: Selbstverständlich. Das WLAN ist für alle Gäste kostenlos.  
+Der Netzwerkname ist HotelFischer_Gast und das Passwort lautet WiFi2026.  
+Möchten Sie noch eine andere Frage haben?
+Robert: Ich erinnere nicht.
+Herr Fischer: Aber natürlich, kein Problem. Ich schreibe es Ihnen gerne auf.  
+Netzwerkname: HotelFischer_Gast  
+Pass
+Robert: Wie Stück? Wie Stück? Zimmer ist in
+Herr Fischer: Ah, ich verstehe — Sie meinen, wo das Zimmer liegt?  
+Das Zimmer 312 ist im dritten Stock. Am besten nehmen Sie den Aufzug gleich rechts von der Rezeption, dann den Gang links entlang. Die Zimmernummer ist gut sichtbar an der Tür.  
+Alles in Ordnung?
+Robert: Ja, danke. Stock, nicht Stück.
+Herr Fischer: Sehr gerne, Herr van Stedum.  
+Ja, genau — der dritte Stock. Gute Verbesserung.  
+
+Herr Fischer: Wenn Sie noch etwas brauchen, melden Sie sich einfach. Angenehmen Tag
+Robert: danke für der Hilfe.
+Herr Fischer: Gerne, Herr van Stedum.  
+Es heißt übrigens „danke für die Hilfe“ — „Hilfe“ ist weiblich, deshalb „die“. Aber ich habe Sie sofort verstanden, keine Sorge.  
+Falls Sie noch etwas brauchen, bin ich immer hier. Schönen Aufenthalt!
+
+Robert: danke für die Hilfe. Schönen Tag.
+Herr Fischer: Gerne geschehen, Herr van Stedum.  
+Einen schönen Tag Ihnen auch — und einen angenehmen Aufenthalt bei uns!
+
+end of lesson.

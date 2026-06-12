@@ -14769,5 +14769,33 @@
       "text_analysis": null
     },
     "folder": null
+  },
+  {
+    "tweet_id": "2062569786123370873",
+    "source": "X/@nntaleb",
+    "url": "https://x.com/nntaleb/status/2062569786123370873",
+    "action": "save",
+    "fetched_at": "2026-06-05T19:57:02",
+    "metadata": {
+      "tweet_text": "As with fat tails Llms are frequency machines that fail to extrapolate outside the sample set. What they know is the VISIBLE.\n\nAlmost as bad as economists, almost worse than psychologists. https://t.co/NopxFTpQKH",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2062533778019439052",
+    "source": "X/@Sorenthek",
+    "url": "https://x.com/Sorenthek/status/2062533778019439052",
+    "action": "save",
+    "fetched_at": "2026-06-05T19:57:02",
+    "metadata": {
+      "tweet_text": "The US Needs to counter China's gold backing but they want it both ways.. save the dollar via stable coins while monetizing their balance sheet to reduce debt\nand they can get it both ways... but it wont hurt China.. it will hurt Europe.\nRemember when Bessent said ' We're https://t.co/P1ZRs9eLNZ",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
   }
 ]

@@ -1,0 +1,254 @@
+{
+  "session_id": "2026-04-30_002",
+  "date": "2026-04-30",
+  "persona": "Maria",
+  "scenario": "cafe_bill",
+  "duration_estimate_min": 10,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Guten Tag! Was darf's denn sein?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Mochen Kaffee."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ein Kaffee? Gerne. Möchtest du vielleicht eine Melange oder einen Verlängerten?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ein Moment bitte. Meine Frau möchte"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne, lass dir Zeit. Deine Frau"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Melange."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Eine Melange für deine Frau und was für dich?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich trinke gern eine kleine, kleiner Browner."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Kleiner Brauner kommt sofort!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Hallo?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ja? Brauchst du noch etwas?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wir brauchen der Rechnung."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Die Rechnung? Kommt sofort. Macht zusammen zwölf Euro sechzig."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Zwölf Euro sechzig. Die mit Karte?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ja klar, Karte geht. Ich bring dir das Gerät."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Here's my card."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Danke. So, das hat geklappt. Hier ist deine Karte wieder."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Vielen Dank."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Du, wenn du mir noch zwei Euro Trinkgeld gibst, das wär super lieb."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Äh, wir, wir, wir kommen morgens."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Morgen? Kommt ihr morgen früh wieder? Das freut mich!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Bis dann."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Bis morgen! Tschüss, und einen schönen Abend euch beiden!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Für dich auch."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Danke dir! Auf Wiedersehen!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully navigated a café scenario in German, managing to order for himself and his wife and request the bill, demonstrating basic communicative competence. However, several grammatical errors appeared, particularly with articles and case endings, and one English phrase slipped in under pressure. Robert showed good recovery skills and social warmth at the end of the conversation.",
+    "errors": [
+      {
+        "type": "vocabulary",
+        "original": "Mochen Kaffee",
+        "correction": "Einen Kaffee bitte / Ich möchte einen Kaffee",
+        "explanation": "'Mochen' is not a German word; Robert likely meant 'möchten' or intended a short request form, and the sentence lacks a verb and proper article.",
+        "context": "Robert: Mochen Kaffee."
+      },
+      {
+        "type": "gender",
+        "original": "kleiner Browner",
+        "correction": "kleinen Brauner",
+        "explanation": "'Kleiner Brauner' is the correct Austrian coffee term, and after 'einen' the adjective takes the weak ending '-en'; also 'Browner' is a misspelling/mispronunciation of 'Brauner'.",
+        "context": "Robert: Ich trinke gern eine kleine, kleiner Browner."
+      },
+      {
+        "type": "missing_article",
+        "original": "eine kleine",
+        "correction": "einen kleinen Brauner",
+        "explanation": "Robert started with the wrong gender article 'eine' (feminine) before self-correcting, but 'Brauner' is masculine and requires 'einen' in the accusative case.",
+        "context": "Robert: Ich trinke gern eine kleine, kleiner Browner."
+      },
+      {
+        "type": "gender",
+        "original": "der Rechnung",
+        "correction": "die Rechnung",
+        "explanation": "'Rechnung' is a feminine noun and takes 'die' in both nominative and accusative; 'der' is incorrect here.",
+        "context": "Robert: Wir brauchen der Rechnung."
+      },
+      {
+        "type": "word_order",
+        "original": "Die mit Karte?",
+        "correction": "Geht das mit Karte? / Kann ich mit Karte zahlen?",
+        "explanation": "The question is missing a verb and the subject; a grammatically complete question is required in German.",
+        "context": "Robert: Die mit Karte?"
+      },
+      {
+        "type": "register",
+        "original": "Here's my card.",
+        "correction": "Hier ist meine Karte. / Bitte sehr.",
+        "explanation": "Robert switched to English mid-conversation; even a simple German phrase should be used to maintain the target language.",
+        "context": "Robert: Here's my card."
+      },
+      {
+        "type": "vocabulary",
+        "original": "wir kommen morgens",
+        "correction": "wir kommen morgen (wieder)",
+        "explanation": "'Morgens' means 'in the mornings' (habitual), whereas 'morgen' means 'tomorrow'; Robert likely meant to say they would return the next day.",
+        "context": "Robert: Äh, wir, wir, wir kommen morgens."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 2,
+      "word_order": 1,
+      "missing_article": 1,
+      "verb_conjugation": 0,
+      "vocabulary": 2,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "die Melange",
+        "english": "Viennese coffee with steamed milk",
+        "note": "used correctly",
+        "tags": [
+          "café",
+          "Austrian",
+          "anki"
+        ]
+      },
+      {
+        "german": "der Kleine Braune",
+        "english": "small black coffee with a dash of cream (Austrian)",
+        "note": "needs practice — pronunciation and gender",
+        "tags": [
+          "café",
+          "Austrian",
+          "anki"
+        ]
+      },
+      {
+        "german": "die Rechnung",
+        "english": "the bill / the invoice",
+        "note": "needs practice — feminine gender",
+        "tags": [
+          "café",
+          "essential",
+          "anki"
+        ]
+      },
+      {
+        "german": "das Trinkgeld",
+        "english": "tip / gratuity",
+        "note": "new this session — heard and understood in context",
+        "tags": [
+          "café",
+          "anki"
+        ]
+      },
+      {
+        "german": "das hat geklappt",
+        "english": "it worked / that went through",
+        "note": "new this session — useful colloquial phrase",
+        "tags": [
+          "colloquial",
+          "anki"
+        ]
+      },
+      {
+        "german": "Lass dir Zeit",
+        "english": "Take your time",
+        "note": "new this session — heard in context",
+        "tags": [
+          "phrases",
+          "anki"
+        ]
+      },
+      {
+        "german": "morgen",
+        "english": "tomorrow",
+        "note": "needs practice — confused with 'morgens' (in the mornings)",
+        "tags": [
+          "time",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully ordered for both himself and his wife, showing he can manage a real-world two-person transaction.",
+      "He used 'Vielen Dank' and 'Für dich auch' naturally, demonstrating polite closing phrases.",
+      "He understood Maria's questions and responses throughout, showing solid receptive comprehension.",
+      "His self-correction attempt ('eine kleine, kleiner Browner') shows active monitoring of his own speech.",
+      "He correctly used 'Wir brauchen' to request the bill, showing appropriate verb conjugation for first-person plural."
+    ],
+    "next_focus": "Accusative case article endings: practice 'einen / eine / ein' and adjective endings in accusative (e.g., 'einen kleinen Brauner', 'die Rechnung') using café and restaurant ordering drills."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

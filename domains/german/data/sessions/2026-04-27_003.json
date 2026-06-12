@@ -1,0 +1,193 @@
+{
+  "session_id": "2026-04-27_003",
+  "date": "2026-04-27",
+  "persona": "Dr. Huber",
+  "scenario": "museum_exhibit",
+  "duration_estimate_min": 12,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Dr. Huber",
+      "text": "Guten Tag! Willkommen im Kunsthistorischen Museum. Kann ich Ihnen bei einem bestimmten Gemälde weiterhelfen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was empfehle mir?"
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Ich empfehle Ihnen besonders „Der Turmbau zu Babel“ von Pieter Bruegel dem Älteren. Möchten Sie, dass ich Ihnen etwas zu diesem Bild erzähle?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Vielleicht. Was bedeutet Turmbau?"
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Der Turmbau zu Babel ist eine biblische Geschichte. Die Menschen wollten einen Turm bis in den Himmel bauen. Gott hat sie bestraft, indem er ihre Sprachen durcheinandergebracht hat, sodass sie sich nicht mehr verstanden haben."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich kenne es. Das ist, das sehr, das ist sehr interessant."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Ja, das ist es wirklich. Bruegel hat den Turm wie das Kolosseum in Rom gemalt. Er wollte zeigen, dass menschlicher Hochmut immer scheitern muss. Möchten Sie noch mehr darüber hören?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich denke, dass einen Eintritte kaufen will."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Sehr gut! Der Eintritt kostet einundzwanzig Euro pro Person. Möchten Sie eine oder zwei Karten kaufen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte zwei Karten, bitte."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Gerne. Zwei Eintrittskarten. Kommen Sie bitte mit, ich zeige Ihnen den Weg zur Kasse."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Bitte schön!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert managed a short but functional museum interaction, demonstrating basic conversational intent and polite phrasing. However, several grammatical errors appeared, including a missing reflexive pronoun in a request, a garbled sentence structure, and a confused pronoun/article construction. His best moment was the clean, confident sentence 'Ich möchte zwei Karten, bitte.'",
+    "errors": [
+      {
+        "type": "missing_article",
+        "original": "Was empfehle mir?",
+        "correction": "Was empfehlen Sie mir?",
+        "explanation": "Robert omitted the subject 'Sie' (the formal you), making the sentence grammatically incomplete and ambiguous; the verb also needs to agree with the second-person formal subject.",
+        "context": "Was empfehle mir?"
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Was empfehle mir?",
+        "correction": "Was empfehlen Sie mir?",
+        "explanation": "The verb 'empfehlen' must be conjugated as 'empfehlen' (Sie-form), not 'empfehle' (ich-form), when asking a polite question directed at another person.",
+        "context": "Was empfehle mir?"
+      },
+      {
+        "type": "word_order",
+        "original": "Das ist, das sehr, das ist sehr interessant.",
+        "correction": "Das ist sehr interessant.",
+        "explanation": "Robert restarted the sentence multiple times mid-utterance; the correct structure is a simple subject-verb-adverb-adjective order with no repetition.",
+        "context": "Ich kenne es. Das ist, das sehr, das ist sehr interessant."
+      },
+      {
+        "type": "gender",
+        "original": "Ich denke, dass einen Eintritte kaufen will.",
+        "correction": "Ich denke, dass ich eine Eintrittskarte kaufen möchte.",
+        "explanation": "'Eintrittskarte' is feminine (die Eintrittskarte), so the accusative article is 'eine', not 'einen'; additionally the subject 'ich' was omitted and 'Eintritte' (plural) does not fit here.",
+        "context": "Ich denke, dass einen Eintritte kaufen will."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Ich denke, dass einen Eintritte kaufen will.",
+        "correction": "Ich denke, dass ich eine Eintrittskarte kaufen möchte.",
+        "explanation": "In a subordinate clause introduced by 'dass', the conjugated verb must appear at the end and agree with an explicit subject ('ich will' → 'ich … kaufen will'); without 'ich' the clause is ungrammatical.",
+        "context": "Ich denke, dass einen Eintritte kaufen will."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Eintritte",
+        "correction": "Eintrittskarte / Eintrittskarten",
+        "explanation": "The natural word for a museum admission ticket is 'die Eintrittskarte'; 'Eintritte' (plural of 'der Eintritt') is understandable but sounds unnatural in this context.",
+        "context": "Ich denke, dass einen Eintritte kaufen will."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 1,
+      "missing_article": 1,
+      "verb_conjugation": 2,
+      "vocabulary": 1,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "der Turmbau",
+        "english": "tower construction / building of a tower",
+        "note": "new this session",
+        "tags": [
+          "museum",
+          "history",
+          "compound noun"
+        ]
+      },
+      {
+        "german": "der Hochmut",
+        "english": "arrogance / hubris",
+        "note": "introduced by Dr. Huber; Robert should learn for active use",
+        "tags": [
+          "anki",
+          "B2",
+          "culture"
+        ]
+      },
+      {
+        "german": "scheitern",
+        "english": "to fail / to founder",
+        "note": "new this session; high-frequency verb worth memorising",
+        "tags": [
+          "anki",
+          "B1",
+          "verb"
+        ]
+      },
+      {
+        "german": "die Eintrittskarte",
+        "english": "admission ticket / entry ticket",
+        "note": "needs practice — Robert used 'Eintritte' instead",
+        "tags": [
+          "anki",
+          "museum",
+          "A2"
+        ]
+      },
+      {
+        "german": "Ich möchte zwei Karten, bitte.",
+        "english": "I would like two tickets, please.",
+        "note": "used correctly — natural and polite phrasing",
+        "tags": [
+          "A1",
+          "shopping",
+          "polite"
+        ]
+      },
+      {
+        "german": "empfehlen",
+        "english": "to recommend",
+        "note": "needs practice — Robert misjudged the conjugation and omitted the subject",
+        "tags": [
+          "anki",
+          "A2",
+          "verb",
+          "Sie-form"
+        ]
+      }
+    ],
+    "strengths": [
+      "Used 'Ich möchte zwei Karten, bitte' correctly — natural word order, appropriate register, and polite tone.",
+      "Successfully asked a clarifying vocabulary question ('Was bedeutet Turmbau?'), showing confidence in seeking help.",
+      "Maintained the formal 'Sie' register throughout without slipping into 'du'.",
+      "Responded appropriately to Dr. Huber's yes/no prompts, keeping the conversation moving."
+    ],
+    "next_focus": "Subordinate clause word order with 'dass': practice constructing sentences of the pattern 'Ich denke, dass ich [subject] … [verb at end]', paying attention to including an explicit subject and placing the conjugated verb at the very end of the clause."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

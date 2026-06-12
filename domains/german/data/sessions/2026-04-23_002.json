@@ -1,0 +1,272 @@
+{
+  "session_id": "2026-04-23_002",
+  "date": "2026-04-23",
+  "persona": "Frau Berger",
+  "scenario": "unknown",
+  "duration_estimate_min": 0,
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Servus! Grüß Sie! Was darf's denn sein heute? Ein Melange oder eher einen Verlängerten? Und zum Essen?"
+    },
+    {
+      "speaker": "You",
+      "text": "Ich hätte gerne einen Verlängerten und einen Apfelstrudel, bitte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ach so, Entschuldigung! Ich hab dich grad für den neuen Kellner gehalten. Na dann, einen Verlängerten und einen Apfelstrudel, kommt sofort!"
+    },
+    {
+      "speaker": "You",
+      "text": "Nein, ich möchte etwas anders."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ah, okay! Was möchtest du stattdessen?"
+    },
+    {
+      "speaker": "You",
+      "text": "Äh, ein Kaffee."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Du meinst einen Kaffee, gell? Kein Problem, kommt."
+    },
+    {
+      "speaker": "You",
+      "text": "Ich, ich wollte ein Kaffee."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ich wollte einen Kaffee. Sag's nochmal richtig."
+    },
+    {
+      "speaker": "You",
+      "text": "Si. Ja. Ja, ein Kaffee Espresso mit Milch. Wie sagt man?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Du meinst einen Cappuccino. Sag einfach: \"Einen Cappuccino, bitte.\""
+    },
+    {
+      "speaker": "You",
+      "text": "Ne, ne, aber, äh, aber es gibt ein Wort, äh, andere Wort. Weißt, ich wusste Kaffee Espresso mit ein bisschen Milch, wie ein Cortado in Kuba."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ah, du meinst einen Cortado! Bei uns sagen wir meist einen kleinen Braunen. Möchtest du einen kleinen Braunen?"
+    },
+    {
+      "speaker": "You",
+      "text": "Genau, vielen Dank."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Sehr gut! Ein kleiner Brauner kommt sofort. Und zum Essen?"
+    },
+    {
+      "speaker": "You",
+      "text": "Ich denke ein bisschen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Was hältst du von einem Stück Apfelstrudel?"
+    },
+    {
+      "speaker": "You",
+      "text": "Nein, äh, so Kaffee."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Nur den Kaffee also. Ein kleiner Brauner kommt sofort."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Adios? Na, du Mischmasch von Sprachen heute! Bis später dann."
+    },
+    {
+      "speaker": "You",
+      "text": "Mein Frau ist hier, die und sie möchte möchte ein Cappuccino."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Deine Frau möchte einen Cappuccino — richtig? Gut, dann bring ich dir einen kleinen Braunen und ihr einen Cappuccino. Kommt gleich!"
+    },
+    {
+      "speaker": "You",
+      "text": "Danke sehr."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Bitte schön! Danke dir!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully navigated a café ordering scenario in Austrian German, demonstrating good communicative intent and useful vocabulary searching. However, he made repeated errors with masculine accusative articles (ein instead of einen) and showed some gender agreement issues with possessive pronouns. His willingness to describe unknown words (Cortado) rather than give up was a strong communicative strategy.",
+    "errors": [
+      {
+        "type": "missing_article",
+        "original": "ein Kaffee",
+        "correction": "einen Kaffee",
+        "explanation": "Kaffee is masculine (der Kaffee), so in the accusative case after möchte/hätte gerne it requires the accusative article 'einen'.",
+        "context": "Äh, ein Kaffee."
+      },
+      {
+        "type": "missing_article",
+        "original": "ich wollte ein Kaffee",
+        "correction": "ich wollte einen Kaffee",
+        "explanation": "Same accusative masculine error repeated — 'der Kaffee' becomes 'einen Kaffee' as a direct object.",
+        "context": "Ich, ich wollte ein Kaffee."
+      },
+      {
+        "type": "vocabulary",
+        "original": "andere Wort",
+        "correction": "anderes Wort",
+        "explanation": "'Wort' is neuter (das Wort), so the adjective takes the neuter ending: 'anderes Wort' (or with article: 'das andere Wort').",
+        "context": "aber es gibt ein Wort, äh, andere Wort."
+      },
+      {
+        "type": "missing_article",
+        "original": "Kaffee Espresso mit ein bisschen Milch",
+        "correction": "Espresso mit einem bisschen Milch",
+        "explanation": "'Ein bisschen' when used as a noun phrase in a prepositional context is acceptable, but 'mit einem bisschen' is the grammatically complete form; additionally compounding 'Kaffee Espresso' is non-standard.",
+        "context": "ich wusste Kaffee Espresso mit ein bisschen Milch, wie ein Cortado in Kuba."
+      },
+      {
+        "type": "gender",
+        "original": "Mein Frau",
+        "correction": "Meine Frau",
+        "explanation": "'Frau' is feminine (die Frau), so the possessive pronoun must take the feminine nominative ending: 'meine Frau'.",
+        "context": "Mein Frau ist hier, die und sie möchte möchte ein Cappuccino."
+      },
+      {
+        "type": "missing_article",
+        "original": "möchte ein Cappuccino",
+        "correction": "möchte einen Cappuccino",
+        "explanation": "'Cappuccino' is masculine (der Cappuccino), requiring the accusative 'einen' as a direct object.",
+        "context": "Mein Frau ist hier, die und sie möchte möchte ein Cappuccino."
+      },
+      {
+        "type": "word_order",
+        "original": "die und sie möchte möchte",
+        "correction": "und sie möchte",
+        "explanation": "The pronoun 'die' is redundant after 'Meine Frau' and creates a broken sentence structure; the verb 'möchte' is also repeated.",
+        "context": "Mein Frau ist hier, die und sie möchte möchte ein Cappuccino."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Ich denke ein bisschen.",
+        "correction": "Ich überlege kurz. / Einen Moment, bitte.",
+        "explanation": "'Denken' here is a calque from English 'I'm thinking'; in German the natural phrase for 'let me think a moment' is 'Ich überlege kurz' or simply 'Einen Moment'.",
+        "context": "Ich denke ein bisschen."
+      },
+      {
+        "type": "register",
+        "original": "Adios",
+        "correction": "Tschüss / Auf Wiedersehen / Servus",
+        "explanation": "While Maria noted it humorously as a 'Mischmasch', using Spanish 'Adios' is inappropriate register for a German-language café interaction; Austrian farewell options include 'Servus' or 'Tschüss'.",
+        "context": "Adios? Na, du Mischmasch von Sprachen heute!"
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 1,
+      "missing_article": 4,
+      "verb_conjugation": 0,
+      "vocabulary": 2,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "einen Verlängerten",
+        "english": "a 'Verlängerter' (Viennese long black coffee)",
+        "note": "used correctly",
+        "tags": [
+          "Austrian German",
+          "café",
+          "anki"
+        ]
+      },
+      {
+        "german": "ein kleiner Brauner",
+        "english": "a small brown coffee (espresso with a dash of cream/milk — Viennese style)",
+        "note": "new this session — learned through description",
+        "tags": [
+          "Austrian German",
+          "café",
+          "anki"
+        ]
+      },
+      {
+        "german": "stattdessen",
+        "english": "instead",
+        "note": "used correctly by Maria in response to Robert's context — worth learning actively",
+        "tags": [
+          "adverb",
+          "anki"
+        ]
+      },
+      {
+        "german": "Ich hätte gerne …",
+        "english": "I would like …",
+        "note": "used correctly — polite conditional form for ordering",
+        "tags": [
+          "ordering",
+          "politeness",
+          "anki"
+        ]
+      },
+      {
+        "german": "Wie sagt man?",
+        "english": "How do you say …?",
+        "note": "used correctly — excellent communicative repair strategy",
+        "tags": [
+          "conversation strategy",
+          "anki"
+        ]
+      },
+      {
+        "german": "Servus",
+        "english": "Hi / Bye (informal Austrian/Bavarian greeting)",
+        "note": "new this session — heard from Maria",
+        "tags": [
+          "Austrian German",
+          "greeting",
+          "anki"
+        ]
+      },
+      {
+        "german": "Melange",
+        "english": "Viennese coffee with steamed milk (similar to latte/cappuccino)",
+        "note": "new this session — heard from Maria",
+        "tags": [
+          "Austrian German",
+          "café",
+          "anki"
+        ]
+      },
+      {
+        "german": "Ich überlege kurz.",
+        "english": "Let me think for a moment.",
+        "note": "needs practice — Robert used 'Ich denke ein bisschen' instead",
+        "tags": [
+          "vocabulary",
+          "phrase",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully used the polite conditional 'Ich hätte gerne …' for ordering — a natural, native-sounding construction.",
+      "He used 'Wie sagt man?' as a repair strategy when he lacked vocabulary, which is an excellent real-world communication skill.",
+      "He described an unknown drink (Cortado) using circumlocution ('Espresso mit ein bisschen Milch') rather than switching to English or giving up.",
+      "His first order ('einen Verlängerten und einen Apfelstrudel') was grammatically correct, including the accusative 'einen'.",
+      "He used 'Genau' and 'vielen Dank' naturally as conversational affirmations."
+    ],
+    "next_focus": "Masculine accusative articles: drill the pattern 'der → einen' with common masculine café and restaurant nouns (der Kaffee → einen Kaffee, der Cappuccino → einen Cappuccino, der Kuchen → einen Kuchen) until it becomes automatic."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true
+}

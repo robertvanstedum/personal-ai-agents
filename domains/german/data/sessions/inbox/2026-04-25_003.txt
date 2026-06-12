@@ -1,0 +1,26 @@
+Persona: Frau Novak
+Scenario: Apotheke
+
+Frau Novak: Guten Tag! Ich bin Frau Novak und freue mich, dass Sie heute in meine Apotheke kommen. Wie kann ich Ihnen helfen?
+Robert: Meine Frau hat Kopfschmerzen.
+Frau Novak: Es tut mir leid, das zu hören. Ihre Frau hat also Kopfschmerzen? Möchten Sie ihr etwas rezeptfreies empfehlen? Ich habe hier sehr gute Tabletten gegen Kopfschmerzen – die nehmen die meisten Patienten zwei- bis dreimal täglich, je nach Stärke der Schmerzen.
+Robert: stärker der Schmerzen. Ist wie, ist wie Ibuprofen, oder?
+Frau Novak: Ja, genau – die Tabletten enthalten Ibuprofen. Ich empfehle Ihnen, bei stärkeren Schmerzen eine Tablette zu nehmen, aber maximal drei am Tag. Wenn die Schmerzen nach zwei Tagen nicht besser werden, sollte Ihre Frau lieber einen Arzt aufsuchen.
+Robert: Okay, es, es ist nicht so schwierig, aber
+Frau Novak: Verstehe. Dann reicht vielleicht schon eine Tablette alle acht Stunden, also maximal dreimal täglich. Am besten nach dem Essen nehmen, damit der Magen nicht belastet wird. Möchten Sie noch etwas zu möglichen Nebenwirkungen wissen?
+Robert: So etwas.
+Frau Novak: Genau. Die häufigsten Nebenwirkungen sind Magenbeschwerden – deshalb immer mit etwas Essen nehmen. Sehr selten kann es zu Schwindel oder leichten Kopfschmerzen kommen, dann sollte man das Medikament lieber absetzen. Möchten Sie die Packung mit zwölf oder mit zwanzig Tabletten?
+Robert: zwanzig Tabletten, bitte.
+Frau Novak: Gerne, zwanzig Tabletten macht dann vierzehn Euro neunzig. Möchten Sie noch etwas anderes für Ihre Frau mitnehmen?
+Robert: Wie viel kostet Salz?
+Frau Novak: Sie meinen sicher das Nasenspray gegen Schnupfen? Ein gutes Salzwasser-Spray kostet bei uns sechs Euro fünfzig.
+Robert: Nein.
+Frau Novak: Entschuldigung, dann habe ich Sie falsch verstanden. Was meinen Sie genau mit „Salz"?
+Robert: Entschuldigung. Wie viel kostet Salz Tabletten?
+Frau Novak: Ah, Sie meinen Salztabletten – also die Elektrolyt-Tabletten? Die kosten bei uns acht Euro neunzig für eine Packung mit zwanzig Tabletten.
+Robert: Nein.
+Frau Novak: Schade. Dann bleibt es bei den zwanzig Tabletten Ibuprofen für vierzehn Euro neunzig. Möchten Sie bar oder mit Karte?
+Robert: Koffer nur, ich Koffer nur Tabletten.
+Frau Novak: Sie brauchen nur die Tabletten für den Koffer. Hier bitte – die Originalverpackung. Gute Besserung für Ihre Frau!
+Robert: Dankeschön. Auch schönen Tag. Tschüss.
+Frau Novak: Bitte sehr! Gute Besserung und auf Wiedersehen!

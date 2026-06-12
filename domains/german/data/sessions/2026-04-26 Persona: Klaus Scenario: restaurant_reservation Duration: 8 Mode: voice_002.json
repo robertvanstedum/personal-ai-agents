@@ -1,0 +1,125 @@
+{
+  "session_id": "2026-04-26 Persona: Klaus Scenario: restaurant_reservation Duration: 8 Mode: voice_002",
+  "date": "2026-04-26",
+  "persona": "Klaus",
+  "scenario": "restaurant_reservation",
+  "duration_estimate_min": 8,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Klaus",
+      "text": "Guten Abend, Restaurant Wien, hier spricht Klaus. Wie kann ich Ihnen helfen? Robert: Ich möchte eine reservieren. Klaus: Natürlich, der Herr. Für wie viele Personen und für wann möchten Sie reservieren? Robert: Zwei Persona for morgen abends. Klaus: Selbstverständlich. Für zwei Personen morgen Abend. Um welche Uhrzeit darf es denn sein? Robert: sieben Uhr oder sieben halb, halb acht. Klaus: Selbstverständlich. Ich habe morgen Abend um halb acht für zwei Personen notiert. Darf ich Ihren Namen aufnehmen? Robert: Ich Name Robert van Stenum. Klaus: Vielen Dank. Robert van Stedum, für zwei Personen morgen Abend um halb acht. Ist alles richtig so? Robert: Wo ist der Tisch? Klaus: Der Tisch ist direkt am Fenster, der Herr. Ein sehr schöner Platz mit Aussicht auf den Garten. Passt Ihnen das? Robert: Super, passt. Klaus: Wunderbar. Dann ist alles bestätigt. Wir freuen uns auf Sie morgen Abend um halb acht. Gibt es sonst noch etwas, das ich für Sie tun kann? Robert: Nein, vielen Dank. Klaus: Gern geschehen. Auf Wiederhören und einen schönen Abend noch."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully completed a restaurant reservation in German, demonstrating functional communicative ability in a real-world scenario. However, several structural errors appeared throughout, including missing articles, incomplete verb phrases, and a vocabulary mix-up with 'Persona' instead of 'Personen'. With targeted work on article usage and complete sentence construction, Robert's fluency will improve noticeably.",
+    "errors": [
+      {
+        "type": "missing_article",
+        "original": "Ich möchte eine reservieren.",
+        "correction": "Ich möchte einen Tisch reservieren.",
+        "explanation": "The noun 'Tisch' (masculine, accusative → einen) is required; 'eine' alone is incomplete and refers to no clear noun.",
+        "context": "Ich möchte eine reservieren."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Zwei Persona for morgen abends.",
+        "correction": "Zwei Personen für morgen Abend.",
+        "explanation": "'Persona' is English/Italian and not standard German; the correct German word is 'Personen', and 'for' must be replaced with the German preposition 'für'.",
+        "context": "Zwei Persona for morgen abends."
+      },
+      {
+        "type": "word_order",
+        "original": "Zwei Persona for morgen abends.",
+        "correction": "Für zwei Personen morgen Abend.",
+        "explanation": "In German, the time expression 'morgen Abend' does not take the suffix '-s'; 'morgen Abends' is non-standard — the correct form is 'morgen Abend' (no genitive -s).",
+        "context": "Zwei Persona for morgen abends."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Ich Name Robert van Stenum.",
+        "correction": "Mein Name ist Robert van Stenum.",
+        "explanation": "The verb 'ist' (to be) is missing entirely; German requires an explicit copula verb and the possessive pronoun 'mein' before 'Name'.",
+        "context": "Ich Name Robert van Stenum."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 1,
+      "missing_article": 1,
+      "verb_conjugation": 1,
+      "vocabulary": 1,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "reservieren",
+        "english": "to reserve / to make a reservation",
+        "note": "used correctly in context, though the object 'einen Tisch' was missing",
+        "tags": [
+          "restaurant",
+          "anki"
+        ]
+      },
+      {
+        "german": "morgen Abend",
+        "english": "tomorrow evening",
+        "note": "needs practice — Robert added an incorrect '-s' suffix (morgen Abends)",
+        "tags": [
+          "time_expressions",
+          "anki"
+        ]
+      },
+      {
+        "german": "halb acht",
+        "english": "half past seven (7:30)",
+        "note": "used correctly after a brief self-correction; good recovery",
+        "tags": [
+          "time",
+          "anki"
+        ]
+      },
+      {
+        "german": "Personen",
+        "english": "persons / people (plural)",
+        "note": "needs practice — Robert used 'Persona' instead",
+        "tags": [
+          "restaurant",
+          "vocabulary",
+          "anki"
+        ]
+      },
+      {
+        "german": "Super, passt.",
+        "english": "Great, that works.",
+        "note": "natural and idiomatic short response; used correctly",
+        "tags": [
+          "colloquial",
+          "useful_phrases"
+        ]
+      },
+      {
+        "german": "Mein Name ist ...",
+        "english": "My name is ...",
+        "note": "needs practice — Robert omitted the verb and possessive entirely",
+        "tags": [
+          "introductions",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Successfully self-corrected the time expression from 'sieben halb' to 'halb acht', showing active self-monitoring.",
+      "Maintained the formal 'Sie' register throughout, appropriate for speaking with restaurant staff.",
+      "Produced a natural, concise closing with 'Nein, vielen Dank', demonstrating good pragmatic awareness.",
+      "Initiated a relevant follow-up question ('Wo ist der Tisch?') showing willingness to extend the conversation beyond the scripted task."
+    ],
+    "next_focus": "Practice constructing complete sentences with the verb 'sein' (ist/sind) and mandatory articles: drill patterns like 'Mein Name ist …', 'Das ist ein/eine …', and 'Ich möchte einen/eine/ein … [noun] + infinitive verb' to eliminate missing verbs and bare 'eine/ein' without a following noun."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

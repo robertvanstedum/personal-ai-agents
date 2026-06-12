@@ -1,0 +1,30 @@
+{
+  "session_id": "2026-04-26_001",
+  "date": "2026-04-26",
+  "persona": "Anna",
+  "scenario": "apartment_handoff",
+  "duration_estimate_min": 8,
+  "mode": "voice anna: hallo! schön, dass du da bist. komm rein, ich zeig dir gleich alles. hier sind die schlüssel für die wohnung. hast du noch gepäck draußen? robert: ja, ich hab, wir haben zwei packen. anna: kein problem, lass uns die zwei koffer schnell reinholen. stell sie einfach im flur ab. willkommen! ich führ dich kurz rum. hast du fragen zu heizung, wlan oder so? robert: ich habe frage. anna: ja, klar, schieß los! was möchtest du wissen? robert: über alles. anna: gut, dann zeig ich dir alles. das ist das wohnzimmer, da drüben die küche. die heizung ist ganz einfach — einfach am thermostat drehen. das wlan-passwort ist „willkommenwien2026“. und du musst bis 11 uhr auschecken, ja? sonst noch was? robert: wie anna: ja? wie funktioniert was genau? robert: denn es gibt ein problem. anna: ach, was für ein problem denn? erzähl! robert: wie viel rufen an. anna: rufen an? meinst du „wie viel kostet ein anruf“ oder etwas mit telefon? sag mir genauer, was du meinst. robert: äh, wie anna: wie funktioniert die heizung zum beispiel? die ist ganz easy — einfach am thermostat die temperatur einstellen und schon wird’s warm. oder meinst du robert: ähm anna: …das wlan? das passwort hab ich dir schon gesagt — „willkommenwien2026“. einfach ins netzwerk gehen und das eingeben. robert: nein, ein kontakt. haben sie, haben sie e-mail oder handy? anna: ach so! klar, meine nummer ist 0650 1234567 und die e-mail ist anna@viennahomes.at. schreib mir einfach, falls was ist. und übrigens — check-out ist um elf uhr, gell? robert: yeah. anna: super. dann wünsch ich dir eine schöne zeit in wien! ruf mich an, wenn du was brauchst. robert: genau. tschüss. anna: tschüss, mach’s gut! —e",
+  "source": "manual",
+  "raw_transcript": [],
+  "reviewer_output": {
+    "overall_summary": "No transcript content was provided for this session. No dialogue between Robert and Anna could be analyzed. Please resubmit with the full conversation text.",
+    "errors": [],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 0,
+      "vocabulary": 0,
+      "register": 0
+    },
+    "vocabulary_highlights": [],
+    "strengths": [],
+    "next_focus": "No session data available. Please provide the transcript and resubmit."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

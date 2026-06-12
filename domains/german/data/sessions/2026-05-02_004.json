@@ -1,0 +1,154 @@
+{
+  "session_id": "2026-05-02_004",
+  "date": "2026-05-02",
+  "persona": "Maria",
+  "scenario": "Viennese café waitress",
+  "duration_estimate_min": 5,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Grüß dich! Setz dich nur hin, bei uns ist’s heute wieder voll. Was darf’s denn sein? Eine Melange, einen Verlängerten oder vielleicht einen Einspänner? Der Gugelhupf ist frisch - magst du was dazu?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Meine Frau möchte gern einen Verlängerten. Ich möchte gern einen kleinen Brauner."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Einen Verlängerten für deine Frau und einen Kleinen Braunen für dich - kommt sofort. Soll’s dazu noch was Süßes geben? Der Gugelhupf ist wirklich frisch heute. Ich bring’s gleich rüber!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was empfehlen sie heute?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Heute empfehle ich den Apfelstrudel - der ist besonders gut. Oder probier den Gugelhupf, der ist ganz frisch. Was meinst du, magst du was davon?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Beide. Ich nehme den Apfelstrudel. Meine Frau nehmt den Gugelhupf."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne, beide! Du nimmst den Apfelstrudel und deine Frau den Gugelhupf. Super Wahl. Kommt gleich mit den Getränken - ich bin sofort wieder da!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert handled a café ordering scenario with solid vocabulary and confidence, successfully navigating Viennese-specific coffee terminology. Two notable errors appeared: a register mismatch (switching to formal 'Sie' mid-conversation) and a verb conjugation error ('nehmt' instead of 'nimmt'). Overall a productive session with strong practical vocabulary use.",
+    "errors": [
+      {
+        "type": "register",
+        "original": "Was empfehlen sie heute?",
+        "correction": "Was empfiehlst du heute?",
+        "explanation": "Maria has been using 'du' throughout, so Robert should maintain the informal register; switching to 'Sie' (capitalized) is also incorrect here as 'sie' lowercase would mean 'they', making the sentence ambiguous or wrong either way.",
+        "context": "Robert: Was empfehlen sie heute?"
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Meine Frau nehmt den Gugelhupf.",
+        "correction": "Meine Frau nimmt den Gugelhupf.",
+        "explanation": "The verb 'nehmen' is a strong verb with a stem-vowel change in the third person singular: 'er/sie/es nimmt', not 'nehmt'.",
+        "context": "Robert: Meine Frau nehmt den Gugelhupf."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 1,
+      "vocabulary": 0,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "der Verlängerte",
+        "english": "a lungo-style coffee with hot water (Viennese term)",
+        "note": "used correctly",
+        "tags": [
+          "café",
+          "Vienna",
+          "coffee"
+        ]
+      },
+      {
+        "german": "der Kleine Braune",
+        "english": "small coffee with a small amount of milk (Viennese term)",
+        "note": "used correctly",
+        "tags": [
+          "café",
+          "Vienna",
+          "coffee"
+        ]
+      },
+      {
+        "german": "der Apfelstrudel",
+        "english": "apple strudel",
+        "note": "used correctly",
+        "tags": [
+          "café",
+          "food",
+          "Austria"
+        ]
+      },
+      {
+        "german": "der Gugelhupf",
+        "english": "a ring-shaped bundt cake traditional in Austria",
+        "note": "new this session",
+        "tags": [
+          "café",
+          "food",
+          "Austria",
+          "anki"
+        ]
+      },
+      {
+        "german": "Ich nehme ...",
+        "english": "I'll have / I'll take ...",
+        "note": "used correctly — natural way to order",
+        "tags": [
+          "ordering",
+          "restaurant",
+          "anki"
+        ]
+      },
+      {
+        "german": "Was empfehlen Sie / empfiehlst du heute?",
+        "english": "What do you recommend today?",
+        "note": "needs practice — good attempt but register and conjugation need attention",
+        "tags": [
+          "restaurant",
+          "questions",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Correctly used Viennese coffee vocabulary ('Verlängerter', 'Kleiner Brauner') showing good preparation for the scenario",
+      "Used 'möchte gern' appropriately for polite ordering",
+      "Ordered for both himself and his wife naturally, demonstrating confident sentence construction",
+      "Responded to Maria's suggestion and made a clear decision, keeping the conversation flowing"
+    ],
+    "next_focus": "Practice stem-changing verbs in the third person singular (e.g. nehmen → nimmt, empfehlen → empfiehlt, sprechen → spricht), as this is a recurring pattern that will come up in many everyday scenarios."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "scaffold_delivered": [
+    "Ich hätte gerne einen kleinen Brauner, bitte.",
+    "Was empfehlen Sie heute?",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_used": [
+    "Ich hätte gerne einen kleinen Brauner, bitte.",
+    "Was empfehlen Sie heute?"
+  ],
+  "scaffold_avoided": [
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_deployment_rate": "2/3 scaffold phrases used"
+}

@@ -1,0 +1,18 @@
+{
+  "lesson_date": "2026-05-02",
+  "lesson_number": 57,
+  "persona": "Herr Fischer",
+  "persona_role": "Hotel Receptionist",
+  "scenario": "hotel_checkin",
+  "warm_up": "Review top error from last session: vocabulary.",
+  "focus": "Practice stem-changing verbs in the third person singular (e.g. nehmen → nimmt, empfehlen → empfiehlt, sprechen → spricht), as this is a recurring pattern that will come up in many everyday scenarios.",
+  "speaking_prompt": "You arrive at your hotel near the Ringstraße after a long flight. Herr Fischer greets you at the front desk. Check in, ask about the WiFi, and confirm your checkout date.",
+  "vocabulary_targets": [
+    "der Verlängerte",
+    "der Kleine Braune",
+    "der Apfelstrudel",
+    "der Gugelhupf",
+    "Ich nehme ..."
+  ],
+  "carry_forward_errors": []
+}

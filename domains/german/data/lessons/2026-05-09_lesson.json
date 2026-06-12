@@ -1,0 +1,21 @@
+{
+  "lesson_date": "2026-05-09",
+  "lesson_number": 68,
+  "persona": "Maria",
+  "persona_role": "Café Waitress",
+  "scenario": "cafe_meal",
+  "warm_up": "Review top error from last session: vocabulary.",
+  "focus": "Article gender and adjective endings: practice the three genders (der/die/das) with their accusative forms (den/die/das), focusing on common café and food nouns like 'das Frühstück', 'die Melange', 'der Kaffee' — use flashcards with the article always included.",
+  "speaking_prompt": "It's lunchtime. Order a full small meal from the Tageskarte (daily menu). Ask what the soup of the day is, then order a main and a drink.",
+  "vocabulary_targets": [
+    "die Melange",
+    "der Verlängerte",
+    "die Schinken-Semmel",
+    "die Rechnung",
+    "die Kräuter"
+  ],
+  "carry_forward_errors": [
+    "Frühstück (was: Früstuck) — session 2026-05-08",
+    "Rechnung (was: Rechtnung) — session 2026-05-08"
+  ]
+}

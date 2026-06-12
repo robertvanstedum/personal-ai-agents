@@ -1,0 +1,20 @@
+{
+  "lesson_date": "2026-04-19",
+  "lesson_number": 2,
+  "persona": "Herr Fischer",
+  "persona_role": "Hotel Receptionist",
+  "scenario": "hotel_checkin",
+  "warm_up": "Review top error from last session: gender.",
+  "focus": "Verb-second (V2) word order in main clauses: practise building sentences that start with a time or place adverb (e.g. 'Heute möchte ich …', 'Morgen brauche ich …') so that subject–verb inversion becomes automatic.",
+  "speaking_prompt": "You arrive at your hotel near the Ringstraße after a long flight. Herr Fischer greets you at the front desk. Check in, ask about the WiFi, and confirm your checkout date.",
+  "vocabulary_targets": [
+    "Sauerteigbrot",
+    "der Unterschied",
+    "Roggenbrot",
+    "Mischbrot",
+    "kräftig"
+  ],
+  "carry_forward_errors": [
+    "ein kräftiges Brot (was: ein starke Brot) — session 2026-04-20"
+  ]
+}

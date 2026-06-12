@@ -1,0 +1,237 @@
+{
+  "session_id": "2026-04-25_003",
+  "date": "2026-04-25",
+  "persona": "Frau Novak",
+  "scenario": "Apotheke",
+  "duration_estimate_min": null,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Frau Novak",
+      "text": "Guten Tag! Ich bin Frau Novak und freue mich, dass Sie heute in meine Apotheke kommen. Wie kann ich Ihnen helfen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Meine Frau hat Kopfschmerzen."
+    },
+    {
+      "speaker": "Frau Novak",
+      "text": "Es tut mir leid, das zu hören. Ihre Frau hat also Kopfschmerzen? Möchten Sie ihr etwas rezeptfreies empfehlen? Ich habe hier sehr gute Tabletten gegen Kopfschmerzen - die nehmen die meisten Patienten zwei- bis dreimal täglich, je nach Stärke der Schmerzen."
+    },
+    {
+      "speaker": "Robert",
+      "text": "stärker der Schmerzen. Ist wie, ist wie Ibuprofen, oder?"
+    },
+    {
+      "speaker": "Frau Novak",
+      "text": "Ja, genau - die Tabletten enthalten Ibuprofen. Ich empfehle Ihnen, bei stärkeren Schmerzen eine Tablette zu nehmen, aber maximal drei am Tag. Wenn die Schmerzen nach zwei Tagen nicht besser werden, sollte Ihre Frau lieber einen Arzt aufsuchen."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Okay, es, es ist nicht so schwierig, aber"
+    },
+    {
+      "speaker": "Frau Novak",
+      "text": "Verstehe. Dann reicht vielleicht schon eine Tablette alle acht Stunden, also maximal dreimal täglich. Am besten nach dem Essen nehmen, damit der Magen nicht belastet wird. Möchten Sie noch etwas zu möglichen Nebenwirkungen wissen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "So etwas."
+    },
+    {
+      "speaker": "Frau Novak",
+      "text": "Genau. Die häufigsten Nebenwirkungen sind Magenbeschwerden - deshalb immer mit etwas Essen nehmen. Sehr selten kann es zu Schwindel oder leichten Kopfschmerzen kommen, dann sollte man das Medikament lieber absetzen. Möchten Sie die Packung mit zwölf oder mit zwanzig Tabletten?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "zwanzig Tabletten, bitte."
+    },
+    {
+      "speaker": "Frau Novak",
+      "text": "Gerne, zwanzig Tabletten macht dann vierzehn Euro neunzig. Möchten Sie noch etwas anderes für Ihre Frau mitnehmen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wie viel kostet Salz?"
+    },
+    {
+      "speaker": "Frau Novak",
+      "text": "Sie meinen sicher das Nasenspray gegen Schnupfen? Ein gutes Salzwasser-Spray kostet bei uns sechs Euro fünfzig."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein."
+    },
+    {
+      "speaker": "Frau Novak",
+      "text": "Entschuldigung, dann habe ich Sie falsch verstanden. Was meinen Sie genau mit „Salz\"?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Entschuldigung. Wie viel kostet Salz Tabletten?"
+    },
+    {
+      "speaker": "Frau Novak",
+      "text": "Ah, Sie meinen Salztabletten - also die Elektrolyt-Tabletten? Die kosten bei uns acht Euro neunzig für eine Packung mit zwanzig Tabletten."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein."
+    },
+    {
+      "speaker": "Frau Novak",
+      "text": "Schade. Dann bleibt es bei den zwanzig Tabletten Ibuprofen für vierzehn Euro neunzig. Möchten Sie bar oder mit Karte?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Koffer nur, ich Koffer nur Tabletten."
+    },
+    {
+      "speaker": "Frau Novak",
+      "text": "Sie brauchen nur die Tabletten für den Koffer. Hier bitte - die Originalverpackung. Gute Besserung für Ihre Frau!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Dankeschön. Auch schönen Tag. Tschüss."
+    },
+    {
+      "speaker": "Frau Novak",
+      "text": "Bitte sehr! Gute Besserung und auf Wiedersehen!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully completed a basic pharmacy transaction in German, purchasing ibuprofen tablets for his wife's headache. His vocabulary was limited but functional, and he communicated core needs despite some confusion around the word 'Salztabletten'. The session revealed gaps in sentence construction, article use, and vocabulary precision that are typical at an early intermediate level.",
+    "errors": [
+      {
+        "type": "vocabulary",
+        "original": "Wie viel kostet Salz?",
+        "correction": "Wie viel kosten Salztabletten?",
+        "explanation": "'Salz' means plain salt (the condiment); Robert likely meant 'Salztabletten' (salt/electrolyte tablets), and the noun should be combined into one compound word as is standard in German.",
+        "context": "Robert: Wie viel kostet Salz?"
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Wie viel kostet Salz Tabletten?",
+        "correction": "Wie viel kosten Salztabletten?",
+        "explanation": "'Tabletten' is plural, so the verb must be 'kosten' (plural form), not 'kostet' (singular); also the two words should be one compound noun.",
+        "context": "Robert: Wie viel kostet Salz Tabletten?"
+      },
+      {
+        "type": "word_order",
+        "original": "Koffer nur, ich Koffer nur Tabletten.",
+        "correction": "Ich brauche nur die Tabletten für meinen Koffer.",
+        "explanation": "German requires the subject-verb structure to be intact; here both the verb 'brauche' and the article are missing, and the word order is scrambled.",
+        "context": "Robert: Koffer nur, ich Koffer nur Tabletten."
+      },
+      {
+        "type": "missing_article",
+        "original": "ich Koffer nur Tabletten",
+        "correction": "Ich brauche nur die Tabletten für meinen Koffer.",
+        "explanation": "Both the definite article 'die' before 'Tabletten' and the possessive article 'meinen' before 'Koffer' are missing, which are required in German.",
+        "context": "Robert: Koffer nur, ich Koffer nur Tabletten."
+      },
+      {
+        "type": "missing_article",
+        "original": "Meine Frau hat Kopfschmerzen.",
+        "correction": "Meine Frau hat Kopfschmerzen.",
+        "explanation": "This sentence is actually correct — 'Kopfschmerzen' is used without an article as it is a plural noun referring to a general condition, which is standard German usage.",
+        "context": "Robert: Meine Frau hat Kopfschmerzen."
+      },
+      {
+        "type": "register",
+        "original": "Auch schönen Tag.",
+        "correction": "Ihnen auch einen schönen Tag!",
+        "explanation": "The polite register (Sie-form) used throughout the conversation requires a complete sentence; 'Auch schönen Tag' is too clipped and missing the pronoun 'Ihnen' and the article 'einen'.",
+        "context": "Robert: Dankeschön. Auch schönen Tag. Tschüss."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 1,
+      "missing_article": 2,
+      "verb_conjugation": 1,
+      "vocabulary": 1,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Kopfschmerzen",
+        "english": "headache(s)",
+        "note": "used correctly",
+        "tags": [
+          "Apotheke",
+          "Körper",
+          "anki"
+        ]
+      },
+      {
+        "german": "Tabletten",
+        "english": "tablets / pills",
+        "note": "used correctly",
+        "tags": [
+          "Apotheke",
+          "anki"
+        ]
+      },
+      {
+        "german": "Nebenwirkungen",
+        "english": "side effects",
+        "note": "introduced this session by Frau Novak — needs practice",
+        "tags": [
+          "Apotheke",
+          "anki"
+        ]
+      },
+      {
+        "german": "rezeptfrei",
+        "english": "over-the-counter (without prescription)",
+        "note": "introduced this session — needs practice",
+        "tags": [
+          "Apotheke",
+          "anki"
+        ]
+      },
+      {
+        "german": "Salztabletten / Elektrolyt-Tabletten",
+        "english": "salt tablets / electrolyte tablets",
+        "note": "needs practice — Robert struggled to produce this compound noun",
+        "tags": [
+          "Apotheke",
+          "Komposita",
+          "anki"
+        ]
+      },
+      {
+        "german": "Gute Besserung",
+        "english": "Get well soon",
+        "note": "used correctly (passively received and acknowledged)",
+        "tags": [
+          "Redewendungen",
+          "anki"
+        ]
+      },
+      {
+        "german": "Ihnen auch einen schönen Tag!",
+        "english": "You too, have a nice day!",
+        "note": "needs practice — Robert produced an incomplete version",
+        "tags": [
+          "Höflichkeit",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert used 'Meine Frau hat Kopfschmerzen' correctly and naturally to open the conversation.",
+      "He successfully navigated numbers and prices by confirming 'zwanzig Tabletten, bitte' clearly and politely.",
+      "He maintained the formal Sie-register throughout the session without switching to 'du'.",
+      "He used 'Entschuldigung' appropriately to signal a communication breakdown and try again."
+    ],
+    "next_focus": "Practice building German compound nouns (Komposita) such as 'Kopfschmerztabletten', 'Salztabletten', 'Magenbeschwerden' — understanding that two concepts are merged into one word is essential for pharmacy and everyday vocabulary."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

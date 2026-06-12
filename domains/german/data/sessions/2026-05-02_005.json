@@ -1,0 +1,203 @@
+{
+  "session_id": "2026-05-02_005",
+  "date": "2026-05-02",
+  "persona": "Maria",
+  "scenario": "Viennese café waitress",
+  "duration_estimate_min": 9,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Grüß dich! Setz dich nur hin, bei uns ist’s heute wieder voll. Was darf’s sein? Eine Melange, einen Verlängerten oder einen Kleinen Braunen? Der Gugelhupf ist frisch - magst du was dazu?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Einen Moment bitte. Ich überlegen Kurtz."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne, nimm dir ruhig einen Moment zum Überlegen. Ich komm gleich wieder vorbei. Möchtest du vielleicht schon einen Verlängerten zum Nachdenken?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Stimmt. Wir möchten zwei Verlängerten."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Zwei Verlängerte kommen sofort. Sonst noch was? Der Gugelhupf wäre perfekt dazu. Ich bin gleich wieder da!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wir möchten gerne bestellen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne, was möchtet ihr denn? Die Getränke kommen gleich. Noch was zum Essen? Der Apfelstrudel ist heute besonders gut."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wir hätten gern auch zwei Apfelstrudel."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Zwei Apfelstrudel dazu - super Wahl. Kommt alles gleich zusammen. Ich bring’s rüber!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Könnte ich bitte die Rechtnung haben?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne, die Rechnung kommt sofort. Zusammen oder getrennt? Hier bitte - macht zusammen 42 Euro. Passt so oder mit Karte? Danke schön!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Es gibt hier meine Karte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Hier ist meine Karte - danke! Die funktioniert, hier dein Beleg. War schön, euch zu haben - kommt bald wieder, gell? Servus!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert managed a realistic café ordering scenario with generally appropriate vocabulary and polite register. He made a small number of errors spread across verb conjugation, spelling, and phrasing, but successfully completed the full arc of the interaction from ordering to paying. The session shows solid beginner-to-intermediate practical German with a few recurring patterns to address.",
+    "errors": [
+      {
+        "type": "verb_conjugation",
+        "original": "Ich überlegen Kurtz.",
+        "correction": "Ich überlege kurz.",
+        "explanation": "First-person singular present tense requires the -e ending: 'überlegen' must be conjugated as 'überlege'; also 'Kurtz' is not a word — 'kurz' (short/briefly) is the correct adverb and is lowercase as it is not a noun.",
+        "context": "Einen Moment bitte. Ich überlegen Kurtz."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Rechtnung",
+        "correction": "Rechnung",
+        "explanation": "'Rechtnung' is a misspelling; the correct German word for 'bill/invoice' is 'Rechnung' (no 't' after 'Rech').",
+        "context": "Könnte ich bitte die Rechtnung haben?"
+      },
+      {
+        "type": "vocabulary",
+        "original": "Es gibt hier meine Karte.",
+        "correction": "Hier ist meine Karte. / Hier bitte, meine Karte.",
+        "explanation": "'Es gibt' means 'there is/are' (existential) and is not used to hand something over; the natural phrasing when presenting something is 'Hier ist…' or simply 'Hier bitte'.",
+        "context": "Es gibt hier meine Karte."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 1,
+      "vocabulary": 2,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "einen Moment bitte",
+        "english": "one moment please",
+        "note": "used correctly",
+        "tags": [
+          "phrases",
+          "politeness"
+        ]
+      },
+      {
+        "german": "Wir hätten gern",
+        "english": "we would like",
+        "note": "used correctly — good use of Konjunktiv II for polite requests",
+        "tags": [
+          "konjunktiv-ii",
+          "ordering",
+          "anki"
+        ]
+      },
+      {
+        "german": "Wir möchten gerne bestellen",
+        "english": "we would like to order",
+        "note": "used correctly — natural and polite phrasing",
+        "tags": [
+          "restaurant",
+          "phrases"
+        ]
+      },
+      {
+        "german": "Könnte ich bitte … haben?",
+        "english": "Could I please have …?",
+        "note": "used correctly — excellent polite register with Konjunktiv II",
+        "tags": [
+          "konjunktiv-ii",
+          "politeness",
+          "anki"
+        ]
+      },
+      {
+        "german": "der Verlängerte",
+        "english": "a lungo-style diluted espresso (Viennese coffee)",
+        "note": "new this session — picked up from Maria's cues and reused correctly",
+        "tags": [
+          "vienna",
+          "coffee",
+          "vocabulary",
+          "anki"
+        ]
+      },
+      {
+        "german": "kurz",
+        "english": "briefly / for a short moment",
+        "note": "needs practice — used as 'Kurtz' (misspelled and miscapitalized)",
+        "tags": [
+          "adverbs",
+          "spelling",
+          "anki"
+        ]
+      },
+      {
+        "german": "die Rechnung",
+        "english": "the bill / invoice",
+        "note": "needs practice — misspelled as 'Rechtnung'",
+        "tags": [
+          "restaurant",
+          "spelling",
+          "anki"
+        ]
+      },
+      {
+        "german": "Hier bitte / Hier ist …",
+        "english": "Here you go / Here is …",
+        "note": "needs practice — confused with 'es gibt'",
+        "tags": [
+          "phrases",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Correctly used 'Wir hätten gern' — a polite Konjunktiv II form appropriate for restaurant situations.",
+      "Successfully used 'Könnte ich bitte … haben?' demonstrating good instinct for polite register.",
+      "Adapted vocabulary introduced by Maria (e.g., 'Verlängerten') and reused it correctly in context.",
+      "Maintained a consistent and appropriate level of formality throughout the interaction.",
+      "Correctly handled plural ordering ('zwei Apfelstrudel', 'zwei Verlängerten') without article errors."
+    ],
+    "next_focus": "Verb conjugation in the first-person singular present tense (e.g., ich überlege, ich bestelle, ich nehme) — Robert dropped the ending entirely this session, suggesting this needs deliberate drilling before it becomes automatic."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "scaffold_delivered": [
+    "Ich hätte gerne einen kleinen Brauner, bitte.",
+    "Was empfehlen Sie heute?",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_used": [
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_avoided": [
+    "Ich hätte gerne einen kleinen Brauner, bitte.",
+    "Was empfehlen Sie heute?"
+  ],
+  "scaffold_deployment_rate": "1/3 scaffold phrases used"
+}

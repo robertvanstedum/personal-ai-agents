@@ -1,0 +1,21 @@
+{
+  "lesson_date": "2026-05-08",
+  "lesson_number": 67,
+  "persona": "Herr Fischer",
+  "persona_role": "Hotel Receptionist",
+  "scenario": "hotel_checkin",
+  "warm_up": "Review top error from last session: vocabulary.",
+  "focus": "Dative case after prepositions: practise the contractions 'im' (in + dem), 'vom' (von + dem), and 'zum' (zu + dem), focusing on when to use dative versus accusative after 'in', so errors like 'in den Zimmer' and 'von mich' are eliminated.",
+  "speaking_prompt": "You arrive at your hotel near the Ringstraße after a long flight. Herr Fischer greets you at the front desk. Check in, ask about the WiFi, and confirm your checkout date.",
+  "vocabulary_targets": [
+    "einchecken",
+    "der Reisepass",
+    "die Zimmerkarte",
+    "erstens / zweitens",
+    "mitnehmen"
+  ],
+  "carry_forward_errors": [
+    "Erstens, haben Sie einen Adapter für meinen Laptop? (was: Esten, haben Sie eie Adapter für meinen Laptop.) — session 2026-05-08",
+    "Ich möchte noch eine Flasche Wasser mitnehmen. (was: Ich möchte noch eine Flasche Wasser mit mir abnemhen.) — session 2026-05-08"
+  ]
+}

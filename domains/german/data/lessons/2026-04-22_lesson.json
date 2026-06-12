@@ -1,0 +1,21 @@
+{
+  "lesson_date": "2026-04-22",
+  "lesson_number": 6,
+  "persona": "Maria",
+  "persona_role": "Café Waitress",
+  "scenario": "cafe_order",
+  "warm_up": "Review top error from last session: gender.",
+  "focus": "Reflexive verbs: practise the most common reflexive verbs (sich erinnern, sich vorstellen, sich setzen) with their required pronouns (mich/dich/sich), as omitting the reflexive pronoun is a recurring structural gap.",
+  "speaking_prompt": "You sit down at a classic Viennese Kaffeehaus. Maria comes to your table. Order a Melange or Verlängerter and a pastry. She speaks quickly — keep up and be polite.",
+  "vocabulary_targets": [
+    "einchecken",
+    "die Reservierung",
+    "das Doppelzimmer",
+    "der Stock",
+    "das WLAN"
+  ],
+  "carry_forward_errors": [
+    "das Internet (was: was ist der Internet?) — session 2026-04-21",
+    "danke für die Hilfe (was: danke für der Hilfe) — session 2026-04-21"
+  ]
+}

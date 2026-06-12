@@ -1,0 +1,149 @@
+{
+  "session_id": "2026-06-03_001",
+  "date": "2026-06-03",
+  "persona": "Frau Berger",
+  "scenario": "Bakery Order near Naschmarkt",
+  "duration_estimate_min": 11,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Frau Berger",
+      "text": "Grüß Gott! Herzlich willkommen in meiner Bäckerei am Naschmarkt. Was darf’s denn heute sein?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte einen Roggenbrot. Ha-ha, haben Sie Roggenbrot?"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Ja, freilich haben wir Roggenbrot - ganz frisch heute! Möchten Sie ein ganzes oder lieber ein halbes?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich hätte gern ein halbes."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Sehr gern. Ein halbes Roggenbrot - das macht drei Euro fünfzig. Zahlen Sie bar oder mit Karte?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Äh, zahle mit Karte."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Bitte sehr, stecken Sie die Karte hier rein. Und hier ist Ihr Roggenbrot, schön eingepackt. Danke und auf Wiedersehen!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke sehr. Tschüss."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Gerne! Auf Wiedersehen und einen schönen Tag noch! -"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert completed a short but functional bakery transaction in German, demonstrating solid use of polite register and key phrases like 'Ich hätte gern'. Two clear errors appeared — a gender mistake on 'Roggenbrot' and a missing subject pronoun in his payment response — but overall communication was successful and natural.",
+    "errors": [
+      {
+        "type": "gender",
+        "original": "einen Roggenbrot",
+        "correction": "ein Roggenbrot",
+        "explanation": "'Brot' is neuter (das Brot), so the accusative indefinite article is 'ein', not 'einen' (which is masculine accusative).",
+        "context": "Ich möchte einen Roggenbrot."
+      },
+      {
+        "type": "missing_article",
+        "original": "zahle mit Karte",
+        "correction": "Ich zahle mit Karte",
+        "explanation": "German requires an explicit subject pronoun; dropping 'Ich' is only acceptable in very informal written contexts (e.g. texting) and sounds incomplete in spoken conversation.",
+        "context": "Äh, zahle mit Karte."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 0,
+      "missing_article": 1,
+      "verb_conjugation": 0,
+      "vocabulary": 0,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Ich hätte gern",
+        "english": "I would like",
+        "note": "used correctly — polite Konjunktiv II form, ideal for shop/restaurant requests",
+        "tags": [
+          "polite_requests",
+          "Konjunktiv_II",
+          "anki"
+        ]
+      },
+      {
+        "german": "freilich",
+        "english": "of course / certainly",
+        "note": "new this session — Austrian/Bavarian regional expression used by Frau Berger; worth recognising passively",
+        "tags": [
+          "Austrian_German",
+          "regional",
+          "anki"
+        ]
+      },
+      {
+        "german": "eingepackt",
+        "english": "wrapped / packed up",
+        "note": "new this session — past participle of 'einpacken', useful in shop contexts",
+        "tags": [
+          "shopping",
+          "anki"
+        ]
+      },
+      {
+        "german": "Grüß Gott",
+        "english": "Hello / Good day (lit. 'May God greet you')",
+        "note": "new this session — standard Austrian/Southern German greeting; Robert should recognise and could use it",
+        "tags": [
+          "Austrian_German",
+          "greetings",
+          "anki"
+        ]
+      },
+      {
+        "german": "Danke sehr",
+        "english": "Thank you very much",
+        "note": "used correctly — appropriate and natural closing phrase",
+        "tags": [
+          "politeness",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Used the polite Konjunktiv II form 'Ich hätte gern' correctly, showing good register awareness for formal transactions.",
+      "Self-corrected mid-sentence ('Ich möchte einen Roggenbrot. Ha-ha, haben Sie Roggenbrot?'), demonstrating real-time awareness of his own speech.",
+      "Maintained a polite, appropriate register throughout the entire interaction without slipping into overly casual language.",
+      "Responded naturally and concisely to Frau Berger's question about whole or half loaf, keeping the conversation flowing."
+    ],
+    "next_focus": "Practice the gender and accusative articles for common food and shop nouns (das Brot, die Semmel, der Kuchen, das Brötchen), with a focus on accusative 'ein/eine/einen' to avoid the 'einen Brot' type error."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "scaffold_delivered": [
+    "Ich möchte lieber einen Tee.",
+    "Meine Frau hätte gerne den Apfelstrudel.",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_used": [
+    "Ich möchte lieber einen Tee."
+  ],
+  "scaffold_avoided": [
+    "Meine Frau hätte gerne den Apfelstrudel.",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_deployment_rate": "1/3 scaffold phrases used"
+}

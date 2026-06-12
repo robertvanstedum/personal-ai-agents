@@ -1,0 +1,289 @@
+{
+  "session_id": "2026-05-07_002",
+  "date": "2026-05-07",
+  "persona": "Georg",
+  "scenario": "neighborhood_chat",
+  "duration_estimate_min": 22,
+  "mode": "writing",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Georg",
+      "text": "Grüß Gott! Na, schön dass Sie da sind. Ich bin der Georg. Setzen Sie sich doch zu mir - wir sind ja im Neubau unterwegs. Sind Sie und Ihre Frau gut angekommen? Wie war der Rest des Tages? Wollen wir ein bisschen durch mein Grätzel spazieren? Es ist eh nicht weit zum gemütlichen Café."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Das klingt Wunderbar, spazieren gehen durch dein Grätzel."
+    },
+    {
+      "speaker": "Georg",
+      "text": "Na, wunderbar! Das klingt gut - „wunderbar“ schreibt man klein, aber passt perfekt. Servus, dann gehen wir einfach los. Schau, das hier ist mein Grätzel in Neubau. Nicht perfekt, aber ehrlich und richtig gemütlich. Viele kleine Läden und Cafés, wo die Wiener wirklich wohnen. Wie gefällt es Ihnen bisher? Und Ihre Frau - kommt sie auch mit oder treffen wir sie später? Bleiben Sie die ganze Woche in der Stadt?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Hier kommt jetzt meine Frau. Vera, hier ist Georg. Möchtest du durch der Grätzel zusammen spazieren gehen?"
+    },
+    {
+      "speaker": "Georg",
+      "text": "Grüß Gott, Vera! Freut mich sehr, Sie kennenzulernen. Na, klar - gehen wir gemeinsam durchs Grätzel. „Durch das Grätzel“ heißt es übrigens. Schau, hier rechts sind lauter kleine, unabhängige Cafés, richtig gemütlich. Wie gefällt euch Wien bisher? Bleibt ihr die ganze Woche?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich habe eine frage. Wann sagt mann gemeinsam oder zusammen?"
+    },
+    {
+      "speaker": "Georg",
+      "text": "Na, gute Frage! „Gemeinsam“ und „zusammen“ bedeuten fast dasselbe - beide heißen „together“. „Zusammen“ sagt man öfter im Alltag, „gemeinsam“ klingt ein bisschen schöner oder formeller, wenn man betont, dass man etwas wirklich gemeinsam macht. Genau wie jetzt - wir spazieren gemeinsam durchs Grätzel. Schau, da vorne ist das kleine Café. Wollen wir reingehen? Wie gefällt es euch beiden bisher?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchten Vera fragen. Vera, was möchtest du besuchen."
+    },
+    {
+      "speaker": "Georg",
+      "text": "Na, „Ich möchte Vera fragen“ - das klingt schon gut! Servus, Vera - was möchtest du denn besuchen? Schau, hier im Grätzel gibt’s richtig gemütliche Ecken. Oder wollt ihr beide lieber zum Naschmarkt oder etwas Ruhigeres? Wie lange bleibt ihr noch in Wien?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Vielleivcht, Vera möchte etwa kaufen....?"
+    },
+    {
+      "speaker": "Georg",
+      "text": "Na, vielleicht meinten Sie „Vielleicht möchte Vera etwas kaufen“? Genau, Vera - möchtest du etwas kaufen? Im Grätzel gibt’s schöne kleine Läden mit lokalen Sachen, nicht nur Souvenirs. Schau, da vorne ist ein netter Shop mit Wiener Design. Wollen wir reingehen? Wie gefällt es euch beiden?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Gehen wir die kleine Läden kennen Lernen."
+    },
+    {
+      "speaker": "Georg",
+      "text": "Na, super Idee! „Gehen wir die kleinen Läden kennenlernen“ - genau. Servus, dann schauen wir uns die kleinen Läden hier im Grätzel an. Die haben echt schöne Sachen, nicht nur für Touristen. Vera, was suchst du denn? Etwas zum Anziehen oder ein Mitbringsel? Wie gefällt euch das Grätzel bisher?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich weiß nicht aut Deutsche Sagan, aber Vera will für Frühling eine \"skirt\" kaufen."
+    },
+    {
+      "speaker": "Georg",
+      "text": "Na, „Ich weiß nicht, wie man das auf Deutsch sagt, aber Vera möchte für den Frühling einen Rock kaufen.“ Perfekt! Servus, Vera - einen schönen Rock für den Frühling? Schau, gleich hier im Grätzel gibt’s einen kleinen Laden mit schöner Kleidung, nicht teuer und richtig gemütlich. Wollen wir reingehen? Was für einen Stil suchst du?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wollen Sie jetzt sitzen und einen Kaffee trinken?"
+    },
+    {
+      "speaker": "Georg",
+      "text": "Na, sehr gerne! „Wollen wir uns jetzt hinsetzen und einen Kaffee trinken?“ klingt noch natürlicher. Servus, dann setzen wir uns doch gleich ins Café hier. Es ist richtig gemütlich drinnen. Vera, Robert - was nehmt ihr? Einen Verlängerten oder lieber einen Melange? Wie gefällt euch das Grätzel bisher?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich will einen Verlängerten, Und Vera, möchetest du einen Melange? Ich denke es ist wie ein Cappaccino. Richtig, Georg?"
+    },
+    {
+      "speaker": "Georg",
+      "text": "Na, sehr gut! „Ich möchte einen Verlängerten“ klingt noch natürlicher. Servus, genau - einen Melange ist unser Wiener Klassiker, ähnlich wie ein Cappuccino, aber mit mehr Milchschaum und typisch österreichisch. Richtig, Robert! Vera, nimmst du den Melange? Und wie war der kleine Laden vorhin - habt ihr etwas Schönes gefunden für den Frühling? Ich nehme auch einen Verlängerten."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert demonstrated solid communicative confidence throughout the neighborhood chat, successfully navigating introductions, expressing wishes, and asking questions in real conversational context. His main recurring challenges are verb conjugation (especially modal verbs) and article/adjective endings, but he consistently made himself understood and showed good vocabulary retention. His willingness to attempt longer sentences and ask meta-questions about German usage is a strong sign of active learning.",
+    "errors": [
+      {
+        "type": "register",
+        "original": "Das klingt Wunderbar, spazieren gehen durch dein Grätzel.",
+        "correction": "Das klingt wunderbar! Spazieren durch Ihr Grätzel.",
+        "explanation": "Two issues: 'wunderbar' is an adjective/adverb and should not be capitalized; and Robert switched to 'du' (dein) while Georg was using the formal 'Sie', making the register inconsistent.",
+        "context": "Das klingt Wunderbar, spazieren gehen durch dein Grätzel."
+      },
+      {
+        "type": "gender",
+        "original": "durch der Grätzel",
+        "correction": "durch das Grätzel",
+        "explanation": "'Grätzel' is neuter (das Grätzel), so the accusative after 'durch' requires 'das', not 'der'.",
+        "context": "Möchtest du durch der Grätzel zusammen spazieren gehen?"
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Ich möchten Vera fragen.",
+        "correction": "Ich möchte Vera fragen.",
+        "explanation": "The modal verb 'möchten' must be conjugated for first person singular: 'ich möchte', not 'ich möchten'.",
+        "context": "Ich möchten Vera fragen."
+      },
+      {
+        "type": "missing_article",
+        "original": "Vera möchte etwa kaufen",
+        "correction": "Vera möchte etwas kaufen.",
+        "explanation": "'Etwa' means 'approximately' or is used in yes/no questions; the correct indefinite pronoun for 'something' is 'etwas'.",
+        "context": "Vielleivcht, Vera möchte etwa kaufen....?"
+      },
+      {
+        "type": "word_order",
+        "original": "Gehen wir die kleine Läden kennen Lernen.",
+        "correction": "Gehen wir die kleinen Läden kennenlernen.",
+        "explanation": "'Kennenlernen' is a separable verb written as one word; additionally the adjective 'klein' needs the plural dative/accusative ending '-en' (die kleinen Läden), and the verb should not be split with a capital 'L'.",
+        "context": "Gehen wir die kleine Läden kennen Lernen."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Ich weiß nicht aut Deutsche Sagan",
+        "correction": "Ich weiß nicht, wie man das auf Deutsch sagt",
+        "explanation": "The correct fixed phrase for 'I don't know how to say it in German' is 'Ich weiß nicht, wie man das auf Deutsch sagt'; 'aut' and 'Sagan' appear to be phonetic misspellings of 'auf' and 'sagt'.",
+        "context": "Ich weiß nicht aut Deutsche Sagan, aber Vera will für Frühling eine 'skirt' kaufen."
+      },
+      {
+        "type": "missing_article",
+        "original": "für Frühling einen Rock kaufen",
+        "correction": "für den Frühling einen Rock kaufen",
+        "explanation": "Seasons used with 'für' in a general/specific sense require the definite article: 'für den Frühling'.",
+        "context": "Vera will für Frühling eine 'skirt' kaufen."
+      },
+      {
+        "type": "register",
+        "original": "Wollen Sie jetzt sitzen und einen Kaffee trinken?",
+        "correction": "Wollen wir uns jetzt hinsetzen und einen Kaffee trinken?",
+        "explanation": "Robert had transitioned to 'du' with Georg earlier in the conversation, so using 'Sie' here is inconsistent; additionally 'wollen wir' (shall we) is more natural for a joint invitation than 'wollen Sie' (do you want).",
+        "context": "Wollen Sie jetzt sitzen und einen Kaffee trinken?"
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "möchetest du",
+        "correction": "möchtest du",
+        "explanation": "The correct second person singular conjugation of 'möchten' is 'möchtest', not 'möchetest'.",
+        "context": "Vera, möchetest du einen Melange?"
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 1,
+      "missing_article": 2,
+      "verb_conjugation": 2,
+      "vocabulary": 1,
+      "register": 2
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "das Grätzel",
+        "english": "local neighborhood (Viennese dialect)",
+        "note": "used correctly in context multiple times",
+        "tags": [
+          "austrian",
+          "dialect",
+          "neighborhood"
+        ]
+      },
+      {
+        "german": "gemütlich",
+        "english": "cozy, comfortable, relaxed",
+        "note": "used correctly; key Austrian cultural word",
+        "tags": [
+          "anki",
+          "culture",
+          "adjective"
+        ]
+      },
+      {
+        "german": "der Verlängerte",
+        "english": "a Viennese-style long black coffee (espresso with hot water)",
+        "note": "used correctly; excellent local vocabulary",
+        "tags": [
+          "anki",
+          "austrian",
+          "cafe"
+        ]
+      },
+      {
+        "german": "der Melange",
+        "english": "Viennese coffee with steamed milk and foam, similar to cappuccino",
+        "note": "used correctly and Robert even explained it to Vera",
+        "tags": [
+          "anki",
+          "austrian",
+          "cafe"
+        ]
+      },
+      {
+        "german": "kennenlernen",
+        "english": "to get to know, to explore",
+        "note": "needs practice — attempted but split incorrectly as 'kennen Lernen'",
+        "tags": [
+          "anki",
+          "separable-verb"
+        ]
+      },
+      {
+        "german": "gemeinsam / zusammen",
+        "english": "together / together",
+        "note": "Robert proactively asked about the difference — great metalinguistic awareness",
+        "tags": [
+          "anki",
+          "nuance",
+          "vocabulary"
+        ]
+      },
+      {
+        "german": "etwas kaufen",
+        "english": "to buy something",
+        "note": "needs practice — confused with 'etwa' (approximately)",
+        "tags": [
+          "anki",
+          "false-friend"
+        ]
+      },
+      {
+        "german": "Ich weiß nicht, wie man das auf Deutsch sagt.",
+        "english": "I don't know how to say that in German.",
+        "note": "new this session — essential survival phrase for learners",
+        "tags": [
+          "anki",
+          "phrase",
+          "must-know"
+        ]
+      },
+      {
+        "german": "für den Frühling",
+        "english": "for spring",
+        "note": "needs practice — article dropped in production",
+        "tags": [
+          "anki",
+          "seasons",
+          "articles"
+        ]
+      },
+      {
+        "german": "der Rock",
+        "english": "skirt",
+        "note": "new this session — successfully learned from Georg's correction",
+        "tags": [
+          "anki",
+          "clothing",
+          "false-friend"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully introduced his wife and facilitated a three-way conversation, showing real communicative competence beyond scripted exchanges.",
+      "He proactively asked a meta-question about the difference between 'gemeinsam' and 'zusammen', demonstrating active curiosity about nuance rather than just getting by.",
+      "He correctly used the Viennese café vocabulary (Verlängerten, Melange) and even explained the Melange to Vera, showing good retention of cultural vocabulary.",
+      "He attempted complex sentence structures like 'Gehen wir … kennenlernen' and 'Ich weiß nicht wie man das auf Deutsch sagt', which are above beginner level even if imperfectly executed.",
+      "His overall sentence rhythm and word order in main clauses was generally correct, with errors concentrated in specific grammar points rather than systemic confusion."
+    ],
+    "next_focus": "Modal verb conjugation in first and second person singular ('ich möchte', 'du möchtest', 'ich will', 'du willst') — Robert produced 'ich möchten' and 'möchetest du' this session, so drilling the full present-tense paradigm of 'möchten' and 'wollen' with short role-play prompts would directly address his most frequent error pattern."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "scaffold_delivered": [
+    "Wir möchten gerne bestellen.",
+    "Könnte ich bitte die Rechnung haben?",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_used": [
+    "Wir möchten gerne bestellen."
+  ],
+  "scaffold_avoided": [
+    "Könnte ich bitte die Rechnung haben?",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_deployment_rate": "1/3 scaffold phrases used"
+}

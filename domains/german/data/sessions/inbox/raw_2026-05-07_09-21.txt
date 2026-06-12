@@ -1,0 +1,24 @@
+---SESSION---
+Date: 2026-05-07
+Persona: Georg
+Scenario: neighborhood_chat
+Duration: 22
+Mode: writingGeorg: Grüß Gott! Na, schön dass Sie da sind. Ich bin der Georg. Setzen Sie sich doch zu mir – wir sind ja im Neubau unterwegs. Sind Sie und Ihre Frau gut angekommen? Wie war der Rest des Tages? Wollen wir ein bisschen durch mein Grätzel spazieren? Es ist eh nicht weit zum gemütlichen Café.
+Robert: Das klingt Wunderbar, spazieren gehen durch dein Grätzel.
+Georg: Na, wunderbar! Das klingt gut – „wunderbar“ schreibt man klein, aber passt perfekt. Servus, dann gehen wir einfach los. Schau, das hier ist mein Grätzel in Neubau. Nicht perfekt, aber ehrlich und richtig gemütlich. Viele kleine Läden und Cafés, wo die Wiener wirklich wohnen. Wie gefällt es Ihnen bisher? Und Ihre Frau – kommt sie auch mit oder treffen wir sie später? Bleiben Sie die ganze Woche in der Stadt?
+Robert: Hier kommt jetzt meine Frau.  Vera, hier ist Georg.  Möchtest du durch der Grätzel zusammen spazieren gehen?
+Georg: Grüß Gott, Vera! Freut mich sehr, Sie kennenzulernen. Na, klar – gehen wir gemeinsam durchs Grätzel. „Durch das Grätzel“ heißt es übrigens. Schau, hier rechts sind lauter kleine, unabhängige Cafés, richtig gemütlich. Wie gefällt euch Wien bisher? Bleibt ihr die ganze Woche?
+Robert: Ich habe eine frage.  Wann sagt mann gemeinsam oder zusammen?
+Georg: Na, gute Frage! „Gemeinsam“ und „zusammen“ bedeuten fast dasselbe – beide heißen „together“. „Zusammen“ sagt man öfter im Alltag, „gemeinsam“ klingt ein bisschen schöner oder formeller, wenn man betont, dass man etwas wirklich gemeinsam macht. Genau wie jetzt – wir spazieren gemeinsam durchs Grätzel. Schau, da vorne ist das kleine Café. Wollen wir reingehen? Wie gefällt es euch beiden bisher?
+Robert: Ich möchten Vera fragen.  Vera, was möchtest du besuchen.
+Georg: Na, „Ich möchte Vera fragen“ – das klingt schon gut! Servus, Vera – was möchtest du denn besuchen? Schau, hier im Grätzel gibt’s richtig gemütliche Ecken. Oder wollt ihr beide lieber zum Naschmarkt oder etwas Ruhigeres? Wie lange bleibt ihr noch in Wien?
+Robert: Vielleivcht, Vera möchte etwa kaufen....?
+Georg: Na, vielleicht meinten Sie „Vielleicht möchte Vera etwas kaufen“? Genau, Vera – möchtest du etwas kaufen? Im Grätzel gibt’s schöne kleine Läden mit lokalen Sachen, nicht nur Souvenirs. Schau, da vorne ist ein netter Shop mit Wiener Design. Wollen wir reingehen? Wie gefällt es euch beiden?
+Robert: Gehen wir die kleine Läden kennen Lernen.
+Georg: Na, super Idee! „Gehen wir die kleinen Läden kennenlernen“ – genau. Servus, dann schauen wir uns die kleinen Läden hier im Grätzel an. Die haben echt schöne Sachen, nicht nur für Touristen. Vera, was suchst du denn? Etwas zum Anziehen oder ein Mitbringsel? Wie gefällt euch das Grätzel bisher?
+Robert: Ich weiß nicht aut Deutsche Sagan, aber Vera will für Frühling eine "skirt" kaufen.
+Georg: Na, „Ich weiß nicht, wie man das auf Deutsch sagt, aber Vera möchte für den Frühling einen Rock kaufen.“ Perfekt! Servus, Vera – einen schönen Rock für den Frühling? Schau, gleich hier im Grätzel gibt’s einen kleinen Laden mit schöner Kleidung, nicht teuer und richtig gemütlich. Wollen wir reingehen? Was für einen Stil suchst du?
+Robert: Wollen Sie jetzt sitzen und einen Kaffee trinken?
+Georg: Na, sehr gerne! „Wollen wir uns jetzt hinsetzen und einen Kaffee trinken?“ klingt noch natürlicher. Servus, dann setzen wir uns doch gleich ins Café hier. Es ist richtig gemütlich drinnen. Vera, Robert – was nehmt ihr? Einen Verlängerten oder lieber einen Melange? Wie gefällt euch das Grätzel bisher?
+Robert: Ich will einen Verlängerten, Und Vera, möchetest du einen Melange?  Ich denke es ist wie ein Cappaccino.  Richtig, Georg?
+Georg: Na, sehr gut! „Ich möchte einen Verlängerten“ klingt noch natürlicher. Servus, genau – einen Melange ist unser Wiener Klassiker, ähnlich wie ein Cappuccino, aber mit mehr Milchschaum und typisch österreichisch. Richtig, Robert! Vera, nimmst du den Melange? Und wie war der kleine Laden vorhin – habt ihr etwas Schönes gefunden für den Frühling? Ich nehme auch einen Verlängerten.

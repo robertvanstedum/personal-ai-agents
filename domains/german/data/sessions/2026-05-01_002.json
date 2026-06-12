@@ -1,0 +1,260 @@
+{
+  "session_id": "2026-05-01_002",
+  "date": "2026-05-01",
+  "persona": "Herr Fischer",
+  "scenario": "directions",
+  "duration_estimate_min": 12,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Herr Fischer",
+      "text": "Guten Morgen! Willkommen in der Lobby. Wie kann ich Ihnen heute behilflich sein?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte spazieren."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Gerne, wohin möchten Sie denn spazieren gehen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was gibt es hier Interessantes?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Oh, das ist eine gute Frage. Hier in der Nähe gibt's wirklich viel Schönes. Der Naschmarkt ist sehr beliebt - da gibt's tolle Stände mit Essen und frischem Obst. Oder der Stephansdom, das ist nur ein paar Stationen mit der U-Bahn entfernt. Was können Sie mir empfehlen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich frage meine Frau."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Selbstverständlich, nehmen Sie sich ruhig Zeit. Ich bin hier, wenn Sie weitere Fragen haben."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wir wollen nach Nishmarkt."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Zum Naschmarkt? Sehr gute Wahl! Das ist ganz einfach mit der U-Bahn. Sie"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Gerne!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Der Naschmarkt ist, ist zu Fuß lange von hier?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Nein, zu Fuß wäre das schon ein bisschen weit - etwa 35 bis 40 Minuten. Mit der U-Bahn sind Sie aber ganz schnell dort. Möchten Sie wissen, welche Linie und wie viele Haltestellen es sind?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, ich, ich besser, ich besser von U-Bahn."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Gut, dann nehmen Sie am besten die U4 Richtung Hütteldorf. Die nächste Station ist Kettenbrückengasse - das sind nur zwei Stationen, also"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Esper."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Espert? Entschuldigung, ich habe das nicht ganz verstanden. Meinen Sie vielleicht Kettenbrückengasse?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein, äh, ich hab, ich, ich habe, äh, gesagt, es ist besser von U-Bahn."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ach so, ja! Das habe ich verstanden - mit der U-Bahn ist es wirklich viel besser. Also, wie gesagt: Nehmen Sie die U4 Richtung Hütteldorf, steigen an der nächsten Station Kettenbrückengasse aus. Das sind nur zwei Haltestellen. Dann sind Sie direkt am Naschmarkt. Soll ich Ihnen den Weg von der Haltestelle zum Markt noch kurz erklären?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wie kauft man die Fahrkarte?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ganz einfach. Am besten kaufen Sie ein Einzelfahrschein am Automaten in der U-Bahn-Station. Drücken Sie einfach auf \"Einzelfahrschein Wien\", dann auf \"Zahlung\", und bezahlen Sie bar oder mit Karte. Der Automat hat auch eine deutsche und englische Spracheinstellung. Soll ich Ihnen noch sagen, wie man den Fahrschein entwertet?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein, nein, danke. Wir gehen, wir gehen jetzt."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Guten Appetit auf dem Naschmarkt! Und einen schönen Tag wünsche ich Ihnen beiden. Auf Wiedersehen!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Also"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ja? Möchten Sie noch etwas wissen, bevor Sie gehen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein, das ist, das ist alles. Vielen Dank. Bis später."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Gerne geschehen! Bis später, und viel Spaß auf dem Naschmarkt! Auf Wiedersehen."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully navigated a real-world directions scenario in German, demonstrating functional communicative ability at a beginner-intermediate level. He struggled with sentence structure, verb placement, and missing prepositions, but always managed to convey his meaning. The session shows progress in willingness to communicate despite hesitation and self-correction attempts.",
+    "errors": [
+      {
+        "type": "verb_conjugation",
+        "original": "Ich möchte spazieren.",
+        "correction": "Ich möchte spazieren gehen.",
+        "explanation": "The verb 'spazieren' requires the infinitive 'gehen' as a companion verb; 'spazieren' alone is not used as a finite verb in standard German.",
+        "context": "Ich möchte spazieren."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Wir wollen nach Nishmarkt.",
+        "correction": "Wir wollen zum Naschmarkt.",
+        "explanation": "Destinations with proper nouns requiring 'der/die/das' use 'zum/zur' (contractions of 'zu dem/zu der'), not 'nach', which is used for cities and countries; also note the pronunciation/spelling of 'Naschmarkt'.",
+        "context": "Wir wollen nach Nishmarkt."
+      },
+      {
+        "type": "word_order",
+        "original": "Der Naschmarkt ist, ist zu Fuß lange von hier?",
+        "correction": "Ist der Naschmarkt lange zu Fuß von hier? / Ist der Naschmarkt weit zu Fuß von hier?",
+        "explanation": "Yes/no questions require verb-first word order in German, and 'weit' (far) is the correct adjective for distance, not 'lange' (long in time).",
+        "context": "Der Naschmarkt ist, ist zu Fuß lange von hier?"
+      },
+      {
+        "type": "vocabulary",
+        "original": "Der Naschmarkt ist, ist zu Fuß lange von hier?",
+        "correction": "Ist der Naschmarkt weit zu Fuß von hier?",
+        "explanation": "'Lange' refers to duration in time; 'weit' is the correct word for physical distance.",
+        "context": "Der Naschmarkt ist, ist zu Fuß lange von hier?"
+      },
+      {
+        "type": "word_order",
+        "original": "Ja, ich, ich besser, ich besser von U-Bahn.",
+        "correction": "Ja, mit der U-Bahn ist es besser.",
+        "explanation": "German requires a conjugated verb in every main clause; 'besser' is an adjective and needs the verb 'sein' (ist) to form a complete sentence, and the prepositional phrase 'mit der U-Bahn' should precede it.",
+        "context": "Ja, ich, ich besser, ich besser von U-Bahn."
+      },
+      {
+        "type": "missing_article",
+        "original": "ich besser von U-Bahn",
+        "correction": "mit der U-Bahn",
+        "explanation": "'U-Bahn' is feminine ('die U-Bahn') and requires the dative article 'der' after the preposition 'mit'; 'von' is also the wrong preposition here — 'mit' expresses means of transport.",
+        "context": "Ja, ich, ich besser, ich besser von U-Bahn."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 2,
+      "missing_article": 1,
+      "verb_conjugation": 1,
+      "vocabulary": 2,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "spazieren gehen",
+        "english": "to go for a walk",
+        "note": "needs practice — used incomplete form 'spazieren' without 'gehen'",
+        "tags": [
+          "verbs",
+          "separable-verbs",
+          "leisure"
+        ]
+      },
+      {
+        "german": "zum Naschmarkt",
+        "english": "to the Naschmarkt",
+        "note": "needs practice — used 'nach' instead of 'zum' for named locations with an article",
+        "tags": [
+          "prepositions",
+          "directions",
+          "dative",
+          "anki"
+        ]
+      },
+      {
+        "german": "zu Fuß",
+        "english": "on foot",
+        "note": "used correctly — good attempt to use this phrase in a question",
+        "tags": [
+          "directions",
+          "transport",
+          "anki"
+        ]
+      },
+      {
+        "german": "mit der U-Bahn",
+        "english": "by subway / by underground",
+        "note": "needs practice — concept was communicated but preposition and article were missing",
+        "tags": [
+          "transport",
+          "prepositions",
+          "dative",
+          "anki"
+        ]
+      },
+      {
+        "german": "in der Nähe",
+        "english": "nearby / in the vicinity",
+        "note": "used correctly by Herr Fischer — good passive exposure, worth learning actively",
+        "tags": [
+          "directions",
+          "phrases",
+          "anki"
+        ]
+      },
+      {
+        "german": "die Fahrkarte / der Fahrschein",
+        "english": "ticket (transport)",
+        "note": "new this session — Robert successfully asked about it using 'Fahrkarte'",
+        "tags": [
+          "transport",
+          "vocabulary",
+          "anki"
+        ]
+      },
+      {
+        "german": "Vielen Dank",
+        "english": "Thank you very much",
+        "note": "used correctly — good register for formal hotel setting",
+        "tags": [
+          "politeness",
+          "phrases"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully maintained a formal register (Sie-form) throughout the conversation without any informal slips.",
+      "He asked clarifying and follow-up questions autonomously (e.g., about ticket purchase), showing real communicative initiative.",
+      "He demonstrated self-correction behavior when trying to rephrase 'Esper' into a full sentence, showing metacognitive awareness.",
+      "He used 'Vielen Dank' and 'Bis später' naturally, showing good command of polite closing phrases.",
+      "He understood Herr Fischer's detailed instructions well enough to ask follow-up questions, indicating solid receptive comprehension."
+    ],
+    "next_focus": "Practice using 'mit + dative' for means of transport (mit der U-Bahn, mit dem Bus, mit dem Taxi) and contrast with 'zu Fuß'; combine with forming simple yes/no questions using verb-first word order (e.g., 'Ist es weit?' / 'Fährt der Bus oft?')."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

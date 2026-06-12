@@ -1,0 +1,386 @@
+{
+  "session_id": "2026-05-01_003",
+  "date": "2026-05-01",
+  "persona": "Maria",
+  "scenario": "cafe meal",
+  "duration_estimate_min": 14,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Guten Tag! Was darf ich Ihnen bringen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wir möchten ein bisschen essen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Möchten Sie etwas von der Tageskarte? Heute haben wir eine sehr gute Gulaschsuppe als Tagessuppe."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Gulaschsuppe, ist wie Ungarn?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ja genau, die Gulaschsuppe kommt ursprünglich aus Ungarn. Sie ist schön würzig mit Paprika und Rindfleisch. Möchten Sie die als Vorspeise?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich frage meine Frau."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne, lassen Sie sich ruhig Zeit. Ich komme gleich wieder zu Ihnen."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Hallo, wir wollen zwei Suppe."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Zwei Gulaschsuppen also - sehr gerne. Und was darf ich Ihnen als Hauptspeise bringen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was bedeutet Hauptspeise?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Hauptspeise ist das Hauptgericht, also der Hauptteil des Essens - zum Beispiel Schnitzel, Tafelspitz oder ein Steak. Nach der Suppe kommt normalerweise die Hauptspeise. Möchten Sie etwas davon sehen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Guck, gucken wir die Hauptspeise."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Natürlich, hier ist die"
+    },
+    {
+      "speaker": "Tageskarte",
+      "text": "- Wiener Schnitzel mit Kartoffelsalat - Tafelspitz mit Apfelkren - Gegrilltes Hähnchen mit Gemüse. Was darf ich Ihnen bringen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte Tafelspitz mit, mit, äh, Apfelkren. Aber ich, ich denke, dass wir so nach Nichtmarkt gehen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Sehr gerne - ein Tafelspitz mit Apfelkren. Und was möchten Sie dazu trinken?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein, ich, ich, jetzt, jetzt, äh, esse ich."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gut, dann bringe ich Ihnen zuerst die zwei Gulaschsuppen und danach den Tafelspitz mit Apfelkren. Guten Appetit!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Zur Suppe. Zur Suppe. Ich, ich, wir, wir essen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Zwei Gulaschsuppen und ein Tafelspitz. Kommt sofort."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Suppe und und nix, nix mehr."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Verstanden. Nur die zwei Gulaschsuppen und der Tafelspitz - kein weiteres Hauptgericht mehr. Ich bringe Ihnen gleich die Suppe."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Genau. Danke. Danke. Schön."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Bitte sehr! Die Suppe kommt sofort."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Dies, dies Suppe ist sehr lecker."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Oh, das freut mich sehr! Vielen Dank. Dann wünsche ich weiterhin guten Appetit!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Die Rechnung, bitte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Selbstverständlich. Ich bringe Ihnen sofort die Rechnung."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wie habe ich gesagt, die Suppe sehr lecker war. Und jetzt, wie gehen wir zu Nichtmarkt?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Vielen Dank, das freut mich wirklich! Zum Naschmarkt ist es ganz einfach: Sie gehen einfach zu Fuß die Straße hinunter - es sind nur etwa zehn Minuten. Oder wollen Sie lieber mit der U-Bahn fahren?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich frage meine Frau."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne, lassen Sie sich Zeit. Ich bin gleich wieder bei Ihnen mit der Rechnung."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wir wollen zu Fuß."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Sehr gut. Dann gehen Sie einfach die Linke Wienzeile entlang, immer geradeaus Richtung Nas"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Spazieren."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ja, genau - Sie spazieren einfach die Straße entlang. In zehn Minuten sind Sie direkt am Naschmarkt. Hier ist Ihre Rechnung. Zahlen Sie bar oder mit Karte?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Mit Karte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Perfekt. Ich hole gleich das Kartenlesegerät. Einen Moment bitte."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was gibt es interessant in Naschmarkt?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Am Naschmarkt finden Sie alles: frisches Obst, Gemüse, Gewürze, Käse, Brot und viele kleine Imbissstände mit internationalem Essen. Es gibt auch viele Cafés und kleine Lokale. Sehr schön zum Bummeln und Probieren. Möchten Sie eine bestimmte Empfehlung für einen Stand?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Meine Frau möchte einen Stand mit Wein, aber ich möchte ein mit Kaffee."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ganz einfach: Am Naschmarkt gibt es mehrere Stände mit österreichischem Wein - besonders die Stände weiter hinten Richtung Freihausviertel sind bekannt dafür. Und für guten Kaffee empfehle ich das Café am Naschmarkt oder den kleinen Stand gleich am Eingang, der sehr guten Espresso macht. Viel Spaß dort!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Vielen Dank. Bis später."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Auf Wiedersehen und viel Spaß am Naschmarkt!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert demonstrated solid communicative intent throughout the café scenario, successfully ordering food, asking for the bill, and requesting directions to the Naschmarkt. However, his speech shows recurring issues with missing articles, incomplete sentence structures, and some vocabulary gaps — particularly when trying to express more complex thoughts mid-sentence. He is clearly at an early intermediate stage, communicating effectively in simple exchanges but struggling with grammatical precision under real-time pressure.",
+    "errors": [
+      {
+        "type": "missing_article",
+        "original": "Gulaschsuppe, ist wie Ungarn?",
+        "correction": "Die Gulaschsuppe ist wie in Ungarn?",
+        "explanation": "The definite article 'die' is required before a feminine noun like 'Gulaschsuppe' when referencing it specifically, and 'in' is needed before 'Ungarn'.",
+        "context": "Gulaschsuppe, ist wie Ungarn?"
+      },
+      {
+        "type": "missing_article",
+        "original": "wir wollen zwei Suppe",
+        "correction": "Wir möchten zwei Suppen.",
+        "explanation": "'Suppen' requires the plural form, and while 'wollen' is grammatically correct, 'möchten' is more polite register for ordering in a restaurant.",
+        "context": "Hallo, wir wollen zwei Suppe."
+      },
+      {
+        "type": "register",
+        "original": "wir wollen zwei Suppe",
+        "correction": "Wir möchten zwei Suppen, bitte.",
+        "explanation": "'Wollen' is grammatically correct but sounds blunt in a service context; 'möchten' is the standard polite form for ordering.",
+        "context": "Hallo, wir wollen zwei Suppe."
+      },
+      {
+        "type": "word_order",
+        "original": "Guck, gucken wir die Hauptspeise",
+        "correction": "Lassen Sie uns die Hauptspeise anschauen.",
+        "explanation": "'Gucken wir' is an informal construction and the verb 'gucken' is too colloquial here; a more natural and polite phrasing uses 'anschauen' with a formal imperative structure.",
+        "context": "Guck, gucken wir die Hauptspeise."
+      },
+      {
+        "type": "vocabulary",
+        "original": "so nach Nichtmarkt gehen",
+        "correction": "zum Naschmarkt gehen",
+        "explanation": "'Nichtmarkt' is a mispronunciation/mistaken form of 'Naschmarkt', and 'so nach' should be 'zum' (contraction of 'zu dem') for directional movement toward a place.",
+        "context": "Ich denke, dass wir so nach Nichtmarkt gehen."
+      },
+      {
+        "type": "word_order",
+        "original": "Wie habe ich gesagt, die Suppe sehr lecker war",
+        "correction": "Wie ich gesagt habe, war die Suppe sehr lecker.",
+        "explanation": "In a subordinate clause introduced by 'wie ich gesagt habe', the verb moves to the end; the main clause then requires verb-second word order ('war die Suppe').",
+        "context": "Wie habe ich gesagt, die Suppe sehr lecker war."
+      },
+      {
+        "type": "missing_article",
+        "original": "Was gibt es interessant in Naschmarkt?",
+        "correction": "Was gibt es Interessantes am Naschmarkt?",
+        "explanation": "'Naschmarkt' requires the preposition 'am' (an dem) for location, and the adjective must be nominalized with a capital letter and -es ending: 'Interessantes'.",
+        "context": "Was gibt es interessant in Naschmarkt?"
+      },
+      {
+        "type": "missing_article",
+        "original": "ich möchte ein mit Kaffee",
+        "correction": "ich möchte einen Stand mit Kaffee",
+        "explanation": "The noun 'Stand' (masculine) is missing entirely; it must be included with the correct accusative article 'einen'.",
+        "context": "Meine Frau möchte einen Stand mit Wein, aber ich möchte ein mit Kaffee."
+      },
+      {
+        "type": "gender",
+        "original": "ich möchte ein mit Kaffee",
+        "correction": "ich möchte einen Stand mit Kaffee",
+        "explanation": "Even if 'Stand' were included, Robert used 'ein' instead of the accusative masculine form 'einen', indicating a gender/case error.",
+        "context": "Meine Frau möchte einen Stand mit Wein, aber ich möchte ein mit Kaffee."
+      },
+      {
+        "type": "missing_article",
+        "original": "Dies, dies Suppe ist sehr lecker",
+        "correction": "Diese Suppe ist sehr lecker.",
+        "explanation": "'Dies' must agree with the feminine noun 'Suppe' and take the form 'diese'; 'dies' alone is a neuter demonstrative pronoun and does not modify a feminine noun directly.",
+        "context": "Dies, dies Suppe ist sehr lecker."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 2,
+      "missing_article": 5,
+      "verb_conjugation": 0,
+      "vocabulary": 1,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "die Tageskarte",
+        "english": "the daily menu / menu of the day",
+        "note": "used correctly (understood in context)",
+        "tags": [
+          "restaurant",
+          "A2",
+          "receptive"
+        ]
+      },
+      {
+        "german": "die Vorspeise",
+        "english": "the starter / appetizer",
+        "note": "understood in context, not produced independently",
+        "tags": [
+          "restaurant",
+          "A2",
+          "receptive"
+        ]
+      },
+      {
+        "german": "die Hauptspeise",
+        "english": "the main course",
+        "note": "Robert asked for clarification — new this session",
+        "tags": [
+          "restaurant",
+          "A2",
+          "new"
+        ]
+      },
+      {
+        "german": "der Tafelspitz",
+        "english": "boiled beef (Austrian dish)",
+        "note": "used correctly and confidently when ordering",
+        "tags": [
+          "Austrian cuisine",
+          "A2",
+          "productive"
+        ]
+      },
+      {
+        "german": "der Apfelkren",
+        "english": "apple horseradish",
+        "note": "successfully repeated and ordered — new this session",
+        "tags": [
+          "Austrian cuisine",
+          "new",
+          "productive"
+        ]
+      },
+      {
+        "german": "die Rechnung",
+        "english": "the bill",
+        "note": "used correctly and at exactly the right moment",
+        "tags": [
+          "restaurant",
+          "A2",
+          "productive"
+        ]
+      },
+      {
+        "german": "zu Fuß",
+        "english": "on foot",
+        "note": "used correctly in context",
+        "tags": [
+          "A2",
+          "movement",
+          "productive"
+        ]
+      },
+      {
+        "german": "spazieren",
+        "english": "to stroll / to walk leisurely",
+        "note": "used correctly as a one-word response to complete Maria's sentence",
+        "tags": [
+          "A2",
+          "movement",
+          "productive"
+        ]
+      },
+      {
+        "german": "am Naschmarkt",
+        "english": "at the Naschmarkt",
+        "note": "needs practice — Robert said 'in Naschmarkt' and 'Nichtmarkt'",
+        "tags": [
+          "prepositions",
+          "Vienna",
+          "needs practice"
+        ]
+      },
+      {
+        "german": "zum (zu dem)",
+        "english": "to the (direction)",
+        "note": "needs practice — Robert used 'nach' and 'in' instead of 'zum' for named locations",
+        "tags": [
+          "prepositions",
+          "A2",
+          "needs practice"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully completed a full restaurant interaction from ordering to paying, demonstrating practical communicative competence",
+      "He correctly used 'Wir möchten' for polite ordering at the start of the session",
+      "He asked clarifying questions in German ('Was bedeutet Hauptspeise?') rather than switching language",
+      "He correctly used 'die Rechnung, bitte' at the appropriate moment with no hesitation",
+      "He produced the culturally specific Austrian terms 'Tafelspitz' and 'Apfelkren' correctly after hearing them once",
+      "His one-word contribution 'Spazieren' showed active listening and the ability to participate even with limited output"
+    ],
+    "next_focus": "Prepositions of place and direction: practice the contrast between 'in + Dative' (location), 'in + Accusative' (movement into), 'an/am' (at a specific place like a market or river), and 'zu/zum/zur' (movement toward a person or named destination) — directly relevant to his errors with 'Naschmarkt' and future navigation scenarios."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

@@ -1,0 +1,224 @@
+{
+  "session_id": "2026-05-08_001",
+  "date": "2026-05-08",
+  "persona": "Herr Fischer",
+  "scenario": "Hotel receptionist near Ringstraße",
+  "duration_estimate_min": 14,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Herr Fischer",
+      "text": "Guten Tag und herzlich willkommen in unserem Hotel! Wie kann ich Ihnen behilflich sein? Möchten Sie einchecken oder haben Sie eine Frage zu den Zimmern, dem Frühstück oder den Annehmlichkeiten? Ich stehe Ihnen gerne zur Verfügung."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte einchecken. Mein Name is Robert Van Stedum."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Guten Tag, Herr van Stedum! Vielen Dank. Ich schaue Ihre Reservierung sofort nach. Haben Sie Ihren Reisepass oder Ausweis schon zur Hand? Dann können wir den Check-in gleich erledigen."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Es gibt hier der Reisepass von mich und meiner Frau."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Vielen Dank. Hier sind die Reisepässe für Sie und Ihre Frau - perfekt. Einen kleinen Moment bitte, ich trage die Daten ein. ... So, alles erledigt. Hier sind Ihre beiden Zimmerkarten für Zimmer 412 im vierten Stock. Möchten Sie noch den WLAN-Code oder Informationen zum Frühstück?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Möchten wir zwei Zimmerkarten."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Selbstverständlich! Hier sind zwei Zimmerkarten für Sie und Ihre Frau. Zimmer 412 im vierten Stock, Aufzug gleich links. Kann ich Ihnen sonst noch behilflich sein? Zum Beispiel mit dem WLAN-Code oder den Frühstückszeiten?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, Ich habe noch zwei Frage. Esten, haben Sie eie Adapter für meinen Laptop."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Gerne, Herr van Stedum. Erstens, ja, wir haben einen Adapter für Ihren Laptop. Ich lasse Ihnen gleich einen internationalen Adapter bringen. Und was ist Ihre zweite Frage? Ich helfe Ihnen sehr gerne weiter."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Zweitens, es gibt Waßer in den Zimmer?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ja, selbstverständlich gibt es Wasser im Zimmer. In jedem Zimmer steht eine Flasche Mineralwasser für Sie bereit. Wenn Sie mehr brauchen, sagen Sie einfach Bescheid - wir bringen Ihnen gerne zusätzliche Flaschen aufs Zimmer. Haben Sie noch weitere Fragen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte noch eine Flasche Wasser mit mir abnemhen."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Gerne, Herr van Stedum. Ich lasse Ihnen noch eine Flasche Wasser bringen, damit Sie sie mitnehmen können. Einen kleinen Moment bitte - ich gebe es gleich an den Zimmerservice weiter. Sonst noch etwas?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Alles gut. Danke sehr."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Sehr gerne, Herr van Stedum. Alles Gute für Ihren Aufenthalt! Falls Sie noch etwas brauchen, rufen Sie einfach an der Rezeption an. Wir sind 24 Stunden für Sie da. Einen schönen Tag noch!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully navigated a hotel check-in scenario in German, demonstrating functional communicative ability and good use of polite register. However, several recurring grammatical errors appeared, particularly with case usage, article gender, and word order, which should be addressed in future sessions. His vocabulary range was appropriate for the context, and he showed confidence in completing the interaction from start to finish.",
+    "errors": [
+      {
+        "type": "verb_conjugation",
+        "original": "Mein Name is Robert Van Stedum.",
+        "correction": "Mein Name ist Robert Van Stedum.",
+        "explanation": "The third-person singular of 'sein' is 'ist', not 'is' — a likely English interference error.",
+        "context": "Ich möchte einchecken. Mein Name is Robert Van Stedum."
+      },
+      {
+        "type": "gender",
+        "original": "Es gibt hier der Reisepass von mich und meiner Frau.",
+        "correction": "Hier sind der Reisepass von mir und meiner Frau. / Hier sind die Reisepässe von mir und meiner Frau.",
+        "explanation": "'von' takes the dative case, so 'mich' (accusative) must be 'mir' (dative); additionally 'der Reisepass' should be plural 'die Reisepässe' since two passports are being presented.",
+        "context": "Es gibt hier der Reisepass von mich und meiner Frau."
+      },
+      {
+        "type": "word_order",
+        "original": "Möchten wir zwei Zimmerkarten.",
+        "correction": "Wir möchten zwei Zimmerkarten.",
+        "explanation": "In a declarative sentence the finite verb comes second, not first; inverting subject and verb creates a question form instead of a statement.",
+        "context": "Möchten wir zwei Zimmerkarten."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Esten, haben Sie eie Adapter für meinen Laptop.",
+        "correction": "Erstens, haben Sie einen Adapter für meinen Laptop?",
+        "explanation": "'Esten' is not a German word; the correct ordinal adverb is 'erstens'. Additionally 'eie' appears to be a typo/mispronunciation of the indefinite article 'einen' (masculine accusative for 'Adapter', which is masculine).",
+        "context": "Ja, Ich habe noch zwei Frage. Esten, haben Sie eie Adapter für meinen Laptop."
+      },
+      {
+        "type": "missing_article",
+        "original": "Ich habe noch zwei Frage.",
+        "correction": "Ich habe noch zwei Fragen.",
+        "explanation": "'Frage' must be pluralised to 'Fragen' when preceded by the numeral 'zwei'; the noun was left in singular form.",
+        "context": "Ja, Ich habe noch zwei Frage. Esten, haben Sie eie Adapter für meinen Laptop."
+      },
+      {
+        "type": "missing_article",
+        "original": "es gibt Waßer in den Zimmer?",
+        "correction": "Gibt es Wasser im Zimmer?",
+        "explanation": "'in dem Zimmer' contracts to 'im Zimmer' (dative singular neuter); 'den' is dative plural or accusative masculine, neither of which is correct here. Also note the spelling: 'Wasser' not 'Waßer'.",
+        "context": "Zweitens, es gibt Waßer in den Zimmer?"
+      },
+      {
+        "type": "vocabulary",
+        "original": "Ich möchte noch eine Flasche Wasser mit mir abnemhen.",
+        "correction": "Ich möchte noch eine Flasche Wasser mitnehmen.",
+        "explanation": "'mitnehmen' is a separable verb meaning 'to take along'; it does not need 'mit mir' as an additional phrase, and the infinitive spelling is 'mitnehmen', not 'abnemhen'.",
+        "context": "Ich möchte noch eine Flasche Wasser mit mir abnemhen."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 1,
+      "missing_article": 2,
+      "verb_conjugation": 1,
+      "vocabulary": 2,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "einchecken",
+        "english": "to check in",
+        "note": "used correctly",
+        "tags": [
+          "hotel",
+          "travel"
+        ]
+      },
+      {
+        "german": "der Reisepass",
+        "english": "passport",
+        "note": "used correctly though pluralisation was missed",
+        "tags": [
+          "travel",
+          "anki"
+        ]
+      },
+      {
+        "german": "die Zimmerkarte",
+        "english": "room key card",
+        "note": "used correctly",
+        "tags": [
+          "hotel",
+          "anki"
+        ]
+      },
+      {
+        "german": "erstens / zweitens",
+        "english": "firstly / secondly",
+        "note": "needs practice — 'erstens' was mispronounced as 'Esten'",
+        "tags": [
+          "connectors",
+          "anki"
+        ]
+      },
+      {
+        "german": "mitnehmen",
+        "english": "to take along / to take with you",
+        "note": "needs practice — separable verb structure and spelling need consolidation",
+        "tags": [
+          "separable-verbs",
+          "anki"
+        ]
+      },
+      {
+        "german": "die Annehmlichkeiten",
+        "english": "amenities / comforts",
+        "note": "new this session — introduced by Herr Fischer",
+        "tags": [
+          "hotel",
+          "anki",
+          "B2"
+        ]
+      },
+      {
+        "german": "Bescheid sagen",
+        "english": "to let someone know / to inform",
+        "note": "new this session — introduced by Herr Fischer",
+        "tags": [
+          "fixed-phrases",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert maintained formal 'Sie' register throughout the entire interaction without slipping into informal 'du', which is exactly appropriate for a hotel setting.",
+      "He successfully used 'erstens' and 'zweitens' as discourse organisers to structure his two questions, even if the pronunciation of 'erstens' was imperfect.",
+      "He kept sentences short and pragmatically clear, ensuring Herr Fischer always understood his communicative intent despite grammatical errors.",
+      "He used 'Ich möchte' correctly and consistently to make polite requests, demonstrating awareness of the Konjunktiv II for politeness."
+    ],
+    "next_focus": "Dative case after prepositions: practise the contractions 'im' (in + dem), 'vom' (von + dem), and 'zum' (zu + dem), focusing on when to use dative versus accusative after 'in', so errors like 'in den Zimmer' and 'von mich' are eliminated."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "scaffold_delivered": [
+    "Ich möchte lieber ein ruhiges Zimmer.",
+    "Könnten Sie uns ein Taxi rufen?",
+    "Entschuldigung — könnten Sie das bitte wiederholen?"
+  ],
+  "scaffold_used": [
+    "Ich möchte lieber ein ruhiges Zimmer."
+  ],
+  "scaffold_avoided": [
+    "Könnten Sie uns ein Taxi rufen?",
+    "Entschuldigung — könnten Sie das bitte wiederholen?"
+  ],
+  "scaffold_deployment_rate": "1/3 scaffold phrases used"
+}

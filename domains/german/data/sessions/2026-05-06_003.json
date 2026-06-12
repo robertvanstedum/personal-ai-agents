@@ -1,0 +1,274 @@
+{
+  "session_id": "2026-05-06_003",
+  "date": "2026-05-06",
+  "persona": "Maria",
+  "scenario": "Viennese café",
+  "duration_estimate_min": 13,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Hallo! Grüß Gott. Was möchtest du heute trinken?"
+    },
+    {
+      "speaker": "Heute Maria",
+      "text": "Heute ist ein schöner Tag dafür, ja. Willst du eine Melange oder"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Heute muss ein bisschen"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Heute muss ich ein bisschen… was? Sag ruhig, ich hab Zeit - na ja, fast."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nie. Wie ist einem, ein, einen"
+    },
+    {
+      "speaker": "Mal Maria",
+      "text": "Eine Melange? Die ist ganz klassisch hier in Wien. Soll ich dir eine bringen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Erkläre mir der Unterschied. Eine Melange oder"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Der Unterschied? Die Melange ist mit viel warmer Milch und Milchschaum, sehr cremig. Ein Kleiner Brauner ist nur ein Espresso mit einem"
+    },
+    {
+      "speaker": "Robert",
+      "text": "A lighter brown."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Genau, ein Kleiner Brauner ist mit nur einem kleinen Schuss Milch, nicht so hell wie die Melange. Schmeckt kräftiger. Möchtest du den probieren?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich fahne mit einen"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ich bring dir einen Kleinen Braunen."
+    },
+    {
+      "speaker": "Kom Robert",
+      "text": "Einen, der Milage. Ich fahne mit einem Milage ein."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Du meinst eine Melange? Alles klar, ich bring dir eine Melange. Kommt sofort!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Sie meinen Milage."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ja, die Melange ist perfekt für dich. Ich bring sie dir gleich!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Hello."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Grüß dich! Willst du etwas bestellen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich könnte noch ein einen Milage haben."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Noch eine Melange? Sehr gerne, kommt gleich!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Können Sie mir die Rechnung geben?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ja klar, macht zusammen sechs Euro achtzig."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Meine Karte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Hier, bitte. Und vielen Dank! Komm gerne wieder. -E"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert managed to navigate a basic café ordering scenario in German, successfully requesting a drink, asking for the bill, and attempting to use dative constructions. However, the session revealed consistent struggles with grammatical gender and article declension, mispronunciation/misspelling of 'Melange' as 'Milage', and several incomplete or abandoned sentences that suggest difficulty formulating thoughts in real time.",
+    "errors": [
+      {
+        "type": "vocabulary",
+        "original": "Milage",
+        "correction": "Melange",
+        "explanation": "Robert consistently mispronounced and misspelled the word 'Melange' (a Viennese coffee with steamed milk) as 'Milage', which is not a German word.",
+        "context": "Einen, der Milage. Ich fahne mit einem Milage ein."
+      },
+      {
+        "type": "vocabulary",
+        "original": "fahne mit … ein",
+        "correction": "fange … an",
+        "explanation": "'Anfangen' means 'to start/begin'; Robert appears to have attempted this verb but conjugated and spelled it incorrectly ('fahne … ein' instead of 'fange … an').",
+        "context": "Ich fahne mit einen / Ich fahne mit einem Milage ein."
+      },
+      {
+        "type": "gender",
+        "original": "der Milage",
+        "correction": "die Melange",
+        "explanation": "'Melange' is a feminine noun ('die Melange'), not masculine ('der').",
+        "context": "Einen, der Milage."
+      },
+      {
+        "type": "missing_article",
+        "original": "Erkläre mir der Unterschied",
+        "correction": "Erkläre mir den Unterschied",
+        "explanation": "'Unterschied' is the direct object of 'erklären' and requires the accusative masculine article 'den', not the nominative 'der'.",
+        "context": "Erkläre mir der Unterschied. Eine Melange oder"
+      },
+      {
+        "type": "word_order",
+        "original": "Heute muss ein bisschen",
+        "correction": "Heute muss ich ein bisschen … (+ infinitive verb)",
+        "explanation": "Robert omitted the subject 'ich' and left the sentence incomplete; in German the subject must be stated and the infinitive verb must close the modal construction.",
+        "context": "Heute muss ein bisschen"
+      },
+      {
+        "type": "register",
+        "original": "Hello.",
+        "correction": "Hallo! / Grüß Gott! / Grüß dich!",
+        "explanation": "Switching to English 'Hello' breaks the immersion and register of a German-language café practice session; a German greeting should be used.",
+        "context": "Robert: Hello."
+      },
+      {
+        "type": "vocabulary",
+        "original": "A lighter brown.",
+        "correction": "Ein Kleiner Brauner / Etwas heller, mit weniger Milch.",
+        "explanation": "Robert switched to English to describe the drink instead of attempting the German term or description, missing an opportunity to practise target vocabulary.",
+        "context": "Robert: A lighter brown."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Sie meinen Milage",
+        "correction": "Sie meinen Melange. / Man nennt es Melange.",
+        "explanation": "While the conjugation 'Sie meinen' is technically correct for formal address, Robert seems to be using it to affirm Maria's correction rather than accepting it, and the intended meaning is unclear; more critically the mispronunciation 'Milage' persists here.",
+        "context": "Robert: Sie meinen Milage."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 1,
+      "missing_article": 1,
+      "verb_conjugation": 1,
+      "vocabulary": 3,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "die Melange",
+        "english": "Viennese coffee with steamed milk and milk foam",
+        "note": "needs practice — repeatedly mispronounced as 'Milage'",
+        "tags": [
+          "café",
+          "Vienna",
+          "nouns",
+          "feminine"
+        ]
+      },
+      {
+        "german": "der Kleine Braune",
+        "english": "small espresso with a dash of milk (Viennese style)",
+        "note": "new this session — introduced by Maria, not yet used by Robert",
+        "tags": [
+          "café",
+          "Vienna",
+          "nouns",
+          "masculine"
+        ]
+      },
+      {
+        "german": "der Unterschied",
+        "english": "the difference",
+        "note": "used in context but with wrong case (der instead of den)",
+        "tags": [
+          "common nouns",
+          "masculine",
+          "accusative"
+        ]
+      },
+      {
+        "german": "die Rechnung",
+        "english": "the bill / the check",
+        "note": "used correctly — good café vocabulary",
+        "tags": [
+          "café",
+          "feminine",
+          "anki"
+        ]
+      },
+      {
+        "german": "Können Sie mir … geben?",
+        "english": "Could you give me …?",
+        "note": "used correctly — polite formal request structure",
+        "tags": [
+          "polite requests",
+          "modal verbs",
+          "anki"
+        ]
+      },
+      {
+        "german": "anfangen mit (+ Dativ)",
+        "english": "to start with / to begin with",
+        "note": "needs practice — attempted but incorrectly conjugated as 'fahne … ein'",
+        "tags": [
+          "separable verbs",
+          "dative",
+          "anki"
+        ]
+      },
+      {
+        "german": "Kommt sofort!",
+        "english": "Coming right away!",
+        "note": "new this session — heard from Maria, useful café phrase",
+        "tags": [
+          "café",
+          "phrases",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Successfully used the polite formal structure 'Können Sie mir die Rechnung geben?' correctly and independently.",
+      "Attempted dative article forms ('mit einem') showing awareness of case, even if inconsistently applied.",
+      "Persisted in the conversation despite incomplete sentences and self-corrected the article from 'einen' to 'einem' mid-utterance.",
+      "Used 'Noch eine Melange?' context correctly when ordering a second coffee, demonstrating comprehension of Maria's responses."
+    ],
+    "next_focus": "Practise the accusative and dative forms of the definite and indefinite articles for all three genders (der/die/das → den/die/das; einem/einer/einem), using café-ordering sentences as a drill context — e.g. 'Ich möchte einen Kaffee. Kannst du mir den Kaffee bringen? Ich fange mit einer Melange an.'"
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "scaffold_delivered": [
+    "Ich komme aus Chicago — kennen Sie die Stadt?",
+    "Ich möchte lieber etwas sehen, was Touristen nicht kennen.",
+    "Entschuldigung — ich verstehe, aber ich suche die Antwort auf Deutsch."
+  ],
+  "scaffold_used": [],
+  "scaffold_avoided": [
+    "Ich komme aus Chicago — kennen Sie die Stadt?",
+    "Ich möchte lieber etwas sehen, was Touristen nicht kennen.",
+    "Entschuldigung — ich verstehe, aber ich suche die Antwort auf Deutsch."
+  ],
+  "scaffold_deployment_rate": "0/3 scaffold phrases used"
+}

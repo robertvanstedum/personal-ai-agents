@@ -1,0 +1,237 @@
+{
+  "session_id": "2026-04-21_004",
+  "date": "2026-04-21",
+  "persona": "Herr Fischer",
+  "scenario": "hotel_checkin",
+  "duration_estimate_min": 15,
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Herr Fischer",
+      "text": "Guten Tag und herzlich willkommen im Hotel Fischer am Ring! Ich bin Herr Fischer, der Rezeptionist. Schön, dass Sie da sind. Wie kann ich Ihnen heute helfen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte einchecken."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Aber natürlich! Herzlich willkommen. Auf welchen Namen ist die Reservierung, bitte?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Mein Name ist Robert van Stedum."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Vielen Dank. Eine Reservierung für zwei Nächte auf Ihren Namen. Haben Sie eine Zimmerpräferenz?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich bin hier mit meiner Frau, Vera Santos."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Wir haben ein Doppelzimmer mit Stadtblick für Sie vorbereitet, Zimmer 312 im dritten Stock. Brauchen Sie noch Hilfe mit dem Gepäck?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein, ich brauche keine Hilfe."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich nicht bin so alt."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich, äh, was ist der Internet?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Das WLAN ist für alle Gäste kostenlos. Der Netzwerkname ist HotelFischer_Gast und das Passwort lautet WiFi2026."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich erinnere nicht."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wie Stück? Wie Stück? Zimmer ist in"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Das Zimmer 312 ist im dritten Stock. Am besten nehmen Sie den Aufzug gleich rechts von der Rezeption."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, danke. Stock, nicht Stück."
+    },
+    {
+      "speaker": "Robert",
+      "text": "danke für der Hilfe."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Es heißt übrigens danke für die Hilfe — Hilfe ist weiblich, deshalb die."
+    },
+    {
+      "speaker": "Robert",
+      "text": "danke für die Hilfe. Schönen Tag."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Einen schönen Tag Ihnen auch — und einen angenehmen Aufenthalt bei uns!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully completed a basic hotel check-in interaction, demonstrating functional communicative ability for simple requests. However, the session revealed several structural weaknesses including word order errors, incorrect article usage, and incomplete sentences, suggesting he is still consolidating A2-level grammar. He showed good self-correction awareness, particularly when he caught 'Stock' vs. 'Stück' himself.",
+    "errors": [
+      {
+        "type": "word_order",
+        "original": "Ich nicht bin so alt.",
+        "correction": "Ich bin nicht so alt.",
+        "explanation": "In German main clauses the verb must occupy the second position, and negation with 'nicht' follows the conjugated verb.",
+        "context": "Ich nicht bin so alt."
+      },
+      {
+        "type": "vocabulary",
+        "original": "was ist der Internet?",
+        "correction": "Wie ist das WLAN? / Gibt es WLAN? / Wie lautet das WLAN-Passwort?",
+        "explanation": "'Internet' in German is neuter ('das Internet'), and asking 'was ist' is unidiomatic here; the intended question about Wi-Fi is better expressed with 'WLAN' and a clearer verb phrase.",
+        "context": "Ich, äh, was ist der Internet?"
+      },
+      {
+        "type": "gender",
+        "original": "was ist der Internet?",
+        "correction": "das Internet",
+        "explanation": "'Internet' is neuter in German, so the correct article is 'das', not 'der'.",
+        "context": "Ich, äh, was ist der Internet?"
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Ich erinnere nicht.",
+        "correction": "Ich erinnere mich nicht. / Ich habe es vergessen.",
+        "explanation": "'Sich erinnern' is a reflexive verb and requires the reflexive pronoun 'mich' in the first person singular; without it the sentence is grammatically incomplete.",
+        "context": "Ich erinnere nicht."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Wie Stück? Wie Stück? Zimmer ist in",
+        "correction": "In welchem Stock ist das Zimmer? / Welcher Stock?",
+        "explanation": "'Stück' means 'piece/bit' while 'Stock' means 'floor/storey'; Robert himself corrected this, but the full intended sentence was also left incomplete.",
+        "context": "Wie Stück? Wie Stück? Zimmer ist in"
+      },
+      {
+        "type": "missing_article",
+        "original": "Zimmer ist in",
+        "correction": "Das Zimmer ist im …",
+        "explanation": "The definite article 'das' is required before 'Zimmer', and 'in' must contract with 'dem' to form 'im' before a dative masculine/neuter noun.",
+        "context": "Wie Stück? Wie Stück? Zimmer ist in"
+      },
+      {
+        "type": "gender",
+        "original": "danke für der Hilfe",
+        "correction": "danke für die Hilfe",
+        "explanation": "'Hilfe' is a feminine noun, so it takes 'die' in the accusative/dative after the preposition 'für' (which governs the accusative), not 'der'.",
+        "context": "danke für der Hilfe."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 2,
+      "word_order": 1,
+      "missing_article": 1,
+      "verb_conjugation": 1,
+      "vocabulary": 2,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "einchecken",
+        "english": "to check in",
+        "note": "used correctly",
+        "tags": [
+          "hotel",
+          "travel",
+          "anki"
+        ]
+      },
+      {
+        "german": "die Reservierung",
+        "english": "the reservation",
+        "note": "understood and used in context correctly",
+        "tags": [
+          "hotel",
+          "travel"
+        ]
+      },
+      {
+        "german": "das Doppelzimmer",
+        "english": "the double room",
+        "note": "new this session — introduced by Herr Fischer, worth memorising",
+        "tags": [
+          "hotel",
+          "anki"
+        ]
+      },
+      {
+        "german": "der Stock",
+        "english": "the floor / storey",
+        "note": "needs practice — confused with 'Stück' (piece); self-corrected",
+        "tags": [
+          "hotel",
+          "building",
+          "anki"
+        ]
+      },
+      {
+        "german": "das WLAN",
+        "english": "Wi-Fi / wireless network",
+        "note": "needs practice — Robert used 'der Internet' instead",
+        "tags": [
+          "technology",
+          "hotel",
+          "anki"
+        ]
+      },
+      {
+        "german": "sich erinnern",
+        "english": "to remember",
+        "note": "needs practice — reflexive pronoun 'mich' was omitted",
+        "tags": [
+          "reflexive verbs",
+          "anki"
+        ]
+      },
+      {
+        "german": "der Aufzug",
+        "english": "the elevator / lift",
+        "note": "new this session — introduced by Herr Fischer",
+        "tags": [
+          "hotel",
+          "building",
+          "anki"
+        ]
+      },
+      {
+        "german": "angenehmer Aufenthalt",
+        "english": "pleasant stay",
+        "note": "new this session — useful farewell phrase in hotel context",
+        "tags": [
+          "hotel",
+          "phrases",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully initiated the check-in with a clear, grammatically correct request: 'Ich möchte einchecken.'",
+      "He provided his name and relevant personal information naturally and with correct sentence structure.",
+      "He self-corrected 'Stück' to 'Stock' unprompted, demonstrating active listening and self-monitoring.",
+      "After Herr Fischer's correction, Robert immediately repeated 'danke für die Hilfe' correctly, showing receptiveness to feedback.",
+      "He maintained the interaction through to a polite farewell ('Schönen Tag'), completing the scenario successfully."
+    ],
+    "next_focus": "Reflexive verbs: practise the most common reflexive verbs (sich erinnern, sich vorstellen, sich setzen) with their required pronouns (mich/dich/sich), as omitting the reflexive pronoun is a recurring structural gap."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true
+}

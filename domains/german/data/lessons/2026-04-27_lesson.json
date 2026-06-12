@@ -1,0 +1,20 @@
+{
+  "lesson_date": "2026-04-27",
+  "lesson_number": 35,
+  "persona": "Herr Fischer",
+  "persona_role": "Hotel Receptionist",
+  "scenario": "room_problem",
+  "warm_up": "Review top error from last session: vocabulary.",
+  "focus": "Subordinate clause word order with 'dass': practice constructing sentences of the pattern 'Ich denke, dass ich [subject] … [verb at end]', paying attention to including an explicit subject and placing the conjugated verb at the very end of the clause.",
+  "speaking_prompt": "Your room has a problem — the shower is cold or the window won't close. Go to the front desk and explain the issue. Ask if they can fix it or move you to another room.",
+  "vocabulary_targets": [
+    "der Turmbau",
+    "der Hochmut",
+    "scheitern",
+    "die Eintrittskarte",
+    "Ich möchte zwei Karten, bitte."
+  ],
+  "carry_forward_errors": [
+    "Eintrittskarte / Eintrittskarten (was: Eintritte) — session 2026-04-27"
+  ]
+}

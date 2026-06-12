@@ -1,0 +1,61 @@
+{
+  "session_id": "2026-06-03_001",
+  "date": "2026-06-03",
+  "persona": "Frau Berger",
+  "scenario": "Bakery Order near Naschmarkt",
+  "duration_estimate_min": 11,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Frau Berger",
+      "text": "Grüß Gott! Willkommen in meiner Bäckerei. Was darf’s denn heute sein?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Haben Sie einen Rotenbrot, Roggenbrot?"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Ja, freilich! Sie meinen sicher Roggenbrot, oder? Wir haben frisches Roggenbrot heute - sehr gut, mit einer schönen Kruste. Möchten Sie ein ganzes oder ein halbes?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ist nur for me. Ein halbes."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Gut! Ein halbes Roggenbrot kommt sofort. Möchten Sie noch etwas dazu? Vielleicht ein Kipferl oder eine Semmel?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein, s-, s-, so, the, the Roggenbrot."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Gut, nur das halbe Roggenbrot. Das macht dann drei Euro fünfzig. Möchten Sie bar zahlen oder mit Karte?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Mit Karte, bitte."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Bitte sehr, stecken Sie die Karte hier rein. Danke schön! Und hier ist Ihr Roggenbrot, frisch eingepackt. Guten Appetit und auf Wiedersehen!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Have a nice day. Cheers."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Danke, gleichfalls! Auf Wiedersehen und einen schönen Tag noch! -"
+    }
+  ],
+  "reviewer_output": null,
+  "anki_generated": false,
+  "next_lesson_generated": false,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

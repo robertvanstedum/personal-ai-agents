@@ -1,0 +1,148 @@
+{
+  "session_id": "2026-04-26 Persona: Klaus Scenario: restaurant_reservation Duration: 8 Mode: writing_002",
+  "date": "2026-04-26",
+  "persona": "Klaus",
+  "scenario": "restaurant_reservation",
+  "duration_estimate_min": 8,
+  "mode": "writing",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Klaus",
+      "text": "Guten Abend, Restaurant Wien. Klaus am Apparat. Wie kann ich Ihnen helfen? Robert: Ich möchte eine Reservation Klaus: Selbstverständlich, der Herr. Für wie viele Personen möchten Sie reservieren und für wann genau? Robert: Ich möchte für zwei Personen. Morgen abend sieben order halb acht. Klaus: Gerne, der Herr. Für zwei Personen morgen Abend - um sieben Uhr oder halb acht? Ich notiere das gerne für Sie. Um welche Zeit genau soll die Reservierung sein? Robert: Ich nahme Robert van Stedum. Klaus: Sehr gerne, Herr van Stedum. Ich reserviere einen Tisch für zwei Personen morgen Abend um 19 Uhr."
+    },
+    {
+      "speaker": "Vielen Dank für die Buchung. Brauchen Sie noch etwas Besonderes, zum Beispiel einen Fensterplatz oder eine bestimmte Weinauswahl? Robert",
+      "text": "Was bedeutet Weinauswahl? Klaus: Weinauswahl bedeutet die Auswahl unserer Weine, Herr van Stedum. Haben Sie einen bestimmten Wein im Sinn, oder darf ich Ihnen etwas empfehlen?"
+    },
+    {
+      "speaker": "Die Reservierung für morgen um 19 Uhr für zwei Personen ist notiert. Brauchen Sie noch etwas anderes? Robert",
+      "text": "Ich danke Ihnen für den Fensterplatz. Klaus: Sehr gerne, Herr van Stedum. Ich notiere den Tisch am Fenster für Sie - das passt hervorragend."
+    },
+    {
+      "speaker": "Kann ich sonst noch etwas für Sie tun? Robert",
+      "text": "Nein, Danke. Bis Morgen."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully completed a restaurant reservation in German, demonstrating appropriate formal register (Sie-form) and basic transactional vocabulary. However, the session revealed several recurring issues: incomplete sentences, a vocabulary error ('order' instead of 'oder'), and a verb conjugation mistake ('nahme' instead of 'heiße/bin'). The interaction was functional but would benefit from fuller, more grammatically complete utterances.",
+    "errors": [
+      {
+        "type": "missing_article",
+        "original": "Ich möchte eine Reservation",
+        "correction": "Ich möchte eine Reservierung machen.",
+        "explanation": "The sentence is missing the verb 'machen' to complete the thought; also 'Reservation' is understandable but 'Reservierung' is the standard German term.",
+        "context": "Robert: Ich möchte eine Reservation"
+      },
+      {
+        "type": "vocabulary",
+        "original": "Reservation",
+        "correction": "Reservierung",
+        "explanation": "'Reservation' is an Anglicism/Gallicism; the correct German term for a booking is 'Reservierung' or 'Tischreservierung'.",
+        "context": "Robert: Ich möchte eine Reservation"
+      },
+      {
+        "type": "vocabulary",
+        "original": "order",
+        "correction": "oder",
+        "explanation": "Robert used the English word 'order' instead of the German conjunction 'oder' (or).",
+        "context": "Robert: Morgen abend sieben order halb acht."
+      },
+      {
+        "type": "word_order",
+        "original": "Morgen abend sieben order halb acht",
+        "correction": "Morgen Abend um sieben Uhr oder halb acht.",
+        "explanation": "The preposition 'um' is required before clock times in German, and 'Abend' should be capitalised as part of the compound time expression 'morgen Abend'.",
+        "context": "Robert: Ich möchte für zwei Personen. Morgen abend sieben order halb acht."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Ich nahme Robert van Stedum",
+        "correction": "Mein Name ist Robert van Stedum. / Ich heiße Robert van Stedum.",
+        "explanation": "'Nahme' is not a valid German verb form; Robert likely confused 'name' (English noun) with a German verb. The correct phrase for giving one's name is 'Mein Name ist …' or 'Ich heiße …'.",
+        "context": "Robert: Ich nahme Robert van Stedum."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 1,
+      "missing_article": 1,
+      "verb_conjugation": 1,
+      "vocabulary": 2,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Reservierung",
+        "english": "reservation / booking",
+        "note": "needs practice — Robert used the non-standard 'Reservation'",
+        "tags": [
+          "restaurant",
+          "anki",
+          "nouns"
+        ]
+      },
+      {
+        "german": "Mein Name ist …",
+        "english": "My name is …",
+        "note": "needs practice — essential phrase Robert attempted incorrectly",
+        "tags": [
+          "introductions",
+          "anki",
+          "phrases"
+        ]
+      },
+      {
+        "german": "um … Uhr",
+        "english": "at … o'clock",
+        "note": "needs practice — preposition 'um' before times was omitted",
+        "tags": [
+          "time",
+          "anki",
+          "grammar"
+        ]
+      },
+      {
+        "german": "Fensterplatz",
+        "english": "window seat / table by the window",
+        "note": "used correctly — Robert successfully picked up and reused this word from Klaus's prompt",
+        "tags": [
+          "restaurant",
+          "anki",
+          "nouns"
+        ]
+      },
+      {
+        "german": "Weinauswahl",
+        "english": "wine selection / wine list",
+        "note": "new this session — Robert asked for clarification, showing good learning behaviour",
+        "tags": [
+          "restaurant",
+          "vocabulary",
+          "anki"
+        ]
+      },
+      {
+        "german": "Bis morgen",
+        "english": "Until tomorrow / See you tomorrow",
+        "note": "used correctly — appropriate farewell in context",
+        "tags": [
+          "phrases",
+          "farewells"
+        ]
+      }
+    ],
+    "strengths": [
+      "Maintained formal Sie-form consistently throughout the entire conversation without a single slip to du.",
+      "Successfully asked for clarification ('Was bedeutet Weinauswahl?') — an important real-world communication strategy.",
+      "Picked up and reused the new word 'Fensterplatz' introduced by Klaus, demonstrating active in-conversation vocabulary acquisition.",
+      "Used polite discourse markers such as 'Ich danke Ihnen' and 'Nein, Danke. Bis Morgen.' appropriate to the formal register."
+    ],
+    "next_focus": "Practise giving personal information in complete sentences: 'Mein Name ist …', 'Ich heiße …', and time expressions with 'um … Uhr' — these two patterns cover the gaps that most disrupted Robert's fluency in this session."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

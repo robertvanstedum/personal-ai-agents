@@ -573,30 +573,158 @@
     "domain": "spiegel.de",
     "trust": "trusted",
     "set_by": "explicit",
-    "note": "Spiegel International — major German outlet with English coverage. Added 2026-05-27 (was missing from trust table, source penalized by default)"
+    "note": "Spiegel International \u2014 major German outlet with English coverage. Added 2026-05-27 (was missing from trust table, source penalized by default)"
   },
   {
     "domain": "chathamhouse.org",
     "trust": "trusted",
     "set_by": "explicit",
-    "note": "Chatham House — UK foreign policy think tank. RSS feed returns 403 on automated fetch as of 2026-05-27; trust entry ready for when feed is accessible"
+    "note": "Chatham House \u2014 UK foreign policy think tank. RSS feed returns 403 on automated fetch as of 2026-05-27; trust entry ready for when feed is accessible"
   },
   {
     "domain": "adamtooze.substack.com",
     "trust": "trusted",
     "set_by": "explicit",
-    "note": "Adam Tooze Chartbook — macro/political economy newsletter. Added to FEEDS 2026-05-27"
+    "note": "Adam Tooze Chartbook \u2014 macro/political economy newsletter. Added to FEEDS 2026-05-27"
   },
   {
     "domain": "newyorkfed.org",
     "trust": "trusted",
     "set_by": "explicit",
-    "note": "NY Fed Liberty Street Economics — Federal Reserve Bank of New York research blog. Added to FEEDS 2026-05-27"
+    "note": "NY Fed Liberty Street Economics \u2014 Federal Reserve Bank of New York research blog. Added to FEEDS 2026-05-27"
   },
   {
     "domain": "nakedcapitalism.com",
     "trust": "neutral",
     "set_by": "explicit",
-    "note": "Naked Capitalism — finance/macro commentary blog. Added to FEEDS 2026-05-27"
+    "note": "Naked Capitalism \u2014 finance/macro commentary blog. Added to FEEDS 2026-05-27"
+  },
+  {
+    "domain": "state.gov",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-05-31",
+    "added_date": "2026-05-31",
+    "query": "Japan Australia India and USA The Quad"
+  },
+  {
+    "domain": "usnews.com",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-05-31",
+    "added_date": "2026-05-31",
+    "query": "Japan Australia India and USA The Quad"
+  },
+  {
+    "domain": "straitstimes.com",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-05-31",
+    "added_date": "2026-05-31",
+    "query": "Japan Australia India and USA The Quad"
+  },
+  {
+    "domain": "mofa.go.jp",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-05-31",
+    "added_date": "2026-05-31",
+    "query": "Japan Australia India and USA The Quad"
+  },
+  {
+    "domain": "malaymail.com",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-05-31",
+    "added_date": "2026-05-31",
+    "query": "Japan Australia India and USA The Quad"
+  },
+  {
+    "domain": "tribune.com.pk",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-05-31",
+    "added_date": "2026-05-31",
+    "query": "Japan Australia India and USA The Quad"
+  },
+  {
+    "domain": "gvwire.com",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-05-31",
+    "added_date": "2026-05-31",
+    "query": "Japan Australia India and USA The Quad"
+  },
+  {
+    "domain": "thestandard.com.hk",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-05-31",
+    "added_date": "2026-05-31",
+    "query": "Japan Australia India and USA The Quad"
+  },
+  {
+    "domain": "economictimes.indiatimes.com",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-05-31",
+    "added_date": "2026-05-31",
+    "query": "Japan Australia India and USA The Quad"
+  },
+  {
+    "domain": "worldview.stratfor.com",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-05-31",
+    "added_date": "2026-05-31",
+    "query": "Japan Australia India and USA The Quad"
+  },
+  {
+    "domain": "business-standard.com",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-05-31",
+    "added_date": "2026-05-31",
+    "query": "Japan Australia India and USA The Quad"
+  },
+  {
+    "domain": "rnz.co.nz",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-05-31",
+    "added_date": "2026-05-31",
+    "query": "Japan Australia India and USA The Quad"
+  },
+  {
+    "domain": "miningweekly.com",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-05-31",
+    "added_date": "2026-05-31",
+    "query": "Japan Australia India and USA The Quad"
+  },
+  {
+    "domain": "newsbharat360.com",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-05-31",
+    "added_date": "2026-05-31",
+    "query": "Japan Australia India and USA The Quad"
+  },
+  {
+    "domain": "dailymaverick.co.za",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-05-31",
+    "added_date": "2026-05-31",
+    "query": "Japan Australia India and USA The Quad"
+  },
+  {
+    "domain": "dnaindia.com",
+    "trust": "probationary",
+    "set_by": "auto",
+    "note": "auto-discovered via Brave 2026-05-31",
+    "added_date": "2026-05-31",
+    "query": "Japan Australia India and USA The Quad"
   }
 ]

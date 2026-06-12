@@ -1,0 +1,260 @@
+{
+  "session_id": "2026-04-29_001",
+  "date": "2026-04-29",
+  "persona": "Herr Fischer",
+  "scenario": "room_problem",
+  "duration_estimate_min": 8,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Herr Fischer",
+      "text": "Guten Morgen! Willkommen im Hotel. Was kann ich für Sie tun?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Problem."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ein Problem? Das tut mir leid zu hören. Worum geht es denn genau?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Das Wasser ist kalt."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Oh, das ist ärgerlich. Das warme Wasser ist kalt? Ich lasse das sofort von der Haustechnik prüfen. Möchten Sie in der Zwischenzeit ein anderes Zimmer?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Meine"
+    },
+    {
+      "speaker": "Frau. Herr Fischer",
+      "text": "Ihre Frau? Verstehe ich das richtig - das Problem betrifft auch Ihre Frau, oder soll ich ein Zimmer für zwei Personen vorbereiten?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Verstehe. Also nur das kalte Wasser im Bad. Ich kümmere mich sofort darum. Soll ich Ihnen jetzt ein anderes Zimmer anbieten, oder reicht es, wenn wir das Problem beheben?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich habe Problem. Noch ein Problem."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ach, zwei Probleme? Das tut mir leid. Was ist denn das zweite Problem?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Das Fernseher nicht funktion."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Verstehe. Der Fernseher funktioniert nicht. Das Wasser ist kalt und der Fernseher auch. Ich schicke sofort jemanden aufs Zimmer, der sich um beides kümmert. Möchten Sie solange in der Lobby warten oder lieber ein anderes Zimmer haben?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Es, es besser ein anderes lieber. Es gibt ein anderes, äh, anderes."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Selbstverständlich. Ich schaue sofort nach einem anderen Zimmer für Sie. Einen kleinen Moment bitte."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Aber Sie etwas gefunden."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ja, ich habe ein anderes Zimmer für Sie gefunden. Es ist etwas größer und liegt ein Stockwerk höher. Möchten Sie gleich umziehen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Haben Sie"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ja? Bitte, was möchten Sie wissen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Das ist alles."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Gut. Dann bereite ich alles für den Umzug vor. Die Zimmernummer ist 412. Brauchen Sie Hilfe mit dem Gepäck?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Hilfe nicht."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "In Ordnung. Hier ist die neue Zimmerkarte. Ich wünsche Ihnen einen angenehmen Aufenthalt. Wenn noch etwas ist, melden Sie sich einfach. -"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully communicated two hotel problems (cold water and broken TV) and requested a room change, demonstrating functional survival German in a real-world scenario. However, his utterances were very fragmented — often single words or incomplete sentences — with notable gaps in article usage, verb conjugation, and sentence construction. The session shows early A2-level production under communicative pressure.",
+    "errors": [
+      {
+        "type": "missing_article",
+        "original": "Problem.",
+        "correction": "Ich habe ein Problem.",
+        "explanation": "German requires an indefinite article before a singular countable noun, and a subject-verb structure is needed to form a complete sentence.",
+        "context": "Robert: Problem."
+      },
+      {
+        "type": "missing_article",
+        "original": "Ich habe Problem.",
+        "correction": "Ich habe ein Problem.",
+        "explanation": "The indefinite article 'ein' is required before 'Problem' (neuter noun) when used as a direct object.",
+        "context": "Robert: Ich habe Problem. Noch ein Problem."
+      },
+      {
+        "type": "gender",
+        "original": "Das Fernseher",
+        "correction": "Der Fernseher",
+        "explanation": "'Fernseher' is masculine, so it requires the masculine article 'der', not the neuter 'das'.",
+        "context": "Robert: Das Fernseher nicht funktion."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "nicht funktion",
+        "correction": "funktioniert nicht",
+        "explanation": "The verb 'funktionieren' must be conjugated for the third-person singular: 'funktioniert'. The infinitive stem 'funktion' cannot be used alone.",
+        "context": "Robert: Das Fernseher nicht funktion."
+      },
+      {
+        "type": "word_order",
+        "original": "Das Fernseher nicht funktion.",
+        "correction": "Der Fernseher funktioniert nicht.",
+        "explanation": "In a German declarative sentence the finite verb must occupy the second position; negation 'nicht' follows the verb at the end.",
+        "context": "Robert: Das Fernseher nicht funktion."
+      },
+      {
+        "type": "word_order",
+        "original": "Es, es besser ein anderes lieber.",
+        "correction": "Ich hätte lieber ein anderes Zimmer.",
+        "explanation": "Robert's attempt lacks a subject, a finite verb in second position, and coherent word order; 'lieber' as a preference marker belongs after the verb.",
+        "context": "Robert: Es, es besser ein anderes lieber. Es gibt ein anderes, äh, anderes."
+      },
+      {
+        "type": "word_order",
+        "original": "Aber Sie etwas gefunden.",
+        "correction": "Haben Sie etwas gefunden?",
+        "explanation": "To form a yes/no question in German the finite verb moves to first position (inversion); the auxiliary 'haben' should lead the question.",
+        "context": "Robert: Aber Sie etwas gefunden."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Hilfe nicht.",
+        "correction": "Nein danke, ich brauche keine Hilfe. / Keine Hilfe, danke.",
+        "explanation": "While 'Hilfe nicht' is partially interpretable, the standard polite refusal uses 'keine Hilfe' (negated noun) or a full verb phrase.",
+        "context": "Robert: Hilfe nicht."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 3,
+      "missing_article": 2,
+      "verb_conjugation": 1,
+      "vocabulary": 1,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Das Wasser ist kalt.",
+        "english": "The water is cold.",
+        "note": "used correctly — clear, well-formed sentence; best utterance of the session",
+        "tags": [
+          "hotel",
+          "complaints",
+          "A1"
+        ]
+      },
+      {
+        "german": "noch ein Problem",
+        "english": "another / one more problem",
+        "note": "used correctly in context, good functional phrase",
+        "tags": [
+          "discourse",
+          "hotel",
+          "A2"
+        ]
+      },
+      {
+        "german": "der Fernseher",
+        "english": "the television",
+        "note": "needs practice — correct vocabulary choice but wrong gender article used",
+        "tags": [
+          "hotel",
+          "household",
+          "gender",
+          "anki"
+        ]
+      },
+      {
+        "german": "funktioniert nicht",
+        "english": "does not work / is not working",
+        "note": "needs practice — Robert attempted this but used the infinitive stem instead",
+        "tags": [
+          "verb_conjugation",
+          "complaints",
+          "anki"
+        ]
+      },
+      {
+        "german": "ein anderes Zimmer",
+        "english": "a different / another room",
+        "note": "new this session — Robert attempted this phrase; correct vocabulary, needs structural support",
+        "tags": [
+          "hotel",
+          "A2",
+          "anki"
+        ]
+      },
+      {
+        "german": "sich kümmern um",
+        "english": "to take care of / to deal with",
+        "note": "used by Herr Fischer — high-frequency hotel/service phrase worth learning",
+        "tags": [
+          "phrasal_verb",
+          "hotel",
+          "B1",
+          "anki"
+        ]
+      },
+      {
+        "german": "Ich hätte lieber …",
+        "english": "I would rather / I would prefer …",
+        "note": "new this session — the correct structure for what Robert was trying to express",
+        "tags": [
+          "Konjunktiv_II",
+          "preference",
+          "A2",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Successfully communicated the core meaning of both problems despite limited grammar, showing good communicative resilience",
+      "Produced one grammatically correct and well-structured sentence independently: 'Das Wasser ist kalt.'",
+      "Used 'noch ein Problem' naturally to signal a second issue, showing emerging discourse management",
+      "Maintained the hotel register throughout (no informal 'du' slippage)",
+      "Attempted longer constructions (e.g. room preference) even when uncertain, rather than giving up"
+    ],
+    "next_focus": "Practice building complete complaint sentences using the pattern 'Der/Die/Das [noun] funktioniert nicht' and 'Ich habe ein Problem mit [noun]', with a focus on masculine/neuter article gender (der vs. das) for common hotel vocabulary."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

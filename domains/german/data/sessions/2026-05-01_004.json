@@ -1,0 +1,182 @@
+{
+  "session_id": "2026-05-01_004",
+  "date": "2026-05-01",
+  "persona": "Dr. Huber",
+  "scenario": "museum_navigation",
+  "duration_estimate_min": 8,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Dr. Huber",
+      "text": "Guten Morgen! Willkommen im Kunsthistorischen Museum. Wie kann ich Ihnen helfen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wer, wer musschen so lernen?"
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Entschuldigung, ich habe Sie nicht ganz verstanden. Meinten Sie vielleicht „Wo muss ich so lernen?“ - also wo man am besten die ägyptische Sammlung findet?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Egyptus Samlung."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Die ägyptische Sammlung befindet sich im Erdgeschoss, gleich rechts wenn Sie durch den großen Eingang gehen. Folgen Sie einfach den Schildern mit der Aufschrift „Ägyptische Sammlung“ - es ist sehr gut ausgeschildert."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Es interessant."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Ja, das ist wirklich sehr interessant! Die ägyptische Sammlung ist eine unserer schönsten Abteilungen. Möchten Sie, dass ich Ihnen den Weg noch einmal langsam erkläre oder haben Sie noch eine andere Frage?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Erstmal kaufen wir Eintrittskarte."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Gern. Die Kasse finden Sie direkt gegenüber dem Haupteingang, auf der linken Seite in der großen Eingangshalle."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Vielen Dank."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Bitte sehr! Ich wünsche Ihnen einen wunderbaren Besuch. Falls Sie noch Fragen haben, zögern Sie nicht, mich anzusprechen."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Genau."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Sehr gut. Genießen Sie Ihren Besuch. -EN"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert managed to navigate a basic museum interaction in German but struggled significantly with forming complete, grammatically correct sentences. His vocabulary was very limited and several utterances were barely intelligible or used non-German words. The session shows he is at an early beginner stage and needs focused work on basic sentence construction, articles, and verb conjugation.",
+    "errors": [
+      {
+        "type": "vocabulary",
+        "original": "Wer, wer musschen so lernen?",
+        "correction": "Wo finde ich die ägyptische Sammlung?",
+        "explanation": "The utterance is largely unintelligible and mixes incorrect words; 'Wer' means 'who', not 'where', and 'musschen'/'lernen' do not form a meaningful question about finding an exhibit.",
+        "context": "Wer, wer musschen so lernen?"
+      },
+      {
+        "type": "vocabulary",
+        "original": "Egyptus Samlung.",
+        "correction": "Die ägyptische Sammlung.",
+        "explanation": "'Egyptus' is not a German word; the correct German adjective is 'ägyptisch', and the noun 'Sammlung' was spelled/pronounced incorrectly.",
+        "context": "Egyptus Samlung."
+      },
+      {
+        "type": "missing_article",
+        "original": "Es interessant.",
+        "correction": "Es ist interessant.",
+        "explanation": "The verb 'ist' (is) is missing entirely; German requires an explicit linking verb and this sentence omits it.",
+        "context": "Es interessant."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Es interessant.",
+        "correction": "Es ist interessant.",
+        "explanation": "The copula verb 'sein' (to be) is absent; the conjugated form 'ist' must appear in the sentence.",
+        "context": "Es interessant."
+      },
+      {
+        "type": "word_order",
+        "original": "Erstmal kaufen wir Eintrittskarte.",
+        "correction": "Erstmal kaufen wir eine Eintrittskarte.",
+        "explanation": "While the verb-second word order is actually correct here after the fronted adverb, the indefinite article 'eine' before 'Eintrittskarte' is missing, making the sentence incomplete.",
+        "context": "Erstmal kaufen wir Eintrittskarte."
+      },
+      {
+        "type": "missing_article",
+        "original": "Erstmal kaufen wir Eintrittskarte.",
+        "correction": "Erstmal kaufen wir eine Eintrittskarte.",
+        "explanation": "'Eintrittskarte' is a feminine noun requiring the indefinite article 'eine' in the accusative case.",
+        "context": "Erstmal kaufen wir Eintrittskarte."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 1,
+      "missing_article": 2,
+      "verb_conjugation": 1,
+      "vocabulary": 2,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Vielen Dank",
+        "english": "Thank you very much",
+        "note": "used correctly",
+        "tags": [
+          "beginner",
+          "politeness",
+          "anki"
+        ]
+      },
+      {
+        "german": "die Eintrittskarte",
+        "english": "the entrance ticket",
+        "note": "needs practice – used without article",
+        "tags": [
+          "museum",
+          "anki",
+          "articles"
+        ]
+      },
+      {
+        "german": "die ägyptische Sammlung",
+        "english": "the Egyptian collection",
+        "note": "needs practice – mispronounced and misspelled as 'Egyptus Samlung'",
+        "tags": [
+          "museum",
+          "adjective endings",
+          "anki"
+        ]
+      },
+      {
+        "german": "erstmal",
+        "english": "first of all / for now",
+        "note": "used correctly as a sentence opener",
+        "tags": [
+          "adverb",
+          "beginner",
+          "anki"
+        ]
+      },
+      {
+        "german": "interessant",
+        "english": "interesting",
+        "note": "vocabulary known but needs practice in full sentence with 'ist'",
+        "tags": [
+          "adjective",
+          "beginner",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully used 'Vielen Dank' correctly and naturally at the right moment.",
+      "He attempted to initiate a topic (the Egyptian collection) even if pronunciation was unclear, showing communicative intent.",
+      "His use of 'Erstmal kaufen wir...' demonstrates a beginning understanding of verb-second word order in German.",
+      "He maintained the formal register (Sie-context) implicitly by not breaking into informal speech."
+    ],
+    "next_focus": "Practice constructing simple present-tense sentences using the structure Subject + Verb + Object with correct articles (ein/eine/der/die/das), starting with museum vocabulary such as 'Ich suche die ägyptische Sammlung' and 'Wir kaufen eine Eintrittskarte'."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

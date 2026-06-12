@@ -1,0 +1,179 @@
+{
+  "session_id": "2026-04-25 Persona: Frau Novak Scenario: ask_medicine Duration: 14 Mode: voice_001",
+  "date": "2026-04-25",
+  "persona": "Frau Novak",
+  "scenario": "ask_medicine",
+  "duration_estimate_min": 14,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Frau Novak",
+      "text": "Guten Tag! Was kann ich für Sie tun? Robert: Meine Frau hat ein Kupferschwert. Frau Novak: Entschuldigung, ich habe Sie nicht ganz verstanden. Könnten Sie mir bitte noch einmal sagen, was Ihrer Frau fehlt? Robert: Äh. Frau Novak: Möchten Sie mir vielleicht beschreiben, welche Beschwerden Ihre Frau hat? Kopfschmerzen, Halsschmerzen, oder etwas anderes? Ich helfe Ihnen gerne. Robert: Ich, ich weiß. Frau Novak: Kein Problem. Sagen Sie mir einfach, welche Symptome Ihre Frau hat, dann kann ich Ihnen das richtige Mittel empfehlen. Robert: Äh, danke, danke, danke. Äh, äh, sie, sie hat Kopfschmerzen. Sie hat Kopfschmerzen. Frau Novak: Ah, Ihre Frau hat also Kopfschmerzen. Verstehe. Möchten Sie ein Schmerzmittel, das rezeptfrei ist? Robert: Genau, ich möchte. Frau Novak: Gerne. Ich empfehle Ihnen Aspirin oder Ibuprofen. Wie stark sind die Kopfschmerzen Ihrer Frau? Robert: Hast du Tylenol? Frau Novak: Entschuldigung, ich spreche nur Deutsch. Möchten Sie ein Schmerzmittel gegen Kopfschmerzen für Ihre Frau? Robert: Okay. Frau Novak: Gut. Dann gebe ich Ihnen Ibuprofen 400 mg. Nehmen Sie eine Tablette, maximal dreimal tä Robert: Sie hat, du hast, du hast Ibuprofen und Aspirin. Was ist besser zwischen zwischen zwei? Frau Novak: Beide sind gut, aber bei starken Kopfschmerzen ist Ibuprofen oft etwas wirksamer. Nehmen Sie eine Tablette alle sechs bis acht Stunden, höchstens drei am Tag. Robert: Gehen wir mit Ibuprofen. Frau Novak: Sehr gut. Hier ist das Ibuprofen 400 mg. Nehmen Sie eine Tablette alle sechs bis acht Stunden, maximal drei Stück am Tag. Brauchen Sie sonst noch etwas? Robert: ein Wasser. Hast du Wasser, eine Flasche Wasser? Frau Novak: Leider verkaufen wir hier in der Apotheke kein Wasser. Dafür gibt es aber einen Supermarkt oder Kiosk direkt nebenan. Robert: Okay, gehen wir gleich dort. Frau Novak: Sehr gut. Brauchen Sie noch etwas anderes, oder soll ich Ihnen die Einnahme noc Robert: Danke. Frau Novak: Gerne. Gute Besserung für Ihre Frau! Auf Wiedersehen. Robert: Auf Wiedersehen. Tschüss. Frau Novak: Auf Wiedersehen! -"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert managed to communicate the core need (headache medication for his wife) and complete the pharmacy transaction, showing basic survival-level German in a real-world scenario. However, the session revealed significant struggles with vocabulary recall, register consistency (mixing 'du' and 'Sie'), and sentence completion, with several utterances left unfinished or replaced by filler. The main takeaway is that Robert needs to build pharmacy/medical vocabulary and commit to the formal 'Sie' register in professional settings.",
+    "errors": [
+      {
+        "type": "vocabulary",
+        "original": "Meine Frau hat ein Kupferschwert.",
+        "correction": "Meine Frau hat Kopfschmerzen.",
+        "explanation": "'Kupferschwert' means 'copper sword' and is not a medical term; Robert likely confused it with 'Kopfschmerzen' (headache), possibly a mispronunciation or mistaken word.",
+        "context": "Meine Frau hat ein Kupferschwert."
+      },
+      {
+        "type": "missing_article",
+        "original": "Meine Frau hat ein Kupferschwert.",
+        "correction": "Meine Frau hat Kopfschmerzen.",
+        "explanation": "'Kopfschmerzen' is used without an article in German; adding 'ein' before it is incorrect even if the target word were right.",
+        "context": "Meine Frau hat ein Kupferschwert."
+      },
+      {
+        "type": "register",
+        "original": "Hast du Tylenol?",
+        "correction": "Haben Sie Tylenol?",
+        "explanation": "In a pharmacy (formal public setting), 'Sie' must be used; 'du' is inappropriately informal with a stranger.",
+        "context": "Hast du Tylenol?"
+      },
+      {
+        "type": "register",
+        "original": "du hast, du hast Ibuprofen und Aspirin.",
+        "correction": "Sie haben Ibuprofen und Aspirin.",
+        "explanation": "Again, 'du' is the wrong register for addressing a pharmacist; 'Sie' is required throughout this interaction.",
+        "context": "Sie hat, du hast, du hast Ibuprofen und Aspirin. Was ist besser zwischen zwischen zwei?"
+      },
+      {
+        "type": "word_order",
+        "original": "Was ist besser zwischen zwischen zwei?",
+        "correction": "Was ist besser — Ibuprofen oder Aspirin? / Welches ist besser von den beiden?",
+        "explanation": "'Zwischen zwischen zwei' is a doubled preposition with no noun object; the correct construction names both options or uses 'von den beiden' (of the two).",
+        "context": "Sie hat, du hast, du hast Ibuprofen und Aspirin. Was ist besser zwischen zwischen zwei?"
+      },
+      {
+        "type": "register",
+        "original": "Hast du Wasser, eine Flasche Wasser?",
+        "correction": "Haben Sie Wasser? Eine Flasche Wasser?",
+        "explanation": "Once more 'du' is used instead of the formal 'Sie' required in this professional context.",
+        "context": "ein Wasser. Hast du Wasser, eine Flasche Wasser?"
+      },
+      {
+        "type": "missing_article",
+        "original": "ein Wasser.",
+        "correction": "Ich möchte ein Wasser. / Haben Sie Wasser?",
+        "explanation": "The utterance is a sentence fragment; while 'ein Wasser' is grammatically acceptable as an elliptical request in casual speech, a complete sentence is expected in this formal register.",
+        "context": "ein Wasser. Hast du Wasser, eine Flasche Wasser?"
+      },
+      {
+        "type": "word_order",
+        "original": "Gehen wir gleich dort.",
+        "correction": "Dann gehe ich gleich dorthin.",
+        "explanation": "'Gehen wir' (let's go) is unusual here as Robert is alone; 'dorthin' is needed because movement toward a place requires the directional 'hin'.",
+        "context": "Okay, gehen wir gleich dort."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Genau, ich möchte.",
+        "correction": "Genau, ich möchte eines, das rezeptfrei ist. / Ja, genau.",
+        "explanation": "'Möchten' requires an object or complement; leaving the sentence incomplete makes it grammatically and communicatively unfinished.",
+        "context": "Genau, ich möchte."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 3,
+      "missing_article": 2,
+      "verb_conjugation": 1,
+      "vocabulary": 1,
+      "register": 3
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Kopfschmerzen",
+        "english": "headache(s)",
+        "note": "eventually used correctly after initial confusion",
+        "tags": [
+          "medical",
+          "anki",
+          "pharmacy"
+        ]
+      },
+      {
+        "german": "Schmerzmittel",
+        "english": "painkiller / pain reliever",
+        "note": "introduced by Frau Novak; Robert should internalize this",
+        "tags": [
+          "medical",
+          "anki",
+          "pharmacy"
+        ]
+      },
+      {
+        "german": "rezeptfrei",
+        "english": "over-the-counter (without prescription)",
+        "note": "new this session; key pharmacy word",
+        "tags": [
+          "medical",
+          "anki",
+          "pharmacy"
+        ]
+      },
+      {
+        "german": "Ibuprofen / Aspirin",
+        "english": "ibuprofen / aspirin",
+        "note": "used correctly in context",
+        "tags": [
+          "medical",
+          "pharmacy"
+        ]
+      },
+      {
+        "german": "wirksamer",
+        "english": "more effective",
+        "note": "introduced by Frau Novak; comparative form to learn",
+        "tags": [
+          "medical",
+          "anki",
+          "grammar"
+        ]
+      },
+      {
+        "german": "Apotheke",
+        "english": "pharmacy",
+        "note": "implicit in scenario; Robert should use this word actively next time",
+        "tags": [
+          "anki",
+          "pharmacy"
+        ]
+      },
+      {
+        "german": "Beschwerden",
+        "english": "complaints / symptoms",
+        "note": "introduced by Frau Novak; important medical register word",
+        "tags": [
+          "medical",
+          "anki"
+        ]
+      },
+      {
+        "german": "Gute Besserung",
+        "english": "Get well soon",
+        "note": "used correctly by Frau Novak; Robert should learn to say this",
+        "tags": [
+          "anki",
+          "phrases"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully communicated the key information (wife has a headache) after initial confusion and recovered from the 'Kupferschwert' mishap.",
+      "He used 'Kopfschmerzen' correctly once he found the word, repeating it for clarity.",
+      "He engaged with the pharmacist's recommendation by asking a comparative question ('was ist besser'), showing communicative initiative.",
+      "He used polite acknowledgment phrases ('Danke', 'Auf Wiedersehen', 'Tschüss') naturally and appropriately.",
+      "He accepted help and kept the conversation moving rather than shutting down completely."
+    ],
+    "next_focus": "Drill the formal 'Sie' register exclusively for service encounters (pharmacy, shop, doctor): practice conjugating common verbs (haben, sein, möchten, können) in Sie-form until switching to 'du' with strangers no longer occurs."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true
+}

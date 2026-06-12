@@ -1,0 +1,27 @@
+---SESSION---
+Date: 2026-05-07
+Persona: Georg
+Scenario: neighborhood_chat
+Duration: 20
+Mode: writingGeorg: Grüß Gott! Na, setzen Sie sich doch. Ich bin der Georg. Sind Sie zum ersten Mal in Wien oder schon öfter hier?
+Robert: Es ist meine ersten Mal in Wien.  Ich möchte lieber spazieren gehen durch der Stadt.
+Georg: Ah, Ihr erstes Mal? Das ist ja schön! Spazieren durch die Stadt ist eine super Idee, besonders jetzt. Na, wo möchten Sie denn hin? Vielleicht vom Stephansplatz Richtung Naschmarkt oder eher in ein ruhigeres Grätzel wie Neubau? Was machen Sie eigentlich beruflich, wenn ich fragen darf? Bleiben Sie länger in Wien?
+Robert: Was würden Sie mir empfehlen?
+Georg: Na, für einen ersten Spaziergang würde ich Ihnen den Weg vom Stephansdom zum Naschmarkt empfehlen. Früh am Morgen ist es dort noch gemütlich, nicht so voll mit Touristen. Oder gehen Sie einfach Richtung Neubau – da gibt’s echte Grätzel-Atmosphäre ohne Ketten. Und Sie? Kommen Sie aus Amerika? Wie lange bleiben Sie denn in Wien?
+Robert: Was bedeutet "Grätzel" ?
+Georg: Grätzel? Ach, das ist einfach unser Wiener Wort für ein Stadtviertel, ein kleines, echtes Viertel mit eigenem Charakter. Nicht so groß wie ein Bezirk, sondern eher gemütlich und überschaubar. In Neubau zum Beispiel ist mein Grätzel voller kleiner Cafés und Läden, wo die Leute wirklich wohnen. Wollen wir da mal zusammen spazieren gehen? Oder bleiben wir erst beim Naschmarkt?
+Robert: Ich muß meine Frau abholen.  Könner wir später in ein kleiner Café in Neubau?
+Georg: Na, klar! „Ich muss meine Frau abholen“ – und dann „Können wir später in ein kleines Café in Neubau?“ klingt gut. Servus, kein Problem. Holen Sie Ihre Frau ruhig ab. In Neubau gibt’s ein sehr gemütliches kleines Café in der Burggasse, das „Café Merkur“ – nichts Touristenmäßiges, einfach gute Kaffee und ruhige Ecke. Wann passt es Ihnen? So gegen 16 Uhr? Ich kann dort auf Sie beide warten. Wie lange bleiben Sie denn insgesamt in Wien?
+Robert: Wir bleiben eine Woche.  Gibt mir seine Nummer von Handy, für text später.
+Georg: Na, eine Woche ist perfekt für Wien! „Gib mir seine Nummer von Handy“ – besser: „Geben Sie mir Ihre Handynummer, damit wir später texten können.“ Servus, klar. Meine Nummer ist 0676 9876543. Schreiben Sie mir einfach, wenn Sie mit Ihrer Frau fertig sind. Dann treffen wir uns gemütlich im kleinen Café in der Burggasse in Neubau. Bis später!
+Robert: Genau.  Geben Sir mir Ihre Handynummer, damit wir später texten können.
+Georg: Na, genau! „Geben Sie mir Ihre Handynummer“ – das klingt schon viel besser. Also, meine Nummer ist 0676 9876543. Schreiben Sie mir einfach, wenn Sie mit Ihrer Frau fertig sind. Dann treffen wir uns gemütlich im Café in der Burggasse. Bis bald! Ich freu mich schon.
+Robert: Es freut mir auch.
+Georg: Na, „Es freut mich auch“ – genau richtig! Servus, super. Dann bis später im Café in der Burggasse. Ich freu mich wirklich, Sie und Ihre Frau kennenzulernen. Kommen Sie einfach, wann es passt – ich bin eh flexibel. Schreiben Sie mir, ja? Servus!
+Robert: Noch eine frage.  Was bedeutet einfach?
+Georg: Na, „Noch eine Frage“ – perfekt! „Einfach“ bedeutet hier so viel wie „nur“ oder „ganz normal“ – also nichts Besonderes, keine Touristenfalle, sondern einfach gute Kaffee und ruhige Atmosphäre. Genau das mag ich in Neubau. Sonst noch was? Ich bin schon gespannt auf Ihre Frau. Schreiben Sie mir einfach, wenn Sie Zeit haben. Servus!
+Robert: ok, auf änglish, "simply" danke ich.
+Georg: Na, „auf Englisch“ meinen Sie? Und „danke“ statt „danke ich“ – das passt schon. „Einfach“ heißt wirklich „simply“ oder „just“ – also ganz normal, ohne Schnickschnack. Genau. Ich warte auf Ihre Nachricht. Bis später im Café! Servus!
+Robert: Tchüss.
+Georg: Servus! „Tschüss“ heißt es – aber passt schon. Bis später im Café, ich freu mich! Schreiben Sie mir einfach. Servus!
+---END---

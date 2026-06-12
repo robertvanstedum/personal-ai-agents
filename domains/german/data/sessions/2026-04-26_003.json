@@ -1,0 +1,31 @@
+{
+  "session_id": "2026-04-26_003",
+  "date": "2026-04-26",
+  "persona": "Herr Fischer",
+  "scenario": "hotel_checkout",
+  "duration_estimate_min": 6,
+  "mode": "voice herr fischer: guten morgen! willkommen am empfang. möchten sie auschecken? robert: ja, ich würde auschecken. herr fischer: gerne. hier ist ihre rechnung für zimmer 214. stimmt alles? möchten sie eine quittung? robert: ich brauche eine quittung. herr fischer: natürlich, hier ist ihre quittung. möchten sie ihr gepäck noch bis zum abend bei uns lagern lassen? das ist kostenlos. robert: nein, brauche ich nicht. herr fischer: alles klar. dann wünsche ich ihnen eine gute weiterreise. kommen sie gerne wieder! robert: danke. herr fischer: bitte sehr. auf wiedersehen!",
+  "source": "manual",
+  "raw_transcript": [],
+  "reviewer_output": {
+    "overall_summary": "Review parse failed — see reviewer_raw_output in session file.",
+    "errors": [],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 0,
+      "vocabulary": 0,
+      "register": 0
+    },
+    "vocabulary_highlights": [],
+    "strengths": [],
+    "next_focus": ""
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "reviewer_raw_output": "The transcript appears to be empty — no actual conversation lines were provided. I'll return a JSON object reflecting that there is nothing to analyze.\n\n{\"overall_summary\":\"No transcript content was provided for this session, so no meaningful analysis could be performed. Without dialogue from Robert or the AI persona, errors, strengths, and vocabulary cannot be assessed. Please resubmit with the full conversation transcript included.\",\"errors\":[],\"error_type_counts\":{\"gender\":0,\"word_order\":0,\"missing_article\":0,\"verb_conjugation\":0,\"vocabulary\":0,\"register\":0},\"vocabulary_highlights\":[],\"strengths\":[],\"next_focus\":\"Provide a complete transcript so that targeted grammar and vocabulary feedback can be generated for the next session.\"}"
+}

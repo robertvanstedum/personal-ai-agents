@@ -1,0 +1,259 @@
+{
+  "session_id": "2026-04-23_003",
+  "date": "2026-04-23",
+  "persona": "Dr. Huber",
+  "scenario": "Museum tour practice - Kunsthistorisches Museum Vienna",
+  "duration_estimate_min": 45,
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Dr. Huber",
+      "text": "Guten Tag! Willkommen im Kunsthistorischen Museum. Ich bin Dr. Huber. Wie kann ich Ihnen heute helfen? Sie sehen aus, als hätten Sie Interesse an unserer Sammlung. Möchten Sie, dass ich Ihnen etwas zu einem bestimmten Werk erzähle, oder haben Sie eine bestimmte Frage?"
+    },
+    {
+      "speaker": "You",
+      "text": "Haben Sie"
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Entschuldigung, ich habe den Rest Ihrer Frage leider nicht ganz verstanden. Könnten Sie den Satz bitte noch einmal vollständig wiederholen? Ich helfe Ihnen sehr gerne weiter."
+    },
+    {
+      "speaker": "You",
+      "text": "Haben Sie, ja, es interessiert mich."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Ach, wunderbar! Es freut mich sehr, dass es Sie interessiert. Möchten Sie, dass ich Ihnen jetzt etwas zu einem bestimmten Gemälde erzähle, oder…"
+    },
+    {
+      "speaker": "You",
+      "text": "Klimt, haben Sie etwas zu Klimt, der Klimt von Klimt?"
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Ja, natürlich haben wir mehrere bedeutende Werke von Gustav Klimt in unserer Sammlung. Am bekanntesten ist hier das Porträt der Adele Bloch-Bauer I, das sogenannte „goldene Portrait\". Möchten Sie, dass ich Ihnen mehr darüber erzähle, oder haben Sie eine spezielle Frage zu Klimt?"
+    },
+    {
+      "speaker": "You",
+      "text": "Ich hätte, ich, ich hätte mich gern mehr erzählen."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Sehr gerne. Gustav Klimt hat das Porträt der Adele Bloch-Bauer im Jahr 1907 gemalt. Das Bild besticht durch seine intensive Goldverwendung und die ornamentalen Muster, die typisch für seine „goldene Phase\" sind. Adele war eine enge Freundin und Mäzenin von Klimt. Das Gemälde hat eine sehr bewegte Geschichte — es wurde von den Nationalsozialisten geraubt und erst 2006 nach einem langen Rechtsstreit an die Erben zurückgegeben. Möchten Sie, dass ich Ihnen noch mehr über die künstlerischen Details oder die Geschichte des Bildes erzähle?"
+    },
+    {
+      "speaker": "You",
+      "text": "No, I like that. I like that. Yeah."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Es freut mich, dass Ihnen die Geschichte gefällt. Möchten Sie noch etwas über ein anderes Werk von Klimt erfahren, oder soll ich Ihnen ein ganz anderes Highlight unseres Museums zeigen?"
+    },
+    {
+      "speaker": "You",
+      "text": "Ich habe Englisch mit meiner Frau gesprochen."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Verstehe. Das ist ganz natürlich, wenn man mit seiner Frau spricht. Aber wenn Sie…"
+    },
+    {
+      "speaker": "You",
+      "text": "Entschuldigung. Äh."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Kein Problem, das macht gar nichts. Möchten Sie, dass ich Ihnen weiter über Klimt erzähle, oder haben Sie eine andere Frage zu einem anderen Künstler?"
+    },
+    {
+      "speaker": "You",
+      "text": "Bitte, bitte wieder, bitte wieder, wiederholen nach einmal, ich nicht die Frage gehört."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Selbstverständlich. Möchten Sie, dass ich Ihnen noch etwas über Gustav Klimt erzähle, oder soll ich Ihnen ein anderes Highlight unseres Museums zeigen?"
+    },
+    {
+      "speaker": "You",
+      "text": "Ja, äh, wie war Gustav Klimt?"
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Gustav Klimt war eine der einflussreichsten Persönlichkeiten der Wiener Moderne. Er lebte von 1862 bis 1918 und war Mitbegründer der Wiener Secession. Klimt war bekannt für seinen außergewöhnlichen Stil, der Elemente des Jugendstils, des Symbolismus und der byzantinischen Kunst miteinander verbindet. Besonders berühmt sind seine „goldenen\" Werke, in denen er echtes Blattgold verwendet hat. Möchten Sie noch mehr über sein Leben oder über ein bestimmtes Werk erfahren?"
+    },
+    {
+      "speaker": "You",
+      "text": "Ich, ich möchte"
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Sie möchten… bitte sprechen Sie ruhig weiter. Ich höre Ihnen aufmerksam zu."
+    },
+    {
+      "speaker": "You",
+      "text": "Ich möchte der Mal, Mal sehen."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Verstehe. Sie möchten sich gerne das Gemälde selbst ansehen. Das Porträt der Adele Bloch-Bauer hängt bei uns im ersten Stock in Saal XI. Soll ich Sie dorthin begleiten, oder möchten Sie noch etwas über das Bild wissen, bevor wir hingehen?"
+    },
+    {
+      "speaker": "You",
+      "text": "Nein, ich, ich möchte gern der Gemälde sehen, ansehen."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Sehr gerne. Dann folgen Sie mir bitte. Das Porträt von Adele Bloch-Bauer hängt gleich hier vorne im ersten Stock. Kommen Sie, ich zeige Ihnen den Weg."
+    },
+    {
+      "speaker": "You",
+      "text": "Dieses Museum ist sehr, sehr groß."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Ja, das Kunsthistorische Museum ist tatsächlich eines der größten und schönsten Museen Europas. Wir haben über zweitausend Gemälde und zahllose Skulpturen in unserer Sammlung. Aber keine Sorge — ich kenne mich hier sehr gut aus und bringe Sie sicher zu den wichtigsten Werken."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert demonstrated beginner-level conversational German with clear enthusiasm for the topic, managing to communicate his basic interests in Klimt and navigate a museum scenario. However, he struggled significantly with sentence completion, article gender, and verb construction, and briefly switched to English mid-session. His vocabulary is limited but he showed good use of formulaic phrases like 'Entschuldigung' and 'Ich möchte gern'.",
+    "errors": [
+      {
+        "type": "verb_conjugation",
+        "original": "ich hätte mich gern mehr erzählen",
+        "correction": "Ich würde gern mehr hören / Könnten Sie mir mehr erzählen?",
+        "explanation": "'Hätte mich gern mehr erzählen' is not grammatically coherent; 'erzählen' here needs to be directed at Dr. Huber as the one doing the telling, so a construction like 'Könnten Sie mir mehr erzählen?' or 'Ich würde gern mehr hören' is correct.",
+        "context": "Ich hätte, ich, ich hätte mich gern mehr erzählen."
+      },
+      {
+        "type": "register",
+        "original": "No, I like that. I like that. Yeah.",
+        "correction": "Ja, das gefällt mir sehr. / Das ist sehr interessant, danke.",
+        "explanation": "Switching to English mid-session breaks the immersion and practice goal; Robert should attempt German even when expressing simple approval.",
+        "context": "No, I like that. I like that. Yeah."
+      },
+      {
+        "type": "word_order",
+        "original": "bitte wieder, wiederholen nach einmal, ich nicht die Frage gehört",
+        "correction": "Könnten Sie das bitte noch einmal wiederholen? Ich habe die Frage nicht gehört.",
+        "explanation": "'Nach einmal' is not standard German — the correct phrase is 'noch einmal'; also the verb 'gehört' must come at the end of the subordinate clause and 'nicht' should follow the auxiliary 'habe'.",
+        "context": "Bitte, bitte wieder, bitte wieder, wiederholen nach einmal, ich nicht die Frage gehört."
+      },
+      {
+        "type": "vocabulary",
+        "original": "nach einmal",
+        "correction": "noch einmal",
+        "explanation": "'Nach einmal' does not exist in standard German; 'noch einmal' means 'once more / again'.",
+        "context": "Bitte, bitte wieder, bitte wieder, wiederholen nach einmal, ich nicht die Frage gehört."
+      },
+      {
+        "type": "gender",
+        "original": "der Klimt von Klimt",
+        "correction": "das Werk von Klimt / das Bild von Klimt / etwas von Klimt",
+        "explanation": "'Klimt' here seems intended to refer to a painting (das Gemälde / das Bild), which are neuter nouns, so 'der' is incorrect; alternatively Robert may have meant the artist but the phrasing 'der Klimt von Klimt' is redundant and unclear.",
+        "context": "Klimt, haben Sie etwas zu Klimt, der Klimt von Klimt?"
+      },
+      {
+        "type": "gender",
+        "original": "ich möchte gern der Gemälde sehen",
+        "correction": "Ich möchte gern das Gemälde sehen.",
+        "explanation": "'Gemälde' is a neuter noun (das Gemälde), so the accusative article is 'das', not 'der'.",
+        "context": "Nein, ich, ich möchte gern der Gemälde sehen, ansehen."
+      },
+      {
+        "type": "missing_article",
+        "original": "Ich habe Englisch mit meiner Frau gesprochen",
+        "correction": "Ich habe auf Englisch mit meiner Frau gesprochen.",
+        "explanation": "When referring to speaking in a language, German uses the preposition 'auf' (or 'auf Englisch'), not just the bare language name after 'habe … gesprochen'.",
+        "context": "Ich habe Englisch mit meiner Frau gesprochen."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 2,
+      "word_order": 1,
+      "missing_article": 1,
+      "verb_conjugation": 1,
+      "vocabulary": 1,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Entschuldigung",
+        "english": "Excuse me / I'm sorry",
+        "note": "used correctly",
+        "tags": [
+          "A1",
+          "politeness"
+        ]
+      },
+      {
+        "german": "Ich möchte gern … sehen",
+        "english": "I would like to see …",
+        "note": "used correctly apart from article gender",
+        "tags": [
+          "A2",
+          "anki",
+          "museum"
+        ]
+      },
+      {
+        "german": "noch einmal wiederholen",
+        "english": "to repeat once more",
+        "note": "needs practice — Robert used 'nach einmal' instead",
+        "tags": [
+          "A2",
+          "anki",
+          "classroom-phrases"
+        ]
+      },
+      {
+        "german": "das Gemälde",
+        "english": "the painting",
+        "note": "needs practice — Robert used incorrect gender 'der'",
+        "tags": [
+          "A2",
+          "anki",
+          "art-vocabulary"
+        ]
+      },
+      {
+        "german": "das Porträt",
+        "english": "the portrait",
+        "note": "new this session — heard in Dr. Huber's speech",
+        "tags": [
+          "B1",
+          "anki",
+          "art-vocabulary"
+        ]
+      },
+      {
+        "german": "die Wiener Secession",
+        "english": "the Vienna Secession (art movement)",
+        "note": "new this session — cultural vocabulary",
+        "tags": [
+          "B2",
+          "culture",
+          "art-vocabulary"
+        ]
+      },
+      {
+        "german": "auf Englisch sprechen",
+        "english": "to speak in English",
+        "note": "needs practice — Robert omitted 'auf'",
+        "tags": [
+          "A2",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully initiated topic-specific requests by naming the artist (Klimt) and showing clear communicative intent despite limited vocabulary.",
+      "He used polite register consistently, including 'Entschuldigung' and 'Bitte' at appropriate moments.",
+      "He correctly formed 'Dieses Museum ist sehr groß' — a complete, well-structured German sentence with correct demonstrative pronoun and adjective.",
+      "He showed self-correction attempts and persistence when struggling to complete sentences, which is valuable practice behaviour."
+    ],
+    "next_focus": "Focus on neuter noun genders for common art/museum vocabulary (das Gemälde, das Bild, das Werk, das Porträt) and practice the fixed phrase 'Könnten Sie das bitte noch einmal wiederholen?' to replace the broken 'nach einmal' construction."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true
+}

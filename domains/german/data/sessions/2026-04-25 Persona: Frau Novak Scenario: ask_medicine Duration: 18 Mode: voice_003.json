@@ -1,0 +1,147 @@
+{
+  "session_id": "2026-04-25 Persona: Frau Novak Scenario: ask_medicine Duration: 18 Mode: voice_003",
+  "date": "2026-04-25",
+  "persona": "Frau Novak",
+  "scenario": "ask_medicine",
+  "duration_estimate_min": 18,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Frau Novak",
+      "text": "Guten Tag! Was kann ich für Sie tun? Robert: Brauche, brauche etwas, für, für meiner Frau Novak: Entschuldigung, ich habe Sie nicht ganz verstanden. Wofür brauchen Sie etwas? Robert: ist Frau Novak: Für Ihre Frau oder für Sie selbst? Sagen Sie mir einfach, welche Beschwerden Sie haben. Robert: Ich brauche etwas, no, ich brauche etwas für meiner Frau, Kopfschmerzen. Frau Novak: Ah, Ihre Frau hat Kopfschmerzen. Möchten Sie ein Schmerzmittel für sie? Robert: der Frau Novak: Möchten Sie ein Schmerzmittel für Ihre Frau? Robert: Ich Frau Novak: Möchten Sie ein Schmerzmittel für Ihre Frau? Robert: Ich glaube, ich, ich, ich glaube Frau Novak: Kein Problem. Möchten Sie ein Schmerzmittel für die Kopfschmerzen Ihrer Frau? Robert: Was für, was für, äh, Schmittel? Frau Novak: Ich empfehle ein Ibuprofen 400 mg. Das hilft sehr gut bei Kopfschmerzen. Robert: haben Sie. Frau Novak: Ja, ich habe ein Ibuprofen 400 mg hier. Nehmen Sie eine Tablette alle sechs bis acht Stunden, höchstens drei am Tag. Robert: Ibuprofen ist ausgeschlossen. Frau Novak: Verstehe. Dann nehmen wir ein Paracetamol. Möchten Sie die Tabletten oder die Kapseln? Robert: Ich brauche Frau Novak: Möchten Sie eine Packung Paracetamol-Tabletten? Robert: Table. Frau Novak: Gerne. Hier ist eine Packung Tabletten. Nehmen Sie eine Tablette alle sechs bis acht Stunden, höchstens vier am Tag. Brauchen Sie sonst noc Robert: Was ist, was ist der Unterschied? Frau Novak: Ibuprofen wirkt stärker gegen Entzündungen, Paracetamol ist etwas schonender für den Magen. Da Ibuprofen ausgeschlossen ist, ist Paracetamol die richtige Wahl. Robert: Ich habe ausgeschlossen gesprochen, aber ausgeschlossen. Frau Novak: Verstehe, dann nehmen Sie ein Ibuprofen. Hier ist eine Packung. Nehmen Sie eine Tablette alle sechs bis acht Stunden, höchstens drei am Tag. Brauchen Sie sonst noch etwas? Robert: Nein, das ist alles. Frau Novak: Gut. Das wäre dann eine Packung Ibuprofen. Zahlen Sie bar oder mit Karte? Robert: Mit Karte, bitte. Frau Novak: Sehr gut. Hier bitte. Gute Besserung für Ihre Frau! Auf Wiedersehen. Robert: Auf Wiedersehen. Tschüss tschüss. Frau Novak: Auf Wiedersehen!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully completed a pharmacy interaction in German, navigating a real-world medical scenario from start to finish. His main struggles were dative case endings (especially 'meine Frau' vs 'meiner Frau') and frequent hesitation with incomplete sentences. Despite this, he communicated his core needs effectively and the conversation reached a natural conclusion.",
+    "errors": [
+      {
+        "type": "gender",
+        "original": "für meiner Frau",
+        "correction": "für meine Frau",
+        "explanation": "After the preposition 'für', the accusative case is required; 'meine Frau' is accusative, not 'meiner Frau' which is genitive/dative.",
+        "context": "Ich brauche etwas für meiner Frau, Kopfschmerzen."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Schmittel",
+        "correction": "Schmerzmittel",
+        "explanation": "The correct word is 'Schmerzmittel' (painkiller); Robert truncated the compound word, omitting 'Schmerz-'.",
+        "context": "Was für, was für, äh, Schmittel?"
+      },
+      {
+        "type": "vocabulary",
+        "original": "Ibuprofen ist ausgeschlossen",
+        "correction": "Ibuprofen verträgt sie nicht / Ibuprofen ist nicht möglich für sie",
+        "explanation": "'Ausgeschlossen' means 'out of the question / excluded' in a more definitive or formal sense; a more natural phrasing in a pharmacy context would be 'Sie verträgt kein Ibuprofen' (she cannot tolerate ibuprofen).",
+        "context": "Ibuprofen ist ausgeschlossen."
+      },
+      {
+        "type": "register",
+        "original": "Auf Wiedersehen. Tschüss tschüss.",
+        "correction": "Auf Wiedersehen.",
+        "explanation": "'Tschüss' is informal and slightly incongruous after the formal 'Auf Wiedersehen' in a professional pharmacy setting; it is better to stay consistent with the formal register throughout.",
+        "context": "Auf Wiedersehen. Tschüss tschüss."
+      },
+      {
+        "type": "missing_article",
+        "original": "Brauche etwas für",
+        "correction": "Ich brauche etwas für",
+        "explanation": "The subject pronoun 'Ich' was omitted, which is ungrammatical in German; unlike Spanish or Italian, German requires an explicit subject pronoun.",
+        "context": "Brauche, brauche etwas, für, für meiner Frau"
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 0,
+      "missing_article": 1,
+      "verb_conjugation": 0,
+      "vocabulary": 2,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Kopfschmerzen",
+        "english": "headache(s)",
+        "note": "used correctly",
+        "tags": [
+          "medical",
+          "pharmacy",
+          "anki"
+        ]
+      },
+      {
+        "german": "Schmerzmittel",
+        "english": "painkiller / pain medication",
+        "note": "needs practice — truncated to 'Schmittel' during session",
+        "tags": [
+          "medical",
+          "pharmacy",
+          "anki",
+          "compound-noun"
+        ]
+      },
+      {
+        "german": "ausgeschlossen",
+        "english": "out of the question / excluded",
+        "note": "used but imprecise in context — practice 'verträgt kein Ibuprofen' instead",
+        "tags": [
+          "medical",
+          "vocabulary",
+          "anki"
+        ]
+      },
+      {
+        "german": "Tabletten",
+        "english": "tablets",
+        "note": "used correctly (partial word produced but context clear)",
+        "tags": [
+          "medical",
+          "pharmacy"
+        ]
+      },
+      {
+        "german": "Das ist alles",
+        "english": "That is all",
+        "note": "used correctly — natural closing phrase",
+        "tags": [
+          "phrases",
+          "anki"
+        ]
+      },
+      {
+        "german": "Mit Karte, bitte",
+        "english": "By card, please",
+        "note": "used correctly — excellent practical phrase",
+        "tags": [
+          "phrases",
+          "transactions",
+          "anki"
+        ]
+      },
+      {
+        "german": "Gute Besserung",
+        "english": "Get well soon",
+        "note": "new this session — produced by Frau Novak, worth learning actively",
+        "tags": [
+          "phrases",
+          "medical",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully conveyed the core message (medicine needed for wife's headache) despite significant hesitation, showing communicative resilience.",
+      "He asked a relevant and intelligent follow-up question ('Was ist der Unterschied?'), demonstrating active engagement with the scenario.",
+      "He used 'Mit Karte, bitte' naturally and correctly at the checkout, showing good practical vocabulary.",
+      "He produced 'Das ist alles' as a clean closing sentence with correct grammar.",
+      "He understood Frau Novak's questions and redirections throughout, indicating solid receptive German skills."
+    ],
+    "next_focus": "Practice the accusative case after 'für': drill phrases like 'für meine Frau', 'für meinen Mann', 'für mein Kind' to replace the persistent dative error 'für meiner Frau'."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

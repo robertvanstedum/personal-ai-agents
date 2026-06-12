@@ -1,0 +1,20 @@
+{
+  "lesson_date": "2026-04-24",
+  "lesson_number": 12,
+  "persona": "Stefan",
+  "persona_role": "U-Bahn Stranger",
+  "scenario": "ask_directions",
+  "warm_up": "Review top error from last session: gender.",
+  "focus": "Accusative article agreement for the three main genders: practice 'einen' (masc.), 'eine' (fem.), 'ein' (neut.) in short shopping dialogues until the forms feel automatic.",
+  "speaking_prompt": "You're on the street near the Stephansdom and you're not sure which way to walk. Ask Stefan how to get to the Belvedere. He'll tell you — confirm you understood the route.",
+  "vocabulary_targets": [
+    "die Semmel",
+    "die Körnersemmel",
+    "der Topfenstrudel",
+    "etwas für meine Frau",
+    "Bar oder Karte?"
+  ],
+  "carry_forward_errors": [
+    "Großen Kaffee (was: Große Kaffee) — session 2026-04-24"
+  ]
+}

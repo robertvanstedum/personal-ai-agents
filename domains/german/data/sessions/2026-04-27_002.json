@@ -1,0 +1,215 @@
+{
+  "session_id": "2026-04-27_002",
+  "date": "2026-04-27",
+  "persona": "Maria",
+  "scenario": "cafe_order",
+  "duration_estimate_min": 12,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Grüß Gott! Was darf’s denn sein?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte ein Kaffee, bitte. Una Verlängerte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ah, einen Verlängerten! Sehr gut. Und dazu etwas Süßes? Wir haben frischen Gugelhupf heute."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was, was haben Sie für, für Süßes?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Neben dem Gugelhupf haben wir Apfelstrudel oder Topfenstrudel. Was möchtest du denn?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Topfenstrudel. Ähm, wie ist dein Topfenstrudel?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Unser Topfenstrudel ist ganz frisch und noch warm, sehr saftig. Magst du dazu Schlagobers?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich probiere ein einen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Einen Topfenstrudel, sehr gerne. Kommt sofort! Möchtest du noch was zu trinken dazu, oder reicht der Verlängerte?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Eine Frau kommt gleich."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ah, wunderbar! Dann mach ich gleich zwei Gedecke. Soll ich für deine Freundin auch was empfehlen, oder"
+    },
+    {
+      "speaker": "Robert",
+      "text": "ein einen einen einen Cappuccino und Croissant."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ah, verstanden - einen Cappuccino und ein Croissant. Ich bring’s gleich!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "für sie."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ah, alles klar! Für deine Freundin also einen Cappuccino und ein Croissant. Ich bring’s sofort!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Genau, danke dir."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Gleich da."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully completed a café ordering scenario in Austrian German, demonstrating useful survival vocabulary and polite register. However, he struggled with noun gender and article declension throughout, and one utterance was a non-sequitur that confused the flow. His hesitation patterns and self-corrections show growing awareness of his own errors.",
+    "errors": [
+      {
+        "type": "gender",
+        "original": "ein Kaffee",
+        "correction": "einen Kaffee",
+        "explanation": "Kaffee is masculine (der Kaffee), so it takes the accusative masculine indefinite article 'einen' when ordered as a direct object.",
+        "context": "Ich möchte ein Kaffee, bitte."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Una Verlängerte",
+        "correction": "Einen Verlängerten",
+        "explanation": "'Una' is Italian/Spanish, not German; the correct German indefinite article in the accusative is 'einen', and the adjective 'verlängert' takes the strong ending '-en' after the article (mixed declension).",
+        "context": "Ich möchte ein Kaffee, bitte. Una Verlängerte."
+      },
+      {
+        "type": "word_order",
+        "original": "Was haben Sie für, für Süßes?",
+        "correction": "Was für Süßes haben Sie? / Welche Süßspeisen haben Sie?",
+        "explanation": "The phrase 'was für' must stay together before the noun; splitting it with the verb in between is ungrammatical in German.",
+        "context": "Was, was haben Sie für, für Süßes?"
+      },
+      {
+        "type": "register",
+        "original": "wie ist dein Topfenstrudel?",
+        "correction": "Wie ist Ihr Topfenstrudel?",
+        "explanation": "Robert had been using the polite 'Sie' form with Maria up to this point; switching to 'du' mid-conversation is inconsistent and inappropriate unless Maria explicitly invited it.",
+        "context": "Topfenstrudel. Ähm, wie ist dein Topfenstrudel?"
+      },
+      {
+        "type": "vocabulary",
+        "original": "Ich probiere ein einen.",
+        "correction": "Ich nehme einen (Topfenstrudel), bitte. / Ja, gerne!",
+        "explanation": "The utterance is structurally incomplete and communicatively unclear; 'probieren' can work (= to try) but needs a clear object, and the article attempt trails off without resolution.",
+        "context": "Ich probiere ein einen."
+      },
+      {
+        "type": "missing_article",
+        "original": "ein einen einen einen Cappuccino und Croissant",
+        "correction": "einen Cappuccino und ein Croissant",
+        "explanation": "Croissant is neuter (das Croissant) and requires the indefinite article 'ein' in the accusative; it was omitted entirely after the conjunction.",
+        "context": "ein einen einen einen Cappuccino und Croissant."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 1,
+      "missing_article": 1,
+      "verb_conjugation": 0,
+      "vocabulary": 2,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Verlängerter",
+        "english": "Verlängerter (Viennese long black coffee – espresso extended with hot water)",
+        "note": "new this session – Austrian café term, needs practice with correct declension",
+        "tags": [
+          "Austrian German",
+          "café",
+          "anki"
+        ]
+      },
+      {
+        "german": "Topfenstrudel",
+        "english": "quark/cream cheese strudel",
+        "note": "used correctly as a topic – Austrian-specific vocabulary",
+        "tags": [
+          "Austrian German",
+          "food",
+          "anki"
+        ]
+      },
+      {
+        "german": "Gugelhupf",
+        "english": "a ring-shaped Central European cake",
+        "note": "encountered receptively – should be added to passive vocabulary",
+        "tags": [
+          "Austrian German",
+          "food",
+          "anki"
+        ]
+      },
+      {
+        "german": "Schlagobers",
+        "english": "whipped cream (Austrian term; standard German: Schlagsahne)",
+        "note": "encountered receptively – key Austrian register word",
+        "tags": [
+          "Austrian German",
+          "register",
+          "anki"
+        ]
+      },
+      {
+        "german": "Gedecke",
+        "english": "place settings / table settings",
+        "note": "encountered receptively – useful café/restaurant vocabulary",
+        "tags": [
+          "café",
+          "anki"
+        ]
+      },
+      {
+        "german": "Ich nehme…",
+        "english": "I'll take / I'll have…",
+        "note": "needs practice – a natural alternative to 'Ich möchte' for ordering",
+        "tags": [
+          "ordering",
+          "anki"
+        ]
+      },
+      {
+        "german": "Danke dir",
+        "english": "Thanks (informal)",
+        "note": "used correctly – appropriate casual closing",
+        "tags": [
+          "register"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert attempted Austrian-specific vocabulary (Verlängerter, Topfenstrudel) showing cultural awareness.",
+      "He used 'Ich möchte' correctly as a polite ordering phrase.",
+      "He self-corrected his article mid-utterance multiple times, showing metalinguistic awareness even if the final form was still imperfect.",
+      "He communicated his core needs successfully despite grammatical errors – the interaction reached its goal.",
+      "His closing 'Genau, danke dir' was natural and appropriate."
+    ],
+    "next_focus": "Accusative case articles for all three genders (einen/eine/ein) — practice ordering drills where Robert must produce the correct accusative article for masculine, feminine, and neuter nouns before progressing to adjective endings."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

@@ -1,0 +1,126 @@
+{
+  "session_id": "2026-04-25_004",
+  "date": "2026-04-25",
+  "persona": "Frau Novak",
+  "scenario": "ask_medicine",
+  "duration_estimate_min": 5,
+  "mode": "writing",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Frau Novak",
+      "text": "Guten Abend! Was kann ich für Sie tun?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Meine Frau hat Kopfschmerzen. Können Sie uns helfen?"
+    },
+    {
+      "speaker": "Frau Novak",
+      "text": "Natürlich helfe ich Ihnen gerne. Wie lange hat Ihre Frau schon Kopfschmerzen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ein Tag, aber es ist wie Migräne."
+    },
+    {
+      "speaker": "Frau Novak",
+      "text": "Ich empfehle Thomapyrin - rezeptfrei erhältlich. Möchten Sie das versuchen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, bitte."
+    },
+    {
+      "speaker": "Frau Novak",
+      "text": "Das macht acht Euro fünfzig. Zahlen Sie bar oder mit Karte?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich zahle mit Karte."
+    },
+    {
+      "speaker": "Frau Novak",
+      "text": "Bitte sehr! Gute Besserung für Ihre Frau!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Dankeschön."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully completed a pharmacy interaction in German, communicating his wife's symptoms and completing a purchase. The session was brief but functional; the main area for improvement is using correct temporal expressions with duration phrases.",
+    "errors": [
+      {
+        "type": "vocabulary",
+        "original": "Ein Tag",
+        "correction": "Seit einem Tag / Einen Tag lang",
+        "explanation": "To express duration up to the present moment, German uses 'seit' with the dative, or 'einen Tag lang' for a completed span; 'Ein Tag' alone is grammatically incomplete as a standalone duration answer.",
+        "context": "Ein Tag, aber es ist wie Migräne."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 0,
+      "vocabulary": 1,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Kopfschmerzen",
+        "english": "headache(s)",
+        "note": "used correctly",
+        "tags": [
+          "health",
+          "pharmacy",
+          "plural-only"
+        ]
+      },
+      {
+        "german": "rezeptfrei",
+        "english": "over-the-counter / without prescription",
+        "note": "encountered this session — passive exposure",
+        "tags": [
+          "pharmacy",
+          "adjective",
+          "anki"
+        ]
+      },
+      {
+        "german": "Gute Besserung",
+        "english": "Get well soon",
+        "note": "encountered this session — useful set phrase",
+        "tags": [
+          "phrases",
+          "health",
+          "anki"
+        ]
+      },
+      {
+        "german": "seit einem Tag",
+        "english": "for one day (up to now)",
+        "note": "needs practice — correct form of what Robert attempted",
+        "tags": [
+          "temporal",
+          "seit",
+          "dative",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Used polite Sie-form consistently and correctly throughout",
+      "Correctly structured the modal question 'Können Sie uns helfen?'",
+      "Appropriately used 'Meine Frau' with correct possessive form",
+      "Payment phrase 'Ich zahle mit Karte' was grammatically perfect"
+    ],
+    "next_focus": "Practice temporal duration phrases using 'seit' + dative (e.g., seit einem Tag, seit zwei Wochen) to accurately describe how long symptoms have been present."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

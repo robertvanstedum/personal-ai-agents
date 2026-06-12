@@ -1,0 +1,75 @@
+{
+  "session_id": "2026-04-25_002",
+  "date": "2026-04-25",
+  "persona": "Frau Novak",
+  "scenario": "ask_medicine",
+  "duration_estimate_min": 12,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Frau Novak",
+      "text": "Guten Tag!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich brauche etwas für Kopfschmerzen."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "This session was extremely brief, consisting of only a single exchange. Robert produced one grammatically correct sentence requesting something for headaches. There is insufficient data to draw meaningful conclusions about his overall proficiency.",
+    "errors": [],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 0,
+      "vocabulary": 0,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Kopfschmerzen",
+        "english": "headache(s)",
+        "note": "used correctly",
+        "tags": [
+          "medical",
+          "pharmacy",
+          "anki"
+        ]
+      },
+      {
+        "german": "etwas für",
+        "english": "something for",
+        "note": "used correctly — natural phrasing for requesting remedies in a pharmacy",
+        "tags": [
+          "pharmacy",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert produced a grammatically correct sentence with proper word order (verb second position).",
+      "He used appropriate vocabulary for a pharmacy scenario ('Kopfschmerzen', 'etwas für').",
+      "The sentence was natural and idiomatic for the context."
+    ],
+    "next_focus": "Practice expanding pharmacy dialogues: describing symptom duration and severity (e.g., 'Ich habe seit zwei Tagen starke Kopfschmerzen.') and responding to follow-up questions from the pharmacist."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "scaffold_delivered": [
+    "Ich hätte gerne einen kleinen Brauner, bitte.",
+    "Was empfehlen Sie heute?",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_used": [],
+  "scaffold_avoided": [
+    "Ich hätte gerne einen kleinen Brauner, bitte.",
+    "Was empfehlen Sie heute?",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_deployment_rate": "0/3 scaffold phrases used"
+}

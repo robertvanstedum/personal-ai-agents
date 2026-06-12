@@ -1,0 +1,87 @@
+{
+  "session_id": "2026-04-24_005",
+  "date": "2026-04-24",
+  "persona": "Frau Berger",
+  "scenario": "bakery_order",
+  "duration_estimate_min": 10,
+  "mode": "writing",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Frau Berger",
+      "text": "Guten Morgen! Was darf es sein?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte ein Brot bitte."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Sehr gut! Das macht zwei Euro."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke schön."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert completed a very short bakery interaction using correct basic phrases. The session was minimal in scope, covering only a simple bread order with no errors, but also very little language production overall. Robert should aim to expand his turns with more detail and variety in future sessions.",
+    "errors": [],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 0,
+      "vocabulary": 0,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Ich möchte",
+        "english": "I would like",
+        "note": "used correctly",
+        "tags": [
+          "polite",
+          "modal",
+          "A1"
+        ]
+      },
+      {
+        "german": "ein Brot",
+        "english": "a loaf of bread",
+        "note": "used correctly",
+        "tags": [
+          "food",
+          "A1",
+          "bakery"
+        ]
+      },
+      {
+        "german": "bitte",
+        "english": "please",
+        "note": "used correctly",
+        "tags": [
+          "politeness",
+          "A1"
+        ]
+      },
+      {
+        "german": "Danke schön",
+        "english": "Thank you very much",
+        "note": "used correctly",
+        "tags": [
+          "politeness",
+          "A1"
+        ]
+      }
+    ],
+    "strengths": [
+      "Used the polite modal construction 'ich möchte' correctly instead of the more abrupt 'ich will'",
+      "Placed 'bitte' correctly at the end of the request",
+      "Responded naturally and politely with 'Danke schön' to close the transaction"
+    ],
+    "next_focus": "Practice expanding bakery orders with quantities, adjectives, and additional items, for example: 'Ich möchte zwei Brötchen und ein Roggenbrot, bitte' — also practice asking for the price using 'Was kostet das?'"
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true
+}

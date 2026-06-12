@@ -1,0 +1,13 @@
+---SESSION---
+Date: 2026-05-02
+Persona: Maria
+Scenario: Viennese café waitress
+Duration: 5
+Mode: voiceMaria: Grüß dich! Setz dich nur hin, bei uns ist’s heute wieder voll. Was darf’s denn sein? Eine Melange, einen Verlängerten oder vielleicht einen Einspänner? Der Gugelhupf ist frisch – magst du was dazu?
+Robert: Meine Frau möchte gern einen Verlängerten.  Ich möchte gern einen kleinen Brauner.
+Maria: Gerne! Einen Verlängerten für deine Frau und einen Kleinen Braunen für dich – kommt sofort. Soll’s dazu noch was Süßes geben? Der Gugelhupf ist wirklich frisch heute. Ich bring’s gleich rüber!
+Robert: Was empfehlen sie heute?
+Maria: Heute empfehle ich den Apfelstrudel – der ist besonders gut. Oder probier den Gugelhupf, der ist ganz frisch. Was meinst du, magst du was davon?
+Robert: Beide.  Ich nehme den Apfelstrudel.  Meine Frau nehmt den Gugelhupf.
+Maria: Gerne, beide! Du nimmst den Apfelstrudel und deine Frau den Gugelhupf. Super Wahl. Kommt gleich mit den Getränken – ich bin sofort wieder da!
+---END---

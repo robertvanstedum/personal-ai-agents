@@ -1,0 +1,305 @@
+{
+  "session_id": "2026-05-08_002",
+  "date": "2026-05-08",
+  "persona": "Maria",
+  "scenario": "Viennese café waitress",
+  "duration_estimate_min": 18,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Grüß dich! Setz dich nur hin, bei uns ist’s heute wieder richtig voll. Was darf’s denn sein? Eine Melange, einen Verlängerten oder vielleicht einen Kleinen Braunen? Der Gugelhupf ist frisch aus dem Ofen - magst du was dazu?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Grüß dich! Ich muß überlege, so ein moment bitte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne, nimm dir ruhig einen Moment zum Überlegen. Ich komm gleich wieder vorbei. Möchtest du vielleicht schon einen Verlängerten oder eine Melange?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, genau. Ich hätte gern einen Verlängerten. Und Ich frage meine Frau."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Einen Verlängerten für dich - kommt sofort. Und was möchte deine Frau? Ich warte gerne einen kleinen Moment, während du sie fragst. Sag einfach Bescheid, wenn ihr entschieden habt!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Sie möchte einen Melange. Es ist unser ersten Kaffee in Wien."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Eine Melange für deine Frau und einen Verlängerten für dich - super Wahl. Und herzlich willkommen in Wien! Das ist also euer erster Kaffee bei uns - wie schön! Ich bring euch die Getränke gleich. Soll’s vielleicht noch was zum Essen dazu geben? Der Gugelhupf ist wirklich frisch heute."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Erst die Kaffee"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Zuerst die Kaffees - kommt sofort. Ein Verlängterter und eine Melange. Ich bin gleich wieder da!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Hast du hier Früstuck?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Ja, wir haben Frühstück. Möchtest du die Karte sehen? Wir haben klassische Wiener Frühstücksvariationen - mit Semmeln, Schinken, Käse, Ei oder Müsli. Soll ich dir die Karte bringen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Die Karte bitte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Hier ist die Frühstückskarte. Schau dir das in Ruhe an. Wir haben alles von klassischem Wiener Frühstück mit Ei und Schinken bis zum kleinen Müsli oder Croissant. Sag einfach Bescheid, was ihr nehmt - ich bin gleich wieder da!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Meine Frau mag gern Ei, vielleicht ein Omelette"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Deine Frau mag also Eier - sehr gut. Wir haben leckere Omeletts. Mit Schinken, Käse oder einfach mit frischen Kräutern? Ich empfehle das Kräuter-Omelett, das ist besonders gut heute. Was meint ihr?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Kräuter is \"sauerkraut\" ? oder?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Nein, nein Kräuter bedeutet frische Kräuter - also Petersilie, Schnittlauch, Basilikum und so. Sehr frisch und lecker im Omelett. Sauerkraut ist das eingelegte Sauerkraut - das ist etwas ganz anderes. Möchtest du das Kräuter-Omelett für deine Frau? Das ist wirklich gut."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, sie probiert Kräuter-Omelett. Ich mag kein Ei, aber mag ich Schinken."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Deine Frau nimmt also das Kräuter-Omelett - gute Wahl. Und für dich etwas mit Schinken? Sehr gerne. Möchtest du zum Beispiel ein Schinken-Käse-Sandwich oder eine Schinken-Semmel? Sag mir einfach, was du möchtest, dann gebe ich alles gleich in die Küche!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich nehme eine Schinken-Semmel."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Eine Schinken-Semmel für dich und das Kräuter-Omelett für deine Frau - kommt sofort. Ich geb’s gleich in die Küche. Möchtet ihr noch etwas dazu? Vielleicht einen frischen Orangensaft oder noch einen Kaffee später? Ich bin gleich wieder da!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Der Frühstück was lecker. Wir nehmen noch einen Kaffee. Ein Verlängerten und eine Melange."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Freut mich sehr, dass das Frühstück so lecker war! Gerne - nochmal einen Verlängerten und eine Melange. Kommt sofort! Sonst noch etwas? Oder soll’s diesmal mit etwas Süßem sein? Der Gugelhupf ist noch da."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke dir für das super Frühstück. Wir nehmen jetzt die Rechtnung."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Freut mich, dass euch das Frühstück so gut geschmeckt hat Ihr möchtet die Rechnung? Klar, kommt sofort. Einen kleinen Moment... Hier bitte zusammen - macht 38 Euro. Passt so oder möchtet ihr mit Karte zahlen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich zahle mit Karte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Mit Karte - perfekt. Einen kleinen Moment bitte... So, das hat geklappt. Hier ist dein Beleg. Vielen Dank für euren Besuch! Es hat mich gefreut. Kommt gerne wieder, gell? Servus und einen schönen Tag noch!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully navigated a full café scenario in Vienna, ordering drinks, breakfast items, and paying — demonstrating solid practical German for a beginner-to-intermediate learner. His communication was consistently comprehensible and appropriately polite, though recurring issues with article gender, verb placement, and noun inflection show that core grammar foundations still need reinforcement. Vocabulary range was good, and he showed real initiative by asking a vocabulary question mid-conversation.",
+    "errors": [
+      {
+        "type": "verb_conjugation",
+        "original": "Ich muß überlege",
+        "correction": "Ich muss überlegen",
+        "explanation": "Modal verbs like 'müssen' require the dependent infinitive, not a conjugated verb; also 'muss' is the modern spelling without ß.",
+        "context": "Ich muß überlege, so ein moment bitte."
+      },
+      {
+        "type": "word_order",
+        "original": "so ein moment bitte",
+        "correction": "einen Moment bitte / nur einen kurzen Moment",
+        "explanation": "'Moment' is masculine and needs the accusative article 'einen'; 'so ein' is colloquially possible but 'einen Moment' is more natural here.",
+        "context": "Ich muß überlege, so ein moment bitte."
+      },
+      {
+        "type": "gender",
+        "original": "einen Melange",
+        "correction": "eine Melange",
+        "explanation": "'Melange' is feminine (die Melange), so the accusative article is 'eine', not 'einen'.",
+        "context": "Sie möchte einen Melange."
+      },
+      {
+        "type": "gender",
+        "original": "unser ersten Kaffee",
+        "correction": "unser erster Kaffee",
+        "explanation": "After 'unser' in nominative masculine, the adjective takes a strong ending '-er', not the mixed ending '-en'.",
+        "context": "Es ist unser ersten Kaffee in Wien."
+      },
+      {
+        "type": "gender",
+        "original": "Der Frühstück",
+        "correction": "Das Frühstück",
+        "explanation": "'Frühstück' is neuter (das Frühstück), so the correct article is 'das', not 'der'.",
+        "context": "Der Frühstück was lecker."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "was lecker",
+        "correction": "war lecker",
+        "explanation": "The past tense of 'sein' in third person singular is 'war', not 'was' (which is English).",
+        "context": "Der Frühstück was lecker."
+      },
+      {
+        "type": "missing_article",
+        "original": "Erst die Kaffee",
+        "correction": "Erst die Kaffees / Zuerst die Kaffees",
+        "explanation": "The plural of 'Kaffee' is 'Kaffees'; the article is correct but the noun needs the plural -s ending.",
+        "context": "Erst die Kaffee"
+      },
+      {
+        "type": "vocabulary",
+        "original": "Früstuck",
+        "correction": "Frühstück",
+        "explanation": "Spelling error: the correct form has an umlaut 'ü' and a 'c' before 'k' — Frühstück.",
+        "context": "Hast du hier Früstuck?"
+      },
+      {
+        "type": "word_order",
+        "original": "aber mag ich Schinken",
+        "correction": "aber ich mag Schinken",
+        "explanation": "After a coordinating conjunction like 'aber', standard subject-verb order applies (ich mag), not verb-subject inversion.",
+        "context": "Ich mag kein Ei, aber mag ich Schinken."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Rechtnung",
+        "correction": "Rechnung",
+        "explanation": "Spelling/pronunciation error: the correct word is 'Rechnung' (bill/invoice), without the extra 't'.",
+        "context": "Wir nehmen jetzt die Rechtnung."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 3,
+      "word_order": 2,
+      "missing_article": 1,
+      "verb_conjugation": 2,
+      "vocabulary": 2,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "die Melange",
+        "english": "Viennese coffee with steamed milk",
+        "note": "used correctly after initial article error; good that Robert picked it up from Maria",
+        "tags": [
+          "cafe",
+          "vienna",
+          "food-drink"
+        ]
+      },
+      {
+        "german": "der Verlängerte",
+        "english": "Americano-style extended espresso",
+        "note": "used correctly throughout — impressive Austrian-specific vocabulary",
+        "tags": [
+          "cafe",
+          "vienna",
+          "food-drink",
+          "anki"
+        ]
+      },
+      {
+        "german": "die Schinken-Semmel",
+        "english": "ham bread roll",
+        "note": "used correctly; good use of compound noun",
+        "tags": [
+          "food-drink",
+          "anki"
+        ]
+      },
+      {
+        "german": "die Rechnung",
+        "english": "the bill",
+        "note": "needs practice — mispronounced/misspelled as 'Rechtnung'",
+        "tags": [
+          "restaurant",
+          "anki"
+        ]
+      },
+      {
+        "german": "die Kräuter",
+        "english": "herbs",
+        "note": "new this session — Robert correctly asked for clarification distinguishing it from Sauerkraut",
+        "tags": [
+          "food",
+          "vocabulary-building",
+          "anki"
+        ]
+      },
+      {
+        "german": "das Frühstück",
+        "english": "breakfast",
+        "note": "needs practice — wrong gender used (der) and misspelled",
+        "tags": [
+          "food",
+          "anki"
+        ]
+      },
+      {
+        "german": "Sag einfach Bescheid",
+        "english": "just let me know",
+        "note": "used by Maria — useful phrase for Robert to adopt actively",
+        "tags": [
+          "phrases",
+          "anki"
+        ]
+      },
+      {
+        "german": "probieren",
+        "english": "to try / to taste",
+        "note": "used correctly in context",
+        "tags": [
+          "verbs"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully completed a full real-world transaction from ordering to paying, demonstrating functional communicative competence.",
+      "He used Austrian-specific café vocabulary (Melange, Verlängerter, Semmel) naturally and correctly.",
+      "He showed intellectual curiosity by asking about 'Kräuter' vs 'Sauerkraut' mid-session, which is excellent active learning behavior.",
+      "Polite register was consistent throughout — appropriate use of 'bitte', 'danke', and 'gern'.",
+      "Sentence construction was generally clear enough to be understood without repetition, even when grammatically imperfect."
+    ],
+    "next_focus": "Article gender and adjective endings: practice the three genders (der/die/das) with their accusative forms (den/die/das), focusing on common café and food nouns like 'das Frühstück', 'die Melange', 'der Kaffee' — use flashcards with the article always included."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "scaffold_delivered": [
+    "Wir möchten gerne bestellen.",
+    "Könnte ich bitte die Rechnung haben?",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_used": [
+    "Wir möchten gerne bestellen.",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_avoided": [
+    "Könnte ich bitte die Rechnung haben?"
+  ],
+  "scaffold_deployment_rate": "2/3 scaffold phrases used"
+}

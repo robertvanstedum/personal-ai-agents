@@ -1,0 +1,30 @@
+Date: 2026-04-23
+Persona: Maria
+Scenario: Ordering coffee and pastry
+Duration: 12
+
+Maria: Servus! Setz di her, i bin die Maria. Was möchtest’n trinken?
+Robert: Ich möchte ein Kaffee, bitte.
+Maria: Ein Kaffee? Na, da hast a bissl zu viel gesagt. Bei uns sagt ma eine Melange oder einen Verlängerten. Magst du eine schöne Melange mit dem guten Milchschaum oder lieber einen Verlängerten? Und dazu was Süßes? Wir haben frischen Gugelhupf.
+Robert: Was ist eine Melange? Kenne ich nicht.
+Maria: Eine Melange is unser Klassiker – halb Kaffee, halb warme Milch mit schönem Schaum drauf. Magst du eine Melange oder doch lieber einen Verlängerten? Und dazu ein Stückerl Gugelhupf?
+Robert: Ich danke das.
+Maria: Passt schon. Also eine Melange und ein Stückerl Gugelhupf, gell?
+Robert: Äh, Melange, so viel Milch hat.
+Maria: Genau, die hat richtig viel Milch. Kommst du öfter nach Wien oder bist zum ersten Mal da?
+Robert: Hast du etwas mit Espresso?
+Maria: Ja klar! Der Kleiner Brauner is genau das – ein starker Espresso mit nur einem kleinen Schuss Milch.
+Robert: Kleiner, Kleiner Brauner ist wie, äh, Cortado in nach Cuba.
+Maria: Genau, so ähnlich wie ein Cortado – aber bei uns in Wien ist er ein bisschen anders.
+Robert: Danke.
+Maria: Passt. Dann einmal einen Kleinen Braunen und ein Stückerl Gugelhupf, oder?
+Robert: Stücke Gux, ein, eine kleine Brau, bitte.
+Maria: Also einen Kleinen Braunen und ein Stück Gugelhupf, gell?
+Robert: Was ist ein Schuh?
+Maria: Ein Schuh? Das ist etwas zum Anziehen. Ich glaub, du meinst Gugelhupf! Der ist unser klassischer Marmorkuchen.
+Robert: Googlehof, äh, Marmorkuchen? Ja, ich probiere.
+Maria: Genau, Gugelhupf ist Marmorkuchen. Kommt sofort! Ein Kleiner Brauner und ein Gugelhupf.
+Robert: Maria, ist meine, meine kleiner Brauner bereit?
+Maria: Ja, dein Kleiner Brauner is fertig. Und der Gugelhupf auch. Vorsicht, der Kaffee is noch ziemlich heiß. Guten Appetit!
+Robert: danke.
+Maria: Bitte, gern geschehen! Lass es dir schmecken.

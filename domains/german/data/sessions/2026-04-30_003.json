@@ -1,0 +1,302 @@
+{
+  "session_id": "2026-04-30_003",
+  "date": "2026-04-30",
+  "persona": "Maria",
+  "scenario": "cafe_bill",
+  "duration_estimate_min": 11,
+  "mode": "writing",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Guten Tag! Schön, dass Sie wieder da sind. Haben Sie alles gut genossen? Möchten Sie jetzt zahlen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte noch einen kleinen Brauner, bitte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Sehr gerne, der Herr. Einen kleinen Brauner kommt sofort. Möchten Sie für Ihre Frau auch noch etwas? Oder soll ich gleich die Rechnung vorbereiten, wenn Sie fertig sind?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Meine Frau möchte etwas sußes probieren."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne, der Herr. Ihre Frau möchte also etwas Süßes probieren. Wir haben heute einen sehr guten Apfelstrudel mit Vanilleeis oder die klassische Sachertorte. Was darf ich Ihrer Frau bringen? Und möchten Sie dann gleich zusammen zahlen, oder soll ich später die Rechnung bringen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich spreche eine moment mit sie."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne, der Herr. Sprechen Sie ruhig einen Moment mit Ihrer Frau. Ich komme gleich wieder, wenn Sie so weit sind. Lassen Sie sich Zeit."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Fertig. Meine Frau geht mit Apfelstrudl."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Sehr gerne, der Herr. Ihre Frau nimmt also den Apfelstrudel. Ausgezeichnet! Dann hätten wir: einen kleinen Brauner für Sie und einen Apfelstrudel für Ihre Frau. Möchten Sie beides zusammen auf eine Rechnung? Ich bringe es gleich. Soll ich die Rechnung schon vorbereiten?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, aber können wir langer hier sitzen?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Selbstverständlich, der Herr. Sie dürfen gerne noch länger hier sitzen bleiben. Kein Problem! Bei uns gibt es keine Zeitbeschränkung. Genießen Sie Ihren Kaffee und den Apfelstrudel in Ruhe. Hier bitte: ein kleiner Brauner und ein Apfelstrudel mit Vanilleeis. Guten Appetit! Soll ich die Rechnung jetzt schon bringen oder erst später, wenn Sie fertig sind?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "erst später"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Sehr gerne, der Herr. Die Rechnung bringe ich Ihnen erst später, wenn Sie fertig sind. Lassen Sie sich Zeit und genießen Sie in Ruhe. Falls Sie zwischendurch etwas brauchen - einfach winken oder rufen. Guten Appetit!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Der kuchen shmecht leker. Es gefält sie viel. Wollen uns jetz die Rechnung."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Vielen Dank, der Herr! Schön zu hören, dass der Kuchen Ihnen und Ihrer Frau schmeckt und dass er ihr sehr gefällt. Dann bringe ich Ihnen jetzt die Rechnung. Einen kleinen Moment bitte. So, bitte sehr. Zusammen macht das 18,80 Euro. Möchten Sie bar zahlen oder mit Karte? Und falls Sie Trinkgeld geben möchten - das ist natürlich sehr willkommen. Wie möchten Sie zahlen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Heir is zwei und zwansig Euro. Spazieren uns jetz nach Wien."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Vielen Dank, der Herr! Hier sind zweiundzwanzig Euro. Das passt perfekt - 18,80 Euro für die Rechnung und ein schönes Trinkgeld. Vielen Dank! Es freut mich sehr, dass Ihnen der Apfelstrudel geschmeckt hat und dass er Ihrer Frau so gut gefallen hat. Genießen Sie Ihren Spaziergang in Wien! Auf Wiedersehen und einen wunderbaren Abend noch für Sie und Ihre Frau. Kommen Sie gerne wieder!"
+    }
+  ],
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "reviewer_output": {
+    "overall_summary": "Robert successfully navigated a complete café scenario in Austrian-style German, from ordering to paying, demonstrating solid basic communicative intent throughout. However, the session revealed consistent weaknesses in spelling/orthography, pronoun case (accusative vs. dative), and verb conjugation in first-person plural. His vocabulary range is developing well for the context, but several structural errors would impede natural comprehension in a real setting.",
+    "errors": [
+      {
+        "type": "vocabulary",
+        "original": "sußes",
+        "correction": "Süßes",
+        "explanation": "The adjective 'süß' requires an umlaut (ü), and when used as a substantivized adjective it is capitalized; 'sußes' is a misspelling.",
+        "context": "Meine Frau möchte etwas sußes probieren."
+      },
+      {
+        "type": "word_order",
+        "original": "Ich spreche eine moment mit sie.",
+        "correction": "Ich spreche einen Moment mit ihr.",
+        "explanation": "Two errors here: 'Moment' is masculine so it takes 'einen' (accusative), and 'sie' (she, nominative) must be 'ihr' (her, dative) after the preposition 'mit'.",
+        "context": "Ich spreche eine moment mit sie."
+      },
+      {
+        "type": "missing_article",
+        "original": "eine moment",
+        "correction": "einen Moment",
+        "explanation": "'Moment' is masculine (der Moment), so the accusative indefinite article is 'einen', not 'eine'.",
+        "context": "Ich spreche eine moment mit sie."
+      },
+      {
+        "type": "gender",
+        "original": "eine moment",
+        "correction": "einen Moment",
+        "explanation": "'Moment' is masculine (der Moment), requiring 'einen' in the accusative case, not the feminine 'eine'.",
+        "context": "Ich spreche eine moment mit sie."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "sie",
+        "correction": "ihr",
+        "explanation": "The preposition 'mit' always governs the dative case; the dative form of the third-person singular feminine pronoun is 'ihr', not the nominative 'sie'.",
+        "context": "Ich spreche eine moment mit sie."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Apfelstrudl",
+        "correction": "Apfelstrudel",
+        "explanation": "The correct spelling is 'Apfelstrudel' — the final 'el' must not be dropped.",
+        "context": "Meine Frau geht mit Apfelstrudl."
+      },
+      {
+        "type": "vocabulary",
+        "original": "geht mit",
+        "correction": "nimmt den / entscheidet sich für den",
+        "explanation": "In German café register, 'mit etwas gehen' is not idiomatic for choosing a dish; 'nimmt den Apfelstrudel' or 'entscheidet sich für den Apfelstrudel' is correct.",
+        "context": "Meine Frau geht mit Apfelstrudl."
+      },
+      {
+        "type": "vocabulary",
+        "original": "langer",
+        "correction": "länger",
+        "explanation": "The comparative of 'lang' requires an umlaut: 'länger' (longer), not 'langer'.",
+        "context": "Ja, aber können wir langer hier sitzen?"
+      },
+      {
+        "type": "vocabulary",
+        "original": "shmecht leker",
+        "correction": "schmeckt lecker",
+        "explanation": "'Schmecken' is the correct verb (to taste good) and 'lecker' is the correct adjective; both are misspelled phonetically.",
+        "context": "Der kuchen shmecht leker."
+      },
+      {
+        "type": "missing_article",
+        "original": "Der kuchen",
+        "correction": "Der Kuchen",
+        "explanation": "All nouns in German are capitalized; 'Kuchen' must be written with a capital K.",
+        "context": "Der kuchen shmecht leker."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Es gefält sie viel.",
+        "correction": "Es gefällt ihr sehr.",
+        "explanation": "'Gefallen' takes a dative object, so 'sie' (nominative) must be 'ihr' (dative); additionally 'gefält' is misspelled — correct is 'gefällt' — and 'viel' is less natural here than 'sehr'.",
+        "context": "Es gefält sie viel."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Wollen uns jetz die Rechnung.",
+        "correction": "Wir möchten jetzt die Rechnung, bitte.",
+        "explanation": "The subject pronoun 'Wir' is missing, 'uns' is the wrong pronoun here, 'jetz' is misspelled ('jetzt'), and 'möchten' is more polite and natural than 'wollen' in a service context.",
+        "context": "Wollen uns jetz die Rechnung."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Heir is",
+        "correction": "Hier sind / Hier ist",
+        "explanation": "'Heir' is a phonetic misspelling of 'hier' (here), and when handing over money one says 'Hier sind … Euro' or 'Hier bitte'.",
+        "context": "Heir is zwei und zwansig Euro."
+      },
+      {
+        "type": "vocabulary",
+        "original": "zwansig",
+        "correction": "zwanzig",
+        "explanation": "'Zwanzig' (twenty) is misspelled; the correct spelling ends in '-zig', not '-sig'.",
+        "context": "Heir is zwei und zwansig Euro."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Spazieren uns jetz nach Wien.",
+        "correction": "Wir machen jetzt einen Spaziergang durch Wien. / Wir gehen jetzt in Wien spazieren.",
+        "explanation": "'Spazieren' cannot be used as a transitive or reflexive verb with 'uns' in this way; the correct constructions are 'spazieren gehen' or 'einen Spaziergang machen'.",
+        "context": "Spazieren uns jetz nach Wien."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 1,
+      "missing_article": 2,
+      "verb_conjugation": 3,
+      "vocabulary": 8,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "zahlen",
+        "english": "to pay",
+        "note": "used correctly in context",
+        "tags": [
+          "café",
+          "anki"
+        ]
+      },
+      {
+        "german": "die Rechnung",
+        "english": "the bill / the check",
+        "note": "used correctly and consistently",
+        "tags": [
+          "café",
+          "anki"
+        ]
+      },
+      {
+        "german": "etwas Süßes",
+        "english": "something sweet",
+        "note": "needs practice — content was right, spelling was wrong (sußes → Süßes)",
+        "tags": [
+          "adjective-noun",
+          "anki"
+        ]
+      },
+      {
+        "german": "einen Moment",
+        "english": "a moment",
+        "note": "needs practice — gender and case both wrong (eine → einen)",
+        "tags": [
+          "masculine-nouns",
+          "anki"
+        ]
+      },
+      {
+        "german": "gefallen + Dativ",
+        "english": "to please / to like (lit. to be pleasing to)",
+        "note": "needs practice — dative object 'ihr' confused with nominative 'sie'",
+        "tags": [
+          "dative-verbs",
+          "anki"
+        ]
+      },
+      {
+        "german": "mit jemandem sprechen",
+        "english": "to speak with someone",
+        "note": "needs practice — 'mit' requires dative: mit ihr, not mit sie",
+        "tags": [
+          "dative-prepositions",
+          "anki"
+        ]
+      },
+      {
+        "german": "spazieren gehen",
+        "english": "to go for a walk",
+        "note": "new this session — attempted but incorrect structure; learn as fixed phrase",
+        "tags": [
+          "separable-verbs",
+          "anki"
+        ]
+      },
+      {
+        "german": "lecker",
+        "english": "delicious / tasty",
+        "note": "new this session — correct word choice, needs spelling practice",
+        "tags": [
+          "adjectives",
+          "anki"
+        ]
+      },
+      {
+        "german": "der Apfelstrudel",
+        "english": "apple strudel",
+        "note": "used correctly in context, minor spelling slip at end",
+        "tags": [
+          "food",
+          "austria"
+        ]
+      },
+      {
+        "german": "länger",
+        "english": "longer",
+        "note": "needs practice — comparative of 'lang' requires umlaut: länger",
+        "tags": [
+          "comparatives",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert maintained the conversation across all expected scenario stages (ordering, deliberating, requesting the bill, paying) without breaking flow.",
+      "He consistently used polite modal constructions such as 'Ich möchte' and 'Meine Frau möchte', which is appropriate register for café interactions.",
+      "He correctly used possessive adjectives ('meine Frau', 'Ihre Frau' was modelled and absorbed) showing awareness of formal vs. informal address.",
+      "He understood and responded appropriately to all of Maria's questions, demonstrating solid receptive comprehension of natural, flowing Austrian German.",
+      "Handing over money and initiating the closing of the interaction ('Heir is zwei und zwansig Euro') showed communicative confidence even under spelling difficulty."
+    ],
+    "next_focus": "Dative case after prepositions and dative-taking verbs: drill 'mit ihr', 'bei ihm', 'gefällt ihr', and 'helfe ihm' with short substitution exercises so that the nominative/dative pronoun distinction becomes automatic."
+  }
+}

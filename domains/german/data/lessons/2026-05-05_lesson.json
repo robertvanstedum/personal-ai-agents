@@ -1,0 +1,20 @@
+{
+  "lesson_date": "2026-05-05",
+  "lesson_number": 61,
+  "persona": "Herr Fischer",
+  "persona_role": "Hotel Receptionist",
+  "scenario": "hotel_checkin",
+  "warm_up": "Review top error from last session: vocabulary.",
+  "focus": "Practice grammatical gender and accusative article agreement (ein/eine/einen) with common food and drink nouns, specifically focusing on feminine nouns like 'die Melange' and masculine nouns like 'der Apfelstrudel' and 'der Kaffee', using flashcard drills and short ordering dialogues.",
+  "speaking_prompt": "You arrive at your hotel near the Ringstraße after a long flight. Herr Fischer greets you at the front desk. Check in, ask about the WiFi, and confirm your checkout date.",
+  "vocabulary_targets": [
+    "die Melange",
+    "der Kleine Braune",
+    "der Verlängerte",
+    "der Gugelhupf",
+    "der Apfelstrudel"
+  ],
+  "carry_forward_errors": [
+    "Aber meine Frau hat noch nichts bestellt. (was: Aber meine Frau hat Nick bestellen.) — session 2026-05-04"
+  ]
+}

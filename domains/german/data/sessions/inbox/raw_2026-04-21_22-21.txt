@@ -1,0 +1,11 @@
+---SESSION---
+Date: 2026-04-21
+Persona: Herr Fischer
+Scenario: hotel_checkin
+Duration: 10
+
+Herr Fischer: Guten Abend, willkommen im Hotel. Wie kann ich Ihnen helfen?
+Robert: Guten Abend. Ich möchte einchecken, bitte.
+Herr Fischer: Natürlich. Ihr Name, bitte?
+Robert: Van Stedum.
+---END-—

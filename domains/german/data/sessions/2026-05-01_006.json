@@ -1,0 +1,138 @@
+{
+  "session_id": "2026-05-01_006",
+  "date": "2026-05-01",
+  "persona": "Anna",
+  "scenario": "bakery_order",
+  "duration_estimate_min": 6,
+  "mode": "writing",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Anna",
+      "text": "Guten Morgen! Was darf es sein?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Guten Morgen! Ich möchte zwei Brötchen und ein Stück Kuchen, bitte."
+    },
+    {
+      "speaker": "Anna",
+      "text": "Natürlich! Welche Brötchen möchten Sie - die normalen oder die Vollkornbrötchen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Die Vollkornbrötchen, bitte. Was kosten das?"
+    },
+    {
+      "speaker": "Anna",
+      "text": "Die Vollkornbrötchen kosten 80 Cent pro Stück, und der Kuchen kostet zwei Euro fünfzig. Das macht insgesamt vier Euro zehn."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Hier ist fünf Euro. Haben Sie auch Kaffee?"
+    },
+    {
+      "speaker": "Anna",
+      "text": "Ja, wir haben Kaffee - einen Euro achtzig für einen kleinen, zwei Euro zwanzig für einen großen. Möchten Sie einen dazu?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, einen großen Kaffee bitte. Danke schön!"
+    },
+    {
+      "speaker": "Anna",
+      "text": "Gerne! Das macht dann sechs Euro dreißig insgesamt. Ihr Wechselgeld ist siebzig Cent. Guten Appetit!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert handled a realistic bakery transaction confidently, using polite register and appropriate vocabulary throughout. The conversation flowed naturally and he successfully ordered multiple items, asked about prices, and managed a payment exchange. One grammatical error with interrogative word order slightly marred an otherwise strong performance.",
+    "errors": [
+      {
+        "type": "word_order",
+        "original": "Was kosten das?",
+        "correction": "Was kostet das?",
+        "explanation": "In a question with 'was' as the subject referring to a singular concept (the total price or the item group being discussed), the verb should be 'kostet' (3rd person singular); additionally 'das' here is singular, so the verb must agree accordingly.",
+        "context": "Die Vollkornbrötchen, bitte. Was kosten das?"
+      }
+    ],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 1,
+      "vocabulary": 0,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Vollkornbrötchen",
+        "english": "whole grain roll",
+        "note": "used correctly",
+        "tags": [
+          "food",
+          "bakery",
+          "compound noun"
+        ]
+      },
+      {
+        "german": "pro Stück",
+        "english": "per piece / each",
+        "note": "introduced by Anna; good passive exposure",
+        "tags": [
+          "shopping",
+          "pricing"
+        ]
+      },
+      {
+        "german": "Wechselgeld",
+        "english": "change (money returned)",
+        "note": "introduced by Anna; useful word to actively learn",
+        "tags": [
+          "shopping",
+          "anki"
+        ]
+      },
+      {
+        "german": "Das macht insgesamt ...",
+        "english": "That comes to ... in total",
+        "note": "key retail phrase; Robert heard it modelled twice — needs practice producing it",
+        "tags": [
+          "shopping",
+          "anki",
+          "set phrase"
+        ]
+      },
+      {
+        "german": "einen dazu",
+        "english": "one (of those) in addition / on top",
+        "note": "natural colloquial addition phrase used by Anna; good to absorb",
+        "tags": [
+          "colloquial",
+          "shopping"
+        ]
+      },
+      {
+        "german": "Guten Appetit",
+        "english": "Enjoy your meal / Bon appétit",
+        "note": "used correctly by Anna; Robert should be able to produce this",
+        "tags": [
+          "social phrase",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Correctly used 'ich möchte' for polite requests rather than the more abrupt 'ich will'",
+      "Proper use of accusative article 'einen großen Kaffee' showing solid case awareness",
+      "Natural conversational flow with appropriate 'bitte' and 'Danke schön' at the right moments",
+      "Successfully navigated a multi-item order and a follow-up question about an additional product",
+      "Maintained formal 'Sie' register consistently, matching the bakery service context"
+    ],
+    "next_focus": "Practice verb conjugation in direct questions: drill the pattern 'Was kostet das?' vs. 'Was kosten die Brötchen?' to solidify subject-verb agreement when asking about prices, and expand to similar shopping question structures (e.g., 'Wie viel kostet ...?', 'Was macht das?')."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

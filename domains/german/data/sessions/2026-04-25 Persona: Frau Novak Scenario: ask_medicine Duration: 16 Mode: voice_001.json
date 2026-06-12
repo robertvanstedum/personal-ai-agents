@@ -1,0 +1,21 @@
+{
+  "session_id": "2026-04-25 Persona: Frau Novak Scenario: ask_medicine Duration: 16 Mode: voice_001",
+  "date": "2026-04-25",
+  "persona": "Frau Novak",
+  "scenario": "ask_medicine",
+  "duration_estimate_min": 16,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Frau Novak",
+      "text": "Guten Tag! Was kann ich für Sie tun? Robert: Nick weiß nicht. Frau Novak: Entschuldigung, ich habe Sie nicht ganz verstanden. Haben Sie Kopfschmerzen oder ein anderes Problem? Robert: Meine Frau hat Kopfschmerzen. Frau Novak: Verstehe. Ihre Frau hat also Kopfschmerzen. Möchten Sie ein Schmerzmittel, das rezeptfrei ist? Robert: Ja, brauchen wir etwas. Was haben Sie? Frau Novak: Ich empfehle eine Tablette Ibuprofen 400 mg. Das hilft gut bei Kopfschmerzen. Robert: Stimmt, das ist, das ist gut. Frau Novak: Sehr gut. Nehmen Sie eine Tablette alle sechs bis acht Stunden, höchstens drei Tabletten am Tag. Brauchen Sie sonst noch etwas? Robert: Brauchen wir etwas für die Hause. Wie sagt man, äh, wie sagt man wasche, wasche die Hand, Hände, Hände? Frau Novak: Möchten Sie eine Handdesinfektion oder eine Salbe für die Hände? Robert: Was ist Salbe? Frau Novak: Eine Salbe ist eine Creme. Wenn die Hände trocken oder rissig sind, können Sie eine Handcreme nehmen. Robert: Äh, sie eine, eine Creme. Frau Novak: Gerne. Hier ist eine gute Handcreme. Soll ich Ihnen die Packung einpacken? Robert: Lass mir jetzt meine Frau empfehlen. Frau Novak: Für Ihre Frau gegen die Kopfschmerzen empfehle ich weiterhin die Ibuprofen-Tabletten. Eine Tablette alle sechs bis acht Stunden, maximal drei pro Tag. Ist das in Ordnung? Robert: Aber, si, ja, aber für die Handcreme, äh. Frau Novak: Für die Hände empfehle ich Ihnen eine Handcreme. Die hilft sehr gut gegen trockene Hände. Möchten Sie die auch mitnehmen? Robert: Es, es gibt. Frau Novak: Ja, die gibt es hier. Soll ich Ihnen die Ibuprofen-Tabletten und die Handcreme zusammen einpacken? Robert: Es gibt mehr. Frau Novak: Möchten Sie noch etwas anderes? Vielleicht ein Mittel gegen Schnupfen oder Halsschmerzen? Robert: Halsschmerzen. Ich wollte Halsschmerzen. Frau Novak: Gut. Gegen Halsschmerzen kann ich Ihnen ein Halsbonbon oder ein Spray empfehlen. Möchten Sie lieber Bonbons oder ein Spray? Robert: Ich wollte lieber Bonbons. Frau Novak: Sehr gut. Hier sind die Halsbonbons. Lutschen Sie einfach ein Bonbon, so oft Sie möchten. Brauchen Sie sonst noch etwas? Robert: Das ist alles. Frau Novak: Gut. Das wären dann die Ibuprofen-Tabletten, die Handcreme und die Halsbonbons. Brauchen Sie eine Tüte? Robert: Genau. Frau Novak: Hier bitte, alles zusammen in einer Tüte. Zahlen Sie bar oder mit Karte? Robert: Mit Karte. Frau Novak: Sehr gut. Gute Besserung für Ihre Frau und passen Sie auf sich auf! Auf Wiedersehen. -"
+    }
+  ],
+  "reviewer_output": null,
+  "anki_generated": false,
+  "next_lesson_generated": false,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

@@ -1,0 +1,141 @@
+{
+  "session_id": "2026-04-20_001",
+  "date": "2026-04-20",
+  "persona": "Frau Berger",
+  "scenario": "bakery_order",
+  "duration_estimate_min": null,
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Robert",
+      "text": "Guten Morgen! Ich hätte gerne zwei Kipferln, bitte."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Natürlich! Frisch gebacken. Sonst noch etwas?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, ich nehme auch der Brot, bitte. Das dunkle."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Sie meinen das Brot — sehr gerne! Das macht 3,40 Euro."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Hier ist fünf Euro. Äh... wie sagt man \"to go\" auf Deutsch?"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Man sagt \"zum Mitnehmen\". Einen Moment, ich pack das ein."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke schön. Das war sehr hilfreich!"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Bitte sehr! Und 1,60 Euro zurück. Einen schönen Tag noch!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke, Ihnen auch. Tschüss!"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Auf Wiederschauen!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert handled a basic bakery transaction confidently, using polite register and appropriate phrases throughout. His main error was a gender mistake on 'Brot', using 'der' instead of the correct neuter 'das'. Overall it was a strong beginner-to-intermediate session with natural conversational flow.",
+    "errors": [
+      {
+        "type": "gender",
+        "original": "der Brot",
+        "correction": "das Brot",
+        "explanation": "'Brot' is neuter in German, so it takes the article 'das', not 'der'.",
+        "context": "Ja, ich nehme auch der Brot, bitte. Das dunkle."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 0,
+      "vocabulary": 0,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Ich hätte gerne",
+        "english": "I would like",
+        "note": "used correctly",
+        "tags": [
+          "polite",
+          "conditional",
+          "ordering"
+        ]
+      },
+      {
+        "german": "Kipferl",
+        "english": "crescent roll / croissant (Austrian term)",
+        "note": "used correctly",
+        "tags": [
+          "Austrian",
+          "bakery",
+          "vocabulary"
+        ]
+      },
+      {
+        "german": "zum Mitnehmen",
+        "english": "to go / to take away",
+        "note": "new this session",
+        "tags": [
+          "anki",
+          "practical",
+          "phrases"
+        ]
+      },
+      {
+        "german": "einpacken",
+        "english": "to pack up / to wrap",
+        "note": "used correctly by Frau Berger, worth noting passively",
+        "tags": [
+          "separable verb",
+          "bakery"
+        ]
+      },
+      {
+        "german": "Ihnen auch",
+        "english": "to you as well (formal)",
+        "note": "used correctly",
+        "tags": [
+          "formal",
+          "polite",
+          "anki"
+        ]
+      },
+      {
+        "german": "Auf Wiederschauen",
+        "english": "Goodbye (Austrian/Southern German variant of Auf Wiedersehen)",
+        "note": "regional variant, good exposure",
+        "tags": [
+          "Austrian",
+          "register",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Used the polite conditional 'Ich hätte gerne' correctly for ordering",
+      "Maintained formal 'Sie' register throughout the conversation",
+      "Asked naturally how to say 'to go' in German, showing good communicative strategy",
+      "Used 'Danke, Ihnen auch' correctly with the formal dative pronoun",
+      "Transaction flow was smooth and realistic with no hesitation on numbers or change"
+    ],
+    "next_focus": "Practice the gender articles for common food and bakery nouns (das Brot, die Semmel, das Brötchen, der Kuchen) using flashcards or a short drill to reinforce neuter and feminine food vocabulary."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true
+}

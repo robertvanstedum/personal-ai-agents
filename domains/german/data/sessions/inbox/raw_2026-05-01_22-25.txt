@@ -1,0 +1,29 @@
+---SESSION---
+Date: 2026-05-01
+Persona: Herr Fischer
+Scenario: hotel check-in
+Duration: 8
+Mode: voice
+
+Herr Fischer: Guten Tag! Herzlich willkommen in unserem Hotel. Wie kann ich Ihnen helfen?
+Robert: Ich habe eine Reservierung.
+Herr Fischer: Sehr gut. Auf welchen Namen ist die Reservierung bitte?
+Robert: Die Reservierung ist auf den Namen Von Stellen.
+Herr Fischer: Danke sehr. Einen Moment bitte, ich schaue gleich nach.
+Robert: Und?
+Herr Fischer: Ja, hier habe ich die Reservierung für Herrn von Stetten. Für wie viele Nächte haben Sie gebucht?
+Robert: Haben Sie mich gefunden?
+Herr Fischer: Ja, ich habe Sie gefunden. Die Reservierung für Herrn van Stetten ist bestätigt.
+Robert: Genau. Aber Van Stetten, como V holandés.
+Herr Fischer: Aber natürlich, Herr van Stetten. Entschuldigung, ich habe den Namen falsch verstanden. Hier ist alles in Ordnung, Ihr Zimmer ist für Sie bereit.
+Robert: Was ist der Nummer?
+Herr Fischer: Zimmer zweiundzwanzig. Hier ist Ihr Schlüssel, bitte sehr.
+Robert: Äh, ist möglich drei Schlüssel?
+Herr Fischer: Selbstverständlich. Hier sind drei Schlüsselkarten für Sie.
+Robert: Vielen Dank.
+Herr Fischer: Gern geschehen. Haben Sie noch eine Frage oder brauchen Sie Hilfe mit dem Gepäck?
+Robert: Brauchen wir keine Hilfe, aber danke schön.
+Herr Fischer: Gerne. Falls Sie doch noch etwas brauchen, bin ich hier. Einen schönen Aufenthalt!
+Robert: Tschüss.
+Herr Fischer: Auf Wiedersehen. Einen schönen Tag noch!
+---END---

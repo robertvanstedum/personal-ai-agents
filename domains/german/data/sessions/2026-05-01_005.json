@@ -1,0 +1,156 @@
+{
+  "session_id": "2026-05-01_005",
+  "date": "2026-05-01",
+  "persona": "Dr. Huber",
+  "scenario": "museum_navigation",
+  "duration_estimate_min": 5,
+  "mode": "writing",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Dr. Huber",
+      "text": "Guten Tag! Herzlich willkommen im Kunsthistorisches Museum. Ich bin Dr. Huber und stehe Ihnen gerne zur Verfügung. Wie kann ich Ihnen helfen? Sie sehen ein wenig orientierungslos aus - möchten Sie vielleicht zur ägyptischen Sammlung?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wir kennen noch nicht das Museum. Können sie uns etwas empfehlen?"
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Guten Tag! Ja, sehr gerne. Es freut mich, dass Sie unser Museum besuchen. Ich empfehle Ihnen besonders die ägyptische Sammlung im Erdgeschoss - sie ist eine der schönsten in Europa mit wunderschönen Sarkophagen und Statuen. Folgen Sie einfach dem Hauptkorridor hier rechts, gehen Sie die Treppe hinunter und dann links durch den großen Bogen. Die Toiletten finden Sie übrigens gleich daneben auf der rechten Seite, bevor Sie in die Sammlung eintreten. Haben Sie alles verstanden, oder soll ich es Ihnen noch einmal langsam zeigen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich verstehe und sicherlich besuchen wir der ägyptisch teil, aber wir spazieren auch durch das Museum."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Sehr gut, das freut mich! Dann besuchen Sie unbedingt den ägyptischen Teil - er lohnt sich wirklich. Wenn Sie durch das ganze Museum spazieren möchten, empfehle ich Ihnen, zuerst hier rechts entlangzugehen, die große Treppe hinunterzusteigen und dann links in den Trakt mit der ägyptischen Sammlung. Die Toiletten sind direkt daneben auf der rechten Seite, falls Sie sie brauchen. Genießen Sie Ihren Rundgang! Haben Sie noch weitere Fragen, oder soll ich Ihnen den Weg auf dem Plan zeigen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein, wir können gleich anfangen."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Wunderbar! Dann wünsche ich Ihnen einen schönen und entspannten Rundgang durch unser Museum. Vergessen Sie nicht: Die ägyptische Sammlung erreichen Sie, indem Sie rechts den Hauptkorridor nehmen, die Treppe hinuntergehen und dann links abbiegen. Die Toiletten sind unmittelbar daneben auf der rechten Seite. Falls Sie später noch Fragen haben oder sich verlaufen, kommen Sie einfach wieder zu mir. Viel Freude bei Ihrem Besuch!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully navigated a museum conversation in German, demonstrating functional communicative competence at a beginner-intermediate level. His sentences were understandable and contextually appropriate, but he made consistent errors with word order, article case, and adjective endings. The main takeaway is that Robert needs to focus on verb-second (V2) word order and noun phrase case agreement.",
+    "errors": [
+      {
+        "type": "word_order",
+        "original": "Wir kennen noch nicht das Museum.",
+        "correction": "Wir kennen das Museum noch nicht.",
+        "explanation": "In German, negation with 'nicht' typically follows the direct object; 'noch nicht' should come after 'das Museum' rather than before it.",
+        "context": "Wir kennen noch nicht das Museum. Können sie uns etwas empfehlen?"
+      },
+      {
+        "type": "register",
+        "original": "Können sie uns etwas empfehlen?",
+        "correction": "Können Sie uns etwas empfehlen?",
+        "explanation": "The formal 'Sie' (you, polite) must always be capitalized; lowercase 'sie' means 'they' or 'she', which changes the meaning entirely in a formal museum context.",
+        "context": "Wir kennen noch nicht das Museum. Können sie uns etwas empfehlen?"
+      },
+      {
+        "type": "word_order",
+        "original": "sicherlich besuchen wir der ägyptisch teil",
+        "correction": "sicherlich werden wir den ägyptischen Teil besuchen",
+        "explanation": "After an adverb like 'sicherlich' starting the clause, the finite verb must come second (V2 rule), and the remaining elements follow; alternatively with the adverb mid-sentence: 'wir besuchen sicherlich den ägyptischen Teil'.",
+        "context": "Ich verstehe und sicherlich besuchen wir der ägyptisch teil, aber wir spazieren auch durch das Museum."
+      },
+      {
+        "type": "gender",
+        "original": "der ägyptisch teil",
+        "correction": "den ägyptischen Teil",
+        "explanation": "'Teil' is masculine (der Teil), so in the accusative case as a direct object it becomes 'den', and the adjective requires the weak ending '-en': 'den ägyptischen Teil'.",
+        "context": "Ich verstehe und sicherlich besuchen wir der ägyptisch teil, aber wir spazieren auch durch das Museum."
+      },
+      {
+        "type": "vocabulary",
+        "original": "wir spazieren auch durch das Museum",
+        "correction": "wir schauen uns auch das Museum an / wir gehen auch durch das Museum",
+        "explanation": "'Spazieren' implies a leisurely outdoor walk and sounds slightly unnatural for moving through a museum interior; 'sich das Museum anschauen' or 'durch das Museum gehen' are more idiomatic.",
+        "context": "Ich verstehe und sicherlich besuchen wir der ägyptisch teil, aber wir spazieren auch durch das Museum."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 2,
+      "missing_article": 0,
+      "verb_conjugation": 0,
+      "vocabulary": 1,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "zur Verfügung stehen",
+        "english": "to be available / at one's disposal",
+        "note": "used correctly by Dr. Huber — worth learning actively",
+        "tags": [
+          "formal",
+          "anki",
+          "useful"
+        ]
+      },
+      {
+        "german": "der Rundgang",
+        "english": "the tour / the round trip through a place",
+        "note": "new this session — appeared in Dr. Huber's speech, good to acquire",
+        "tags": [
+          "museum",
+          "anki"
+        ]
+      },
+      {
+        "german": "der Hauptkorridor",
+        "english": "the main corridor",
+        "note": "new this session — useful for navigation vocabulary",
+        "tags": [
+          "navigation",
+          "museum"
+        ]
+      },
+      {
+        "german": "empfehlen",
+        "english": "to recommend",
+        "note": "used correctly by Robert — good productive use",
+        "tags": [
+          "anki",
+          "verbs"
+        ]
+      },
+      {
+        "german": "der ägyptische Teil",
+        "english": "the Egyptian section/part",
+        "note": "needs practice — Robert used incorrect case and adjective ending",
+        "tags": [
+          "adjective-endings",
+          "anki"
+        ]
+      },
+      {
+        "german": "sich verlaufen",
+        "english": "to get lost (on foot)",
+        "note": "new this session — appeared in Dr. Huber's closing, very useful colloquial phrase",
+        "tags": [
+          "anki",
+          "colloquial"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert kept the conversation moving naturally and responded relevantly to all of Dr. Huber's questions",
+      "He correctly used 'empfehlen' with the appropriate pronoun 'uns' showing awareness of dative objects",
+      "He used the conjunction 'aber' correctly to contrast two ideas in one sentence",
+      "His sentence 'Nein, wir können gleich anfangen' was grammatically correct and appropriately concise"
+    ],
+    "next_focus": "Practice the V2 (verb-second) word order rule in main clauses, especially after fronted adverbs like 'sicherlich', 'vielleicht', or 'dann', combined with accusative adjective endings (e.g. 'den ägyptischen Teil')."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

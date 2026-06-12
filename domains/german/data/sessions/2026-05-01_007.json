@@ -1,0 +1,211 @@
+{
+  "session_id": "2026-05-01_007",
+  "date": "2026-05-01",
+  "persona": "Herr Fischer",
+  "scenario": "hotel check-in",
+  "duration_estimate_min": 8,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Herr Fischer",
+      "text": "Guten Tag! Herzlich willkommen in unserem Hotel. Wie kann ich Ihnen helfen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich habe eine Reservierung."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Sehr gut. Auf welchen Namen ist die Reservierung bitte?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Die Reservierung ist auf den Namen Von Stellen."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Danke sehr. Einen Moment bitte, ich schaue gleich nach."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Und?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ja, hier habe ich die Reservierung für Herrn von Stetten. Für wie viele Nächte haben Sie gebucht?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Haben Sie mich gefunden?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ja, ich habe Sie gefunden. Die Reservierung für Herrn van Stetten ist bestätigt."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Genau. Aber Van Stetten, como V holandés."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Aber natürlich, Herr van Stetten. Entschuldigung, ich habe den Namen falsch verstanden. Hier ist alles in Ordnung, Ihr Zimmer ist für Sie bereit."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was ist der Nummer?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Zimmer zweiundzwanzig. Hier ist Ihr Schlüssel, bitte sehr."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Äh, ist möglich drei Schlüssel?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Selbstverständlich. Hier sind drei Schlüsselkarten für Sie."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Vielen Dank."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Gern geschehen. Haben Sie noch eine Frage oder brauchen Sie Hilfe mit dem Gepäck?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Brauchen wir keine Hilfe, aber danke schön."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Gerne. Falls Sie doch noch etwas brauchen, bin ich hier. Einen schönen Aufenthalt!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Tschüss."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Auf Wiedersehen. Einen schönen Tag noch!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully completed a hotel check-in scenario in German, demonstrating basic communicative competence and polite vocabulary. He made several structural errors typical of an intermediate learner, including missing articles, incorrect gender agreement, and one code-switch into Spanish. The conversation flowed naturally despite these mistakes, showing Robert is comfortable using German in practical contexts.",
+    "errors": [
+      {
+        "type": "gender",
+        "original": "Was ist der Nummer?",
+        "correction": "Was ist die Nummer?",
+        "explanation": "'Nummer' is feminine (die Nummer), so the correct article is 'die', not 'der'.",
+        "context": "Robert: Was ist der Nummer?"
+      },
+      {
+        "type": "missing_article",
+        "original": "Äh, ist möglich drei Schlüssel?",
+        "correction": "Äh, ist es möglich, drei Schlüssel zu bekommen?",
+        "explanation": "The sentence is missing the subject pronoun 'es' and a proper infinitive complement; bare 'ist möglich' is ungrammatical in German.",
+        "context": "Robert: Äh, ist möglich drei Schlüssel?"
+      },
+      {
+        "type": "word_order",
+        "original": "Brauchen wir keine Hilfe, aber danke schön.",
+        "correction": "Wir brauchen keine Hilfe, aber danke schön.",
+        "explanation": "Starting with the verb 'Brauchen' creates an interrogative structure; since this is a statement, the subject 'Wir' should come first.",
+        "context": "Robert: Brauchen wir keine Hilfe, aber danke schön."
+      },
+      {
+        "type": "vocabulary",
+        "original": "como V holandés",
+        "correction": "wie das niederländische V / wie ein V auf Niederländisch",
+        "explanation": "Robert code-switched into Spanish mid-sentence; the German equivalents are 'wie' (like/as) and 'niederländisch' (Dutch/Netherlandic).",
+        "context": "Robert: Genau. Aber Van Stetten, como V holandés."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 1,
+      "missing_article": 1,
+      "verb_conjugation": 0,
+      "vocabulary": 1,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Reservierung",
+        "english": "reservation",
+        "note": "used correctly",
+        "tags": [
+          "hotel",
+          "travel",
+          "anki"
+        ]
+      },
+      {
+        "german": "Schlüssel / Schlüsselkarte",
+        "english": "key / key card",
+        "note": "used correctly",
+        "tags": [
+          "hotel",
+          "travel",
+          "anki"
+        ]
+      },
+      {
+        "german": "Herzlich willkommen",
+        "english": "warm welcome / welcome",
+        "note": "heard and absorbed from Herr Fischer; worth adding to active vocabulary",
+        "tags": [
+          "greetings",
+          "formal",
+          "anki"
+        ]
+      },
+      {
+        "german": "ist es möglich, … zu …",
+        "english": "is it possible to …",
+        "note": "needs practice — Robert attempted this structure but omitted 'es' and the infinitive",
+        "tags": [
+          "modal phrases",
+          "grammar",
+          "anki"
+        ]
+      },
+      {
+        "german": "Einen schönen Aufenthalt!",
+        "english": "Have a pleasant stay!",
+        "note": "new this session; high-frequency hotel phrase worth memorising",
+        "tags": [
+          "hotel",
+          "travel",
+          "phrases",
+          "anki"
+        ]
+      },
+      {
+        "german": "Gern geschehen",
+        "english": "You're welcome / My pleasure",
+        "note": "new this session; polite register, useful across many contexts",
+        "tags": [
+          "politeness",
+          "phrases",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Maintained the formal 'Sie' register consistently and correctly throughout the entire interaction.",
+      "Used 'Vielen Dank' and 'danke schön' naturally at appropriate moments, showing good pragmatic awareness.",
+      "Successfully conveyed meaning even when sentences were grammatically incomplete, keeping the conversation moving.",
+      "Correctly used 'keine' for negation ('Brauchen wir keine Hilfe'), demonstrating knowledge of negative articles."
+    ],
+    "next_focus": "Practice the 'es ist möglich, … zu + Infinitiv' construction (and similar impersonal phrases such as 'es ist wichtig', 'es ist nötig') to make polite requests more grammatically complete."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

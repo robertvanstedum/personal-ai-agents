@@ -1,0 +1,37 @@
+---SESSION---
+Date: 2026-04-30
+Persona: Dr. Huber
+Scenario: museum_recommendation
+Duration: 9
+Mode: writing
+
+Dr. Huber: Guten Tag! Herzlich willkommen im Kunsthistorischen Museum. Wie kann ich Ihnen helfen? Sie sehen aus, als hätten Sie eine Frage.
+
+Robert: Wir haben keine Eintritskarte gekauft.
+
+Dr. Huber: Guten Tag! Kein Problem, der Herr. Sie haben noch keine Eintrittskarte gekauft? Das lässt sich schnell erledigen. Die Kasse ist gleich hier links im Foyer. Möchten Sie zwei Karten für heute? Und Sie sagten, Sie haben nur noch etwa eine Stunde Zeit? Dann empfehle ich Ihnen, direkt nach dem Ticketkauf zu mir zurückzukommen, damit ich Ihnen die wichtigsten Highlights zeigen kann.
+
+Robert: Zwei Eintrittskarte bitte sehr
+
+Dr. Huber: Sehr gerne, der Herr. Zwei Eintrittskarten für heute, bitte sehr. Das macht zusammen 42 Euro. Hier sind Ihre Karten. Da Sie nur noch eine Stunde Zeit haben, würde ich Ihnen vorschlagen, dass wir uns auf die absoluten Highlights konzentrieren. Möchten Sie mit mir einen kurzen Rundgang machen? Was interessiert Sie besonders – Malerei, Antike oder vielleicht die Ägyptische Sammlung?
+
+Robert: Intrasante, wuste ich nicht das Ägyptische dinge hier. Was bedeudet Sammlung?
+
+Dr. Huber: Sehr interessant, dass Sie das nicht wussten! Ja, wir haben hier tatsächlich eine beeindruckende ägyptische Sammlung. „Sammlung“ bedeutet einfach die gesamte Kollektion von Objekten zu einem Thema – also alle ägyptischen Kunstwerke und Fundstücke, die wir hier ausstellen. Möchten Sie die ägyptische Sammlung sehen? Sie liegt im Untergeschoss. In Ihrer verbleibenden Stunde könnten wir dort beginnen. Es gibt dort wunderschöne Sarkophage und Statuen. Oder bevorzugen Sie die berühmten Gemälde von Bruegel und Rubens im ersten Stock? Was möchten Sie zuerst anschauen?
+
+Robert: Ich bin von Chicago und gibt es auch einen Museum mit eine ägyptische Sammung. Gehen wir erst dort. Es fragt mir die unterschied.
+
+Dr. Huber: Ah, Sie kommen aus Chicago! Sehr schön. Ja, dort gibt es das berühmte Field Museum, das tatsächlich eine hervorragende ägyptische Sammlung hat. Dann gehen wir am besten zuerst in unsere ägyptische Sammlung im Untergeschoss. Kommen Sie bitte mit mir. Während wir hinuntergehen, können Sie mich gerne nach den Unterschieden fragen. Was interessiert Sie besonders – die Größe der Sammlung, die berühmtesten Stücke oder wie sich die Präsentation unterscheidet? Hier entlang, der Herr. Die Treppe hinunter. Was möchten Sie wissen?
+
+Robert: Ich möchte gern wandern.
+
+Dr. Huber: Sehr gerne, der Herr. Dann wandern wir gemeinsam durch die ägyptische Sammlung. Kommen Sie mit mir. Schauen Sie, diese große Granitstatue des Pharaos ist über 3000 Jahre alt. Beeindruckend, nicht wahr? Möchten Sie hier ein bisschen herumwandern und sich die Stücke in Ruhe anschauen? Oder soll ich Ihnen die wichtigsten Exponate gezielt zeigen? Fragen Sie einfach, was Sie interessiert – ich erkläre Ihnen gerne alles.
+
+Robert: Können wir einsam wandern. Brauchen wir jetz nicht hilfreich.
+
+Dr. Huber: Selbstverständlich, der Herr. Sie möchten allein durch die Sammlung wandern und brauchen im Moment keine weitere Hilfe. Das verstehe ich vollkommen. Dann lasse ich Sie und Ihre Frau jetzt in Ruhe schauen. Nehmen Sie sich Zeit und genießen Sie die Ausstellung. Falls Sie später doch noch Fragen haben oder etwas Bestimmtes suchen, finden Sie mich gerne wieder hier im Saal. Viel Freude bei Ihrem Rundgang!
+
+Robert: Danke sehr.
+
+Dr. Huber: Bitte sehr, der Herr. Es hat mich sehr gefreut, Ihnen ein wenig helfen zu dürfen. Genießen Sie Ihren Rundgang durch die ägyptische Sammlung und das ganze Museum. Falls Sie später doch noch etwas brauchen, bin ich jederzeit für Sie da. Einen schönen Aufenthalt im Kunsthistorischen Museum!
+---END-—

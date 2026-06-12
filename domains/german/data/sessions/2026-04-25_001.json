@@ -1,0 +1,63 @@
+{
+  "session_id": "2026-04-25_001",
+  "date": "2026-04-25",
+  "persona": "Stefan",
+  "scenario": "transit_help",
+  "duration_estimate_min": 10,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Stefan",
+      "text": "Guten Tag! Wie kann ich Ihnen helfen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Welche Linie fährt nach Schönbrunn?"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "This session was extremely brief, containing only a single exchange. Robert asked a simple but correct question about which transit line goes to Schönbrunn. There is insufficient data to fully assess his proficiency, but the one sentence produced was grammatically accurate.",
+    "errors": [],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 0,
+      "vocabulary": 0,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Welche Linie",
+        "english": "Which line",
+        "note": "used correctly",
+        "tags": [
+          "transit",
+          "questions"
+        ]
+      },
+      {
+        "german": "fährt nach",
+        "english": "goes to / travels to",
+        "note": "used correctly",
+        "tags": [
+          "transit",
+          "verbs",
+          "fahren"
+        ]
+      }
+    ],
+    "strengths": [
+      "Correct use of 'welche' as an interrogative pronoun agreeing with the feminine noun 'Linie'",
+      "Correct verb placement in a question: 'fährt' in second position after the question word",
+      "Appropriate use of 'nach' for destination (city/place name)"
+    ],
+    "next_focus": "Practice a full transit conversation: asking about departure times, platform numbers, and ticket types, focusing on modal verbs (müssen, können) and accusative case for ticket purchases."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": false,
+  "drill_mode": true,
+  "drill_session": 2,
+  "drill_total": 3
+}

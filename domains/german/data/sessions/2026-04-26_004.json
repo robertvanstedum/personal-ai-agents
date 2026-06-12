@@ -1,0 +1,150 @@
+{
+  "session_id": "2026-04-26_004",
+  "date": "2026-04-26",
+  "persona": "Herr Fischer",
+  "scenario": "hotel_checkout",
+  "duration_estimate_min": 10,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Herr Fischer",
+      "text": "Guten Morgen! Wie kann ich Ihnen helfen? Robert: Ich habe eine Reservierung. Herr Fischer: Selbstverständlich. Ihr Name bitte? Robert: Robert Brandstätter. Herr Fischer: Guten Morgen, Herr Brandstätter! Einen Moment bitte, ich schaue nach Ihrer Reservierung. Robert: aber Herr Fischer: Entschuldigung, ich habe Sie nicht ganz verstanden. Könnten Sie das bitte noch einmal sagen? Robert: Ich bin Herr Fischer: Selbstverständlich. Und Sie möchten auschecken? Robert: Mein Name ist, mein Name ist Robert Brandstätter. Herr Fischer: Ah, Herr Brandstätter! Hier habe ich Ihre Rechnung. Möchten Sie sie gleich bezahlen oder soll ich sie Ihnen zuerst zeigen? Robert: Nein, es nicht. Ich heiße nicht Brandstätter. Ich heiße Van Stedum. Herr Fischer: Entschuldigung, Herr Van Stedum. Das war mein Fehler. Hier ist Ihre Rechnung - alles in Ordnung, oder soll ich Ihnen etwas erklären? Robert: Ich danke es. Klar. Herr Fischer: Bitte sehr. Hier ist Ihre Rechnung. Möchten Sie eine Quittung haben? Robert: Genau. Muss ich eine Quittung. Herr Fischer: Selbstverständlich, ich drucke Ihnen eine Quittung aus. Brauchen Sie noch etwas? Robert: Nein, das ist alles. Herr Fischer: Hier ist Ihre Quittung. Und was ist mit dem Gepäck - möchten Sie es noch bei uns lassen? Wir haben einen Gepäckraum für Sie. Robert: Brauche es nicht. Herr Fischer: Bitte sehr. Hier ist Ihre Quittung. Ihre Schlüssel bitte, und ich wünsche Ihnen eine gute Reise! Robert: Dankeschön. Herr Fischer: Auf Wiedersehen, Herr Van Stedum! Kommen Sie gerne wieder! -E"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert managed to complete a basic hotel checkout interaction in German, demonstrating comfort with simple transactional phrases and polite formulas. However, several utterances were incomplete or grammatically broken, suggesting difficulty constructing full sentences under pressure. The main takeaway is that Robert needs to focus on forming complete sentences with proper verb placement and modal verb constructions.",
+    "errors": [
+      {
+        "type": "verb_conjugation",
+        "original": "Ich danke es.",
+        "correction": "Ich bedanke mich. / Danke schön.",
+        "explanation": "'danken' takes a dative object of a person (jemandem danken), not an accusative 'es'; the intended meaning 'thank you' is best expressed as 'Ich bedanke mich' or simply 'Danke schön'.",
+        "context": "Robert: Ich danke es. Klar."
+      },
+      {
+        "type": "missing_article",
+        "original": "Muss ich eine Quittung.",
+        "correction": "Ich brauche eine Quittung. / Könnte ich bitte eine Quittung bekommen?",
+        "explanation": "The sentence is missing a verb to complete it; 'Muss ich eine Quittung' is a fragment — a full verb such as 'bekommen' or 'haben' is required, and 'müssen' is also pragmatically odd here.",
+        "context": "Robert: Genau. Muss ich eine Quittung."
+      },
+      {
+        "type": "word_order",
+        "original": "Nein, es nicht.",
+        "correction": "Nein, das stimmt nicht. / Das ist nicht korrekt.",
+        "explanation": "The utterance is an incomplete sentence missing both a subject in correct position and a main verb; in a negation the verb must be present.",
+        "context": "Robert: Nein, es nicht. Ich heiße nicht Brandstätter. Ich heiße Van Stedum."
+      },
+      {
+        "type": "missing_article",
+        "original": "Brauche es nicht.",
+        "correction": "Ich brauche es nicht. / Nein danke, ich brauche es nicht.",
+        "explanation": "The subject pronoun 'ich' is omitted; German requires an explicit subject in declarative sentences (pro-drop is not permitted in standard German).",
+        "context": "Robert: Brauche es nicht."
+      },
+      {
+        "type": "word_order",
+        "original": "aber",
+        "correction": "Entschuldigung, aber mein Name ist nicht Brandstätter.",
+        "explanation": "Robert produced only the conjunction 'aber' without completing the sentence, leaving the intended correction of his name unexpressed.",
+        "context": "Robert: aber"
+      },
+      {
+        "type": "word_order",
+        "original": "Ich bin",
+        "correction": "Ich bin Robert Van Stedum. / Ich heiße Van Stedum.",
+        "explanation": "The sentence was left unfinished; a predicate nominative is required after 'Ich bin' to form a grammatical sentence.",
+        "context": "Robert: Ich bin"
+      }
+    ],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 3,
+      "missing_article": 2,
+      "verb_conjugation": 1,
+      "vocabulary": 0,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "die Reservierung",
+        "english": "reservation",
+        "note": "used correctly",
+        "tags": [
+          "hotel",
+          "travel"
+        ]
+      },
+      {
+        "german": "die Rechnung",
+        "english": "bill / invoice",
+        "note": "understood and used in context",
+        "tags": [
+          "hotel",
+          "finance"
+        ]
+      },
+      {
+        "german": "die Quittung",
+        "english": "receipt",
+        "note": "understood correctly; attempted to request one but sentence was incomplete",
+        "tags": [
+          "hotel",
+          "finance",
+          "needs practice"
+        ]
+      },
+      {
+        "german": "der Gepäckraum",
+        "english": "luggage storage room",
+        "note": "new this session — introduced by Herr Fischer",
+        "tags": [
+          "hotel",
+          "travel",
+          "anki"
+        ]
+      },
+      {
+        "german": "auschecken",
+        "english": "to check out",
+        "note": "new this session — introduced by Herr Fischer; Robert should practise using it actively",
+        "tags": [
+          "hotel",
+          "travel",
+          "anki"
+        ]
+      },
+      {
+        "german": "Ich heiße … / Mein Name ist …",
+        "english": "My name is …",
+        "note": "used correctly for self-identification and correction",
+        "tags": [
+          "basics"
+        ]
+      },
+      {
+        "german": "sich bedanken",
+        "english": "to express thanks / to thank",
+        "note": "needs practice — Robert incorrectly said 'Ich danke es' instead of 'Ich bedanke mich'",
+        "tags": [
+          "politeness",
+          "anki",
+          "needs practice"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully provided his name and corrected the receptionist's error, showing communicative persistence.",
+      "He used 'Ich heiße nicht … Ich heiße …' correctly to make a contrastive correction.",
+      "He maintained the formal 'Sie' register throughout, appropriate for a hotel context.",
+      "Simple phrases like 'Nein, das ist alles' and 'Dankeschön' were delivered naturally and correctly."
+    ],
+    "next_focus": "Complete sentence construction with modal verbs: practise forming full sentences using 'können', 'müssen', and 'brauchen' (e.g. 'Könnte ich eine Quittung bekommen?', 'Ich brauche keine Hilfe.') to avoid the sentence fragments that appeared repeatedly this session."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

@@ -1,0 +1,250 @@
+{
+  "session_id": "2026-05-04_001",
+  "date": "2026-05-04",
+  "persona": "Maria",
+  "scenario": "Cafe Order",
+  "duration_estimate_min": 12,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Servus! Schön, dass du da bist. Was darf’s denn sein?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wir möchten ein, wir möchten Kaffee bestellen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Was möchtet ihr denn für einen Kaffee? Eine Melange, einen Kleinen Braunen oder vielleicht einen Verlängerten?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was ist ein Melange?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ein Melange ist unser"
+    },
+    {
+      "speaker": "Wiener Klassiker",
+      "text": "Kaffee mit viel aufgeschäumter Milch, fast wie ein Cappuccino, aber etwas milder. Sehr beliebt hier. Willst du den probieren?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Meine Frau möchte ein, ein Melange."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gute Wahl für deine Frau! Eine Melange kommt sofort. Und für dich? Was möchtest du trinken?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich bestelle ein, ein kleiner Brauner."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Sehr gut, ein kleiner Brauner für dich und eine Melange für deine Frau. Kommt gleich. Und dazu vielleicht einen Gugelhupf oder einen Apfelstrudel?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte sicherlich ein, einen Apfel, Apfelstrudel."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Sehr gerne, einen Apfelstrudel dazu. Kommt sofort. Bitte schön, eure Getränke und der Strudel. Guten Appetit!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Aber meine Frau hat Nick bestellen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Deine Frau hat noch nichts bestellt? Entschuldigung, das hab ich jetzt überhört. Was möchtest du denn, meine Liebe?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Er, er möchte ein Apfelstrudel auch."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Alles klar, dann zwei Apfelstrudel und eine Melange und ein kleiner Brauner. Kommt sofort!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully navigated a café ordering scenario in Austrian German, demonstrating solid communicative intent and useful vocabulary. However, he showed recurring difficulty with German grammatical gender and article selection, particularly with 'Melange' and 'Apfelstrudel', and made a notable pronoun error when referring to his wife. His sentence structures were generally comprehensible but occasionally incomplete or grammatically imprecise.",
+    "errors": [
+      {
+        "type": "missing_article",
+        "original": "Wir möchten ein, wir möchten Kaffee bestellen.",
+        "correction": "Wir möchten einen Kaffee bestellen.",
+        "explanation": "When ordering a countable item like 'Kaffee', the indefinite article 'einen' (accusative masculine) is required.",
+        "context": "Wir möchten ein, wir möchten Kaffee bestellen."
+      },
+      {
+        "type": "gender",
+        "original": "Was ist ein Melange?",
+        "correction": "Was ist eine Melange?",
+        "explanation": "'Melange' is feminine in German ('die Melange'), so the correct indefinite article is 'eine'.",
+        "context": "Was ist ein Melange?"
+      },
+      {
+        "type": "gender",
+        "original": "Meine Frau möchte ein, ein Melange.",
+        "correction": "Meine Frau möchte eine Melange.",
+        "explanation": "'Die Melange' is feminine; in the accusative case after 'möchte', the correct article is 'eine'.",
+        "context": "Meine Frau möchte ein, ein Melange."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Ich bestelle ein, ein kleiner Brauner.",
+        "correction": "Ich möchte einen kleinen Braunen.",
+        "explanation": "While 'bestellen' is not wrong in principle, the article and adjective ending are incorrect: 'kleiner Brauner' is nominative, but the accusative form after 'einen' requires 'kleinen Braunen'. Using 'möchte' is also more natural in this polite ordering context.",
+        "context": "Ich bestelle ein, ein kleiner Brauner."
+      },
+      {
+        "type": "gender",
+        "original": "Ich möchte sicherlich ein, einen Apfel, Apfelstrudel.",
+        "correction": "Ich möchte sicherlich einen Apfelstrudel.",
+        "explanation": "'Der Apfelstrudel' is masculine, and Robert did self-correct to 'einen', which is the correct accusative masculine form — partial credit here, though the hesitation and fragmentation indicate uncertainty.",
+        "context": "Ich möchte sicherlich ein, einen Apfel, Apfelstrudel."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Aber meine Frau hat Nick bestellen.",
+        "correction": "Aber meine Frau hat noch nichts bestellt.",
+        "explanation": "'Nick' appears to be a mispronunciation or mishearing of 'noch nichts'; additionally, 'hat bestellen' is incorrect — the correct Perfekt form is 'hat bestellt'.",
+        "context": "Aber meine Frau hat Nick bestellen."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Aber meine Frau hat Nick bestellen.",
+        "correction": "Meine Frau hat noch nichts bestellt.",
+        "explanation": "The Perfekt tense requires a past participle: 'bestellt', not the infinitive 'bestellen'.",
+        "context": "Aber meine Frau hat Nick bestellen."
+      },
+      {
+        "type": "register",
+        "original": "Er, er möchte ein Apfelstrudel auch.",
+        "correction": "Sie möchte auch einen Apfelstrudel.",
+        "explanation": "Robert referred to his wife using 'er' (he/masculine) instead of 'sie' (she/feminine); additionally, word order places 'auch' more naturally before the object or at the end, and the article should be 'einen' (accusative masculine).",
+        "context": "Er, er möchte ein Apfelstrudel auch."
+      },
+      {
+        "type": "word_order",
+        "original": "Er, er möchte ein Apfelstrudel auch.",
+        "correction": "Sie möchte auch einen Apfelstrudel.",
+        "explanation": "In German, 'auch' typically follows the verb and precedes the object rather than appearing at the end of the sentence.",
+        "context": "Er, er möchte ein Apfelstrudel auch."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 4,
+      "word_order": 1,
+      "missing_article": 1,
+      "verb_conjugation": 2,
+      "vocabulary": 1,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "die Melange",
+        "english": "Viennese coffee with foamed milk (similar to cappuccino)",
+        "note": "new this session — Austrian café vocabulary",
+        "tags": [
+          "anki",
+          "austria",
+          "cafe",
+          "food-and-drink"
+        ]
+      },
+      {
+        "german": "der Kleine Braune",
+        "english": "small espresso with a dash of milk",
+        "note": "new this session — Austrian café vocabulary",
+        "tags": [
+          "anki",
+          "austria",
+          "cafe",
+          "food-and-drink"
+        ]
+      },
+      {
+        "german": "der Verlängerte",
+        "english": "long black coffee (diluted espresso)",
+        "note": "new this session — encountered but not actively used",
+        "tags": [
+          "anki",
+          "austria",
+          "cafe"
+        ]
+      },
+      {
+        "german": "der Gugelhupf",
+        "english": "a ring-shaped Central European cake",
+        "note": "new this session — encountered but not used",
+        "tags": [
+          "anki",
+          "austria",
+          "food"
+        ]
+      },
+      {
+        "german": "der Apfelstrudel",
+        "english": "apple strudel",
+        "note": "needs practice — used multiple times but with incorrect articles",
+        "tags": [
+          "anki",
+          "food",
+          "gender-masculine"
+        ]
+      },
+      {
+        "german": "Bitte schön",
+        "english": "here you are / you're welcome",
+        "note": "used correctly by Maria — Robert should incorporate this",
+        "tags": [
+          "anki",
+          "politeness",
+          "cafe"
+        ]
+      },
+      {
+        "german": "sicherlich",
+        "english": "certainly / definitely",
+        "note": "used correctly — good register for polite conversation",
+        "tags": [
+          "anki",
+          "adverbs"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully communicated his orders and his wife's order, keeping the interaction moving forward despite grammatical errors.",
+      "He used the polite modal verb 'möchten/möchte' consistently and correctly for expressing wishes.",
+      "He self-corrected 'ein' to 'einen' for Apfelstrudel mid-utterance, showing emerging awareness of accusative case.",
+      "He introduced new Austrian café vocabulary ('Melange', 'kleiner Brauner', 'Apfelstrudel') actively in his responses.",
+      "He asked a clarifying question ('Was ist ein Melange?') showing confidence in using German for real communicative purposes."
+    ],
+    "next_focus": "Practice grammatical gender and accusative article agreement (ein/eine/einen) with common food and drink nouns, specifically focusing on feminine nouns like 'die Melange' and masculine nouns like 'der Apfelstrudel' and 'der Kaffee', using flashcard drills and short ordering dialogues."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "scaffold_delivered": [
+    "Ich möchte lieber einen Tee.",
+    "Meine Frau hätte gerne den Apfelstrudel.",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_used": [
+    "Ich möchte lieber einen Tee.",
+    "Meine Frau hätte gerne den Apfelstrudel."
+  ],
+  "scaffold_avoided": [
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_deployment_rate": "2/3 scaffold phrases used"
+}

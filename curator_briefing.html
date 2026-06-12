@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="curator-model" content="grok-4-1">
     <meta name="curator-mode" content="production">
-    <meta name="curator-timestamp" content="2026-05-31 17:23:47">
+    <meta name="curator-timestamp" content="2026-06-12 07:50:44">
     <meta name="curator-articles" content="20">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-    <title>Morning Briefing - May 31, 2026</title>
+    <title>Morning Briefing - June 12, 2026</title>
     <style>
         :root {
             --bg: #f5f0e8;
@@ -172,42 +172,8 @@
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 0.06em;
-            margin-bottom: 0.75rem;
+            margin-bottom: 1rem;
         }
-
-        /* ── Topics strip ── */
-        #topics-strip {
-            display: flex; align-items: center; gap: 6px;
-            flex-wrap: wrap; margin-bottom: 1rem;
-        }
-        #topics-strip-label {
-            font-family: var(--font-mono); font-size: 0.65rem;
-            text-transform: uppercase; letter-spacing: 0.1em;
-            color: var(--text-dim); margin-right: 2px;
-        }
-        .topic-pill {
-            display: inline-flex; align-items: center; gap: 5px;
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: 999px; padding: 3px 10px 3px 8px;
-            font-size: 0.72rem; font-family: var(--font-mono);
-            line-height: 1.2;
-        }
-        .tp-active  { border-color: rgba(46,125,82,0.45); background: rgba(46,125,82,0.06); }
-        .tp-paused  { border-color: rgba(139,110,26,0.45); background: rgba(139,110,26,0.06); }
-        .tp-dormant { border-color: rgba(158,144,128,0.3); }
-        .tp-oneshot { border-color: rgba(26,92,138,0.4); background: rgba(26,92,138,0.06); }
-        .tp-dot     { font-size: 0.65rem; flex-shrink: 0; }
-        .tp-name    { color: var(--text); text-decoration: none; font-weight: 500; }
-        .tp-name:hover { color: var(--accent); }
-        .tp-sub     { color: var(--text-dim); font-size: 0.68rem; }
-        .tp-activate-btn {
-            font-family: var(--font-mono); font-size: 0.62rem;
-            background: var(--accent); color: white;
-            border: none; border-radius: 999px; padding: 1px 7px;
-            cursor: pointer; margin-left: 2px; line-height: 1.6;
-        }
-        .tp-activate-btn:hover { background: #7a521f; }
-        .tp-activate-btn:disabled { opacity: 0.5; cursor: default; }
 
         /* ── Table ── */
         .briefing-table {
@@ -466,21 +432,14 @@
   <nav class="header-nav">
     <a href="/" class="nav-link active">Daily</a>
     <a href="curator_library.html" class="nav-link">Library</a>
-    <a href="interests/2026/scans/index.html" class="nav-link">Scans &amp; Dives</a>
+    <a href="interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
     <a href="curator_intelligence.html" class="nav-link">Observations</a>
     <a href="curator_priorities.html" class="nav-link">🎯</a>
   </nav>
 </header>
 
 <main>
-    <div class="briefing-date">Sunday, May 31, 2026</div>
-
-    <!-- Topics strip — loaded client-side, hidden until topics exist -->
-    <div id="topics-strip" style="display:none;">
-      <span id="topics-strip-label">Topics</span>
-      <div id="topics-pills" style="display:contents;"></div>
-    </div>
-
+    <div class="briefing-date">Friday, June 12, 2026</div>
     <div class="briefing-table">
         <table>
             <thead>
@@ -495,18 +454,18 @@
                 </tr>
             </thead>
             <tbody>
-                <tr data-hash-id="804f0" 
+                <tr data-hash-id="f8a76" 
                         data-rank="1"
-                        data-title="How America Lost Its Most Important Defense Tech Habit"
-                        data-url="https://warontherocks.com/cogs-of-war/how-america-lost-its-most-important-defense-tech-habit/"
-                        data-source="War on the Rocks"
+                        data-title="Iran war day 105: Trump halts attacks after Kharg Island threat"
+                        data-url="https://www.aljazeera.com/news/2026/6/12/iran-war-day-105-trump-halts-attacks-after-kharg-island-threat?traffic_source=rss"
+                        data-source="Al Jazeera"
                         data-category="geo_major">
                     <td class="col-rank"><span class="rank-badge">1</span></td>
                     <td class="col-category"><span class="cat-badge cat-geo_major">geo_major</span></td>
-                    <td class="col-source"><span class="source-name">War on the Rocks</span></td>
+                    <td class="col-source"><span class="source-name">Al Jazeera</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://warontherocks.com/cogs-of-war/how-america-lost-its-most-important-defense-tech-habit/" target="_blank">How America Lost Its Most Important Defense Tech Habit</a>
+                            <a href="https://www.aljazeera.com/news/2026/6/12/iran-war-day-105-trump-halts-attacks-after-kharg-island-threat?traffic_source=rss" target="_blank">Iran war day 105: Trump halts attacks after Kharg Island threat</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
@@ -518,22 +477,22 @@
                         <div class="action-buttons">
                             <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 1);">👍</button>
                             <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 1);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 1);">💾</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 1);">💾</button>
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="e651a" 
+                <tr data-hash-id="c7c07" 
                         data-rank="2"
-                        data-title="Trump’s Least Bad Option in Iran"
-                        data-url="https://www.foreignaffairs.com/iran/trumps-least-bad-option-iran"
-                        data-source="Foreign Affairs"
+                        data-title="Trump says Iran deal coming soon, Tehran yet to confirm"
+                        data-url="https://www.dw.com/en/trump-says-iran-deal-coming-soon-tehran-yet-to-confirm/live-77520654?maca=en-rss-en-all-1573-xml-mrss"
+                        data-source="Deutsche Welle"
                         data-category="geo_major">
                     <td class="col-rank"><span class="rank-badge">2</span></td>
                     <td class="col-category"><span class="cat-badge cat-geo_major">geo_major</span></td>
-                    <td class="col-source"><span class="source-name">Foreign Affairs</span></td>
+                    <td class="col-source"><span class="source-name">Deutsche Welle</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.foreignaffairs.com/iran/trumps-least-bad-option-iran" target="_blank">Trump’s Least Bad Option in Iran</a>
+                            <a href="https://www.dw.com/en/trump-says-iran-deal-coming-soon-tehran-yet-to-confirm/live-77520654?maca=en-rss-en-all-1573-xml-mrss" target="_blank">Trump says Iran deal coming soon, Tehran yet to confirm</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
@@ -545,76 +504,103 @@
                         <div class="action-buttons">
                             <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 2);">👍</button>
                             <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 2);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 2);">💾</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 2);">💾</button>
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="a14c0" 
+                <tr data-hash-id="39fcb" 
                         data-rank="3"
-                        data-title="Quantifying the impact of the Iran war on US inflation"
-                        data-url="https://cepr.org/voxeu/columns/quantifying-impact-iran-war-us-inflation"
-                        data-source="CEPR VoxEU"
+                        data-title="The Toll Booth at the Throat of World Trade"
+                        data-url="https://warontherocks.com/the-toll-booth-at-the-throat-of-world-trade/"
+                        data-source="War on the Rocks"
                         data-category="monetary">
                     <td class="col-rank"><span class="rank-badge">3</span></td>
                     <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
-                    <td class="col-source"><span class="source-name">CEPR VoxEU</span></td>
+                    <td class="col-source"><span class="source-name">War on the Rocks</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://cepr.org/voxeu/columns/quantifying-impact-iran-war-us-inflation" target="_blank">Quantifying the impact of the Iran war on US inflation</a>
+                            <a href="https://warontherocks.com/the-toll-booth-at-the-throat-of-world-trade/" target="_blank">The Toll Booth at the Throat of World Trade</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">12.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:60%"></div></div>
+                        <div class="score-val">13.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:68%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
                             <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 3);">👍</button>
                             <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 3);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 3);">💾</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 3);">💾</button>
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="f86f0" 
+                <tr data-hash-id="c304c" 
                         data-rank="4"
-                        data-title="Polls open in Colombia’s pivotal presidential election"
-                        data-url="https://www.aljazeera.com/video/newsfeed/2026/5/31/polls-open-in-colombias-pivotal-presidential-election?traffic_source=rss"
-                        data-source="Al Jazeera"
+                        data-title="Iran’s New Grand Strategy"
+                        data-url="https://www.foreignaffairs.com/iran/irans-new-grand-strategy"
+                        data-source="Foreign Affairs"
                         data-category="geo_other">
                     <td class="col-rank"><span class="rank-badge">4</span></td>
                     <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
-                    <td class="col-source"><span class="source-name">Al Jazeera</span></td>
+                    <td class="col-source"><span class="source-name">Foreign Affairs</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.aljazeera.com/video/newsfeed/2026/5/31/polls-open-in-colombias-pivotal-presidential-election?traffic_source=rss" target="_blank">Polls open in Colombia’s pivotal presidential election</a>
+                            <a href="https://www.foreignaffairs.com/iran/irans-new-grand-strategy" target="_blank">Iran’s New Grand Strategy</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">9.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:45%"></div></div>
+                        <div class="score-val">13.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:68%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
                             <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 4);">👍</button>
                             <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 4);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 4);">💾</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 4);">💾</button>
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="19ff8" 
+                <tr data-hash-id="e86b4" 
                         data-rank="5"
-                        data-title="What Hungary must do to receive EU funds frozen under Orban"
-                        data-url="https://www.dw.com/en/what-hungary-must-do-to-receive-eu-funds-frozen-under-orban/a-77354206?maca=en-rss-en-all-1573-xml-mrss"
-                        data-source="Deutsche Welle"
-                        data-category="fiscal">
+                        data-title="It’s Not too Late to Fix the AI Exports Program"
+                        data-url="https://www.justsecurity.org/140041/fix-us-ai-exports-program/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=fix-us-ai-exports-program"
+                        data-source="Just Security"
+                        data-category="technology">
                     <td class="col-rank"><span class="rank-badge">5</span></td>
-                    <td class="col-category"><span class="cat-badge cat-fiscal">fiscal</span></td>
-                    <td class="col-source"><span class="source-name">Deutsche Welle</span></td>
+                    <td class="col-category"><span class="cat-badge cat-technology">technology</span></td>
+                    <td class="col-source"><span class="source-name">Just Security</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.dw.com/en/what-hungary-must-do-to-receive-eu-funds-frozen-under-orban/a-77354206?maca=en-rss-en-all-1573-xml-mrss" target="_blank">What Hungary must do to receive EU funds frozen under Orban</a>
+                            <a href="https://www.justsecurity.org/140041/fix-us-ai-exports-program/?utm_source=rss&utm_medium=rss&utm_campaign=fix-us-ai-exports-program" target="_blank">It’s Not too Late to Fix the AI Exports Program</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">10.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:52%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 5);">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 5);">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 5);">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="0064f" 
+                        data-rank="6"
+                        data-title="Hormuz 5 June 2026 #1"
+                        data-url="https://www.crisisgroup.org/content/hormuz-5-june-2026-1"
+                        data-source="Crisis Group"
+                        data-category="geo_other">
+                    <td class="col-rank"><span class="rank-badge">6</span></td>
+                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
+                    <td class="col-source"><span class="source-name">Crisis Group</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://www.crisisgroup.org/content/hormuz-5-june-2026-1" target="_blank">Hormuz 5 June 2026 #1</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
@@ -624,24 +610,51 @@
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 5);">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 5);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 5);">💾</button>
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 6);">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 6);">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 6);">💾</button>
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="f4a1e" 
-                        data-rank="6"
-                        data-title="China’s AI Heist"
-                        data-url="https://www.foreignaffairs.com/china/chinas-ai-heist"
-                        data-source="Foreign Affairs"
-                        data-category="technology">
-                    <td class="col-rank"><span class="rank-badge">6</span></td>
-                    <td class="col-category"><span class="cat-badge cat-technology">technology</span></td>
-                    <td class="col-source"><span class="source-name">Foreign Affairs</span></td>
+                <tr data-hash-id="6cfbc" 
+                        data-rank="7"
+                        data-title="Crisis Comes Closer: Social Security\&#x27;s Projected Insolvency Moved A Year Earlier"
+                        data-url="https://www.zerohedge.com/political/crisis-comes-closer-social-securitys-projected-insolvency-moved-year-earlier"
+                        data-source="ZeroHedge"
+                        data-category="fiscal">
+                    <td class="col-rank"><span class="rank-badge">7</span></td>
+                    <td class="col-category"><span class="cat-badge cat-fiscal">fiscal</span></td>
+                    <td class="col-source"><span class="source-name">ZeroHedge</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.foreignaffairs.com/china/chinas-ai-heist" target="_blank">China’s AI Heist</a>
+                            <a href="https://www.zerohedge.com/political/crisis-comes-closer-social-securitys-projected-insolvency-moved-year-earlier" target="_blank">Crisis Comes Closer: Social Security's Projected Insolvency Moved A Year Earlier</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">8.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:40%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 7);">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 7);">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 7);">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="a84a5" 
+                        data-rank="8"
+                        data-title="Adaptive rerouting reshapes impacts of maritime chokepoint disruptions"
+                        data-url="https://arxiv.org/abs/2606.13431"
+                        data-source="arXiv q-fin"
+                        data-category="monetary">
+                    <td class="col-rank"><span class="rank-badge">8</span></td>
+                    <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
+                    <td class="col-source"><span class="source-name">arXiv q-fin</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://arxiv.org/abs/2606.13431" target="_blank">Adaptive rerouting reshapes impacts of maritime chokepoint disruptions</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
@@ -651,20 +664,74 @@
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 6);">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 6);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 6);">💾</button>
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 8);">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 8);">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 8);">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="dc88e" 
+                        data-rank="9"
+                        data-title="Our Warming Climate: A Pilot Project in Norway Raises Doubts about CCS Sustainability"
+                        data-url="https://www.spiegel.de/international/business/our-warming-climate-a-pilot-project-in-norway-raises-doubts-about-ccs-sustainability-a-066f9f4a-adbf-475b-b072-3015b5a370d1#ref=rss"
+                        data-source="Spiegel International"
+                        data-category="other">
+                    <td class="col-rank"><span class="rank-badge">9</span></td>
+                    <td class="col-category"><span class="cat-badge cat-other">other</span></td>
+                    <td class="col-source"><span class="source-name">Spiegel International</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://www.spiegel.de/international/business/our-warming-climate-a-pilot-project-in-norway-raises-doubts-about-ccs-sustainability-a-066f9f4a-adbf-475b-b072-3015b5a370d1#ref=rss" target="_blank">Our Warming Climate: A Pilot Project in Norway Raises Doubts about CCS Sustainability</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">7.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:38%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 9);">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 9);">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 9);">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="298eb" 
+                        data-rank="10"
+                        data-title="Global trade linkages and the cross-country distribution of the gains from AI"
+                        data-url="https://cepr.org/voxeu/columns/global-trade-linkages-and-cross-country-distribution-gains-ai"
+                        data-source="CEPR VoxEU"
+                        data-category="technology">
+                    <td class="col-rank"><span class="rank-badge">10</span></td>
+                    <td class="col-category"><span class="cat-badge cat-technology">technology</span></td>
+                    <td class="col-source"><span class="source-name">CEPR VoxEU</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://cepr.org/voxeu/columns/global-trade-linkages-and-cross-country-distribution-gains-ai" target="_blank">Global trade linkages and the cross-country distribution of the gains from AI</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">6.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:30%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 10);">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 10);">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 10);">💾</button>
                         </div>
                     </td>
                 </tr>
                 <tr data-hash-id="97a4e" 
-                        data-rank="7"
+                        data-rank="11"
                         data-title="Chartbook 450: Modern growth surges. Or, why China\&#x27;s economic development is unique in human history."
                         data-url="https://adamtooze.substack.com/p/chartbook-450-modern-growth-surges"
                         data-source="Adam Tooze Chartbook"
-                        data-category="monetary">
-                    <td class="col-rank"><span class="rank-badge">7</span></td>
-                    <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
+                        data-category="geo_major">
+                    <td class="col-rank"><span class="rank-badge">11</span></td>
+                    <td class="col-category"><span class="cat-badge cat-geo_major">geo_major</span></td>
                     <td class="col-source"><span class="source-name">Adam Tooze Chartbook</span></td>
                     <td class="col-title">
                         <div class="article-title">
@@ -673,168 +740,56 @@
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">6.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:30%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 7);">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 7);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 7);">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="41a28" 
-                        data-rank="8"
-                        data-title="The Weaponization of GLOMAG: How Rivals Co-opt U.S. Sanctions to Target Business and Political Opponents"
-                        data-url="https://www.justsecurity.org/138443/weaponization-glomag-sanctions/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=weaponization-glomag-sanctions"
-                        data-source="Just Security"
-                        data-category="other">
-                    <td class="col-rank"><span class="rank-badge">8</span></td>
-                    <td class="col-category"><span class="cat-badge cat-other">other</span></td>
-                    <td class="col-source"><span class="source-name">Just Security</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://www.justsecurity.org/138443/weaponization-glomag-sanctions/?utm_source=rss&utm_medium=rss&utm_campaign=weaponization-glomag-sanctions" target="_blank">The Weaponization of GLOMAG: How Rivals Co-opt U.S. Sanctions to Target Business and Political Opponents</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">6.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:30%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 8);">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 8);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 8);">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="60c78" 
-                        data-rank="9"
-                        data-title="The Trump-Xi Summit: What Happened in Beijing?"
-                        data-url="https://www.crisisgroup.org/pod/asia-pacific/china/trump-xi-summit-what-happened-beijing"
-                        data-source="Crisis Group"
-                        data-category="geo_major">
-                    <td class="col-rank"><span class="rank-badge">9</span></td>
-                    <td class="col-category"><span class="cat-badge cat-geo_major">geo_major</span></td>
-                    <td class="col-source"><span class="source-name">Crisis Group</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://www.crisisgroup.org/pod/asia-pacific/china/trump-xi-summit-what-happened-beijing" target="_blank">The Trump-Xi Summit: What Happened in Beijing?</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">5.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:28%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 9);">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 9);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 9);">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="fc6fa" 
-                        data-rank="10"
-                        data-title="AI’s Macroeconomic Challenges and Promises"
-                        data-url="https://libertystreeteconomics.newyorkfed.org/2026/05/ais-macroeconomic-challenges-and-promises/"
-                        data-source="NY Fed Liberty Street"
-                        data-category="technology">
-                    <td class="col-rank"><span class="rank-badge">10</span></td>
-                    <td class="col-category"><span class="cat-badge cat-technology">technology</span></td>
-                    <td class="col-source"><span class="source-name">NY Fed Liberty Street</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://libertystreeteconomics.newyorkfed.org/2026/05/ais-macroeconomic-challenges-and-promises/" target="_blank">AI’s Macroeconomic Challenges and Promises</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">2.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:12%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 10);">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 10);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 10);">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="87344" 
-                        data-rank="11"
-                        data-title="Colombia’s Presidential Race"
-                        data-url="https://geopoliticalfutures.com/colombias-presidential-race/"
-                        data-source="Geopolitical Futures"
-                        data-category="geo_other">
-                    <td class="col-rank"><span class="rank-badge">11</span></td>
-                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
-                    <td class="col-source"><span class="source-name">Geopolitical Futures</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://geopoliticalfutures.com/colombias-presidential-race/" target="_blank">Colombia’s Presidential Race</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">2.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:12%"></div></div>
+                        <div class="score-val">4.0</div>
+                        <div class="score-bar"><div class="score-fill" style="width:20%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
                             <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 11);">👍</button>
                             <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 11);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 11);">💾</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 11);">💾</button>
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="f92c4" 
+                <tr data-hash-id="7f21a" 
                         data-rank="12"
-                        data-title="The global minimum tax: More winners than losers – even without the US"
-                        data-url="https://cepr.org/voxeu/columns/global-minimum-tax-more-winners-losers-even-without-us"
-                        data-source="CEPR VoxEU"
+                        data-title="Monthly Statement of the Public Debt, May 31, 2026"
+                        data-url="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding"
+                        data-source="Treasury MSPD"
                         data-category="fiscal">
                     <td class="col-rank"><span class="rank-badge">12</span></td>
                     <td class="col-category"><span class="cat-badge cat-fiscal">fiscal</span></td>
-                    <td class="col-source"><span class="source-name">CEPR VoxEU</span></td>
+                    <td class="col-source"><span class="source-name">Treasury MSPD</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://cepr.org/voxeu/columns/global-minimum-tax-more-winners-losers-even-without-us" target="_blank">The global minimum tax: More winners than losers – even without the US</a>
+                            <a href="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding" target="_blank">Monthly Statement of the Public Debt, May 31, 2026</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">1.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:8%"></div></div>
+                        <div class="score-val">0.7</div>
+                        <div class="score-bar"><div class="score-fill" style="width:4%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
                             <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 12);">👍</button>
                             <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 12);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 12);">💾</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 12);">💾</button>
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="a8289" 
+                <tr data-hash-id="b61df" 
                         data-rank="13"
-                        data-title="This is what Druckenmiller thinks about Kevin Warsh
-
-This is setting the stage f"
-                        data-url="https://x.com/Globalflows/status/2018173643566764503"
-                        data-source="X/@Globalflows"
+                        data-title="EU-Asylsystem GEAS: Europa schottet sich nicht völlig ab"
+                        data-url="https://www.faz.net/aktuell/politik/ausland/geas-europa-schottet-sich-nicht-voellig-ab-200920701.html"
+                        data-source="FAZ"
                         data-category="other">
                     <td class="col-rank"><span class="rank-badge">13</span></td>
                     <td class="col-category"><span class="cat-badge cat-other">other</span></td>
-                    <td class="col-source"><span class="source-name">X/@Globalflows</span></td>
+                    <td class="col-source"><span class="source-name">FAZ</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://x.com/Globalflows/status/2018173643566764503" target="_blank">This is what Druckenmiller thinks about Kevin Warsh
-
-This is setting the stage f</a>
+                            <a href="https://www.faz.net/aktuell/politik/ausland/geas-europa-schottet-sich-nicht-voellig-ab-200920701.html" target="_blank">EU-Asylsystem GEAS: Europa schottet sich nicht völlig ab</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
@@ -846,130 +801,103 @@ This is setting the stage f</a>
                         <div class="action-buttons">
                             <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 13);">👍</button>
                             <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 13);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 13);">💾</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 13);">💾</button>
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="3ae7c" 
+                <tr data-hash-id="ecfb6" 
                         data-rank="14"
-                        data-title="Glass Jaw? The New Economic Fragility Recasting American Power"
-                        data-url="https://warontherocks.com/glass-jaw-the-new-economic-fragility-recasting-american-power/"
-                        data-source="War on the Rocks"
-                        data-category="monetary">
+                        data-title="Iran Embraces a Forever War"
+                        data-url="https://www.foreignaffairs.com/iran/iran-embraces-forever-war"
+                        data-source="Foreign Affairs"
+                        data-category="geo_other">
                     <td class="col-rank"><span class="rank-badge">14</span></td>
-                    <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
-                    <td class="col-source"><span class="source-name">War on the Rocks</span></td>
+                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
+                    <td class="col-source"><span class="source-name">Foreign Affairs</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://warontherocks.com/glass-jaw-the-new-economic-fragility-recasting-american-power/" target="_blank">Glass Jaw? The New Economic Fragility Recasting American Power</a>
+                            <a href="https://www.foreignaffairs.com/iran/iran-embraces-forever-war" target="_blank">Iran Embraces a Forever War</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-10.5</div>
+                        <div class="score-val">-9.0</div>
                         <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
                             <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 14);">👍</button>
                             <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 14);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 14);">💾</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 14);">💾</button>
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="bff67" 
+                <tr data-hash-id="070a5" 
                         data-rank="15"
-                        data-title="Failing the Threshold: The Impact of Rising Interest Rates on Mortgage Borrowing"
-                        data-url="https://www.stlouisfed.org/on-the-economy/2026/may/impact-rising-interest-rates-mortgage-borrowing"
-                        data-source="Fed On The Economy"
-                        data-category="fiscal">
+                        data-title="The new Middle East trade corridor emerges after the Strait of Hormuz is closed"
+                        data-url="https://theduran.com/the-new-middle-east-trade-corridor-emerges-after-the-strait-of-hormuz-is-closed/"
+                        data-source="The Duran"
+                        data-category="monetary">
                     <td class="col-rank"><span class="rank-badge">15</span></td>
-                    <td class="col-category"><span class="cat-badge cat-fiscal">fiscal</span></td>
-                    <td class="col-source"><span class="source-name">Fed On The Economy</span></td>
+                    <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
+                    <td class="col-source"><span class="source-name">The Duran</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.stlouisfed.org/on-the-economy/2026/may/impact-rising-interest-rates-mortgage-borrowing" target="_blank">Failing the Threshold: The Impact of Rising Interest Rates on Mortgage Borrowing</a>
+                            <a href="https://theduran.com/the-new-middle-east-trade-corridor-emerges-after-the-strait-of-hormuz-is-closed/" target="_blank">The new Middle East trade corridor emerges after the Strait of Hormuz is closed</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-12.0</div>
+                        <div class="score-val">-10.0</div>
                         <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
                             <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 15);">👍</button>
                             <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 15);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 15);">💾</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 15);">💾</button>
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="f6e2c" 
+                <tr data-hash-id="fc6fa" 
                         data-rank="16"
-                        data-title="Le Pen Leads Every Major Rival In New French Presidential Runoff Polling"
-                        data-url="https://www.zerohedge.com/markets/le-pen-leads-every-major-rival-new-french-presidential-runoff-polling"
-                        data-source="ZeroHedge"
-                        data-category="geo_other">
+                        data-title="AI’s Macroeconomic Challenges and Promises"
+                        data-url="https://libertystreeteconomics.newyorkfed.org/2026/05/ais-macroeconomic-challenges-and-promises/"
+                        data-source="NY Fed Liberty Street"
+                        data-category="technology">
                     <td class="col-rank"><span class="rank-badge">16</span></td>
-                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
-                    <td class="col-source"><span class="source-name">ZeroHedge</span></td>
+                    <td class="col-category"><span class="cat-badge cat-technology">technology</span></td>
+                    <td class="col-source"><span class="source-name">NY Fed Liberty Street</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://www.zerohedge.com/markets/le-pen-leads-every-major-rival-new-french-presidential-runoff-polling" target="_blank">Le Pen Leads Every Major Rival In New French Presidential Runoff Polling</a>
+                            <a href="https://libertystreeteconomics.newyorkfed.org/2026/05/ais-macroeconomic-challenges-and-promises/" target="_blank">AI’s Macroeconomic Challenges and Promises</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
                     <td class="col-score">
-                        <div class="score-val">-12.0</div>
+                        <div class="score-val">-11.0</div>
                         <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
                             <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 16);">👍</button>
                             <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 16);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 16);">💾</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 16);">💾</button>
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="ff487" 
+                <tr data-hash-id="34209" 
                         data-rank="17"
-                        data-title="Alex Karp just said what every other tech CEO is terrified to admit: the world d"
-                        data-url="https://x.com/r0ck3t23/status/2021835344044343421"
-                        data-source="X/@r0ck3t23"
-                        data-category="technology">
-                    <td class="col-rank"><span class="rank-badge">17</span></td>
-                    <td class="col-category"><span class="cat-badge cat-technology">technology</span></td>
-                    <td class="col-source"><span class="source-name">X/@r0ck3t23</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://x.com/r0ck3t23/status/2021835344044343421" target="_blank">Alex Karp just said what every other tech CEO is terrified to admit: the world d</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">-12.0</div>
-                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 17);">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 17);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 17);">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="534f4" 
-                        data-rank="18"
-                        data-title="🇺🇸 Over $250M has reportedly been funneled by Neville Roy Singham, a U.S. citize"
-                        data-url="https://x.com/MarioNawfal/status/2018318486448083319"
-                        data-source="X/@MarioNawfal"
+                        data-title="„Es fehlen um die 100 Plätze im Moment – das ist schon ein bisschen traurig“"
+                        data-url="https://www.welt.de/videos/video6a2bc7537e682fc37fbf6f70/geas-reform-es-fehlen-um-die-100-plaetze-im-moment-das-ist-schon-ein-bisschen-traurig.html"
+                        data-source="Die Welt"
                         data-category="other">
-                    <td class="col-rank"><span class="rank-badge">18</span></td>
+                    <td class="col-rank"><span class="rank-badge">17</span></td>
                     <td class="col-category"><span class="cat-badge cat-other">other</span></td>
-                    <td class="col-source"><span class="source-name">X/@MarioNawfal</span></td>
+                    <td class="col-source"><span class="source-name">Die Welt</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://x.com/MarioNawfal/status/2018318486448083319" target="_blank">🇺🇸 Over $250M has reportedly been funneled by Neville Roy Singham, a U.S. citize</a>
+                            <a href="https://www.welt.de/videos/video6a2bc7537e682fc37fbf6f70/geas-reform-es-fehlen-um-die-100-plaetze-im-moment-das-ist-schon-ein-bisschen-traurig.html" target="_blank">„Es fehlen um die 100 Plätze im Moment – das ist schon ein bisschen traurig“</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
@@ -979,16 +907,43 @@ This is setting the stage f</a>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 18);">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 18);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 18);">💾</button>
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 17);">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 17);">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 17);">💾</button>
                         </div>
                     </td>
                 </tr>
-                <tr data-hash-id="1342b" 
+                <tr data-hash-id="95c35" 
+                        data-rank="18"
+                        data-title="Inflation and the Accuracy of Public Debt Forecasts"
+                        data-url="https://www.stlouisfed.org/on-the-economy/2026/feb/inflation-accuracy-public-debt-forecasts"
+                        data-source="Fed On The Economy"
+                        data-category="fiscal">
+                    <td class="col-rank"><span class="rank-badge">18</span></td>
+                    <td class="col-category"><span class="cat-badge cat-fiscal">fiscal</span></td>
+                    <td class="col-source"><span class="source-name">Fed On The Economy</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://www.stlouisfed.org/on-the-economy/2026/feb/inflation-accuracy-public-debt-forecasts" target="_blank">Inflation and the Accuracy of Public Debt Forecasts</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">-15.2</div>
+                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 18);">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 18);">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 18);">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="3728b" 
                         data-rank="19"
-                        data-title="Five Americans Injured by Recent Iranian Attack on Kuwait Air Base"
-                        data-url="https://news.antiwar.com/2026/05/31/five-americans-injured-by-recent-iranian-attack-on-kuwait-air-base/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=five-americans-injured-by-recent-iranian-attack-on-kuwait-air-base"
+                        data-title="Iran’s IRGC Says It Targeted US Aircraft at Base in Jordan With 12 Ballistic Missiles"
+                        data-url="https://news.antiwar.com/2026/06/11/irans-irgc-says-it-targeted-us-aircraft-at-base-in-jordan-with-12-ballistic-missiles/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=irans-irgc-says-it-targeted-us-aircraft-at-base-in-jordan-with-12-ballistic-missiles"
                         data-source="Antiwar.com"
                         data-category="geo_major">
                     <td class="col-rank"><span class="rank-badge">19</span></td>
@@ -996,7 +951,34 @@ This is setting the stage f</a>
                     <td class="col-source"><span class="source-name">Antiwar.com</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="https://news.antiwar.com/2026/05/31/five-americans-injured-by-recent-iranian-attack-on-kuwait-air-base/?utm_source=rss&utm_medium=rss&utm_campaign=five-americans-injured-by-recent-iranian-attack-on-kuwait-air-base" target="_blank">Five Americans Injured by Recent Iranian Attack on Kuwait Air Base</a>
+                            <a href="https://news.antiwar.com/2026/06/11/irans-irgc-says-it-targeted-us-aircraft-at-base-in-jordan-with-12-ballistic-missiles/?utm_source=rss&utm_medium=rss&utm_campaign=irans-irgc-says-it-targeted-us-aircraft-at-base-in-jordan-with-12-ballistic-missiles" target="_blank">Iran’s IRGC Says It Targeted US Aircraft at Base in Jordan With 12 Ballistic Missiles</a>
+                        </div>
+                    </td>
+                    <td class="col-time"><span class="time-ago">N/A</span></td>
+                    <td class="col-score">
+                        <div class="score-val">-31.5</div>
+                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 19);">👍</button>
+                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 19);">👎</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 19);">💾</button>
+                        </div>
+                    </td>
+                </tr>
+                <tr data-hash-id="4ea32" 
+                        data-rank="20"
+                        data-title="In Mali, Turkey Sees an Opening"
+                        data-url="https://geopoliticalfutures.com/in-mali-turkey-sees-an-opening/"
+                        data-source="Geopolitical Futures"
+                        data-category="geo_other">
+                    <td class="col-rank"><span class="rank-badge">20</span></td>
+                    <td class="col-category"><span class="cat-badge cat-geo_other">geo_other</span></td>
+                    <td class="col-source"><span class="source-name">Geopolitical Futures</span></td>
+                    <td class="col-title">
+                        <div class="article-title">
+                            <a href="https://geopoliticalfutures.com/in-mali-turkey-sees-an-opening/" target="_blank">In Mali, Turkey Sees an Opening</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">N/A</span></td>
@@ -1006,36 +988,9 @@ This is setting the stage f</a>
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
-                            <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 19);">👍</button>
-                            <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 19);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 19);">💾</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr data-hash-id="723ba" 
-                        data-rank="20"
-                        data-title="One of a number of potentially important macro divergences that occurred in 2H25"
-                        data-url="https://x.com/LukeGromen/status/2023425014071242852"
-                        data-source="X/@LukeGromen"
-                        data-category="monetary">
-                    <td class="col-rank"><span class="rank-badge">20</span></td>
-                    <td class="col-category"><span class="cat-badge cat-monetary">monetary</span></td>
-                    <td class="col-source"><span class="source-name">X/@LukeGromen</span></td>
-                    <td class="col-title">
-                        <div class="article-title">
-                            <a href="https://x.com/LukeGromen/status/2023425014071242852" target="_blank">One of a number of potentially important macro divergences that occurred in 2H25</a>
-                        </div>
-                    </td>
-                    <td class="col-time"><span class="time-ago">N/A</span></td>
-                    <td class="col-score">
-                        <div class="score-val">-33.5</div>
-                        <div class="score-bar"><div class="score-fill" style="width:0%"></div></div>
-                    </td>
-                    <td class="col-actions">
-                        <div class="action-buttons">
                             <button class="action-btn btn-like" title="Like this article" onclick="showFeedback(this, 'like', 20);">👍</button>
                             <button class="action-btn btn-dislike" title="Dislike this article" onclick="showFeedback(this, 'dislike', 20);">👎</button>
-                            <button class="action-btn btn-save" title="Save to investigate" onclick="showFeedback(this, 'save', 20);">💾</button>
+                            <button class="action-btn btn-save" title="Save for deep dive" onclick="showFeedback(this, 'save', 20);">💾</button>
                         </div>
                     </td>
                 </tr>
@@ -1106,10 +1061,10 @@ This is setting the stage f</a>
                     // Show toast notification
                     showToast(data.message || 'Article #' + rank + ' ' + action + 'd', 'success');
 
-                    // If liked or saved, add Investigate button
+                    // If liked or saved, add deep dive button
                     if (action === 'like' || action === 'save') {
                         const hashId = button.closest('tr').dataset.hashId;
-                        addInvestigateButton(rank, hashId);
+                        addDeepDiveButton(rank, hashId);
                     }
                 } else {
                     // Re-enable on error
@@ -1161,480 +1116,263 @@ This is setting the stage f</a>
         }, 2500);
     }
     
-    // ── Investigate modal ─────────────────────────────────────────────────────
-
-    var _inv = { hashId: '', title: '', url: '', source: '', btn: null };
-
-    function openInvestigateModal(hashId, title, url, source, btn) {
-        _inv = { hashId: hashId, title: title, url: url, source: source, btn: btn };
-        document.getElementById('inv-article-title').textContent = title;
-        document.getElementById('inv-article-source').textContent = source || '';
-        switchInvTab('scan');
-        document.getElementById('investigate-overlay').style.display = 'flex';
-        document.getElementById('inv-scan-interest').focus();
-    }
-
-    function closeInvestigateModal() {
-        document.getElementById('investigate-overlay').style.display = 'none';
-        ['inv-scan-interest','inv-scan-focus','inv-track-slug',
-         'inv-track-motivation','inv-lean-new-title','inv-lean-note'].forEach(function(id) {
-            var el = document.getElementById(id);
-            if (el) el.value = '';
-        });
-        ['inv-track-status','inv-lean-status'].forEach(function(id) {
-            var el = document.getElementById(id);
-            if (el) el.textContent = '';
-        });
-    }
-
-    function switchInvTab(tab) {
-        document.querySelectorAll('.inv-tab').forEach(function(b) {
-            b.classList.toggle('active', b.dataset.tab === tab);
-        });
-        document.querySelectorAll('.inv-pane').forEach(function(p) {
-            p.classList.toggle('active', p.id === 'inv-pane-' + tab);
-        });
-        if (tab === 'lean') loadLeaningsForModal();
-    }
-
-    // ── Tab 1: Scan ──────────────────────────────────────────────────────────
-
-    function runScan() {
-        var interest = document.getElementById('inv-scan-interest').value.trim();
-        var focus    = document.getElementById('inv-scan-focus').value.trim();
-        if (!interest) { document.getElementById('inv-scan-interest').focus(); return; }
-
-        closeInvestigateModal();
-        var btn = _inv.btn;
-        btn.disabled = true;
-        btn.textContent = '⏳ Scanning…';
-
-        var url = '/deepdive?hash_id=' + _inv.hashId + '&interest=' + encodeURIComponent(interest);
-        if (focus) url += '&focus=' + encodeURIComponent(focus);
-
-        fetch(url)
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.success && data.html_path) {
-                    window.open(data.html_path, '_blank');
-                    btn.textContent = '✅ View Scan';
-                    btn.disabled = false;
-                    btn.onclick = function() { window.open(data.html_path, '_blank'); };
-                } else {
-                    btn.textContent = '✅ Done';
-                    btn.disabled = false;
-                    showToast(data.message || 'Scan complete!', 'success');
-                }
-            })
-            .catch(function(e) {
-                btn.textContent = '❌ Failed';
-                btn.disabled = false;
-                showToast('Scan failed: ' + e.message, 'error');
-            });
-    }
-
-    // ── Tab 2: Track as Topic ────────────────────────────────────────────────
-
-    function runTrack() {
-        var slug       = document.getElementById('inv-track-slug').value.trim()
-                            .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-        var motivation = document.getElementById('inv-track-motivation').value.trim();
-        var days       = parseInt(document.getElementById('inv-track-days').value) || 14;
-        var statusEl   = document.getElementById('inv-track-status');
-
-        if (!slug) { statusEl.textContent = 'Topic slug required.'; return; }
-        statusEl.textContent = 'Creating topic…';
-
-        fetch('/api/research/spawn-thread', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                topic:        slug,
-                motivation:   motivation || 'Research triggered from: ' + _inv.title,
-                queries:      [slug.replace(/-/g, ' ')],
-                duration_days: days,
-                scan_id:      _inv.hashId,
-                scan_title:   _inv.title,
-            })
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data.ok) {
-                statusEl.textContent = 'Topic "' + slug + '" created.';
-                showToast('Topic "' + slug + '" created — ' + days + 'd active pull', 'success');
-                setTimeout(closeInvestigateModal, 800);
-            } else {
-                statusEl.textContent = 'Error: ' + (data.error || 'failed');
+    function showDeepDiveModal(rank, hashId, diveBtn) {
+        // Create modal overlay
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+        
+        // Create modal
+        var modal = document.createElement('div');
+        modal.style.cssText = 'background: white; padding: 30px; border-radius: 12px; max-width: 500px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.3);';
+        
+        modal.innerHTML = '<h2 style="margin: 0 0 20px 0; color: #2c3e50;">Deep Dive Analysis</h2>' +
+            '<p style="color: #666; margin-bottom: 20px;">This generates a research briefing with bibliography tailored to YOUR interests.</p>' +
+            '<label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">What interests you about this article?</label>' +
+            '<textarea id="interest-input" placeholder="e.g., Geopolitical implications, economic impact, contrarian perspectives..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: inherit; margin-bottom: 20px; box-sizing: border-box;"></textarea>' +
+            '<label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">Specific focus areas? (optional)</label>' +
+            '<input id="focus-input" type="text" placeholder="e.g., Historical precedents, key players, data sources..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; font-family: inherit; margin-bottom: 20px; box-sizing: border-box;">' +
+            '<div style="display: flex; gap: 10px; justify-content: flex-end;">' +
+            '<button id="modal-cancel" style="padding: 10px 20px; border: 1px solid #ddd; background: white; border-radius: 6px; cursor: pointer; font-weight: 500;">Cancel</button>' +
+            '<button id="modal-submit" style="padding: 10px 20px; border: none; background: #f39c12; color: white; border-radius: 6px; cursor: pointer; font-weight: 500;">Generate (~30s, $0.15)</button>' +
+            '</div>';
+        
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        
+        // Focus on interest input
+        document.getElementById('interest-input').focus();
+        
+        // Handle cancel
+        document.getElementById('modal-cancel').onclick = function() {
+            document.body.removeChild(overlay);
+        };
+        
+        // Handle submit
+        document.getElementById('modal-submit').onclick = function() {
+            var interest = document.getElementById('interest-input').value.trim();
+            var focus = document.getElementById('focus-input').value.trim();
+            
+            if (!interest) {
+                alert('Please describe what interests you about this article.');
+                return;
             }
-        })
-        .catch(function(e) { statusEl.textContent = 'Error: ' + e.message; });
-    }
-
-    // ── Tab 3: Add to Leaning ────────────────────────────────────────────────
-
-    function loadLeaningsForModal() {
-        var sel = document.getElementById('inv-lean-select');
-        sel.innerHTML = '<option value="">Loading…</option>';
-        fetch('/api/research/leanings')
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                var leanings = data.leanings || [];
-                sel.innerHTML = '<option value="">— add to existing leaning —</option>' +
-                    leanings.map(function(l) {
-                        var label = {question:'?', leaning:'→', hold:'✓'}[l.state] || '';
-                        return '<option value="' + l.id + '">' + label + ' ' + l.title + '</option>';
-                    }).join('');
-                if (!leanings.length) {
-                    sel.innerHTML = '<option value="">— no leanings yet, create below —</option>';
-                }
-            })
-            .catch(function() { sel.innerHTML = '<option value="">Error loading leanings</option>'; });
-    }
-
-    function runLean() {
-        var leaningId = document.getElementById('inv-lean-select').value;
-        var newTitle  = document.getElementById('inv-lean-new-title').value.trim();
-        var stance    = document.getElementById('inv-lean-stance').value;
-        var note      = document.getElementById('inv-lean-note').value.trim();
-        var statusEl  = document.getElementById('inv-lean-status');
-
-        if (!leaningId && !newTitle) {
-            statusEl.textContent = 'Select a leaning or enter a new leaning title.';
-            return;
-        }
-        statusEl.textContent = 'Saving…';
-
-        function doAddEvidence(id) {
-            return fetch('/api/research/leanings/' + id + '/evidence', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    title: _inv.title, url: _inv.url,
-                    source: _inv.source, stance: stance, note: note,
+            
+            // Close modal
+            document.body.removeChild(overlay);
+            
+            // Update button and trigger deep dive
+            diveBtn.disabled = true;
+            diveBtn.textContent = '⏳ Analyzing...';
+            diveBtn.style.opacity = '0.6';
+            
+            // Send to server with hash_id, interest and focus
+            var url = 'http://localhost:8766/deepdive?hash_id=' + hashId + '&interest=' + encodeURIComponent(interest);
+            if (focus) {
+                url += '&focus=' + encodeURIComponent(focus);
+            }
+            
+            fetch(url)
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.success && data.html_path) {
+                        window.open(data.html_path, '_blank');
+                        diveBtn.textContent = '✅ View Again';
+                        diveBtn.style.background = '#27ae60';
+                        diveBtn.disabled = false;
+                        diveBtn.style.opacity = '1';
+                        diveBtn.onclick = function() { window.open(data.html_path, '_blank'); };
+                    } else {
+                        diveBtn.textContent = '✅ Done';
+                        diveBtn.disabled = false;
+                        diveBtn.style.opacity = '1';
+                        showToast(data.message || 'Deep dive complete!', 'success');
+                    }
                 })
-            }).then(function(r) { return r.json(); });
-        }
-
-        var promise;
-        if (leaningId) {
-            promise = doAddEvidence(leaningId);
-        } else {
-            promise = fetch('/api/research/leanings', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({title: newTitle, state: 'question'})
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (!data.ok) throw new Error(data.error);
-                return doAddEvidence(data.leaning.id);
-            });
-        }
-
-        promise
-            .then(function(data) {
-                if (!data.ok) throw new Error(data.error);
-                statusEl.textContent = 'Added.';
-                showToast('Evidence added to leaning', 'success');
-                setTimeout(closeInvestigateModal, 600);
-            })
-            .catch(function(e) { statusEl.textContent = 'Error: ' + e.message; });
+                .catch(function(error) {
+                    console.error('Deep dive error:', error);
+                    diveBtn.textContent = '❌ Failed';
+                    diveBtn.style.background = '#e74c3c';
+                    diveBtn.disabled = false;
+                    diveBtn.style.opacity = '1';
+                    showToast('Deep dive failed. Is curator_server.py running?', 'error');
+                });
+        };
+        
+        // Close on overlay click
+        overlay.onclick = function(e) {
+            if (e.target === overlay) {
+                document.body.removeChild(overlay);
+            }
+        };
     }
-
-    function addInvestigateButton(rank, hashId) {
+    
+    function addDeepDiveButton(rank, hashId) {
+        // Find the action buttons container for this rank
         var rows = document.querySelectorAll('tbody tr');
         for (var i = 0; i < rows.length; i++) {
             var row = rows[i];
             var rankBadge = row.querySelector('.rank-badge');
-            if (rankBadge && rankBadge.textContent == rank) {
+            if (rankBadge && rankBadge.textContent === rank.toString()) {
                 var actionButtons = row.querySelector('.action-buttons');
-                if (actionButtons.querySelector('.btn-investigate')) return;
-
-                var btn = document.createElement('button');
-                btn.className = 'action-btn btn-investigate';
-                btn.textContent = '🔍 Investigate →';
-
+                
+                // Check if deep dive button already exists
+                if (actionButtons.querySelector('.btn-dive')) {
+                    return;
+                }
+                
+                // Create deep dive button
+                var diveBtn = document.createElement('button');
+                diveBtn.className = 'action-btn btn-dive';
+                diveBtn.textContent = '🔖 Deep Dive';
+                
+                // Check if this is a dry run
                 var isDryRun = document.body.getAttribute('data-run-mode') === 'dry-run';
                 if (isDryRun) {
-                    btn.title = 'Dry run — disabled';
-                    btn.disabled = true;
-                    btn.style.opacity = '0.5';
+                    diveBtn.title = 'Dry run — buttons disabled';
+                    diveBtn.disabled = true;
+                    diveBtn.style.cssText = 'background: #95a5a6; color: white; cursor: not-allowed; opacity: 0.6;';
                 } else {
-                    btn.title = 'Investigate — Scan, Track as Topic, or add to Leaning';
-                    var t = row.dataset.title || '', u = row.dataset.url || '', s = row.dataset.source || '';
-                    btn.onclick = (function(h, ti, ur, so, b) {
-                        return function() { openInvestigateModal(h, ti, ur, so, b); };
-                    })(hashId, t, u, s, btn);
+                    diveBtn.title = 'Request deep dive analysis (~30s, costs ~$0.15)';
+                    diveBtn.style.cssText = 'background: #f39c12; color: white;';
+                    // Use IIFE to capture rank, hashId and diveBtn by value (not reference)
+                    diveBtn.onclick = (function(capturedRank, capturedHashId, capturedBtn) {
+                        return function() {
+                            showDeepDiveModal(capturedRank, capturedHashId, capturedBtn);
+                        };
+                    })(rank, hashId, diveBtn);
                 }
-
-                actionButtons.insertBefore(btn, actionButtons.firstChild);
-                btn.style.animation = 'fadeIn 0.3s ease';
+                
+                // Insert at the beginning
+                actionButtons.insertBefore(diveBtn, actionButtons.firstChild);
+                
+                // Visual feedback
+                diveBtn.style.animation = 'fadeIn 0.3s ease';
                 break;
             }
         }
     }
-
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') closeInvestigateModal();
-    });
-
-    // ── Topics strip ──────────────────────────────────────────────────────────
-
-    function loadTopicsStrip() {
-        fetch('/api/research/topics/status')
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (!data.ok) return;
-                var visible = (data.topics || []).filter(function(t) {
-                    return t.status !== 'closed' && t.status !== 'retired' && t.status !== 'archived';
-                });
-                if (!visible.length) return;
-
-                var html = visible.map(renderTopicPill).join('');
-                document.getElementById('topics-pills').innerHTML = html;
-                document.getElementById('topics-strip').style.display = 'flex';
-            })
-            .catch(function() { /* silent — Topics strip is informational */ });
-    }
-
-    function renderTopicPill(t) {
-        var cfg = {
-            'active-pull': { cls: 'tp-active',  dot: '●', dotColor: '#2e7d52' },
-            'paused':      { cls: 'tp-paused',  dot: '◐', dotColor: '#8b6e1a' },
-            'dormant':     { cls: 'tp-dormant', dot: '○', dotColor: '#9e9080' },
-            'one-shot':    { cls: 'tp-oneshot', dot: '◆', dotColor: '#1a5c8a' },
-        }[t.status] || { cls: 'tp-dormant', dot: '?', dotColor: '#9e9080' };
-
-        var sub = t.status;
-        if (t.status === 'active-pull') {
-            sub = t.days_remaining !== null
-                ? t.days_remaining + 'd left · ' + t.session_count + ' sessions'
-                : 'active';
-        } else if (t.status === 'dormant') {
-            sub = t.session_count ? t.session_count + ' sessions' : 'no sessions';
-        } else if (t.status === 'paused') {
-            sub = 'paused';
-        }
-
-        var activateBtn = (t.status === 'dormant' || t.status === 'paused')
-            ? '<button class="tp-activate-btn" onclick="quickActivate(\'' + esc(t.slug) + '\',this)">Activate</button>'
-            : '';
-
-        return '<div class="topic-pill ' + cfg.cls + '">' +
-            '<span class="tp-dot" style="color:' + cfg.dotColor + '">' + cfg.dot + '</span>' +
-            '<a class="tp-name" href="/research/dashboard" title="' + esc(t.motivation || '') + '">' + esc(t.slug) + '</a>' +
-            '<span class="tp-sub">' + esc(sub) + '</span>' +
-            activateBtn +
-            '</div>';
-    }
-
-    function quickActivate(slug, btn) {
-        btn.disabled = true;
-        btn.textContent = '…';
-        fetch('/api/research/topic/' + slug + '/activate', { method: 'POST' })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.ok) {
-                    showToast('Topic "' + slug + '" activated', 'success');
-                    loadTopicsStrip();
-                } else {
-                    showToast('Error: ' + (data.error || 'failed'), 'error');
-                    btn.disabled = false;
-                    btn.textContent = 'Activate';
-                }
-            })
-            .catch(function(e) {
-                showToast('Error: ' + e.message, 'error');
-                btn.disabled = false;
-                btn.textContent = 'Activate';
-            });
-    }
-
-    loadTopicsStrip();
-
     </script>
-
-    <!-- ── Investigate modal ────────────────────────────────────────────── -->
-    <div id="investigate-overlay" style="display:none; position:fixed; inset:0; background:rgba(42,36,24,0.55); z-index:10000; align-items:center; justify-content:center;">
-      <div id="investigate-modal">
-        <!-- Header -->
-        <div class="inv-header">
-          <div>
-            <div class="inv-article-title" id="inv-article-title"></div>
-            <div class="inv-article-source" id="inv-article-source"></div>
-          </div>
-          <button class="inv-close" onclick="closeInvestigateModal()">✕</button>
-        </div>
-        <!-- Tabs -->
-        <div class="inv-tabs">
-          <button class="inv-tab active" data-tab="scan" onclick="switchInvTab('scan')">🔭 Scan</button>
-          <button class="inv-tab" data-tab="track" onclick="switchInvTab('track')">🗓 Track</button>
-          <button class="inv-tab" data-tab="lean" onclick="switchInvTab('lean')">📎 Lean</button>
-        </div>
-        <!-- Scan pane -->
-        <div class="inv-pane active" id="inv-pane-scan">
-          <p class="inv-hint">Generate an article-level analysis with bibliography tailored to your interests (~30s, ~$0.15).</p>
-          <label class="inv-label">What interests you about this article?</label>
-          <textarea id="inv-scan-interest" class="inv-textarea" rows="3"
-            placeholder="e.g. Geopolitical implications, economic impact, contrarian perspectives…"></textarea>
-          <label class="inv-label" style="margin-top:10px;">Focus areas (optional)</label>
-          <input id="inv-scan-focus" class="inv-input" type="text"
-            placeholder="e.g. Historical precedents, key players, data sources…">
-          <div class="inv-actions">
-            <button class="inv-btn inv-btn-primary" onclick="runScan()">Run Scan →</button>
-            <button class="inv-btn" onclick="closeInvestigateModal()">Cancel</button>
-          </div>
-        </div>
-        <!-- Track pane -->
-        <div class="inv-pane" id="inv-pane-track">
-          <p class="inv-hint">Create an active research Topic. Sessions will run searches on this subject for the duration you choose.</p>
-          <label class="inv-label">Topic slug <span style="color:var(--text-dim);font-weight:400;">(letters, numbers, hyphens)</span></label>
-          <input id="inv-track-slug" class="inv-input" type="text"
-            placeholder="e.g. quad-alliance-cohesion" autocomplete="off">
-          <label class="inv-label" style="margin-top:10px;">Motivation (optional)</label>
-          <textarea id="inv-track-motivation" class="inv-textarea" rows="2"
-            placeholder="Why are you tracking this? What's your prior belief?"></textarea>
-          <label class="inv-label" style="margin-top:10px;">Duration</label>
-          <div class="inv-duration-row">
-            <select id="inv-track-days" class="inv-select">
-              <option value="3">3 days</option>
-              <option value="7">7 days</option>
-              <option value="14" selected>14 days</option>
-              <option value="30">30 days</option>
-            </select>
-          </div>
-          <div class="inv-actions">
-            <button class="inv-btn inv-btn-primary" onclick="runTrack()">Create Topic →</button>
-            <button class="inv-btn" onclick="closeInvestigateModal()">Cancel</button>
-            <span class="inv-status" id="inv-track-status"></span>
-          </div>
-        </div>
-        <!-- Lean pane -->
-        <div class="inv-pane" id="inv-pane-lean">
-          <p class="inv-hint">Attach this article as evidence to a belief you're tracking.</p>
-          <label class="inv-label">Add to existing leaning</label>
-          <select id="inv-lean-select" class="inv-select" style="width:100%;">
-            <option value="">Loading…</option>
-          </select>
-          <label class="inv-label" style="margin-top:10px;">— or create a new leaning —</label>
-          <input id="inv-lean-new-title" class="inv-input" type="text"
-            placeholder="New leaning statement e.g. The Quad will hold under pressure">
-          <label class="inv-label" style="margin-top:10px;">Stance</label>
-          <select id="inv-lean-stance" class="inv-select" style="width:100%;">
-            <option value="supports">▲ Supports</option>
-            <option value="complicates">▽ Complicates</option>
-            <option value="neutral" selected>○ Neutral</option>
-          </select>
-          <label class="inv-label" style="margin-top:10px;">Note (optional)</label>
-          <input id="inv-lean-note" class="inv-input" type="text"
-            placeholder="One-line reaction or observation">
-          <div class="inv-actions">
-            <button class="inv-btn inv-btn-primary" onclick="runLean()">Add Evidence →</button>
-            <button class="inv-btn" onclick="closeInvestigateModal()">Cancel</button>
-            <span class="inv-status" id="inv-lean-status"></span>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <style>
     @keyframes fadeIn {
         from { opacity: 0; transform: scale(0.9); }
         to { opacity: 1; transform: scale(1); }
     }
-
-    /* ── Investigate button ── */
-    .btn-investigate {
-        background: var(--accent) !important;
+    .btn-dive {
+        background: #f39c12 !important;
         color: white !important;
-        font-weight: 600 !important;
     }
-    .btn-investigate:hover { background: #7a521f !important; transform: scale(1.03); }
-
-    /* ── Investigate modal ── */
-    #investigate-modal {
-        background: #faf7f2;
-        border: 1px solid #ddd6c8;
-        border-radius: 12px;
-        box-shadow: 0 8px 32px rgba(42,36,24,0.22);
-        width: 520px; max-width: 94vw;
-        font-family: 'Source Sans 3', sans-serif;
-        font-size: 14px;
-        color: #2a2418;
-        overflow: hidden;
+    .btn-dive:hover {
+        background: #e67e22 !important;
+        transform: scale(1.05);
     }
-    .inv-header {
-        display: flex; align-items: flex-start; justify-content: space-between;
-        padding: 18px 20px 14px;
-        border-bottom: 1px solid #ddd6c8;
-        background: #f0ebe0;
-    }
-    .inv-article-title {
-        font-family: 'Playfair Display', Georgia, serif;
-        font-size: 0.95rem; font-weight: 600; line-height: 1.3;
-        color: #2a2418; max-width: 420px;
-    }
-    .inv-article-source {
-        font-family: 'DM Mono', monospace; font-size: 10px;
-        text-transform: uppercase; letter-spacing: 0.08em;
-        color: #9e9080; margin-top: 3px;
-    }
-    .inv-close {
-        background: none; border: none; cursor: pointer;
-        font-size: 1rem; color: #9e9080; padding: 0 0 0 12px; line-height: 1;
-    }
-    .inv-close:hover { color: #2a2418; }
-
-    /* Tabs */
-    .inv-tabs {
-        display: flex; border-bottom: 1px solid #ddd6c8;
-        background: #f5f0e8;
-    }
-    .inv-tab {
-        flex: 1; padding: 10px 0; border: none; background: transparent;
-        cursor: pointer; font-family: 'DM Mono', monospace;
-        font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
-        color: #9e9080; border-bottom: 2px solid transparent;
-        transition: color 0.15s, border-color 0.15s;
-    }
-    .inv-tab.active { color: #8b5e2a; border-bottom-color: #8b5e2a; }
-    .inv-tab:hover:not(.active) { color: #6b5f4e; }
-
-    /* Panes */
-    .inv-pane { display: none; padding: 18px 20px 20px; }
-    .inv-pane.active { display: block; }
-    .inv-hint { font-size: 0.8rem; color: #6b5f4e; margin-bottom: 12px; line-height: 1.5; }
-    .inv-label {
-        display: block; font-size: 0.75rem; font-weight: 600;
-        color: #6b5f4e; margin-bottom: 4px; margin-top: 0;
-    }
-    .inv-input, .inv-select, .inv-textarea {
-        width: 100%; font-family: inherit; font-size: 0.875rem;
-        background: #f5f0e8; border: 1px solid #c8bfaf;
-        border-radius: 6px; padding: 8px 10px; color: #2a2418;
-        outline: none; box-sizing: border-box;
-    }
-    .inv-input:focus, .inv-select:focus, .inv-textarea:focus { border-color: #8b5e2a; }
-    .inv-textarea { resize: vertical; min-height: 64px; }
-    .inv-duration-row { display: flex; gap: 8px; }
-    .inv-actions {
-        display: flex; align-items: center; gap: 8px;
-        margin-top: 14px; flex-wrap: wrap;
-    }
-    .inv-btn {
-        font-family: 'DM Mono', monospace; font-size: 11px;
-        text-transform: uppercase; letter-spacing: 0.06em;
-        padding: 8px 16px; border-radius: 6px; cursor: pointer;
-        border: 1px solid #ddd6c8; background: #f0ebe0;
-        color: #2a2418; transition: background 0.15s;
-    }
-    .inv-btn:hover { background: #e5ddd0; }
-    .inv-btn-primary {
-        background: #8b5e2a; color: white; border-color: #8b5e2a;
-    }
-    .inv-btn-primary:hover { background: #7a521f; }
-    .inv-status { font-size: 0.78rem; color: #6b5f4e; }
     </style>
+
+<details class="radar-section">
+  <summary class="radar-summary">
+    📡 On Radar — 10 articles matching active Topics
+    <span class="radar-hint">(not in today's top 20)</span>
+  </summary>
+  <div class="radar-body">
+    <table class="radar-table">
+      <thead>
+        <tr>
+          <th>Article</th>
+          <th>Source</th>
+          <th>Topic</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="radar-row">
+                <td class="radar-title"><a href="https://geopoliticalfutures.com/daily-memo-putin-on-monetary-policy-global-refugee-numbers/" target="_blank" rel="noopener">Daily Memo: Putin on Monetary Policy, Global Refugee Numbers</a></td>
+                <td class="radar-source">Geopolitical Futures</td>
+                <td class="radar-topic">📡 china-ai-local-llms</td>
+            </tr>
+            <tr class="radar-row">
+                <td class="radar-title"><a href="https://www.zerohedge.com/commodities/bofa-sees-runaway-price-risk-spot-sulfur-global-supply-chain-freezes" target="_blank" rel="noopener">BofA Sees "Runaway Price Risk" In Spot Sulfur As Global Supply Chain Freezes</a></td>
+                <td class="radar-source">ZeroHedge</td>
+                <td class="radar-topic">📡 china-ai-local-llms</td>
+            </tr>
+            <tr class="radar-row">
+                <td class="radar-title"><a href="https://www.zerohedge.com/markets/china-learning-use-less-oil-and-thats-bigger-deal-it-sounds" target="_blank" rel="noopener">China Is Learning To Use Less Oil, And That's A Bigger Deal Than It Sounds</a></td>
+                <td class="radar-source">ZeroHedge</td>
+                <td class="radar-topic">📡 china-rise, china-ai-local-llms, china-and-taiwan</td>
+            </tr>
+            <tr class="radar-row">
+                <td class="radar-title"><a href="https://www.zerohedge.com/technology/jpm-call-axon-reveals-race-fortify-us-drone-centers-against-kamikaze-drone-swarms" target="_blank" rel="noopener">JPM Call With Axon Reveals Race To Fortify U.S. Data Centers Against Kamikaze Drone Swarms</a></td>
+                <td class="radar-source">ZeroHedge</td>
+                <td class="radar-topic">📡 china-ai-local-llms</td>
+            </tr>
+            <tr class="radar-row">
+                <td class="radar-title"><a href="https://www.zerohedge.com/markets/cops-bust-india-based-gold-scam-widow-loses-700k" target="_blank" rel="noopener">Cops Bust India-Based Gold Scam Before Widow Loses $700K</a></td>
+                <td class="radar-source">ZeroHedge</td>
+                <td class="radar-topic">📡 gold-geopolitics</td>
+            </tr>
+            <tr class="radar-row">
+                <td class="radar-title"><a href="https://www.zerohedge.com/political/florida-supreme-court-allows-new-gop-congressional-map-remain-place" target="_blank" rel="noopener">Florida Supreme Court Allows New GOP Congressional Map To Remain In Place</a></td>
+                <td class="radar-source">ZeroHedge</td>
+                <td class="radar-topic">📡 china-ai-local-llms</td>
+            </tr>
+            <tr class="radar-row">
+                <td class="radar-title"><a href="https://www.zerohedge.com/political/middle-schoolers-reading-math-scores-remain-below-pre-pandemic-levels-us-results-show" target="_blank" rel="noopener">Middle Schoolers' Reading & Math Scores Remain Below Pre-Pandemic Levels, US Results Show</a></td>
+                <td class="radar-source">ZeroHedge</td>
+                <td class="radar-topic">📡 china-ai-local-llms</td>
+            </tr>
+            <tr class="radar-row">
+                <td class="radar-title"><a href="https://www.zerohedge.com/political/it-was-two-bucks-homeless-residents-say-they-were-paid-vote-los-angeles-mayoral-race" target="_blank" rel="noopener">"It Was Like Two Bucks": Homeless Residents Say They Were Paid To Vote In Los Angeles Mayoral Race</a></td>
+                <td class="radar-source">ZeroHedge</td>
+                <td class="radar-topic">📡 china-ai-local-llms</td>
+            </tr>
+            <tr class="radar-row">
+                <td class="radar-title"><a href="https://www.zerohedge.com/political/raising-girls-who-wont-be-bullied-starting-line" target="_blank" rel="noopener">Raising Girls Who Won't Be Bullied Off The Starting Line</a></td>
+                <td class="radar-source">ZeroHedge</td>
+                <td class="radar-topic">📡 china-ai-local-llms</td>
+            </tr>
+            <tr class="radar-row">
+                <td class="radar-title"><a href="https://www.zerohedge.com/geopolitical/why-chinas-population-decline-irreversible" target="_blank" rel="noopener">Why China's Population Decline Is Irreversible</a></td>
+                <td class="radar-source">ZeroHedge</td>
+                <td class="radar-topic">📡 china-rise, china-ai-local-llms, china-and-taiwan</td>
+            </tr>
+      </tbody>
+    </table>
+  </div>
+</details>
+<style>
+.radar-section {
+  margin: 2rem 0 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.radar-summary {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  user-select: none;
+  list-style: none;
+}
+.radar-summary::-webkit-details-marker { display: none; }
+.radar-hint {
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-left: 0.5rem;
+}
+.radar-body { padding: 0 0.5rem 0.75rem; }
+.radar-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.radar-table th {
+  text-align: left; padding: 0.4rem 0.75rem;
+  color: var(--text-dim); font-weight: 500;
+  border-bottom: 1px solid var(--border);
+}
+.radar-row td { padding: 0.4rem 0.75rem; border-bottom: 1px solid var(--border2); }
+.radar-title a { color: var(--text); text-decoration: none; }
+.radar-title a:hover { color: var(--accent); text-decoration: underline; }
+.radar-source { color: var(--text-muted); white-space: nowrap; }
+.radar-topic { color: var(--text-dim); font-size: 0.8rem; white-space: nowrap; }
+</style>
+
 </div><!-- /.main-content -->
 </body>
 </html>

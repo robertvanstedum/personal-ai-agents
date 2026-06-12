@@ -860,3 +860,87 @@ Traceback (most recent call last):
   File "/Users/vanstedum/Projects/personal-ai-agents/venv/lib/python3.14/site-packages/requests/adapters.py", line 659, in send
     raise ConnectionError(err, request=request)
 requests.exceptions.ConnectionError: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+Traceback (most recent call last):
+  File "/Users/vanstedum/Projects/personal-ai-agents/telegram_bot.py", line 30, in <module>
+    from german_domain import (
+    ...<24 lines>...
+    )
+ModuleNotFoundError: No module named 'german_domain'
+Traceback (most recent call last):
+  File "/Users/vanstedum/Projects/personal-ai-agents/telegram_bot.py", line 30, in <module>
+    from german_domain import (
+    ...<24 lines>...
+    )
+ModuleNotFoundError: No module named 'german_domain'
+Traceback (most recent call last):
+  File "/Users/vanstedum/Projects/personal-ai-agents/telegram_bot.py", line 30, in <module>
+    from german_domain import (
+    ...<24 lines>...
+    )
+ModuleNotFoundError: No module named 'german_domain'
+Traceback (most recent call last):
+  File "/Users/vanstedum/Projects/personal-ai-agents/telegram_bot.py", line 30, in <module>
+    from german_domain import (
+    ...<24 lines>...
+    )
+ModuleNotFoundError: No module named 'german_domain'
+Traceback (most recent call last):
+  File "/Users/vanstedum/Projects/personal-ai-agents/telegram_bot.py", line 30, in <module>
+    from german_domain import (
+    ...<24 lines>...
+    )
+ModuleNotFoundError: No module named 'german_domain'
+Traceback (most recent call last):
+  File "/Users/vanstedum/Projects/personal-ai-agents/telegram_bot.py", line 30, in <module>
+    from german_domain import (
+    ...<24 lines>...
+    )
+ModuleNotFoundError: No module named 'german_domain'
+Traceback (most recent call last):
+  File "/Users/vanstedum/Projects/personal-ai-agents/telegram_bot.py", line 30, in <module>
+    from german_domain import (
+    ...<24 lines>...
+    )
+ModuleNotFoundError: No module named 'german_domain'
+Traceback (most recent call last):
+  File "/Users/vanstedum/Projects/personal-ai-agents/telegram_bot.py", line 30, in <module>
+    from german_domain import (
+    ...<24 lines>...
+    )
+ModuleNotFoundError: No module named 'german_domain'
+Traceback (most recent call last):
+  File "/Users/vanstedum/Projects/personal-ai-agents/telegram_bot.py", line 30, in <module>
+    from german_domain import (
+    ...<24 lines>...
+    )
+ModuleNotFoundError: No module named 'german_domain'
+Traceback (most recent call last):
+  File "/Users/vanstedum/Projects/personal-ai-agents/telegram_bot.py", line 30, in <module>
+    from german_domain import (
+    ...<24 lines>...
+    )
+ModuleNotFoundError: No module named 'german_domain'
+Traceback (most recent call last):
+  File "/Users/vanstedum/Projects/personal-ai-agents/telegram_bot.py", line 30, in <module>
+    from german_domain import (
+    ...<24 lines>...
+    )
+ModuleNotFoundError: No module named 'german_domain'
+Traceback (most recent call last):
+  File "/Users/vanstedum/Projects/personal-ai-agents/telegram_bot.py", line 30, in <module>
+    from german_domain import (
+    ...<24 lines>...
+    )
+ModuleNotFoundError: No module named 'german_domain'
+Traceback (most recent call last):
+  File "/Users/vanstedum/Projects/personal-ai-agents/telegram_bot.py", line 30, in <module>
+    from german_domain import (
+    ...<24 lines>...
+    )
+ModuleNotFoundError: No module named 'german_domain'
+Traceback (most recent call last):
+  File "/Users/vanstedum/Projects/personal-ai-agents/telegram_bot.py", line 30, in <module>
+    from german_domain import (
+    ...<24 lines>...
+    )
+ModuleNotFoundError: No module named 'german_domain'

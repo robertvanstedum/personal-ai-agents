@@ -1,0 +1,161 @@
+{
+  "session_id": "2026-05-02_001",
+  "date": "2026-05-02",
+  "persona": "Maria",
+  "scenario": "Viennese café waitress",
+  "duration_estimate_min": 5,
+  "mode": "writing",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Grüß dich! Setz dich nur hin, es ist heute recht voll hier. Was möchtest du trinken? Eine Melange oder vielleicht einen Verlängerter? Und hast du Hunger, der Gugelhupf ist frisch."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke, denken wir dauber ein bisschen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne, nimm dir ruhig Zeit zum Überlegen. Ich denke, du meinst „ich denke darüber nach“, gell? Sag einfach Bescheid, wenn du weißt, was du möchtest - vielleicht eine schöne Melange? Ich bin gleich wieder da!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte einen kleiner brauner und meine Frau möchte ein Cappuccino. Wie sagt mann das?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Servus! Also, du möchtest einen Kleinen Braunen und deine Frau einen Cappuccino. Perfekt, kommt sofort. Soll’s dazu noch was Süßes geben, vielleicht ein Stück Gugelhupf? Ich bring’s gleich rüber!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert managed to communicate basic café orders successfully and showed willingness to engage with Viennese vocabulary. However, the session revealed recurring issues with adjective endings, article gender agreement, and a vocabulary slip in the opening turn. Overall a promising beginner-to-intermediate session with clear targets for improvement.",
+    "errors": [
+      {
+        "type": "vocabulary",
+        "original": "denken wir dauber ein bisschen",
+        "correction": "ich denke darüber nach ein bisschen / ich überlege noch kurz",
+        "explanation": "'dauber' is not a German word; Robert likely intended 'darüber' (about it), and the correct phrasing uses the separable verb 'nachdenken' (ich denke darüber nach) rather than a non-existent form.",
+        "context": "Danke, denken wir dauber ein bisschen."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "denken wir dauber ein bisschen",
+        "correction": "ich denke darüber nach",
+        "explanation": "Robert used the first-person plural 'wir denken' when he meant the singular 'ich denke', incorrectly including the listener in his personal reflection.",
+        "context": "Danke, denken wir dauber ein bisschen."
+      },
+      {
+        "type": "gender",
+        "original": "ein Cappuccino",
+        "correction": "einen Cappuccino",
+        "explanation": "'Cappuccino' is masculine (der Cappuccino), so the accusative article must be 'einen', not 'ein'.",
+        "context": "meine Frau möchte ein Cappuccino"
+      },
+      {
+        "type": "gender",
+        "original": "einen kleiner brauner",
+        "correction": "einen Kleinen Braunen",
+        "explanation": "After the indefinite article 'einen' (accusative masculine), the adjective takes the weak ending '-en', not the strong ending '-er'; both adjectives must also be capitalised as they form a proper café-menu noun phrase.",
+        "context": "Ich möchte einen kleiner brauner und meine Frau möchte ein Cappuccino."
+      },
+      {
+        "type": "word_order",
+        "original": "Wie sagt mann das?",
+        "correction": "Wie sagt man das?",
+        "explanation": "The impersonal pronoun is 'man' (one / you in general), not 'mann' (which is not a word; 'Mann' means husband/man); spelling affects meaning here.",
+        "context": "Wie sagt mann das?"
+      }
+    ],
+    "error_type_counts": {
+      "gender": 2,
+      "word_order": 1,
+      "missing_article": 0,
+      "verb_conjugation": 1,
+      "vocabulary": 1,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "die Melange",
+        "english": "Viennese coffee with steamed milk (similar to a café au lait)",
+        "note": "new this session",
+        "tags": [
+          "café",
+          "Vienna",
+          "food-and-drink"
+        ]
+      },
+      {
+        "german": "der Kleine Braune",
+        "english": "small black coffee with a small amount of milk or cream (Viennese style)",
+        "note": "needs practice – adjective endings still uncertain",
+        "tags": [
+          "café",
+          "Vienna",
+          "adjective-endings"
+        ]
+      },
+      {
+        "german": "der Verlängerter (ein Verlängerter)",
+        "english": "an Americano-style elongated espresso",
+        "note": "new this session – introduced by Maria, not yet used by Robert",
+        "tags": [
+          "café",
+          "Vienna",
+          "food-and-drink"
+        ]
+      },
+      {
+        "german": "der Gugelhupf",
+        "english": "a traditional ring-shaped Central European cake",
+        "note": "new this session",
+        "tags": [
+          "café",
+          "Vienna",
+          "food-and-drink",
+          "anki"
+        ]
+      },
+      {
+        "german": "nachdenken (ich denke darüber nach)",
+        "english": "to think about / to consider",
+        "note": "needs practice – Robert attempted this but used wrong form",
+        "tags": [
+          "separable-verbs",
+          "anki"
+        ]
+      },
+      {
+        "german": "Sag einfach Bescheid",
+        "english": "just let me know",
+        "note": "new this session – useful conversational phrase",
+        "tags": [
+          "phrases",
+          "anki"
+        ]
+      },
+      {
+        "german": "Wie sagt man das?",
+        "english": "How do you say that?",
+        "note": "used correctly in intent but misspelled 'man' as 'mann'",
+        "tags": [
+          "meta-language",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully used 'ich möchte' for polite ordering, which is the appropriate register for a café setting.",
+      "He correctly used 'meine Frau' to refer to his wife, showing accurate possessive pronoun usage.",
+      "He proactively asked 'Wie sagt man das?' demonstrating good learner behaviour and willingness to seek clarification in the target language.",
+      "His overall communicative intent was clear throughout, allowing the conversation to progress naturally despite grammatical errors."
+    ],
+    "next_focus": "Adjective endings after indefinite articles in the accusative case (e.g. 'einen kleinen Braunen', 'einen frischen Gugelhupf') — drill the masculine accusative pattern '-en' with café and food vocabulary to reinforce both the grammar rule and the new Viennese lexicon from this session."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

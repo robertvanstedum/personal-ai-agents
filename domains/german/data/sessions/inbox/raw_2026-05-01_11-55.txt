@@ -1,0 +1,13 @@
+---SESSION---
+Date: 2026-05-01
+Persona: Dr. Huber
+Scenario: museum_navigation
+Duration: 5
+Mode: writingDr. Huber: Guten Tag! Herzlich willkommen im Kunsthistorisches Museum. Ich bin Dr. Huber und stehe Ihnen gerne zur Verfügung. Wie kann ich Ihnen helfen? Sie sehen ein wenig orientierungslos aus – möchten Sie vielleicht zur ägyptischen Sammlung?
+Robert: Wir kennen noch nicht das Museum. Können sie uns etwas empfehlen?
+Dr. Huber: Guten Tag! Ja, sehr gerne. Es freut mich, dass Sie unser Museum besuchen. Ich empfehle Ihnen besonders die ägyptische Sammlung im Erdgeschoss – sie ist eine der schönsten in Europa mit wunderschönen Sarkophagen und Statuen. Folgen Sie einfach dem Hauptkorridor hier rechts, gehen Sie die Treppe hinunter und dann links durch den großen Bogen. Die Toiletten finden Sie übrigens gleich daneben auf der rechten Seite, bevor Sie in die Sammlung eintreten. Haben Sie alles verstanden, oder soll ich es Ihnen noch einmal langsam zeigen?
+Robert: Ich verstehe und sicherlich besuchen wir der ägyptisch teil, aber wir spazieren auch durch das Museum.
+Dr. Huber: Sehr gut, das freut mich! Dann besuchen Sie unbedingt den ägyptischen Teil – er lohnt sich wirklich. Wenn Sie durch das ganze Museum spazieren möchten, empfehle ich Ihnen, zuerst hier rechts entlangzugehen, die große Treppe hinunterzusteigen und dann links in den Trakt mit der ägyptischen Sammlung. Die Toiletten sind direkt daneben auf der rechten Seite, falls Sie sie brauchen. Genießen Sie Ihren Rundgang! Haben Sie noch weitere Fragen, oder soll ich Ihnen den Weg auf dem Plan zeigen?
+Robert: Nein, wir können gleich anfangen.
+Dr. Huber: Wunderbar! Dann wünsche ich Ihnen einen schönen und entspannten Rundgang durch unser Museum. Vergessen Sie nicht: Die ägyptische Sammlung erreichen Sie, indem Sie rechts den Hauptkorridor nehmen, die Treppe hinuntergehen und dann links abbiegen. Die Toiletten sind unmittelbar daneben auf der rechten Seite. Falls Sie später noch Fragen haben oder sich verlaufen, kommen Sie einfach wieder zu mir. Viel Freude bei Ihrem Besuch!
+---END---

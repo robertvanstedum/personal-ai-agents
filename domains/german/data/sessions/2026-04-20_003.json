@@ -1,0 +1,238 @@
+{
+  "session_id": "2026-04-20_003",
+  "date": "2026-04-20",
+  "persona": "Frau Berger",
+  "scenario": "bakery_order",
+  "duration_estimate_min": 10,
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Frau Berger",
+      "text": "Guten Morgen! Servus, kommst du wieder zu mir? Wie geht's dir heut? Möchtest du was Frisches zum Frühstück oder vielleicht was für unterwegs?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Ja, sag nur – was möchtest du denn heute haben? Ich hab ganz frische Kipferl und ein schönes Nussbrot da."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte, äh."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Kein Problem, lass dir ruhig Zeit. Was hättest du denn gern?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Brot, ein Brötchen, oh. Zwei Brötchen, bitte."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Zwei Semmerln, sehr gern! Möchtest du vielleicht noch was Süßes dazu? Wir haben heute ganz frische Vanillekipferl."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Heute, heute nicht, aber"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Heute nicht, alles klar. Dann nur die zwei Semmerln. Macht einen Euro sechzig. Magst sie in einer Tüte oder gleich so?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "ein Brot."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Ein Brot dazu? Welches hättest du denn gern – ein ganzes Bauernbrot oder"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, aber ich möchte ein, ein starke Brot, ein Brot, a sour, sour Brot."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Ah, du meinst ein Sauerteigbrot! Sehr gern – unser Roggensauerteigbrot ist…"
+    },
+    {
+      "speaker": "Robert",
+      "text": "es gibt"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Es gibt mehrere? Ja, wir haben zwei Sorten Sauerteigbrot – ein klassisches Roggenbrot und ein Mischbrot. Welches möchtest du?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was ist der Unterschied zwischen Roggenbrot und Mischbrot?"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Roggenbrot ist fast nur aus Roggen, hat einen kräftigen, herben Geschmack. Mischbrot ist halb Roggen, halb Weizen – etwas milder und leichter. Welches magst du lieber?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "heute ich möchte gern Roggenbrot."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Sehr gern! Ein ganzes Roggenbrot oder soll ich dir ein halbes abschneiden?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke, halbes ist besser. Halbes, danke."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Gut, ein halbes Roggenbrot und zwei Semmerln macht zusammen vier Euro dreißig. Zahlen Sie bar oder mit Karte?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "mit Karte."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Alles klar, Karte passt. Hier bitte schön, dein halbes Roggenbrot und die zwei Semmerln. Guten Appetit und einen schönen Tag noch!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "zwei. Guten Tag."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Gerne! Bis bald und guten Tag dir"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Tschüss."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Tschüss!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully completed a bakery transaction in German, demonstrating useful survival vocabulary and the ability to ask a meaningful comprehension question mid-conversation. However, he struggled with word order in verb-second sentences, adjective endings, and finding target-language vocabulary under pressure, frequently hesitating or code-switching into English.",
+    "errors": [
+      {
+        "type": "word_order",
+        "original": "heute ich möchte gern Roggenbrot",
+        "correction": "Heute möchte ich gern Roggenbrot.",
+        "explanation": "In German main clauses the finite verb must occupy the second position; when a time adverb like 'heute' starts the sentence, the subject 'ich' moves after the verb.",
+        "context": "Robert: heute ich möchte gern Roggenbrot."
+      },
+      {
+        "type": "gender",
+        "original": "ein starke Brot",
+        "correction": "ein kräftiges Brot",
+        "explanation": "'Brot' is neuter (das Brot), so the adjective in an indefinite noun phrase takes the ending '-es' (ein kräftiges Brot); additionally 'stark' is not the best word here — 'kräftig' or 'herzhaft' better describes a strong-flavoured bread.",
+        "context": "Robert: Ja, aber ich möchte ein, ein starke Brot, ein Brot, a sour, sour Brot."
+      },
+      {
+        "type": "vocabulary",
+        "original": "a sour, sour Brot",
+        "correction": "ein Sauerteigbrot",
+        "explanation": "Robert code-switched to English because he did not know the German word; the correct term is 'Sauerteigbrot' (sourdough bread).",
+        "context": "Robert: Ja, aber ich möchte ein, ein starke Brot, ein Brot, a sour, sour Brot."
+      },
+      {
+        "type": "missing_article",
+        "original": "Halbes, danke",
+        "correction": "Ein halbes, danke. / Das halbe, bitte.",
+        "explanation": "German noun phrases generally require an article; omitting it here sounds incomplete, though it is understandable in informal spoken context.",
+        "context": "Robert: Danke, halbes ist besser. Halbes, danke."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 1,
+      "missing_article": 1,
+      "verb_conjugation": 0,
+      "vocabulary": 1,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Sauerteigbrot",
+        "english": "sourdough bread",
+        "note": "needs practice — Robert knew the concept but not the word",
+        "tags": [
+          "food",
+          "bakery",
+          "anki"
+        ]
+      },
+      {
+        "german": "der Unterschied",
+        "english": "the difference",
+        "note": "used correctly in a spontaneous question — strong moment",
+        "tags": [
+          "useful",
+          "anki"
+        ]
+      },
+      {
+        "german": "Roggenbrot",
+        "english": "rye bread",
+        "note": "new this session — receptive knowledge confirmed",
+        "tags": [
+          "food",
+          "bakery",
+          "anki"
+        ]
+      },
+      {
+        "german": "Mischbrot",
+        "english": "mixed-grain bread (rye-wheat blend)",
+        "note": "new this session — receptive knowledge confirmed",
+        "tags": [
+          "food",
+          "bakery",
+          "anki"
+        ]
+      },
+      {
+        "german": "kräftig",
+        "english": "strong / robust (flavour)",
+        "note": "needs practice — better adjective choice than 'stark' for describing bread flavour",
+        "tags": [
+          "adjectives",
+          "food",
+          "anki"
+        ]
+      },
+      {
+        "german": "Semmerl / Brötchen",
+        "english": "bread roll",
+        "note": "used 'Brötchen' correctly (High German); Frau Berger modelled the Austrian variant 'Semmerl'",
+        "tags": [
+          "regional",
+          "food",
+          "anki"
+        ]
+      },
+      {
+        "german": "für unterwegs",
+        "english": "for on the go / to take away",
+        "note": "new this session — introduced by Frau Berger, worth active practice",
+        "tags": [
+          "phrases",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Successfully used 'Ich möchte … bitte' as a polite request frame throughout.",
+      "Asked a genuine comprehension question ('Was ist der Unterschied zwischen Roggenbrot und Mischbrot?') using correct word order and the right preposition 'zwischen' with dative — a clear highlight of the session.",
+      "Responded appropriately to Frau Berger's follow-up questions about quantity and payment with minimal prompting.",
+      "Used appropriate farewell register ('Tschüss') consistently with the informal 'du' register established by Frau Berger."
+    ],
+    "next_focus": "Verb-second (V2) word order in main clauses: practise building sentences that start with a time or place adverb (e.g. 'Heute möchte ich …', 'Morgen brauche ich …') so that subject–verb inversion becomes automatic."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true
+}

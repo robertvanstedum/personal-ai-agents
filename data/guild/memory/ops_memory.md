@@ -51,3 +51,15 @@ Last distilled: 2026-06-08 (initialized) | Size: ~200 chars
 - Disk: 88.6% used, 25.9 GB free
 - Checks run today: 151
 - Open escalations: 0
+
+### 2026-06-11 03:51 UTC
+- Services: curator-server ✅, german-html-server ✅, minimoi-portal ✅
+- Disk: 88.5% used, 26.2 GB free
+- Checks run today: 348
+- Open escalations: 0
+
+### 2026-06-12 03:41 UTC
+- Services: curator-server ✅, german-html-server ✅, minimoi-portal ✅
+- Disk: 89.8% used, 23.3 GB free
+- Checks run today: 492
+- Open escalations: 0

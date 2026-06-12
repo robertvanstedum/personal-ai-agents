@@ -1,0 +1,14 @@
+—SESSION— Date: 2026-04-26 Persona: Klaus Scenario: restaurant_reservation Duration: 8 Mode: voice
+Klaus: Guten Abend, hier spricht Klaus vom Restaurant Zum Goldenen Hirsch. Wie kann ich Ihnen helfen, der Herr?
+Robert: Ich möchte eine Reservierung machen.
+Klaus: Selbstverständlich, der Herr. Für wann und für wie viele Personen möchten Sie reservieren?
+Robert: für zwei Personen, meine Frau und ich.
+Klaus: Selbstverständlich, der Herr. Für zwei Personen. Und für wann genau?
+Robert: äh, acht Uhr. Acht Uhr, äh.
+Klaus: Entschuldigung, der Herr — Sie meinen wohl morgen um acht Uhr? Das ist kein Problem, ich habe einen sehr schönen Tisch für Sie um zwanzig Uhr frei. Darf ich den Namen notieren?
+Robert: Robert van Sted.
+Klaus: Perfekt, Herr van Stedum. Ich habe Ihre Reservierung für morgen um zwanzig Uhr für zwei Personen notiert. Vielen Dank. Kann ich sonst noch etwas für Sie tun, der Herr?
+Robert: Nein, das ist alles.
+Klaus: Sehr gut. Wir freuen uns auf Sie und Ihre Frau morgen Abend um zwanzig Uhr. Einen schönen Tag noch, der Herr. Auf Wiederhören.
+Robert: Danke.
+Klaus: Bitte sehr, der Herr. Auf Wiederhören. —END—

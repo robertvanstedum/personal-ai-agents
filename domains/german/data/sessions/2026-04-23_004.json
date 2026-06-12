@@ -1,0 +1,30 @@
+{
+  "session_id": "2026-04-23_004",
+  "date": "2026-04-23",
+  "persona": "Frau Berger",
+  "scenario": "bakery_order",
+  "duration_estimate_min": 12,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Frau Berger",
+      "text": "Guten Morgen!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Guten Morgen, ich hätte gerne ein Brot."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Natürlich! Das macht zwei Euro."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke!"
+    }
+  ],
+  "reviewer_output": null,
+  "anki_generated": false,
+  "next_lesson_generated": false
+}

@@ -1,0 +1,229 @@
+{
+  "session_id": "2026-05-01_001",
+  "date": "2026-05-01",
+  "persona": "Herr Fischer",
+  "scenario": "directions",
+  "duration_estimate_min": 10,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Herr Fischer",
+      "text": "Guten Morgen! Wie kann ich Ihnen helfen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was haben Sie hier interessant?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Das kommt darauf an, was Sie interessiert. Der Naschmarkt ist bei unseren Gästen sehr beliebt - dort gibt es viele Stände mit Essen und Trinken. Möchten Sie vielleicht dorthin? Ich kann Ihnen den Weg erklären."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Das Naschmarkt."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Zum Naschmarkt? Sehr gerne. Gehen Sie einfach die Ringstraße entlang zum"
+    },
+    {
+      "speaker": "Karls Robert",
+      "text": "Bleibt, bleibt la, lange von hier?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Guten Morgen. Der Naschmarkt ist nicht weit von hier - etwa zehn Minuten mit der U-Bahn. Möchten Sie die genaue Verbindung wissen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Und wenn man nach Fuß, zu Fuß gehen?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Zu Fuß sind es ungefähr 25 bis 30 Minuten. Sie gehen am besten die Ringstraße"
+    },
+    {
+      "speaker": "Richtung Robert",
+      "text": "Ist, es ist möglich?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ja, natürlich ist das möglich. Es ist ein schöner Spaziergang entlang der Ringstraße. Möchten Sie den genauen Weg zu Fuß oder doch lieber mit der U-Bahn?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Fuß, äh, ich denke Fuß, aber frage ich meine"
+    },
+    {
+      "speaker": "Frau. Herr Fischer",
+      "text": "Gerne, fragen Sie Ihre Frau. Wenn Sie später doch die U-Bahn-Verbindung brauchen - sagen Sie einfach Bescheid. Ich erkläre Ihnen die Linie und die"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein, äh, wir, wir gehen, wir, wir gehen von U-Bahn."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Selbstverständlich. Sie nehmen die U4 Richtung Heiligenstadt, fahren zwei Stationen bis Kettenbrückengasse. Dort steigen Sie aus - der Naschmarkt liegt direkt am Ausgang."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Stimmt. Und wie kauft man ein Karte?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ja, das ist ganz einfach. Sie kaufen ein Einzelfahrschein oder ein 24-Stunden-Ticket direkt am Automaten in der U-Bahn-Station. Möchten Sie, dass ich Ihnen zeige, wie man den Automaten bedient, oder haben Sie noch Fragen zur Fahrt?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein, nein, brauchen wir nicht. Äh, gehen wir jetzt in U-Bahn. Erstmal."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Guten Morgen! Viel Spaß auf dem Naschmarkt. Wenn Sie später noch etwas brauchen - ein Taxi, eine Reservierung oder einen Tipp fürs Abendessen - kommen Sie einfach wieder."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Vielen Dank. Bis später."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Bis später! Schönen Tag noch! -END-"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully navigated a practical directions scenario in German, managing to communicate his needs despite frequent hesitations and sentence fragments. His vocabulary is emerging but he relies heavily on single words and incomplete phrases rather than full sentences. The session shows a foundation to build on, particularly around question formation and article usage.",
+    "errors": [
+      {
+        "type": "vocabulary",
+        "original": "Was haben Sie hier interessant?",
+        "correction": "Was gibt es hier Interessantes? / Was können Sie mir empfehlen?",
+        "explanation": "'haben + interessant' is not a natural German construction; 'es gibt' is the standard way to ask what is available, and 'interessant' needs to function as a pronoun here.",
+        "context": "Robert: Was haben Sie hier interessant?"
+      },
+      {
+        "type": "missing_article",
+        "original": "Das Naschmarkt.",
+        "correction": "Den Naschmarkt, bitte. / Zum Naschmarkt, bitte.",
+        "explanation": "'Naschmarkt' is masculine (der Naschmarkt), so the accusative form 'den' or the contraction 'zum' (zu + dem) is required here.",
+        "context": "Robert: Das Naschmarkt."
+      },
+      {
+        "type": "word_order",
+        "original": "Bleibt, bleibt la, lange von hier?",
+        "correction": "Ist es weit von hier? / Wie weit ist es von hier?",
+        "explanation": "Robert was attempting to ask about distance but used 'bleibt' (stays/remains) instead of 'ist' and did not form a proper question structure.",
+        "context": "Robert: Bleibt, bleibt la, lange von hier?"
+      },
+      {
+        "type": "vocabulary",
+        "original": "wenn man nach Fuß, zu Fuß gehen?",
+        "correction": "Und wenn man zu Fuß geht? / Wie lange dauert es zu Fuß?",
+        "explanation": "'nach Fuß' is not a German expression; the correct fixed phrase is 'zu Fuß gehen', which Robert did self-correct to, but the sentence still lacked a verb and proper structure.",
+        "context": "Robert: Und wenn man nach Fuß, zu Fuß gehen?"
+      },
+      {
+        "type": "missing_article",
+        "original": "gehen wir jetzt in U-Bahn",
+        "correction": "gehen wir jetzt zur U-Bahn / fahren wir jetzt mit der U-Bahn",
+        "explanation": "'U-Bahn' is feminine (die U-Bahn) and requires the article; 'mit der U-Bahn fahren' is the standard collocation for taking the subway.",
+        "context": "Robert: Äh, gehen wir jetzt in U-Bahn. Erstmal."
+      },
+      {
+        "type": "missing_article",
+        "original": "wir gehen von U-Bahn",
+        "correction": "wir fahren mit der U-Bahn",
+        "explanation": "The preposition 'von' does not collocate with U-Bahn for mode of transport; the correct phrase is 'mit der U-Bahn fahren'.",
+        "context": "Robert: Nein, äh, wir, wir gehen, wir, wir gehen von U-Bahn."
+      },
+      {
+        "type": "vocabulary",
+        "original": "wie kauft man ein Karte?",
+        "correction": "Wie kauft man eine Fahrkarte? / Wo kann man ein Ticket kaufen?",
+        "explanation": "'Karte' is feminine (die Karte), so the article should be 'eine'; additionally, the more precise term in a transit context is 'Fahrkarte' or 'Ticket'.",
+        "context": "Robert: Und wie kauft man ein Karte?"
+      }
+    ],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 1,
+      "missing_article": 3,
+      "verb_conjugation": 0,
+      "vocabulary": 3,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "zu Fuß gehen",
+        "english": "to go on foot / to walk",
+        "note": "partially self-corrected from 'nach Fuß' — needs practice as a fixed phrase",
+        "tags": [
+          "transport",
+          "fixed-phrase",
+          "anki"
+        ]
+      },
+      {
+        "german": "Wie weit ist es von hier?",
+        "english": "How far is it from here?",
+        "note": "needs practice — Robert attempted this concept but could not form the sentence",
+        "tags": [
+          "directions",
+          "questions",
+          "anki"
+        ]
+      },
+      {
+        "german": "mit der U-Bahn fahren",
+        "english": "to take the subway",
+        "note": "needs practice — Robert used 'von U-Bahn' and 'gehen' instead",
+        "tags": [
+          "transport",
+          "collocations",
+          "anki"
+        ]
+      },
+      {
+        "german": "die Fahrkarte / das Ticket",
+        "english": "the ticket",
+        "note": "needs practice — Robert said 'ein Karte' with wrong gender and less precise noun",
+        "tags": [
+          "transport",
+          "vocabulary",
+          "anki"
+        ]
+      },
+      {
+        "german": "Viel Spaß!",
+        "english": "Have fun!",
+        "note": "used correctly by Herr Fischer — good passive exposure for Robert",
+        "tags": [
+          "phrases",
+          "social"
+        ]
+      },
+      {
+        "german": "Bescheid sagen",
+        "english": "to let someone know",
+        "note": "introduced by Herr Fischer — new this session, worth noting",
+        "tags": [
+          "phrases",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully self-corrected 'nach Fuß' to 'zu Fuß', showing real-time monitoring of his own speech",
+      "Robert maintained the interaction across multiple turns and communicated his intentions clearly enough for the scenario to progress",
+      "Robert used polite discourse markers like 'Vielen Dank' and 'Bis später' naturally and correctly",
+      "Robert showed initiative by asking a practical follow-up question about buying a ticket, demonstrating engagement with the scenario"
+    ],
+    "next_focus": "Practice fixed transport phrases as complete sentences: 'Wir fahren mit der U-Bahn', 'Ich möchte eine Fahrkarte kaufen', and 'Wie weit ist es von hier?' — focusing on correct articles and verb placement in questions."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

@@ -1,0 +1,36 @@
+—SESSION—
+Date: 2026-04-24
+Persona: Stefan
+Scenario: U-Bahn
+Duration: 12
+Stefan: Servus, Grüß Gott! Fahrschein bitte. Hast du einen gültigen Ticket?
+Robert: Nein, ich habe nicht.
+Stefan: Kein Ticket? Dann brauchst du einen. Wohin willst du eigentlich? Zum Prater oder zum Stephansdom?
+Robert: Was ist der Unterschied?
+Stefan: Zum Prater nimmst du die U1 Richtung Leopoldau, einfach einsteigen, keine Umsteigung. Zum Stephansdom gehst du direkt raus, der ist gleich oben.
+Robert: Ich möchte gern spazieren. Wo ist besser?
+Stefan: Der Prater ist viel besser zum Spazieren, da hast du den großen Park und den Wurstelprater mit dem Riesenrad. Nimm einfach die U1, zwei Stationen.
+Robert: Genau, ich nehme mich.
+Stefan: Nimmst die U1 Richtung Leopoldau, zwei Stationen, dann bist du schon im Prater. Servus und viel Spaß!
+Stefan: Ah, du meinst die U1. Die fährt direkt zum Prater. Zwei Stationen, dann
+Robert: U1, genau.
+Stefan: Genau, die U1 Richtung Leopoldau, zwei Stationen, dann bist du schon im Prater. Servus und schönen Tag!
+Robert: Entschuldige bitte. Vamos. Wiederholen.
+Stefan: Entschuldigung, ich spreche nur Deutsch hier in der U-Bahn. Möchtest du nochmal hören, wie du zum Prater kommst?
+Robert: Wie?
+Stefan: Nimm die U1 Richtung Leopoldau, nur zwei Stationen. Dann bist du direkt am Prater.
+Robert: Klar, aber ich verstehe ein bisschen nicht.
+Stefan: Kein Problem. U1 in Richtung Leopoldau, einfach zwei Stationen mitfahren, dann steigst du aus und bist schon im Prater. Gell?
+Robert: Vor Spazieren, vor Spazieren. Wo, wo gehe ich?
+Stefan: Nach dem Aussteigen einfach geradeaus in den Park gehen, da kannst du schön spazieren. Der Wurstelprater mit dem Riesenrad ist auch gleich da. Viel Spaß!
+Robert: Danke. Ich brauche
+Stefan: Brauchst du noch ein Ticket oder sonst was? Ansonsten Servus und guten Sp
+Robert: ein Ticket.
+Stefan: Gut, dann hol dir am Automaten da drüben ein Einzelticket oder eine Tageskarte. Für den Prater reicht das Einzelticket.
+Robert: Ich denke ein Tageskarte ist besser.
+Stefan: Ja, Tageskarte ist smart. Die gibt’s auch am Automaten. Dann kannst du den ganzen Tag hin und her fahren, gell?
+Robert: Ich kaufe zwei Tag, Tageskarte, bitte.
+Stefan: Zwei Tageskarten? Geht klar. Sag einfach am Automaten “zwei Tageskarten” oder drück die Knöpfe. Das macht dann vierundzwanzig Euro zusammen.
+Robert: Danke dir.
+Stefan: Gerne. Viel Spaß beim Spazieren im Prater! Servus.
+—END—

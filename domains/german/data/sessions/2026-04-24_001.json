@@ -1,0 +1,171 @@
+{
+  "session_id": "2026-04-24_001",
+  "date": "2026-04-24",
+  "persona": "Frau Berger",
+  "scenario": "Bäckerei",
+  "duration_estimate_min": 10,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Frau Berger",
+      "text": "Guten Morgen! Willkommen in der Bäckerei. Die ist heute richtig voll, tut mir leid. Was möchten Sie denn?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte ein Kaffee."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Kaffee haben wir natürlich auch. Großer oder kleiner? Und dazu vielleicht eine frische Semmel?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Große Kaffee und ein ein Semmel auch."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Großer Kaffee und eine Semmel, geht klar! Welche Semmel möchten Sie – die klassische oder die mit Körnern?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Das ist Körner."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Eine Körnersemmel also, sehr gut! Macht zusammen fünf Euro fünfzig. Zahlen Sie bar oder mit Karte?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein, nein, nein. Entschuldigung. Was ist Körner? Ich no, ich"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Entschuldigung, ich verstehe nicht ganz. Möchten Sie noch etwas für Ihre Frau? Vielleicht einen Topfenstrudel? Der ist ganz frisch!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Auch auch ein sie auch eine Dinge meinen meiner Frau."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Sehr gut, dann eine große Kaffee und eine Körnersemmel. Macht fünf Euro fünfzig. Bar oder Karte?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Uff."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Ist alles in Ordnung? Die Schlange ist heute echt lang, aber Ihr Kaffee ist schon fertig."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert managed to communicate basic bakery requests and showed willingness to self-correct, which is a positive sign. However, the session revealed consistent struggles with German noun gender (especially article agreement) and a vocabulary gap that caused a communication breakdown mid-conversation. The session was short and somewhat halting, suggesting Robert is still at an early production stage.",
+    "errors": [
+      {
+        "type": "missing_article",
+        "original": "Ich möchte ein Kaffee.",
+        "correction": "Ich möchte einen Kaffee.",
+        "explanation": "Kaffee is masculine (der Kaffee), and in the accusative case after 'möchte' the article becomes 'einen', not 'ein'.",
+        "context": "Ich möchte ein Kaffee."
+      },
+      {
+        "type": "gender",
+        "original": "Große Kaffee",
+        "correction": "Großen Kaffee",
+        "explanation": "As a masculine noun in the accusative case, the adjective ending must be '-en': 'großen Kaffee'.",
+        "context": "Große Kaffee und ein ein Semmel auch."
+      },
+      {
+        "type": "missing_article",
+        "original": "ein ein Semmel",
+        "correction": "eine Semmel",
+        "explanation": "Semmel is feminine (die Semmel), so the correct indefinite article is 'eine', not 'ein'; the word was also repeated, indicating hesitation.",
+        "context": "Große Kaffee und ein ein Semmel auch."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Das ist Körner.",
+        "correction": "Die mit Körnern, bitte. / Ich nehme die Körnersemmel.",
+        "explanation": "Robert likely intended to select the seeded roll but produced an incomplete and grammatically unclear sentence; a simple selection phrase like 'die mit Körnern, bitte' would have communicated the choice clearly.",
+        "context": "Das ist Körner."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Auch auch ein sie auch eine Dinge meinen meiner Frau.",
+        "correction": "Auch etwas für meine Frau, bitte. / Ich möchte auch etwas für meine Frau.",
+        "explanation": "Robert was trying to say he also wanted something for his wife but could not construct the sentence; 'etwas für meine Frau' is the key phrase needed here.",
+        "context": "Auch auch ein sie auch eine Dinge meinen meiner Frau."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 0,
+      "missing_article": 2,
+      "verb_conjugation": 0,
+      "vocabulary": 2,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "die Semmel",
+        "english": "bread roll (Austrian/Bavarian term)",
+        "note": "new this session – regional term worth remembering",
+        "tags": [
+          "anki",
+          "food",
+          "Austrian German"
+        ]
+      },
+      {
+        "german": "die Körnersemmel",
+        "english": "seeded/multigrain bread roll",
+        "note": "new this session – encountered but not yet mastered",
+        "tags": [
+          "anki",
+          "food",
+          "compound noun"
+        ]
+      },
+      {
+        "german": "der Topfenstrudel",
+        "english": "quark/cream cheese strudel",
+        "note": "new this session – introduced by Frau Berger, Robert did not use it",
+        "tags": [
+          "anki",
+          "food",
+          "Austrian German"
+        ]
+      },
+      {
+        "german": "etwas für meine Frau",
+        "english": "something for my wife",
+        "note": "needs practice – Robert attempted this idea but could not produce it",
+        "tags": [
+          "anki",
+          "phrases",
+          "possessive"
+        ]
+      },
+      {
+        "german": "Bar oder Karte?",
+        "english": "Cash or card?",
+        "note": "new this session – useful transactional phrase",
+        "tags": [
+          "anki",
+          "shopping",
+          "phrases"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert used 'Entschuldigung' appropriately to signal a communication problem and attempted to self-correct, showing good pragmatic awareness.",
+      "He successfully used 'Ich möchte' as a polite request structure, which is the correct register for a shop interaction.",
+      "Robert attempted to add a second item ('auch') to his order, showing he is trying to build multi-part sentences even under pressure."
+    ],
+    "next_focus": "Accusative article agreement for the three main genders: practice 'einen' (masc.), 'eine' (fem.), 'ein' (neut.) in short shopping dialogues until the forms feel automatic."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true
+}

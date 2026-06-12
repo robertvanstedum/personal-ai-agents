@@ -1,0 +1,253 @@
+{
+  "session_id": "2026-04-30_004",
+  "date": "2026-04-30",
+  "persona": "Dr. Huber",
+  "scenario": "museum_recommendation",
+  "duration_estimate_min": 9,
+  "mode": "writing",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Dr. Huber",
+      "text": "Guten Tag! Herzlich willkommen im Kunsthistorischen Museum. Wie kann ich Ihnen helfen? Sie sehen aus, als hätten Sie eine Frage."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wir haben keine Eintritskarte gekauft."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Guten Tag! Kein Problem, der Herr. Sie haben noch keine Eintrittskarte gekauft? Das lässt sich schnell erledigen. Die Kasse ist gleich hier links im Foyer. Möchten Sie zwei Karten für heute? Und Sie sagten, Sie haben nur noch etwa eine Stunde Zeit? Dann empfehle ich Ihnen, direkt nach dem Ticketkauf zu mir zurückzukommen, damit ich Ihnen die wichtigsten Highlights zeigen kann."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Zwei Eintrittskarte bitte sehr"
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Sehr gerne, der Herr. Zwei Eintrittskarten für heute, bitte sehr. Das macht zusammen 42 Euro. Hier sind Ihre Karten. Da Sie nur noch eine Stunde Zeit haben, würde ich Ihnen vorschlagen, dass wir uns auf die absoluten Highlights konzentrieren. Möchten Sie mit mir einen kurzen Rundgang machen? Was interessiert Sie besonders - Malerei, Antike oder vielleicht die Ägyptische Sammlung?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Intrasante, wuste ich nicht das Ägyptische dinge hier. Was bedeudet Sammlung?"
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Sehr interessant, dass Sie das nicht wussten! Ja, wir haben hier tatsächlich eine beeindruckende ägyptische Sammlung. „Sammlung“ bedeutet einfach die gesamte Kollektion von Objekten zu einem Thema - also alle ägyptischen Kunstwerke und Fundstücke, die wir hier ausstellen. Möchten Sie die ägyptische Sammlung sehen? Sie liegt im Untergeschoss. In Ihrer verbleibenden Stunde könnten wir dort beginnen. Es gibt dort wunderschöne Sarkophage und Statuen. Oder bevorzugen Sie die berühmten Gemälde von Bruegel und Rubens im ersten Stock? Was möchten Sie zuerst anschauen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich bin von Chicago und gibt es auch einen Museum mit eine ägyptische Sammung. Gehen wir erst dort. Es fragt mir die unterschied."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Ah, Sie kommen aus Chicago! Sehr schön. Ja, dort gibt es das berühmte Field Museum, das tatsächlich eine hervorragende ägyptische Sammlung hat. Dann gehen wir am besten zuerst in unsere ägyptische Sammlung im Untergeschoss. Kommen Sie bitte mit mir. Während wir hinuntergehen, können Sie mich gerne nach den Unterschieden fragen. Was interessiert Sie besonders - die Größe der Sammlung, die berühmtesten Stücke oder wie sich die Präsentation unterscheidet? Hier entlang, der Herr. Die Treppe hinunter. Was möchten Sie wissen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte gern wandern."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Sehr gerne, der Herr. Dann wandern wir gemeinsam durch die ägyptische Sammlung. Kommen Sie mit mir. Schauen Sie, diese große Granitstatue des Pharaos ist über 3000 Jahre alt. Beeindruckend, nicht wahr? Möchten Sie hier ein bisschen herumwandern und sich die Stücke in Ruhe anschauen? Oder soll ich Ihnen die wichtigsten Exponate gezielt zeigen? Fragen Sie einfach, was Sie interessiert - ich erkläre Ihnen gerne alles."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Können wir einsam wandern. Brauchen wir jetz nicht hilfreich."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Selbstverständlich, der Herr. Sie möchten allein durch die Sammlung wandern und brauchen im Moment keine weitere Hilfe. Das verstehe ich vollkommen. Dann lasse ich Sie und Ihre Frau jetzt in Ruhe schauen. Nehmen Sie sich Zeit und genießen Sie die Ausstellung. Falls Sie später doch noch Fragen haben oder etwas Bestimmtes suchen, finden Sie mich gerne wieder hier im Saal. Viel Freude bei Ihrem Rundgang!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke sehr."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Bitte sehr, der Herr. Es hat mich sehr gefreut, Ihnen ein wenig helfen zu dürfen. Genießen Sie Ihren Rundgang durch die ägyptische Sammlung und das ganze Museum. Falls Sie später doch noch etwas brauchen, bin ich jederzeit für Sie da. Einen schönen Aufenthalt im Kunsthistorischen Museum!"
+    }
+  ],
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "reviewer_output": {
+    "overall_summary": "Robert successfully navigated a museum scenario in German, demonstrating functional communicative ability and a willingness to ask for vocabulary help mid-conversation. However, the session revealed consistent weaknesses in plural noun forms, article usage, sentence structure, and vocabulary selection, particularly with false friends and register-inappropriate word choices.",
+    "errors": [
+      {
+        "type": "missing_article",
+        "original": "Wir haben keine Eintritskarte gekauft",
+        "correction": "Wir haben noch keine Eintrittskarten gekauft",
+        "explanation": "Minor spelling error aside ('Eintrittskarte'), the sentence is grammatically acceptable but note the plural would be more natural here since they want two tickets; also 'Eintritskarte' is misspelled.",
+        "context": "Wir haben keine Eintritskarte gekauft."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Zwei Eintrittskarte bitte sehr",
+        "correction": "Zwei Eintrittskarten, bitte sehr",
+        "explanation": "After a numeral greater than one, the noun must be in the plural form: 'Eintrittskarten' not 'Eintrittskarte'.",
+        "context": "Zwei Eintrittskarte bitte sehr"
+      },
+      {
+        "type": "vocabulary",
+        "original": "Intrasante",
+        "correction": "Interessant",
+        "explanation": "'Intrasante' is not a German word; the correct adjective is 'interessant', and as an exclamation it would be used without inflection or as 'Das ist interessant!'",
+        "context": "Intrasante, wuste ich nicht das Ägyptische dinge hier."
+      },
+      {
+        "type": "word_order",
+        "original": "wuste ich nicht das Ägyptische dinge hier",
+        "correction": "Das wusste ich nicht, dass es hier ägyptische Dinge / eine ägyptische Sammlung gibt",
+        "explanation": "German main clauses require verb-second word order, and the subordinate clause needs 'dass' plus a proper verb at the end; also 'Dinge' needs a lowercase 'd' as a common noun and requires an article.",
+        "context": "Intrasante, wuste ich nicht das Ägyptische dinge hier."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "gibt es auch einen Museum",
+        "correction": "gibt es auch ein Museum",
+        "explanation": "'Museum' is neuter (das Museum), so the indefinite article in the accusative is 'ein', not 'einen' (which is masculine accusative).",
+        "context": "Ich bin von Chicago und gibt es auch einen Museum mit eine ägyptische Sammung."
+      },
+      {
+        "type": "gender",
+        "original": "mit eine ägyptische Sammung",
+        "correction": "mit einer ägyptischen Sammlung",
+        "explanation": "'Sammlung' is feminine (die Sammlung), so after the preposition 'mit' (dative) the article is 'einer' and the adjective takes the weak dative ending '-en'.",
+        "context": "gibt es auch einen Museum mit eine ägyptische Sammung."
+      },
+      {
+        "type": "word_order",
+        "original": "Gehen wir erst dort",
+        "correction": "Gehen wir zuerst dorthin",
+        "explanation": "'Dort' means 'there (at that place)' but movement toward a place requires 'dorthin'; also 'erst' is acceptable but 'zuerst' is more natural for 'first of all'.",
+        "context": "Gehen wir erst dort."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Es fragt mir die unterschied",
+        "correction": "Ich frage mich den Unterschied / Mich interessiert der Unterschied",
+        "explanation": "'Es fragt mir' is not a German construction; to express curiosity about a difference, use 'Ich frage mich...' (I wonder) or 'Mich interessiert der Unterschied' and note 'Unterschied' is masculine (der Unterschied).",
+        "context": "Es fragt mir die unterschied."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Ich möchte gern wandern",
+        "correction": "Ich würde gerne herumschauen / Ich möchte mich gerne umsehen",
+        "explanation": "'Wandern' specifically means hiking outdoors; inside a museum the correct verb is 'sich umsehen' (to look around) or 'herumgehen/herumschauen'.",
+        "context": "Ich möchte gern wandern."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Können wir einsam wandern",
+        "correction": "Können wir alleine herumlaufen / Dürfen wir uns selbst umsehen",
+        "explanation": "'Einsam' means 'lonely' (emotionally) not 'alone'; the correct word for 'by ourselves' is 'alleine' or 'allein'.",
+        "context": "Können wir einsam wandern."
+      },
+      {
+        "type": "register",
+        "original": "Brauchen wir jetz nicht hilfreich",
+        "correction": "Wir brauchen jetzt keine Hilfe, danke / Wir kommen alleine zurecht",
+        "explanation": "'Hilfreich' is an adjective meaning 'helpful' (describing a person or thing), not a noun; to say 'we don't need help' use 'Wir brauchen keine Hilfe' and note the verb must come second in a main clause.",
+        "context": "Können wir einsam wandern. Brauchen wir jetz nicht hilfreich."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 2,
+      "word_order": 3,
+      "missing_article": 1,
+      "verb_conjugation": 1,
+      "vocabulary": 4,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "die Eintrittskarte / die Eintrittskarten",
+        "english": "admission ticket / admission tickets",
+        "note": "needs practice — Robert used the singular where plural was required",
+        "tags": [
+          "museum",
+          "plural",
+          "anki"
+        ]
+      },
+      {
+        "german": "die Sammlung",
+        "english": "collection",
+        "note": "new this session — Robert asked for and received the definition mid-conversation",
+        "tags": [
+          "museum",
+          "vocabulary",
+          "anki"
+        ]
+      },
+      {
+        "german": "sich umsehen",
+        "english": "to look around / browse",
+        "note": "needs practice — Robert used 'wandern' instead",
+        "tags": [
+          "reflexive",
+          "museum",
+          "anki"
+        ]
+      },
+      {
+        "german": "alleine / allein",
+        "english": "alone / by oneself",
+        "note": "needs practice — Robert confused with 'einsam' (lonely)",
+        "tags": [
+          "adjective",
+          "false-friend-adjacent",
+          "anki"
+        ]
+      },
+      {
+        "german": "der Unterschied",
+        "english": "the difference",
+        "note": "needs practice — Robert attempted 'die Unterschied' with wrong gender and broken sentence structure",
+        "tags": [
+          "masculine",
+          "anki"
+        ]
+      },
+      {
+        "german": "interessant",
+        "english": "interesting",
+        "note": "needs practice — Robert approximated as 'Intrasante'",
+        "tags": [
+          "adjective",
+          "spelling",
+          "anki"
+        ]
+      },
+      {
+        "german": "keine Hilfe brauchen",
+        "english": "to not need help",
+        "note": "needs practice — Robert attempted 'nicht hilfreich' using the adjective incorrectly",
+        "tags": [
+          "phrase",
+          "negation",
+          "anki"
+        ]
+      },
+      {
+        "german": "das Untergeschoss",
+        "english": "basement / lower floor",
+        "note": "used correctly — Robert understood the term in context",
+        "tags": [
+          "museum",
+          "building"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert proactively asked for vocabulary help mid-conversation ('Was bedeutet Sammlung?'), showing good learner strategies",
+      "Robert successfully communicated his origin ('Ich bin von Chicago') and was understood throughout",
+      "Robert used polite register consistently, including 'bitte sehr' and 'Danke sehr'",
+      "Robert maintained the conversation across multiple turns, keeping the scenario moving forward despite grammatical gaps"
+    ],
+    "next_focus": "German noun plurals and article gender in the dative case — specifically practicing common museum and travel nouns (die Karte→Karten, das Museum, die Sammlung) with their correct articles in nominative, accusative, and dative contexts."
+  }
+}

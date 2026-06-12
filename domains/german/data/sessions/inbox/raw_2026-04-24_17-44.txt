@@ -1,0 +1,20 @@
+---SESSION---
+Date: 2026-04-24
+Persona: Frau Berger
+Scenario: Bäckerei
+Duration: 10
+
+Frau Berger: Guten Morgen! Willkommen in der Bäckerei. Die ist heute richtig voll, tut mir leid. Was möchten Sie denn?
+Robert: Ich möchte ein Kaffee.
+Frau Berger: Kaffee haben wir natürlich auch. Großer oder kleiner? Und dazu vielleicht eine frische Semmel?
+Robert: Große Kaffee und ein ein Semmel auch.
+Frau Berger: Großer Kaffee und eine Semmel, geht klar! Welche Semmel möchten Sie – die klassische oder die mit Körnern?
+Robert: Das ist Körner.
+Frau Berger: Eine Körnersemmel also, sehr gut! Macht zusammen fünf Euro fünfzig. Zahlen Sie bar oder mit Karte?
+Robert: Nein, nein, nein. Entschuldigung. Was ist Körner? Ich no, ich
+Frau Berger: Entschuldigung, ich verstehe nicht ganz. Möchten Sie noch etwas für Ihre Frau? Vielleicht einen Topfenstrudel? Der ist ganz frisch!
+Robert: Auch auch ein sie auch eine Dinge meinen meiner Frau.
+Frau Berger: Sehr gut, dann eine große Kaffee und eine Körnersemmel. Macht fünf Euro fünfzig. Bar oder Karte?
+Robert: Uff.
+Frau Berger: Ist alles in Ordnung? Die Schlange ist heute echt lang, aber Ihr Kaffee ist schon fertig.
+---END-—

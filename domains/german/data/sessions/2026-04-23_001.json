@@ -1,0 +1,250 @@
+{
+  "session_id": "2026-04-23_001",
+  "date": "2026-04-23",
+  "persona": "Maria",
+  "scenario": "Ordering coffee and pastry",
+  "duration_estimate_min": 12,
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Servus! Setz di her, i bin die Maria. Was möchtest’n trinken?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte ein Kaffee, bitte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ein Kaffee? Na, da hast a bissl zu viel gesagt. Bei uns sagt ma eine Melange oder einen Verlängerten. Magst du eine schöne Melange mit dem guten Milchschaum oder lieber einen Verlängerten? Und dazu was Süßes? Wir haben frischen Gugelhupf."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was ist eine Melange? Kenne ich nicht."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Eine Melange is unser Klassiker – halb Kaffee, halb warme Milch mit schönem Schaum drauf. Magst du eine Melange oder doch lieber einen Verlängerten? Und dazu ein Stückerl Gugelhupf?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich danke das."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Passt schon. Also eine Melange und ein Stückerl Gugelhupf, gell?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Äh, Melange, so viel Milch hat."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Genau, die hat richtig viel Milch. Kommst du öfter nach Wien oder bist zum ersten Mal da?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Hast du etwas mit Espresso?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ja klar! Der Kleiner Brauner is genau das – ein starker Espresso mit nur einem kleinen Schuss Milch."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Kleiner, Kleiner Brauner ist wie, äh, Cortado in nach Cuba."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Genau, so ähnlich wie ein Cortado – aber bei uns in Wien ist er ein bisschen anders."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Passt. Dann einmal einen Kleinen Braunen und ein Stückerl Gugelhupf, oder?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Stücke Gux, ein, eine kleine Brau, bitte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Also einen Kleinen Braunen und ein Stück Gugelhupf, gell?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was ist ein Schuh?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ein Schuh? Das ist etwas zum Anziehen. Ich glaub, du meinst Gugelhupf! Der ist unser klassischer Marmorkuchen."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Googlehof, äh, Marmorkuchen? Ja, ich probiere."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Genau, Gugelhupf ist Marmorkuchen. Kommt sofort! Ein Kleiner Brauner und ein Gugelhupf."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Maria, ist meine, meine kleiner Brauner bereit?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ja, dein Kleiner Brauner is fertig. Und der Gugelhupf auch. Vorsicht, der Kaffee is noch ziemlich heiß. Guten Appetit!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "danke."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Bitte, gern geschehen! Lass es dir schmecken."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully navigated an authentic Viennese café scenario, demonstrating solid communicative intent and a willingness to ask clarifying questions. His main weaknesses are grammatical gender agreement (articles and adjective endings), missing articles, and occasional awkward word order. Despite these errors, he achieved his communicative goal and showed good vocabulary curiosity throughout the session.",
+    "errors": [
+      {
+        "type": "gender",
+        "original": "ein Kaffee",
+        "correction": "einen Kaffee",
+        "explanation": "Kaffee is masculine (der Kaffee), so in the accusative case after 'möchte' it requires the article 'einen', not 'ein'.",
+        "context": "Ich möchte ein Kaffee, bitte."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Ich danke das.",
+        "correction": "Ja, gerne. / Ja, das klingt gut.",
+        "explanation": "'Ich danke das' is not a standard German expression; 'danken' does not take a direct accusative object like this — Robert likely meant to express agreement or thanks, which would be 'Danke' or 'Ja, das nehme ich'.",
+        "context": "Ich danke das."
+      },
+      {
+        "type": "missing_article",
+        "original": "Melange, so viel Milch hat.",
+        "correction": "Die Melange hat so viel Milch?",
+        "explanation": "The sentence is missing the subject article 'die' before Melange and needs the verb in the correct position; German main clauses require verb-second word order.",
+        "context": "Äh, Melange, so viel Milch hat."
+      },
+      {
+        "type": "word_order",
+        "original": "Melange, so viel Milch hat.",
+        "correction": "Die Melange hat so viel Milch?",
+        "explanation": "In a German main clause the verb must be in second position; 'hat' was placed at the end as if in a subordinate clause.",
+        "context": "Äh, Melange, so viel Milch hat."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Cortado in nach Cuba",
+        "correction": "Cortado aus Kuba / wie ein Cortado aus Spanien",
+        "explanation": "'In nach' is a double preposition that does not work in German; origin is expressed with 'aus', and Cortado is generally associated with Spain, not Cuba.",
+        "context": "Kleiner, Kleiner Brauner ist wie, äh, Cortado in nach Cuba."
+      },
+      {
+        "type": "gender",
+        "original": "meine kleiner Brauner",
+        "correction": "mein Kleiner Brauner",
+        "explanation": "'Brauner' is masculine (der Kleine Braune), so the possessive pronoun must be 'mein', not 'meine' (which is feminine/plural).",
+        "context": "Maria, ist meine, meine kleiner Brauner bereit?"
+      },
+      {
+        "type": "vocabulary",
+        "original": "bereit",
+        "correction": "fertig",
+        "explanation": "'Bereit' means 'ready/prepared' in a more formal or action-oriented sense; for food and drinks being ready to serve, 'fertig' is the natural everyday word in German.",
+        "context": "Maria, ist meine, meine kleiner Brauner bereit?"
+      }
+    ],
+    "error_type_counts": {
+      "gender": 2,
+      "word_order": 1,
+      "missing_article": 1,
+      "verb_conjugation": 0,
+      "vocabulary": 3,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "die Melange",
+        "english": "Viennese coffee with steamed milk and foam",
+        "note": "new this session",
+        "tags": [
+          "cafe",
+          "vienna",
+          "anki"
+        ]
+      },
+      {
+        "german": "der Verlängerte",
+        "english": "extended/long black coffee (Viennese style)",
+        "note": "new this session",
+        "tags": [
+          "cafe",
+          "vienna",
+          "anki"
+        ]
+      },
+      {
+        "german": "der Kleine Braune",
+        "english": "small espresso with a little milk (Viennese style)",
+        "note": "new this session",
+        "tags": [
+          "cafe",
+          "vienna",
+          "anki"
+        ]
+      },
+      {
+        "german": "der Gugelhupf",
+        "english": "marble bundt cake",
+        "note": "new this session — Robert struggled with pronunciation",
+        "tags": [
+          "food",
+          "vienna",
+          "anki"
+        ]
+      },
+      {
+        "german": "das Stückerl",
+        "english": "a little piece (Austrian diminutive)",
+        "note": "new this session — authentic Austrian register",
+        "tags": [
+          "austrian-german",
+          "diminutive"
+        ]
+      },
+      {
+        "german": "Vorsicht",
+        "english": "be careful / watch out",
+        "note": "used correctly by Maria — good passive exposure for Robert",
+        "tags": [
+          "useful",
+          "anki"
+        ]
+      },
+      {
+        "german": "Lass es dir schmecken",
+        "english": "enjoy your meal (lit. let it taste good to you)",
+        "note": "new this session — Austrian/Southern German alternative to 'Guten Appetit'",
+        "tags": [
+          "phrase",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert consistently asked clarifying questions when he did not understand vocabulary, which is excellent communicative behavior.",
+      "He successfully identified what he wanted and completed the order despite limited vocabulary.",
+      "He made a culturally appropriate comparison (Cortado) to connect new vocabulary to prior knowledge.",
+      "He maintained the conversation naturally and responded to follow-up questions from Maria without shutting down."
+    ],
+    "next_focus": "Masculine accusative articles: practice using 'einen' vs. 'ein' with masculine nouns (e.g., einen Kaffee, einen Kuchen, einen Tisch) through short ordering drills, since this error appeared immediately and recurred throughout the session."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true
+}

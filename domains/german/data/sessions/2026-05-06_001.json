@@ -1,0 +1,314 @@
+{
+  "session_id": "2026-05-06_001",
+  "date": "2026-05-06",
+  "persona": "Herr Fischer",
+  "scenario": "Hotel Check-in",
+  "duration_estimate_min": 15,
+  "mode": "writing",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Herr Fischer",
+      "text": "Guten Morgen! Willkommen in unserem Hotel. Haben Sie eine Reservierung?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, ich habe eine Reservierung. Mein Name ist Robert Van Stedum."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Guten Morgen, Herr Van Stedum. Einen kleinen Moment bitte, ich schaue nach Ihrer Reservierung."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Hallo. Haben Sie ein Zimmer gefunden?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ja, ich habe Ihre Reservierung gefunden. Sie haben ein Einzelzimmer für drei Nächte gebucht, ab heute. Möchten Sie jetzt einchecken?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Er möchte einchecken. Es für zwei Personen. Genau."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Es tut mir leid, aber ich sehe hier eine Reservierung für ein Einzelzimmer. Möchten Sie stattdessen ein Doppelzimmer? Ich kann gerne nachschauen, was noch verfügbar ist."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich, ich bin hier mit meiner"
+    },
+    {
+      "speaker": "Frau. Herr Fischer",
+      "text": "Ah, ich verstehe. Sie sind also zu zweit. Einen Augenblick bitte, ich schaue, ob wir ein Doppelzimmer für Sie beide umbuchen können."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was ist der Unterschied, der Doppelzimmer und Einzelzimmer?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ein Einzelzimmer hat ein Bett für eine Person, während ein Doppelzimmer zwei Betten oder ein großes Bett hat und für zwei Personen ausgelegt ist. Möchten Sie gerne ein Doppelzimmer buchen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Doppel, Doppelzimmer mit ein großes Bett."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Selbstverständlich. Ich buche Ihnen gerne ein Doppelzimmer mit einem großen Bett um. Das wäre dann für zwei Personen, richtig?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Einzelzimmer da."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Genau, das Einzelzimmer haben wir jetzt auf ein Doppelzimmer mit großem Bett umgebucht. Möchten Sie jetzt den Check-in abschließen und Ihren Zimmerschlüssel erhalten?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, und"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Sehr gut. Hier ist Ihre Zimmerkarte für Zimmer 312. Frühstück gibt es von sieben bis zehn"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Eine Frage mehr. Äh, ist diese, äh, das Zimmer ist ruhig? Wir möchten eine, ein ruhiges Zimmer."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ja, Zimmer 312 liegt zum Innenhof und ist sehr ruhig. Sie werden dort keine Straßenlärm haben."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ausgezeichnet. Danke."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Bitte sehr! Wenn Sie noch etwas brauchen, melden Sie sich einfach an der Rezeption. Ich wünsche Ihnen und Ihrer Frau einen angenehmen Aufenthalt bei uns!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Oh, ich habe etwas vergessen. Wi-Fi, wie Funktion, wie funktioniert das Wi-Fi?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Das WLAN ist für unsere Gäste kostenlos. Das Netzwerk heißt “HotelRing” und das"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wi-Fi."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Das WLAN-Netzwerk heißt HotelRing. Das Passwort ist Vienna2026. Sie können sich einfach damit verbinden. Brauchen Sie noch etwas anderes?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein, danke."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Bitte sehr. Ich wünsche Ihnen und Ihrer Frau einen schönen Aufenthalt bei uns in Wien."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Okay, auf Wiedersehen."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Auf Wiedersehen! Schönen Tag noch! -END-"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully navigated a realistic hotel check-in scenario, demonstrating useful survival vocabulary and a willingness to self-correct mid-sentence. However, several grammatical errors appeared repeatedly, particularly with pronoun usage, article case, and sentence structure, suggesting these areas need focused attention. Overall the session showed solid communicative intent despite incomplete or broken sentences.",
+    "errors": [
+      {
+        "type": "verb_conjugation",
+        "original": "Er möchte einchecken.",
+        "correction": "Ich möchte einchecken.",
+        "explanation": "Robert used third-person 'er' (he) instead of first-person 'ich' (I) when referring to himself.",
+        "context": "Er möchte einchecken. Es für zwei Personen. Genau."
+      },
+      {
+        "type": "missing_article",
+        "original": "Es für zwei Personen.",
+        "correction": "Es ist für zwei Personen.",
+        "explanation": "The verb 'ist' is missing; German requires an explicit copula verb where English might drop it colloquially.",
+        "context": "Er möchte einchecken. Es für zwei Personen. Genau."
+      },
+      {
+        "type": "gender",
+        "original": "der Unterschied, der Doppelzimmer und Einzelzimmer",
+        "correction": "der Unterschied zwischen dem Doppelzimmer und dem Einzelzimmer",
+        "explanation": "'Zimmer' is neuter (das Zimmer), so the dative form requires 'dem', not 'der'; also the preposition 'zwischen' is needed to express 'between'.",
+        "context": "Was ist der Unterschied, der Doppelzimmer und Einzelzimmer?"
+      },
+      {
+        "type": "gender",
+        "original": "mit ein großes Bett",
+        "correction": "mit einem großen Bett",
+        "explanation": "After the preposition 'mit' the dative case is required: 'einem' (not 'ein') and the adjective takes the weak dative ending '-en'.",
+        "context": "Doppel, Doppelzimmer mit ein großes Bett."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Eine Frage mehr.",
+        "correction": "Noch eine Frage.",
+        "explanation": "'Eine Frage mehr' is a direct calque from English 'one more question'; the natural German expression is 'noch eine Frage'.",
+        "context": "Eine Frage mehr. Äh, ist diese, äh, das Zimmer ist ruhig?"
+      },
+      {
+        "type": "word_order",
+        "original": "ist diese, äh, das Zimmer ist ruhig?",
+        "correction": "Ist dieses Zimmer ruhig?",
+        "explanation": "In a yes/no question the finite verb must come first; Robert restarted mid-sentence but the verb-second rule for questions should be verb-first.",
+        "context": "Äh, ist diese, äh, das Zimmer ist ruhig?"
+      },
+      {
+        "type": "gender",
+        "original": "eine, ein ruhiges Zimmer",
+        "correction": "ein ruhiges Zimmer",
+        "explanation": "'Zimmer' is neuter (das Zimmer), so the indefinite article is 'ein', not 'eine'; Robert self-corrected but the initial error reflects gender uncertainty.",
+        "context": "Wir möchten eine, ein ruhiges Zimmer."
+      },
+      {
+        "type": "vocabulary",
+        "original": "wie Funktion, wie funktioniert das Wi-Fi?",
+        "correction": "Wie funktioniert das WLAN?",
+        "explanation": "'Wi-Fi' is understood but the standard German term is 'WLAN'; 'wie Funktion' is not grammatical — the correct verb form 'funktioniert' which Robert found is right, but the false start should be avoided.",
+        "context": "Wi-Fi, wie Funktion, wie funktioniert das Wi-Fi?"
+      }
+    ],
+    "error_type_counts": {
+      "gender": 3,
+      "word_order": 1,
+      "missing_article": 1,
+      "verb_conjugation": 1,
+      "vocabulary": 2,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "die Reservierung",
+        "english": "reservation / booking",
+        "note": "used correctly",
+        "tags": [
+          "hotel",
+          "travel"
+        ]
+      },
+      {
+        "german": "einchecken",
+        "english": "to check in",
+        "note": "used correctly",
+        "tags": [
+          "hotel",
+          "travel"
+        ]
+      },
+      {
+        "german": "das Einzelzimmer",
+        "english": "single room",
+        "note": "used correctly and repeatedly",
+        "tags": [
+          "hotel",
+          "anki"
+        ]
+      },
+      {
+        "german": "das Doppelzimmer",
+        "english": "double room",
+        "note": "used correctly",
+        "tags": [
+          "hotel",
+          "anki"
+        ]
+      },
+      {
+        "german": "der Unterschied",
+        "english": "the difference",
+        "note": "good attempt; needs practice with 'zwischen + dative'",
+        "tags": [
+          "vocabulary",
+          "anki"
+        ]
+      },
+      {
+        "german": "noch eine Frage",
+        "english": "one more question",
+        "note": "needs practice — Robert used 'eine Frage mehr' (anglicism)",
+        "tags": [
+          "phrases",
+          "anki"
+        ]
+      },
+      {
+        "german": "ruhig",
+        "english": "quiet / peaceful",
+        "note": "used correctly in context",
+        "tags": [
+          "adjectives",
+          "hotel"
+        ]
+      },
+      {
+        "german": "das WLAN",
+        "english": "Wi-Fi / wireless network",
+        "note": "Robert used 'Wi-Fi'; 'WLAN' is the standard German term",
+        "tags": [
+          "technology",
+          "anki"
+        ]
+      },
+      {
+        "german": "ausgezeichnet",
+        "english": "excellent",
+        "note": "used correctly and naturally",
+        "tags": [
+          "expressions"
+        ]
+      },
+      {
+        "german": "umbuchen",
+        "english": "to rebook / change a booking",
+        "note": "introduced by Herr Fischer; new this session",
+        "tags": [
+          "hotel",
+          "travel",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully communicated his core needs throughout the scenario, including correcting the room type and asking about Wi-Fi and noise level.",
+      "He self-corrected 'eine' to 'ein' before 'ruhiges Zimmer', showing active monitoring of his own speech.",
+      "He used 'ausgezeichnet' naturally as a response marker, which sounds fluent and appropriate.",
+      "He maintained polite, formal register throughout without slipping into informal 'du' forms.",
+      "He showed good recovery strategies when stuck, using fillers like 'äh' and restarting sentences rather than giving up."
+    ],
+    "next_focus": "Practice dative case after prepositions — specifically 'mit einem/einer/einem' and 'zwischen dem/der/dem' — using hotel and travel vocabulary as context, since gender and case errors after prepositions were the most frequent issue this session."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "scaffold_delivered": [
+    "Ich habe eine Reservierung auf den Namen Van Stedum.",
+    "Wann ist der Check-out?",
+    "Entschuldigung — könnten Sie das bitte wiederholen?"
+  ],
+  "scaffold_used": [
+    "Ich habe eine Reservierung auf den Namen Van Stedum.",
+    "Entschuldigung — könnten Sie das bitte wiederholen?"
+  ],
+  "scaffold_avoided": [
+    "Wann ist der Check-out?"
+  ],
+  "scaffold_deployment_rate": "2/3 scaffold phrases used"
+}

@@ -1,0 +1,166 @@
+{
+  "session_id": "2026-04-24_006",
+  "date": "2026-04-24",
+  "persona": "Stefan",
+  "scenario": "U-Bahn",
+  "duration_estimate_min": 12,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Stefan",
+      "text": "Servus, Grüß Gott! Fahrschein bitte. Hast du einen gültigen Ticket?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein, ich habe nicht."
+    },
+    {
+      "speaker": "Stefan",
+      "text": "Kein Ticket? Dann brauchst du einen. Wohin willst du eigentlich? Zum Prater oder zum Stephansdom?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was ist der Unterschied?"
+    },
+    {
+      "speaker": "Stefan",
+      "text": "Zum Prater nimmst du die U1 Richtung Leopoldau, einfach einsteigen, keine Umsteigung. Zum Stephansdom gehst du direkt raus, der ist gleich oben."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte gern spazieren. Wo ist besser?"
+    },
+    {
+      "speaker": "Stefan",
+      "text": "Der Prater ist viel besser zum Spazieren, da hast du den großen Park und den Wurstelprater mit dem Riesenrad. Nimm einfach die U1, zwei Stationen."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Genau, ich nehme mich."
+    },
+    {
+      "speaker": "Stefan",
+      "text": "Nimmst die U1 Richtung Leopoldau, zwei Stationen, dann bist du schon im Prater. Servus und viel Spaß!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke dir."
+    },
+    {
+      "speaker": "Stefan",
+      "text": "Gerne. Viel Spaß beim Spazieren im Prater! Servus."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert managed a short transactional conversation in a U-Bahn scenario with basic comprehension intact, but made several notable errors including a missing object pronoun, incorrect reflexive verb usage, and a gender mistake on 'Ticket'. His sentence construction is still quite minimal, though he showed good use of polite register ('Danke dir') and asked a relevant clarifying question.",
+    "errors": [
+      {
+        "type": "missing_article",
+        "original": "ich habe nicht",
+        "correction": "ich habe keinen",
+        "explanation": "When negating a noun object in German, 'kein' is used as the negating article rather than 'nicht'; since 'Ticket/Fahrschein' is neuter but the accusative of 'einen Fahrschein' (masculine) requires 'keinen', the correct form is 'ich habe keinen' (or 'ich habe kein Ticket').",
+        "context": "Nein, ich habe nicht."
+      },
+      {
+        "type": "gender",
+        "original": "einen gültigen Ticket",
+        "correction": "ein gültiges Ticket",
+        "explanation": "'Ticket' is neuter (das Ticket), so the indefinite article in the accusative is 'ein' and the adjective ending is '-es', not the masculine 'einen … -en'.",
+        "context": "Hast du einen gültigen Ticket? (spoken by Stefan, but Robert did not correct it — note this was Stefan's error in the transcript)"
+      },
+      {
+        "type": "vocabulary",
+        "original": "Wo ist besser?",
+        "correction": "Wo ist es besser? / Welcher Ort ist besser?",
+        "explanation": "German requires a subject in this type of comparative question; 'es' acts as a dummy subject, or the noun 'Ort' can be used explicitly.",
+        "context": "Ich möchte gern spazieren. Wo ist besser?"
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "ich nehme mich",
+        "correction": "ich nehme die U1",
+        "explanation": "'Nehmen' here is not reflexive; Robert likely meant to say 'ich nehme die U1' (I'll take the U1) but incorrectly added the reflexive pronoun 'mich', which changes the meaning entirely.",
+        "context": "Genau, ich nehme mich."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 0,
+      "missing_article": 1,
+      "verb_conjugation": 1,
+      "vocabulary": 1,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "der Fahrschein / das Ticket",
+        "english": "ticket (transit)",
+        "note": "needs practice — Robert should consolidate both words and their genders",
+        "tags": [
+          "transport",
+          "nouns",
+          "anki"
+        ]
+      },
+      {
+        "german": "einsteigen",
+        "english": "to board / get on",
+        "note": "introduced this session by Stefan; worth memorising",
+        "tags": [
+          "transport",
+          "separable verbs",
+          "anki"
+        ]
+      },
+      {
+        "german": "umsteigen",
+        "english": "to change (trains/lines)",
+        "note": "new this session; key vocabulary for public transport",
+        "tags": [
+          "transport",
+          "separable verbs",
+          "anki"
+        ]
+      },
+      {
+        "german": "Richtung",
+        "english": "direction / toward",
+        "note": "used correctly in context by Stefan; Robert should practise using it actively",
+        "tags": [
+          "transport",
+          "prepositions",
+          "anki"
+        ]
+      },
+      {
+        "german": "das Riesenrad",
+        "english": "the giant Ferris wheel",
+        "note": "new this session; culturally relevant Vienna landmark",
+        "tags": [
+          "culture",
+          "Vienna",
+          "anki"
+        ]
+      },
+      {
+        "german": "Danke dir",
+        "english": "Thanks (to you)",
+        "note": "used correctly; slightly warmer/informal than plain 'Danke'",
+        "tags": [
+          "politeness",
+          "register"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert used 'Ich möchte gern' correctly to express a polite wish, showing good modal verb instinct.",
+      "He asked a relevant and well-formed clarifying question ('Was ist der Unterschied?') that moved the conversation forward naturally.",
+      "He used 'Danke dir' appropriately, matching the informal Austrian register of the scenario.",
+      "He understood Stefan's directions well enough to attempt a response about taking the U1."
+    ],
+    "next_focus": "Negation with 'kein': practise replacing 'nicht haben' with the correct 'kein/keine/keinen' forms across masculine, feminine, and neuter nouns in accusative sentences."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true
+}

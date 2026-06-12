@@ -1,0 +1,16 @@
+---SESSION---
+Date: 2026-05-01
+Persona: Anna
+Scenario: bakery_order
+Duration: 6
+Mode: writing
+Anna: Guten Morgen! Was darf es sein?
+Robert: Guten Morgen! Ich möchte zwei Brötchen und ein Stück Kuchen, bitte.
+Anna: Natürlich! Welche Brötchen möchten Sie — die normalen oder die Vollkornbrötchen?
+Robert: Die Vollkornbrötchen, bitte. Was kosten das?
+Anna: Die Vollkornbrötchen kosten 80 Cent pro Stück, und der Kuchen kostet zwei Euro fünfzig. Das macht insgesamt vier Euro zehn.
+Robert: Hier ist fünf Euro. Haben Sie auch Kaffee?
+Anna: Ja, wir haben Kaffee — einen Euro achtzig für einen kleinen, zwei Euro zwanzig für einen großen. Möchten Sie einen dazu?
+Robert: Ja, einen großen Kaffee bitte. Danke schön!
+Anna: Gerne! Das macht dann sechs Euro dreißig insgesamt. Ihr Wechselgeld ist siebzig Cent. Guten Appetit!
+---END---

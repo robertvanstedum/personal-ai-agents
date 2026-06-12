@@ -1,0 +1,18 @@
+{
+  "lesson_date": "2026-06-03",
+  "lesson_number": 70,
+  "persona": "Herr Fischer",
+  "persona_role": "Hotel Receptionist",
+  "scenario": "hotel_checkin",
+  "warm_up": "Review top error from last session: vocabulary.",
+  "focus": "Practice the gender and accusative articles for common food and shop nouns (das Brot, die Semmel, der Kuchen, das Brötchen), with a focus on accusative 'ein/eine/einen' to avoid the 'einen Brot' type error.",
+  "speaking_prompt": "You arrive at your hotel near the Ringstraße after a long flight. Herr Fischer greets you at the front desk. Check in, ask about the WiFi, and confirm your checkout date.",
+  "vocabulary_targets": [
+    "Ich hätte gern",
+    "freilich",
+    "eingepackt",
+    "Grüß Gott",
+    "Danke sehr"
+  ],
+  "carry_forward_errors": []
+}

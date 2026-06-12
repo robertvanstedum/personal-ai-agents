@@ -1,0 +1,21 @@
+{
+  "lesson_date": "2026-04-26",
+  "lesson_number": 28,
+  "persona": "Klaus",
+  "persona_role": "Restaurant Waiter (Upscale)",
+  "scenario": "restaurant_reservation",
+  "warm_up": "Review top error from last session: vocabulary.",
+  "focus": "Practise giving personal information in full sentences: 'Mein Name ist …', 'Ich möchte … machen', and time expressions with 'um' (e.g. 'um 19 Uhr', 'um halb acht') to avoid incomplete sentences in transactional conversations.",
+  "speaking_prompt": "Call the restaurant to book a table for two for tomorrow evening at 7pm. Klaus answers. Confirm the reservation and ask if they need anything from you.",
+  "vocabulary_targets": [
+    "Reservierung vornehmen",
+    "Fensterplatz",
+    "Weinauswahl",
+    "Mein Name ist …",
+    "um sieben Uhr / um halb acht"
+  ],
+  "carry_forward_errors": [
+    "Reservierung (was: Reservation) — session 2026-04-26 Persona: Klaus Scenario: restaurant_reservation Duration: 8 Mode: writing",
+    "oder (was: order) — session 2026-04-26 Persona: Klaus Scenario: restaurant_reservation Duration: 8 Mode: writing"
+  ]
+}

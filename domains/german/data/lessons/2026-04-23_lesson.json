@@ -1,0 +1,20 @@
+{
+  "lesson_date": "2026-04-23",
+  "lesson_number": 9,
+  "persona": "Dr. Huber",
+  "persona_role": "Museum Guide",
+  "scenario": "museum_exhibit",
+  "warm_up": "Review top error from last session: gender.",
+  "focus": "Masculine accusative articles: drill the pattern 'der → einen' with common masculine café and restaurant nouns (der Kaffee → einen Kaffee, der Cappuccino → einen Cappuccino, der Kuchen → einen Kuchen) until it becomes automatic.",
+  "speaking_prompt": "You're standing in front of a famous painting at the Kunsthistorisches Museum. Dr. Huber approaches and offers to tell you about it. Ask follow-up questions — who painted it, when, and what it means.",
+  "vocabulary_targets": [
+    "einen Verlängerten",
+    "ein kleiner Brauner",
+    "stattdessen",
+    "Ich hätte gerne …",
+    "Wie sagt man?"
+  ],
+  "carry_forward_errors": [
+    "Meine Frau (was: Mein Frau) — session 2026-04-23"
+  ]
+}

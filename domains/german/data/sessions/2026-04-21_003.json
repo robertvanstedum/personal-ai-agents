@@ -1,0 +1,27 @@
+{
+  "session_id": "2026-04-21_003",
+  "date": "2026-04-21",
+  "persona": "Herr Fischer",
+  "scenario": "hotel_checkin",
+  "duration_estimate_min": 15,
+  "source": "manual",
+  "raw_transcript": [],
+  "reviewer_output": {
+    "overall_summary": "Review parse failed — see reviewer_raw_output in session file.",
+    "errors": [],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 0,
+      "vocabulary": 0,
+      "register": 0
+    },
+    "vocabulary_highlights": [],
+    "strengths": [],
+    "next_focus": ""
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "reviewer_raw_output": "The transcript appears to be empty - no conversation content was provided between Robert and Herr Fischer.\n\nSince I have no utterances to analyze, I'll return a minimal valid JSON object reflecting that:\n\n{\"overall_summary\":\"No transcript content was provided for this session, so no analysis could be performed. Please resubmit with the full conversation text included. There are no errors, strengths, or vocabulary items to report.\",\"errors\":[],\"error_type_counts\":{\"gender\":0,\"word_order\":0,\"missing_article\":0,\"verb_conjugation\":0,\"vocabulary\":0,\"register\":0},\"vocabulary_highlights\":[],\"strengths\":[],\"next_focus\":\"Please provide the session transcript so a meaningful focus area can be identified for Robert's next practice session.\"}"
+}

@@ -1,0 +1,215 @@
+{
+  "session_id": "2026-04-27_001",
+  "date": "2026-04-27",
+  "persona": "Maria",
+  "scenario": "cafe_order",
+  "duration_estimate_min": 12,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Grüß Gott! Was darf’s denn sein?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte ein Kaffee, bitte. Una Verlängerte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ah, einen Verlängerten! Sehr gut. Und dazu etwas Süßes? Wir haben frischen Gugelhupf heute."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was, was haben Sie für, für Süßes?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Neben dem Gugelhupf haben wir Apfelstrudel oder Topfenstrudel. Was möchtest du denn?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Topfenstrudel. Ähm, wie ist dein Topfenstrudel?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Unser Topfenstrudel ist ganz frisch und noch warm, sehr saftig. Magst du dazu Schlagobers?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich probiere ein einen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Einen Topfenstrudel, sehr gerne. Kommt sofort! Möchtest du noch was zu trinken dazu, oder reicht der Verlängerte?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Eine Frau kommt gleich."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ah, wunderbar! Dann mach ich gleich zwei Gedecke. Soll ich für deine Freundin auch was empfehlen, oder"
+    },
+    {
+      "speaker": "Robert",
+      "text": "ein einen einen einen Cappuccino und Croissant."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ah, verstanden - einen Cappuccino und ein Croissant. Ich bring’s gleich!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "für sie."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ah, alles klar! Für deine Freundin also einen Cappuccino und ein Croissant. Ich bring’s sofort!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Genau, danke dir."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne! Gleich da."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully completed a café ordering scenario in Austrian German, demonstrating functional communicative ability and some good vocabulary choices. However, he made several consistent errors with article declension (especially accusative masculine), mixed in a Spanish word, and struggled with sentence structure under pressure. His biggest growth area is mastering the accusative case for masculine nouns.",
+    "errors": [
+      {
+        "type": "gender",
+        "original": "ein Kaffee",
+        "correction": "einen Kaffee",
+        "explanation": "Kaffee is masculine, so in the accusative case (direct object) it requires 'einen', not 'ein'.",
+        "context": "Ich möchte ein Kaffee, bitte."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Una Verlängerte",
+        "correction": "Eine Verlängerte",
+        "explanation": "'Una' is Spanish/Italian; the correct German indefinite article is 'eine' (feminine, nominative).",
+        "context": "Ich möchte ein Kaffee, bitte. Una Verlängerte."
+      },
+      {
+        "type": "word_order",
+        "original": "Was haben Sie für, für Süßes?",
+        "correction": "Was für Süßes haben Sie? / Welche Süßspeisen haben Sie?",
+        "explanation": "In German, 'was für' is a fixed phrase that should not be split; the verb follows the subject in a question with a question word.",
+        "context": "Was, was haben Sie für, für Süßes?"
+      },
+      {
+        "type": "register",
+        "original": "wie ist dein Topfenstrudel?",
+        "correction": "Wie ist Ihr Topfenstrudel?",
+        "explanation": "Robert had been using the formal 'Sie' with Maria but switched to informal 'du/dein' here, which is inconsistent; in a café with a stranger, 'Ihr' is more appropriate unless invited to use 'du'.",
+        "context": "Topfenstrudel. Ähm, wie ist dein Topfenstrudel?"
+      },
+      {
+        "type": "missing_article",
+        "original": "Ich probiere ein einen.",
+        "correction": "Ich probiere einen (Topfenstrudel).",
+        "explanation": "Robert self-corrected from 'ein' to 'einen' (good!) but the sentence was incomplete and the self-correction was halting; the full correct sentence would be 'Ich probiere einen (Topfenstrudel)'.",
+        "context": "Ich probiere ein einen."
+      },
+      {
+        "type": "word_order",
+        "original": "eine Frau kommt gleich.",
+        "correction": "Meine Freundin / Eine Begleiterin kommt gleich.",
+        "explanation": "While grammatically passable, 'eine Frau' (a woman) is an unusual and oddly detached way to refer to a companion; additionally the intended meaning suggests he meant to say 'my friend/partner is coming soon', which requires a possessive or more specific noun.",
+        "context": "Eine Frau kommt gleich."
+      },
+      {
+        "type": "gender",
+        "original": "ein einen einen einen Cappuccino und Croissant",
+        "correction": "einen Cappuccino und ein Croissant",
+        "explanation": "Cappuccino is masculine (accusative: einen) and Croissant is neuter (accusative: ein); Robert cycled through incorrect articles before landing on the right one for Cappuccino but omitted the article for Croissant entirely.",
+        "context": "ein einen einen einen Cappuccino und Croissant."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 3,
+      "word_order": 2,
+      "missing_article": 1,
+      "verb_conjugation": 0,
+      "vocabulary": 1,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "der Verlängerte",
+        "english": "Americano-style diluted espresso (Austrian term)",
+        "note": "used correctly after Maria's correction — good uptake",
+        "tags": [
+          "austrian",
+          "café",
+          "anki"
+        ]
+      },
+      {
+        "german": "der Topfenstrudel",
+        "english": "quark/cream cheese strudel",
+        "note": "new this session — used confidently",
+        "tags": [
+          "austrian",
+          "food",
+          "anki"
+        ]
+      },
+      {
+        "german": "das Schlagobers",
+        "english": "whipped cream (Austrian term)",
+        "note": "introduced by Maria — Robert did not yet use it productively",
+        "tags": [
+          "austrian",
+          "café",
+          "anki"
+        ]
+      },
+      {
+        "german": "der Gugelhupf",
+        "english": "ring-shaped bundt cake (Austrian/Bavarian)",
+        "note": "new this session — heard and understood",
+        "tags": [
+          "austrian",
+          "food",
+          "anki"
+        ]
+      },
+      {
+        "german": "Genau, danke dir.",
+        "english": "Exactly, thanks.",
+        "note": "used correctly and naturally as a closing exchange",
+        "tags": [
+          "conversational",
+          "register"
+        ]
+      },
+      {
+        "german": "das Gedeck",
+        "english": "place setting / cover (in a café context)",
+        "note": "introduced by Maria — Robert did not yet use it",
+        "tags": [
+          "austrian",
+          "café",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully communicated all his orders and was understood throughout the scenario.",
+      "He self-corrected 'ein' to 'einen' in real time, showing emerging accusative awareness.",
+      "He appropriately used 'Sie' (formal) for most of the conversation, showing register awareness.",
+      "His closing phrase 'Genau, danke dir' was natural and fluent.",
+      "He picked up and reused 'Topfenstrudel' and 'Verlängerte' after hearing them, demonstrating good auditory uptake."
+    ],
+    "next_focus": "Practice accusative case articles for all three genders (einen/eine/ein) through targeted drills — especially ordering sentences like 'Ich möchte einen/eine/ein ___' — since masculine accusative errors appeared in nearly every ordering attempt this session."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

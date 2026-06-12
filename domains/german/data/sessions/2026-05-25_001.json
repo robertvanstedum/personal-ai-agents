@@ -1,0 +1,180 @@
+{
+  "session_id": "session_2026-05-25_001",
+  "date": "2026-05-25",
+  "persona": "Maria",
+  "scenario": "cafe bill",
+  "duration_estimate_min": 3,
+  "source": "html",
+  "raw_transcript": [
+    {
+      "speaker": "Transcript",
+      "text": "---SESSION---"
+    },
+    {
+      "speaker": "Date",
+      "text": "2026-05-25"
+    },
+    {
+      "speaker": "Persona",
+      "text": "Viennese Waiter"
+    },
+    {
+      "speaker": "Scenario",
+      "text": "Kaffeehaus ordering"
+    },
+    {
+      "speaker": "Duration",
+      "text": "12"
+    },
+    {
+      "speaker": "Mode",
+      "text": "voice"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich muss ein bisschen überlegen, überlegen. Ich denke, dass ich möchte einen Manualchen."
+    },
+    {
+      "speaker": "Waiter",
+      "text": "Du meinst sicher einen Melange — der ist perfekt zum Frühstück. Soll ich dir dazu auc"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Und meine, und mein, meine Frau möchte ein, einer Verlänger, einen Verlängerte."
+    },
+    {
+      "speaker": "Waiter",
+      "text": "Deine Frau möchte einen Verlängerten, gell? Kommt sofort. Noch was dazu, einen Gugelhupf vielleicht?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Äh, nein, äh, sonst nur das Kaffee."
+    },
+    {
+      "speaker": "Waiter",
+      "text": "Passt, zwei Kaffee also. Deiner Frau den Verlängerten und dir die Melange. Bin gleich wieder da!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Vielen Dank."
+    },
+    {
+      "speaker": "Waiter",
+      "text": "Bitte schön! Lass es euch gut schmecken."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Sellen, bitte. Sellen."
+    },
+    {
+      "speaker": "Waiter",
+      "text": "Die Rechnung? Klar, macht zusammen zwölf Euro achtzig."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Okay, hier ist meine Karte."
+    },
+    {
+      "speaker": "Waiter",
+      "text": "Danke! Zahlst mit Karte, super. Einen Moment... So, passt alles. Danke schön und schönen Tag noch euch beiden!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Likewise."
+    },
+    {
+      "speaker": "Waiter",
+      "text": "Servus, und auf Wiederschaun!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "End session."
+    },
+    {
+      "speaker": "Waiter",
+      "text": "Session beendet. War schön mit euch beiden im Kaffeehaus! ☕ Falls du weitermachen oder was Neues starten möchtest – einfach sagen. ---END---"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully navigated a Viennese café ordering scenario, demonstrating practical vocabulary for coffee types and payment. He struggled with recalling specific Viennese coffee terms and made a gender/article error with 'Kaffee', but communicated his intentions clearly enough for the waiter to understand. The session showed good functional communication despite some hesitation and vocabulary gaps.",
+    "errors": [
+      {
+        "type": "vocabulary",
+        "original": "einen Manualchen",
+        "correction": "eine Melange",
+        "explanation": "'Manualchen' is not a German or Viennese coffee term; the intended drink was 'eine Melange', the classic Viennese milk coffee.",
+        "context": "Ich denke, dass ich möchte einen Manualchen."
+      },
+      {
+        "type": "gender",
+        "original": "einen Manualchen",
+        "correction": "eine Melange",
+        "explanation": "'Melange' is feminine (die Melange), requiring the article 'eine' in the accusative, not 'einen'.",
+        "context": "Ich denke, dass ich möchte einen Manualchen."
+      },
+      {
+        "type": "word_order",
+        "original": "Ich denke, dass ich möchte einen Manualchen",
+        "correction": "Ich denke, dass ich eine Melange möchte",
+        "explanation": "In a subordinate clause introduced by 'dass', the verb must go to the end of the clause.",
+        "context": "Ich denke, dass ich möchte einen Manualchen."
+      },
+      {
+        "type": "gender",
+        "original": "einer Verlänger",
+        "correction": "einen Verlängerten",
+        "explanation": "'Verlängerter' is a masculine adjectival noun (der Verlängerte), so it takes 'einen' in the accusative, not 'einer'.",
+        "context": "Und meine, und mein, meine Frau möchte ein, einer Verlänger, einen Verlängerte."
+      },
+      {
+        "type": "gender",
+        "original": "das Kaffee",
+        "correction": "den Kaffee",
+        "explanation": "'Kaffee' is masculine (der Kaffee), so the accusative requires 'den', not 'das'; note that in Austrian German 'das Kaffee' can colloquially refer to a cup of coffee, but standard usage is 'der Kaffee'.",
+        "context": "Äh, nein, äh, sonst nur das Kaffee."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Sellen, bitte. Sellen.",
+        "correction": "Die Rechnung, bitte. / Zahlen, bitte.",
+        "explanation": "'Sellen' is not a German word; Robert likely intended 'zahlen' (to pay) or 'die Rechnung' (the bill), both standard ways to ask for the check.",
+        "context": "Sellen, bitte. Sellen."
+      },
+      {
+        "type": "register",
+        "original": "Likewise.",
+        "correction": "Danke, ebenso. / Gleichfalls.",
+        "explanation": "Using English 'Likewise' breaks the target language immersion; the German equivalents 'Gleichfalls' or 'Danke, ebenso' should be used to wish someone well in return.",
+        "context": "Likewise."
+      }
+    ],
+    "strengths": [
+      "Successfully self-corrected the article for 'Verlängerten' mid-sentence, showing active monitoring of his own speech",
+      "Used 'meine Frau' correctly with the right possessive form",
+      "Politely used 'Vielen Dank' at an appropriate moment",
+      "Managed to communicate payment intent clearly with 'hier ist meine Karte'",
+      "Attempted Viennese-specific coffee vocabulary, showing awareness of regional dialect"
+    ],
+    "next_focus": "Subordinate clause word order with 'dass': practice placing the conjugated verb at the end, e.g. 'Ich glaube, dass ich einen Kaffee möchte.'",
+    "topics": [
+      "ordering drinks",
+      "Viennese coffee culture",
+      "paying the bill",
+      "café vocabulary"
+    ],
+    "vocabulary": [
+      "Melange",
+      "Verlängerter",
+      "Gugelhupf",
+      "die Rechnung",
+      "zahlen",
+      "Kaffeehaus",
+      "Bitte schön",
+      "Servus",
+      "auf Wiederschaun",
+      "Lass es euch gut schmecken"
+    ]
+  },
+  "anki_generated": false,
+  "next_lesson_generated": false
+}

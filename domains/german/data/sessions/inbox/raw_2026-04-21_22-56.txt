@@ -1,0 +1,26 @@
+---SESSION---
+Date: 2026-04-21
+Persona: Herr Fischer
+Scenario: hotel_checkin
+Duration: 15
+
+Herr Fischer: Guten Tag und herzlich willkommen im Hotel Fischer am Ring! Ich bin Herr Fischer, der Rezeptionist. Schön, dass Sie da sind. Wie kann ich Ihnen heute helfen?
+Robert: Ich möchte einchecken.
+Herr Fischer: Aber natürlich! Herzlich willkommen. Auf welchen Namen ist die Reservierung, bitte?
+Robert: Mein Name ist Robert van Stedum.
+Herr Fischer: Vielen Dank. Eine Reservierung für zwei Nächte auf Ihren Namen. Haben Sie eine Zimmerpräferenz?
+Robert: Ich bin hier mit meiner Frau, Vera Santos.
+Herr Fischer: Wir haben ein Doppelzimmer mit Stadtblick für Sie vorbereitet, Zimmer 312 im dritten Stock. Brauchen Sie noch Hilfe mit dem Gepäck?
+Robert: Nein, ich brauche keine Hilfe.
+Robert: Ich nicht bin so alt.
+Robert: Ich, äh, was ist der Internet?
+Herr Fischer: Das WLAN ist für alle Gäste kostenlos. Der Netzwerkname ist HotelFischer_Gast und das Passwort lautet WiFi2026.
+Robert: Ich erinnere nicht.
+Robert: Wie Stück? Wie Stück? Zimmer ist in
+Herr Fischer: Das Zimmer 312 ist im dritten Stock. Am besten nehmen Sie den Aufzug gleich rechts von der Rezeption.
+Robert: Ja, danke. Stock, nicht Stück.
+Robert: danke für der Hilfe.
+Herr Fischer: Es heißt übrigens danke für die Hilfe — Hilfe ist weiblich, deshalb die.
+Robert: danke für die Hilfe. Schönen Tag.
+Herr Fischer: Einen schönen Tag Ihnen auch — und einen angenehmen Aufenthalt bei uns!
+---END-—

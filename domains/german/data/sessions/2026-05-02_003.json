@@ -1,0 +1,194 @@
+{
+  "session_id": "2026-05-02_003",
+  "date": "2026-05-02",
+  "persona": "Maria",
+  "scenario": "Viennese café waitress",
+  "duration_estimate_min": 10,
+  "mode": "writing",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Grüß dich! Setz dich nur hin, bei uns ist’s heute wieder busy. Was darf’s sein? Eine Melange oder lieber einen Kleinen Braunen? Der Gugelhupf ist frisch, magst du was Süßes dazu?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Einen Moment bitte. Ich überlege kurz."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne, nimm dir Zeit zum Überlegen. Ich komm gleich wieder vorbei. Möchtest du vielleicht schon einen Verlängerten zum Nachdenken?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Einen Verlängerten für meine Frau. Ich möchte gern einen Tée."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Gerne, einen Verlängerten für deine Frau und einen Tee für dich. Kommt sofort! Möchtest du den Tee mit Milch oder Zitrone? Der Gugelhupf wäre perfekt dazu."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Kein Milch für mich, aber doch mit Milch mit dem Verlängerten."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Keine Milch für deinen Tee, aber Milch zum Verlängerten - alles klar! Wird gemacht. Sonst noch was? Ich bring’s gleich."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wir sind bereit. Spazzien wir jetzt. Nehmen wir die Rechnung und erzälhe ich mit Karte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Super, ihr seid bereit! Zahlen wir jetzt die Rechnung? Klar, ich bring sie gleich. Du zahlst mit Karte - passt perfekt. Danke!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Vienen Dank. Bis später."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Vielen Dank! Bis später, kommt gern wieder. Servus!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert handled a simple café ordering scenario with reasonable communicative success, managing to convey his needs despite several errors. His main weaknesses are grammatical gender agreement and vocabulary interference from other languages (Spanish/Italian). With focused practice on article gender and basic verb forms, his fluency in everyday situations will improve noticeably.",
+    "errors": [
+      {
+        "type": "gender",
+        "original": "Kein Milch für mich",
+        "correction": "Keine Milch für mich",
+        "explanation": "'Milch' is feminine (die Milch), so the correct negation article is 'keine', not 'kein'.",
+        "context": "Kein Milch für mich, aber doch mit Milch mit dem Verlängerten."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Spazzien wir jetzt",
+        "correction": "Zahlen wir jetzt",
+        "explanation": "'Spazzien' is not a German word; Robert likely mixed in Italian 'spaziare' or similar — the correct German word for settling the bill is 'zahlen'.",
+        "context": "Wir sind bereit. Spazzien wir jetzt. Nehmen wir die Rechnung und erzälhe ich mit Karte."
+      },
+      {
+        "type": "vocabulary",
+        "original": "erzälhe ich mit Karte",
+        "correction": "ich zahle mit Karte",
+        "explanation": "'Erzählen' means 'to tell/narrate'; the intended word is 'zahlen' (to pay), and the sentence structure also needs correction to place the verb correctly.",
+        "context": "Wir sind bereit. Spazzien wir jetzt. Nehmen wir die Rechnung und erzälhe ich mit Karte."
+      },
+      {
+        "type": "word_order",
+        "original": "Nehmen wir die Rechnung und erzälhe ich mit Karte",
+        "correction": "Können wir die Rechnung haben? Ich zahle mit Karte.",
+        "explanation": "In a coordinated sentence with 'und', the second clause requires subject-verb order (not inversion), and the overall phrasing is unnatural; splitting into two sentences is clearer.",
+        "context": "Wir sind bereit. Spazzien wir jetzt. Nehmen wir die Rechnung und erzälhe ich mit Karte."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Vienen Dank",
+        "correction": "Vielen Dank",
+        "explanation": "'Vienen' is a Spanish/Portuguese word; the correct German phrase is 'Vielen Dank' (many thanks).",
+        "context": "Vienen Dank. Bis später."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Tée",
+        "correction": "Tee",
+        "explanation": "Minor spelling/accent issue: German does not use accent marks; the word is simply 'Tee' with no accent.",
+        "context": "Ich möchte gern einen Tée."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 1,
+      "missing_article": 0,
+      "verb_conjugation": 0,
+      "vocabulary": 4,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "die Melange",
+        "english": "Viennese coffee with steamed milk (similar to a latte)",
+        "note": "used correctly (understood in context)",
+        "tags": [
+          "café",
+          "Austria",
+          "food-and-drink"
+        ]
+      },
+      {
+        "german": "der Verlängerte",
+        "english": "an Americano-style extended espresso with water",
+        "note": "used correctly",
+        "tags": [
+          "café",
+          "Austria",
+          "food-and-drink",
+          "anki"
+        ]
+      },
+      {
+        "german": "der Kleine Braune",
+        "english": "small coffee with a little milk (Viennese café term)",
+        "note": "new this session — introduced by Maria, not yet used by Robert",
+        "tags": [
+          "café",
+          "Austria",
+          "food-and-drink",
+          "anki"
+        ]
+      },
+      {
+        "german": "der Gugelhupf",
+        "english": "a traditional ring-shaped cake common in Austria and Germany",
+        "note": "new this session — introduced by Maria",
+        "tags": [
+          "food-and-drink",
+          "Austria",
+          "anki"
+        ]
+      },
+      {
+        "german": "zahlen",
+        "english": "to pay",
+        "note": "needs practice — Robert attempted this concept but used wrong words",
+        "tags": [
+          "essential",
+          "anki",
+          "café"
+        ]
+      },
+      {
+        "german": "Ich überlege kurz",
+        "english": "I'll think about it for a moment / Let me consider briefly",
+        "note": "used correctly — natural and fluent phrasing",
+        "tags": [
+          "useful-phrases",
+          "anki"
+        ]
+      },
+      {
+        "german": "Wir sind bereit",
+        "english": "We are ready",
+        "note": "used correctly",
+        "tags": [
+          "useful-phrases"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert used 'Ich möchte gern' correctly — a polite and natural way to order in German.",
+      "He correctly ordered 'einen Verlängerten' using the right accusative masculine article, showing some feel for case endings.",
+      "He used 'Ich überlege kurz' naturally, which is an idiomatic and fluent phrase.",
+      "His sentence 'Wir sind bereit' was grammatically correct and appropriate to the situation.",
+      "He maintained the conversation flow and communicated his core needs successfully despite vocabulary gaps."
+    ],
+    "next_focus": "Focus on grammatical gender of common nouns (especially feminine nouns like 'die Milch', 'die Rechnung', 'die Karte') and the corresponding article changes in nominative and accusative cases — drill with café and restaurant vocabulary as the context."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

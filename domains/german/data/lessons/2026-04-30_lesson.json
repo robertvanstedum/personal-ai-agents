@@ -1,0 +1,21 @@
+{
+  "lesson_date": "2026-04-30",
+  "lesson_number": 37,
+  "persona": "Maria",
+  "persona_role": "Café Waitress",
+  "scenario": "cafe_bill",
+  "warm_up": "Review top error from last session: vocabulary.",
+  "focus": "Adjective endings after 'kein' in all three genders (kein kaltes Wasser, kein heißes Wasser, keine saubere Handtuch) — practice with hotel and everyday vocabulary using the nominative and accusative cases first.",
+  "speaking_prompt": "You've finished your coffee. Get Maria's attention and ask for the bill. She'll tell you the total — pay and leave a tip.",
+  "vocabulary_targets": [
+    "kaputt",
+    "Es gibt kein ...",
+    "kaltes Wasser / heißes Wasser",
+    "Ich warte dort.",
+    "Danke schön"
+  ],
+  "carry_forward_errors": [
+    "kein kaltes Wasser (was: kein kalt water) — session 2026-04-30",
+    "Danke schön (was: Danke schon) — session 2026-04-30"
+  ]
+}

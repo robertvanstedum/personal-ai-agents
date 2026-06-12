@@ -1,0 +1,35 @@
+---SESSION---
+Date: 2026-05-01
+Persona: Herr Fischer
+Scenario: directions
+Duration: 12
+Mode: voice
+
+Herr Fischer: Guten Morgen! Willkommen in der Lobby. Wie kann ich Ihnen heute behilflich sein?
+Robert: Ich möchte spazieren.
+Herr Fischer: Gerne, wohin möchten Sie denn spazieren gehen?
+Robert: Was gibt es hier Interessantes?
+Herr Fischer: Oh, das ist eine gute Frage. Hier in der Nähe gibt's wirklich viel Schönes. Der Naschmarkt ist sehr beliebt — da gibt's tolle Stände mit Essen und frischem Obst. Oder der Stephansdom, das ist nur ein paar Stationen mit der U-Bahn entfernt. Was können Sie mir empfehlen?
+Robert: Ich frage meine Frau.
+Herr Fischer: Selbstverständlich, nehmen Sie sich ruhig Zeit. Ich bin hier, wenn Sie weitere Fragen haben.
+Robert: Wir wollen nach Nishmarkt.
+Herr Fischer: Zum Naschmarkt? Sehr gute Wahl! Das ist ganz einfach mit der U-Bahn. Sie
+Robert: Danke.
+Herr Fischer: Gerne!
+Robert: Der Naschmarkt ist, ist zu Fuß lange von hier?
+Herr Fischer: Nein, zu Fuß wäre das schon ein bisschen weit — etwa 35 bis 40 Minuten. Mit der U-Bahn sind Sie aber ganz schnell dort. Möchten Sie wissen, welche Linie und wie viele Haltestellen es sind?
+Robert: Ja, ich, ich besser, ich besser von U-Bahn.
+Herr Fischer: Gut, dann nehmen Sie am besten die U4 Richtung Hütteldorf. Die nächste Station ist Kettenbrückengasse — das sind nur zwei Stationen, also
+Robert: Esper.
+Herr Fischer: Espert? Entschuldigung, ich habe das nicht ganz verstanden. Meinen Sie vielleicht Kettenbrückengasse?
+Robert: Nein, äh, ich hab, ich, ich habe, äh, gesagt, es ist besser von U-Bahn.
+Herr Fischer: Ach so, ja! Das habe ich verstanden — mit der U-Bahn ist es wirklich viel besser. Also, wie gesagt: Nehmen Sie die U4 Richtung Hütteldorf, steigen an der nächsten Station Kettenbrückengasse aus. Das sind nur zwei Haltestellen. Dann sind Sie direkt am Naschmarkt. Soll ich Ihnen den Weg von der Haltestelle zum Markt noch kurz erklären?
+Robert: Wie kauft man die Fahrkarte?
+Herr Fischer: Ganz einfach. Am besten kaufen Sie ein Einzelfahrschein am Automaten in der U-Bahn-Station. Drücken Sie einfach auf "Einzelfahrschein Wien", dann auf "Zahlung", und bezahlen Sie bar oder mit Karte. Der Automat hat auch eine deutsche und englische Spracheinstellung. Soll ich Ihnen noch sagen, wie man den Fahrschein entwertet?
+Robert: Nein, nein, danke. Wir gehen, wir gehen jetzt.
+Herr Fischer: Guten Appetit auf dem Naschmarkt! Und einen schönen Tag wünsche ich Ihnen beiden. Auf Wiedersehen!
+Robert: Also
+Herr Fischer: Ja? Möchten Sie noch etwas wissen, bevor Sie gehen?
+Robert: Nein, das ist, das ist alles. Vielen Dank. Bis später.
+Herr Fischer: Gerne geschehen! Bis später, und viel Spaß auf dem Naschmarkt! Auf Wiedersehen.
+---END---

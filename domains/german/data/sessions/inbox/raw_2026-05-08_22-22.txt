@@ -1,0 +1,21 @@
+---SESSION---
+Date: 2026-05-08
+Persona: Herr Fischer
+Scenario: Hotel receptionist near Ringstraße
+Duration: 14
+Mode: voiceHerr Fischer: Guten Tag und herzlich willkommen in unserem Hotel! Wie kann ich Ihnen behilflich sein? Möchten Sie einchecken oder haben Sie eine Frage zu den Zimmern, dem Frühstück oder den Annehmlichkeiten? Ich stehe Ihnen gerne zur Verfügung.
+Robert: Ich möchte einchecken.  Mein Name is Robert Van Stedum.
+Herr Fischer: Guten Tag, Herr van Stedum! Vielen Dank. Ich schaue Ihre Reservierung sofort nach. Haben Sie Ihren Reisepass oder Ausweis schon zur Hand? Dann können wir den Check-in gleich erledigen.
+Robert: Es gibt hier der Reisepass von mich und meiner Frau.
+Herr Fischer: Vielen Dank. Hier sind die Reisepässe für Sie und Ihre Frau – perfekt. Einen kleinen Moment bitte, ich trage die Daten ein. ... So, alles erledigt. Hier sind Ihre beiden Zimmerkarten für Zimmer 412 im vierten Stock. Möchten Sie noch den WLAN-Code oder Informationen zum Frühstück?
+Robert: Möchten wir zwei Zimmerkarten.
+Herr Fischer: Selbstverständlich! Hier sind zwei Zimmerkarten für Sie und Ihre Frau. Zimmer 412 im vierten Stock, Aufzug gleich links. Kann ich Ihnen sonst noch behilflich sein? Zum Beispiel mit dem WLAN-Code oder den Frühstückszeiten?
+Robert: Ja, Ich habe noch zwei Frage.  Esten, haben Sie eie Adapter für meinen Laptop.
+Herr Fischer: Gerne, Herr van Stedum. Erstens, ja, wir haben einen Adapter für Ihren Laptop. Ich lasse Ihnen gleich einen internationalen Adapter bringen. Und was ist Ihre zweite Frage? Ich helfe Ihnen sehr gerne weiter.
+Robert: Zweitens, es gibt Waßer in den Zimmer?
+Herr Fischer: Ja, selbstverständlich gibt es Wasser im Zimmer. In jedem Zimmer steht eine Flasche Mineralwasser für Sie bereit. Wenn Sie mehr brauchen, sagen Sie einfach Bescheid – wir bringen Ihnen gerne zusätzliche Flaschen aufs Zimmer. Haben Sie noch weitere Fragen?
+Robert: Ich möchte noch eine Flasche Wasser mit mir abnemhen.
+Herr Fischer: Gerne, Herr van Stedum. Ich lasse Ihnen noch eine Flasche Wasser bringen, damit Sie sie mitnehmen können. Einen kleinen Moment bitte – ich gebe es gleich an den Zimmerservice weiter. Sonst noch etwas?
+Robert: Alles gut.  Danke sehr.
+Herr Fischer: Sehr gerne, Herr van Stedum. Alles Gute für Ihren Aufenthalt! Falls Sie noch etwas brauchen, rufen Sie einfach an der Rezeption an. Wir sind 24 Stunden für Sie da. Einen schönen Tag noch!
+---END---

@@ -1,0 +1,51 @@
+---SESSION---
+Date: 2026-05-01
+Persona: Maria
+Scenario: cafe meal
+Duration: 14
+Mode: voice
+
+Maria: Guten Tag! Was darf ich Ihnen bringen?
+Robert: Wir möchten ein bisschen essen.
+Maria: Gerne! Möchten Sie etwas von der Tageskarte? Heute haben wir eine sehr gute Gulaschsuppe als Tagessuppe.
+Robert: Gulaschsuppe, ist wie Ungarn?
+Maria: Ja genau, die Gulaschsuppe kommt ursprünglich aus Ungarn. Sie ist schön würzig mit Paprika und Rindfleisch. Möchten Sie die als Vorspeise?
+Robert: Ich frage meine Frau.
+Maria: Gerne, lassen Sie sich ruhig Zeit. Ich komme gleich wieder zu Ihnen.
+Robert: Hallo, wir wollen zwei Suppe.
+Maria: Zwei Gulaschsuppen also — sehr gerne. Und was darf ich Ihnen als Hauptspeise bringen?
+Robert: Was bedeutet Hauptspeise?
+Maria: Hauptspeise ist das Hauptgericht, also der Hauptteil des Essens — zum Beispiel Schnitzel, Tafelspitz oder ein Steak. Nach der Suppe kommt normalerweise die Hauptspeise. Möchten Sie etwas davon sehen?
+Robert: Guck, gucken wir die Hauptspeise.
+Maria: Natürlich, hier ist die Tageskarte: - Wiener Schnitzel mit Kartoffelsalat - Tafelspitz mit Apfelkren - Gegrilltes Hähnchen mit Gemüse. Was darf ich Ihnen bringen?
+Robert: Ich möchte Tafelspitz mit, mit, äh, Apfelkren. Aber ich, ich denke, dass wir so nach Nichtmarkt gehen.
+Maria: Sehr gerne — ein Tafelspitz mit Apfelkren. Und was möchten Sie dazu trinken?
+Robert: Nein, ich, ich, jetzt, jetzt, äh, esse ich.
+Maria: Gut, dann bringe ich Ihnen zuerst die zwei Gulaschsuppen und danach den Tafelspitz mit Apfelkren. Guten Appetit!
+Robert: Zur Suppe. Zur Suppe. Ich, ich, wir, wir essen.
+Maria: Zwei Gulaschsuppen und ein Tafelspitz. Kommt sofort.
+Robert: Suppe und und nix, nix mehr.
+Maria: Verstanden. Nur die zwei Gulaschsuppen und der Tafelspitz — kein weiteres Hauptgericht mehr. Ich bringe Ihnen gleich die Suppe.
+Robert: Genau. Danke. Danke. Schön.
+Maria: Bitte sehr! Die Suppe kommt sofort.
+Robert: Dies, dies Suppe ist sehr lecker.
+Maria: Oh, das freut mich sehr! Vielen Dank. Dann wünsche ich weiterhin guten Appetit!
+Robert: Die Rechnung, bitte.
+Maria: Selbstverständlich. Ich bringe Ihnen sofort die Rechnung.
+Robert: Wie habe ich gesagt, die Suppe sehr lecker war. Und jetzt, wie gehen wir zu Nichtmarkt?
+Maria: Vielen Dank, das freut mich wirklich! Zum Naschmarkt ist es ganz einfach: Sie gehen einfach zu Fuß die Straße hinunter — es sind nur etwa zehn Minuten. Oder wollen Sie lieber mit der U-Bahn fahren?
+Robert: Ich frage meine Frau.
+Maria: Gerne, lassen Sie sich Zeit. Ich bin gleich wieder bei Ihnen mit der Rechnung.
+Robert: Wir wollen zu Fuß.
+Maria: Sehr gut. Dann gehen Sie einfach die Linke Wienzeile entlang, immer geradeaus Richtung Nas
+Robert: Spazieren.
+Maria: Ja, genau — Sie spazieren einfach die Straße entlang. In zehn Minuten sind Sie direkt am Naschmarkt. Hier ist Ihre Rechnung. Zahlen Sie bar oder mit Karte?
+Robert: Mit Karte.
+Maria: Perfekt. Ich hole gleich das Kartenlesegerät. Einen Moment bitte.
+Robert: Was gibt es interessant in Naschmarkt?
+Maria: Am Naschmarkt finden Sie alles: frisches Obst, Gemüse, Gewürze, Käse, Brot und viele kleine Imbissstände mit internationalem Essen. Es gibt auch viele Cafés und kleine Lokale. Sehr schön zum Bummeln und Probieren. Möchten Sie eine bestimmte Empfehlung für einen Stand?
+Robert: Meine Frau möchte einen Stand mit Wein, aber ich möchte ein mit Kaffee.
+Maria: Ganz einfach: Am Naschmarkt gibt es mehrere Stände mit österreichischem Wein — besonders die Stände weiter hinten Richtung Freihausviertel sind bekannt dafür. Und für guten Kaffee empfehle ich das Café am Naschmarkt oder den kleinen Stand gleich am Eingang, der sehr guten Espresso macht. Viel Spaß dort!
+Robert: Vielen Dank. Bis später.
+Maria: Gerne! Auf Wiedersehen und viel Spaß am Naschmarkt!
+---END---

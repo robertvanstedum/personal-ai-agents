@@ -1,0 +1,18 @@
+{
+  "lesson_date": "2026-05-21",
+  "lesson_number": 69,
+  "persona": "Dr. Huber",
+  "persona_role": "Museum Guide",
+  "scenario": "museum_exhibit",
+  "warm_up": "Review top error from last session: vocabulary.",
+  "focus": "Accusative case endings for articles and possessives with feminine and masculine nouns — specifically practicing 'meine Frau' (nominative) vs. 'für meine Frau' (accusative/dative) and 'einen / ein' in ordering contexts.",
+  "speaking_prompt": "You're standing in front of a famous painting at the Kunsthistorisches Museum. Dr. Huber approaches and offers to tell you about it. Ask follow-up questions — who painted it, when, and what it means.",
+  "vocabulary_targets": [
+    "Ich möchte",
+    "ein Stück Gugelhupf",
+    "Melange / Kleiner Brauner / Verlängerter",
+    "Wie sagt man … auf Deutsch?",
+    "Schwarztee nach englischer Art"
+  ],
+  "carry_forward_errors": []
+}

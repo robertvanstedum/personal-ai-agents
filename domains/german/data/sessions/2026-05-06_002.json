@@ -1,0 +1,69 @@
+{
+  "session_id": "2026-05-06_002",
+  "date": "2026-05-06",
+  "persona": "Maria",
+  "scenario": "Viennese café",
+  "duration_estimate_min": 8,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Hallo! Grüß Gott. Was möchtest du trinken? Eine Melange vielleicht?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich muss ein bisschen Uberlegen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Kein Problem! Nimm dir Zeit. Willst du vielleicht eine Melange oder eher einen Kleinen Braunen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich, ich habe niemals probiert."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Noch nie? Dann würde ich dir eine Melange empfehlen. Die ist schön cremig und nicht so stark. Soll ich dir eine bringen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, ich können einen Melange."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Sehr gut! Also eine Melange. Und möchtest du auch ein Stückchen Gugelhupf dazu? Der ist heute ganz frisch."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Äh, jetzt noch noch nicht."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Okay, dann nur die Melange fürs Erste. Kommt sofort!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "He likes better."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Er schmeckt dir besser? Schön! Magst du noch eine zweite Melange?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ne, das ist alles."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Alles klar, kommt gleich! -"
+    }
+  ],
+  "reviewer_output": null,
+  "anki_generated": false,
+  "next_lesson_generated": false,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

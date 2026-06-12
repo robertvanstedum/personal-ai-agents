@@ -1,0 +1,175 @@
+{
+  "session_id": "2026-05-21_001",
+  "date": "2026-05-21",
+  "persona": "Maria",
+  "scenario": "Viennese café",
+  "duration_estimate_min": 7,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Servus! Was darf’s denn sein? Einen Melange, einen Kleinen Braunen oder vielleicht einen Verlängerten?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte, ich möchte einen kleinen braunen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Einen Kleinen Braunen, sehr gerne! Kommt sofort. Möchtest du dazu vielleicht ein Stück Gugelhupf? Der ist heute ganz frisch."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Und mein Frau, ja, genau. Und mein Frau möchte einen Tee, bitte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ah, für deine Frau einen Tee, alles klar! Und welchen Tee darf’s denn sein? Wir haben Earl Grey, Kamille oder einen schönen frischen Pfefferminztee."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich frage, ich frage ihr, äh."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Kein Problem, ich bringe einfach einen Pfefferminztee für deine Frau, der ist sehr beliebt. Und für dich den Kleinen Braunen - kommt sofort"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Sie, sie, sie möchte ein Schwarztee. English Breakfast. Wie sagt man English Breakfast auf Deutsch?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Sie möchte einen Schwarztee, genau! Bei uns sagen wir einfach “English Breakfast” oder “Schwarztee nach englischer Art”. Kommt sofort."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Dankeschön."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Bitte sehr! Ich bringe euch die Getränke gleich."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully completed a basic café ordering scenario in Vienna, demonstrating solid foundational vocabulary and polite register. His main recurring issue was noun gender agreement, particularly with possessive articles for feminine nouns. Overall communication was effective and he showed good recovery strategies when uncertain.",
+    "errors": [
+      {
+        "type": "gender",
+        "original": "mein Frau",
+        "correction": "meine Frau",
+        "explanation": "'Frau' is feminine (die Frau), so the possessive article 'mein' must take the feminine nominative ending '-e', giving 'meine Frau'.",
+        "context": "Und mein Frau, ja, genau. Und mein Frau möchte einen Tee, bitte."
+      },
+      {
+        "type": "missing_article",
+        "original": "ein Schwarztee",
+        "correction": "einen Schwarztee",
+        "explanation": "'Schwarztee' is masculine (der Schwarztee), and as a direct object it requires the accusative masculine article 'einen', not the nominative 'ein'.",
+        "context": "Sie möchte ein Schwarztee."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Ich frage ihr",
+        "correction": "Ich frage sie",
+        "explanation": "'fragen' takes a direct object in the accusative case, not the dative; 'sie' (accusative) is correct instead of 'ihr' (dative).",
+        "context": "Ich frage, ich frage ihr, äh."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 1,
+      "vocabulary": 0,
+      "register": 0,
+      "accusative": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Ich möchte",
+        "english": "I would like",
+        "note": "used correctly",
+        "tags": [
+          "polite register",
+          "ordering",
+          "modal"
+        ]
+      },
+      {
+        "german": "ein Stück Gugelhupf",
+        "english": "a slice of Gugelhupf (ring cake)",
+        "note": "new this session — Viennese pastry vocabulary",
+        "tags": [
+          "anki",
+          "Austrian German",
+          "food"
+        ]
+      },
+      {
+        "german": "Melange / Kleiner Brauner / Verlängerter",
+        "english": "Viennese coffee with milk / small coffee with a little milk / espresso extended with water",
+        "note": "new this session — Viennese café menu vocabulary",
+        "tags": [
+          "anki",
+          "Austrian German",
+          "café"
+        ]
+      },
+      {
+        "german": "Wie sagt man … auf Deutsch?",
+        "english": "How do you say … in German?",
+        "note": "used correctly — excellent communication strategy for filling gaps",
+        "tags": [
+          "communication strategy",
+          "meta-language"
+        ]
+      },
+      {
+        "german": "Schwarztee nach englischer Art",
+        "english": "English Breakfast tea / black tea in the English style",
+        "note": "new this session",
+        "tags": [
+          "anki",
+          "café",
+          "drinks"
+        ]
+      },
+      {
+        "german": "Dankeschön",
+        "english": "Thank you very much",
+        "note": "used correctly",
+        "tags": [
+          "politeness",
+          "basics"
+        ]
+      }
+    ],
+    "strengths": [
+      "Used 'Ich möchte' correctly and naturally for polite ordering throughout the conversation.",
+      "Employed the useful meta-language phrase 'Wie sagt man … auf Deutsch?' to ask for vocabulary help — a strong real-world communication strategy.",
+      "Maintained a polite and appropriate register for a café setting throughout the session.",
+      "Successfully self-corrected mid-sentence (e.g., repeating 'ich möchte' to restart) rather than giving up."
+    ],
+    "next_focus": "Accusative case endings for articles and possessives with feminine and masculine nouns — specifically practicing 'meine Frau' (nominative) vs. 'für meine Frau' (accusative/dative) and 'einen / ein' in ordering contexts."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "scaffold_delivered": [
+    "Ich möchte lieber einen Tee.",
+    "Meine Frau hätte gerne den Apfelstrudel.",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_used": [
+    "Ich möchte lieber einen Tee."
+  ],
+  "scaffold_avoided": [
+    "Meine Frau hätte gerne den Apfelstrudel.",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_deployment_rate": "1/3 scaffold phrases used"
+}

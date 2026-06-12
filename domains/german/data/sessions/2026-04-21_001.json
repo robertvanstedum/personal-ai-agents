@@ -1,0 +1,68 @@
+{
+  "session_id": "2026-04-21_001",
+  "date": "2026-04-21",
+  "persona": "Herr Fischer",
+  "scenario": "hotel_checkin",
+  "duration_estimate_min": 10,
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Herr Fischer",
+      "text": "Guten Abend, willkommen im Hotel. Wie kann ich Ihnen helfen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Guten Abend. Ich möchte einchecken, bitte."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Natürlich. Ihr Name, bitte?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Van Stedum."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "This session was extremely brief, covering only the opening exchange of a hotel check-in scenario. Robert demonstrated basic polite phrasing and correct use of 'möchte' with an infinitive, but the transcript is too short to assess any meaningful grammar range. More extended practice is needed to evaluate Robert's true proficiency in this scenario.",
+    "errors": [],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 0,
+      "vocabulary": 0,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "einchecken",
+        "english": "to check in",
+        "note": "used correctly",
+        "tags": [
+          "hotel",
+          "travel",
+          "separable-verb"
+        ]
+      },
+      {
+        "german": "Ich möchte … bitte",
+        "english": "I would like … please",
+        "note": "used correctly — polite modal construction appropriate for the register",
+        "tags": [
+          "modal-verb",
+          "polite-register",
+          "hotel"
+        ]
+      }
+    ],
+    "strengths": [
+      "Correctly used the formal register throughout (no inappropriate 'du' forms).",
+      "Properly constructed the modal verb phrase 'Ich möchte einchecken' with the infinitive at the end.",
+      "Added 'bitte' naturally, matching the polite tone of the scenario."
+    ],
+    "next_focus": "Practice the full hotel check-in flow: providing personal details, asking about room type, and understanding questions about payment — focusing on accusative case with articles (e.g., 'einen Einzelzimmer' → 'ein Einzelzimmer')."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true
+}

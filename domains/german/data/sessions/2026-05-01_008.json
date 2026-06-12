@@ -1,0 +1,202 @@
+{
+  "session_id": "2026-05-01_008",
+  "date": "2026-05-01",
+  "persona": "Herr Fischer",
+  "scenario": "hotel check-in",
+  "duration_estimate_min": 8,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Herr Fischer",
+      "text": "Guten Tag! Herzlich willkommen in unserem Hotel. Wie kann ich Ihnen helfen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte, ich habe eine Reservierung."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Sehr gut. Auf welchen Namen ist die Reservierung bitte?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Auf den Namen Rob Van Stedum."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Einen Moment bitte. Ja, ich habe die Reservierung für Herrn van Stedum gefunden. Für wie viele Nächte haben Sie gebucht?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich danke, dass"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Bitte sehr. Für wie viele Nächte haben Sie bei uns gebucht?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Drei Tage."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Drei Nächte, sehr gut. Ihr Zimmer ist schon vorbereitet. Möchten Sie direkt einchecken?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Genau."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Bitte sehr. Hier ist Ihr Zimmerschlüssel. Zimmer vierundzwanzig im zweiten Stock. Brauchen Sie Hilfe mit dem Gepäck?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein, danke. Haben Sie WLAN in dem Zimmer?"
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Ja, selbstverständlich. Das WLAN-Passwort steht auf der Karte neben dem Telefon. Die Verbindung ist im ganzen Hotel kostenlos."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Okay, vielen Dank. Bis später."
+    },
+    {
+      "speaker": "Herr Fischer",
+      "text": "Gerne. Einen schönen Aufenthalt bei uns! Auf Wiedersehen."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully completed a basic hotel check-in scenario, demonstrating functional survival German with simple, effective phrases. His main weaknesses were an incomplete sentence at a key moment and using 'Tage' instead of 'Nächte' in a hotel context. Overall a promising session with room to build more complex sentence structures.",
+    "errors": [
+      {
+        "type": "vocabulary",
+        "original": "Drei Tage.",
+        "correction": "Drei Nächte.",
+        "explanation": "In hotel contexts, stays are counted in 'Nächte' (nights), not 'Tage' (days); Herr Fischer's follow-up prompt actually used 'Nächte' which Robert did not pick up on.",
+        "context": "Herr Fischer: Für wie viele Nächte haben Sie bei uns gebucht? Robert: Drei Tage."
+      },
+      {
+        "type": "word_order",
+        "original": "Ich möchte, ich habe eine Reservierung.",
+        "correction": "Ich habe eine Reservierung. / Ich möchte einchecken – ich habe eine Reservierung.",
+        "explanation": "The two clauses are not grammatically connected; 'ich möchte' needs an infinitive or a subordinate clause, and the sentence should be combined or restructured for coherence.",
+        "context": "Robert: Ich möchte, ich habe eine Reservierung."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Ich danke, dass",
+        "correction": "Entschuldigung. / Könnten Sie das bitte wiederholen?",
+        "explanation": "The utterance appears to be an abandoned or confused sentence; when needing clarification or a moment, a recovery phrase such as 'Entschuldigung' or 'Könnten Sie das wiederholen?' would be appropriate.",
+        "context": "Herr Fischer: Für wie viele Nächte haben Sie gebucht? Robert: Ich danke, dass"
+      },
+      {
+        "type": "register",
+        "original": "Okay, vielen Dank.",
+        "correction": "Sehr gut, vielen Dank. / Gut, vielen Dank.",
+        "explanation": "'Okay' is informal and English-derived; in a formal hotel setting with Sie-register, 'Sehr gut' or 'Gut' is more appropriate.",
+        "context": "Robert: Okay, vielen Dank. Bis später."
+      },
+      {
+        "type": "missing_article",
+        "original": "Haben Sie WLAN in dem Zimmer?",
+        "correction": "Haben Sie WLAN im Zimmer? / Gibt es WLAN auf dem Zimmer?",
+        "explanation": "'In dem' is grammatically correct but unnatural here; the contracted form 'im' is standard, and 'auf dem Zimmer' is actually the idiomatic hotel phrasing in German.",
+        "context": "Robert: Haben Sie WLAN in dem Zimmer?"
+      }
+    ],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 1,
+      "missing_article": 1,
+      "verb_conjugation": 0,
+      "vocabulary": 2,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Ich habe eine Reservierung.",
+        "english": "I have a reservation.",
+        "note": "used correctly — core hotel phrase, good recall",
+        "tags": [
+          "hotel",
+          "beginner",
+          "anki"
+        ]
+      },
+      {
+        "german": "Auf den Namen…",
+        "english": "Under the name…",
+        "note": "used correctly — natural and accurate response to 'Auf welchen Namen?'",
+        "tags": [
+          "hotel",
+          "formulaic",
+          "anki"
+        ]
+      },
+      {
+        "german": "die Nächte",
+        "english": "the nights (plural of die Nacht)",
+        "note": "needs practice — confused with 'Tage' in hotel context",
+        "tags": [
+          "hotel",
+          "nouns",
+          "anki"
+        ]
+      },
+      {
+        "german": "Genau.",
+        "english": "Exactly. / That's right.",
+        "note": "used correctly — natural affirmation in spoken German",
+        "tags": [
+          "conversational",
+          "filler"
+        ]
+      },
+      {
+        "german": "auf dem Zimmer",
+        "english": "in the room (hotel-specific idiom)",
+        "note": "new this session — idiomatic hotel phrasing, contrasts with general 'in dem Zimmer'",
+        "tags": [
+          "hotel",
+          "idiom",
+          "anki"
+        ]
+      },
+      {
+        "german": "Könnten Sie das bitte wiederholen?",
+        "english": "Could you please repeat that?",
+        "note": "new this session — essential recovery phrase for spoken practice",
+        "tags": [
+          "survival",
+          "anki",
+          "speaking-strategies"
+        ]
+      },
+      {
+        "german": "Einen schönen Aufenthalt!",
+        "english": "Enjoy your stay!",
+        "note": "new this session — passive exposure; useful to learn actively for hotel scenarios",
+        "tags": [
+          "hotel",
+          "formulaic",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Correctly used the formal Sie-register throughout the entire conversation without switching to du.",
+      "Accurately responded to 'Auf welchen Namen?' with the natural phrase 'Auf den Namen…', showing good formulaic recall.",
+      "Used 'Genau' as a natural spoken affirmation rather than a literal or over-translated response.",
+      "Maintained the conversation flow and reached a natural closing with 'Bis später' and 'vielen Dank', completing the scenario successfully."
+    ],
+    "next_focus": "Practice counting hotel stays using 'Nächte' and build sentence repair strategies — specifically the phrase 'Könnten Sie das bitte wiederholen?' and how to correctly connect 'ich möchte' with an infinitive (e.g., 'Ich möchte einchecken.')."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

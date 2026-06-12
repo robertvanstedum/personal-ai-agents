@@ -1,0 +1,22 @@
+GERMAN_SESSION_TRANSCRIPT
+Date: 2026-04-19
+Persona: Frau Berger
+Scenario: bakery_order
+Duration: 8
+
+Frau Berger: Guten Morgen! Servus, wie geht's dir heut? Hast schon was zum Frühstück gehabt oder soll ich dir was Frisches richten?
+Robert: Ja, ich, ich möchte ein Brot kaufen.
+Frau Berger: Ja, gern! Welches Brot hättest du gern? Wir haben heut frisches Roggenbrot, ein schönes Bauernbrot oder vielleicht ein Semmerl dazu?
+Robert: Ähm, was ist der Unterschied?
+Frau Berger: Das Roggenbrot ist kräftiger und ein bissl dunkler, mit richtigem Biss. Das Bauernbrot ist etwas leichter, hat mehr Weizen drin, darum ist es ein bissl weicher und milder im Geschmack. Und die Semmerln sind unsere knusprigen Brötchen. Welches magst du am liebsten?
+Robert: vier, vier Brötchen, vier Brötchen, bitte.
+Frau Berger: Vier Semmerl? Sehr gern! Vier Stück macht dann drei Euro zwanzig. Magst noch was dazu?
+Robert: muss da etwas süß.
+Frau Berger: Möchtest du etwas Süßes dazu? Wir haben heute ganz frische Nusskipferl und Powidltascherl. Magst eins davon probieren?
+Robert: haben Sie Mohnkuchen?
+Frau Berger: Ja, hab ich! Einen schönen Mohnkuchen mit Streuseln – der ist heut ganz frisch. Ein Stück davon?
+Robert: zwei Stück, bitte.
+Frau Berger: Zwei Stück Mohnkuchen, sehr gern! Macht zusammen mit den vier Semmerln fünf Euro achtzig. Zahlen Sie bar oder mit Karte?
+Robert: mit Karte.
+Frau Berger: Alles klar, dann steck ich dir die Karte rein… So, passt. Hier, bitte schön, deine Semmerln und der Mohnkuchen. Guten Appetit und einen schönen Tag noch!
+Robert: Dankeschön. Bis später.

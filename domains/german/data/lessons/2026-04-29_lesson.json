@@ -1,0 +1,20 @@
+{
+  "lesson_date": "2026-04-29",
+  "lesson_number": 36,
+  "persona": "Herr Fischer",
+  "persona_role": "Hotel Receptionist",
+  "scenario": "room_problem",
+  "warm_up": "Review top error from last session: vocabulary.",
+  "focus": "Practice building complete complaint sentences using the pattern 'Der/Die/Das [noun] funktioniert nicht' and 'Ich habe ein Problem mit [noun]', with a focus on masculine/neuter article gender (der vs. das) for common hotel vocabulary.",
+  "speaking_prompt": "Your room has a problem — the shower is cold or the window won't close. Go to the front desk and explain the issue. Ask if they can fix it or move you to another room.",
+  "vocabulary_targets": [
+    "Das Wasser ist kalt.",
+    "noch ein Problem",
+    "der Fernseher",
+    "funktioniert nicht",
+    "ein anderes Zimmer"
+  ],
+  "carry_forward_errors": [
+    "Nein danke, ich brauche keine Hilfe. / Keine Hilfe, danke. (was: Hilfe nicht.) — session 2026-04-29"
+  ]
+}

@@ -1,0 +1,249 @@
+{
+  "session_id": "2026-05-06_004",
+  "date": "2026-05-06",
+  "persona": "Maria",
+  "scenario": "Viennese café",
+  "duration_estimate_min": 13,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Hallo! Grüß Gott. Was möchtest du trinken?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wir möchten etwas bestellen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Klar! Was darf ich euch bringen? Eine Melange vielleicht?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Meine Frau möchte einen Melange."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Eine Melange für deine Frau, sehr gerne! Und für dich?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ein Moment bitte, ich muss überlegen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Kein Problem, lass dir Zeit. Ich komm gleich nochmal."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Hallo. Ich möchte jetzt eine kleine Black Browner."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Du meinst einen Kleinen Braunen? Sehr gerne, kommt sofort!"
+    },
+    {
+      "speaker": "In Maria",
+      "text": "Und für dich jetzt auch eine Melange oder den Kleinen Braunen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Entschuldigung."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Kein Problem! Sag einfach, was du möchtest. Ich hab Zeit."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wir, wir möchten etwas essen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Alles klar! Wir haben heute frischen Gugelhupf. Soll ich euch ein Stück bringen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Zwei Stücken, bitte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Zwei Stücke Gugelhupf, sehr gerne! Kommt sofort."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Die Gugelhupf schmeckt, schmecken gut."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Freut mich, dass euch der Gugelhupf schmeckt! Möchtet ihr noch was oder soll ich die Rechnung bringen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Könnte ich die Rechnung haben?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ja, natürlich. Macht zusammen dreizehn Euro sechzig."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Hier ist meine Karte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Danke! Hier, bitte. Und vielen Dank, kommt gerne wieder!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Sicherlich. Tschüss."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Tschüss! Macht’s gut! -"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert managed a complete café interaction in German, successfully ordering drinks and food and handling the bill. His main challenges were grammatical gender (article agreement) and the plural form of 'Stücke', but he communicated effectively throughout and used polite register consistently.",
+    "errors": [
+      {
+        "type": "gender",
+        "original": "einen Melange",
+        "correction": "eine Melange",
+        "explanation": "'Melange' is feminine (die Melange), so the accusative article is 'eine', not 'einen'.",
+        "context": "Meine Frau möchte einen Melange."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Black Browner",
+        "correction": "Kleinen Braunen",
+        "explanation": "The Viennese coffee drink is called 'Kleiner Brauner' (small brown coffee); 'Black Browner' is not a recognised term.",
+        "context": "Ich möchte jetzt eine kleine Black Browner."
+      },
+      {
+        "type": "gender",
+        "original": "eine kleine Black Browner",
+        "correction": "einen Kleinen Braunen",
+        "explanation": "'Kleiner Brauner' is masculine (der Kleine Braune), requiring the accusative 'einen', not 'eine'.",
+        "context": "Ich möchte jetzt eine kleine Black Browner."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Zwei Stücken",
+        "correction": "Zwei Stücke",
+        "explanation": "The plural of 'Stück' is 'Stücke', not 'Stücken'; 'Stücken' is a dative plural form and incorrect here.",
+        "context": "Zwei Stücken, bitte."
+      },
+      {
+        "type": "gender",
+        "original": "Die Gugelhupf schmeckt",
+        "correction": "Der Gugelhupf schmeckt",
+        "explanation": "'Gugelhupf' is masculine (der Gugelhupf), so the nominative article is 'der', not 'die'.",
+        "context": "Die Gugelhupf schmeckt, schmecken gut."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "schmeckt, schmecken gut",
+        "correction": "schmeckt gut",
+        "explanation": "Since 'der Gugelhupf' is singular, the verb should be 'schmeckt' (third person singular); Robert self-corrected to 'schmecken' (plural), which does not agree with the singular subject.",
+        "context": "Die Gugelhupf schmeckt, schmecken gut."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 3,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 1,
+      "vocabulary": 2,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Melange",
+        "english": "Viennese coffee with steamed milk (similar to a cappuccino)",
+        "note": "used in context; article needs practice (die Melange)",
+        "tags": [
+          "café",
+          "Vienna",
+          "food-and-drink"
+        ]
+      },
+      {
+        "german": "Kleiner Brauner",
+        "english": "small Viennese black coffee with a dash of cream",
+        "note": "new this session; corrected from 'Black Browner'",
+        "tags": [
+          "café",
+          "Vienna",
+          "food-and-drink",
+          "anki"
+        ]
+      },
+      {
+        "german": "Gugelhupf",
+        "english": "Bundt cake / ring cake, a classic Viennese pastry",
+        "note": "new this session; gender (der) needs practice",
+        "tags": [
+          "café",
+          "Vienna",
+          "food-and-drink",
+          "anki"
+        ]
+      },
+      {
+        "german": "die Rechnung",
+        "english": "the bill / check",
+        "note": "used correctly in a polite request",
+        "tags": [
+          "café",
+          "restaurant",
+          "anki"
+        ]
+      },
+      {
+        "german": "Könnte ich … haben?",
+        "english": "Could I have …?",
+        "note": "used correctly; excellent polite register",
+        "tags": [
+          "polite-requests",
+          "anki"
+        ]
+      },
+      {
+        "german": "Kein Problem, lass dir Zeit",
+        "english": "No problem, take your time",
+        "note": "heard from Maria; useful café phrase to learn",
+        "tags": [
+          "phrases",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Successfully completed a full real-world café interaction from greeting to paying the bill.",
+      "Used polite and appropriate register throughout, including 'Entschuldigung', 'Bitte', and the Konjunktiv II form 'Könnte ich … haben?'.",
+      "Correctly used 'möchten' for wishes and orders in multiple turns.",
+      "Self-corrected mid-sentence (schmeckt → schmecken), showing active monitoring, even though the final choice was also incorrect."
+    ],
+    "next_focus": "Grammatical gender of common café and food nouns (der Gugelhupf, die Melange, der Kleine Braune) with a focus on accusative article agreement (ein/eine/einen) — practice by drilling 'Ich möchte einen/eine/ein …' with a set of masculine, feminine, and neuter food and drink items."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "scaffold_delivered": [
+    "Ich komme aus Chicago — kennen Sie die Stadt?",
+    "Ich möchte lieber etwas sehen, was Touristen nicht kennen.",
+    "Entschuldigung — ich verstehe, aber ich suche die Antwort auf Deutsch."
+  ],
+  "scaffold_used": [
+    "Ich möchte lieber etwas sehen, was Touristen nicht kennen.",
+    "Entschuldigung — ich verstehe, aber ich suche die Antwort auf Deutsch."
+  ],
+  "scaffold_avoided": [
+    "Ich komme aus Chicago — kennen Sie die Stadt?"
+  ],
+  "scaffold_deployment_rate": "2/3 scaffold phrases used"
+}

@@ -1,0 +1,20 @@
+{
+  "lesson_date": "2026-05-01",
+  "lesson_number": 49,
+  "persona": "Herr Fischer",
+  "persona_role": "Hotel Receptionist",
+  "scenario": "hotel_checkin",
+  "warm_up": "Review top error from last session: vocabulary.",
+  "focus": "Practice the V2 (verb-second) word order rule in main clauses, especially after fronted adverbs like 'sicherlich', 'vielleicht', or 'dann', combined with accusative adjective endings (e.g. 'den ägyptischen Teil').",
+  "speaking_prompt": "You arrive at your hotel near the Ringstraße after a long flight. Herr Fischer greets you at the front desk. Check in, ask about the WiFi, and confirm your checkout date.",
+  "vocabulary_targets": [
+    "zur Verfügung stehen",
+    "der Rundgang",
+    "der Hauptkorridor",
+    "empfehlen",
+    "der ägyptische Teil"
+  ],
+  "carry_forward_errors": [
+    "wir schauen uns auch das Museum an / wir gehen auch durch das Museum (was: wir spazieren auch durch das Museum) — session 2026-05-01"
+  ]
+}

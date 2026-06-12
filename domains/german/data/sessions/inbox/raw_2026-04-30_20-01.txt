@@ -1,0 +1,33 @@
+---SESSION---
+Date: 2026-04-30
+Persona: Maria
+Scenario: cafe_bill
+Duration: 10
+Mode: voice
+
+Maria: Guten Tag! Was darf's denn sein?
+Robert: Mochen Kaffee.
+Maria: Ein Kaffee? Gerne. Möchtest du vielleicht eine Melange oder einen Verlängerten?
+Robert: Ein Moment bitte. Meine Frau möchte
+Maria: Gerne, lass dir Zeit. Deine Frau
+Robert: Melange.
+Maria: Eine Melange für deine Frau und was für dich?
+Robert: Ich trinke gern eine kleine, kleiner Browner.
+Maria: Kleiner Brauner kommt sofort!
+Robert: Hallo?
+Maria: Ja? Brauchst du noch etwas?
+Robert: Wir brauchen der Rechnung.
+Maria: Die Rechnung? Kommt sofort. Macht zusammen zwölf Euro sechzig.
+Robert: Zwölf Euro sechzig. Die mit Karte?
+Maria: Ja klar, Karte geht. Ich bring dir das Gerät.
+Robert: Here's my card.
+Maria: Danke. So, das hat geklappt. Hier ist deine Karte wieder.
+Robert: Vielen Dank.
+Maria: Gerne! Du, wenn du mir noch zwei Euro Trinkgeld gibst, das wär super lieb.
+Robert: Äh, wir, wir, wir kommen morgens.
+Maria: Morgen? Kommt ihr morgen früh wieder? Das freut mich!
+Robert: Bis dann.
+Maria: Bis morgen! Tschüss, und einen schönen Abend euch beiden!
+Robert: Für dich auch.
+Maria: Danke dir! Auf Wiedersehen!
+---END---

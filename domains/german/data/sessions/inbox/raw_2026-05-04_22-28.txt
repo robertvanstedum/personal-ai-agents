@@ -1,0 +1,16 @@
+—SESSION— Date: 2026-05-04 Persona: Maria Scenario: Cafe Order Duration: 12 Mode: voice
+Maria: Servus! Schön, dass du da bist. Was darf’s denn sein?
+Robert: Wir möchten ein, wir möchten Kaffee bestellen.
+Maria: Gerne! Was möchtet ihr denn für einen Kaffee? Eine Melange, einen Kleinen Braunen oder vielleicht einen Verlängerten?
+Robert: Was ist ein Melange?
+Maria: Ein Melange ist unser Wiener Klassiker: Kaffee mit viel aufgeschäumter Milch, fast wie ein Cappuccino, aber etwas milder. Sehr beliebt hier. Willst du den probieren?
+Robert: Meine Frau möchte ein, ein Melange.
+Maria: Gute Wahl für deine Frau! Eine Melange kommt sofort. Und für dich? Was möchtest du trinken?
+Robert: Ich bestelle ein, ein kleiner Brauner.
+Maria: Sehr gut, ein kleiner Brauner für dich und eine Melange für deine Frau. Kommt gleich. Und dazu vielleicht einen Gugelhupf oder einen Apfelstrudel?
+Robert: Ich möchte sicherlich ein, einen Apfel, Apfelstrudel.
+Maria: Sehr gerne, einen Apfelstrudel dazu. Kommt sofort. Bitte schön, eure Getränke und der Strudel. Guten Appetit!
+Robert: Aber meine Frau hat Nick bestellen.
+Maria: Deine Frau hat noch nichts bestellt? Entschuldigung, das hab ich jetzt überhört. Was möchtest du denn, meine Liebe?
+Robert: Er, er möchte ein Apfelstrudel auch.
+Maria: Alles klar, dann zwei Apfelstrudel und eine Melange und ein kleiner Brauner. Kommt sofort! —END—

@@ -1,0 +1,15 @@
+{
+  "lesson_date": "2026-05-03",
+  "lesson_number": 60,
+  "persona": "Herr Fischer",
+  "persona_role": "Hotel Receptionist",
+  "scenario": "hotel_checkin",
+  "warm_up": "Review top error from last session: vocabulary.",
+  "focus": "Practice expanding pharmacy dialogues: describing symptom duration and severity (e.g., 'Ich habe seit zwei Tagen starke Kopfschmerzen.') and responding to follow-up questions from the pharmacist.",
+  "speaking_prompt": "You arrive at your hotel near the Ringstraße after a long flight. Herr Fischer greets you at the front desk. Check in, ask about the WiFi, and confirm your checkout date.",
+  "vocabulary_targets": [
+    "Kopfschmerzen",
+    "etwas für"
+  ],
+  "carry_forward_errors": []
+}

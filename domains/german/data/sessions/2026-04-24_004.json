@@ -1,0 +1,28 @@
+{
+  "session_id": "2026-04-24_004",
+  "date": "2026-04-24",
+  "persona": "Stefan",
+  "scenario": "U-Bahn",
+  "duration_estimate_min": 12,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [],
+  "reviewer_output": {
+    "overall_summary": "Review parse failed — see reviewer_raw_output in session file.",
+    "errors": [],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 0,
+      "vocabulary": 0,
+      "register": 0
+    },
+    "vocabulary_highlights": [],
+    "strengths": [],
+    "next_focus": ""
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "reviewer_raw_output": "I need the actual transcript content to analyze. You've provided the persona (Stefan), scenario (U-Bahn), and date, but the transcript itself appears to be empty or wasn't included in your message.\n\nCould you paste the conversation transcript so I can analyze Robert's German and return the JSON feedback?"
+}

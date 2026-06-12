@@ -1,0 +1,33 @@
+---SESSION---
+Date: 2026-05-08
+Persona: Maria
+Scenario: Viennese café waitress
+Duration: 18
+Mode: voiceMaria: Grüß dich! Setz dich nur hin, bei uns ist’s heute wieder richtig voll. Was darf’s denn sein? Eine Melange, einen Verlängerten oder vielleicht einen Kleinen Braunen? Der Gugelhupf ist frisch aus dem Ofen – magst du was dazu?
+Robert: Grüß dich! Ich muß überlege, so ein moment bitte.
+Maria: Gerne, nimm dir ruhig einen Moment zum Überlegen. Ich komm gleich wieder vorbei. Möchtest du vielleicht schon einen Verlängerten oder eine Melange?
+Robert: Ja, genau.  Ich hätte gern einen Verlängerten.  Und Ich frage meine Frau.
+Maria: Gerne! Einen Verlängerten für dich – kommt sofort. Und was möchte deine Frau? Ich warte gerne einen kleinen Moment, während du sie fragst. Sag einfach Bescheid, wenn ihr entschieden habt!
+Robert: Sie möchte einen Melange.  Es ist unser ersten Kaffee in Wien.
+Maria: Gerne! Eine Melange für deine Frau und einen Verlängerten für dich – super Wahl. Und herzlich willkommen in Wien! Das ist also euer erster Kaffee bei uns – wie schön! Ich bring euch die Getränke gleich. Soll’s vielleicht noch was zum Essen dazu geben? Der Gugelhupf ist wirklich frisch heute.
+Robert: Erst die Kaffee
+Maria: Gerne! Zuerst die Kaffees – kommt sofort. Ein Verlängterter und eine Melange. Ich bin gleich wieder da!
+Robert: Hast du hier Früstuck?
+Maria: Gerne! Ja, wir haben Frühstück. Möchtest du die Karte sehen? Wir haben klassische Wiener Frühstücksvariationen – mit Semmeln, Schinken, Käse, Ei oder Müsli. Soll ich dir die Karte bringen?
+Robert: Die Karte bitte.
+Maria: Gerne! Hier ist die Frühstückskarte. Schau dir das in Ruhe an. Wir haben alles von klassischem Wiener Frühstück mit Ei und Schinken bis zum kleinen Müsli oder Croissant. Sag einfach Bescheid, was ihr nehmt – ich bin gleich wieder da!
+Robert: Meine Frau mag gern Ei, vielleicht ein Omelette
+Maria: Gerne! Deine Frau mag also Eier – sehr gut. Wir haben leckere Omeletts. Mit Schinken, Käse oder einfach mit frischen Kräutern? Ich empfehle das Kräuter-Omelett, das ist besonders gut heute. Was meint ihr?
+Robert: Kräuter is "sauerkraut" ?  oder?
+Maria: Nein, nein  Kräuter bedeutet frische Kräuter – also Petersilie, Schnittlauch, Basilikum und so. Sehr frisch und lecker im Omelett. Sauerkraut ist das eingelegte Sauerkraut – das ist etwas ganz anderes. Möchtest du das Kräuter-Omelett für deine Frau? Das ist wirklich gut.
+Robert: Ja, sie probiert Kräuter-Omelett.  Ich mag kein Ei, aber mag ich Schinken.
+Maria: Gerne! Deine Frau nimmt also das Kräuter-Omelett – gute Wahl. Und für dich etwas mit Schinken? Sehr gerne. Möchtest du zum Beispiel ein Schinken-Käse-Sandwich oder eine Schinken-Semmel? Sag mir einfach, was du möchtest, dann gebe ich alles gleich in die Küche!
+Robert: Ich nehme eine Schinken-Semmel.
+Maria: Gerne! Eine Schinken-Semmel für dich und das Kräuter-Omelett für deine Frau – kommt sofort. Ich geb’s gleich in die Küche. Möchtet ihr noch etwas dazu? Vielleicht einen frischen Orangensaft oder noch einen Kaffee später? Ich bin gleich wieder da!
+Robert: Der Frühstück was lecker.  Wir nehmen noch einen Kaffee.  Ein Verlängerten und eine Melange.
+Maria: Freut mich sehr, dass das Frühstück so lecker war!  Gerne – nochmal einen Verlängerten und eine Melange. Kommt sofort! Sonst noch etwas? Oder soll’s diesmal mit etwas Süßem sein? Der Gugelhupf ist noch da.
+Robert: Danke dir für das super Frühstück.  Wir nehmen jetzt die Rechtnung.
+Maria: Gerne! Freut mich, dass euch das Frühstück so gut geschmeckt hat  Ihr möchtet die Rechnung? Klar, kommt sofort. Einen kleinen Moment... Hier bitte zusammen – macht 38 Euro. Passt so oder möchtet ihr mit Karte zahlen?
+Robert: Ich zahle mit Karte.
+Maria: Gerne! Mit Karte – perfekt. Einen kleinen Moment bitte... So, das hat geklappt. Hier ist dein Beleg. Vielen Dank für euren Besuch! Es hat mich gefreut. Kommt gerne wieder, gell? Servus und einen schönen Tag noch! 
+---END---

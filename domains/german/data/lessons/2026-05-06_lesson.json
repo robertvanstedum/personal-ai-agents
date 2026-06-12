@@ -1,0 +1,21 @@
+{
+  "lesson_date": "2026-05-06",
+  "lesson_number": 64,
+  "persona": "Georg",
+  "persona_role": "Friendly Viennese local",
+  "scenario": "local_smalltalk",
+  "warm_up": "Review top error from last session: vocabulary.",
+  "focus": "Grammatical gender of common café and food nouns (der Gugelhupf, die Melange, der Kleine Braune) with a focus on accusative article agreement (ein/eine/einen) — practice by drilling 'Ich möchte einen/eine/ein …' with a set of masculine, feminine, and neuter food and drink items.",
+  "speaking_prompt": "You walk into a scene with Georg (Friendly Viennese local). Scenario: local smalltalk. Speak naturally.",
+  "vocabulary_targets": [
+    "Melange",
+    "Kleiner Brauner",
+    "Gugelhupf",
+    "die Rechnung",
+    "Könnte ich … haben?"
+  ],
+  "carry_forward_errors": [
+    "Kleinen Braunen (was: Black Browner) — session 2026-05-06",
+    "Zwei Stücke (was: Zwei Stücken) — session 2026-05-06"
+  ]
+}

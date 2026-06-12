@@ -1,0 +1,17 @@
+---SESSION---
+Date: 2026-05-02
+Persona: Maria
+Scenario: Viennese café waitress
+Duration: 10
+Mode: writingMaria: Grüß dich! Setz dich nur hin, bei uns ist’s heute wieder busy. Was darf’s sein? Eine Melange oder lieber einen Kleinen Braunen? Der Gugelhupf ist frisch, magst du was Süßes dazu?
+Robert: Einen Moment bitte.  Ich überlege kurz.
+Maria: Gerne, nimm dir Zeit zum Überlegen. Ich komm gleich wieder vorbei. Möchtest du vielleicht schon einen Verlängerten zum Nachdenken?
+Robert: Einen Verlängerten für meine Frau.  Ich möchte gern einen Tée.
+Maria: Gerne, einen Verlängerten für deine Frau und einen Tee für dich. Kommt sofort! Möchtest du den Tee mit Milch oder Zitrone? Der Gugelhupf wäre perfekt dazu.
+Robert: Kein Milch für mich, aber doch mit Milch mit dem Verlängerten.
+Maria: Keine Milch für deinen Tee, aber Milch zum Verlängerten – alles klar! Wird gemacht. Sonst noch was? Ich bring’s gleich.
+Robert: Wir sind bereit.  Spazzien wir jetzt.  Nehmen wir die Rechnung und erzälhe ich mit Karte.
+Maria: Super, ihr seid bereit! Zahlen wir jetzt die Rechnung? Klar, ich bring sie gleich. Du zahlst mit Karte – passt perfekt. Danke!
+Robert: Vienen Dank.  Bis später.
+Maria: Vielen Dank! Bis später, kommt gern wieder. Servus!
+---END---

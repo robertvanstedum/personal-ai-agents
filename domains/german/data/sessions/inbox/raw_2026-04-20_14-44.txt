@@ -1,0 +1,33 @@
+GERMAN_SESSION_TRANSCRIPT
+Date: 2026-04-20
+Persona: Frau Berger
+Scenario: bakery_order
+Duration: 10
+
+Frau Berger: Guten Morgen! Servus, kommst du wieder zu mir? Wie geht's dir heut? Möchtest du was Frisches zum Frühstück oder vielleicht was für unterwegs?
+Robert: Ich möchte
+Frau Berger: Ja, sag nur – was möchtest du denn heute haben? Ich hab ganz frische Kipferl und ein schönes Nussbrot da.
+Robert: Ich möchte, äh.
+Frau Berger: Kein Problem, lass dir ruhig Zeit. Was hättest du denn gern?
+Robert: Brot, ein Brötchen, oh. Zwei Brötchen, bitte.
+Frau Berger: Zwei Semmerln, sehr gern! Möchtest du vielleicht noch was Süßes dazu? Wir haben heute ganz frische Vanillekipferl.
+Robert: Heute, heute nicht, aber
+Frau Berger: Heute nicht, alles klar. Dann nur die zwei Semmerln. Macht einen Euro sechzig. Magst sie in einer Tüte oder gleich so?
+Robert: ein Brot.
+Frau Berger: Ein Brot dazu? Welches hättest du denn gern – ein ganzes Bauernbrot oder
+Robert: Ja, aber ich möchte ein, ein starke Brot, ein Brot, a sour, sour Brot.
+Frau Berger: Ah, du meinst ein Sauerteigbrot! Sehr gern – unser Roggensauerteigbrot ist…
+Robert: es gibt
+Frau Berger: Es gibt mehrere? Ja, wir haben zwei Sorten Sauerteigbrot – ein klassisches Roggenbrot und ein Mischbrot. Welches möchtest du?
+Robert: Was ist der Unterschied zwischen Roggenbrot und Mischbrot?
+Frau Berger: Roggenbrot ist fast nur aus Roggen, hat einen kräftigen, herben Geschmack. Mischbrot ist halb Roggen, halb Weizen – etwas milder und leichter. Welches magst du lieber?
+Robert: heute ich möchte gern Roggenbrot.
+Frau Berger: Sehr gern! Ein ganzes Roggenbrot oder soll ich dir ein halbes abschneiden?
+Robert: Danke, halbes ist besser. Halbes, danke.
+Frau Berger: Gut, ein halbes Roggenbrot und zwei Semmerln macht zusammen vier Euro dreißig. Zahlen Sie bar oder mit Karte?
+Robert: mit Karte.
+Frau Berger: Alles klar, Karte passt. Hier bitte schön, dein halbes Roggenbrot und die zwei Semmerln. Guten Appetit und einen schönen Tag noch!
+Robert: zwei. Guten Tag.
+Frau Berger: Gerne! Bis bald und guten Tag dir
+Robert: Tschüss.
+Frau Berger: Tschüss!

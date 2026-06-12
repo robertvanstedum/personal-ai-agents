@@ -1,0 +1,161 @@
+{
+  "session_id": "2026-04-26 Persona: Klaus Scenario: restaurant_reservation Duration: 8 Mode: voice_001",
+  "date": "2026-04-26",
+  "persona": "Klaus",
+  "scenario": "restaurant_reservation",
+  "duration_estimate_min": 8,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Klaus",
+      "text": "Guten Abend, hier spricht Klaus vom Restaurant Zum Goldenen Hirsch. Wie kann ich Ihnen helfen, der Herr?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte eine Reservierung machen."
+    },
+    {
+      "speaker": "Klaus",
+      "text": "Selbstverständlich, der Herr. Für wann und für wie viele Personen möchten Sie reservieren?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "für zwei Personen, meine Frau und ich."
+    },
+    {
+      "speaker": "Klaus",
+      "text": "Selbstverständlich, der Herr. Für zwei Personen. Und für wann genau?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "äh, acht Uhr. Acht Uhr, äh."
+    },
+    {
+      "speaker": "Klaus",
+      "text": "Entschuldigung, der Herr - Sie meinen wohl morgen um acht Uhr? Das ist kein Problem, ich habe einen sehr schönen Tisch für Sie um zwanzig Uhr frei. Darf ich den Namen notieren?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Robert van Sted."
+    },
+    {
+      "speaker": "Klaus",
+      "text": "Perfekt, Herr van Stedum. Ich habe Ihre Reservierung für morgen um zwanzig Uhr für zwei Personen notiert. Vielen Dank. Kann ich sonst noch etwas für Sie tun, der Herr?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein, das ist alles."
+    },
+    {
+      "speaker": "Klaus",
+      "text": "Sehr gut. Wir freuen uns auf Sie und Ihre Frau morgen Abend um zwanzig Uhr. Einen schönen Tag noch, der Herr. Auf Wiederhören."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke."
+    },
+    {
+      "speaker": "Klaus",
+      "text": "Bitte sehr, der Herr. Auf Wiederhören."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert completed a straightforward restaurant reservation in German, demonstrating functional communicative ability in a formal service interaction. His sentences were grammatically simple but largely correct; the main weakness is underdeveloped utterances — he relied on very short responses and hesitated when giving the time. Building longer, more complete sentences with date and time phrases would significantly improve his fluency in this scenario.",
+    "errors": [
+      {
+        "type": "missing_article",
+        "original": "für zwei Personen, meine Frau und ich",
+        "correction": "Für zwei Personen — meine Frau und ich.",
+        "explanation": "While not strictly wrong, the response is a fragment missing a finite verb; a complete sentence would be 'Ich möchte für zwei Personen reservieren — meine Frau und ich.' The lack of a full sentence structure is a recurring pattern worth addressing.",
+        "context": "für zwei Personen, meine Frau und ich."
+      },
+      {
+        "type": "vocabulary",
+        "original": "äh, acht Uhr. Acht Uhr, äh.",
+        "correction": "Morgen um acht Uhr abends, bitte. / Für morgen Abend um zwanzig Uhr.",
+        "explanation": "Robert provided only the bare time without specifying the date or using a complete phrase; in a formal telephone reservation, the expected register includes the date and a polite framing such as 'für morgen Abend um zwanzig Uhr'.",
+        "context": "äh, acht Uhr. Acht Uhr, äh."
+      },
+      {
+        "type": "register",
+        "original": "Nein, das ist alles.",
+        "correction": "Nein, danke, das wäre alles.",
+        "explanation": "In formal telephone German, 'das wäre alles' (subjunctive II) is the polished, expected phrasing rather than the more abrupt indicative 'das ist alles'.",
+        "context": "Nein, das ist alles."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 0,
+      "missing_article": 1,
+      "verb_conjugation": 0,
+      "vocabulary": 1,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "eine Reservierung machen",
+        "english": "to make a reservation",
+        "note": "used correctly",
+        "tags": [
+          "restaurant",
+          "phone",
+          "anki"
+        ]
+      },
+      {
+        "german": "das wäre alles",
+        "english": "that would be all",
+        "note": "needs practice — formal telephone closing phrase",
+        "tags": [
+          "register",
+          "telephone",
+          "anki"
+        ]
+      },
+      {
+        "german": "für morgen Abend um zwanzig Uhr",
+        "english": "for tomorrow evening at eight o'clock",
+        "note": "needs practice — complete date-time phrase for reservations",
+        "tags": [
+          "time",
+          "restaurant",
+          "anki"
+        ]
+      },
+      {
+        "german": "Auf Wiederhören",
+        "english": "goodbye (on the phone)",
+        "note": "not yet used by Robert — important telephone-specific farewell to learn",
+        "tags": [
+          "telephone",
+          "register",
+          "anki"
+        ]
+      },
+      {
+        "german": "selbstverständlich",
+        "english": "of course / certainly",
+        "note": "heard from Klaus — high-register affirmation worth adding to active vocabulary",
+        "tags": [
+          "register",
+          "formal",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Correctly opened with 'Ich möchte eine Reservierung machen' — a grammatically complete, appropriately formal sentence.",
+      "Used the correct preposition 'für' consistently with persons and time ('für zwei Personen').",
+      "Maintained formal register throughout without switching to informal 'du' forms.",
+      "Kept composure during the interaction and responded appropriately to Klaus's clarifying questions."
+    ],
+    "next_focus": "Practice giving complete date and time phrases in formal contexts — specifically the pattern 'für + [date] + um + [time] + Uhr' (e.g., 'für morgen Abend um zwanzig Uhr') — combined with polite subjunctive II closings like 'das wäre alles' and 'ich hätte gerne'."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

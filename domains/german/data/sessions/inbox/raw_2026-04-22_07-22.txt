@@ -1,0 +1,10 @@
+---SESSION---
+Date: [today's date YYYY-MM-DD]
+Persona: [Persona Name]
+Scenario: [scenario_label]
+Duration: [your estimate in minutes]
+
+[Persona Name]: [turn text]
+Robert: [turn text]
+[continue alternating turns...]
+---END---"

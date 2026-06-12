@@ -1,0 +1,151 @@
+{
+  "session_id": "2026-04-26 Persona: Klaus Scenario: restaurant_reservation Duration: 8 Mode: writing_003",
+  "date": "2026-04-26",
+  "persona": "Klaus",
+  "scenario": "restaurant_reservation",
+  "duration_estimate_min": 8,
+  "mode": "writing",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Klaus",
+      "text": "Guten Abend, Restaurant Wien. Klaus am Apparat. Wie kann ich Ihnen helfen? Robert: Ich möchte eine Reservation Klaus: Selbstverständlich, der Herr. Für wie viele Personen möchten Sie reservieren und für wann genau? Robert: Ich möchte für zwei Personen. Morgen abend sieben order halb acht. Klaus: Gerne, der Herr. Für zwei Personen morgen Abend - um sieben Uhr oder halb acht? Ich notiere das gerne für Sie. Um welche Zeit genau soll die Reservierung sein? Robert: Ich nahme Robert van Stedum. Klaus: Sehr gerne, Herr van Stedum. Ich reserviere einen Tisch für zwei Personen morgen Abend um 19 Uhr."
+    },
+    {
+      "speaker": "Vielen Dank für die Buchung. Brauchen Sie noch etwas Besonderes, zum Beispiel einen Fensterplatz oder eine bestimmte Weinauswahl? Robert",
+      "text": "Was bedeutet Weinauswahl? Klaus: Weinauswahl bedeutet die Auswahl unserer Weine, Herr van Stedum. Haben Sie einen bestimmten Wein im Sinn, oder darf ich Ihnen etwas empfehlen?"
+    },
+    {
+      "speaker": "Die Reservierung für morgen um 19 Uhr für zwei Personen ist notiert. Brauchen Sie noch etwas anderes? Robert",
+      "text": "Ich danke Ihnen für den Fensterplatz. Klaus: Sehr gerne, Herr van Stedum. Ich notiere den Tisch am Fenster für Sie - das passt hervorragend."
+    },
+    {
+      "speaker": "Kann ich sonst noch etwas für Sie tun? Robert",
+      "text": "Nein, Danke. Bis Morgen."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully completed a restaurant reservation in a formal register, demonstrating solid use of polite forms and key transactional phrases. However, several errors appeared in vocabulary choice, verb conjugation, and incomplete sentences that would cause confusion in a real interaction. The session shows a good functional base that needs refinement in precision and completeness.",
+    "errors": [
+      {
+        "type": "vocabulary",
+        "original": "Reservation",
+        "correction": "Reservierung",
+        "explanation": "The standard German word is 'Reservierung'; 'Reservation' is an Anglicism/Gallicism not commonly used in Austrian or German restaurant contexts, though it may appear in Swiss German.",
+        "context": "Ich möchte eine Reservation"
+      },
+      {
+        "type": "missing_article",
+        "original": "Ich möchte eine Reservation",
+        "correction": "Ich möchte eine Reservierung machen / vornehmen",
+        "explanation": "The sentence is grammatically incomplete without a verb; 'machen' or 'vornehmen' is needed to complete the thought.",
+        "context": "Ich möchte eine Reservation"
+      },
+      {
+        "type": "vocabulary",
+        "original": "order",
+        "correction": "oder",
+        "explanation": "Robert used the English word 'order' instead of the German conjunction 'oder' (or).",
+        "context": "Morgen abend sieben order halb acht"
+      },
+      {
+        "type": "word_order",
+        "original": "Morgen abend sieben order halb acht",
+        "correction": "Morgen Abend um sieben Uhr oder halb acht",
+        "explanation": "The preposition 'um' is required before clock times in German, and 'Abend' should be capitalised as part of the compound time expression.",
+        "context": "Morgen abend sieben order halb acht"
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Ich nahme",
+        "correction": "Mein Name ist",
+        "explanation": "'Nehmen' conjugates as 'ich nehme' not 'ich nahme' (which is simple past), but more importantly this phrasing is unnatural; the conventional phrase for giving one's name is 'Mein Name ist …'.",
+        "context": "Ich nahme Robert van Stedum"
+      },
+      {
+        "type": "register",
+        "original": "Ich danke Ihnen für den Fensterplatz",
+        "correction": "Könnten wir bitte einen Fensterplatz haben? / Ich hätte gerne einen Fensterplatz.",
+        "explanation": "Robert thanked Klaus for a window seat that had not yet been confirmed or requested; he skipped the actual request and jumped to the thanks, making the exchange confusing.",
+        "context": "Ich danke Ihnen für den Fensterplatz."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 1,
+      "missing_article": 1,
+      "verb_conjugation": 1,
+      "vocabulary": 2,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Reservierung vornehmen",
+        "english": "to make a reservation",
+        "note": "needs practice — Robert attempted this but used an incomplete form",
+        "tags": [
+          "restaurant",
+          "formal",
+          "anki"
+        ]
+      },
+      {
+        "german": "Fensterplatz",
+        "english": "window seat / table by the window",
+        "note": "understood correctly when offered by Klaus",
+        "tags": [
+          "restaurant",
+          "anki"
+        ]
+      },
+      {
+        "german": "Weinauswahl",
+        "english": "wine selection / choice of wines",
+        "note": "new this session — Robert correctly asked for clarification",
+        "tags": [
+          "restaurant",
+          "vocabulary"
+        ]
+      },
+      {
+        "german": "Mein Name ist …",
+        "english": "My name is …",
+        "note": "needs practice — Robert attempted 'Ich nahme' instead",
+        "tags": [
+          "basics",
+          "anki"
+        ]
+      },
+      {
+        "german": "um sieben Uhr / um halb acht",
+        "english": "at seven o'clock / at half past seven",
+        "note": "needs practice — the preposition 'um' before times was omitted",
+        "tags": [
+          "time",
+          "anki"
+        ]
+      },
+      {
+        "german": "Bis morgen",
+        "english": "See you tomorrow / Until tomorrow",
+        "note": "used correctly — good natural closing phrase",
+        "tags": [
+          "phrases"
+        ]
+      }
+    ],
+    "strengths": [
+      "Maintained formal 'Sie' register consistently throughout the entire conversation.",
+      "Understood and responded appropriately to Klaus's clarifying questions.",
+      "Correctly asked 'Was bedeutet Weinauswahl?' — a natural and useful clarification strategy.",
+      "Used a polite closing 'Bis Morgen' that fits the formal restaurant context.",
+      "Successfully communicated the core information (two people, tomorrow evening) despite imperfect phrasing."
+    ],
+    "next_focus": "Practise giving personal information in full sentences: 'Mein Name ist …', 'Ich möchte … machen', and time expressions with 'um' (e.g. 'um 19 Uhr', 'um halb acht') to avoid incomplete sentences in transactional conversations."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

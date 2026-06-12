@@ -1,0 +1,37 @@
+{
+  "session_id": "2026-05-01_001",
+  "date": "2026-05-01",
+  "persona": "Dr. Huber",
+  "scenario": "museum_navigation",
+  "duration_estimate_min": 5,
+  "mode": "writing",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Dr. Huber",
+      "text": "Guten Tag! Willkommen im Kunsthistorisches Museum. Wie kann ich Ihnen helfen? Sie sehen aus, als ob Sie sich ein wenig orientieren müssten. Möchten Sie die ägyptische Sammlung besuchen oder brauchen Sie vielleicht die Toiletten? Sagen Sie mir einfach, wonach Sie suchen - ich erkläre Ihnen den Weg gerne ganz genau."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Guten Tag! Es ist unsere erstmal hier in Museum. Was empfehle sie uns?"
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Guten Tag! Schön, dass Sie zum ersten Mal bei uns im Kunsthistorisches Museum sind. Ich empfehle Ihnen besonders die ägyptische Sammlung im Erdgeschoss - sie ist eine der beeindruckendsten in Europa. Von hier im Foyer gehen Sie einfach geradeaus durch den großen Saal, dann die Treppe hinunter ins Untergeschoss. Die Toiletten finden Sie übrigens gleich links neben dem Eingang zur ägyptischen Abteilung. Haben Sie die Wegbeschreibung gut verstanden, oder soll ich sie noch einmal wiederholen? Möchten Sie auch ein paar Highlights der Sammlung hören?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Wir kaufen Eintrittskarten und in Musuem wandern."
+    },
+    {
+      "speaker": "Dr. Huber",
+      "text": "Gerne! Die Eintrittskarten können Sie direkt hier am Schalter im Foyer kaufen. Danach können Sie ganz entspannt durch das Museum wandern. Wenn Sie zur ägyptischen Sammlung möchten, gehen Sie am besten vom Eingang aus links durch den Hauptsaal und nehmen die breite Treppe nach unten. Die Toiletten sind dann sofort rechts, bevor Sie in die Ausstellungsräume kommen. Haben Sie noch Fragen zu den Karten oder zum Weg? Ich helfe Ihnen sehr gerne weiter!"
+    }
+  ],
+  "reviewer_output": null,
+  "anki_generated": false,
+  "next_lesson_generated": false,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0
+}

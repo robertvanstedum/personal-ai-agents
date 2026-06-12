@@ -1,0 +1,130 @@
+{
+  "session_id": "2026-04-20_002",
+  "date": "2026-04-20",
+  "persona": "Frau Berger",
+  "scenario": "bakery_order",
+  "duration_estimate_min": null,
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Robert",
+      "text": "Guten Morgen! Ich hätte gerne zwei Kipferln, bitte."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Natürlich! Frisch gebacken. Sonst noch etwas?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, ich nehme auch der Brot, bitte. Das dunkle."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Sie meinen das Brot — sehr gerne! Das macht 3,40 Euro."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Hier ist fünf Euro. Äh... wie sagt man \"to go\" auf Deutsch?"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Man sagt \"zum Mitnehmen\". Einen Moment, ich pack das ein."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke schön. Das war sehr hilfreich!"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Bitte sehr! Und 1,60 Euro zurück. Einen schönen Tag noch!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke, Ihnen auch. Tschüss!"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Auf Wiederschauen!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert handled a real-world bakery transaction confidently and naturally, using polite register throughout. The session contained only one clear grammatical error — a gender mistake on 'Brot' — and Robert showed good initiative by asking a vocabulary question in context, which is excellent learning behaviour.",
+    "errors": [
+      {
+        "type": "gender",
+        "original": "der Brot",
+        "correction": "das Brot",
+        "explanation": "'Brot' is neuter (das), so the accusative article is 'das', not 'der'.",
+        "context": "Ja, ich nehme auch der Brot, bitte."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 0,
+      "vocabulary": 0,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Ich hätte gerne",
+        "english": "I would like",
+        "note": "used correctly — polite conditional, ideal for service interactions",
+        "tags": [
+          "politeness",
+          "conditional",
+          "anki"
+        ]
+      },
+      {
+        "german": "das Kipferl (pl. Kipferln)",
+        "english": "crescent roll / croissant (Austrian)",
+        "note": "used correctly — Austrian-specific term, shows regional awareness",
+        "tags": [
+          "Austrian",
+          "food",
+          "anki"
+        ]
+      },
+      {
+        "german": "zum Mitnehmen",
+        "english": "to go / to take away",
+        "note": "new this session — learned by asking in context, excellent strategy",
+        "tags": [
+          "phrases",
+          "food",
+          "anki"
+        ]
+      },
+      {
+        "german": "Das war sehr hilfreich",
+        "english": "That was very helpful",
+        "note": "used correctly — natural and appropriate closing remark",
+        "tags": [
+          "social phrases"
+        ]
+      },
+      {
+        "german": "Auf Wiederschauen",
+        "english": "Goodbye (lit. 'until we see each other again')",
+        "note": "new this session — Austrian/Southern German alternative to 'Auf Wiedersehen'",
+        "tags": [
+          "Austrian",
+          "farewells",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Used the polite conditional 'Ich hätte gerne' correctly instead of the blunter 'Ich will'",
+      "Maintained formal Sie-register consistently throughout the interaction",
+      "Proactively asked a vocabulary question in German ('Wie sagt man...'), demonstrating good learner initiative",
+      "Handled numbers and the payment exchange naturally without hesitation",
+      "Used 'Ihnen auch' correctly as the formal response to a farewell wish"
+    ],
+    "next_focus": "Practice noun genders for common food and everyday items (das Brot, das Brötchen, die Semmel, der Kaffee), using articles in both nominative and accusative cases to build automaticity."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true
+}

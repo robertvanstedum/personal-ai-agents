@@ -1,0 +1,175 @@
+{
+  "session_id": "2026-04-19_001",
+  "date": "2026-04-19",
+  "persona": "Frau Berger",
+  "scenario": "bakery_order",
+  "duration_estimate_min": 8,
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Frau Berger",
+      "text": "Guten Morgen! Servus, wie geht's dir heut? Hast schon was zum Frühstück gehabt oder soll ich dir was Frisches richten?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, ich, ich möchte ein Brot kaufen."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Ja, gern! Welches Brot hättest du gern? Wir haben heut frisches Roggenbrot, ein schönes Bauernbrot oder vielleicht ein Semmerl dazu?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ähm, was ist der Unterschied?"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Das Roggenbrot ist kräftiger und ein bissl dunkler, mit richtigem Biss. Das Bauernbrot ist etwas leichter, hat mehr Weizen drin, darum ist es ein bissl weicher und milder im Geschmack. Und die Semmerln sind unsere knusprigen Brötchen. Welches magst du am liebsten?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "vier, vier Brötchen, vier Brötchen, bitte."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Vier Semmerl? Sehr gern! Vier Stück macht dann drei Euro zwanzig. Magst noch was dazu?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "muss da etwas süß."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Möchtest du etwas Süßes dazu? Wir haben heute ganz frische Nusskipferl und Powidltascherl. Magst eins davon probieren?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "haben Sie Mohnkuchen?"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Ja, hab ich! Einen schönen Mohnkuchen mit Streuseln – der ist heut ganz frisch. Ein Stück davon?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "zwei Stück, bitte."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Zwei Stück Mohnkuchen, sehr gern! Macht zusammen mit den vier Semmerln fünf Euro achtzig. Zahlen Sie bar oder mit Karte?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "mit Karte."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Alles klar, dann steck ich dir die Karte rein… So, passt. Hier, bitte schön, deine Semmerln und der Mohnkuchen. Guten Appetit und einen schönen Tag noch!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Dankeschön. Bis später."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully completed a bakery transaction in German, demonstrating basic purchasing vocabulary and polite register. However, his sentences were often incomplete or grammatically fragmented, particularly when expressing desires or needs. With more practice on sentence structure and article usage, he will communicate much more fluently.",
+    "errors": [
+      {
+        "type": "vocabulary",
+        "original": "muss da etwas süß",
+        "correction": "Ich möchte etwas Süßes.",
+        "explanation": "The sentence is incomplete and grammatically broken; 'muss' (must) is the wrong verb here, and 'süß' needs to be nominalized as 'Süßes' when used as a noun phrase after 'etwas'.",
+        "context": "Robert: muss da etwas süß."
+      },
+      {
+        "type": "missing_article",
+        "original": "muss da etwas süß",
+        "correction": "Ich möchte etwas Süßes.",
+        "explanation": "There is no subject pronoun ('Ich') and no proper sentence structure; a subject is required in German declarative sentences.",
+        "context": "Robert: muss da etwas süß."
+      },
+      {
+        "type": "register",
+        "original": "haben Sie Mohnkuchen?",
+        "correction": "Haben Sie Mohnkuchen? (correct, but inconsistent with prior informal 'du' register used throughout)",
+        "explanation": "Robert switched to formal 'Sie' mid-conversation after Frau Berger had been using informal 'du' throughout; while 'Sie' is not wrong, the register shift is inconsistent and slightly unnatural in this informal Bavarian/Austrian bakery context.",
+        "context": "Robert: haben Sie Mohnkuchen?"
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "haben Sie Mohnkuchen?",
+        "correction": "Hast du Mohnkuchen? (if staying in informal register)",
+        "explanation": "The verb 'haben' should be conjugated as 'hast' with 'du' to match the informal register established by Frau Berger.",
+        "context": "Robert: haben Sie Mohnkuchen?"
+      }
+    ],
+    "error_type_counts": {
+      "gender": 0,
+      "word_order": 0,
+      "missing_article": 1,
+      "verb_conjugation": 1,
+      "vocabulary": 1,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Brötchen / Semmerl",
+        "english": "bread roll",
+        "note": "Robert used 'Brötchen' correctly; 'Semmerl' is the Austrian/Bavarian regional term introduced by Frau Berger — good exposure",
+        "tags": [
+          "regional",
+          "food",
+          "anki"
+        ]
+      },
+      {
+        "german": "Mohnkuchen",
+        "english": "poppy seed cake",
+        "note": "used correctly and confidently — good specific vocabulary",
+        "tags": [
+          "food",
+          "bakery",
+          "anki"
+        ]
+      },
+      {
+        "german": "etwas Süßes",
+        "english": "something sweet",
+        "note": "needs practice — Robert attempted this but did not form it correctly",
+        "tags": [
+          "adjective-noun",
+          "anki",
+          "needs practice"
+        ]
+      },
+      {
+        "german": "Dankeschön",
+        "english": "thank you very much",
+        "note": "used correctly and naturally",
+        "tags": [
+          "politeness",
+          "anki"
+        ]
+      },
+      {
+        "german": "Bis später",
+        "english": "see you later",
+        "note": "used correctly as a natural farewell",
+        "tags": [
+          "farewell",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Robert successfully navigated a full transactional conversation from greeting to payment without breaking down",
+      "He used 'möchte' correctly to express a polite purchase request ('ich möchte ein Brot kaufen')",
+      "He asked a clarifying question naturally ('Was ist der Unterschied?') showing communicative confidence",
+      "He specified quantities clearly and correctly ('vier Brötchen, bitte' and 'zwei Stück, bitte')",
+      "He responded appropriately to payment questions with a short, correct answer ('mit Karte')"
+    ],
+    "next_focus": "Practice forming complete sentences with 'etwas + adjective used as noun' (e.g., 'etwas Süßes', 'etwas Frisches', 'etwas Kaltes') and always including a subject pronoun — drill the pattern 'Ich möchte etwas [Adjektiv]es' until it becomes automatic."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true
+}

@@ -1,0 +1,19 @@
+---SESSION---
+Date: 2026-05-02
+Persona: Maria
+Scenario: Viennese café waitress
+Duration: 9
+Mode: voiceMaria: Grüß dich! Setz dich nur hin, bei uns ist’s heute wieder voll. Was darf’s sein? Eine Melange, einen Verlängerten oder einen Kleinen Braunen? Der Gugelhupf ist frisch – magst du was dazu?
+Robert: Einen Moment bitte.  Ich überlegen Kurtz.
+Maria: Gerne, nimm dir ruhig einen Moment zum Überlegen. Ich komm gleich wieder vorbei. Möchtest du vielleicht schon einen Verlängerten zum Nachdenken?
+Robert: Stimmt.  Wir möchten zwei Verlängerten.
+Maria: Gerne! Zwei Verlängerte kommen sofort. Sonst noch was? Der Gugelhupf wäre perfekt dazu. Ich bin gleich wieder da!
+Robert: Wir möchten gerne bestellen.
+Maria: Gerne, was möchtet ihr denn? Die Getränke kommen gleich. Noch was zum Essen? Der Apfelstrudel ist heute besonders gut.
+Robert: Wir hätten gern auch zwei Apfelstrudel.
+Maria: Gerne! Zwei Apfelstrudel dazu – super Wahl. Kommt alles gleich zusammen. Ich bring’s rüber!
+Robert: Könnte ich bitte die Rechtnung haben?
+Maria: Gerne, die Rechnung kommt sofort. Zusammen oder getrennt? Hier bitte – macht zusammen 42 Euro. Passt so oder mit Karte? Danke schön!
+Robert: Es gibt hier meine Karte.
+Maria: Hier ist meine Karte – danke! Die funktioniert, hier dein Beleg. War schön, euch zu haben – kommt bald wieder, gell? Servus!
+---END---

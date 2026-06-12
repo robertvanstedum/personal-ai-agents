@@ -1,0 +1,19 @@
+{
+  "lesson_date": "2026-04-25",
+  "lesson_number": 23,
+  "persona": "Klaus",
+  "persona_role": "Restaurant Waiter (Upscale)",
+  "scenario": "restaurant_reservation",
+  "warm_up": "Review top error from last session: vocabulary.",
+  "focus": "Practice temporal duration phrases using 'seit' + dative (e.g., seit einem Tag, seit zwei Wochen) to accurately describe how long symptoms have been present.",
+  "speaking_prompt": "Call the restaurant to book a table for two for tomorrow evening at 7pm. Klaus answers. Confirm the reservation and ask if they need anything from you.",
+  "vocabulary_targets": [
+    "Kopfschmerzen",
+    "rezeptfrei",
+    "Gute Besserung",
+    "seit einem Tag"
+  ],
+  "carry_forward_errors": [
+    "Seit einem Tag / Einen Tag lang (was: Ein Tag) — session 2026-04-25"
+  ]
+}
