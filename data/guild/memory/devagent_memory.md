@@ -51,3 +51,4 @@ Last updated: 2026-06-09 | Hard cap: 8,000 chars
 2026-06-12 15:24 UTC: [doc_created] HANDOFF_PROCESS_2026-06-12.md — Outlines 7-step handoff loop plus file lifecycle rules for mini-moi agents.
 2026-06-12 16:09 UTC: [doc_created] HANDOFF_PROCESS_2026-06-12.md — Defines 7-step handoff process from design to done for mini-moi agents.
 2026-06-12 17:53 UTC: [doc_created] spec_guild_nav_restructure_2026-06-12.md — Spec for restructuring Guild navigation to fix stacked nav rows and combined page renders.
+2026-06-12 18:25 UTC: [doc_created] spec_housekeeping_2026-06-12.md — Spec for repo sync audit and roadmap file location housekeeping tasks.
