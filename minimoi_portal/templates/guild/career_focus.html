@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Career Focus — Guild</title>
+  <title>Career Focus — Positions — Guild</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
@@ -40,80 +40,148 @@
       font-family: 'DM Mono', monospace; font-size: 10px;
       text-transform: uppercase; letter-spacing: 0.08em;
       color: rgba(198,138,94,0.7); text-decoration: none;
-      padding: 0 14px; height: 36px;
+      padding: 0 12px; height: 36px;
       display: flex; align-items: center;
       border-bottom: 2px solid transparent;
     }
     .subnav-link:hover { color: #C68A5E; }
     .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; }
+    .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
 
     /* ── Page header ── */
-    .page-header { padding: 28px 32px 0; display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
-    .page-title { font-family: 'Playfair Display', serif; font-size: 1.7rem; font-weight: 400; }
+    .page-header {
+      padding: 24px 32px 0;
+      display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    }
+    .page-title { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 400; }
     .page-meta { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); }
-    .deadline-badge { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+    .deadline-badge {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
       letter-spacing: 0.08em; color: #8b2020; background: rgba(139,32,32,0.08);
-      border: 1px solid rgba(139,32,32,0.2); border-radius: 4px; padding: 2px 8px; }
+      border: 1px solid rgba(139,32,32,0.2); border-radius: 4px; padding: 2px 8px;
+    }
+    .pipeline-link {
+      margin-left: auto; font-family: 'DM Mono', monospace; font-size: 10px;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--accent); text-decoration: none;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .pipeline-link:hover { text-decoration: underline; }
+    .count-pill {
+      background: var(--accent-dim); border: 1px solid rgba(139,94,42,0.25);
+      border-radius: 10px; padding: 1px 7px; font-size: 10px;
+    }
 
     /* ── Filters ── */
-    .filters { padding: 16px 32px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-    .filter-label { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
-      letter-spacing: 0.08em; color: var(--text-dim); }
-    .filter-btn { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
-      letter-spacing: 0.06em; color: var(--text-muted); background: var(--surface);
-      border: 1px solid var(--border); border-radius: 4px; padding: 4px 10px; cursor: pointer; transition: all 0.15s; }
-    .filter-btn:hover, .filter-btn.active { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
-    .filter-sep { color: var(--border); margin: 0 4px; }
+    .filters {
+      padding: 14px 32px 0;
+      display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    }
+    .filter-group { display: flex; align-items: center; gap: 6px; }
+    .filter-label {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-dim);
+    }
+    .filter-select {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--text-muted);
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 4px; padding: 4px 8px; cursor: pointer;
+    }
+    .filter-select:focus { outline: none; border-color: var(--accent); }
+    .filter-sep { color: var(--border); font-size: 12px; }
 
-    /* ── Pipeline ── */
-    .pipeline { display: flex; gap: 0; overflow-x: auto; padding: 16px 32px 40px; min-height: 60vh; }
-    .column { min-width: 220px; flex: 1; border-right: 1px solid var(--border); padding: 0 12px; }
-    .column:last-child { border-right: none; }
-    .col-header { font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
-      letter-spacing: 0.12em; color: var(--text-dim); padding-bottom: 8px;
-      border-bottom: 1px solid var(--border); margin-bottom: 10px;
-      display: flex; justify-content: space-between; align-items: baseline; }
-    .col-count { opacity: 0.6; }
-    .col-suggested .col-header { color: var(--accent); }
+    /* ── Table ── */
+    .table-wrap { padding: 16px 32px 48px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--text-dim);
+      padding: 6px 10px; text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th.col-star { width: 32px; text-align: center; padding: 6px 6px; }
+    th.col-score { width: 54px; text-align: right; }
+    th.col-type  { width: 110px; }
+    th.col-status { width: 130px; }
+    th.col-date  { width: 64px; }
 
-    /* ── Cards ── */
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
-      padding: 10px 12px; margin-bottom: 8px; transition: box-shadow 0.15s; }
-    .card:hover { box-shadow: 0 2px 8px rgba(42,36,24,0.10); }
-    .card-title { font-size: 13px; font-weight: 500; line-height: 1.35; margin-bottom: 4px; }
-    .card-company { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
-    .card-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-    .badge { font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
-      letter-spacing: 0.08em; border-radius: 3px; padding: 1px 6px; border: 1px solid; }
+    tbody tr.data-row { border-bottom: none; }
+    tbody tr.data-row:hover td { background: var(--surface); }
+    tbody tr.data-row td { padding: 9px 10px; vertical-align: middle; border-top: 1px solid var(--border); }
+    tbody tr.reason-row td { padding: 0; }
+
+    td.col-star { text-align: center; padding: 9px 6px !important; }
+    td.col-score { text-align: right; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; }
+    td.col-date  { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); }
+
+    .star-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: 15px; padding: 0; line-height: 1;
+      color: var(--accent); opacity: 0.35;
+      transition: opacity 0.15s;
+    }
+    .star-btn.starred { opacity: 1; }
+    .star-btn:hover { opacity: 0.75; }
+
+    .pos-title { font-size: 13px; font-weight: 500; }
+    .pos-title a { color: var(--text); text-decoration: none; }
+    .pos-title a:hover { color: var(--accent); text-decoration: underline; }
+    .pos-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px;
+      display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+    .badge {
+      font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
+      letter-spacing: 0.08em; border-radius: 3px; padding: 2px 6px; border: 1px solid;
+      white-space: nowrap;
+    }
     .badge-employment { color: #1a5c8a; background: rgba(26,92,138,0.08); border-color: rgba(26,92,138,0.2); }
     .badge-contract   { color: #7a2e6e; background: rgba(122,46,110,0.08); border-color: rgba(122,46,110,0.2); }
+    .badge-advisory   { color: #3a6e2a; background: rgba(58,110,42,0.08); border-color: rgba(58,110,42,0.2); }
     .badge-warm       { color: var(--accent); background: var(--accent-dim); border-color: rgba(139,94,42,0.3); }
-    .card-score { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; margin-left: auto; }
-    .card-geo { font-size: 11px; color: var(--text-dim); }
-    .card-narrative { font-size: 11px; color: var(--text-muted); font-style: italic;
-      margin-top: 6px; line-height: 1.4; display: none; }
-    .card-narrative.visible { display: block; }
-    .card-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px;
-      padding-top: 7px; border-top: 0.5px solid var(--border); }
-    .card-apply { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
-      letter-spacing: 0.06em; color: var(--accent); text-decoration: none; }
-    .card-apply:hover { text-decoration: underline; }
-    .card-status-form { margin-left: auto; }
-    .card-status-select { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
-      letter-spacing: 0.04em; color: var(--text-muted); background: var(--bg);
-      border: 1px solid var(--border); border-radius: 3px; padding: 2px 6px; cursor: pointer; }
-    .card-status-select:focus { outline: none; border-color: var(--accent); }
-    .card-toggle { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim);
-      background: none; border: none; cursor: pointer; padding: 0; letter-spacing: 0.04em; }
-    .card-toggle:hover { color: var(--text-muted); }
+
+    .status-select {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--text-muted);
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 3px; padding: 3px 6px; cursor: pointer; width: 100%;
+    }
+    .status-select:focus { outline: none; border-color: var(--accent); }
+
+    /* ── Inline close reason picker ── */
+    .reason-picker {
+      display: none; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 7px 10px 9px 42px;
+      background: rgba(139,94,42,0.04);
+      border-top: 1px solid rgba(139,94,42,0.15);
+    }
+    .reason-picker.visible { display: flex; }
+    .reason-label {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-dim); white-space: nowrap;
+    }
+    .reason-btn {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--text-muted);
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 3px; padding: 3px 10px; cursor: pointer; transition: all 0.12s;
+    }
+    .reason-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+    .reason-btn.selected { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+    .reason-save {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.05em; color: #faf7f2;
+      background: var(--accent); border: none;
+      border-radius: 3px; padding: 3px 12px; cursor: pointer;
+      margin-left: 4px; display: none;
+    }
+    .reason-save.visible { display: inline-block; }
 
     /* ── Empty state ── */
-    .empty-col { text-align: center; padding: 24px 8px; color: var(--text-dim); font-size: 12px; font-style: italic; }
-
-    /* ── Note banner ── */
-    .note-banner { margin: 0 32px 0; padding: 10px 14px; background: var(--accent-dim);
-      border: 1px solid rgba(139,94,42,0.2); border-radius: 6px; font-size: 12px; color: var(--text-muted); }
-    .note-banner b { color: var(--accent); }
+    .empty-state {
+      text-align: center; padding: 60px 32px;
+      color: var(--text-dim); font-size: 13px; font-style: italic;
+    }
   </style>
 </head>
 <body>
@@ -129,128 +197,162 @@
     <a href="/guild" class="nav-active">Guild</a>
   </div>
   <div class="guild-subnav">
-    <a href="/guild/career" class="subnav-link subnav-active">Career Focus</a>
+    <a href="/guild/career" class="subnav-link">Career Focus</a>
+    <span class="subnav-dot">&nbsp;·&nbsp;</span>
+    <a href="/guild/career" class="subnav-link subnav-active">Positions</a>
+    <span class="subnav-dot">&nbsp;·&nbsp;</span>
+    <a href="/guild/career/active" class="subnav-link">Active Pipeline</a>
   </div>
 </nav>
 
 <div class="page-header">
-  <h1 class="page-title">Career Focus</h1>
-  <span class="page-meta">{{ total }} positions tracked</span>
+  <h1 class="page-title">Positions</h1>
+  <span class="page-meta">{{ total }} tracked</span>
   <span class="deadline-badge">Deadline: {{ deadline }}</span>
+  {% if board_count > 0 %}
+  <a href="/guild/career/active" class="pipeline-link">
+    Active Pipeline <span class="count-pill">{{ board_count }}</span> →
+  </a>
+  {% endif %}
 </div>
 
-<div class="filters">
-  <span class="filter-label">Type:</span>
-  <button class="filter-btn{% if type_filter == 'all' %} active{% endif %}" onclick="filterType(this,'all')">All</button>
-  <button class="filter-btn{% if type_filter == 'employment' %} active{% endif %}" onclick="filterType(this,'employment')">Employment</button>
-  <button class="filter-btn{% if type_filter == 'contract' %} active{% endif %}" onclick="filterType(this,'contract')">Contract</button>
+<form class="filters" method="GET" action="/guild/career" id="filter-form">
+  <div class="filter-group">
+    <span class="filter-label">Status</span>
+    <select class="filter-select" name="status" onchange="this.form.submit()">
+      {% for val, lbl in [('all','All'),('suggested','Suggested'),('reviewing','Reviewing'),('applied','Applied'),('interview','Interview'),('closed','Closed'),('rejected','Rejected')] %}
+      <option value="{{ val }}"{{ ' selected' if status_filter == val else '' }}>{{ lbl }}</option>
+      {% endfor %}
+    </select>
+  </div>
   <span class="filter-sep">|</span>
-  <span class="filter-label">Geo:</span>
-  <button class="filter-btn{% if geo_filter == 'all' %} active{% endif %}" onclick="filterGeo(this,'all')">All</button>
-  <button class="filter-btn{% if geo_filter == 'chicago' %} active{% endif %}" onclick="filterGeo(this,'chicago')">Chicago</button>
-  <button class="filter-btn{% if geo_filter == 'remote' %} active{% endif %}" onclick="filterGeo(this,'remote')">Remote</button>
-  <button class="filter-btn{% if geo_filter == 'international' %} active{% endif %}" onclick="filterGeo(this,'international')">International</button>
-</div>
+  <div class="filter-group">
+    <span class="filter-label">Type</span>
+    <select class="filter-select" name="type" onchange="this.form.submit()">
+      {% for val, lbl in [('all','All'),('employment','Employment'),('contract','Contract'),('advisory','Advisory')] %}
+      <option value="{{ val }}"{{ ' selected' if type_filter == val else '' }}>{{ lbl }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <span class="filter-sep">|</span>
+  <div class="filter-group">
+    <span class="filter-label">Geo</span>
+    <select class="filter-select" name="geo" onchange="this.form.submit()">
+      {% for val, lbl in [('all','All'),('chicago','Chicago'),('remote','Remote'),('international','International')] %}
+      <option value="{{ val }}"{{ ' selected' if geo_filter == val else '' }}>{{ lbl }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <span class="filter-sep">|</span>
+  <div class="filter-group">
+    <span class="filter-label">Priority</span>
+    <select class="filter-select" name="priority" onchange="this.form.submit()">
+      <option value="all"{{ ' selected' if priority_filter == 'all' else '' }}>All</option>
+      <option value="starred"{{ ' selected' if priority_filter == 'starred' else '' }}>Starred</option>
+    </select>
+  </div>
+</form>
 
-{% if total == 0 %}
-<div class="note-banner">
-  No positions yet. Loop A runs twice daily (06:00 and 18:00).
-</div>
-{% endif %}
-
-<div class="pipeline" id="pipeline">
-  {% set columns = [
-    ('suggested',  'Suggested',  opportunities | selectattr('status','eq','suggested')  | list),
-    ('reviewing',  'Reviewing',  opportunities | selectattr('status','eq','reviewing')  | list),
-    ('applied',    'Applied',    opportunities | selectattr('status','eq','applied')    | list),
-    ('interview',  'Interview',  opportunities | selectattr('status','eq','interview')  | list),
-    ('closed',     'Closed',     opportunities | selectattr('status','eq','closed')    | list),
-    ('rejected',   'Rejected',   opportunities | selectattr('status','eq','rejected')  | list),
-  ] %}
-  {% for col_id, col_label, col_items in columns %}
-  <div class="column col-{{ col_id }}" data-col="{{ col_id }}">
-    <div class="col-header">
-      <span>{{ col_label }}</span>
-      <span class="col-count">{{ col_items | length }}</span>
-    </div>
-    {% if col_items %}
-      {% for opp in col_items %}
-      <div class="card" data-type="{{ opp.opportunity_type or '' }}" data-geo="{{ (opp.geo or '') | lower }}">
-        <div class="card-title">{{ opp.title }}</div>
-        <div class="card-company">{{ opp.company or '' }}{% if opp.geo %} · {{ opp.geo }}{% endif %}</div>
-        <div class="card-meta">
-          {% if opp.opportunity_type %}
-          <span class="badge badge-{{ opp.opportunity_type }}">{{ opp.opportunity_type }}</span>
-          {% endif %}
-          {% if opp.warm_lead %}
-          <span class="badge badge-warm">⭐ Warm lead</span>
-          {% endif %}
-          {% if opp.fit_score %}
-          <span class="card-score" style="color:{{ opp.fit_score | score_color }}">{{ opp.fit_score }}/10</span>
-          {% endif %}
-          {% if opp.fit_narrative %}
-          <button class="card-toggle" onclick="toggleNarrative(this)">reason ↓</button>
-          {% endif %}
-        </div>
-        {% if opp.fit_narrative %}
-        <div class="card-narrative">{{ opp.fit_narrative }}</div>
-        {% endif %}
-        <div class="card-actions">
-          {% if opp.url %}
-          <a class="card-apply" href="{{ opp.url }}" target="_blank" rel="noopener">Apply →</a>
-          {% endif %}
-          <form class="card-status-form" method="POST" action="/guild/career/positions/{{ opp.id }}/status">
-            <select class="card-status-select" name="status" onchange="this.form.submit()">
+<div class="table-wrap">
+  {% if opportunities %}
+  <table>
+    <thead>
+      <tr>
+        <th class="col-star">★</th>
+        <th>Title / Company</th>
+        <th>Location</th>
+        <th class="col-score">Score</th>
+        <th class="col-type">Type</th>
+        <th class="col-status">Status</th>
+        <th class="col-date">Added</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for opp in opportunities %}
+      {# Data row #}
+      <tr class="data-row">
+        <td class="col-star">
+          <form method="POST" action="/guild/career/positions/{{ opp.id }}/priority" style="display:inline">
+            <input type="hidden" name="_referrer" value="positions">
+            <button type="submit" class="star-btn{{ ' starred' if opp.priority else '' }}"
+                    title="{{ 'Remove star' if opp.priority else 'Star this position' }}">{{ '★' if opp.priority else '☆' }}</button>
+          </form>
+        </td>
+        <td>
+          <div class="pos-title">
+            {% if opp.url %}<a href="{{ opp.url }}" target="_blank" rel="noopener">{{ opp.title }}</a>
+            {% else %}{{ opp.title }}{% endif %}
+          </div>
+          <div class="pos-sub">
+            <span>{{ opp.company or '' }}</span>
+            {% if opp.warm_lead %}<span class="badge badge-warm">⭐ Warm</span>{% endif %}
+          </div>
+        </td>
+        <td><span style="font-size:12px;color:var(--text-muted)">{{ opp.geo or '—' }}</span></td>
+        <td class="col-score">
+          {% if opp.fit_score %}<span style="color:{{ opp.fit_score | score_color }}">{{ opp.fit_score }}</span>
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if opp.opportunity_type %}<span class="badge badge-{{ opp.opportunity_type }}">{{ opp.opportunity_type }}</span>
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          <form method="POST" action="/guild/career/positions/{{ opp.id }}/status" id="sf-{{ opp.id }}">
+            <input type="hidden" name="_referrer" value="positions">
+            <input type="hidden" name="close_reason" id="rv-{{ opp.id }}" value="">
+            <select class="status-select" name="status" onchange="handleStatus(this,{{ opp.id }})">
               {% for s in ['suggested','reviewing','applied','interview','closed','rejected'] %}
               <option value="{{ s }}"{{ ' selected' if opp.status == s else '' }}>{{ s | title }}</option>
               {% endfor %}
             </select>
           </form>
-        </div>
-      </div>
-      {% endfor %}
-    {% else %}
-      <div class="empty-col">—</div>
+        </td>
+        <td class="col-date">
+          {% if opp.created_at %}{{ opp.created_at.strftime('%b %-d') }}{% else %}—{% endif %}
+        </td>
+      </tr>
+      {# Inline close reason picker row — hidden until "Closed" is selected #}
+      <tr class="reason-row">
+        <td colspan="7">
+          <div class="reason-picker" id="rp-{{ opp.id }}">
+            <span class="reason-label">Reason:</span>
+            {% for r, lbl in [('filled','Filled'),('rejected','Rejected'),('declined','Declined'),('accepted','Accepted')] %}
+            <button type="button" class="reason-btn" onclick="pickReason({{ opp.id }},'{{ r }}',this)">{{ lbl }}</button>
+            {% endfor %}
+            <button type="button" class="reason-save" id="rs-{{ opp.id }}" onclick="document.getElementById('sf-{{ opp.id }}').submit()">Save →</button>
+          </div>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state">
+    No positions match the current filters.
+    {% if status_filter == 'all' and type_filter == 'all' and geo_filter == 'all' and priority_filter == 'all' %}
+    Loop A runs twice daily (06:00 and 18:00) to surface new opportunities.
     {% endif %}
   </div>
-  {% endfor %}
+  {% endif %}
 </div>
 
 <script>
-let activeType = 'all', activeGeo = 'all';
-
-function toggleNarrative(btn) {
-  const card = btn.closest('.card');
-  const narr = card.querySelector('.card-narrative');
-  if (!narr) return;
-  const open = narr.classList.toggle('visible');
-  btn.textContent = open ? 'reason ↑' : 'reason ↓';
+function handleStatus(select, id) {
+  if (select.value === 'closed') {
+    document.getElementById('rp-' + id).classList.add('visible');
+  } else {
+    document.getElementById('rp-' + id).classList.remove('visible');
+    document.getElementById('sf-' + id).submit();
+  }
 }
 
-function filterType(btn, type) {
-  document.querySelectorAll('.filters .filter-btn').forEach(b => {
-    if (['all','employment','contract'].includes(b.textContent.toLowerCase())) b.classList.remove('active');
-  });
-  btn.classList.add('active');
-  activeType = type;
-  applyFilters();
-}
-
-function filterGeo(btn, geo) {
-  document.querySelectorAll('.filters .filter-btn').forEach(b => {
-    if (['all','chicago','remote','international'].includes(b.textContent.toLowerCase())) b.classList.remove('active');
-  });
-  btn.classList.add('active');
-  activeGeo = geo;
-  applyFilters();
-}
-
-function applyFilters() {
-  document.querySelectorAll('.card').forEach(card => {
-    const typeMatch = activeType === 'all' || card.dataset.type === activeType;
-    const geoMatch  = activeGeo === 'all'  || card.dataset.geo.includes(activeGeo);
-    card.style.display = (typeMatch && geoMatch) ? '' : 'none';
-  });
+function pickReason(id, reason, btn) {
+  document.getElementById('rv-' + id).value = reason;
+  const picker = document.getElementById('rp-' + id);
+  picker.querySelectorAll('.reason-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('rs-' + id).classList.add('visible');
 }
 </script>
 </body>

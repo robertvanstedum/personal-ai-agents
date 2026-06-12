@@ -587,22 +587,50 @@ def guild_landing():
 @app.route("/guild/career/positions")
 @_require_owner
 def guild_career():
-    status_filter = request.args.get('status', 'all')
-    geo_filter    = request.args.get('geo', 'all')
-    type_filter   = request.args.get('type', 'all')
+    status_filter   = request.args.get('status', 'all')
+    geo_filter      = request.args.get('geo', 'all')
+    type_filter     = request.args.get('type', 'all')
+    priority_filter = request.args.get('priority', 'all')
 
+    conditions, params = [], []
+    if status_filter != 'all':
+        conditions.append("status = %s")
+        params.append(status_filter)
+    if type_filter != 'all':
+        conditions.append("opportunity_type = %s")
+        params.append(type_filter)
+    if geo_filter != 'all':
+        conditions.append("LOWER(COALESCE(geo,'')) LIKE %s")
+        params.append(f'%{geo_filter.lower()}%')
+    if priority_filter == 'starred':
+        conditions.append("priority = TRUE")
+
+    where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     sql = (
         "SELECT id, title, company, geo, url, opportunity_type, "
         "fit_score, fit_narrative, warm_lead, warm_lead_contacts, "
-        "cos_notes, status, created_at "
+        "cos_notes, status, priority, close_reason, closed_at, created_at "
         "FROM pipeline.items "
-        "WHERE status != 'rejected' "
-        "ORDER BY fit_score DESC NULLS LAST, created_at DESC"
+        f"{where_clause} "
+        "ORDER BY priority DESC NULLS LAST, fit_score DESC NULLS LAST, created_at DESC"
     )
     try:
-        opportunities = _guild_db_query(sql)
+        opportunities = _guild_db_query(sql, params or None)
     except Exception:
         opportunities = []
+
+    # Count board-qualifying positions for contextual link
+    board_sql = (
+        "SELECT COUNT(*) AS cnt FROM pipeline.items "
+        "WHERE (priority = TRUE AND status = 'applied') "
+        "OR status = 'reviewing' "
+        "OR status = 'interview' "
+        "OR (status = 'closed' AND closed_at > NOW() - INTERVAL '5 days')"
+    )
+    try:
+        board_count = int(_guild_db_query(board_sql)[0]['cnt'])
+    except Exception:
+        board_count = 0
 
     return render_template(
         "guild/career_focus.html",
@@ -611,6 +639,34 @@ def guild_career():
         status_filter=status_filter,
         geo_filter=geo_filter,
         type_filter=type_filter,
+        priority_filter=priority_filter,
+        board_count=board_count,
+        deadline="Aug 1, 2026",
+    )
+
+
+@app.route("/guild/career/active")
+@_require_owner
+def guild_career_active():
+    sql = (
+        "SELECT id, title, company, geo, url, opportunity_type, "
+        "fit_score, fit_narrative, warm_lead, warm_lead_contacts, "
+        "cos_notes, status, priority, close_reason, closed_at, created_at "
+        "FROM pipeline.items "
+        "WHERE (priority = TRUE AND status = 'applied') "
+        "OR status = 'reviewing' "
+        "OR status = 'interview' "
+        "OR (status = 'closed' AND closed_at > NOW() - INTERVAL '5 days') "
+        "ORDER BY priority DESC NULLS LAST, fit_score DESC NULLS LAST, created_at DESC"
+    )
+    try:
+        positions = _guild_db_query(sql)
+    except Exception:
+        positions = []
+
+    return render_template(
+        "guild/career_active.html",
+        positions=positions,
         deadline="Aug 1, 2026",
     )
 
@@ -618,16 +674,49 @@ def guild_career():
 @app.route("/guild/career/positions/<int:opp_id>/status", methods=["POST"])
 @_require_owner
 def update_position_status(opp_id):
-    new_status = request.form.get("status", "").strip()
+    new_status   = request.form.get("status", "").strip()
+    close_reason = request.form.get("close_reason", "").strip() or None
+    referrer     = request.form.get("_referrer", "positions")
     valid = {"suggested", "reviewing", "applied", "interview", "closed", "rejected"}
     if new_status in valid:
         try:
-            _guild_db_execute(
-                "UPDATE pipeline.items SET status=%s WHERE id=%s",
-                (new_status, opp_id)
-            )
+            if new_status == "closed":
+                _guild_db_execute(
+                    "UPDATE pipeline.items SET status=%s, close_reason=%s, closed_at=NOW() WHERE id=%s",
+                    (new_status, close_reason, opp_id)
+                )
+                if close_reason == "accepted":
+                    try:
+                        import requests as _req
+                        _req.post("http://localhost:8769/event",
+                                  json={"type": "search_complete"}, timeout=2)
+                    except Exception:
+                        pass
+            else:
+                _guild_db_execute(
+                    "UPDATE pipeline.items SET status=%s WHERE id=%s",
+                    (new_status, opp_id)
+                )
         except Exception:
             pass
+    if referrer == "active":
+        return redirect(url_for("guild_career_active"))
+    return redirect(url_for("guild_career"))
+
+
+@app.route("/guild/career/positions/<int:opp_id>/priority", methods=["POST"])
+@_require_owner
+def toggle_position_priority(opp_id):
+    referrer = request.form.get("_referrer", "positions")
+    try:
+        _guild_db_execute(
+            "UPDATE pipeline.items SET priority = NOT COALESCE(priority, FALSE) WHERE id=%s",
+            (opp_id,)
+        )
+    except Exception:
+        pass
+    if referrer == "active":
+        return redirect(url_for("guild_career_active"))
     return redirect(url_for("guild_career"))
 
 
