@@ -21,7 +21,9 @@
     "sector_focus": {
       "primary": "agentic AI — any industry",
       "secondary": "telecom + AI — international, strongest resume match",
+      "tertiary": "Technical Product Manager — any industry, Chicago area priority",
       "telecom_ai_score_boost": 1.5,
+      "tpm_chicago_note": "TPM roles of any type in Chicago/hybrid score on par with primary. 30yr delivery background is directly applicable regardless of industry.",
       "note": "30yr telecom background makes telecom AI roles internationally equivalent to Chicago primary. Float these to top."
     },
 
@@ -30,7 +32,7 @@
         "geo": "Chicago, IL",
         "priority": 1,
         "mode": "on-site or hybrid",
-        "scope": "all TPM roles + all IT/technology leadership + agentic AI"
+        "scope": "all TPM roles (any industry) + agentic AI + IT/technology leadership"
       },
       {
         "geo": "Remote",
@@ -69,6 +71,11 @@
 
     "target_roles": [
       "Technical Product Manager",
+      "Senior Technical Product Manager",
+      "Principal Technical Product Manager",
+      "Director of Product Management",
+      "Group Product Manager",
+      "Product Manager AI",
       "Principal Product Manager",
       "Principal Engineer Agentic AI",
       "AI Platform Lead",
@@ -82,7 +89,9 @@
 
     "role_keywords": [
       "agentic AI", "LLM orchestration", "AI platform",
-      "technical product manager", "TPM", "principal engineer",
+      "technical product manager", "TPM", "senior TPM", "principal TPM",
+      "product manager AI", "product management",
+      "principal engineer",
       "system integrator", "IT director", "network AI",
       "AI RAN", "telecom AI", "AI transformation"
     ],
