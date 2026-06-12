@@ -204,7 +204,7 @@
     <a href="/guild" class="nav-active">Guild</a>
   </div>
   <div class="guild-subnav">
-    <a href="/guild/career" class="subnav-link">Career Focus</a>
+    <span class="subnav-link" style="cursor:default;opacity:0.5">Career Focus</span>
     <span class="subnav-dot">&nbsp;·&nbsp;</span>
     <a href="/guild/career" class="subnav-link">Positions</a>
     <span class="subnav-dot">&nbsp;·&nbsp;</span>
@@ -294,7 +294,6 @@
 {% endmacro %}
 
 <div class="board">
-  {% if positions %}
 
   {# ── STARRED APPLIED ── #}
   <div class="col">
@@ -303,10 +302,12 @@
         <span class="col-header-label">Starred Applied</span>
         <span class="col-header-sub">I want this</span>
       </div>
-      <span class="col-count">{{ applied_col | length }}</span>
+      {% if applied_col %}<span class="col-count">{{ applied_col | length }}</span>{% endif %}
     </div>
     {% for pos in applied_col %}{{ board_card(pos) }}{% endfor %}
-    {% if not applied_col %}<div class="empty-col">—</div>{% endif %}
+    {% if not applied_col %}
+    <div class="empty-col">Star an applied position<br>to see it here.</div>
+    {% endif %}
   </div>
 
   {# ── REVIEWING ── #}
@@ -316,7 +317,7 @@
         <span class="col-header-label">Reviewing</span>
         <span class="col-header-sub">They engaged</span>
       </div>
-      <span class="col-count">{{ reviewing_col | length }}</span>
+      {% if reviewing_col %}<span class="col-count">{{ reviewing_col | length }}</span>{% endif %}
     </div>
     {% for pos in reviewing_col %}{{ board_card(pos) }}{% endfor %}
     {% if not reviewing_col %}<div class="empty-col">—</div>{% endif %}
@@ -329,7 +330,7 @@
         <span class="col-header-label">Interview</span>
         <span class="col-header-sub">Active conversation</span>
       </div>
-      <span class="col-count">{{ interview_col | length }}</span>
+      {% if interview_col %}<span class="col-count">{{ interview_col | length }}</span>{% endif %}
     </div>
     {% for pos in interview_col %}{{ board_card(pos) }}{% endfor %}
     {% if not interview_col %}<div class="empty-col">—</div>{% endif %}
@@ -340,19 +341,14 @@
     <div class="col-header">
       <div>
         <span class="col-header-label">Recently Closed</span>
-        <span class="col-header-sub">5-day grace period</span>
+        <span class="col-header-sub">5-day grace</span>
       </div>
-      <span class="col-count">{{ closed_col | length }}</span>
+      {% if closed_col %}<span class="col-count">{{ closed_col | length }}</span>{% endif %}
     </div>
     {% for pos in closed_col %}{{ board_card(pos) }}{% endfor %}
     {% if not closed_col %}<div class="empty-col">—</div>{% endif %}
   </div>
 
-  {% else %}
-  <div class="empty-board">
-    No active positions. Star an application or wait for a response.
-  </div>
-  {% endif %}
 </div>
 
 <script>
