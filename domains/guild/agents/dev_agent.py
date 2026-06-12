@@ -219,16 +219,12 @@ def classify_doc(file_path: str, content: str) -> dict:
                 "  1. spec_title: document title from top-level # heading. "
                 "Strip any leading 'Handoff —', 'Build Spec —', 'Design —' prefix. "
                 "Null if not a spec/handoff/design doc.\n"
-                "  2. has_dod: true if the document has a section clearly meaning "
-                "'Definition of Done' (checklist of completion criteria), else false.\n"
-                "  3. has_commit: true if the document has a section clearly meaning "
-                "'Commit' (containing git commands or file paths for committing), else false.\n"
-                "  4. referenced_files: list of every _working/ path mentioned anywhere "
+                "  2. referenced_files: list of every _working/ path mentioned anywhere "
                 "in this document (e.g. '_working/spec_foo.md'). Empty list if none.\n\n"
                 '{"doc_type":"...","summary":"...","agent_source":"...",'
-                '"spec_title":null,"has_dod":false,"has_commit":false,"referenced_files":[]}\n\n'
+                '"spec_title":null,"referenced_files":[]}\n\n'
                 f"Filename: {Path(file_path).name}\n"
-                f"Content preview:\n{content[:800]}"
+                f"Content preview:\n{content[:3000]}"
             )}],
             max_tokens=300,
             temperature=0.1,
@@ -241,13 +237,15 @@ def classify_doc(file_path: str, content: str) -> dict:
         data = json.loads(raw)
         if not isinstance(data, dict):
             raise ValueError("non-dict response")
+        _lower = content.lower()
         return {
             "doc_type":         data.get("doc_type", "unknown"),
             "summary":          data.get("summary", Path(file_path).name),
             "agent_source":     data.get("agent_source", "unknown"),
             "spec_title":       data.get("spec_title"),
-            "has_dod":          bool(data.get("has_dod", False)),
-            "has_commit":       bool(data.get("has_commit", False)),
+            # Direct search on full content — structural check, no LLM needed
+            "has_dod":          "## definition of done" in _lower,
+            "has_commit":       "## commit" in _lower,
             "referenced_files": data.get("referenced_files", [])
                                 if isinstance(data.get("referenced_files"), list) else [],
         }
@@ -255,27 +253,31 @@ def classify_doc(file_path: str, content: str) -> dict:
         log.debug("LLM classify failed (%s) — using filename heuristic", e)
 
     # Filename heuristic fallback — no LLM needed for obvious cases
+    # has_dod / has_commit always use direct search regardless of LLM availability
     name = Path(file_path).name.lower()
+    _lower = content.lower()
+    _dod     = "## definition of done" in _lower
+    _commit  = "## commit" in _lower
     if "handoff" in name:
         return {"doc_type": "handoff",      "summary": f"Handoff doc: {Path(file_path).name}",
                 "agent_source": "unknown",  "spec_title": None,
-                "has_dod": False, "has_commit": False, "referenced_files": []}
+                "has_dod": _dod, "has_commit": _commit, "referenced_files": []}
     if "spec" in name or "final" in name:
         return {"doc_type": "spec",         "summary": f"Spec: {Path(file_path).name}",
                 "agent_source": "unknown",  "spec_title": None,
-                "has_dod": False, "has_commit": False, "referenced_files": []}
+                "has_dod": _dod, "has_commit": _commit, "referenced_files": []}
     if "design" in name:
         return {"doc_type": "design",       "summary": f"Design doc: {Path(file_path).name}",
                 "agent_source": "unknown",  "spec_title": None,
-                "has_dod": False, "has_commit": False, "referenced_files": []}
+                "has_dod": _dod, "has_commit": _commit, "referenced_files": []}
     if "review" in name or "build_log" in name:
         return {"doc_type": "build_output", "summary": f"Review: {Path(file_path).name}",
                 "agent_source": "unknown",  "spec_title": None,
-                "has_dod": False, "has_commit": False, "referenced_files": []}
+                "has_dod": _dod, "has_commit": _commit, "referenced_files": []}
     return {
         "doc_type": "unknown", "summary": f"New doc: {Path(file_path).name}",
         "agent_source": "unknown", "spec_title": None,
-        "has_dod": False, "has_commit": False, "referenced_files": [],
+        "has_dod": _dod, "has_commit": _commit, "referenced_files": [],
     }
 
 
