@@ -783,8 +783,25 @@ def add_position():
 @app.route("/guild/build")
 @_require_owner
 def guild_build():
-    # Queue: live board — active items + recently done
-    queue_sql = """
+    status_filter = request.args.get('status', 'all')
+    query = "SELECT * FROM guild.design_log"
+    params = []
+    if status_filter != 'all':
+        query += " WHERE status = %s"
+        params.append(status_filter)
+    query += " ORDER BY last_transition_at DESC NULLS LAST"
+    try:
+        items = _guild_db_query(query, params or None)
+    except Exception:
+        items = []
+    return render_template("guild/build_log.html", items=items,
+                           status_filter=status_filter, user=_current_user())
+
+
+@app.route("/guild/build/queue")
+@_require_owner
+def guild_build_queue():
+    sql = """
         SELECT * FROM guild.design_log
         WHERE status IN ('spec_ready','in_build','blocked','incomplete')
            OR (status = 'done'
@@ -801,36 +818,11 @@ def guild_build():
           last_transition_at DESC NULLS LAST
     """
     try:
-        queue_items = _guild_db_query(queue_sql)
+        items = _guild_db_query(sql)
     except Exception:
-        queue_items = []
-
-    # Log: full history, optionally filtered by status
-    status_filter = request.args.get('status', 'all')
-    log_query = "SELECT * FROM guild.design_log"
-    log_params = []
-    if status_filter != 'all':
-        log_query += " WHERE status = %s"
-        log_params.append(status_filter)
-    log_query += " ORDER BY last_transition_at DESC NULLS LAST"
-    try:
-        log_items = _guild_db_query(log_query, log_params or None)
-    except Exception:
-        log_items = []
-
-    return render_template(
-        "guild/build_log.html",
-        queue_items=queue_items,
-        log_items=log_items,
-        status_filter=status_filter,
-        user=_current_user(),
-    )
-
-
-@app.route("/guild/build/queue")
-@_require_owner
-def guild_build_queue():
-    return redirect("/guild/build#queue", 302)
+        items = []
+    return render_template("guild/build_queue.html", items=items,
+                           user=_current_user())
 
 
 @app.route("/guild/build/items/<int:item_id>/status", methods=["POST"])

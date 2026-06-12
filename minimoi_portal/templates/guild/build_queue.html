@@ -238,7 +238,7 @@
 
   <div class="card-actions">
     <form method="POST" action="/guild/build/items/{{ item_id }}/status" id="bf-{{ item_id }}" style="display:contents">
-      <input type="hidden" name="_referrer" value="queue">
+
       <input type="hidden" name="note" id="bn-{{ item_id }}" value="">
       <select class="card-select" id="bs-{{ item_id }}"
               onchange="queueStatus(this, {{ item_id }})">
@@ -298,8 +298,6 @@
   </div>
   <div class="guild-subnav">
     <a href="/guild/career" class="subnav-link">Career Focus</a>
-    <span class="subnav-dot">&nbsp;·&nbsp;</span>
-    <span class="subnav-link" style="cursor:default;opacity:0.5">Build</span>
     <span class="subnav-dot">&nbsp;·&nbsp;</span>
     <a href="/guild/build" class="subnav-link">Build Log</a>
     <span class="subnav-dot">&nbsp;·&nbsp;</span>
