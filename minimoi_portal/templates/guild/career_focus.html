@@ -384,7 +384,8 @@
           </div>
           <div class="pos-sub">
             <span>{{ opp.company or '' }}</span>
-            {% if opp.source == 'manual' %}<span class="badge badge-manual">Mine</span>{% endif %}
+            {% if opp.source == 'manual' %}<span class="badge badge-manual">Mine</span>
+            {% elif opp.source %}<span style="font-size:9px;color:var(--text-dim)">· scout</span>{% endif %}
             {% if opp.warm_lead %}<span class="badge badge-warm">⭐ Warm</span>{% endif %}
           </div>
         </td>

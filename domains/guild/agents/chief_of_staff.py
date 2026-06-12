@@ -139,14 +139,17 @@ Hard limits (never cross these):
 
 def _build_system_prompt() -> str:
     try:
-        cos_soul = COS_SOUL_FILE.read_text().strip()
+        raw_context = json.loads(COS_CONTEXT_FILE.read_text())
+        soul_enabled = raw_context.get("cos_soul_enabled", True)
+        cos_context  = json.dumps(raw_context, indent=2)
     except Exception:
-        cos_soul = "(soul unavailable)"
+        soul_enabled = True
+        cos_context  = "(context unavailable)"
 
     try:
-        cos_context = json.dumps(json.loads(COS_CONTEXT_FILE.read_text()), indent=2)
+        cos_soul = COS_SOUL_FILE.read_text().strip() if soul_enabled else ""
     except Exception:
-        cos_context = "(context unavailable)"
+        cos_soul = ""
 
     cos_memory = _read_memory()
 
