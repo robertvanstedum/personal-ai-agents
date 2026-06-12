@@ -31,6 +31,7 @@ from openai import OpenAI
 
 BASE_DIR        = Path(__file__).parent.parent.parent.parent   # repo root
 COS_CONTEXT_FILE = BASE_DIR / "domains/guild/config/cos_context.json"
+COS_SOUL_FILE    = BASE_DIR / "domains/guild/config/cos_soul.md"
 COS_MEMORY_FILE  = BASE_DIR / "data/guild/memory/cos_memory.md"
 AGENDA_FILE      = BASE_DIR / "data/guild/cos_agenda.json"
 LOGS_DIR         = BASE_DIR / "logs"
@@ -112,25 +113,9 @@ def _append_memory(entry: str):
 # ── System prompt ─────────────────────────────────────────────────────────────
 
 _SYSTEM_PROMPT = """You are the Chief of Staff for mini-moi — Robert van Stedum's personal AI agent platform.
-You are a trusted colleague, not a helpdesk bot. Be direct, conversational, and useful.
 
-You have access to:
-- Robert's current goals and priorities (context file, below)
-- Your accumulated memory of what matters (memory file, below)
-- The current live state of Operations (status, below)
-
-Your role:
-- Answer questions about the system, Robert's priorities, or anything in your context
-- Surface relevant information if you notice something worth mentioning
-- Queue recommendations to the portal when you find something actionable
-- Be honest when you don't know something — don't invent system state
-
-Hard limits (never cross these):
-- Do not take external actions (no API calls, no messages to third parties) without Robert confirming
-- Do not stop, restart, or modify services — that is Operations' domain
-- Do not delete or overwrite any data
-- Do not make decisions that belong to Robert — recommend, don't decide
-- Do not access files or data outside what is provided in this prompt
+--- SOUL ---
+{cos_soul}
 
 --- CONTEXT FILE ---
 {cos_context}
@@ -143,9 +128,21 @@ Hard limits (never cross these):
 
 --- TODAY ---
 {date_str}
+
+Hard limits (never cross these):
+- Do not take external actions (no API calls, no messages to third parties) without Robert confirming
+- Do not stop, restart, or modify services — that is Operations' domain
+- Do not delete or overwrite any data
+- Do not make decisions that belong to Robert — recommend, don't decide
+- Do not access files or data outside what is provided in this prompt
 """
 
 def _build_system_prompt() -> str:
+    try:
+        cos_soul = COS_SOUL_FILE.read_text().strip()
+    except Exception:
+        cos_soul = "(soul unavailable)"
+
     try:
         cos_context = json.dumps(json.loads(COS_CONTEXT_FILE.read_text()), indent=2)
     except Exception:
@@ -162,6 +159,7 @@ def _build_system_prompt() -> str:
     date_str = datetime.now().strftime("%A, %B %d, %Y %H:%M")
 
     return _SYSTEM_PROMPT.format(
+        cos_soul=cos_soul,
         cos_context=cos_context,
         cos_memory=cos_memory,
         ops_status=ops_str,
