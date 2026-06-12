@@ -609,7 +609,7 @@ def guild_career():
     sql = (
         "SELECT id, title, company, geo, url, opportunity_type, "
         "fit_score, fit_narrative, warm_lead, warm_lead_contacts, "
-        "cos_notes, status, priority, close_reason, closed_at, created_at "
+        "cos_notes, status, priority, close_reason, closed_at, source, created_at "
         "FROM pipeline.items "
         f"{where_clause} "
         "ORDER BY priority DESC NULLS LAST, fit_score DESC NULLS LAST, created_at DESC"
@@ -717,6 +717,38 @@ def toggle_position_priority(opp_id):
         pass
     if referrer == "active":
         return redirect(url_for("guild_career_active"))
+    return redirect(url_for("guild_career"))
+
+
+@app.route("/guild/career/positions/add", methods=["POST"])
+@_require_owner
+def add_position():
+    title            = request.form.get("title", "").strip()
+    company          = request.form.get("company", "").strip() or None
+    geo              = request.form.get("geo", "").strip() or None
+    opportunity_type = request.form.get("opportunity_type", "employment").strip()
+    url              = request.form.get("url", "").strip() or None
+    status           = request.form.get("status", "applied").strip()
+    priority         = request.form.get("priority") == "1"
+
+    valid_status = {"suggested", "reviewing", "applied", "interview", "closed", "rejected"}
+    valid_type   = {"employment", "contract", "advisory"}
+    if not title:
+        return redirect(url_for("guild_career"))
+    if status not in valid_status:
+        status = "applied"
+    if opportunity_type not in valid_type:
+        opportunity_type = "employment"
+
+    try:
+        _guild_db_execute(
+            "INSERT INTO pipeline.items "
+            "(title, company, geo, opportunity_type, url, status, priority, source, context, created_by) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, 'manual', 'career', 'robert')",
+            (title, company, geo, opportunity_type, url, status, priority)
+        )
+    except Exception:
+        pass
     return redirect(url_for("guild_career"))
 
 

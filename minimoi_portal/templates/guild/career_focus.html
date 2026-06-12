@@ -139,6 +139,7 @@
     .badge-contract   { color: #7a2e6e; background: rgba(122,46,110,0.08); border-color: rgba(122,46,110,0.2); }
     .badge-advisory   { color: #3a6e2a; background: rgba(58,110,42,0.08); border-color: rgba(58,110,42,0.2); }
     .badge-warm       { color: var(--accent); background: var(--accent-dim); border-color: rgba(139,94,42,0.3); }
+    .badge-manual     { color: #2a6e4e; background: rgba(42,110,78,0.08); border-color: rgba(42,110,78,0.25); }
 
     .status-select {
       font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
@@ -177,6 +178,50 @@
     }
     .reason-save.visible { display: inline-block; }
 
+    /* ── Add form ── */
+    .add-btn {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--accent);
+      background: var(--accent-dim); border: 1px solid rgba(139,94,42,0.3);
+      border-radius: 4px; padding: 4px 12px; cursor: pointer; margin-left: auto;
+    }
+    .add-btn:hover { background: rgba(139,94,42,0.14); }
+    .add-form-wrap {
+      display: none; margin: 0 32px 16px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+      padding: 16px 20px;
+    }
+    .add-form-wrap.open { display: block; }
+    .add-form-title {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 12px;
+    }
+    .add-form-grid { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+    .add-field { display: flex; flex-direction: column; gap: 4px; }
+    .add-field label {
+      font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--text-dim);
+    }
+    .add-field input, .add-field select {
+      font-family: 'Source Sans 3', sans-serif; font-size: 13px;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 3px;
+      padding: 5px 8px; color: var(--text); min-width: 140px;
+    }
+    .add-field.wide input { min-width: 260px; }
+    .add-field input:focus, .add-field select:focus { outline: none; border-color: var(--accent); }
+    .add-form-actions { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+    .add-submit {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #faf7f2;
+      background: var(--accent); border: none; border-radius: 3px;
+      padding: 5px 16px; cursor: pointer;
+    }
+    .add-cancel {
+      font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim);
+      background: none; border: none; cursor: pointer; padding: 5px 0;
+    }
+    .add-cancel:hover { color: var(--text-muted); }
+
     /* ── Empty state ── */
     .empty-state {
       text-align: center; padding: 60px 32px;
@@ -214,6 +259,60 @@
     Active Pipeline <span class="count-pill">{{ board_count }}</span> →
   </a>
   {% endif %}
+  <button class="add-btn" onclick="toggleAddForm()">+ Add Position</button>
+</div>
+
+{# ── Add Position form ── #}
+<div class="add-form-wrap" id="add-form-wrap">
+  <div class="add-form-title">Add position manually</div>
+  <form method="POST" action="/guild/career/positions/add">
+    <div class="add-form-grid">
+      <div class="add-field wide">
+        <label>Title *</label>
+        <input type="text" name="title" placeholder="Principal Engineer, Agentic AI" required autofocus>
+      </div>
+      <div class="add-field">
+        <label>Company</label>
+        <input type="text" name="company" placeholder="Comcast">
+      </div>
+      <div class="add-field">
+        <label>Location</label>
+        <input type="text" name="geo" placeholder="Chicago, IL">
+      </div>
+      <div class="add-field">
+        <label>Type</label>
+        <select name="opportunity_type">
+          <option value="employment" selected>Employment</option>
+          <option value="contract">Contract</option>
+          <option value="advisory">Advisory</option>
+        </select>
+      </div>
+      <div class="add-field">
+        <label>Status</label>
+        <select name="status">
+          <option value="applied" selected>Applied</option>
+          <option value="suggested">Suggested</option>
+          <option value="reviewing">Reviewing</option>
+          <option value="interview">Interview</option>
+        </select>
+      </div>
+      <div class="add-field">
+        <label>★ Priority</label>
+        <select name="priority">
+          <option value="1">Yes — star it</option>
+          <option value="0" selected>No</option>
+        </select>
+      </div>
+    </div>
+    <div class="add-field wide" style="margin-top:10px">
+      <label>Job URL</label>
+      <input type="url" name="url" placeholder="https://jobs.comcast.com/..." style="min-width:420px">
+    </div>
+    <div class="add-form-actions" style="margin-top:12px">
+      <button type="submit" class="add-submit">Add Position</button>
+      <button type="button" class="add-cancel" onclick="toggleAddForm()">Cancel</button>
+    </div>
+  </form>
 </div>
 
 <form class="filters" method="GET" action="/guild/career" id="filter-form">
@@ -285,6 +384,7 @@
           </div>
           <div class="pos-sub">
             <span>{{ opp.company or '' }}</span>
+            {% if opp.source == 'manual' %}<span class="badge badge-manual">Mine</span>{% endif %}
             {% if opp.warm_lead %}<span class="badge badge-warm">⭐ Warm</span>{% endif %}
           </div>
         </td>
@@ -338,6 +438,14 @@
 </div>
 
 <script>
+function toggleAddForm() {
+  const wrap = document.getElementById('add-form-wrap');
+  wrap.classList.toggle('open');
+  if (wrap.classList.contains('open')) {
+    wrap.querySelector('input[name="title"]').focus();
+  }
+}
+
 function handleStatus(select, id) {
   if (select.value === 'closed') {
     document.getElementById('rp-' + id).classList.add('visible');
