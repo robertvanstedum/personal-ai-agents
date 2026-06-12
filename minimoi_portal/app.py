@@ -897,6 +897,84 @@ def update_build_status(item_id):
     return redirect(request.referrer or url_for('guild_build_queue'))
 
 
+@app.route("/guild/build/items/<int:item_id>/edit", methods=["POST"])
+@_require_owner
+def edit_build_item(item_id):
+    """Update spec_title, summary, github_issue — the human-editable metadata fields."""
+    spec_title   = request.form.get('spec_title',   '').strip() or None
+    summary      = request.form.get('summary',      '').strip() or None
+    github_issue = request.form.get('github_issue', '').strip() or None
+    try:
+        _guild_db_execute(
+            "UPDATE guild.design_log SET spec_title=%s, summary=%s, github_issue=%s "
+            "WHERE id=%s",
+            (spec_title, summary, github_issue, item_id)
+        )
+    except Exception:
+        pass
+    return redirect(request.referrer or url_for('guild_build'))
+
+
+@app.route("/guild/build/items/<int:item_id>/history")
+@_require_owner
+def build_item_history(item_id):
+    """Return transition history for a design_log item as JSON."""
+    try:
+        rows = _guild_db_query(
+            "SELECT from_status, to_status, triggered_by, reason, created_at "
+            "FROM guild.design_log_transitions "
+            "WHERE design_log_id = %s ORDER BY created_at ASC",
+            (item_id,)
+        )
+        history = []
+        for r in rows:
+            history.append({
+                "from":    r['from_status'] or '—',
+                "to":      r['to_status'],
+                "by":      r['triggered_by'] or '—',
+                "reason":  r['reason'] or '',
+                "at":      r['created_at'].strftime('%b %d %H:%M') if r['created_at'] else '—',
+            })
+        return jsonify(history)
+    except Exception as e:
+        return jsonify([])
+
+
+@app.route("/guild/build/items/new", methods=["POST"])
+@_require_owner
+def new_build_item():
+    """Manually seed a design_log row — for specs Design/Dev missed or hand-entered work."""
+    spec_title   = request.form.get('spec_title',   '').strip()
+    spec_file    = request.form.get('spec_file',    '').strip() or None
+    summary      = request.form.get('summary',      '').strip() or None
+    github_issue = request.form.get('github_issue', '').strip() or None
+    status       = request.form.get('status', 'spec_ready')
+    valid_status = {'spec_ready', 'in_build', 'blocked', 'incomplete', 'deferred'}
+    if not spec_title:
+        return redirect(url_for('guild_build'))
+    if status not in valid_status:
+        status = 'spec_ready'
+    try:
+        rows = _guild_db_query(
+            "INSERT INTO guild.design_log "
+            "(event_type, doc_type, spec_title, spec_file, summary, github_issue, "
+            " agent_source, status, last_transition_at) "
+            "VALUES ('manual_entry','spec',%s,%s,%s,%s,'robert',%s,NOW()) RETURNING id",
+            (spec_title, spec_file, summary, github_issue, status)
+        )
+        new_id = rows[0]['id'] if rows else None
+        if new_id:
+            _guild_db_execute(
+                "INSERT INTO guild.design_log_transitions "
+                "(design_log_id, from_status, to_status, triggered_by, reason) "
+                "VALUES (%s, NULL, %s, 'robert', 'manually seeded from /guild/build')",
+                (new_id, status)
+            )
+    except Exception:
+        pass
+    return redirect(url_for('guild_build'))
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():

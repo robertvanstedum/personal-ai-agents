@@ -140,6 +140,78 @@
       padding: 40px 32px; text-align: center;
       font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim);
     }
+
+    /* ── New spec form ── */
+    .new-spec-toggle {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-muted); text-decoration: none;
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 4px 10px; cursor: pointer; background: none;
+    }
+    .new-spec-toggle:hover { color: var(--accent); border-color: var(--accent); }
+    .new-spec-form {
+      display: none;
+      margin: 0 32px 0;
+      background: var(--surface);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 14px 16px 12px;
+    }
+    .new-spec-form .form-row {
+      display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 8px; align-items: end;
+    }
+    .new-spec-form input, .new-spec-form select {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      border: 1px solid var(--border); border-radius: 3px;
+      padding: 5px 8px; background: var(--bg); color: var(--text); width: 100%;
+    }
+    .new-spec-form input:focus, .new-spec-form select:focus { outline: 1px solid var(--accent); }
+    .new-spec-form label {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em;
+      display: block; margin-bottom: 3px;
+    }
+    .new-spec-submit {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      padding: 5px 14px; border-radius: 3px;
+      background: var(--accent); color: white; border: none; cursor: pointer;
+      white-space: nowrap;
+    }
+    .new-spec-submit:hover { opacity: 0.85; }
+
+    /* ── Inline edit row ── */
+    .edit-link {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      color: var(--text-dim); text-decoration: none; cursor: pointer;
+    }
+    .edit-link:hover { color: var(--accent); }
+    .edit-row { display: none; background: rgba(139,94,42,0.03); }
+    .edit-row td { padding: 8px 14px; }
+    .edit-row .edit-inner {
+      display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; align-items: end;
+    }
+    .edit-row input {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      border: 1px solid var(--border); border-radius: 3px;
+      padding: 4px 7px; background: var(--bg); color: var(--text); width: 100%;
+    }
+    .edit-row input:focus { outline: 1px solid var(--accent); }
+    .edit-row label {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      color: var(--text-dim); text-transform: uppercase; display: block; margin-bottom: 2px;
+    }
+    .edit-save { font-family: 'DM Mono', monospace; font-size: 10px;
+      padding: 4px 12px; border-radius: 3px;
+      background: var(--accent); color: white; border: none; cursor: pointer; }
+    .edit-save:hover { opacity: 0.85; }
+    /* history inside build log */
+    .hist-section { margin-top: 8px; font-size: 11px; }
+    .hist-row {
+      font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-dim);
+      display: grid; grid-template-columns: 80px 140px 60px; gap: 4px;
+      padding: 2px 0; border-bottom: 1px solid rgba(221,214,200,0.3);
+    }
+    .hist-row:last-child { border-bottom: none; }
+    .hist-reason { grid-column: 1/-1; font-size: 8px; padding-left: 4px; color: var(--text-dim); }
   </style>
 </head>
 <body>
@@ -168,9 +240,45 @@
 <div class="page-header">
   <h1 class="page-title">Build Log</h1>
   <span class="page-meta">{{ items | length }} spec{{ 's' if items | length != 1 else '' }}</span>
-  <div class="header-actions">
+  <div class="header-actions" style="display:flex;gap:8px;align-items:center;">
+    <button class="new-spec-toggle" onclick="toggleNewSpec()">+ New spec</button>
     <a href="https://github.com/robertvanstedum/personal-ai-agents/issues" target="_blank" rel="noopener" class="gh-link">View GitHub Issues →</a>
   </div>
+</div>
+
+<div class="new-spec-form" id="new-spec-form">
+  <form method="POST" action="/guild/build/items/new">
+    <div class="form-row">
+      <div>
+        <label>Title *</label>
+        <input name="spec_title" placeholder="e.g. Guild Daily Briefing" required>
+      </div>
+      <div>
+        <label>Spec file</label>
+        <input name="spec_file" placeholder="spec_foo_2026-06-12.md">
+      </div>
+      <div>
+        <label>GitHub issue</label>
+        <input name="github_issue" placeholder="#41">
+      </div>
+      <div>
+        <label>Status</label>
+        <select name="status">
+          <option value="spec_ready">Spec Ready</option>
+          <option value="in_build">In Build</option>
+          <option value="incomplete">Incomplete</option>
+          <option value="deferred">Deferred</option>
+        </select>
+      </div>
+      <div style="padding-bottom:1px;">
+        <button type="submit" class="new-spec-submit">Add</button>
+      </div>
+    </div>
+    <div style="margin-top:6px;">
+      <label style="display:inline;margin-right:6px;">Summary</label>
+      <input name="summary" placeholder="One-line description (optional)" style="width:calc(100% - 70px);display:inline;">
+    </div>
+  </form>
 </div>
 
 <form class="filters" method="GET" action="/guild/build">
@@ -236,10 +344,46 @@
           {% else %}—{% endif %}
         </td>
         <td>
-          {% if item.github_issue %}
-          <a href="https://github.com/robertvanstedum/personal-ai-agents/issues/{{ item.github_issue | replace('#','') }}"
-             target="_blank" class="gh-badge">#{{ item.github_issue | replace('#','') }}</a>
-          {% else %}—{% endif %}
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            {% if item.github_issue %}
+            <a href="https://github.com/robertvanstedum/personal-ai-agents/issues/{{ item.github_issue | replace('#','') }}"
+               target="_blank" class="gh-badge">#{{ item.github_issue | replace('#','') }}</a>
+            {% else %}<span style="color:var(--text-dim)">—</span>{% endif %}
+            <a class="edit-link" onclick="toggleEditRow({{ item.id }})">edit</a>
+            <a class="edit-link" onclick="toggleHistRow({{ item.id }})">hist</a>
+          </div>
+        </td>
+      </tr>
+      {# ── Inline edit row ── #}
+      <tr class="edit-row" id="edit-row-{{ item.id }}">
+        <td colspan="4">
+          <form method="POST" action="/guild/build/items/{{ item.id }}/edit">
+            <div class="edit-inner">
+              <div>
+                <label>Title</label>
+                <input name="spec_title" value="{{ item.spec_title or '' }}" placeholder="Title">
+              </div>
+              <div>
+                <label>Summary</label>
+                <input name="summary" value="{{ item.summary or '' }}" placeholder="One line">
+              </div>
+              <div>
+                <label>GitHub issue</label>
+                <input name="github_issue" value="{{ item.github_issue or '' }}" placeholder="#41">
+              </div>
+              <div style="padding-bottom:1px;">
+                <button type="submit" class="edit-save">Save</button>
+              </div>
+            </div>
+          </form>
+        </td>
+      </tr>
+      {# ── History row ── #}
+      <tr class="edit-row" id="hist-row-{{ item.id }}">
+        <td colspan="4">
+          <div class="hist-section">
+            <div id="lhist-{{ item.id }}" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+          </div>
         </td>
       </tr>
     {% endfor %}
@@ -250,5 +394,41 @@
   {% endif %}
 </div>
 
+<script>
+function toggleNewSpec() {
+  const f = document.getElementById('new-spec-form');
+  f.style.display = f.style.display === 'block' ? 'none' : 'block';
+}
+function toggleEditRow(id) {
+  const r = document.getElementById('edit-row-' + id);
+  r.style.display = r.style.display === 'table-row' ? 'none' : 'table-row';
+}
+function toggleHistRow(id) {
+  const r = document.getElementById('hist-row-' + id);
+  const showing = r.style.display === 'table-row';
+  r.style.display = showing ? 'none' : 'table-row';
+  if (!showing) loadLogHistory(id);
+}
+function loadLogHistory(id) {
+  const el = document.getElementById('lhist-' + id);
+  if (!el || el.dataset.loaded) return;
+  fetch('/guild/build/items/' + id + '/history')
+    .then(r => r.json())
+    .then(rows => {
+      if (!rows.length) { el.textContent = 'no transitions yet'; el.dataset.loaded = '1'; return; }
+      el.innerHTML = rows.map(r => {
+        const reason = r.reason ? `<div class="hist-reason">${r.reason}</div>` : '';
+        return `<div class="hist-row">
+          <span>${r.at}</span>
+          <span>${r.from} → ${r.to}</span>
+          <span>${r.by}</span>
+          ${reason}
+        </div>`;
+      }).join('');
+      el.dataset.loaded = '1';
+    })
+    .catch(() => { el.textContent = 'unavailable'; });
+}
+</script>
 </body>
 </html>

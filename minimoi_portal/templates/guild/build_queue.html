@@ -165,13 +165,37 @@
       border-top: 1px solid rgba(221,214,200,0.5);
       font-size: 12px; color: var(--text-muted); line-height: 1.5;
     }
-    .card-detail .detail-row {
-      margin-bottom: 4px;
-    }
+    .card-detail .detail-row { margin-bottom: 4px; }
     .detail-label {
       font-family: 'DM Mono', monospace; font-size: 10px;
       color: var(--text-dim); margin-right: 6px;
     }
+    /* edit form inside detail panel */
+    .edit-form { margin-top: 8px; border-top: 1px solid rgba(221,214,200,0.5); padding-top: 8px; }
+    .edit-form input {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      border: 1px solid var(--border); border-radius: 3px;
+      padding: 3px 6px; background: var(--bg); color: var(--text);
+      width: 100%; margin-bottom: 4px;
+    }
+    .edit-form input:focus { outline: 1px solid var(--accent); }
+    .edit-save-btn {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      padding: 3px 10px; border-radius: 3px;
+      background: var(--accent); color: white; border: none; cursor: pointer;
+    }
+    .edit-save-btn:hover { opacity: 0.85; }
+    /* history section */
+    .history-section { margin-top: 8px; border-top: 1px solid rgba(221,214,200,0.5); padding-top: 6px; }
+    .history-row {
+      font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-dim);
+      padding: 2px 0; border-bottom: 1px solid rgba(221,214,200,0.3);
+      display: grid; grid-template-columns: 80px 1fr 60px; gap: 4px; align-items: start;
+    }
+    .history-row:last-child { border-bottom: none; }
+    .history-transition { color: var(--text-muted); }
+    .history-reason { color: var(--text-dim); font-size: 8px; grid-column: 1/-1; padding-left: 4px; }
+    .history-loading { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); }
   </style>
 </head>
 <body>
@@ -239,15 +263,23 @@
   </div>
 
   <div class="card-detail" id="bdetail-{{ item_id }}">
-    {% if item.summary %}
-    <div class="detail-row"><span class="detail-label">Summary</span>{{ item.summary }}</div>
-    {% endif %}
     {% if item.spec_file %}
     <div class="detail-row"><span class="detail-label">File</span>{{ item.spec_file }}</div>
     {% endif %}
-    {% if item.doc_type %}
-    <div class="detail-row"><span class="detail-label">Type</span>{{ item.doc_type }}</div>
-    {% endif %}
+
+    {# ── Inline edit form ── #}
+    <form class="edit-form" method="POST" action="/guild/build/items/{{ item_id }}/edit">
+      <input name="spec_title"   value="{{ item.spec_title   or '' }}" placeholder="Title">
+      <input name="summary"      value="{{ item.summary      or '' }}" placeholder="Summary (one line)">
+      <input name="github_issue" value="{{ item.github_issue or '' }}" placeholder="GitHub issue  e.g. #41">
+      <button type="submit" class="edit-save-btn">Save edits</button>
+    </form>
+
+    {# ── Transition history ── #}
+    <div class="history-section">
+      <div class="detail-label" style="margin-bottom:4px;">History</div>
+      <div id="bhist-{{ item_id }}" class="history-loading">loading…</div>
+    </div>
   </div>
 </div>
 {% endmacro %}
@@ -368,7 +400,30 @@ function toggleBuildDetail(id) {
   } else {
     panel.style.display = 'block';
     btn.textContent = '▲';
+    loadHistory(id);
   }
+}
+
+function loadHistory(id) {
+  const el = document.getElementById('bhist-' + id);
+  if (!el || el.dataset.loaded) return;
+  fetch('/guild/build/items/' + id + '/history')
+    .then(r => r.json())
+    .then(rows => {
+      if (!rows.length) { el.textContent = 'no transitions yet'; el.dataset.loaded = '1'; return; }
+      el.innerHTML = rows.map(r => {
+        const transition = `${r.from} → ${r.to}`;
+        const reason = r.reason ? `<div class="history-reason">${r.reason}</div>` : '';
+        return `<div class="history-row">
+          <span>${r.at}</span>
+          <span class="history-transition">${transition}</span>
+          <span>${r.by}</span>
+          ${reason}
+        </div>`;
+      }).join('');
+      el.dataset.loaded = '1';
+    })
+    .catch(() => { el.textContent = 'history unavailable'; });
 }
 </script>
 </body>
