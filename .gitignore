@@ -111,6 +111,12 @@ _working/trash/
 # Plan docs — design plans from OpenClaw/Claude.ai, permanent record, commit them
 !_working/plan_*.md
 !_working/plan_*.md.pdf
+# Design docs — architecture/design artifacts, permanent record, commit them
+!_working/design_*.md
+!_working/design_*.md.pdf
+# Build specs — prefixed variant from Claude.ai, permanent record, commit them
+!_working/build_spec_*.md
+!_working/build_spec_*.md.pdf
 
 # Finance domain — private data
 domains/finance/statements/
