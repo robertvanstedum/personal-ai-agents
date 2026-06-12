@@ -825,6 +825,21 @@ def guild_build_queue():
                            user=_current_user())
 
 
+@app.route("/guild/build/roadmap")
+@_require_owner
+def guild_build_roadmap():
+    import markdown as _md
+    from pathlib import Path
+    roadmap_path = Path(__file__).parent.parent / "_working/ROADMAP_2026-06-12.md"
+    try:
+        raw = roadmap_path.read_text()
+        content = _md.markdown(raw, extensions=["fenced_code", "tables"])
+    except Exception:
+        content = "<p><em>Roadmap file not found.</em></p>"
+    return render_template("guild/build_roadmap.html", content=content,
+                           user=_current_user())
+
+
 @app.route("/guild/build/items/<int:item_id>/status", methods=["POST"])
 @_require_owner
 def update_build_status(item_id):
