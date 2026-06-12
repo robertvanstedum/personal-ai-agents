@@ -654,18 +654,22 @@ def guild_career():
     except Exception:
         opportunities = []
 
-    # Count board-qualifying positions for contextual link
+    # Pipeline board positions (all qualifying — unfiltered, shown as second section)
     board_sql = (
-        "SELECT COUNT(*) AS cnt FROM pipeline.items "
+        "SELECT id, title, company, geo, url, opportunity_type, "
+        "fit_score, fit_narrative, warm_lead, warm_lead_contacts, "
+        "cos_notes, status, priority, close_reason, closed_at, created_at "
+        "FROM pipeline.items "
         "WHERE (priority = TRUE AND status = 'applied') "
         "OR status = 'reviewing' "
         "OR status = 'interview' "
-        "OR (status = 'closed' AND closed_at > NOW() - INTERVAL '5 days')"
+        "OR (status = 'closed' AND closed_at > NOW() - INTERVAL '5 days') "
+        "ORDER BY priority DESC NULLS LAST, fit_score DESC NULLS LAST, created_at DESC"
     )
     try:
-        board_count = int(_guild_db_query(board_sql)[0]['cnt'])
+        positions = _guild_db_query(board_sql)
     except Exception:
-        board_count = 0
+        positions = []
 
     # Read targeting criteria from cos_context.json (read-only, no fallback needed)
     try:
@@ -682,11 +686,11 @@ def guild_career():
         "guild/career_focus.html",
         opportunities=opportunities,
         total=len(opportunities),
+        positions=positions,
         status_filter=status_filter,
         geo_filter=geo_filter,
         type_filter=type_filter,
         priority_filter=priority_filter,
-        board_count=board_count,
         deadline="Aug 1, 2026",
         targeting=targeting,
     )
@@ -695,27 +699,7 @@ def guild_career():
 @app.route("/guild/career/active")
 @_require_owner
 def guild_career_active():
-    sql = (
-        "SELECT id, title, company, geo, url, opportunity_type, "
-        "fit_score, fit_narrative, warm_lead, warm_lead_contacts, "
-        "cos_notes, status, priority, close_reason, closed_at, created_at "
-        "FROM pipeline.items "
-        "WHERE (priority = TRUE AND status = 'applied') "
-        "OR status = 'reviewing' "
-        "OR status = 'interview' "
-        "OR (status = 'closed' AND closed_at > NOW() - INTERVAL '5 days') "
-        "ORDER BY priority DESC NULLS LAST, fit_score DESC NULLS LAST, created_at DESC"
-    )
-    try:
-        positions = _guild_db_query(sql)
-    except Exception:
-        positions = []
-
-    return render_template(
-        "guild/career_active.html",
-        positions=positions,
-        deadline="Aug 1, 2026",
-    )
+    return redirect("/guild/career#pipeline", 302)
 
 
 @app.route("/guild/career/positions/<int:opp_id>/status", methods=["POST"])
@@ -746,15 +730,12 @@ def update_position_status(opp_id):
                 )
         except Exception:
             pass
-    if referrer == "active":
-        return redirect(url_for("guild_career_active"))
     return redirect(url_for("guild_career"))
 
 
 @app.route("/guild/career/positions/<int:opp_id>/priority", methods=["POST"])
 @_require_owner
 def toggle_position_priority(opp_id):
-    referrer = request.form.get("_referrer", "positions")
     try:
         _guild_db_execute(
             "UPDATE pipeline.items SET priority = NOT COALESCE(priority, FALSE) WHERE id=%s",
@@ -762,8 +743,6 @@ def toggle_position_priority(opp_id):
         )
     except Exception:
         pass
-    if referrer == "active":
-        return redirect(url_for("guild_career_active"))
     return redirect(url_for("guild_career"))
 
 
@@ -804,25 +783,8 @@ def add_position():
 @app.route("/guild/build")
 @_require_owner
 def guild_build():
-    status_filter = request.args.get('status', 'all')
-    query = "SELECT * FROM guild.design_log"
-    params = []
-    if status_filter != 'all':
-        query += " WHERE status = %s"
-        params.append(status_filter)
-    query += " ORDER BY last_transition_at DESC NULLS LAST"
-    try:
-        items = _guild_db_query(query, params or None)
-    except Exception:
-        items = []
-    return render_template("guild/build_log.html", items=items,
-                           status_filter=status_filter, user=_current_user())
-
-
-@app.route("/guild/build/queue")
-@_require_owner
-def guild_build_queue():
-    sql = """
+    # Queue: live board — active items + recently done
+    queue_sql = """
         SELECT * FROM guild.design_log
         WHERE status IN ('spec_ready','in_build','blocked','incomplete')
            OR (status = 'done'
@@ -839,11 +801,36 @@ def guild_build_queue():
           last_transition_at DESC NULLS LAST
     """
     try:
-        items = _guild_db_query(sql)
+        queue_items = _guild_db_query(queue_sql)
     except Exception:
-        items = []
-    return render_template("guild/build_queue.html", items=items,
-                           user=_current_user())
+        queue_items = []
+
+    # Log: full history, optionally filtered by status
+    status_filter = request.args.get('status', 'all')
+    log_query = "SELECT * FROM guild.design_log"
+    log_params = []
+    if status_filter != 'all':
+        log_query += " WHERE status = %s"
+        log_params.append(status_filter)
+    log_query += " ORDER BY last_transition_at DESC NULLS LAST"
+    try:
+        log_items = _guild_db_query(log_query, log_params or None)
+    except Exception:
+        log_items = []
+
+    return render_template(
+        "guild/build_log.html",
+        queue_items=queue_items,
+        log_items=log_items,
+        status_filter=status_filter,
+        user=_current_user(),
+    )
+
+
+@app.route("/guild/build/queue")
+@_require_owner
+def guild_build_queue():
+    return redirect("/guild/build#queue", 302)
 
 
 @app.route("/guild/build/items/<int:item_id>/status", methods=["POST"])
@@ -894,7 +881,7 @@ def update_build_status(item_id):
     except Exception:
         pass
 
-    return redirect(request.referrer or url_for('guild_build_queue'))
+    return redirect(request.referrer or url_for('guild_build'))
 
 
 @app.route("/guild/build/items/<int:item_id>/edit", methods=["POST"])
