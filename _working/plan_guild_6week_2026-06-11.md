@@ -1,6 +1,7 @@
 # Guild — 6-Week Strategic Plan
 *mini-moi · Guild · Direction*
 *Authored: 2026-06-11 — Robert*
+*Revised: 2026-06-11 — corrections applied*
 *Horizon: ~July 1 production + June/July learning window*
 
 ---
@@ -20,37 +21,42 @@ not instead of it.
 |---|---|
 | Curator | v1.2 in production — daily use, ops, build support |
 | German | v1.0 in production — steady practice cadence |
-| Guild | Career + Build in production — practical, not ambitious |
+| Guild | Career usable + Build discipline + CoS operations live |
 
 All three live, being used, generating real signal.
 
 ---
 
-## Career — keep it supplementary
+## Career — finish it before leaving it
 
 **What it is:** Loop A surfaces candidates, Robert works the real job search
 in parallel. Guild supplements, not replaces.
 
-**Risk to manage:** Over-building Career while under-investing in the actual
-job search outside the platform. The Aug 1 deadline is real.
+**Current state:** Positions table is live. Active Pipeline board has not
+been used in practice yet — it needs to be exercised with real data before
+it can be called done.
 
-**Build stance:** Two-page design is done. Close reason coming. Stop there
-for now — no new Career features until there's clear signal the current
-ones are actually being used and helping.
+**What "usable" means:**
+- Loop A running and surfacing real candidates
+- Robert starring positions, advancing statuses, pipeline board has cards
+- Close reason working end-to-end
+- Board has been opened and actually used, not just built
 
-**What it needs to be useful:** Loop A running twice daily, results surfacing
-in Positions table, Robert starring and advancing statuses. That's it.
+**Build stance after that:** Stop. No new Career features until there's
+clear signal the current ones are helping the job search. The Aug 1
+deadline is the constraint — build discipline matters here as much as anywhere.
 
 ---
 
-## Build — the near-term priority
+## Build — the near-term Guild priority
 
 **What it is:** Automating the design→build handoff process. Making the
 workflow (OpenClaw plans → Robert approves → Claude Code builds → review)
 faster and less manual.
 
-**Why now:** It's a bottleneck on every build. And it's a showcase — a
-concrete example of the platform improving its own operations.
+**Why now:** It's a bottleneck on every build. It's a showcase — a
+concrete example of the platform improving its own operations. And it's
+useful immediately for the remaining work in this window.
 
 **What this looks like:**
 - Handoff doc generation becomes more structured / templated
@@ -62,28 +68,33 @@ concrete example of the platform improving its own operations.
 
 ---
 
-## CoS — forward-looking, not feature-building
+## CoS — three mandates, one agent
 
-**Soul v0.1** is committed. Wire it into `/chat` tomorrow (one code change).
-Then leave it. The soul's job is to make `/chat` feel like a working partner
-over time — that's a slow observation, not a sprint.
+CoS is not just forward-looking intelligence. It has three active jobs:
 
-**CoS 6-week goal: AI agent trend intelligence**
+### 1. Operations
+Monitor platform health. Disk, services, errors — the Tier 1–4 alert
+model already built and running. Keep this solid. Operations is the
+foundation everything else runs on.
 
-CoS is the right place for forward-looking, strategic work. For the next
-6 weeks, the CoS mandate is:
+### 2. Build discipline
+CoS tracks active builds and enforces the process:
+- What's in flight, what's waiting for review, what's stalled
+- Handoff doc completeness check before Claude Code starts
+- Build log entries after each session
+- Prevents drift between what was planned and what was built
 
-- Track AI agent trends weekly — what's shipping, what's changing, what matters
-- Assess how mini-moi is positioned relative to those trends
-- Surface findings in Telegram — not a flood, just what's worth knowing
-- Stay current enough that the platform doesn't fall behind without noticing
+### 3. AI agent forward-looking intelligence
+Track what's shipping in the agent space, how mini-moi is positioned,
+what matters for the roadmap. Weekly cadence. Surfaces findings via
+Telegram — not a flood, just what's worth knowing.
 
-This is practical intelligence, not research theater. CoS reads the field
-and tells Robert what it sees. Robert decides what to act on.
+**Soul v0.1** is committed. Wire into `/chat` tomorrow (one code change).
+The soul shapes tone on all three mandates — it's the connective tissue,
+not a fourth job.
 
-**What it's not:** A new build sprint. Not composite character framework,
-not principal profile, not Loop F. Those stay bookshelved until the
-basic mandate is working.
+**What CoS is not right now:** composite character framework, principal
+profile, Loop F. Those stay bookshelved.
 
 ---
 
@@ -93,7 +104,7 @@ Both need updating to reflect what's actually live:
 
 - GitHub: README reflects v1.0 German, v1.2 Curator, Guild live
 - minimoi.ai: update to show all three domains in production
-- The build process improvement (above) is itself a portfolio artifact
+- Build process improvement is itself a portfolio artifact
 
 Target: by end of June, the repo and site tell the real story.
 
@@ -102,16 +113,16 @@ Target: by end of June, the repo and site tell the real story.
 ## The 6-week rhythm
 
 **Now → July 1:**
-- Career two-page live and being used ✅
-- Build process improvement shipped
-- CoS soul wired in, agent trend tracking active
+- Career: finish making it usable (board exercised with real data)
+- Build: handoff automation shipped
+- CoS: soul wired in, all three mandates active
 - German and Curator steady in production
 
 **July (learning window):**
 - All three domains in production together
 - Incremental improvements driven by real use
-- No major new build scope — learn what's working
-- CoS surfacing agent trend findings weekly
+- No major new scope — learn what's working
+- CoS surfacing agent intelligence weekly, ops steady, build discipline active
 
 **End of July:**
 - Real production signal from all three domains
@@ -124,12 +135,12 @@ Target: by end of June, the repo and site tell the real story.
 ## What this is not
 
 - Not a CoS-first sprint. CoS supports the work; it's not the work.
-- Not a career platform build. It's a job search supplement.
+- Not a career platform build. It's a job search supplement that needs
+  to be finished and then left alone.
 - Not an agent research project. It's practical intelligence with a
-  clear consumer (Robert) and a clear cadence (weekly).
+  clear cadence and a clear consumer.
 
 ---
 
-*Guild 6-week plan · 2026-06-11 · Robert*
-*Build priority: Build process automation. Career: supplementary and stable.*
-*CoS mandate: AI agent trend intelligence, weekly cadence.*
+*Guild 6-week plan · 2026-06-11 · Robert (revised)*
+*Career: finish usable, then stop. Build: handoff automation. CoS: ops + build discipline + agent intelligence.*
