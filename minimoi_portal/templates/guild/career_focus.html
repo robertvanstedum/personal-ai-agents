@@ -48,6 +48,25 @@
     .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; }
     .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
 
+    /* ── Secondary nav (section sub-pages) ── */
+    .guild-secondary-nav {
+      height: 30px; display: flex; align-items: center;
+      padding: 0 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.04);
+      background: rgba(0,0,0,0.08);
+    }
+    .sec-link {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: rgba(198,138,94,0.45); text-decoration: none;
+      padding: 0 10px; height: 30px;
+      display: flex; align-items: center;
+      border-bottom: 2px solid transparent;
+    }
+    .sec-link:hover { color: rgba(198,138,94,0.75); }
+    .sec-link.sec-active { color: #C68A5E; border-bottom-color: rgba(198,138,94,0.45); }
+    .sec-dot { color: rgba(255,255,255,0.12); font-size: 9px; }
+
     /* ── Section headers (Scans & Dives pattern) ── */
     .section-hdr {
       display: flex; align-items: baseline;
@@ -372,8 +391,11 @@
     <a href="/guild/career" class="subnav-link subnav-active">Career Focus</a>
     <span class="subnav-dot">&nbsp;·&nbsp;</span>
     <a href="/guild/build" class="subnav-link">Build</a>
-    <span class="subnav-dot">&nbsp;·&nbsp;</span>
-    <a href="/guild/build/queue" class="subnav-link">Queue</a>
+  </div>
+  <div class="guild-secondary-nav">
+    <a href="/guild/career#positions" class="sec-link sec-active">Positions</a>
+    <span class="sec-dot">&nbsp;·&nbsp;</span>
+    <a href="/guild/career#pipeline" class="sec-link">Active Pipeline</a>
   </div>
 </nav>
 
