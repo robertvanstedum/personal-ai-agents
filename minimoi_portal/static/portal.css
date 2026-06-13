@@ -166,6 +166,7 @@ body.landing { background: var(--bg-dark); color: var(--parch); }
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 1rem;
+  align-items: start;
 }
 
 .about-card {
