@@ -7,12 +7,16 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Source Sans 3', sans-serif;
-      background: #f5f0e8; color: #2a2418;
-      font-size: 14px; min-height: 100vh;
+    :root {
+      --bg: #f5f0e8; --surface: #faf7f2; --surface2: #f0ebe0;
+      --border: #ddd6c8; --text: #2a2418; --text-muted: #6b5f4e;
+      --text-dim: #9e9080; --accent: #8b5e2a; --accent-dim: rgba(139,94,42,0.08);
+      --ok: #2a6e4e; --ok-bg: rgba(42,110,78,0.07); --ok-border: rgba(42,110,78,0.2);
+      --warn: #8b5a00; --warn-bg: rgba(139,90,0,0.07); --warn-border: rgba(139,90,0,0.25);
+      --danger: #8b2020; --danger-bg: rgba(139,32,32,0.07); --danger-border: rgba(139,32,32,0.2);
     }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
 
     /* ── Guild nav ── */
     nav.guild-nav {
@@ -22,9 +26,8 @@
     }
     .guild-nav-brand {
       height: 44px; display: flex; align-items: center;
-      padding: 0 1.5rem; gap: 0;
-      font-family: 'DM Mono', monospace; font-size: 11px;
-      letter-spacing: 0.08em;
+      padding: 0 1.5rem;
+      font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.08em;
     }
     .guild-nav-brand a { color: #C68A5E; text-decoration: none; }
     .guild-nav-brand a:hover { color: #ffffff; }
@@ -32,7 +35,7 @@
     .nav-sep { color: rgba(255,255,255,0.2); margin: 0 12px; }
     .guild-subnav {
       height: 36px; display: flex; align-items: center;
-      padding: 0 1.5rem; gap: 0;
+      padding: 0 1.5rem;
       border-top: 1px solid rgba(255,255,255,0.06);
       background: rgba(0,0,0,0.15);
     }
@@ -48,37 +51,147 @@
     .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; }
     .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
 
-    /* ── Content ── */
-    main { max-width: 700px; margin: 0 auto; padding: 52px 32px 80px; }
-    h1 {
-      font-family: 'Playfair Display', serif;
-      font-size: 2rem; font-weight: 400; margin-bottom: 8px;
+    /* ── Layout ── */
+    .briefing {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: var(--border);
+      border-top: 1px solid var(--border);
+      min-height: calc(100vh - 80px);
     }
-    .page-meta {
-      font-family: 'DM Mono', monospace; font-size: 11px;
-      color: #9e9080; letter-spacing: 0.04em; margin-bottom: 40px;
+    .section {
+      background: var(--bg);
+      padding: 28px 32px 36px;
     }
-    .section-list { list-style: none; }
-    .section-item {
-      border-bottom: 0.5px solid #ddd6c8;
-      padding: 18px 0;
+    .section-label {
+      font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
+      letter-spacing: 0.14em; color: var(--text-dim); font-weight: 600;
+      margin-bottom: 16px;
+      display: flex; align-items: center; gap: 10px;
     }
-    .section-item:first-child { border-top: 0.5px solid #ddd6c8; }
-    .section-link {
-      display: flex; align-items: baseline; justify-content: space-between;
-      text-decoration: none; color: inherit;
+    .section-label-line {
+      flex: 1; height: 1px; background: var(--border);
     }
-    .section-link:hover .section-title { color: #8b5e2a; }
-    .section-title {
-      font-size: 15px; font-weight: 500; color: #2a2418;
+
+    /* ── Status dot ── */
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+      display: inline-block; margin-right: 6px;
     }
-    .section-desc {
-      font-size: 12px; color: #9e9080; margin-top: 3px;
+    .dot-ok     { background: var(--ok); }
+    .dot-warn   { background: var(--warn); }
+    .dot-danger { background: var(--danger); }
+    .dot-dim    { background: var(--text-dim); }
+
+    /* ── Status pill ── */
+    .pill {
+      font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
+      letter-spacing: 0.07em; padding: 2px 7px; border-radius: 3px; border: 1px solid;
+      white-space: nowrap;
     }
-    .section-arrow {
-      font-family: 'DM Mono', monospace; font-size: 11px;
-      color: #8b5e2a; flex-shrink: 0; margin-left: 16px;
+    .pill-ok     { color: var(--ok);     background: var(--ok-bg);     border-color: var(--ok-border); }
+    .pill-warn   { color: var(--warn);   background: var(--warn-bg);   border-color: var(--warn-border); }
+    .pill-danger { color: var(--danger); background: var(--danger-bg); border-color: var(--danger-border); }
+    .pill-dim    { color: var(--text-dim); background: rgba(0,0,0,0.03); border-color: var(--border); }
+
+    /* ── Row items ── */
+    .brief-row {
+      display: flex; align-items: baseline; gap: 10px;
+      padding: 9px 0;
+      border-bottom: 1px solid rgba(221,214,200,0.4);
+      font-size: 13px;
     }
+    .brief-row:last-child { border-bottom: none; }
+    .brief-label {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-dim); white-space: nowrap;
+      min-width: 90px;
+    }
+    .brief-value { color: var(--text-muted); flex: 1; line-height: 1.4; }
+    .brief-value strong { color: var(--text); font-weight: 600; }
+    .brief-value a { color: var(--accent); text-decoration: none; }
+    .brief-value a:hover { text-decoration: underline; }
+
+    /* ── Stat cluster ── */
+    .stat-row {
+      display: flex; gap: 20px; flex-wrap: wrap;
+      padding: 10px 0 14px;
+      border-bottom: 1px solid rgba(221,214,200,0.4);
+      margin-bottom: 12px;
+    }
+    .stat { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+    .stat-num {
+      font-family: 'Playfair Display', serif; font-size: 1.6rem;
+      font-weight: 400; line-height: 1; color: var(--text);
+    }
+    .stat-num.accent { color: var(--accent); }
+    .stat-num.ok     { color: var(--ok); }
+    .stat-num.warn   { color: var(--warn); }
+    .stat-num.danger { color: var(--danger); }
+    .stat-lbl {
+      font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-dim);
+    }
+
+    /* ── Blocked item ── */
+    .blocked-item {
+      background: var(--danger-bg); border: 1px solid var(--danger-border);
+      border-radius: 4px; padding: 8px 12px; margin-bottom: 8px;
+    }
+    .blocked-title { font-size: 13px; font-weight: 500; color: var(--danger); }
+    .blocked-reason { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+    /* ── Ahead loop row ── */
+    .loop-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 0; border-bottom: 1px solid rgba(221,214,200,0.4);
+    }
+    .loop-row:last-child { border-bottom: none; }
+    .loop-name {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-dim); min-width: 56px;
+    }
+    .loop-schedule { font-size: 12px; color: var(--text-muted); flex: 1; }
+    .loop-next {
+      font-family: 'DM Mono', monospace; font-size: 10px; color: var(--accent);
+      white-space: nowrap;
+    }
+    .loop-first-run {
+      font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--ok); background: var(--ok-bg);
+      border: 1px solid var(--ok-border); border-radius: 3px; padding: 1px 6px;
+    }
+
+    /* ── Deadline countdown ── */
+    .deadline-block {
+      margin-top: 16px; padding: 12px 14px;
+      background: var(--warn-bg); border: 1px solid var(--warn-border);
+      border-radius: 5px;
+    }
+    .deadline-days {
+      font-family: 'Playfair Display', serif; font-size: 2rem;
+      font-weight: 400; color: var(--warn); line-height: 1;
+    }
+    .deadline-label {
+      font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--warn); margin-top: 3px;
+    }
+    .deadline-note { font-size: 11px; color: var(--text-dim); margin-top: 5px; line-height: 1.4; }
+
+    /* ── Flag note ── */
+    .flag-note {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-dim); font-style: italic;
+      padding: 6px 0; border-top: 1px solid rgba(221,214,200,0.4); margin-top: 8px;
+    }
+
+    /* ── Section link ── */
+    .section-goto {
+      font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--accent); text-decoration: none;
+    }
+    .section-goto:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -100,31 +213,286 @@
   </div>
 </nav>
 
-<main>
-  <h1>Guild</h1>
-  <p class="page-meta">Agent operations &middot; owner only</p>
+<div class="briefing">
 
-  <ul class="section-list">
-    <li class="section-item">
-      <a class="section-link" href="/guild/career">
-        <div>
-          <div class="section-title">Career Focus</div>
-          <div class="section-desc">Positions pipeline — Loop A runs twice daily</div>
-        </div>
-        <span class="section-arrow">→</span>
-      </a>
-    </li>
-    <li class="section-item">
-      <a class="section-link" href="/guild/build">
-        <div>
-          <div class="section-title">Build</div>
-          <div class="section-desc">Spec lifecycle — queue and build log</div>
-        </div>
-        <span class="section-arrow">→</span>
-      </a>
-    </li>
-  </ul>
-</main>
+  {# ── SYSTEMS ─────────────────────────────────────────────────── #}
+  <div class="section">
+    <div class="section-label">Systems <span class="section-label-line"></span></div>
+
+    {# Operations #}
+    {% set ops_ok = ops.get('state') == 'running' and ops.get('open_escalations', 0) == 0 %}
+    {% set disk   = ops.get('last_action', {}).get('disk_pct', 0) %}
+    {% set disk_warn = disk and disk | float > 85 %}
+    <div class="brief-row">
+      <span class="brief-label">Operations</span>
+      <span class="brief-value">
+        {% if ops.get('error') %}
+          <span class="dot dot-danger"></span>unreachable
+        {% elif ops_ok and not disk_warn %}
+          <span class="dot dot-ok"></span>
+          {{ ops.get('last_action', {}).get('services', '—') }} ·
+          0 escalations
+        {% else %}
+          <span class="dot dot-warn"></span>
+          {{ ops.get('last_action', {}).get('services', '—') }} ·
+          {{ ops.get('open_escalations', 0) }} escalation{{ 's' if ops.get('open_escalations', 0) != 1 else '' }}
+        {% endif %}
+      </span>
+    </div>
+
+    {# Disk #}
+    {% if disk %}
+    <div class="brief-row">
+      <span class="brief-label">Disk</span>
+      <span class="brief-value">
+        {% if disk | float > 95 %}
+          <span class="pill pill-danger">{{ disk }}%</span>&nbsp; critical
+        {% elif disk | float > 85 %}
+          <span class="pill pill-warn">{{ disk }}%</span>&nbsp; above 85% threshold
+        {% else %}
+          <span class="pill pill-ok">{{ disk }}%</span>
+        {% endif %}
+      </span>
+    </div>
+    {% endif %}
+
+    {# Loops #}
+    <div class="brief-row">
+      <span class="brief-label">Loop A</span>
+      <span class="brief-value">Career scout · <strong>{{ ahead.loop_a.next }}</strong></span>
+    </div>
+    <div class="brief-row">
+      <span class="brief-label">Loops B–D</span>
+      <span class="brief-value">
+        German / Curator / Novelty ·
+        <strong>{{ ahead.loop_b.next }}</strong>
+        {% set bcd_sunday = ahead.loop_b.next %}
+      </span>
+    </div>
+
+    {# Uptime #}
+    {% if ops.get('uptime_seconds') %}
+    {% set updays = (ops.uptime_seconds / 86400) | int %}
+    <div class="brief-row">
+      <span class="brief-label">Uptime</span>
+      <span class="brief-value" style="color:var(--text-dim)">
+        {{ updays }}d · started {{ ops.started_at[:10] if ops.started_at else '—' }}
+      </span>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── CAREER ───────────────────────────────────────────────────── #}
+  <div class="section">
+    <div class="section-label">
+      Career Focus
+      <span class="section-label-line"></span>
+      <a href="/guild/career" class="section-goto">View →</a>
+    </div>
+
+    {# Deadline countdown #}
+    {% if ahead.career_deadline is not none %}
+    <div class="deadline-block">
+      <div class="deadline-days">{{ ahead.career_deadline }}</div>
+      <div class="deadline-label">days to Aug 1 deadline</div>
+      {% if ahead.urgency_note %}
+      <div class="deadline-note">{{ ahead.urgency_note }}</div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# Stats #}
+    {% set total = career.counts.values() | sum %}
+    <div class="stat-row" style="margin-top:16px;">
+      {% if career.counts.get('interview', 0) %}
+      <div class="stat">
+        <span class="stat-num ok">{{ career.counts.interview }}</span>
+        <span class="stat-lbl">Interview</span>
+      </div>
+      {% endif %}
+      {% if career.counts.get('suggested', 0) %}
+      <div class="stat">
+        <span class="stat-num">{{ career.counts.suggested }}</span>
+        <span class="stat-lbl">Suggested</span>
+      </div>
+      {% endif %}
+      {% if career.counts.get('applied', 0) %}
+      <div class="stat">
+        <span class="stat-num">{{ career.counts.applied }}</span>
+        <span class="stat-lbl">Applied</span>
+      </div>
+      {% endif %}
+      {% if career.counts.get('reviewing', 0) %}
+      <div class="stat">
+        <span class="stat-num accent">{{ career.counts.reviewing }}</span>
+        <span class="stat-lbl">Reviewing</span>
+      </div>
+      {% endif %}
+      <div class="stat">
+        <span class="stat-num" style="color:var(--text-dim)">{{ total }}</span>
+        <span class="stat-lbl">Total</span>
+      </div>
+    </div>
+
+    {# Active interviews #}
+    {% for pos in career.interviews %}
+    <div class="brief-row">
+      <span class="brief-label">Interview</span>
+      <span class="brief-value">
+        <strong>{{ pos.title | truncate(50, true, '…') }}</strong>
+        {% if pos.company %} · {{ pos.company }}{% endif %}
+      </span>
+    </div>
+    {% endfor %}
+
+    {# Stale applications #}
+    {% if career.stale %}
+    <div class="brief-row">
+      <span class="brief-label">Stale</span>
+      <span class="brief-value" style="color:var(--warn)">
+        {{ career.stale | length }} application{{ 's' if career.stale | length != 1 else '' }} &gt;7 days no response
+      </span>
+    </div>
+    {% endif %}
+
+    {# Recently closed #}
+    {% for pos in career.recent_closed %}
+    <div class="brief-row">
+      <span class="brief-label">Closed</span>
+      <span class="brief-value" style="color:var(--text-dim)">
+        {{ pos.title | truncate(45, true, '…') }}
+        {% if pos.close_reason %} · {{ pos.close_reason }}{% endif %}
+        {% if pos.fit_score %} · <strong>{{ pos.fit_score }}</strong>{% endif %}
+      </span>
+    </div>
+    {% endfor %}
+
+    {% if career.error %}
+    <div class="flag-note">⚠ pipeline.items unavailable</div>
+    {% endif %}
+  </div>
+
+  {# ── BUILD ────────────────────────────────────────────────────── #}
+  <div class="section">
+    <div class="section-label">
+      Build
+      <span class="section-label-line"></span>
+      <a href="/guild/build" class="section-goto">Log →</a>
+      &nbsp;
+      <a href="/guild/build/queue" class="section-goto">Queue →</a>
+    </div>
+
+    {# Stats #}
+    <div class="stat-row">
+      {% if build.counts.get('in_build', 0) %}
+      <div class="stat">
+        <span class="stat-num accent">{{ build.counts.in_build }}</span>
+        <span class="stat-lbl">In Build</span>
+      </div>
+      {% endif %}
+      {% if build.counts.get('spec_ready', 0) %}
+      <div class="stat">
+        <span class="stat-num">{{ build.counts.spec_ready }}</span>
+        <span class="stat-lbl">Spec Ready</span>
+      </div>
+      {% endif %}
+      {% if build.counts.get('blocked', 0) %}
+      <div class="stat">
+        <span class="stat-num danger">{{ build.counts.blocked }}</span>
+        <span class="stat-lbl">Blocked</span>
+      </div>
+      {% endif %}
+      {% if build.counts.get('done', 0) %}
+      <div class="stat">
+        <span class="stat-num" style="color:var(--text-dim)">{{ build.counts.done }}</span>
+        <span class="stat-lbl">Done</span>
+      </div>
+      {% endif %}
+    </div>
+
+    {# Blocked items — needs Robert #}
+    {% for item in build.blocked %}
+    <div class="blocked-item">
+      <div class="blocked-title">⚠ {{ item.spec_title or '(untitled)' }}</div>
+      {% if item.blocked_reason %}
+      <div class="blocked-reason">{{ item.blocked_reason }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    {# Spec-ready queue #}
+    {% for item in build.spec_ready %}
+    <div class="brief-row">
+      <span class="brief-label">Spec Ready</span>
+      <span class="brief-value">{{ item.spec_title or '(untitled)' }}</span>
+    </div>
+    {% endfor %}
+
+    {# cos_agenda #}
+    {% if build.agenda %}
+    {% for item in build.agenda %}
+    <div class="brief-row">
+      <span class="brief-label">{{ item.domain | upper }}</span>
+      <span class="brief-value" style="color:var(--text-muted)">{{ item.description }}</span>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="flag-note">cos_agenda empty — CoS loops not yet running</div>
+    {% endif %}
+
+    {% if build.error %}
+    <div class="flag-note">⚠ design_log unavailable</div>
+    {% endif %}
+  </div>
+
+  {# ── AHEAD ────────────────────────────────────────────────────── #}
+  <div class="section">
+    <div class="section-label">Ahead <span class="section-label-line"></span></div>
+
+    {# Loop schedule #}
+    <div style="margin-bottom:16px;">
+      {% for loop_key, loop_label, loop_note in [
+          ('loop_a', 'Loop A', 'Career scout'),
+          ('loop_b', 'Loop B', 'German watch'),
+          ('loop_c', 'Loop C', 'Curator scout'),
+          ('loop_d', 'Loop D', 'Novelty watch')
+      ] %}
+      {% set lp = ahead[loop_key] %}
+      <div class="loop-row">
+        <span class="loop-name">{{ loop_label }}</span>
+        <span class="loop-schedule">{{ loop_note }} · {{ lp.schedule }}</span>
+        <span class="loop-next">
+          {{ lp.next }}
+          {% if loop_key in ('loop_b','loop_c','loop_d') and 'Jun 15' in lp.next or 'tomorrow' in lp.next %}
+          <span class="loop-first-run">first run</span>
+          {% endif %}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+
+    {# Key dates #}
+    <div class="section-label" style="margin-top:8px;">Key dates <span class="section-label-line"></span></div>
+
+    <div class="brief-row">
+      <span class="brief-label">Aug 1</span>
+      <span class="brief-value">Career placement deadline
+        {% if ahead.career_deadline is not none %}
+        · <strong>{{ ahead.career_deadline }}d</strong>
+        {% endif %}
+      </span>
+    </div>
+    <div class="brief-row">
+      <span class="brief-label">Aug 3</span>
+      <span class="brief-value" style="color:var(--text-dim)">T-Mobile contract end</span>
+    </div>
+    <div class="brief-row">
+      <span class="brief-label">Jun 15</span>
+      <span class="brief-value">Loops B/C/D first run · German / Curator / Novelty</span>
+    </div>
+  </div>
+
+</div>
 
 </body>
 </html>

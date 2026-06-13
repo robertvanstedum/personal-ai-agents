@@ -615,7 +615,147 @@ def _guild_db_execute(sql, params=None):
 @app.route("/guild/")
 @_require_owner
 def guild_landing():
-    return render_template("guild/guild_landing.html", user=_current_user())
+    import requests as _req
+    from datetime import datetime, timezone, timedelta
+    import json as _json
+    from pathlib import Path as _Path
+
+    # ── 1. Operations status ──────────────────────────────────────────────────
+    ops = {}
+    try:
+        r = _req.get("http://localhost:8768/status", timeout=2)
+        ops = r.json()
+    except Exception:
+        ops = {"state": "unreachable", "error": True}
+
+    # ── 2. Career ─────────────────────────────────────────────────────────────
+    career = {"counts": {}, "interviews": [], "recent_closed": [], "stale": [],
+              "days_left": None, "urgency_note": "", "error": False}
+    try:
+        for row in _guild_db_query(
+            "SELECT status, COUNT(*) as cnt FROM pipeline.items GROUP BY status"
+        ):
+            career["counts"][row["status"]] = int(row["cnt"])
+        career["interviews"] = _guild_db_query(
+            "SELECT title, company FROM pipeline.items WHERE status='interview'"
+            " ORDER BY created_at DESC"
+        )
+        career["recent_closed"] = _guild_db_query(
+            "SELECT title, company, close_reason, fit_score, closed_at"
+            " FROM pipeline.items"
+            " WHERE status='closed' AND closed_at > NOW() - INTERVAL '5 days'"
+            " ORDER BY closed_at DESC"
+        )
+        career["stale"] = _guild_db_query(
+            "SELECT title, company, created_at FROM pipeline.items"
+            " WHERE status='applied' AND created_at < NOW() - INTERVAL '7 days'"
+            " ORDER BY created_at ASC"
+        )
+    except Exception:
+        career["error"] = True
+
+    # Deadline from cos_context.json
+    try:
+        _ctx = _json.loads(
+            (_Path(__file__).parent.parent / "domains/guild/config/cos_context.json").read_text()
+        )
+        _cf = _ctx.get("career_focus", {})
+        _dl = _cf.get("deadline", "")
+        career["urgency_note"] = _cf.get("urgency_note", "")
+        if _dl:
+            _dl_dt = datetime.strptime(_dl, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            career["days_left"] = (_dl_dt - datetime.now(timezone.utc)).days
+    except Exception:
+        pass
+
+    # ── 3. Build ──────────────────────────────────────────────────────────────
+    build = {"counts": {}, "blocked": [], "spec_ready": [], "agenda": [], "error": False}
+    try:
+        for row in _guild_db_query(
+            "SELECT status, COUNT(*) as cnt FROM guild.design_log GROUP BY status"
+        ):
+            build["counts"][row["status"]] = int(row["cnt"])
+        build["blocked"] = _guild_db_query(
+            "SELECT spec_title, blocked_reason FROM guild.design_log WHERE status='blocked'"
+        )
+        build["spec_ready"] = _guild_db_query(
+            "SELECT spec_title FROM guild.design_log WHERE status='spec_ready' ORDER BY id DESC"
+        )
+        build["agenda"] = _guild_db_query(
+            "SELECT domain, description, confidence FROM guild.cos_agenda"
+            " WHERE status='pending' ORDER BY confidence DESC NULLS LAST LIMIT 5"
+        )
+    except Exception:
+        build["error"] = True
+
+    # ── 4. Ahead ──────────────────────────────────────────────────────────────
+    # Compute next fire times for each loop (America/Chicago ≈ UTC-5/UTC-6)
+    _now = datetime.now(timezone.utc)
+    _today = _now.date()
+
+    def _next_daily(hour_utc):
+        """Next occurrence of a daily UTC hour."""
+        candidate = _now.replace(hour=hour_utc, minute=0, second=0, microsecond=0)
+        if candidate <= _now:
+            candidate += timedelta(days=1)
+        return candidate
+
+    def _next_weekday(weekday, hour_utc):
+        """Next occurrence of a UTC weekday (0=Mon…6=Sun) at given hour."""
+        days_ahead = (weekday - _today.weekday()) % 7
+        candidate = (_now + timedelta(days=days_ahead)).replace(
+            hour=hour_utc, minute=0, second=0, microsecond=0)
+        if candidate <= _now:
+            candidate += timedelta(weeks=1)
+        return candidate
+
+    def _next_dom(day, hour_utc):
+        """Next occurrence of a day-of-month at given UTC hour."""
+        from calendar import monthrange
+        y, m, d = _today.year, _today.month, day
+        if d < _today.day or (d == _today.day and _now.hour >= hour_utc):
+            m += 1
+            if m > 12:
+                m, y = 1, y + 1
+        import datetime as _dt
+        # clamp to month length
+        d = min(d, monthrange(y, m)[1])
+        candidate = datetime(y, m, d, hour_utc, 0, 0, tzinfo=timezone.utc)
+        return candidate
+
+    _loop_a_next = _next_daily(11)   # 06:00 CDT = 11:00 UTC
+    _loop_b_next = _next_weekday(6, 14)  # Sunday 09:00 CDT = 14 UTC
+    _loop_c_next = _next_weekday(6, 15)  # Sunday 10:00 CDT = 15 UTC
+    _loop_d1     = _next_dom(1,  13)     # 1st  08:00 CDT = 13 UTC
+    _loop_d15    = _next_dom(15, 13)     # 15th 08:00 CDT = 13 UTC
+    _loop_d_next = min(_loop_d1, _loop_d15)
+
+    def _fmt_next(dt):
+        delta = dt - _now
+        days = delta.days
+        if days == 0:
+            h = delta.seconds // 3600
+            return f"in {h}h" if h else "< 1h"
+        if days == 1:
+            return f"tomorrow {dt.strftime('%-I:%M %p')} CT"
+        return dt.strftime(f"%-d %b {dt.strftime('%-I:%M %p')} CT")
+
+    ahead = {
+        "loop_a": {"schedule": "Daily 06:00 + 18:00 CT", "next": _fmt_next(_loop_a_next)},
+        "loop_b": {"schedule": "Sunday 09:00 CT", "next": _fmt_next(_loop_b_next)},
+        "loop_c": {"schedule": "Sunday 10:00 CT", "next": _fmt_next(_loop_c_next)},
+        "loop_d": {"schedule": "1st + 15th 08:00 CT", "next": _fmt_next(_loop_d_next)},
+        "career_deadline": career.get("days_left"),
+        "urgency_note": career.get("urgency_note", ""),
+    }
+
+    return render_template("guild/guild_landing.html",
+        ops=ops,
+        career=career,
+        build=build,
+        ahead=ahead,
+        user=_current_user()
+    )
 
 
 @app.route("/guild/career")
