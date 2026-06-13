@@ -6,6 +6,7 @@
   <title>Positions — Career Focus — Guild</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/guild.css">
   <style>
     :root {
       --bg: #f5f0e8; --surface: #faf7f2; --surface2: #f0ebe0;
@@ -24,11 +25,11 @@
     .guild-nav-brand {
       height: 44px; display: flex; align-items: center;
       padding: 0 1.5rem;
-      font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.08em;
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); letter-spacing: 0.08em;
     }
     .guild-nav-brand a { color: #C68A5E; text-decoration: none; }
     .guild-nav-brand a:hover { color: #ffffff; }
-    .guild-nav-brand a.nav-active { color: #ffffff; font-weight: 600; }
+    .guild-nav-brand a.nav-active { color: #ffffff; font-weight: 700; }
     .nav-sep { color: rgba(255,255,255,0.2); margin: 0 12px; }
     .guild-subnav {
       height: 36px; display: flex; align-items: center;
@@ -37,7 +38,7 @@
       background: rgba(0,0,0,0.15);
     }
     .subnav-back {
-      font-family: 'DM Mono', monospace; font-size: 10px;
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
       text-transform: uppercase; letter-spacing: 0.06em;
       color: rgba(198,138,94,0.4); text-decoration: none;
       padding: 0 14px 0 0; height: 36px;
@@ -47,7 +48,7 @@
     }
     .subnav-back:hover { color: rgba(198,138,94,0.75); }
     .subnav-link {
-      font-family: 'DM Mono', monospace; font-size: 10px;
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
       text-transform: uppercase; letter-spacing: 0.08em;
       color: rgba(198,138,94,0.7); text-decoration: none;
       padding: 0 12px; height: 36px;
@@ -55,7 +56,7 @@
       border-bottom: 2px solid transparent;
     }
     .subnav-link:hover { color: #C68A5E; }
-    .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; }
+    .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; font-weight: 700; }
     .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
 
     /* ── Page header ── */
@@ -106,8 +107,8 @@
     .table-wrap { padding: 16px 32px 48px; overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
     thead th {
-      font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
-      letter-spacing: 0.1em; color: var(--text-dim);
+      font-family: var(--guild-h2-font); font-size: var(--guild-h2-size); text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--guild-h2-color); font-weight: var(--guild-h2-weight);
       padding: 6px 10px; text-align: left;
       border-bottom: 1px solid var(--border);
     }

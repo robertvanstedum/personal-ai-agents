@@ -6,6 +6,7 @@
   <title>Guild — mini-moi</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/guild.css">
   <style>
     :root {
       --bg: #f5f0e8; --surface: #faf7f2; --surface2: #f0ebe0;
@@ -27,11 +28,11 @@
     .guild-nav-brand {
       height: 44px; display: flex; align-items: center;
       padding: 0 1.5rem;
-      font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.08em;
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); letter-spacing: 0.08em;
     }
     .guild-nav-brand a { color: #C68A5E; text-decoration: none; }
     .guild-nav-brand a:hover { color: #ffffff; }
-    .guild-nav-brand a.nav-active { color: #ffffff; font-weight: 600; }
+    .guild-nav-brand a.nav-active { color: #ffffff; font-weight: 700; }
     .nav-sep { color: rgba(255,255,255,0.2); margin: 0 12px; }
     .guild-subnav {
       height: 36px; display: flex; align-items: center;
@@ -40,7 +41,7 @@
       background: rgba(0,0,0,0.15);
     }
     .subnav-link {
-      font-family: 'DM Mono', monospace; font-size: 10px;
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
       text-transform: uppercase; letter-spacing: 0.08em;
       color: rgba(198,138,94,0.7); text-decoration: none;
       padding: 0 14px; height: 36px;
@@ -48,30 +49,34 @@
       border-bottom: 2px solid transparent;
     }
     .subnav-link:hover { color: #C68A5E; }
-    .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; }
+    .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; font-weight: 700; }
     .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
 
     /* ── Layout ── */
     .briefing {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 1px;
-      background: var(--border);
+      gap: 16px;
+      padding: 20px 24px;
+      background: var(--bg);
       border-top: 1px solid var(--border);
       min-height: calc(100vh - 80px);
     }
     .section {
-      background: var(--bg);
-      padding: 28px 32px 36px;
+      background: var(--surface);
+      border: 1px solid rgba(184,174,158,0.75);
+      border-radius: 6px;
+      padding: 24px 28px 32px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
     .section-label {
-      font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
-      letter-spacing: 0.14em; color: var(--text-dim); font-weight: 600;
-      margin-bottom: 16px;
+      font-family: var(--guild-h2-font); font-size: var(--guild-h2-size); text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--guild-h2-color); font-weight: var(--guild-h2-weight);
+      margin-bottom: 18px;
       display: flex; align-items: center; gap: 10px;
     }
     .section-label-line {
-      flex: 1; height: 1px; background: var(--border);
+      flex: 1; height: 1px; background: rgba(184,174,158,0.6);
     }
 
     /* ── Status dot ── */
@@ -170,7 +175,7 @@
       border-radius: 5px;
     }
     .deadline-days {
-      font-family: 'Playfair Display', serif; font-size: 2rem;
+      font-family: 'Playfair Display', serif; font-size: 1.4rem;
       font-weight: 400; color: var(--warn); line-height: 1;
     }
     .deadline-label {
@@ -207,9 +212,9 @@
     <a href="/guild" class="nav-active">Guild</a>
   </div>
   <div class="guild-subnav">
-    <a href="/guild/career" class="subnav-link">Career Focus</a>
+    <a href="/guild/career" class="subnav-link subnav-active">Career Focus</a>
     <span class="subnav-dot">&nbsp;·&nbsp;</span>
-    <a href="/guild/build" class="subnav-link">Build</a>
+    <a href="/guild/build" class="subnav-link subnav-active">Build</a>
   </div>
 </nav>
 

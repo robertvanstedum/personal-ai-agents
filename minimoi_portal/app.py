@@ -924,12 +924,20 @@ def add_position():
 @_require_owner
 def guild_build():
     status_filter = request.args.get('status', 'all')
-    query = "SELECT * FROM guild.design_log"
-    params = []
-    if status_filter != 'all':
-        query += " WHERE status = %s"
-        params.append(status_filter)
-    query += " ORDER BY last_transition_at DESC NULLS LAST"
+    where = "WHERE dl.status = %s" if status_filter != 'all' else ""
+    params = [status_filter] if status_filter != 'all' else []
+    query = f"""
+        SELECT dl.*,
+               t.reason AS incomplete_reason
+        FROM guild.design_log dl
+        LEFT JOIN LATERAL (
+            SELECT reason FROM guild.design_log_transitions
+            WHERE design_log_id = dl.id AND to_status = 'incomplete'
+            ORDER BY created_at DESC LIMIT 1
+        ) t ON true
+        {where}
+        ORDER BY dl.last_transition_at DESC NULLS LAST
+    """
     try:
         items = _guild_db_query(query, params or None)
     except Exception:
@@ -942,12 +950,19 @@ def guild_build():
 @_require_owner
 def guild_build_queue():
     sql = """
-        SELECT * FROM guild.design_log
-        WHERE status IN ('spec_ready','in_build','blocked','incomplete')
-           OR (status = 'done'
-               AND last_transition_at > NOW() - INTERVAL '3 days')
+        SELECT dl.*,
+               t.reason AS incomplete_reason
+        FROM guild.design_log dl
+        LEFT JOIN LATERAL (
+            SELECT reason FROM guild.design_log_transitions
+            WHERE design_log_id = dl.id AND to_status = 'incomplete'
+            ORDER BY created_at DESC LIMIT 1
+        ) t ON true
+        WHERE dl.status IN ('spec_ready','in_build','blocked','incomplete')
+           OR (dl.status = 'done'
+               AND dl.last_transition_at > NOW() - INTERVAL '3 days')
         ORDER BY
-          CASE status
+          CASE dl.status
             WHEN 'blocked'    THEN 1
             WHEN 'in_build'   THEN 2
             WHEN 'spec_ready' THEN 3
@@ -955,7 +970,7 @@ def guild_build_queue():
             WHEN 'done'       THEN 4
             ELSE 5
           END,
-          last_transition_at DESC NULLS LAST
+          dl.last_transition_at DESC NULLS LAST
     """
     try:
         items = _guild_db_query(sql)
@@ -963,6 +978,44 @@ def guild_build_queue():
         items = []
     return render_template("guild/build_queue.html", items=items,
                            user=_current_user())
+
+
+@app.route("/guild/build/spec/<path:filename>")
+@_require_owner
+def guild_build_spec(filename):
+    import markdown as _md
+    from pathlib import Path
+    import re
+    if not re.match(r'^[\w\-\.]+\.md$', filename):
+        return "Not found", 404
+    spec_path = Path(__file__).parent.parent / "_working" / filename
+    if not spec_path.exists():
+        return render_template("guild/spec_detail.html",
+                               content="<p><em>Spec file not found.</em></p>",
+                               filename=filename, user=_current_user())
+    raw = spec_path.read_text()
+    content = _md.markdown(raw, extensions=["fenced_code", "tables"])
+    return render_template("guild/spec_detail.html", content=content,
+                           filename=filename, user=_current_user())
+
+
+@app.route("/guild/build/spec/<path:filename>/raw")
+@_require_owner
+def guild_build_spec_raw(filename):
+    from pathlib import Path
+    from flask import Response
+    import re
+    if not re.match(r'^[\w\-\.]+\.md$', filename):
+        return "Not found", 404
+    spec_path = Path(__file__).parent.parent / "_working" / filename
+    if not spec_path.exists():
+        return "Not found", 404
+    raw = spec_path.read_text()
+    return Response(
+        raw,
+        mimetype="text/plain",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
 
 
 @app.route("/guild/build/roadmap")

@@ -6,6 +6,7 @@
   <title>Build Queue — Guild</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/guild.css">
   <style>
     :root {
       --bg: #f5f0e8; --surface: #faf7f2; --surface2: #f0ebe0;
@@ -24,11 +25,11 @@
     .guild-nav-brand {
       height: 44px; display: flex; align-items: center;
       padding: 0 1.5rem;
-      font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.08em;
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); letter-spacing: 0.08em;
     }
     .guild-nav-brand a { color: #C68A5E; text-decoration: none; }
     .guild-nav-brand a:hover { color: #ffffff; }
-    .guild-nav-brand a.nav-active { color: #ffffff; font-weight: 600; }
+    .guild-nav-brand a.nav-active { color: #ffffff; font-weight: 700; }
     .nav-sep { color: rgba(255,255,255,0.2); margin: 0 12px; }
     .guild-subnav {
       height: 36px; display: flex; align-items: center;
@@ -37,7 +38,7 @@
       background: rgba(0,0,0,0.15);
     }
     .subnav-link {
-      font-family: 'DM Mono', monospace; font-size: 10px;
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
       text-transform: uppercase; letter-spacing: 0.08em;
       color: rgba(198,138,94,0.7); text-decoration: none;
       padding: 0 12px; height: 36px;
@@ -45,11 +46,11 @@
       border-bottom: 2px solid transparent;
     }
     .subnav-link:hover { color: #C68A5E; }
-    .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; }
+    .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; font-weight: 700; }
     .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
 
     .subnav-back {
-      font-family: 'DM Mono', monospace; font-size: 10px;
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
       text-transform: uppercase; letter-spacing: 0.06em;
       color: rgba(198,138,94,0.4); text-decoration: none;
       padding: 0 14px 0 0; height: 36px;
@@ -89,9 +90,9 @@
     .board-col:last-child { border-right: none; }
     .col-header {
       padding: 10px 4px 12px;
-      font-family: 'DM Mono', monospace; font-size: 10px;
-      text-transform: uppercase; letter-spacing: 0.1em;
-      color: var(--text-dim);
+      font-family: var(--guild-h2-font); font-size: var(--guild-h2-size); font-weight: var(--guild-h2-weight);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--guild-h2-color);
       display: flex; align-items: center; gap: 8px;
     }
     .col-count {
@@ -245,6 +246,17 @@
            target="_blank" class="card-tag tag-gh">#{{ item.github_issue | replace('#','') }}</a>
       {% endif %}
     </div>
+    {% if status == 'incomplete' and item.incomplete_reason %}
+    <div style="font-size:10px;color:#8b5a00;margin-top:5px;line-height:1.4;">{{ item.incomplete_reason }}</div>
+    {% endif %}
+    {% if item.spec_file %}
+    <div style="margin-top:5px;">
+      <a href="/guild/build/spec/{{ item.spec_file }}"
+         target="_blank" rel="noopener"
+         style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;"
+         onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">↗ {{ item.spec_file }}</a>
+    </div>
+    {% endif %}
   </div>
 
   <div class="card-actions">

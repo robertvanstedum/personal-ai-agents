@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Roadmap — Guild</title>
+  <title>{{ filename }} — Guild</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/guild.css">
@@ -40,107 +40,91 @@
     .subnav-back {
       font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
       text-transform: uppercase; letter-spacing: 0.06em;
-      color: rgba(198,138,94,0.4); text-decoration: none;
-      padding: 0 14px 0 0; height: 36px;
+      color: rgba(198,138,94,0.6); text-decoration: none;
+      padding: 0; height: 36px;
       display: flex; align-items: center;
-      margin-right: 10px;
-      border-right: 1px solid rgba(255,255,255,0.1);
     }
-    .subnav-back:hover { color: rgba(198,138,94,0.75); }
-    .subnav-link {
-      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
-      text-transform: uppercase; letter-spacing: 0.08em;
-      color: rgba(198,138,94,0.7); text-decoration: none;
-      padding: 0 12px; height: 36px;
-      display: flex; align-items: center;
-      border-bottom: 2px solid transparent;
-    }
-    .subnav-link:hover { color: #C68A5E; }
-    .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; font-weight: 700; }
-    .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
+    .subnav-back:hover { color: rgba(198,138,94,0.9); }
 
-    /* ── Markdown content ── */
-    .roadmap-wrap {
+    /* ── Content ── */
+    .spec-wrap {
       max-width: 760px;
       margin: 0 auto;
-      padding: 36px 40px 72px;
+      padding: 28px 40px 72px;
     }
+    .spec-toolbar {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 28px;
+    }
+    .spec-filename {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-dim); flex: 1;
+    }
+    .spec-btn {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; padding: 4px 12px; border-radius: 4px;
+      border: 1px solid var(--border); background: var(--surface2);
+      color: var(--text-muted); text-decoration: none; cursor: pointer;
+      white-space: nowrap;
+    }
+    .spec-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-    .roadmap-content h1 {
+    /* ── Markdown content (same as roadmap) ── */
+    .spec-content h1 {
       font-family: 'Playfair Display', serif;
       font-size: 1.75rem; font-weight: 400;
       color: var(--text); margin-bottom: 6px;
     }
-    .roadmap-content h2 {
+    .spec-content h2 {
       font-family: 'Playfair Display', serif;
       font-size: 1.2rem; font-weight: 400;
       color: var(--text); margin-top: 36px; margin-bottom: 10px;
-      padding-bottom: 6px;
-      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px; border-bottom: 1px solid var(--border);
     }
-    .roadmap-content h3 {
+    .spec-content h3 {
       font-family: 'DM Mono', monospace;
       font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
       color: var(--text-muted); font-weight: 600;
       margin-top: 20px; margin-bottom: 8px;
     }
-    .roadmap-content p {
-      color: var(--text-muted); line-height: 1.65;
-      margin-bottom: 12px; font-size: 13.5px;
-    }
-    .roadmap-content ul, .roadmap-content ol {
-      padding-left: 20px; margin-bottom: 14px;
-    }
-    .roadmap-content li {
-      color: var(--text-muted); line-height: 1.6;
-      font-size: 13.5px; margin-bottom: 5px;
-    }
-    .roadmap-content li strong { color: var(--text); }
-    .roadmap-content code {
+    .spec-content p { color: var(--text-muted); line-height: 1.65; margin-bottom: 12px; font-size: 13.5px; }
+    .spec-content ul, .spec-content ol { padding-left: 20px; margin-bottom: 14px; }
+    .spec-content li { color: var(--text-muted); line-height: 1.6; font-size: 13.5px; margin-bottom: 5px; }
+    .spec-content li strong { color: var(--text); }
+    .spec-content code {
       font-family: 'DM Mono', monospace; font-size: 11px;
       background: var(--surface2); border: 1px solid var(--border);
       border-radius: 3px; padding: 1px 5px; color: var(--accent);
     }
-    .roadmap-content pre {
+    .spec-content pre {
       background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 5px; padding: 14px 16px;
-      overflow-x: auto; margin-bottom: 16px;
+      border-radius: 5px; padding: 14px 16px; overflow-x: auto; margin-bottom: 16px;
     }
-    .roadmap-content pre code {
-      background: none; border: none; padding: 0;
-      font-size: 11px; color: var(--text-muted);
-    }
-    .roadmap-content blockquote {
+    .spec-content pre code { background: none; border: none; padding: 0; font-size: 11px; color: var(--text-muted); }
+    .spec-content blockquote {
       border-left: 3px solid rgba(139,94,42,0.3);
-      padding: 6px 16px; margin: 14px 0;
-      color: var(--text-dim); font-style: italic;
+      padding: 6px 16px; margin: 14px 0; color: var(--text-dim); font-style: italic;
     }
-    .roadmap-content hr {
-      border: none; border-top: 1px solid var(--border);
-      margin: 28px 0;
-    }
-    .roadmap-content a { color: var(--accent); }
-    .roadmap-content a:hover { text-decoration: underline; }
-    .roadmap-content table {
-      width: 100%; border-collapse: collapse; margin-bottom: 16px;
-    }
-    .roadmap-content th {
+    .spec-content hr { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
+    .spec-content a { color: var(--accent); }
+    .spec-content a:hover { text-decoration: underline; }
+    .spec-content table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    .spec-content th {
       font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
       letter-spacing: 0.07em; color: var(--text-muted); font-weight: 600;
       padding: 8px 12px; text-align: left;
       border-bottom: 1px solid var(--border); background: var(--surface2);
     }
-    .roadmap-content td {
-      font-size: 13px; color: var(--text-muted);
-      padding: 8px 12px; border-bottom: 1px solid rgba(221,214,200,0.5);
-    }
-    .roadmap-content tr:last-child td { border-bottom: none; }
+    .spec-content td { font-size: 13px; color: var(--text-muted); padding: 8px 12px; border-bottom: 1px solid rgba(221,214,200,0.5); }
+    .spec-content tr:last-child td { border-bottom: none; }
 
-    /* read-only notice */
-    .readonly-notice {
-      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
-      letter-spacing: 0.06em; color: var(--text-dim);
-      margin-bottom: 28px;
+    /* ── Print ── */
+    @media print {
+      nav.guild-nav, .spec-toolbar { display: none !important; }
+      body { background: #ffffff; font-size: 12px; }
+      .spec-wrap { padding: 0; max-width: 100%; }
+      .spec-content a { color: inherit; text-decoration: none; }
+      .spec-content code, .spec-content pre { background: #f4f4f4; border-color: #ddd; }
     }
   </style>
 </head>
@@ -157,18 +141,17 @@
     <a href="/guild" class="nav-active">Guild</a>
   </div>
   <div class="guild-subnav">
-    <a href="/guild" class="subnav-back">← Guild</a>
-    <a href="/guild/build" class="subnav-link">Build Log</a>
-    <span class="subnav-dot">&nbsp;·&nbsp;</span>
-    <a href="/guild/build/queue" class="subnav-link">Queue</a>
-    <span class="subnav-dot">&nbsp;·&nbsp;</span>
-    <a href="/guild/build/roadmap" class="subnav-link subnav-active">Roadmap</a>
+    <a href="/guild/build" class="subnav-back">← Build Log</a>
   </div>
 </nav>
 
-<div class="roadmap-wrap">
-  <p class="readonly-notice">Read-only · edit in _working/ROADMAP_2026-06-12.md</p>
-  <div class="roadmap-content">
+<div class="spec-wrap">
+  <div class="spec-toolbar">
+    <span class="spec-filename">{{ filename }}</span>
+    <a href="/guild/build/spec/{{ filename }}/raw" class="spec-btn" download>↓ Download .md</a>
+    <button class="spec-btn" onclick="window.print()">⎙ Print / PDF</button>
+  </div>
+  <div class="spec-content">
     {{ content | safe }}
   </div>
 </div>
