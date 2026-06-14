@@ -1,5 +1,5 @@
 # mini-moi Services Reference
-**Last updated:** 2026-06-09
+**Last updated:** 2026-06-14
 **Purpose:** Canonical list of all always-on services, how they start, and what manages them.
 
 ---
@@ -13,13 +13,17 @@ headless Docker daemon managed by Homebrew's launchd integration.
 | Item | Detail |
 |---|---|
 | Install | `brew install colima` |
-| Service | `brew services start colima` (runs at login, always-on) |
+| Service | `com.vanstedum.colima` launchd plist (runs `colima start` at login) |
 | Socket | `unix:///Users/vanstedum/.colima/default/docker.sock` |
 | Context | `colima` (active — set by `docker context use colima`) |
 | Config | Default: VZ driver, aarch64, 20GB disk |
 
 **Docker Desktop** can remain installed for occasional GUI inspection but must NOT
 be relied on for daemon availability. Colima owns the daemon.
+
+**Note:** Do NOT use `brew services start colima` — the custom launchd plist
+(`com.vanstedum.colima`) is the managed path. `brew services` and launchd
+conflict and cause double-start issues.
 
 ### Container startup
 After Colima is ready, containers are brought up by:
@@ -52,7 +56,9 @@ All services run under `~/Library/LaunchAgents/`. Log files in `logs/`.
 
 | Label | File | Port | Scope |
 |---|---|---|---|
-| `com.user.docker-compose` | `scripts/start_docker_services.sh` | — | Starts containers after Colima |
+| `com.vanstedum.colima` | runs `colima start` | — | Docker runtime — starts first, everything depends on it |
+| `com.user.docker-compose` | `scripts/start_docker_services.sh` | — | Waits for Colima socket, then `docker compose up -d` |
+| `com.vanstedum.portal-boot-restart` | `launchctl kickstart` after 45s sleep | — | Restarts portal after Colima+Postgres are ready |
 | `com.user.operations` | `domains/guild/agents/operations.py` | 8768 | Guild Operations agent |
 | `com.user.cos` | `domains/guild/agents/chief_of_staff.py` | 8769 | Guild Chief of Staff |
 | `com.user.devagent` | `domains/guild/agents/dev_agent.py` | 8770 | Guild Design/Dev agent |
@@ -93,17 +99,20 @@ Status: `curl http://localhost:8769/loops`
 ## Startup Order at Login
 
 ```
-1. Colima (brew service)          — Docker daemon
-2. com.user.docker-compose        — waits for Colima, then: postgres + neo4j
-3. com.user.operations            — Guild Operations (8768)
-4. com.user.cos                   — Chief of Staff (8769) — APScheduler loops inside
-5. com.user.devagent              — Design/Dev agent (8770)
-6. com.user.curator-server        — Curator Flask (8766)
-7. com.vanstedum.minimoi-portal   — Portal (5001)
-8. com.user.telegram-feedback-bot — minimoi_cmd_bot polling
+1. com.vanstedum.colima              — runs `colima start` (Docker daemon, ~15s)
+2. com.user.docker-compose           — waits for socket, then: postgres + neo4j
+3. com.user.operations               — Guild Operations (8768)
+4. com.user.cos                      — Chief of Staff (8769) — APScheduler loops inside
+5. com.user.devagent                 — Design/Dev agent (8770)
+6. com.user.curator-server           — Curator Flask (8766)
+7. com.vanstedum.minimoi-portal      — Portal (5001) — starts immediately but DB not ready yet
+8. com.vanstedum.portal-boot-restart — waits 45s, then restarts portal with live DB connection
+9. com.user.telegram-feedback-bot    — minimoi_cmd_bot polling
 ```
 launchd does not guarantee order — services must be resilient to dependencies being
 temporarily unavailable. All Guild agents use file fallback when DB is down.
+The portal-boot-restart (step 8) handles the specific case where the portal starts
+before Postgres is ready and shows empty build log/queue pages.
 
 ---
 
