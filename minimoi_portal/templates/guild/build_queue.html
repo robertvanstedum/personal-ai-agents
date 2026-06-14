@@ -263,7 +263,7 @@
     <form method="POST" action="/guild/build/items/{{ item_id }}/status" id="bf-{{ item_id }}" style="display:contents">
 
       <input type="hidden" name="note" id="bn-{{ item_id }}" value="">
-      <select class="card-select" id="bs-{{ item_id }}"
+      <select class="card-select" name="status" id="bs-{{ item_id }}"
               onchange="queueStatus(this, {{ item_id }})">
         <option value="spec_ready"  {% if status == 'spec_ready'  %}selected{% endif %}>Spec Ready</option>
         <option value="incomplete"  {% if status == 'incomplete'  %}selected{% endif %}>Incomplete</option>
