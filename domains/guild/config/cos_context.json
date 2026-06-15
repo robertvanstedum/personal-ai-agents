@@ -3,10 +3,10 @@
 
   "career_focus": {
     "active": true,
-    "deadline": "2026-08-01",
+    "deadline": "2026-09-01",
     "board_closed_grace_days": 5,
     "mode": ["employment", "contract"],
-    "urgency_note": "T-Mobile contract ends Aug 3, 2026. Need placement by Aug 1.",
+    "urgency_note": "Fall preparation completed by Sep 1.",
 
     "search_sources": {
       "primary": ["web_search_api", "rss_feeds"],
