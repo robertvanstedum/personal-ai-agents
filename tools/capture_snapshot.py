@@ -226,11 +226,11 @@ def _rewrite_links(soup: BeautifulSoup) -> None:
 
 
 def _replace_dashboard_btn(soup: BeautifulSoup) -> None:
-    """Replace 'Dashboard →' nav button with 'Request Access →'."""
+    """Replace 'Dashboard →' nav button with 'Browse Preview →'."""
     for a in soup.find_all("a", href=True):
         if "/dashboard" in a.get("href", "") or (a.get_text(strip=True) in ("Dashboard →", "Dashboard")):
-            a["href"] = "/contact"
-            a.string = "Request Access →"
+            a["href"] = "/preview/curator/briefing.html"
+            a.string = "Browse Preview →"
 
 
 def _inject_whats_running_links(soup: BeautifulSoup) -> None:
