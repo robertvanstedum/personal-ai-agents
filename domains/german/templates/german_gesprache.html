@@ -828,13 +828,16 @@ document.body.classList.add('parch-mode');
     }
   });
 
-  // ── Session voice recording ────────────────────────────────────────────────
+  // ── Session voice recording with VAD ─────────────────────────────────────
+  // Auto-stops when you stop speaking (1.5s silence). No manual Stop needed.
 
   (function () {
-    let mediaRecorder = null;
-    let audioChunks   = [];
+    let mediaRecorder  = null;
+    let audioChunks    = [];
     let recordingTimer = null;
     let secondsElapsed = 0;
+    let vadInterval    = null;
+    let audioCtx       = null;
 
     const recordBtn = document.getElementById('session-record-btn');
     const stopBtn   = document.getElementById('session-stop-btn');
@@ -845,14 +848,20 @@ document.body.classList.add('parch-mode');
       return;
     }
 
+    function stopRecording() {
+      if (vadInterval)  { clearInterval(vadInterval);  vadInterval  = null; }
+      if (audioCtx)     { audioCtx.close();            audioCtx     = null; }
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    }
+
     recordBtn.addEventListener('click', async () => {
       if (!sessionActive) return;
-      stopSpeaking(); // stop persona speaking before recording
-      // Brief pause so speaker audio clears before mic opens
-      await new Promise(r => setTimeout(r, 300));
+      stopSpeaking();
+      await new Promise(r => setTimeout(r, 300)); // let speaker audio clear
+
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioChunks = [];
+        audioChunks    = [];
         secondsElapsed = 0;
         timerEl.textContent = '00:00';
 
@@ -862,43 +871,47 @@ document.body.classList.add('parch-mode');
 
         mediaRecorder.onstop = async () => {
           clearInterval(recordingTimer);
+          if (vadInterval)  { clearInterval(vadInterval);  vadInterval  = null; }
+          if (audioCtx)     { audioCtx.close();            audioCtx     = null; }
           stream.getTracks().forEach(t => t.stop());
+
           stopBtn.style.display = 'none';
           recordBtn.disabled = false;
           recordBtn.classList.remove('recording');
-          recordBtn.textContent = '● Aufnehmen';
+          recordBtn.textContent = '● Sprechen';
 
           const mimeUsed = mediaRecorder.mimeType || 'audio/webm';
           const blob = new Blob(audioChunks, { type: mimeUsed });
           const formData = new FormData();
           formData.append('audio', blob, 'session.webm');
 
-          sessionInputEl.placeholder = 'Transkribiere…';
+          timerEl.textContent = '⋯';
           try {
             const res  = await fetch('/api/transcribe', { method: 'POST', body: formData });
             const data = await res.json();
+            timerEl.textContent = '00:00';
             if (data.transcript) {
               const text = data.transcript.trim();
-              sessionInputEl.value = text;
-              // Auto-send immediately during a session — no need to press Senden
               if (sessionActive && text) {
-                sessionInputEl.value = '';
+                sessionInputEl.value = text;   // show briefly so user sees it
                 await sendTurn(text);
+                sessionInputEl.value = '';
               }
             } else {
-              sessionInputEl.placeholder = '⚠ Transkription fehlgeschlagen — manuell eingeben.';
-              setTimeout(() => { sessionInputEl.placeholder = 'Schreiben oder aufnehmen…'; }, 4000);
+              sessionInputEl.placeholder = '⚠ Nicht erkannt — nochmal versuchen.';
+              setTimeout(() => { sessionInputEl.placeholder = 'Schreiben oder sprechen…'; }, 3000);
             }
           } catch (err) {
-            sessionInputEl.placeholder = '⚠ Verbindungsfehler — manuell eingeben.';
-            setTimeout(() => { sessionInputEl.placeholder = 'Schreiben oder aufnehmen…'; }, 4000);
+            timerEl.textContent = '00:00';
+            sessionInputEl.placeholder = '⚠ Verbindungsfehler.';
+            setTimeout(() => { sessionInputEl.placeholder = 'Schreiben oder sprechen…'; }, 3000);
           }
         };
 
         mediaRecorder.start(1000);
         recordBtn.disabled = true;
         recordBtn.classList.add('recording');
-        recordBtn.textContent = '● Läuft';
+        recordBtn.textContent = '● Zuhören…';
         stopBtn.style.display = 'inline-block';
 
         recordingTimer = setInterval(() => {
@@ -908,15 +921,48 @@ document.body.classList.add('parch-mode');
           timerEl.textContent = `${mm}:${ss}`;
         }, 1000);
 
+        // ── VAD: auto-stop on 1.5s silence ──────────────────────────────────
+        const MIN_SPEECH_MS  = 400;   // don't trigger VAD in first 400ms
+        const SILENCE_MS     = 1500;  // stop after 1.5s silence
+        const SILENCE_RMS    = 0.012; // RMS threshold (0–1)
+
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        audioCtx.createMediaStreamSource(stream).connect(analyser);
+        const pcmData = new Float32Array(analyser.fftSize);
+
+        const startTime   = Date.now();
+        let   silenceFrom = null;
+
+        vadInterval = setInterval(() => {
+          analyser.getFloatTimeDomainData(pcmData);
+          let sum = 0;
+          for (let i = 0; i < pcmData.length; i++) sum += pcmData[i] * pcmData[i];
+          const rms = Math.sqrt(sum / pcmData.length);
+
+          const elapsed = Date.now() - startTime;
+          if (elapsed < MIN_SPEECH_MS) { silenceFrom = null; return; }
+
+          if (rms < SILENCE_RMS) {
+            if (!silenceFrom) silenceFrom = Date.now();
+            else if (Date.now() - silenceFrom >= SILENCE_MS) {
+              clearInterval(vadInterval); vadInterval = null;
+              stopRecording();
+            }
+          } else {
+            silenceFrom = null;
+          }
+        }, 80);
+
       } catch (err) {
-        recordBtn.textContent = '● Aufnehmen';
+        recordBtn.textContent = '● Sprechen';
         recordBtn.disabled = false;
       }
     });
 
-    stopBtn.addEventListener('click', () => {
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-    });
+    // Manual stop still works as override
+    stopBtn.addEventListener('click', stopRecording);
   })();
 
   // ── Transcript analysis (KI-Personas pane) ────────────────────────────────
