@@ -155,7 +155,7 @@ MODAL_CSS_JS = """
 </style>
 <div class="preview-modal-overlay" id="previewModal">
   <div class="preview-modal">
-    <h3>Admin — not available in preview</h3>
+    <h3>Not available in preview</h3>
     <p>Full history and interactive features require guest access. Request access to explore the live platform.</p>
     <div class="preview-modal-actions">
       <a href="/contact" class="preview-modal-btn">Request access →</a>
