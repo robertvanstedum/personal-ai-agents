@@ -131,6 +131,16 @@ def _require_owner(f):
 
 # ── Public routes ─────────────────────────────────────────────────────────────
 
+@app.route("/capture-auth")
+def capture_auth():
+    """Localhost-only session bootstrap for capture_snapshot.py.
+    Only accessible from 127.0.0.1 — never reachable via Cloudflare tunnel."""
+    if request.remote_addr != "127.0.0.1":
+        return "Forbidden", 403
+    session["user"] = {"username": "robert", "tier": "owner", "display_name": "Robert"}
+    return "ok", 200
+
+
 @app.route("/preview/")
 @app.route("/preview/<path:subpath>")
 def preview(subpath=""):

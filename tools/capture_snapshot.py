@@ -273,7 +273,7 @@ def process_page(html: str, page: dict, captured_at: str) -> str:
 
 # ── Capture ────────────────────────────────────────────────────────────────────
 
-def capture_all(password: str) -> dict:
+def capture_all(password: str = "") -> dict:
     captured_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     manifest = {"captured_at": captured_at, "pages": [], "failures": []}
 
@@ -287,18 +287,25 @@ def capture_all(password: str) -> dict:
         )
         page = context.new_page()
 
-        # ── Login ──────────────────────────────────────────────────────────
-        print(f"  Logging in as {USERNAME}...", end=" ", flush=True)
-        page.goto(f"{PORTAL_URL}/login")
-        page.fill('input[name="username"]', USERNAME)
-        page.fill('input[name="password"]', password)
-        page.click('button[type="submit"]')
-        page.wait_for_load_state("networkidle")
-
-        if "/login" in page.url:
-            print("FAILED — check password")
-            browser.close()
-            return manifest
+        # ── Auth via localhost-only capture route ──────────────────────────
+        print(f"  Authenticating via /capture-auth...", end=" ", flush=True)
+        page.goto(f"{PORTAL_URL}/capture-auth")
+        if page.inner_text("body").strip() != "ok":
+            # Fallback: password login
+            if password:
+                page.goto(f"{PORTAL_URL}/login")
+                page.fill('input[name="username"]', USERNAME)
+                page.fill('input[name="password"]', password)
+                page.click('button[type="submit"]')
+                page.wait_for_load_state("networkidle")
+                if "/login" in page.url:
+                    print("FAILED — check password")
+                    browser.close()
+                    return manifest
+            else:
+                print("FAILED — /capture-auth returned non-ok (not localhost?)")
+                browser.close()
+                return manifest
         print("ok")
 
         # ── Capture each page ──────────────────────────────────────────────
@@ -389,9 +396,7 @@ def _write_index(manifest: dict) -> None:
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    password = os.environ.get("PORTAL_PASSWORD", "")
-    if not password:
-        password = getpass.getpass(f"Portal password for {USERNAME}: ")
+    password = os.environ.get("PORTAL_PASSWORD", "")  # optional fallback
 
     print(f"\ncapture_snapshot.py — {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"Portal: {PORTAL_URL}")

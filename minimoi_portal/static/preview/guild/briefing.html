@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Guild — mini-moi</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&amp;family=DM+Mono:wght@400;500&amp;family=Source+Sans+3:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="/static/guild.css" rel="stylesheet"/>
+<style>
+    :root {
+      --bg: #f5f0e8; --surface: #faf7f2; --surface2: #f0ebe0;
+      --border: #ddd6c8; --text: #2a2418; --text-muted: #6b5f4e;
+      --text-dim: #9e9080; --accent: #8b5e2a; --accent-dim: rgba(139,94,42,0.08);
+      --ok: #2a6e4e; --ok-bg: rgba(42,110,78,0.07); --ok-border: rgba(42,110,78,0.2);
+      --warn: #8b5a00; --warn-bg: rgba(139,90,0,0.07); --warn-border: rgba(139,90,0,0.25);
+      --danger: #8b2020; --danger-bg: rgba(139,32,32,0.07); --danger-border: rgba(139,32,32,0.2);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+    /* ── Guild nav ── */
+    nav.guild-nav {
+      position: sticky; top: 0; z-index: 100;
+      background: #2a1f14;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .guild-nav-brand {
+      height: 44px; display: flex; align-items: center;
+      padding: 0 1.5rem;
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); letter-spacing: 0.08em;
+    }
+    .guild-nav-brand a { color: #C68A5E; text-decoration: none; }
+    .guild-nav-brand a:hover { color: #ffffff; }
+    .guild-nav-brand a.nav-active { color: #ffffff; font-weight: 700; }
+    .nav-sep { color: rgba(255,255,255,0.2); margin: 0 12px; }
+    .guild-subnav {
+      height: 36px; display: flex; align-items: center;
+      padding: 0 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,0,0,0.15);
+    }
+    .subnav-link {
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: rgba(198,138,94,0.7); text-decoration: none;
+      padding: 0 14px; height: 36px;
+      display: flex; align-items: center;
+      border-bottom: 2px solid transparent;
+    }
+    .subnav-link:hover { color: #C68A5E; }
+    .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; font-weight: 700; }
+    .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
+
+    /* ── Layout ── */
+    .briefing {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 20px 24px;
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+      min-height: calc(100vh - 80px);
+    }
+    .section {
+      background: var(--surface);
+      border: 1px solid rgba(184,174,158,0.75);
+      border-radius: 6px;
+      padding: 24px 28px 32px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .section-label {
+      font-family: var(--guild-h2-font); font-size: var(--guild-h2-size); text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--guild-h2-color); font-weight: var(--guild-h2-weight);
+      margin-bottom: 18px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-label-line {
+      flex: 1; height: 1px; background: rgba(184,174,158,0.6);
+    }
+
+    /* ── Status dot ── */
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+      display: inline-block; margin-right: 6px;
+    }
+    .dot-ok     { background: var(--ok); }
+    .dot-warn   { background: var(--warn); }
+    .dot-danger { background: var(--danger); }
+    .dot-dim    { background: var(--text-dim); }
+
+    /* ── Status pill ── */
+    .pill {
+      font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
+      letter-spacing: 0.07em; padding: 2px 7px; border-radius: 3px; border: 1px solid;
+      white-space: nowrap;
+    }
+    .pill-ok     { color: var(--ok);     background: var(--ok-bg);     border-color: var(--ok-border); }
+    .pill-warn   { color: var(--warn);   background: var(--warn-bg);   border-color: var(--warn-border); }
+    .pill-danger { color: var(--danger); background: var(--danger-bg); border-color: var(--danger-border); }
+    .pill-dim    { color: var(--text-dim); background: rgba(0,0,0,0.03); border-color: var(--border); }
+
+    /* ── Row items ── */
+    .brief-row {
+      display: flex; align-items: baseline; gap: 10px;
+      padding: 9px 0;
+      border-bottom: 1px solid rgba(221,214,200,0.4);
+      font-size: 13px;
+    }
+    .brief-row:last-child { border-bottom: none; }
+    .brief-label {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-dim); white-space: nowrap;
+      min-width: 90px;
+    }
+    .brief-value { color: var(--text-muted); flex: 1; line-height: 1.4; }
+    .brief-value strong { color: var(--text); font-weight: 600; }
+    .brief-value a { color: var(--accent); text-decoration: none; }
+    .brief-value a:hover { text-decoration: underline; }
+
+    /* ── Stat cluster ── */
+    .stat-row {
+      display: flex; gap: 20px; flex-wrap: wrap;
+      padding: 10px 0 14px;
+      border-bottom: 1px solid rgba(221,214,200,0.4);
+      margin-bottom: 12px;
+    }
+    .stat { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+    .stat-num {
+      font-family: 'Playfair Display', serif; font-size: 1.6rem;
+      font-weight: 400; line-height: 1; color: var(--text);
+    }
+    .stat-num.accent { color: var(--accent); }
+    .stat-num.ok     { color: var(--ok); }
+    .stat-num.warn   { color: var(--warn); }
+    .stat-num.danger { color: var(--danger); }
+    .stat-lbl {
+      font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-dim);
+    }
+
+    /* ── Blocked item ── */
+    .blocked-item {
+      background: var(--danger-bg); border: 1px solid var(--danger-border);
+      border-radius: 4px; padding: 8px 12px; margin-bottom: 8px;
+    }
+    .blocked-title { font-size: 13px; font-weight: 500; color: var(--danger); }
+    .blocked-reason { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+    /* ── Ahead loop row ── */
+    .loop-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 0; border-bottom: 1px solid rgba(221,214,200,0.4);
+    }
+    .loop-row:last-child { border-bottom: none; }
+    .loop-name {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-dim); min-width: 56px;
+    }
+    .loop-schedule { font-size: 12px; color: var(--text-muted); flex: 1; }
+    .loop-next {
+      font-family: 'DM Mono', monospace; font-size: 10px; color: var(--accent);
+      white-space: nowrap;
+    }
+    .loop-first-run {
+      font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--ok); background: var(--ok-bg);
+      border: 1px solid var(--ok-border); border-radius: 3px; padding: 1px 6px;
+    }
+
+    /* ── Deadline countdown ── */
+    .deadline-block {
+      margin-top: 16px; padding: 12px 14px;
+      background: var(--warn-bg); border: 1px solid var(--warn-border);
+      border-radius: 5px;
+    }
+    .deadline-days {
+      font-family: 'Playfair Display', serif; font-size: 1.4rem;
+      font-weight: 400; color: var(--warn); line-height: 1;
+    }
+    .deadline-label {
+      font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--warn); margin-top: 3px;
+    }
+    .deadline-note { font-size: 11px; color: var(--text-dim); margin-top: 5px; line-height: 1.4; }
+
+    /* ── Flag note ── */
+    .flag-note {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-dim); font-style: italic;
+      padding: 6px 0; border-top: 1px solid rgba(221,214,200,0.4); margin-top: 8px;
+    }
+
+    /* ── Section link ── */
+    .section-goto {
+      font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--accent); text-decoration: none;
+    }
+    .section-goto:hover { text-decoration: underline; }
+  </style>
+
+<style id="preview-banner-style">
+.preview-banner {
+  position: sticky; top: 0; z-index: 9999;
+  background: #2A1F14; color: #F5F0E8;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 11px; letter-spacing: 0.04em;
+  padding: 7px 20px;
+  border-bottom: 1px solid rgba(198,138,94,0.3);
+  display: flex; align-items: center; gap: 8px;
+}
+.preview-banner .preview-date { color: rgba(245,240,232,0.7); }
+.preview-request-link {
+  color: #C68A5E; text-decoration: none; margin-left: auto;
+  border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
+}
+.preview-request-link:hover { background: rgba(198,138,94,0.1); }
+</style>
+</head>
+<body><div class="preview-banner">
+<span>Preview snapshot — </span>
+<span class="preview-date">Captured June 2026</span>
+<span>. Data is real but frozen.</span>
+<a class="preview-request-link" data-admin-blocked="true" style="cursor: pointer;">Request live access →</a>
+</div>
+<nav class="guild-nav">
+<div class="guild-nav-brand">
+<a href="/preview/">mini-moi</a>
+<span class="nav-sep">|</span>
+<a href="/preview/curator/briefing.html">Curator</a>
+<span class="nav-sep">|</span>
+<a href="/preview/german/lesen.html">German</a>
+<span class="nav-sep">|</span>
+<a class="nav-active" href="/preview/guild/briefing.html">Guild</a>
+</div>
+<div class="guild-subnav">
+<a class="subnav-link subnav-active" href="/preview/guild/career.html">Career Focus</a>
+<span class="subnav-dot"> · </span>
+<a class="subnav-link subnav-active" href="/preview/guild/build_log.html">Build</a>
+</div>
+</nav>
+<div class="briefing">
+<div class="section">
+<div class="section-label">Systems <span class="section-label-line"></span></div>
+<div class="brief-row">
+<span class="brief-label">Operations</span>
+<span class="brief-value">
+<span class="dot dot-warn"></span>
+          3/3 healthy ·
+          0 escalations
+        
+      </span>
+</div>
+<div class="brief-row">
+<span class="brief-label">Disk</span>
+<span class="brief-value">
+<span class="pill pill-warn">88.5%</span>  above 85% threshold
+        
+      </span>
+</div>
+<div class="brief-row">
+<span class="brief-label">Loop A</span>
+<span class="brief-value">Career scout · <strong>in 10h</strong></span>
+</div>
+<div class="brief-row">
+<span class="brief-label">Loops B–D</span>
+<span class="brief-value">
+        German / Curator / Novelty ·
+        <strong>21 Jun 2:00 PM CT</strong>
+</span>
+</div>
+<div class="brief-row">
+<span class="brief-label">Uptime</span>
+<span class="brief-value" style="color:var(--text-dim)">
+        1d · started 2026-06-13
+      </span>
+</div>
+</div>
+<div class="section">
+<div class="section-label">
+      Career Focus
+      <span class="section-label-line"></span>
+<a class="section-goto" href="/preview/guild/career.html">View →</a>
+</div>
+<div class="deadline-block">
+<div class="deadline-days">46</div>
+<div class="deadline-label">days to Aug 1 deadline</div>
+<div class="deadline-note">T-Mobile contract ends Aug 3, 2026. Need placement by Aug 1.</div>
+</div>
+<div class="stat-row" style="margin-top:16px;">
+<div class="stat">
+<span class="stat-num ok">1</span>
+<span class="stat-lbl">Interview</span>
+</div>
+<div class="stat">
+<span class="stat-num">10</span>
+<span class="stat-lbl">Suggested</span>
+</div>
+<div class="stat">
+<span class="stat-num" style="color:var(--text-dim)">12</span>
+<span class="stat-lbl">Total</span>
+</div>
+</div>
+<div class="brief-row">
+<span class="brief-label">Interview</span>
+<span class="brief-value">
+<strong>Principal Engineer, Agentic AI</strong>
+         · T-Mobile
+      </span>
+</div>
+<div class="brief-row">
+<span class="brief-label">Closed</span>
+<span class="brief-value" style="color:var(--text-dim)">
+        Lead Principal Engineer, Enterprise Agentic …
+         · filled
+         · <strong>9.00</strong>
+</span>
+</div>
+</div>
+<div class="section">
+<div class="section-label">
+      Build
+      <span class="section-label-line"></span>
+<a class="section-goto" href="/preview/guild/build_log.html">Log →</a>
+       
+      <a class="section-goto" href="/preview/guild/queue.html">Queue →</a>
+</div>
+<div class="stat-row">
+<div class="stat">
+<span class="stat-num accent">2</span>
+<span class="stat-lbl">In Build</span>
+</div>
+<div class="stat">
+<span class="stat-num">2</span>
+<span class="stat-lbl">Spec Ready</span>
+</div>
+<div class="stat">
+<span class="stat-num" style="color:var(--text-dim)">13</span>
+<span class="stat-lbl">Done</span>
+</div>
+</div>
+<div class="brief-row">
+<span class="brief-label">Spec Ready</span>
+<span class="brief-value">Housekeeping: Repo Sync Audit + Roadmap File Location</span>
+</div>
+<div class="brief-row">
+<span class="brief-label">Spec Ready</span>
+<span class="brief-value">Lesen Writing Drill</span>
+</div>
+<div class="brief-row">
+<span class="brief-label">MINI_MOI</span>
+<span class="brief-value" style="color:var(--text-muted)">Thoth (threat): Pure open-source local-first assistant focused on architecture transparency versus mini-moi's curated feature set and model-agnostic agent guild. | Rec: Review its open-source codebase for reusable patterns in local agent orchestration.</span>
+</div>
+<div class="brief-row">
+<span class="brief-label">MINI_MOI</span>
+<span class="brief-value" style="color:var(--text-muted)">Personal AI (threat): Emphasizes carrier-native memory tokens and edge infrastructure rather than local-first autonomous agents with specialized modules like daily briefings or language coaching. | Rec: Track their edge deployment model for potential hybrid local-edge extensions.</span>
+</div>
+<div class="brief-row">
+<span class="brief-label">CURATOR</span>
+<span class="brief-value" style="color:var(--text-muted)">Suggested thread: ai-governance-frontier-cset — Directly analyzes U.S. AI governance proposals and their underlying assumptions, matching the AI governance interest exactly. | Source: AI Governance at the Frontier | Center for Security and Emerging Technology (https://cset.georgetown.edu/publication/ai-governance-at-the-frontier)</span>
+</div>
+<div class="brief-row">
+<span class="brief-label">CURATOR</span>
+<span class="brief-value" style="color:var(--text-muted)">Suggested thread: global-ai-governance-regional-models — Directly covers emerging AI governance models across EU, UK, Asia, Middle East and Australia, matching listed AI governance and MENA interests. | Source: Navigating AI governance across the globe: regional approaches and frontline insights - Bird &amp; Bird (https://www.twobirds.com/en/capabilities/artificial-intelligence/ai-legal-services/navigating-ai-governance-across-the-globe)</span>
+</div>
+<div class="brief-row">
+<span class="brief-label">CURATOR</span>
+<span class="brief-value" style="color:var(--text-muted)">Suggested thread: canada-mobile-ai-governance — Directly relevant to AI governance and telecom AI as Canada’s rules extend the EU Act’s reach into mobile-device oversight, signaling broader regulatory momentum. | Source: Canada’s Emerging AI Regulations Are Sending a Clear Signal: Mobile AI Governance Can No Longer Be Ignored (https://www.lookout.com/blog/mobile-ai-governance-can-no-longer-be-ignored)</span>
+</div>
+</div>
+<div class="section">
+<div class="section-label">Ahead <span class="section-label-line"></span></div>
+<div style="margin-bottom:16px;">
+<div class="loop-row">
+<span class="loop-name">Loop A</span>
+<span class="loop-schedule">Career scout · Daily 06:00 + 18:00 CT</span>
+<span class="loop-next">
+          in 10h
+          
+        </span>
+</div>
+<div class="loop-row">
+<span class="loop-name">Loop B</span>
+<span class="loop-schedule">German watch · Sunday 09:00 CT</span>
+<span class="loop-next">
+          21 Jun 2:00 PM CT
+          
+        </span>
+</div>
+<div class="loop-row">
+<span class="loop-name">Loop C</span>
+<span class="loop-schedule">Curator scout · Sunday 10:00 CT</span>
+<span class="loop-next">
+          21 Jun 3:00 PM CT
+          
+        </span>
+</div>
+<div class="loop-row">
+<span class="loop-name">Loop D</span>
+<span class="loop-schedule">Novelty watch · 1st + 15th 08:00 CT</span>
+<span class="loop-next">
+          in 12h
+          
+        </span>
+</div>
+</div>
+<div class="section-label" style="margin-top:8px;">Key dates <span class="section-label-line"></span></div>
+<div class="brief-row">
+<span class="brief-label">Aug 1</span>
+<span class="brief-value">Career placement deadline
+        
+        · <strong>46d</strong>
+</span>
+</div>
+<div class="brief-row">
+<span class="brief-label">Aug 3</span>
+<span class="brief-value" style="color:var(--text-dim)">T-Mobile contract end</span>
+</div>
+<div class="brief-row">
+<span class="brief-label">Jun 15</span>
+<span class="brief-value">Loops B/C/D first run · German / Curator / Novelty</span>
+</div>
+</div>
+</div>
+
+<style id="preview-modal-style">
+.preview-modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
+}
+.preview-modal-overlay.active { display: flex; }
+.preview-modal {
+  background: #2a1f14; border: 1px solid rgba(198,138,94,0.4);
+  border-radius: 8px; padding: 28px 32px; max-width: 380px; width: 90%;
+  color: #F5F0E8; font-family: 'Source Sans 3', system-ui, sans-serif;
+}
+.preview-modal h3 {
+  font-size: 14px; font-weight: 600; margin: 0 0 12px;
+  color: #C68A5E; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.preview-modal p { font-size: 13px; color: rgba(245,240,232,0.75); line-height: 1.6; margin: 0 0 20px; }
+.preview-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.preview-modal-btn {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(198,138,94,0.5); background: transparent; color: #C68A5E;
+  text-decoration: none; display: inline-block;
+}
+.preview-modal-btn:hover { background: rgba(198,138,94,0.15); }
+.preview-modal-close {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(245,240,232,0.2); background: transparent;
+  color: rgba(245,240,232,0.6);
+}
+.preview-modal-close:hover { border-color: rgba(245,240,232,0.4); color: #F5F0E8; }
+</style>
+<div class="preview-modal-overlay" id="previewModal">
+<div class="preview-modal">
+<h3>Admin — not available in preview</h3>
+<p>This section is for authenticated users. Request guest access to explore the live platform.</p>
+<div class="preview-modal-actions">
+<a class="preview-modal-btn" data-admin-blocked="true" style="cursor: pointer;">Request access →</a>
+<button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>
+</div>
+</div>
+</div>
+<script id="preview-modal-script">
+(function() {
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('[data-admin-blocked]');
+    if (el) { e.preventDefault(); e.stopPropagation(); document.getElementById('previewModal').classList.add('active'); }
+  });
+  document.getElementById('previewModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+})();
+</script>
+</body></html>

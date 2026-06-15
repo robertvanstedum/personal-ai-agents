@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Curator</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<style>
+    :root {
+      --bg:       #F5F0E8;
+      --text:     #2A1F14;
+      --accent:   #C68A5E;
+      --card-bg:  #EDE7DC;
+      --rule:     #C4B49A;
+      --muted:    #8A7060;
+      --dim:      #A89880;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: Georgia, 'Times New Roman', serif;
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* ── Background image (Option B — neoclassical hall, radial fade) ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: url('/static/curator/landing-bg.jpg') center/cover no-repeat;
+      opacity: 0.14;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── All content above the bg ── */
+    .site-wrap { position: relative; z-index: 1; }
+
+    /* ── Domain subnav ─────────────────────────────────────────────── */
+    nav.curator-subnav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(245,240,232,0.96);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--rule);
+      display: flex;
+      align-items: center;
+      padding: 0 1.5rem;
+      height: 44px;
+    }
+    .subnav-tab {
+      font-family: 'DM Mono', 'Courier New', monospace;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      text-decoration: none;
+      padding: 0 14px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s;
+    }
+    .subnav-tab:hover { color: var(--text); }
+    .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .subnav-right { margin-left: auto; }
+
+    /* ── Masthead ───────────────────────────────────────────────────── */
+    .masthead {
+      text-align: center;
+      padding: 4.5rem 2rem 2.5rem;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    .masthead-rule {
+      border: none;
+      border-top: 1px solid var(--rule);
+      width: 85%;
+      margin: 0.6rem auto;
+    }
+    .masthead-title {
+      font-size: 4.2rem;
+      font-weight: 400;
+      letter-spacing: 0.38em;
+      text-transform: uppercase;
+      line-height: 1;
+      padding: 0.4rem 0;
+    }
+    .masthead-tagline {
+      font-style: italic;
+      font-size: 0.92rem;
+      color: var(--accent);
+      line-height: 1.8;
+      padding: 0.5rem 0;
+    }
+    .masthead-date {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--dim);
+      margin-top: 0.4rem;
+    }
+
+    /* ── Card catalog ───────────────────────────────────────────────── */
+    .card-catalog {
+      display: flex;
+      justify-content: center;
+      flex-wrap: nowrap;
+      gap: 20px;
+      padding: 2rem 2rem 4rem;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .drawer {
+      background: var(--card-bg);
+      border: 1px solid var(--rule);
+      box-shadow: 2px 3px 8px rgba(42,31,20,0.10);
+      border-radius: 2px;
+      width: 210px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      text-decoration: none;
+      color: inherit;
+      transition: transform 0.18s, box-shadow 0.18s;
+    }
+    .drawer:hover {
+      transform: translateY(-3px);
+      box-shadow: 2px 6px 16px rgba(42,31,20,0.14);
+    }
+
+    /* Label tab */
+    .drawer-tab {
+      background: var(--text);
+      color: #EDE7DC;
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      padding: 5px 11px 6px;
+    }
+
+    /* Image */
+    .drawer-img {
+      width: 100%;
+      height: 136px;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* Body */
+    .drawer-body {
+      flex: 1;
+      padding: 12px 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      border-top: 1px solid var(--rule);
+    }
+    .drawer-kicker {
+      font-family: 'DM Mono', monospace;
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--dim);
+    }
+    .drawer-line {
+      font-family: Georgia, serif;
+      font-size: 0.83rem;
+      line-height: 1.45;
+      color: var(--text);
+      margin-top: 2px;
+    }
+    .drawer-link {
+      margin-top: auto;
+      padding-top: 10px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+    }
+
+    /* ── Footer ─────────────────────────────────────────────────────── */
+    footer {
+      text-align: center;
+      padding: 1.25rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
+      color: var(--dim);
+      border-top: 1px solid var(--rule);
+    }
+    footer a { color: var(--dim); text-decoration: none; }
+    footer a:hover { color: var(--muted); }
+
+    /* ── Mobile ──────────────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .card-catalog { flex-wrap: wrap; }
+      .drawer { width: calc(50% - 10px); }
+    }
+    @media (max-width: 480px) {
+      .masthead-title { font-size: 2.6rem; }
+      .drawer { width: 100%; }
+    }
+  </style>
+<style>body{padding-top:38px!important;}nav.curator-subnav{top:38px!important;}</style>
+<style id="preview-banner-style">
+.preview-banner {
+  position: sticky; top: 0; z-index: 9999;
+  background: #2A1F14; color: #F5F0E8;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 11px; letter-spacing: 0.04em;
+  padding: 7px 20px;
+  border-bottom: 1px solid rgba(198,138,94,0.3);
+  display: flex; align-items: center; gap: 8px;
+}
+.preview-banner .preview-date { color: rgba(245,240,232,0.7); }
+.preview-request-link {
+  color: #C68A5E; text-decoration: none; margin-left: auto;
+  border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
+}
+.preview-request-link:hover { background: rgba(198,138,94,0.1); }
+</style>
+</head>
+<body><div class="preview-banner">
+<span>Preview snapshot — </span>
+<span class="preview-date">Captured June 2026</span>
+<span>. Data is real but frozen.</span>
+<a class="preview-request-link" data-admin-blocked="true" style="cursor: pointer;">Request live access →</a>
+</div>
+<style id="portal-offset-css">body{padding-top:38px!important;}nav.curator-subnav{top:38px!important;}</style>
+<div id="portal-nav-bar" style="
+  position:fixed;top:0;left:0;right:0;z-index:999999;
+  height:38px;background:#12122a;color:#e8e8e8;
+  display:flex;align-items:center;padding:0 16px;gap:0;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:13px;border-bottom:1px solid rgba(255,255,255,0.12);
+  box-shadow:0 1px 8px rgba(0,0,0,0.4);
+">
+<a href="/preview/" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
+<span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
+<a href="/preview/curator/briefing.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;color:#ffffff;font-weight:600;">Curator</a>
+<a href="/preview/german/lesen.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;">German</a>
+<a href="/preview/guild/briefing.html" style="color:#C68A5E;text-decoration:none;">Guild</a>
+<span style="color:rgba(255,255,255,0.45);margin-left:auto;margin-right:12px;">Robert</span>
+<a data-admin-blocked="true" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;; cursor: pointer;">Sign out</a>
+</div>
+<div class="site-wrap">
+<!-- Domain subnav -->
+<nav class="curator-subnav">
+<a class="subnav-tab" data-admin-blocked="true" style="cursor: pointer;">Daily</a>
+<a class="subnav-tab" data-admin-blocked="true" style="cursor: pointer;">Reading Room</a>
+<a class="subnav-tab" href="/preview/curator/scans_dives.html">Scans &amp; Dives</a>
+<a class="subnav-tab" data-admin-blocked="true" style="cursor: pointer;">Leanings</a>
+<a class="subnav-tab" href="/preview/curator/archive.html">Archive</a>
+<a class="subnav-tab subnav-right" data-admin-blocked="true" style="cursor: pointer;">Desk</a>
+</nav>
+<!-- Masthead -->
+<div class="masthead">
+<hr class="masthead-rule"/>
+<h1 class="masthead-title">Curator</h1>
+<hr class="masthead-rule"/>
+<p class="masthead-tagline">
+    targeted search → analysis →<br/>
+    opinion/doubt → long-term archive
+  </p>
+<p class="masthead-date">Sunday, June 14, 2026</p>
+</div>
+<!-- Card catalog — four entries per §6 fixed copy -->
+<div class="card-catalog">
+<a class="drawer" data-admin-blocked="true" style="cursor: pointer;">
+<div class="drawer-tab">Daily</div>
+<img alt="Daily briefing" class="drawer-img" src="/app/curator/static/curator/landing-daily.jpg"/>
+<div class="drawer-body">
+<div class="drawer-kicker">Daily briefing</div>
+<div class="drawer-line">The day's stories, scored and ranked by morning.</div>
+<div class="drawer-link">Today ›</div>
+</div>
+</a>
+<a class="drawer" href="/preview/curator/scans_dives.html">
+<div class="drawer-tab">Scans &amp; Dives</div>
+<img alt="Scans and Dives" class="drawer-img" src="/app/curator/static/curator/landing-research.jpg"/>
+<div class="drawer-body">
+<div class="drawer-kicker">Research</div>
+<div class="drawer-line">Where a quick read becomes a deep dive.</div>
+<div class="drawer-link">Explore ›</div>
+</div>
+</a>
+<a class="drawer" data-admin-blocked="true" style="cursor: pointer;">
+<div class="drawer-tab">Leanings</div>
+<img alt="Leanings" class="drawer-img" src="/app/curator/static/curator/landing-leanings.jpg"/>
+<div class="drawer-body">
+<div class="drawer-kicker">Working views</div>
+<div class="drawer-line">Open questions, held until the evidence lands.</div>
+<div class="drawer-link">Review ›</div>
+</div>
+</a>
+<a class="drawer" href="/preview/curator/archive.html">
+<div class="drawer-tab">Archive</div>
+<img alt="Archive" class="drawer-img" src="/app/curator/static/curator/landing-archive.jpg"/>
+<div class="drawer-body">
+<div class="drawer-kicker">The stacks</div>
+<div class="drawer-line">Everything kept, and searchable over time.</div>
+<div class="drawer-link">Browse ›</div>
+</div>
+</a>
+</div><!-- /.card-catalog -->
+<footer>
+<a href="https://github.com/robertvanstedum/personal-ai-agents">mini-moi · github.com/robertvanstedum/personal-ai-agents</a>
+</footer>
+</div><!-- /.site-wrap -->
+
+<style id="preview-modal-style">
+.preview-modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
+}
+.preview-modal-overlay.active { display: flex; }
+.preview-modal {
+  background: #2a1f14; border: 1px solid rgba(198,138,94,0.4);
+  border-radius: 8px; padding: 28px 32px; max-width: 380px; width: 90%;
+  color: #F5F0E8; font-family: 'Source Sans 3', system-ui, sans-serif;
+}
+.preview-modal h3 {
+  font-size: 14px; font-weight: 600; margin: 0 0 12px;
+  color: #C68A5E; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.preview-modal p { font-size: 13px; color: rgba(245,240,232,0.75); line-height: 1.6; margin: 0 0 20px; }
+.preview-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.preview-modal-btn {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(198,138,94,0.5); background: transparent; color: #C68A5E;
+  text-decoration: none; display: inline-block;
+}
+.preview-modal-btn:hover { background: rgba(198,138,94,0.15); }
+.preview-modal-close {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(245,240,232,0.2); background: transparent;
+  color: rgba(245,240,232,0.6);
+}
+.preview-modal-close:hover { border-color: rgba(245,240,232,0.4); color: #F5F0E8; }
+</style>
+<div class="preview-modal-overlay" id="previewModal">
+<div class="preview-modal">
+<h3>Admin — not available in preview</h3>
+<p>This section is for authenticated users. Request guest access to explore the live platform.</p>
+<div class="preview-modal-actions">
+<a class="preview-modal-btn" data-admin-blocked="true" style="cursor: pointer;">Request access →</a>
+<button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>
+</div>
+</div>
+</div>
+<script id="preview-modal-script">
+(function() {
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('[data-admin-blocked]');
+    if (el) { e.preventDefault(); e.stopPropagation(); document.getElementById('previewModal').classList.add('active'); }
+  });
+  document.getElementById('previewModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+})();
+</script>
+</body></html>

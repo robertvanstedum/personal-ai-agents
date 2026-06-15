@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="de"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Gespräche — Mein Deutsch</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="/app/german/static/german.css?v=6" rel="stylesheet"/>
+
+<style id="preview-banner-style">
+.preview-banner {
+  position: sticky; top: 0; z-index: 9999;
+  background: #2A1F14; color: #F5F0E8;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 11px; letter-spacing: 0.04em;
+  padding: 7px 20px;
+  border-bottom: 1px solid rgba(198,138,94,0.3);
+  display: flex; align-items: center; gap: 8px;
+}
+.preview-banner .preview-date { color: rgba(245,240,232,0.7); }
+.preview-request-link {
+  color: #C68A5E; text-decoration: none; margin-left: auto;
+  border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
+}
+.preview-request-link:hover { background: rgba(198,138,94,0.1); }
+</style>
+</head>
+<body class="gesprache-mode parch-mode"><div class="preview-banner">
+<span>Preview snapshot — </span>
+<span class="preview-date">Captured June 2026</span>
+<span>. Data is real but frozen.</span>
+<a class="preview-request-link" data-admin-blocked="true" style="cursor: pointer;">Request live access →</a>
+</div>
+<style id="portal-offset-css">body{padding-top:38px!important;}nav{top:38px!important;}</style>
+<div id="portal-nav-bar" style="
+  position:fixed;top:0;left:0;right:0;z-index:999999;
+  height:38px;background:#12122a;color:#e8e8e8;
+  display:flex;align-items:center;padding:0 16px;gap:0;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:13px;border-bottom:1px solid rgba(255,255,255,0.12);
+  box-shadow:0 1px 8px rgba(0,0,0,0.4);
+">
+<a href="/preview/" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
+<span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
+<a href="/preview/curator/briefing.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;">Curator</a>
+<a href="/preview/german/lesen.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;color:#ffffff;font-weight:600;">German</a>
+<a href="/preview/guild/briefing.html" style="color:#C68A5E;text-decoration:none;">Guild</a>
+<span style="color:rgba(255,255,255,0.45);margin-left:auto;margin-right:12px;">Robert</span>
+<a data-admin-blocked="true" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;; cursor: pointer;">Sign out</a>
+</div>
+<nav>
+<a class="logo" href="/preview/german/lesen.html">Mein Deutsch</a>
+<ul class="nav-links">
+<li><a data-admin-blocked="true" style="cursor: pointer;" title="Read">Lesen</a></li>
+<li><a class="active" href="/preview/german/gesprache.html" title="Conversations">Gespräche</a></li>
+<li><a href="/preview/german/schreiben.html" title="Write">Schreiben</a></li>
+<li><a data-admin-blocked="true" style="cursor: pointer;" title="Words / Phrasebook">Wörter</a></li>
+<li><a href="/preview/german/archiv.html" title="Archive">Archiv</a></li>
+<li><a data-admin-blocked="true" style="cursor: pointer;" title="Admin">Admin</a></li>
+</ul>
+</nav>
+<main class="page">
+<div class="tab-layout-split">
+<div class="tab-content">
+<div class="tab-split-header">
+<div class="tab-hero-label">[WIEN AUSSENAUFNAHME]</div>
+<h1>Gespräche</h1>
+<p class="tab-description" id="gesprache-subtitle">Wähle eine Persona, starte ein Gespräch, und reiche das Transkript ein.</p>
+</div>
+<!-- ── Mode toggle ─────────────────────────────────────────────────────── -->
+<div class="gesprache-toggle" role="tablist">
+<button class="gesprache-toggle-btn active" id="btn-tab-personas" role="tab">KI-Personas</button>
+<button class="gesprache-toggle-btn" id="btn-tab-konversation" role="tab">Konversation</button>
+</div>
+<!-- ── KI-Personas pane ────────────────────────────────────────────────── -->
+<div id="pane-ki-personas">
+<div class="ueben-layout">
+<!-- Left: persona list -->
+<div class="persona-list" id="persona-list">
+<div class="persona-list-item active" data-idx="0" data-name="Frau Berger" data-ready="false" data-round="1" data-round-default="5" data-sessions="0" data-slug="frau_berger">
+<div class="persona-avatar">🥐</div>
+<div class="persona-info">
+<div class="persona-name">
+                Frau Berger
+                
+              </div>
+<div class="persona-role">
+                Bakery Owner
+                
+              </div>
+</div>
+</div>
+<div class="persona-list-item" data-idx="1" data-name="Herr Fischer" data-ready="false" data-round="1" data-round-default="5" data-sessions="0" data-slug="herr_fischer">
+<div class="persona-avatar">🏨</div>
+<div class="persona-info">
+<div class="persona-name">
+                Herr Fischer
+                
+              </div>
+<div class="persona-role">
+                Hotel Receptionist
+                
+              </div>
+</div>
+</div>
+<div class="persona-list-item" data-idx="2" data-name="Maria" data-ready="false" data-round="1" data-round-default="5" data-sessions="1" data-slug="maria">
+<div class="persona-avatar">☕</div>
+<div class="persona-info">
+<div class="persona-name">
+                Maria
+                
+              </div>
+<div class="persona-role">
+                Café Waitress
+                
+                <span class="round-counter">Runde 1/5</span>
+</div>
+</div>
+</div>
+<div class="persona-list-item" data-idx="3" data-name="Dr. Huber" data-ready="false" data-round="1" data-round-default="5" data-sessions="0" data-slug="dr._huber">
+<div class="persona-avatar">🏛️</div>
+<div class="persona-info">
+<div class="persona-name">
+                Dr. Huber
+                
+              </div>
+<div class="persona-role">
+                Museum Guide
+                
+              </div>
+</div>
+</div>
+<div class="persona-list-item" data-idx="4" data-name="Stefan" data-ready="false" data-round="1" data-round-default="5" data-sessions="0" data-slug="stefan">
+<div class="persona-avatar">🚇</div>
+<div class="persona-info">
+<div class="persona-name">
+                Stefan
+                
+              </div>
+<div class="persona-role">
+                U-Bahn Stranger
+                
+              </div>
+</div>
+</div>
+<div class="persona-list-item" data-idx="5" data-name="Frau Novak" data-ready="false" data-round="1" data-round-default="5" data-sessions="0" data-slug="frau_novak">
+<div class="persona-avatar">💊</div>
+<div class="persona-info">
+<div class="persona-name">
+                Frau Novak
+                
+              </div>
+<div class="persona-role">
+                Pharmacist
+                
+              </div>
+</div>
+</div>
+<div class="persona-list-item" data-idx="6" data-name="Klaus" data-ready="false" data-round="1" data-round-default="5" data-sessions="0" data-slug="klaus">
+<div class="persona-avatar">🍷</div>
+<div class="persona-info">
+<div class="persona-name">
+                Klaus
+                
+              </div>
+<div class="persona-role">
+                Restaurant Waiter (Upscale)
+                
+              </div>
+</div>
+</div>
+<div class="persona-list-item" data-idx="7" data-name="Georg" data-ready="false" data-round="1" data-round-default="5" data-sessions="0" data-slug="georg">
+<div class="persona-avatar">🗺️</div>
+<div class="persona-info">
+<div class="persona-name">
+                Georg
+                
+              </div>
+<div class="persona-role">
+                Friendly Viennese local
+                
+              </div>
+</div>
+</div>
+<div class="persona-list-item" data-idx="8" data-name="Anna" data-ready="false" data-round="1" data-round-default="5" data-sessions="0" data-slug="anna">
+<div class="persona-avatar">🏠</div>
+<div class="persona-info">
+<div class="persona-name">
+                Anna
+                
+              </div>
+<div class="persona-role">
+                Airbnb Host
+                
+              </div>
+</div>
+</div>
+</div>
+<!-- Right: detail + prompt -->
+<div class="persona-detail" id="persona-detail">
+<div class="detail-persona-header">
+<span class="detail-avatar" id="detail-avatar">🥐</span>
+<div>
+<div class="detail-name" id="detail-name">Frau Berger</div>
+<div class="detail-role" id="detail-role">Bakery Owner</div>
+</div>
+</div>
+<p class="detail-description" id="detail-description">Warm, patient Viennese woman in her 50s. Runs a traditional Bäckerei near the Naschmarkt. Loves chatting about bread and pastries. Gently rephrases errors in-character.</p>
+<div class="scene-list" id="scene-list"><button class="scene-btn active" data-key="bakery_order">Ich hätte gerne…</button><button class="scene-btn" data-key="neighborhood_chat">Wie gefällt Ihnen Wien?</button></div>
+<div class="prompt-delivery" id="prompt-delivery">
+<div class="prompt-text" id="prompt-text" style="display:none">You walk into Frau Berger's Bäckerei near the Naschmarkt. She greets you warmly. Order bread or pastries, ask about today's specials, and pay. Speak politely — use 'Ich hätte gerne' or 'Ich möchte'.</div>
+<div class="prompt-actions">
+<button class="btn-delivery" id="btn-telegram" title="Kopiert den Prompt und öffnet Telegram — dort einfügen">
+                ✈️ Telegram öffnen
+              </button>
+<button class="btn-delivery" id="btn-copy" title="Kopiert den vollständigen Grok-Prompt in die Zwischenablage">
+                📋 Kopieren
+              </button>
+<button class="btn-delivery" id="btn-download" title="Speichert den vollständigen Grok-Prompt als Textdatei">
+                💾 Als .txt speichern
+              </button>
+</div>
+<div class="prompt-toast" id="prompt-toast" style="display:none">✓ Vollständiger Prompt kopiert</div>
+</div>
+<details class="session-brief-details" id="session-brief-panel" style="">
+<summary class="session-brief-summary">🎯 Heutige Vorbereitung</summary>
+<pre class="session-brief-text" id="session-brief-text">📚 Sitzung 69 — Frau Berger / Bakery Order [use formal_sie]
+Carry forward: Erste Sitzung — kein Carry-forward
+Ziel: You walk into Frau Berger's Bäckerei near the Naschmarkt. She greets you warmly. Order bread or pastries, ask about today's specials, and pay. Speak politely — use 'Ich hätte gerne' or 'Ich möchte'.
+
+🧱 Heutige Vorbereitung:
+   • Ich hätte gerne zwei Kipferl, bitte.
+   • Was ist frisch heute?
+   • Ich möchte lieber das dunkle Brot.
+   • Haben Sie Nussstrudel?
+   🆘 Einen Moment — ich überlege noch.</pre>
+</details>
+<details class="nach-sitzung-details" id="transcript-details">
+<summary class="session-brief-summary">✏️ Nach der Sitzung</summary>
+<div class="nach-sitzung-body">
+<div id="transcript-input-wrap">
+<textarea class="notebook-textarea nach-sitzung-textarea" id="transcript-input" placeholder="Transkript hier einfügen — z.B. aus Grok Voice
+
+Robert: Guten Morgen…
+Frau Berger: Guten Morgen!…" rows="6"></textarea>
+<div class="gesprache-submit-row">
+<button class="btn-primary" id="btn-analysieren" title="Analyse des Gesprächs">Analysieren</button>
+<span class="gesprache-status" id="analyse-status"></span>
+</div>
+</div>
+<div class="transcript-analysiert-row" id="transcript-analysiert-row" style="display:none">
+<span class="transcript-analysiert-label">✓ analysiert</span>
+<button class="btn-ghost btn-sm" id="btn-transcript-bearbeiten">bearbeiten</button>
+</div>
+</div>
+</details>
+<!-- Feedback — rendered inside panel after analysis -->
+<div id="gesprache-feedback-wrap" style="display:none">
+<hr class="gesprache-divider"/>
+<div class="gesprache-section-label">Feedback</div>
+<div class="gesprache-feedback">
+<div class="feedback-summary" id="feedback-summary"></div>
+<div class="feedback-block" id="feedback-errors-block" style="display:none">
+<div class="feedback-block-label">Fehler</div>
+<ul class="feedback-errors-list" id="feedback-errors-list"></ul>
+</div>
+<div class="feedback-block" id="feedback-strengths-block" style="display:none">
+<div class="feedback-block-label">Stärken</div>
+<ul class="feedback-strengths-list" id="feedback-strengths-list"></ul>
+</div>
+<div class="feedback-block" id="feedback-focus-block" style="display:none">
+<div class="feedback-block-label">Für nächste Mal</div>
+<p class="feedback-next-focus" id="feedback-next-focus"></p>
+</div>
+</div>
+</div>
+</div>
+</div><!-- .ueben-layout -->
+<!-- Recent sessions -->
+<hr class="gesprache-divider"/>
+<div class="gesprache-section-label">Letzte Sitzungen</div>
+<div class="gesprache-sessions-list">
+<div class="gesprache-session-row">
+<span class="gesprache-session-date">2026-06-03</span>
+<span class="gesprache-session-persona">Frau Berger</span>
+<span class="gesprache-session-scene">Bakery Order near Naschmarkt</span>
+<span class="gesprache-session-source">manual</span>
+</div>
+<div class="gesprache-session-row">
+<span class="gesprache-session-date">2026-05-25</span>
+<span class="gesprache-session-persona">Maria</span>
+<span class="gesprache-session-scene">cafe bill</span>
+<span class="gesprache-session-source">html</span>
+</div>
+<div class="gesprache-session-row">
+<span class="gesprache-session-date">2026-05-21</span>
+<span class="gesprache-session-persona">Maria</span>
+<span class="gesprache-session-scene">Viennese café</span>
+<span class="gesprache-session-source">manual</span>
+</div>
+<div class="gesprache-session-row">
+<span class="gesprache-session-date">2026-05-08</span>
+<span class="gesprache-session-persona">Maria</span>
+<span class="gesprache-session-scene">Viennese café waitress</span>
+<span class="gesprache-session-source">manual</span>
+</div>
+<div class="gesprache-session-row">
+<span class="gesprache-session-date">2026-05-08</span>
+<span class="gesprache-session-persona">Herr Fischer</span>
+<span class="gesprache-session-scene">Hotel receptionist near Ringstraße</span>
+<span class="gesprache-session-source">manual</span>
+</div>
+</div>
+<p class="hint" style="margin-top:0.75rem"><a href="/preview/german/archiv.html">→ Alle Sitzungen im Archiv</a></p>
+</div><!-- #pane-ki-personas -->
+<!-- ── Konversation pane ───────────────────────────────────────────────── -->
+<div id="pane-konversation" style="display:none">
+<div class="konversation-cards">
+<!-- Card 1: Vorbereitung — Before the session -->
+<div class="konversation-card">
+<div class="konversation-card-label">1 · Before — Vorbereitung</div>
+<p class="konv-hint">Was möchtest du heute üben? Dein Tutor bekommt diesen Brief vor der Sitzung.</p>
+<div class="konv-field">
+<label class="konv-field-label" for="konv-session-notes">Schwerpunkte für heute</label>
+<textarea class="tutor-input" id="konv-session-notes" placeholder="z.B. Adjektivendungen üben, Café-Vokabular, Meinungen ausdrücken…" rows="4"></textarea>
+</div>
+<button class="btn-ghost btn-sm" id="btn-generate-brief">Brief für Tutor erstellen →</button>
+<span class="gesprache-status" id="konv-brief-status"></span>
+<div id="konv-brief-result" style="display:none; margin-top:12px;">
+<div class="konv-brief-preview" id="konv-brief-preview"></div>
+<div class="konv-link-row" style="margin-top:8px;">
+<code class="konv-link-code" id="brief-link-url"></code>
+<button class="btn-ghost btn-sm" id="btn-copy-brief-link">Link kopieren</button>
+</div>
+</div>
+</div>
+<!-- Card 2: Gespräch — During + After -->
+<div class="konversation-card">
+<div class="konversation-card-label">2 · During — Gespräch</div>
+<p class="konv-hint">Start a Google Meet. Copy the meeting link from inside Meet to share with your tutor.</p>
+<button class="btn-raum-oeffnen" id="btn-open-meet">Start Google Meet →</button>
+<p class="konv-hint" style="margin-top:10px;">After the meeting, enable transcription in Meet settings so the transcript auto-saves to Google Drive.</p>
+<!-- After-session: collapsible inside card -->
+<details class="nach-sitzung-details" id="konv-transcript-details" style="margin-top:1.25rem">
+<summary class="session-brief-summary">✏️ Nach dem Gespräch</summary>
+<div class="konv-nachbereitung-body">
+<div id="konv-transcript-input-wrap">
+<!-- Consent gate -->
+<label class="konv-consent-label" id="consent-label">
+<input id="consent-checkbox" type="checkbox"/>
+<span>Teilnehmer hat zugestimmt</span>
+</label>
+<!-- Transcript tools — locked until consent checked -->
+<div class="konv-transcript-tools konv-transcript-locked" id="transcript-tools">
+<div class="konv-field" style="margin-top:0.75rem">
+<label class="konv-field-label">Tutor / Gesprächspartner</label>
+<input class="tutor-input" disabled="" id="tutor-name-input" placeholder="z.B. Frau Weber" type="text"/>
+</div>
+<div class="konv-field">
+<div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:0.3rem;">
+<label class="konv-field-label" style="margin-bottom:0;">Transkript einfügen</label>
+<button class="konv-drive-link" disabled="" id="btn-fetch-transcript" title="Neuestes Transkript von Google Drive laden">
+                        Von Drive →
+                      </button>
+</div>
+<textarea class="tutor-input" disabled="" id="tutor-transcript-input" placeholder="Aus Otter.ai kopieren und hier einfügen." rows="5"></textarea>
+</div>
+<button class="btn-ghost btn-sm" disabled="" id="btn-submit-tutor-transcript" title="Sends the transcript to Claude for grammar analysis">
+                    Transkript analysieren →
+                  </button>
+<div class="gesprache-status" id="tutor-submit-status" style="margin-top:6px;"></div>
+</div>
+</div><!-- #konv-transcript-input-wrap -->
+<div class="transcript-analysiert-row" id="konv-transcript-analysiert-row" style="display:none">
+<span class="transcript-analysiert-label">✓ analysiert</span>
+<button class="btn-ghost btn-sm" id="btn-konv-transcript-bearbeiten">bearbeiten</button>
+</div>
+</div>
+</details>
+</div>
+</div><!-- .konversation-cards -->
+</div><!-- #pane-konversation -->
+<!-- Round-ready modal (used by KI-Personas pane) -->
+<div aria-modal="true" class="round-modal" id="round-ready-modal" role="dialog" style="display:none">
+<div class="round-modal-content">
+<div class="round-modal-title" id="round-modal-title"></div>
+<div class="round-modal-actions">
+<button class="btn-primary btn-sm" id="btn-round-close" title="Start a new round with this persona">Neue Runde starten</button>
+<button class="btn-ghost btn-sm" id="btn-round-extend" title="Extend round by 3 sessions">Verlängern +3</button>
+<button class="btn-ghost btn-sm" id="btn-round-defer" title="Decide later">Jetzt nicht</button>
+</div>
+</div>
+</div>
+</div><!-- .tab-content -->
+<div class="tab-panel-photo">
+<img alt="Wien café counter" src="/app/german/static/photos/beer_coffee_IMG_5189.jpg" style="object-position: center 40%"/>
+</div>
+</div><!-- .tab-layout-split -->
+</main>
+<script>
+document.body.classList.add('parch-mode');
+(function () {
+  'use strict';
+
+  const personas = [{"description": "Warm, patient Viennese woman in her 50s. Runs a traditional B\u00e4ckerei near the Naschmarkt. Loves chatting about bread and pastries. Gently rephrases errors in-character.", "difficulty": "beginner-friendly", "emoji": "\ud83e\udd50", "labels": {"bakery_order": "Ich h\u00e4tte gerne\u2026", "neighborhood_chat": "Wie gef\u00e4llt Ihnen Wien?"}, "memory": {"active_memory": {"errors_noted": [], "last_seen": null, "notes": "", "rapport_level": "neutral", "round_number": 1, "sessions_this_round": 0, "strengths": [], "topics_discussed": [], "vocabulary_introduced": []}, "archived_rounds": [], "current_round": 1, "persona": "frau_berger", "persona_type": "casual", "ready_to_archive": false, "round_default": 5, "round_extended": false, "user": "robert"}, "name": "Frau Berger", "register": "formal_sie", "role": "Bakery Owner", "scenarios": ["bakery_order", "neighborhood_chat"], "slug": "frau_berger", "speaking_prompts": {"bakery_order": "You walk into Frau Berger\u0027s B\u00e4ckerei near the Naschmarkt. She greets you warmly. Order bread or pastries, ask about today\u0027s specials, and pay. Speak politely \u2014 use \u0027Ich h\u00e4tte gerne\u0027 or \u0027Ich m\u00f6chte\u0027.", "neighborhood_chat": "You\u0027ve just picked up your order and Frau Berger wants to chat. She asks how you\u0027re finding Vienna. Talk about the neighborhood, what you\u0027ve seen, and where you\u0027re headed next."}, "style": "casual, forgiving, gentle in-character corrections", "warm_up_variants": ["Order a Semmel and ask for the price.", "Ask what\u0027s fresh today, then order a Kipferl.", "Order a Mohnflesserl and ask if they have Topfenstrudel.", "Ask for two Semmeln and a Salzstangerl, then pay with exact change."]}, {"description": "Professional, efficient, polite. Works at a mid-range hotel near the Ringstra\u00dfe. Speaks clearly and formally \u2014 good for standard Hochdeutsch practice.", "difficulty": "intermediate", "emoji": "\ud83c\udfe8", "labels": {"directions": "K\u00f6nnen Sie mir helfen?", "hotel_checkin": "Ich m\u00f6chte einchecken.", "hotel_checkout": "Ich m\u00f6chte auschecken.", "room_problem": "Es gibt ein Problem."}, "memory": {"active_memory": {"errors_noted": [], "last_seen": null, "notes": "", "rapport_level": "neutral", "round_number": 1, "sessions_this_round": 0, "strengths": [], "topics_discussed": [], "vocabulary_introduced": []}, "archived_rounds": [], "current_round": 1, "persona": "herr_fischer", "persona_type": "casual", "ready_to_archive": false, "round_default": 5, "round_extended": false, "user": "robert"}, "name": "Herr Fischer", "register": "formal_sie", "role": "Hotel Receptionist", "scenarios": ["hotel_checkin", "hotel_checkout", "room_problem", "directions"], "slug": "herr_fischer", "speaking_prompts": {"directions": "You\u0027re in the hotel lobby and need to get somewhere in the city. Ask Herr Fischer how to get to the Naschmarkt by U-Bahn. Confirm the line number and how many stops.", "hotel_checkin": "You arrive at your hotel near the Ringstra\u00dfe after a long flight. Herr Fischer greets you at the front desk. Check in, ask about the WiFi, and confirm your checkout date.", "hotel_checkout": "It\u0027s your last morning. You go to the front desk to check out. Confirm your bill, mention you\u0027d like a receipt, and ask about luggage storage.", "room_problem": "Your room has a problem \u2014 the shower is cold or the window won\u0027t close. Go to the front desk and explain the issue. Ask if they can fix it or move you to another room."}, "style": "formal, clear, standard Hochdeutsch", "warm_up_variants": ["Ask what time breakfast starts and where it\u0027s served.", "Ask Herr Fischer to recommend a good restaurant nearby.", "Request a wake-up call for 7am tomorrow.", "Ask if the hotel has a gym and what the opening hours are."]}, {"description": "Young, slightly hurried, uses some Viennese slang. Works at a classic Kaffeehaus. Tests natural pace and informal register.", "difficulty": "intermediate", "emoji": "\u2615", "labels": {"cafe_bill": "Zahlen, bitte.", "cafe_meal": "Was empfehlen Sie?", "cafe_order": "Ich h\u00e4tte gerne\u2026"}, "memory": {"active_memory": {"errors_noted": ["\u0027Manualchen\u0027 is not a German or Viennese coffee term; the intended drink was \u0027eine Melange\u0027, the classic Viennese milk coffee.", "\u0027Melange\u0027 is feminine (die Melange), requiring the article \u0027eine\u0027 in the accusative, not \u0027einen\u0027.", "In a subordinate clause introduced by \u0027dass\u0027, the verb must go to the end of the clause.", "\u0027Verl\u00e4ngerter\u0027 is a masculine adjectival noun (der Verl\u00e4ngerte), so it takes \u0027einen\u0027 in the accusative, not \u0027einer\u0027.", "\u0027Kaffee\u0027 is masculine (der Kaffee), so the accusative requires \u0027den\u0027, not \u0027das\u0027; note that in Austrian German \u0027das Kaffee\u0027 can colloquially refer to a cup of coffee, but standard usage is \u0027der Kaffee\u0027.", "\u0027Sellen\u0027 is not a German word; Robert likely intended \u0027zahlen\u0027 (to pay) or \u0027die Rechnung\u0027 (the bill), both standard ways to ask for the check.", "Using English \u0027Likewise\u0027 breaks the target language immersion; the German equivalents \u0027Gleichfalls\u0027 or \u0027Danke, ebenso\u0027 should be used to wish someone well in return."], "last_seen": "2026-05-25", "notes": "Robert successfully navigated a Viennese caf\u00e9 ordering scenario, demonstrating practical vocabulary for coffee types and payment. He struggled with recalling specific Viennese coffee terms and made a gender/article error with \u0027Kaffee\u0027, but communicated his intentions clearly enough for the waiter to understand. The session showed good functional communication despite some hesitation and vocabulary gaps.", "rapport_level": "neutral", "round_number": 1, "sessions_this_round": 1, "strengths": ["Successfully self-corrected the article for \u0027Verl\u00e4ngerten\u0027 mid-sentence, showing active monitoring of his own speech", "Used \u0027meine Frau\u0027 correctly with the right possessive form", "Politely used \u0027Vielen Dank\u0027 at an appropriate moment", "Managed to communicate payment intent clearly with \u0027hier ist meine Karte\u0027", "Attempted Viennese-specific coffee vocabulary, showing awareness of regional dialect"], "topics_discussed": ["ordering drinks", "Viennese coffee culture", "paying the bill", "caf\u00e9 vocabulary"], "vocabulary_introduced": ["Melange", "Verl\u00e4ngerter", "Gugelhupf", "die Rechnung", "zahlen", "Kaffeehaus", "Bitte sch\u00f6n", "Servus", "auf Wiederschaun", "Lass es euch gut schmecken"]}, "archived_rounds": [], "current_round": 1, "persona": "maria", "persona_type": "casual", "ready_to_archive": false, "round_default": 5, "round_extended": false, "user": "robert"}, "name": "Maria", "register": "formal_sie", "role": "Caf\u00e9 Waitress", "scenarios": ["cafe_order", "cafe_bill", "cafe_meal"], "slug": "maria", "speaking_prompts": {"cafe_bill": "You\u0027ve finished your coffee. Get Maria\u0027s attention and ask for the bill. She\u0027ll tell you the total \u2014 pay and leave a tip.", "cafe_meal": "It\u0027s lunchtime. Order a full small meal from the Tageskarte (daily menu). Ask what the soup of the day is, then order a main and a drink.", "cafe_order": "You sit down at a classic Viennese Kaffeehaus. Maria comes to your table. Order a Melange or Verl\u00e4ngerter and a pastry. She speaks quickly \u2014 keep up and be polite."}, "style": "casual, slightly fast, informal", "warm_up_variants": ["Order a Melange and a Kipferl.", "Order a Verl\u00e4ngerter and ask for the Tageskarte.", "Ask if the Gugelhupf is fresh, then order a Kleiner Brauner.", "Ask for a table for two, order drinks, and ask for the bill."]}, {"description": "Enthusiastic, knowledgeable, speaks in complete sentences. Works at the Kunsthistorisches Museum. Good for listening comprehension and follow-up questions.", "difficulty": "intermediate-advanced", "emoji": "\ud83c\udfdb\ufe0f", "labels": {"museum_exhibit": "Was ist das hier?", "museum_navigation": "Wo finde ich\u2026?", "museum_recommendation": "Was empfehlen Sie?"}, "memory": {"active_memory": {"errors_noted": [], "last_seen": null, "notes": "", "rapport_level": "neutral", "round_number": 1, "sessions_this_round": 0, "strengths": [], "topics_discussed": [], "vocabulary_introduced": []}, "archived_rounds": [], "current_round": 1, "persona": "dr._huber", "persona_type": "casual", "ready_to_archive": false, "round_default": 5, "round_extended": false, "user": "robert"}, "name": "Dr. Huber", "register": "formal_sie", "role": "Museum Guide", "scenarios": ["museum_exhibit", "museum_recommendation", "museum_navigation"], "slug": "dr._huber", "speaking_prompts": {"museum_exhibit": "You\u0027re standing in front of a famous painting at the Kunsthistorisches Museum. Dr. Huber approaches and offers to tell you about it. Ask follow-up questions \u2014 who painted it, when, and what it means.", "museum_navigation": "You\u0027re lost in the museum. Ask Dr. Huber how to find the Egyptian collection and where the toilets are. He\u0027ll give directions \u2014 confirm you understood.", "museum_recommendation": "You only have an hour left. Ask Dr. Huber what you absolutely must see before you leave. He\u0027ll give you a tour recommendation \u2014 follow along and ask questions."}, "style": "formal, informative, complete sentences", "warm_up_variants": ["Ask Dr. Huber who painted the most famous work in this room.", "Ask when the museum was built and who commissioned it.", "Ask which collection he personally finds most interesting.", "Ask Dr. Huber to explain one small detail in the painting in front of you."]}, {"description": "Relaxed local, early 30s. Willing to help a tourist but speaks at normal speed. Tests directional vocabulary and city navigation.", "difficulty": "intermediate", "emoji": "\ud83d\ude87", "labels": {"ask_directions": "Wie komme ich zu\u2026?", "confirm_stop": "Ist das die richtige Linie?", "transit_help": "Welche Linie f\u00e4hrt zu\u2026?"}, "memory": {"active_memory": {"errors_noted": [], "last_seen": null, "notes": "", "rapport_level": "neutral", "round_number": 1, "sessions_this_round": 0, "strengths": [], "topics_discussed": [], "vocabulary_introduced": []}, "archived_rounds": [], "current_round": 1, "persona": "stefan", "persona_type": "casual", "ready_to_archive": false, "round_default": 5, "round_extended": false, "user": "robert"}, "name": "Stefan", "register": "formal_sie", "role": "U-Bahn Stranger", "scenarios": ["ask_directions", "transit_help", "confirm_stop"], "slug": "stefan", "speaking_prompts": {"ask_directions": "You\u0027re on the street near the Stephansdom and you\u0027re not sure which way to walk. Ask Stefan how to get to the Belvedere. He\u0027ll tell you \u2014 confirm you understood the route.", "confirm_stop": "You\u0027re on the U4 and unsure if you\u0027ve missed your stop. Ask the person next to you (Stefan) whether Karlsplatz is the next stop. He\u0027ll help you figure it out.", "transit_help": "You\u0027re at a U-Bahn station and confused about which line to take. Ask Stefan which line goes to Sch\u00f6nbrunn and where to change. He\u0027ll explain \u2014 repeat back to confirm."}, "style": "casual, normal speed, colloquial", "warm_up_variants": ["Ask Stefan how to get to the Naschmarkt on foot.", "Ask which U-Bahn line goes to the Prater.", "Ask Stefan how long it takes to walk to Sch\u00f6nbrunn from here.", "Ask if the next train on this platform goes toward the city centre."]}, {"description": "Calm, precise, professional. Good for medical and practical vocabulary travelers might genuinely need.", "difficulty": "intermediate", "emoji": "\ud83d\udc8a", "labels": {"ask_medicine": "Ich brauche etwas gegen\u2026", "describe_symptom": "Ich habe Schmerzen.", "understand_instructions": "Wie oft soll ich das nehmen?"}, "memory": {"active_memory": {"errors_noted": [], "last_seen": null, "notes": "", "rapport_level": "neutral", "round_number": 1, "sessions_this_round": 0, "strengths": [], "topics_discussed": [], "vocabulary_introduced": []}, "archived_rounds": [], "current_round": 1, "persona": "frau_novak", "persona_type": "casual", "ready_to_archive": false, "round_default": 5, "round_extended": false, "user": "robert"}, "name": "Frau Novak", "register": "formal_sie", "role": "Pharmacist", "scenarios": ["ask_medicine", "describe_symptom", "understand_instructions"], "slug": "frau_novak", "speaking_prompts": {"ask_medicine": "You have a headache and need something from the pharmacy. Ask Frau Novak for a painkiller. She\u0027ll ask a few questions \u2014 answer them and confirm the dosage.", "describe_symptom": "You\u0027ve had a sore throat for two days. Describe your symptoms to Frau Novak. She\u0027ll recommend something and ask if you have allergies \u2014 respond and buy what she suggests.", "understand_instructions": "Frau Novak hands you medicine with instructions. Ask her to explain how often to take it and whether you can take it with food. Confirm you understood."}, "style": "formal, precise, calm", "warm_up_variants": ["Ask for something for a mild headache, no prescription.", "Ask Frau Novak if she has throat lozenges and which brand she recommends.", "Ask whether ibuprofen or paracetamol is better for a fever.", "Ask if you need a prescription for the medicine she\u0027s recommending."]}, {"description": "Formal, proud of the menu, expects proper dining etiquette. Slight Austrian formality. Good for elevated register practice.", "difficulty": "intermediate-advanced", "emoji": "\ud83c\udf77", "labels": {"ask_about_wine": "Was empfehlen Sie?", "pay_bill": "Die Rechnung, bitte.", "restaurant_order": "Ich nehme\u2026", "restaurant_reservation": "Ich habe reserviert."}, "memory": {"active_memory": {"errors_noted": [], "last_seen": null, "notes": "", "rapport_level": "neutral", "round_number": 1, "sessions_this_round": 0, "strengths": [], "topics_discussed": [], "vocabulary_introduced": []}, "archived_rounds": [], "current_round": 1, "persona": "klaus", "persona_type": "casual", "ready_to_archive": false, "round_default": 5, "round_extended": false, "user": "robert"}, "name": "Klaus", "register": "formal_sie", "role": "Restaurant Waiter (Upscale)", "scenarios": ["restaurant_reservation", "restaurant_order", "ask_about_wine", "pay_bill"], "slug": "klaus", "speaking_prompts": {"ask_about_wine": "You\u0027d like wine with dinner. Ask Klaus what he recommends to go with your main course. He\u0027ll describe two options \u2014 ask a follow-up question and choose one.", "pay_bill": "Dinner is done. Get Klaus\u0027s attention and ask for the bill. He\u0027ll tell you the total \u2014 pay by card and say goodbye politely.", "restaurant_order": "You\u0027re seated at an upscale restaurant. Klaus presents the menu. Order a starter and main course. Ask what he recommends. Use formal register \u2014 \u0027Ich nehme\u0027 or \u0027Ich h\u00e4tte gerne\u0027.", "restaurant_reservation": "Call the restaurant to book a table for two for tomorrow evening at 7pm. Klaus answers. Confirm the reservation and ask if they need anything from you."}, "style": "formal, slightly elevated, Austrian formality", "warm_up_variants": ["Ask Klaus what today\u0027s Tagesgericht (dish of the day) is.", "Ask whether the Tafelspitz is available this evening.", "Ask Klaus to describe the difference between two starters.", "Ask for still water and a bread basket before ordering."]}, {"age": "mid-40s", "default_scenario": "local_smalltalk", "description": "A warm, curious Viennese local who enjoys talking to visitors. Speaks natural, colloquial Austrian German \u2014 relaxed but not sloppy. Opens formally with strangers, shifts to du naturally if the conversation warms up. Happy to give honest local recommendations and genuine opinions, not tourist-brochure answers.", "emoji": "\ud83d\uddfa\ufe0f", "memory": {"active_memory": {"errors_noted": [], "last_seen": null, "notes": "", "rapport_level": "neutral", "round_number": 1, "sessions_this_round": 0, "strengths": [], "topics_discussed": [], "vocabulary_introduced": []}, "archived_rounds": [], "current_round": 1, "persona": "georg", "persona_type": "casual", "ready_to_archive": false, "round_default": 5, "round_extended": false, "user": "robert"}, "name": "Georg", "prompt_file": "georg_local.txt", "ready_answers": [{"answer": "Ich komme aus Chicago \u2014 aus den USA.", "question": "Woher kommen Sie?"}, {"answer": "Ich bin Produktmanager \u2014 Technologie und Telekommunikation.", "question": "Was machen Sie beruflich?"}, {"answer": "Wir bleiben etwa eine Woche.", "question": "Wie lange bleiben Sie in Wien?"}, {"answer": "Nein, ich war schon einmal hier \u2014 aber das ist lange her.", "question": "Ist das Ihr erster Besuch?"}, {"answer": "Ein bisschen \u2014 ich lerne noch. Aber ich versuche es gerne.", "question": "Sprechen Sie Deutsch?"}, {"answer": "Ja, ich reise sehr gern \u2014 Brasilien, Dubai, viele L\u00e4nder.", "question": "Reisen Sie oft?"}], "register": "formal_sie", "register_notes": "Opens Sie with strangers. Can shift to du mid-session if conversation becomes personal \u2014 this is normal Austrian social behavior, not a bug.", "role": "Friendly Viennese local", "scenarios": ["local_smalltalk", "heuriger_visit", "weekend_recommendations", "neighborhood_chat"], "slug": "georg", "stall_level": "HIGH", "trigger_words": ["local", "georg", "chat", "small talk", "conversation", "heuriger", "w\u00fcrstelstand", "casual"], "warm_up_variants": ["A local asks where you\u0027re from \u2014 answer and ask where they recommend for Saturday morning", "You\u0027re at a Heuriger \u2014 ask Georg what\u0027s good to drink and what locals do here on weekends", "Georg asks what you do \u2014 answer in German and ask what he recommends that tourists usually miss", "You just arrived \u2014 tell Georg how long you\u0027re staying and ask about a good neighborhood to explore"]}, {"description": "Friendly, practical, explains things clearly. A good onboarding persona \u2014 patient and encouraging. Ideal for early sessions.", "difficulty": "beginner-friendly", "emoji": "\ud83c\udfe0", "labels": {"apartment_handoff": "Sch\u00f6n, Sie kennenzulernen.", "appliance_questions": "Wie funktioniert das?", "neighborhood_tips": "Was empfehlen Sie hier?", "report_problem": "Es gibt ein Problem."}, "memory": {"active_memory": {"errors_noted": [], "last_seen": null, "notes": "", "rapport_level": "neutral", "round_number": 1, "sessions_this_round": 0, "strengths": [], "topics_discussed": [], "vocabulary_introduced": []}, "archived_rounds": [], "current_round": 1, "persona": "anna", "persona_type": "casual", "ready_to_archive": false, "round_default": 5, "round_extended": false, "user": "robert"}, "name": "Anna", "register": "formal_sie", "role": "Airbnb Host", "scenarios": ["apartment_handoff", "appliance_questions", "neighborhood_tips", "report_problem"], "slug": "anna", "speaking_prompts": {"apartment_handoff": "Anna meets you at the apartment. She gives you the keys and shows you around. Ask about the heating, the WiFi password, and what time you need to check out.", "appliance_questions": "You can\u0027t figure out the washing machine or the stovetop. Call Anna and ask her to explain. She\u0027ll walk you through it \u2014 confirm you understood.", "neighborhood_tips": "Ask Anna where the nearest supermarket is, a good local caf\u00e9, and whether there\u0027s a pharmacy nearby. She\u0027ll give you three recommendations \u2014 take notes.", "report_problem": "Something in the apartment isn\u0027t working \u2014 the hot water or the internet. Call Anna to report it. Describe the problem clearly and ask when it can be fixed."}, "style": "casual, encouraging, patient", "warm_up_variants": ["Ask Anna where to put the rubbish and which bins are for recycling.", "Ask what the checkout time is and whether you can leave bags after.", "Ask Anna for the WiFi password and how to connect the TV.", "Ask if there are any house rules you should know about."]}];
+  let selectedIdx = 0;
+  let selectedSceneKey = null;
+  let currentFullPrompt = null;
+
+  // ── Tab toggle ─────────────────────────────────────────────────────────────
+
+  const SUBTITLES = {
+    personas:     'Wähle eine Persona, starte ein Gespräch, und reiche das Transkript ein.',
+    konversation: 'Vorbereitung, Sitzung und Nachbereitung mit einem echten Gesprächspartner.',
+  };
+
+  function switchTab(tab) {
+    const isPersonas = tab === 'personas';
+    document.getElementById('pane-ki-personas').style.display = isPersonas ? '' : 'none';
+    document.getElementById('pane-konversation').style.display = isPersonas ? 'none' : '';
+    document.getElementById('btn-tab-personas').classList.toggle('active', isPersonas);
+    document.getElementById('btn-tab-konversation').classList.toggle('active', !isPersonas);
+
+    // Fix 2 — update subtitle text
+    const subtitle = document.getElementById('gesprache-subtitle');
+    if (subtitle) subtitle.textContent = SUBTITLES[tab] || SUBTITLES.personas;
+
+    // Fix 3 — hide/show photo column
+    const photo = document.querySelector('.tab-panel-photo');
+    const split = document.querySelector('.tab-layout-split');
+    if (photo && split) {
+      photo.style.display = isPersonas ? '' : 'none';
+      split.style.gridTemplateColumns = isPersonas ? '' : '1fr';
+    }
+
+    sessionStorage.setItem('gesprache-tab', tab);
+  }
+
+  document.getElementById('btn-tab-personas').addEventListener('click', () => switchTab('personas'));
+  document.getElementById('btn-tab-konversation').addEventListener('click', () => switchTab('konversation'));
+
+  // ── Nach der Sitzung — state reset ────────────────────────────────────────
+
+  function resetNachDerSitzung() {
+    // Clear textarea and status
+    document.getElementById('transcript-input').value = '';
+    document.getElementById('analyse-status').textContent = '';
+    const btn = document.getElementById('btn-analysieren');
+    btn.disabled = false;
+    btn.textContent = 'Analysieren';
+    // Show input wrap, hide analysiert row
+    document.getElementById('transcript-input-wrap').style.display = '';
+    document.getElementById('transcript-analysiert-row').style.display = 'none';
+    // Clear and hide feedback
+    document.getElementById('feedback-summary').textContent = '';
+    document.getElementById('feedback-errors-block').style.display = 'none';
+    document.getElementById('feedback-strengths-block').style.display = 'none';
+    document.getElementById('feedback-focus-block').style.display = 'none';
+    document.getElementById('gesprache-feedback-wrap').style.display = 'none';
+    // Collapse the details panel
+    const nachDetails = document.getElementById('transcript-details');
+    if (nachDetails) nachDetails.removeAttribute('open');
+  }
+
+  // ── Persona selection ──────────────────────────────────────────────────────
+
+  function selectPersona(idx) {
+    const p = personas[idx];
+    if (!p) return;
+    selectedIdx = idx;
+    selectedSceneKey = null;
+    currentFullPrompt = null;
+    document.getElementById('session-brief-panel').style.display = 'none';
+    resetNachDerSitzung();
+
+    document.querySelectorAll('.persona-list-item').forEach(el => el.classList.remove('active'));
+    document.querySelector(`.persona-list-item[data-idx="${idx}"]`).classList.add('active');
+
+    document.getElementById('detail-avatar').textContent = p.emoji || p.name[0];
+    document.getElementById('detail-name').textContent = p.name;
+    document.getElementById('detail-role').textContent = p.role;
+    document.getElementById('detail-description').textContent = p.description || '';
+
+    const sceneList = document.getElementById('scene-list');
+    sceneList.innerHTML = '';
+
+    const prompts = p.speaking_prompts || {};
+    const keys = Object.keys(prompts);
+
+    if (keys.length === 0 && p.warm_up_variants) {
+      p.warm_up_variants.forEach((variant, i) => {
+        const btn = makeSceneBtn('warm_up_' + i, variant.slice(0, 40) + (variant.length > 40 ? '…' : ''));
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          selectedSceneKey = 'warm_up_' + i;
+          document.getElementById('prompt-text').textContent = variant;
+          document.getElementById('prompt-delivery').style.display = '';
+          fetchAndStorePrompt(p.slug, 'warm_up_' + i);
+        });
+        sceneList.appendChild(btn);
+      });
+      sceneList.firstChild && sceneList.firstChild.click();
+    } else if (keys.length > 0) {
+      keys.forEach(key => {
+        const label = (p.labels && p.labels[key]) ? p.labels[key] : key.replace(/_/g, ' ');
+        const btn = makeSceneBtn(key, label);
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          selectedSceneKey = key;
+          document.getElementById('prompt-text').textContent = prompts[key];
+          document.getElementById('prompt-delivery').style.display = '';
+          fetchAndStorePrompt(p.slug, key);
+        });
+        sceneList.appendChild(btn);
+      });
+      sceneList.firstChild.click();
+    } else {
+      sceneList.innerHTML = '<p class="hint">Keine Szenen konfiguriert.</p>';
+      document.getElementById('prompt-delivery').style.display = 'none';
+    }
+  }
+
+  function makeSceneBtn(key, label) {
+    const btn = document.createElement('button');
+    btn.className = 'scene-btn';
+    btn.dataset.key = key;
+    btn.textContent = label;
+    return btn;
+  }
+
+  // ── Round-ready modal ─────────────────────────────────────────────────────
+
+  let pendingRoundSlug = null;
+
+  function showRoundModal(item) {
+    pendingRoundSlug = item.dataset.slug;
+    const round = item.dataset.round;
+    const sessions = item.dataset.sessions;
+    document.getElementById('round-modal-title').textContent =
+      `Runde ${round} abgeschlossen (${sessions} Sitzung${sessions === '1' ? '' : 'en'}).`;
+    document.getElementById('round-ready-modal').style.display = 'flex';
+  }
+
+  async function doRoundAction(action) {
+    if (!pendingRoundSlug) return;
+    document.getElementById('round-ready-modal').style.display = 'none';
+    if (action === 'defer') { pendingRoundSlug = null; return; }
+    try {
+      await fetch('/app/german/api/round-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ persona_slug: pendingRoundSlug, action }),
+      });
+      window.location.reload();
+    } catch (e) {
+      console.error('Round action failed', e);
+    }
+    pendingRoundSlug = null;
+  }
+
+  document.getElementById('btn-round-close').addEventListener('click', () => doRoundAction('close'));
+  document.getElementById('btn-round-extend').addEventListener('click', () => doRoundAction('extend'));
+  document.getElementById('btn-round-defer').addEventListener('click', () => doRoundAction('defer'));
+  document.getElementById('round-ready-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) doRoundAction('defer');
+  });
+
+  document.querySelectorAll('.persona-list-item').forEach(item => {
+    item.addEventListener('click', () => {
+      selectPersona(parseInt(item.dataset.idx, 10));
+      if (item.dataset.ready === 'true') showRoundModal(item);
+    });
+  });
+
+  // ── Prompt delivery ────────────────────────────────────────────────────────
+
+  async function fetchAndStorePrompt(personaSlug, sceneKey) {
+    currentFullPrompt = null;
+    document.getElementById('session-brief-panel').style.display = 'none';
+    try {
+      const res = await fetch(`/app/german/api/persona-prompt?persona=${encodeURIComponent(personaSlug)}&scene=${encodeURIComponent(sceneKey)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      currentFullPrompt = data.prompt;
+      const briefEl = document.getElementById('session-brief-text');
+      briefEl.textContent = data.session_brief || '';
+      document.getElementById('session-brief-panel').style.display = data.session_brief ? '' : 'none';
+    } catch (e) {
+      console.warn('persona-prompt fetch failed', e);
+    }
+  }
+
+  function getFullPrompt() {
+    return currentFullPrompt || document.getElementById('prompt-text').textContent.trim();
+  }
+
+  document.getElementById('btn-telegram').addEventListener('click', () => {
+    // IMPORTANT: window.open must be called synchronously within the click handler.
+    // After any await, the browser loses the user-gesture context and blocks popups.
+    // Strategy: open Telegram immediately, then fire the API call in background.
+    const toast = document.getElementById('prompt-toast');
+    const p = personas[selectedIdx];
+
+    // Open Telegram NOW — while user gesture is still active
+    window.open('tg://resolve?domain=minimoi_cmd_bot', '_blank');
+    setTimeout(() => window.open('https://t.me/minimoi_cmd_bot', '_blank'), 3000);
+
+    // Show sending state
+    toast.textContent = '⏳ Sende Prompt an Telegram…';
+    toast.style.display = 'block';
+
+    // Fire-and-forget API call — updates toast when done
+    fetch('/app/german/api/send-to-telegram', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        persona_name: p.name,
+        scene_key: selectedSceneKey || '',
+      }),
+    })
+    .then(res => res.json())
+    .then(data => {
+      toast.textContent = data.ok
+        ? '✓ Prompt gesendet — long-press in Telegram zum Kopieren'
+        : '⚠ Senden fehlgeschlagen — Prompt in Zwischenablage kopiert';
+      if (!data.ok) navigator.clipboard && navigator.clipboard.writeText(getFullPrompt()).catch(() => {});
+    })
+    .catch(() => {
+      toast.textContent = '⚠ Netzwerkfehler — Prompt in Zwischenablage kopiert';
+      navigator.clipboard && navigator.clipboard.writeText(getFullPrompt()).catch(() => {});
+    })
+    .finally(() => {
+      setTimeout(() => { toast.style.display = 'none'; toast.textContent = '✓ Vollständiger Prompt kopiert'; }, 5000);
+    });
+  });
+
+  document.getElementById('btn-copy').addEventListener('click', () => {
+    navigator.clipboard.writeText(getFullPrompt()).then(() => {
+      const toast = document.getElementById('prompt-toast');
+      toast.style.display = 'block';
+      setTimeout(() => toast.style.display = 'none', 2500);
+    }).catch(() => {
+      const el = document.getElementById('prompt-text');
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(range);
+    });
+  });
+
+  document.getElementById('btn-download').addEventListener('click', () => {
+    const p = personas[selectedIdx];
+    const filename = `${p.name}_${selectedSceneKey || 'scene'}_prompt.txt`
+      .toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_.]/g, '');
+    const blob = new Blob([getFullPrompt()], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // ── Transcript analysis (KI-Personas pane) ────────────────────────────────
+
+  document.getElementById('btn-analysieren').addEventListener('click', async () => {
+    const transcript = document.getElementById('transcript-input').value.trim();
+    if (!transcript) return;
+    const status = document.getElementById('analyse-status');
+    const btn = document.getElementById('btn-analysieren');
+    const p = personas[selectedIdx];
+    const personaName = p ? p.name : '';
+    const scene = selectedSceneKey ? selectedSceneKey.replace(/_/g, ' ') : '';
+
+    btn.disabled = true;
+    btn.textContent = 'Analysiere…';
+    status.textContent = '';
+
+    try {
+      const res = await fetch('/app/german/api/analyse-transcript', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript, persona_name: personaName, scene }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Fehler');
+
+      // Success: render feedback, collapse input to analysiert row, scroll panel
+      renderFeedback(data.feedback);
+      document.getElementById('transcript-input-wrap').style.display = 'none';
+      document.getElementById('transcript-analysiert-row').style.display = '';
+      btn.textContent = 'Analysieren';
+      btn.disabled = false;
+
+      requestAnimationFrame(() => {
+        const panel = document.getElementById('persona-detail');
+        const wrap  = document.getElementById('gesprache-feedback-wrap');
+        const panelRect = panel.getBoundingClientRect();
+        const wrapRect  = wrap.getBoundingClientRect();
+        panel.scrollBy({ top: wrapRect.top - panelRect.top, behavior: 'smooth' });
+      });
+    } catch (e) {
+      // Error: show message in feedback slot, preserve textarea, re-enable button
+      renderFeedbackError(e.message || 'Fehler bei der Analyse.');
+      btn.textContent = 'Analysieren';
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('btn-transcript-bearbeiten').addEventListener('click', () => {
+    document.getElementById('transcript-input-wrap').style.display = '';
+    document.getElementById('transcript-analysiert-row').style.display = 'none';
+  });
+
+  function renderFeedback(fb) {
+    document.getElementById('feedback-summary').textContent = fb.overall_summary || '';
+
+    const errorsBlock = document.getElementById('feedback-errors-block');
+    const errorsList = document.getElementById('feedback-errors-list');
+    errorsList.innerHTML = '';
+    if (fb.errors && fb.errors.length) {
+      fb.errors.forEach(e => {
+        const li = document.createElement('li');
+        li.textContent = `${e.original} → ${e.correction}: ${e.explanation}`;
+        errorsList.appendChild(li);
+      });
+      errorsBlock.style.display = '';
+    } else {
+      errorsBlock.style.display = 'none';
+    }
+
+    const strengthsBlock = document.getElementById('feedback-strengths-block');
+    const strengthsList = document.getElementById('feedback-strengths-list');
+    strengthsList.innerHTML = '';
+    if (fb.strengths && fb.strengths.length) {
+      fb.strengths.forEach(s => {
+        const li = document.createElement('li');
+        li.textContent = s;
+        strengthsList.appendChild(li);
+      });
+      strengthsBlock.style.display = '';
+    } else {
+      strengthsBlock.style.display = 'none';
+    }
+
+    const focusBlock = document.getElementById('feedback-focus-block');
+    if (fb.next_focus) {
+      document.getElementById('feedback-next-focus').textContent = fb.next_focus;
+      focusBlock.style.display = '';
+    } else {
+      focusBlock.style.display = 'none';
+    }
+
+    document.getElementById('gesprache-feedback-wrap').style.display = '';
+  }
+
+  function renderFeedbackError(msg) {
+    document.getElementById('feedback-summary').textContent = '⚠ ' + msg;
+    document.getElementById('feedback-errors-block').style.display = 'none';
+    document.getElementById('feedback-strengths-block').style.display = 'none';
+    document.getElementById('feedback-focus-block').style.display = 'none';
+    document.getElementById('gesprache-feedback-wrap').style.display = '';
+  }
+
+  // ── Konversation pane ─────────────────────────────────────────────────────
+
+  // Pre-fill textarea with suggestion from last human tutor session
+  (async () => {
+    try {
+      const res = await fetch('/app/german/api/tutor-brief/suggestion');
+      const data = await res.json();
+      if (data.suggestion) {
+        document.getElementById('konv-session-notes').value = data.suggestion;
+      }
+    } catch (e) { /* silently ignore — textarea stays empty */ }
+  })();
+
+  document.getElementById('btn-generate-brief').addEventListener('click', async () => {
+    const btn    = document.getElementById('btn-generate-brief');
+    const status = document.getElementById('konv-brief-status');
+    const notes  = document.getElementById('konv-session-notes').value;
+    btn.disabled = true;
+    btn.textContent = 'Erstelle Brief…';
+    status.textContent = '';
+    try {
+      const res = await fetch('/app/german/api/tutor-brief/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_notes: notes }),
+      });
+      const data = await res.json();
+      if (data.token) {
+        const url = window.location.origin + '/tutor-brief/' + data.token;
+        document.getElementById('brief-link-url').textContent = url;
+        document.getElementById('konv-brief-preview').textContent = data.brief_text || '';
+        document.getElementById('konv-brief-result').style.display = '';
+      } else {
+        status.textContent = 'Fehler — bitte nochmal versuchen.';
+      }
+    } catch (e) {
+      status.textContent = 'Fehler — bitte nochmal versuchen.';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Brief für Tutor erstellen →';
+    }
+  });
+
+  document.getElementById('btn-copy-brief-link').addEventListener('click', () => {
+    navigator.clipboard.writeText(document.getElementById('brief-link-url').textContent);
+  });
+
+  document.getElementById('btn-open-meet').addEventListener('click', () => {
+    window.open('https://meet.new', '_blank');
+  });
+
+  document.getElementById('btn-submit-tutor-transcript').addEventListener('click', async () => {
+    const transcript = document.getElementById('tutor-transcript-input').value.trim();
+    const tutorName  = document.getElementById('tutor-name-input').value.trim() || 'Tutor';
+    const status     = document.getElementById('tutor-submit-status');
+    if (!transcript) { status.textContent = 'Bitte Transkript einfügen.'; return; }
+
+    const btn = document.getElementById('btn-submit-tutor-transcript');
+    btn.disabled = true;
+    btn.textContent = 'Analysiere…';
+    status.textContent = '';
+
+    try {
+      const res = await fetch('/app/german/api/analyse-transcript', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript,
+          persona_name: tutorName,
+          scene: 'human_session',
+        }),
+      });
+      const data = await res.json();
+      if (data.session_id) {
+        // Success: collapse tools, show analysiert row
+        document.getElementById('konv-transcript-input-wrap').style.display = 'none';
+        document.getElementById('konv-transcript-analysiert-row').style.display = '';
+        status.textContent = `✓ Gespeichert als ${data.session_id}`;
+      } else {
+        status.textContent = `Fehler: ${data.error || 'Unbekannt'}`;
+        btn.textContent = 'Transkript analysieren →';
+        btn.disabled = false;
+      }
+    } catch (e) {
+      status.textContent = 'Netzwerkfehler';
+      btn.textContent = 'Transkript analysieren →';
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('btn-konv-transcript-bearbeiten').addEventListener('click', () => {
+    document.getElementById('konv-transcript-input-wrap').style.display = '';
+    document.getElementById('konv-transcript-analysiert-row').style.display = 'none';
+    const btn = document.getElementById('btn-submit-tutor-transcript');
+    btn.textContent = 'Transkript analysieren →';
+    btn.disabled = false;
+    document.getElementById('tutor-submit-status').textContent = '';
+  });
+
+  // ── Consent gate ─────────────────────────────────────────────────────────
+
+  function setTranscriptLocked(locked) {
+    const tools = document.getElementById('transcript-tools');
+    tools.classList.toggle('konv-transcript-locked', locked);
+    tools.querySelectorAll('input, textarea, button').forEach(el => {
+      el.disabled = locked;
+    });
+  }
+
+  document.getElementById('consent-checkbox').addEventListener('change', e => {
+    setTranscriptLocked(!e.target.checked);
+  });
+
+  // ── Google Drive transcript fetch ────────────────────────────────────────
+
+  document.getElementById('btn-fetch-transcript').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-fetch-transcript');
+    const orig = btn.textContent;
+    btn.textContent = 'Fetching…';
+    btn.disabled = true;
+
+    try {
+      const apiBase = window.location.pathname.replace(/\/[^/]*$/, '');
+      const res  = await fetch(apiBase + '/api/google/latest-transcript');
+      const data = await res.json();
+
+      if (res.status === 401 && data.error === 'not_authed') {
+        // Start OAuth flow — redirect current tab to auth URL
+        window.location.href = apiBase + '/api/google/auth';
+        return;
+      }
+      if (data.ok) {
+        document.getElementById('tutor-transcript-input').value = data.text;
+        btn.textContent = '✓ ' + data.file_name;
+        setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 4000);
+        return;
+      }
+      btn.textContent = data.error || 'Error';
+    } catch (e) {
+      btn.textContent = 'Network error';
+    }
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 3000);
+  });
+
+  // Show success message if returning from Google OAuth
+  if (new URLSearchParams(window.location.search).get('google_auth') === 'ok') {
+    const status = document.getElementById('tutor-submit-status');
+    if (status) {
+      status.textContent = '✓ Google Drive connected — click "Fetch from Drive" to load your transcript.';
+      setTimeout(() => { status.textContent = ''; }, 6000);
+    }
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+
+  if (personas.length > 0) selectPersona(0);
+
+  // Restore last tab: URL param → sessionStorage → default KI-Personas
+  const _urlTab = new URLSearchParams(window.location.search).get('tab');
+  switchTab(_urlTab || sessionStorage.getItem('gesprache-tab') || 'personas');
+
+})();
+</script>
+
+<style id="preview-modal-style">
+.preview-modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
+}
+.preview-modal-overlay.active { display: flex; }
+.preview-modal {
+  background: #2a1f14; border: 1px solid rgba(198,138,94,0.4);
+  border-radius: 8px; padding: 28px 32px; max-width: 380px; width: 90%;
+  color: #F5F0E8; font-family: 'Source Sans 3', system-ui, sans-serif;
+}
+.preview-modal h3 {
+  font-size: 14px; font-weight: 600; margin: 0 0 12px;
+  color: #C68A5E; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.preview-modal p { font-size: 13px; color: rgba(245,240,232,0.75); line-height: 1.6; margin: 0 0 20px; }
+.preview-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.preview-modal-btn {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(198,138,94,0.5); background: transparent; color: #C68A5E;
+  text-decoration: none; display: inline-block;
+}
+.preview-modal-btn:hover { background: rgba(198,138,94,0.15); }
+.preview-modal-close {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(245,240,232,0.2); background: transparent;
+  color: rgba(245,240,232,0.6);
+}
+.preview-modal-close:hover { border-color: rgba(245,240,232,0.4); color: #F5F0E8; }
+</style>
+<div class="preview-modal-overlay" id="previewModal">
+<div class="preview-modal">
+<h3>Admin — not available in preview</h3>
+<p>This section is for authenticated users. Request guest access to explore the live platform.</p>
+<div class="preview-modal-actions">
+<a class="preview-modal-btn" data-admin-blocked="true" style="cursor: pointer;">Request access →</a>
+<button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>
+</div>
+</div>
+</div>
+<script id="preview-modal-script">
+(function() {
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('[data-admin-blocked]');
+    if (el) { e.preventDefault(); e.stopPropagation(); document.getElementById('previewModal').classList.add('active'); }
+  });
+  document.getElementById('previewModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+})();
+</script>
+</body></html>

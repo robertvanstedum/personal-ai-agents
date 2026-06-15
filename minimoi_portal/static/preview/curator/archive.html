@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Archive — Curator</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&amp;family=DM+Mono:wght@400;500&amp;family=Source+Sans+3:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<style>
+    :root {
+      --bg:         #F5F0E8;
+      --surface:    #faf7f2;
+      --surface2:   #f0ebe0;
+      --text:       #2A1F14;
+      --text-muted: #6b5f4e;
+      --text-dim:   #9e9080;
+      --accent:     #8b5e2a;
+      --accent-dim: rgba(139,94,42,0.08);
+      --border:     #ddd6c8;
+      --border2:    #C4B49A;
+      --rule:       #C4B49A;
+      --shadow:     rgba(42,31,20,0.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Source Sans 3', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    /* ── Subnav (standardized Phase 2) ── */
+    nav.curator-subnav {
+      position: sticky; top: 0; z-index: 100;
+      height: 44px;
+      background: rgba(245,240,232,0.96);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 1.5rem;
+    }
+    .subnav-tab {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-muted); text-decoration: none;
+      padding: 0 14px; height: 44px;
+      display: flex; align-items: center;
+      border-bottom: 2px solid transparent; transition: color 0.15s;
+    }
+    .subnav-tab:hover { color: var(--text); }
+    .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .subnav-focus { margin-left: auto; }
+
+    /* ── Main layout ── */
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 36px 32px 80px;
+    }
+
+    /* ── Page header ── */
+    .page-header { margin-bottom: 24px; }
+    .page-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.7rem; font-weight: 400; margin-bottom: 4px;
+    }
+    .page-sub { font-size: 0.85rem; color: var(--text-muted); }
+
+    /* ── Search bar ── */
+    .search-wrap { margin-bottom: 2rem; }
+    .search-input {
+      width: 100%; padding: 10px 14px;
+      font-family: 'Source Sans 3', sans-serif; font-size: 14px;
+      color: var(--text); background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px;
+      outline: none; transition: border-color 0.15s;
+    }
+    .search-input:focus { border-color: var(--accent); }
+
+    /* ── Section ── */
+    .archive-section { margin-bottom: 2.5rem; }
+    .section-head {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: 0;
+    }
+    .section-kicker {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-dim);
+    }
+    .section-count {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      color: var(--text-dim); opacity: 0.6; margin-left: 8px;
+    }
+    .show-all-link {
+      font-family: 'DM Mono', monospace; font-size: 0.7rem;
+      color: var(--accent); text-decoration: none; cursor: pointer;
+    }
+    .show-all-link:hover { text-decoration: underline; }
+
+    /* ── Rows ── */
+    .archive-rows { margin-top: 6px; }
+    .archive-row {
+      display: flex; align-items: baseline; gap: 12px;
+      padding: 9px 0;
+      border-bottom: 0.5px solid var(--rule);
+      font-size: 13px;
+    }
+    .archive-row:last-child { border-bottom: none; }
+    .row-date {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-muted); white-space: nowrap; min-width: 100px;
+      flex-shrink: 0;
+    }
+    .row-title { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .row-title.muted { font-weight: 400; color: var(--text-muted); }
+    .row-source { font-size: 11px; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
+    .row-action { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent); text-decoration: none; white-space: nowrap; flex-shrink: 0; }
+    .row-action:hover { text-decoration: underline; }
+    .row-meta { font-size: 11px; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
+    .dive-badge {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-dim); border: 1px solid var(--border2);
+      border-radius: 3px; padding: 1px 5px; white-space: nowrap; flex-shrink: 0;
+    }
+
+    /* ── Show more / collapse rows ── */
+    .show-more-row {
+      padding: 8px 0; font-size: 12px; color: var(--text-muted);
+      cursor: pointer; border-bottom: none;
+    }
+    .show-more-row:hover { color: var(--accent); }
+    /* Bottom collapse anchor — shown at foot of expanded section */
+    .bottom-collapse {
+      text-align: right;
+      padding: 0.75rem 0;
+      border-top: 1px solid var(--border);
+      margin-top: 0.5rem;
+      font-family: 'DM Mono', monospace; font-size: 0.7rem;
+      color: var(--accent); cursor: pointer;
+    }
+    .bottom-collapse:hover { text-decoration: underline; }
+    /* Daily editions: rows hidden beyond initial batch */
+    .daily-hidden { display: none; }
+
+    /* ── Empty state ── */
+    .archive-empty {
+      font-size: 0.85rem; color: var(--text-dim); font-style: italic;
+      padding: 10px 0;
+    }
+
+    /* ── Search results ── */
+    .search-results { display: none; }
+    .search-results-header {
+      font-size: 12px; color: var(--text-muted); margin-bottom: 1rem;
+    }
+    .result-type-badge {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-dim); border: 1px solid var(--border2);
+      border-radius: 3px; padding: 1px 5px; flex-shrink: 0;
+    }
+  </style>
+<style>body{padding-top:38px!important;}nav.curator-subnav{top:38px!important;}</style>
+<style id="preview-banner-style">
+.preview-banner {
+  position: sticky; top: 0; z-index: 9999;
+  background: #2A1F14; color: #F5F0E8;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 11px; letter-spacing: 0.04em;
+  padding: 7px 20px;
+  border-bottom: 1px solid rgba(198,138,94,0.3);
+  display: flex; align-items: center; gap: 8px;
+}
+.preview-banner .preview-date { color: rgba(245,240,232,0.7); }
+.preview-request-link {
+  color: #C68A5E; text-decoration: none; margin-left: auto;
+  border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
+}
+.preview-request-link:hover { background: rgba(198,138,94,0.1); }
+</style>
+</head>
+<body><div class="preview-banner">
+<span>Preview snapshot — </span>
+<span class="preview-date">Captured June 2026</span>
+<span>. Data is real but frozen.</span>
+<a class="preview-request-link" data-admin-blocked="true" style="cursor: pointer;">Request live access →</a>
+</div>
+<style id="portal-offset-css">body{padding-top:38px!important;}nav.curator-subnav{top:38px!important;}</style>
+<div id="portal-nav-bar" style="
+  position:fixed;top:0;left:0;right:0;z-index:999999;
+  height:38px;background:#12122a;color:#e8e8e8;
+  display:flex;align-items:center;padding:0 16px;gap:0;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:13px;border-bottom:1px solid rgba(255,255,255,0.12);
+  box-shadow:0 1px 8px rgba(0,0,0,0.4);
+">
+<a href="/preview/" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
+<span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
+<a href="/preview/curator/briefing.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;color:#ffffff;font-weight:600;">Curator</a>
+<a href="/preview/german/lesen.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;">German</a>
+<a href="/preview/guild/briefing.html" style="color:#C68A5E;text-decoration:none;">Guild</a>
+<span style="color:rgba(255,255,255,0.45);margin-left:auto;margin-right:12px;">Robert</span>
+<a data-admin-blocked="true" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;; cursor: pointer;">Sign out</a>
+</div>
+<nav class="curator-subnav">
+<a class="subnav-tab" data-admin-blocked="true" style="cursor: pointer;">Daily</a>
+<a class="subnav-tab" data-admin-blocked="true" style="cursor: pointer;">Reading Room</a>
+<a class="subnav-tab" href="/preview/curator/scans_dives.html">Scans &amp; Dives</a>
+<a class="subnav-tab" data-admin-blocked="true" style="cursor: pointer;">Leanings</a>
+<a class="subnav-tab active" href="/preview/curator/archive.html">Archive</a>
+<a class="subnav-tab subnav-focus" data-admin-blocked="true" style="cursor: pointer;">Desk</a>
+</nav>
+<main>
+<div class="page-header">
+<h1 class="page-title">Archive</h1>
+<p class="page-sub">Everything kept, and searchable over time.</p>
+</div>
+<div class="search-wrap">
+<input autocomplete="off" class="search-input" id="searchInput" placeholder="Search across all archives…" type="text"/>
+</div>
+<!-- Search results (shown when query active) -->
+<div class="search-results" id="searchResults">
+<div class="search-results-header" id="searchHeader"></div>
+<div class="archive-rows" id="searchRows"></div>
+</div>
+<!-- Five sections (hidden when search active) -->
+<div id="allSections">
+<!-- Daily editions -->
+<div class="archive-section">
+<div class="section-head">
+<span>
+<span class="section-kicker">Daily editions</span>
+<span class="section-count" id="cnt-daily">109</span>
+</span>
+</div>
+<div class="archive-rows" id="rows-daily"><div class="archive-row daily-row" data-index="0" data-search="2026-06-14 20 articles">
+<span class="row-date">Sun, Jun 14</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row" data-index="1" data-search="2026-06-13 20 articles">
+<span class="row-date">Sat, Jun 13</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row" data-index="2" data-search="2026-06-12 20 articles">
+<span class="row-date">Fri, Jun 12</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="3" data-search="2026-06-11 20 articles">
+<span class="row-date">Thu, Jun 11</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="4" data-search="2026-06-10 20 articles">
+<span class="row-date">Wed, Jun 10</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="5" data-search="2026-06-09 20 articles">
+<span class="row-date">Tue, Jun 9</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="6" data-search="2026-06-08 20 articles">
+<span class="row-date">Mon, Jun 8</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="7" data-search="2026-06-07 20 articles">
+<span class="row-date">Sun, Jun 7</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="8" data-search="2026-06-06 20 articles">
+<span class="row-date">Sat, Jun 6</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="9" data-search="2026-06-05 20 articles">
+<span class="row-date">Fri, Jun 5</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="10" data-search="2026-06-04 20 articles">
+<span class="row-date">Thu, Jun 4</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="11" data-search="2026-06-03 20 articles">
+<span class="row-date">Wed, Jun 3</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="12" data-search="2026-06-02 20 articles">
+<span class="row-date">Tue, Jun 2</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="13" data-search="2026-06-01 20 articles">
+<span class="row-date">Mon, Jun 1</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="14" data-search="2026-05-31 20 articles">
+<span class="row-date">Sun, May 31</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="15" data-search="2026-05-30 20 articles">
+<span class="row-date">Sat, May 30</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="16" data-search="2026-05-29 20 articles">
+<span class="row-date">Fri, May 29</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="17" data-search="2026-05-28 20 articles">
+<span class="row-date">Thu, May 28</span>
+<span class="row-title muted">20 articles</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="18" data-search="2026-05-23 ">
+<span class="row-date">Sat, May 23</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="19" data-search="2026-05-21 ">
+<span class="row-date">Thu, May 21</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="20" data-search="2026-05-14 ">
+<span class="row-date">Thu, May 14</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="21" data-search="2026-05-13 ">
+<span class="row-date">Wed, May 13</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="22" data-search="2026-05-12 ">
+<span class="row-date">Tue, May 12</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="23" data-search="2026-05-11 ">
+<span class="row-date">Mon, May 11</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="24" data-search="2026-05-10 ">
+<span class="row-date">Sun, May 10</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="25" data-search="2026-05-09 ">
+<span class="row-date">Sat, May 9</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="26" data-search="2026-05-08 ">
+<span class="row-date">Fri, May 8</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="27" data-search="2026-05-07 ">
+<span class="row-date">Thu, May 7</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="28" data-search="2026-05-06 ">
+<span class="row-date">Wed, May 6</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="29" data-search="2026-05-05 ">
+<span class="row-date">Tue, May 5</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="30" data-search="2026-05-04 ">
+<span class="row-date">Mon, May 4</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="31" data-search="2026-05-03 ">
+<span class="row-date">Sun, May 3</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="32" data-search="2026-05-02 ">
+<span class="row-date">Sat, May 2</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="33" data-search="2026-05-01 ">
+<span class="row-date">Fri, May 1</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="34" data-search="2026-04-30 ">
+<span class="row-date">Thu, Apr 30</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="35" data-search="2026-04-29 ">
+<span class="row-date">Wed, Apr 29</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="36" data-search="2026-04-28 ">
+<span class="row-date">Tue, Apr 28</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="37" data-search="2026-04-27 ">
+<span class="row-date">Mon, Apr 27</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="38" data-search="2026-04-26 ">
+<span class="row-date">Sun, Apr 26</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="39" data-search="2026-04-25 ">
+<span class="row-date">Sat, Apr 25</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="40" data-search="2026-04-24 ">
+<span class="row-date">Fri, Apr 24</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="41" data-search="2026-04-23 ">
+<span class="row-date">Thu, Apr 23</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="42" data-search="2026-04-22 ">
+<span class="row-date">Wed, Apr 22</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="43" data-search="2026-04-21 ">
+<span class="row-date">Tue, Apr 21</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="44" data-search="2026-04-20 ">
+<span class="row-date">Mon, Apr 20</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="45" data-search="2026-04-19 ">
+<span class="row-date">Sun, Apr 19</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="46" data-search="2026-04-18 ">
+<span class="row-date">Sat, Apr 18</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="47" data-search="2026-04-17 ">
+<span class="row-date">Fri, Apr 17</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="48" data-search="2026-04-16 ">
+<span class="row-date">Thu, Apr 16</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="49" data-search="2026-04-15 ">
+<span class="row-date">Wed, Apr 15</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="50" data-search="2026-04-14 ">
+<span class="row-date">Tue, Apr 14</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="51" data-search="2026-04-12 ">
+<span class="row-date">Sun, Apr 12</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="52" data-search="2026-04-11 ">
+<span class="row-date">Sat, Apr 11</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="53" data-search="2026-04-10 ">
+<span class="row-date">Fri, Apr 10</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="54" data-search="2026-04-09 ">
+<span class="row-date">Thu, Apr 9</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="55" data-search="2026-04-08 ">
+<span class="row-date">Wed, Apr 8</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="56" data-search="2026-04-05 ">
+<span class="row-date">Sun, Apr 5</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="57" data-search="2026-04-04 ">
+<span class="row-date">Sat, Apr 4</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="58" data-search="2026-04-03 ">
+<span class="row-date">Fri, Apr 3</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="59" data-search="2026-04-02 ">
+<span class="row-date">Thu, Apr 2</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="60" data-search="2026-03-31 ">
+<span class="row-date">Tue, Mar 31</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="61" data-search="2026-03-29 ">
+<span class="row-date">Sun, Mar 29</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="62" data-search="2026-03-28 ">
+<span class="row-date">Sat, Mar 28</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="63" data-search="2026-03-27 ">
+<span class="row-date">Fri, Mar 27</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="64" data-search="2026-03-26 ">
+<span class="row-date">Thu, Mar 26</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="65" data-search="2026-03-25 ">
+<span class="row-date">Wed, Mar 25</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="66" data-search="2026-03-24 ">
+<span class="row-date">Tue, Mar 24</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="67" data-search="2026-03-23 ">
+<span class="row-date">Mon, Mar 23</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="68" data-search="2026-03-22 ">
+<span class="row-date">Sun, Mar 22</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="69" data-search="2026-03-21 ">
+<span class="row-date">Sat, Mar 21</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="70" data-search="2026-03-20 ">
+<span class="row-date">Fri, Mar 20</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="71" data-search="2026-03-19 ">
+<span class="row-date">Thu, Mar 19</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="72" data-search="2026-03-18 ">
+<span class="row-date">Wed, Mar 18</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="73" data-search="2026-03-17 ">
+<span class="row-date">Tue, Mar 17</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="74" data-search="2026-03-16 ">
+<span class="row-date">Mon, Mar 16</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="75" data-search="2026-03-15 ">
+<span class="row-date">Sun, Mar 15</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="76" data-search="2026-03-14 ">
+<span class="row-date">Sat, Mar 14</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="77" data-search="2026-03-13 ">
+<span class="row-date">Fri, Mar 13</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="78" data-search="2026-03-12 ">
+<span class="row-date">Thu, Mar 12</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="79" data-search="2026-03-11 ">
+<span class="row-date">Wed, Mar 11</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="80" data-search="2026-03-10 ">
+<span class="row-date">Tue, Mar 10</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="81" data-search="2026-03-09 ">
+<span class="row-date">Mon, Mar 9</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="82" data-search="2026-03-08 ">
+<span class="row-date">Sun, Mar 8</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="83" data-search="2026-03-07 ">
+<span class="row-date">Sat, Mar 7</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="84" data-search="2026-03-06 ">
+<span class="row-date">Fri, Mar 6</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="85" data-search="2026-03-05 ">
+<span class="row-date">Thu, Mar 5</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="86" data-search="2026-03-04 ">
+<span class="row-date">Wed, Mar 4</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="87" data-search="2026-03-03 ">
+<span class="row-date">Tue, Mar 3</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="88" data-search="2026-03-02 ">
+<span class="row-date">Mon, Mar 2</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="89" data-search="2026-03-01 ">
+<span class="row-date">Sun, Mar 1</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="90" data-search="2026-02-28 ">
+<span class="row-date">Sat, Feb 28</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="91" data-search="2026-02-27 ">
+<span class="row-date">Fri, Feb 27</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="92" data-search="2026-02-26 ">
+<span class="row-date">Thu, Feb 26</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="93" data-search="2026-02-25 ">
+<span class="row-date">Wed, Feb 25</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="94" data-search="2026-02-24 ">
+<span class="row-date">Tue, Feb 24</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="95" data-search="2026-02-23 ">
+<span class="row-date">Mon, Feb 23</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="96" data-search="2026-02-22 ">
+<span class="row-date">Sun, Feb 22</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="97" data-search="2026-02-21 ">
+<span class="row-date">Sat, Feb 21</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="98" data-search="2026-02-20 ">
+<span class="row-date">Fri, Feb 20</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="99" data-search="2026-02-19 ">
+<span class="row-date">Thu, Feb 19</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="100" data-search="2026-02-18 ">
+<span class="row-date">Wed, Feb 18</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="101" data-search="2026-02-17 ">
+<span class="row-date">Tue, Feb 17</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="102" data-search="2026-02-16 ">
+<span class="row-date">Mon, Feb 16</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="103" data-search="2026-02-15 ">
+<span class="row-date">Sun, Feb 15</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="104" data-search="2026-02-14 ">
+<span class="row-date">Sat, Feb 14</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="105" data-search="2026-02-13 ">
+<span class="row-date">Fri, Feb 13</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="106" data-search="2026-02-12 ">
+<span class="row-date">Thu, Feb 12</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="107" data-search="2026-02-11 ">
+<span class="row-date">Wed, Feb 11</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row daily-row daily-hidden" data-index="108" data-search="2026-02-10 ">
+<span class="row-date">Tue, Feb 10</span>
+<span class="row-title muted">—</span>
+</div><div class="archive-row show-more-row" id="daily-show-more" style="justify-content:flex-end;">
+<a href="#" id="daily-expand-btn" onclick="dailyShowMore(event)" style="color:var(--accent);font-family:'DM Mono',monospace;font-size:0.7rem;text-decoration:none;">
+        show more daily ↓ <span id="daily-remaining">(+ 106 more)</span>
+</a>
+</div></div>
+</div>
+<!-- Sources -->
+<div class="archive-section">
+<div class="section-head" id="sources-header">
+<span>
+<span class="section-kicker">Sources</span>
+<span class="section-count" id="cnt-sources">32</span>
+</span>
+<span class="show-all-link" id="toggle-sources" onclick="toggleSection('sources')">show all →</span>
+</div>
+<div class="archive-rows" id="rows-sources"><div class="archive-row" data-search="How Can Lebanon’s Partners Help Strengthen the Lebanese Armed Forces? War on the Rocks 2026-06-10">
+<span class="row-date">Wed, Jun 10</span>
+<span class="row-title">How Can Lebanon’s Partners Help Strengthen the Lebanese Armed Forces?</span>
+<span class="row-source">War on the Rocks</span>
+</div><div class="archive-row" data-search="How have countries around the world responded to the US-Israel war on Iran? Al Jazeera 2026-06-07">
+<span class="row-date">Sun, Jun 7</span>
+<span class="row-title">How have countries around the world responded to the US-Israel war on Iran?</span>
+<span class="row-source">Al Jazeera</span>
+</div><div class="archive-row" data-search="Armenia's election offers a choice between Russia and EU Deutsche Welle 2026-06-03">
+<span class="row-date">Wed, Jun 3</span>
+<span class="row-title">Armenia's election offers a choice between Russia and EU</span>
+<span class="row-source">Deutsche Welle</span>
+</div><div class="archive-row show-more-row" onclick="toggleSection('sources')">+ 29 more sources</div></div>
+</div>
+<!-- Scans -->
+<div class="archive-section">
+<div class="section-head" id="scans-header">
+<span>
+<span class="section-kicker">Scans</span>
+<span class="section-count" id="cnt-scans">32</span>
+</span>
+<span class="show-all-link" id="toggle-scans" onclick="toggleSection('scans')">show all →</span>
+</div>
+<div class="archive-rows" id="rows-scans"><div class="archive-row" data-search="For the Quad, Flexibility Is Not Weakness Geopolitical Futures 2026-05-29">
+<span class="row-date">2026-05-29</span>
+<span class="row-title">For the Quad, Flexibility Is Not Weakness</span>
+<span class="row-source">Geopolitical Futures</span>
+</div><div class="archive-row" data-search="China’s Role in Global Innovation Is Changing Fed On The Economy 2026-02-22">
+<span class="row-date">2026-02-22</span>
+<span class="row-title">China’s Role in Global Innovation Is Changing</span>
+<span class="row-source">Fed On The Economy</span>
+</div><div class="archive-row" data-search="Polls open in Colombia’s pivotal presidential election Al Jazeera 2026-05-31">
+<span class="row-date">2026-05-31</span>
+<span class="row-title">Polls open in Colombia’s pivotal presidential election</span>
+<span class="row-source">Al Jazeera</span>
+</div><div class="archive-row show-more-row" onclick="toggleSection('scans')">+ 29 more scans</div></div>
+</div>
+<!-- Dives -->
+<div class="archive-section">
+<div class="section-head" id="dives-header">
+<span>
+<span class="section-kicker">Dives</span>
+<span class="section-count" id="cnt-dives">13</span>
+</span>
+<span class="show-all-link" id="toggle-dives" onclick="toggleSection('dives')">show all →</span>
+</div>
+<div class="archive-rows" id="rows-dives"><div class="archive-row" data-search="Strait Of Hormuz Dive 007 dive">
+<span class="dive-badge">Thread</span>
+<span class="row-title">Strait Of Hormuz Dive 007</span>
+<a class="row-action" data-admin-blocked="true" style="cursor: pointer;">View →</a>
+</div><div class="archive-row" data-search="Strait Of Hormuz Dive 006 dive">
+<span class="dive-badge">Thread</span>
+<span class="row-title">Strait Of Hormuz Dive 006</span>
+<a class="row-action" data-admin-blocked="true" style="cursor: pointer;">View →</a>
+</div><div class="archive-row" data-search="Strait Of Hormuz dive">
+<span class="dive-badge">Thread</span>
+<span class="row-title">Strait Of Hormuz</span>
+<a class="row-action" data-admin-blocked="true" style="cursor: pointer;">View →</a>
+</div><div class="archive-row show-more-row" onclick="toggleSection('dives')">+ 10 more dives</div></div>
+</div>
+<!-- Observations -->
+<div class="archive-section">
+<div class="section-head" id="obs-header">
+<span>
+<span class="section-kicker">Observations</span>
+<span class="section-count" id="cnt-obs">25</span>
+</span>
+<span class="show-all-link" id="toggle-obs" onclick="toggleSection('obs')">show all →</span>
+</div>
+<div class="archive-rows" id="rows-obs"><div class="archive-row" data-search="2026-04-21 3 observations">
+<span class="row-date">Tue, Apr 21</span>
+<span class="row-title muted">3 observations</span>
+<a class="row-action" data-admin-blocked="true" style="cursor: pointer;">View →</a>
+</div><div class="archive-row" data-search="2026-04-20 2 observations">
+<span class="row-date">Mon, Apr 20</span>
+<span class="row-title muted">2 observations</span>
+<a class="row-action" data-admin-blocked="true" style="cursor: pointer;">View →</a>
+</div><div class="archive-row" data-search="2026-04-19 2 observations">
+<span class="row-date">Sun, Apr 19</span>
+<span class="row-title muted">2 observations</span>
+<a class="row-action" data-admin-blocked="true" style="cursor: pointer;">View →</a>
+</div><div class="archive-row show-more-row" onclick="toggleSection('obs')">+ 22 more obs</div></div>
+</div>
+</div><!-- /#allSections -->
+</main>
+<script>
+// ── Data (injected server-side) ───────────────────────────────────────────────
+const DATA = {
+  daily:   [{"count": 20, "date": "2026-06-14", "file": "curator_2026-06-14-0644.html"}, {"count": 20, "date": "2026-06-13", "file": "curator_2026-06-13-0657.html"}, {"count": 20, "date": "2026-06-12", "file": "curator_2026-06-12-0750.html"}, {"count": 20, "date": "2026-06-11", "file": "curator_2026-06-11-0643.html"}, {"count": 20, "date": "2026-06-10", "file": "curator_2026-06-10-0735.html"}, {"count": 20, "date": "2026-06-09", "file": "curator_2026-06-09-0657.html"}, {"count": 20, "date": "2026-06-08", "file": "curator_2026-06-08-0615.html"}, {"count": 20, "date": "2026-06-07", "file": "curator_2026-06-07-0842.html"}, {"count": 20, "date": "2026-06-06", "file": "curator_2026-06-06-1045.html"}, {"count": 20, "date": "2026-06-05", "file": "curator_2026-06-05-1658.html"}, {"count": 20, "date": "2026-06-04", "file": "curator_2026-06-04-0605.html"}, {"count": 20, "date": "2026-06-03", "file": "curator_2026-06-03-1627.html"}, {"count": 20, "date": "2026-06-02", "file": "curator_2026-06-02-1602.html"}, {"count": 20, "date": "2026-06-01", "file": "curator_2026-06-01-1536.html"}, {"count": 20, "date": "2026-05-31", "file": "curator_2026-05-31-1723.html"}, {"count": 20, "date": "2026-05-30", "file": "curator_2026-05-30-1203.html"}, {"count": 20, "date": "2026-05-29", "file": "curator_2026-05-29-0658.html"}, {"count": 20, "date": "2026-05-28", "file": "curator_2026-05-28-0616.html"}, {"count": 0, "date": "2026-05-23", "file": "curator_2026-05-23-0827.html"}, {"count": 0, "date": "2026-05-21", "file": "curator_2026-05-21-1322.html"}, {"count": 0, "date": "2026-05-14", "file": "curator_2026-05-14-0807.html"}, {"count": 0, "date": "2026-05-13", "file": "curator_2026-05-13-0648.html"}, {"count": 0, "date": "2026-05-12", "file": "curator_2026-05-12-0630.html"}, {"count": 0, "date": "2026-05-11", "file": "curator_2026-05-11-0624.html"}, {"count": 0, "date": "2026-05-10", "file": "curator_2026-05-10-0700.html"}, {"count": 0, "date": "2026-05-09", "file": "curator_2026-05-09-0658.html"}, {"count": 0, "date": "2026-05-08", "file": "curator_2026-05-08-1605.html"}, {"count": 0, "date": "2026-05-07", "file": "curator_2026-05-07-0635.html"}, {"count": 0, "date": "2026-05-06", "file": "curator_2026-05-06-0820.html"}, {"count": 0, "date": "2026-05-05", "file": "curator_2026-05-05-1014.html"}, {"count": 0, "date": "2026-05-04", "file": "curator_2026-05-04-0802.html"}, {"count": 0, "date": "2026-05-03", "file": "curator_2026-05-03-0810.html"}, {"count": 0, "date": "2026-05-02", "file": "curator_2026-05-02-2203.html"}, {"count": 0, "date": "2026-05-01", "file": "curator_2026-05-01-0728.html"}, {"count": 0, "date": "2026-04-30", "file": "curator_2026-04-30-0627.html"}, {"count": 0, "date": "2026-04-29", "file": "curator_2026-04-29-1410.html"}, {"count": 0, "date": "2026-04-28", "file": "curator_2026-04-28-0855.html"}, {"count": 0, "date": "2026-04-27", "file": "curator_2026-04-27-0740.html"}, {"count": 0, "date": "2026-04-26", "file": "curator_2026-04-26-0901.html"}, {"count": 0, "date": "2026-04-25", "file": "curator_2026-04-25-0844.html"}, {"count": 0, "date": "2026-04-24", "file": "curator_2026-04-24-0707.html"}, {"count": 0, "date": "2026-04-23", "file": "curator_2026-04-23-0633.html"}, {"count": 0, "date": "2026-04-22", "file": "curator_2026-04-22-0740.html"}, {"count": 0, "date": "2026-04-21", "file": "curator_2026-04-21-0607.html"}, {"count": 0, "date": "2026-04-20", "file": "curator_2026-04-20-1149.html"}, {"count": 0, "date": "2026-04-19", "file": "curator_2026-04-19-0709.html"}, {"count": 0, "date": "2026-04-18", "file": "curator_2026-04-18-1041.html"}, {"count": 0, "date": "2026-04-17", "file": "curator_2026-04-17-1015.html"}, {"count": 0, "date": "2026-04-16", "file": "curator_2026-04-16-0606.html"}, {"count": 0, "date": "2026-04-15", "file": "curator_2026-04-15-0810.html"}, {"count": 0, "date": "2026-04-14", "file": "curator_2026-04-14-0932.html"}, {"count": 0, "date": "2026-04-12", "file": "curator_2026-04-12-0905.html"}, {"count": 0, "date": "2026-04-11", "file": "curator_2026-04-11-0905.html"}, {"count": 0, "date": "2026-04-10", "file": "curator_2026-04-10-0803.html"}, {"count": 0, "date": "2026-04-09", "file": "curator_2026-04-09-0715.html"}, {"count": 0, "date": "2026-04-08", "file": "curator_2026-04-08-1301.html"}, {"count": 0, "date": "2026-04-05", "file": "curator_2026-04-05-0740.html"}, {"count": 0, "date": "2026-04-04", "file": "curator_2026-04-04-1031.html"}, {"count": 0, "date": "2026-04-03", "file": "curator_2026-04-03-0847.html"}, {"count": 0, "date": "2026-04-02", "file": "curator_2026-04-02-2220.html"}, {"count": 0, "date": "2026-03-31", "file": "curator_2026-03-31-0605.html"}, {"count": 0, "date": "2026-03-29", "file": "curator_2026-03-29-0703.html"}, {"count": 0, "date": "2026-03-28", "file": "curator_2026-03-28-1026.html"}, {"count": 0, "date": "2026-03-27", "file": "curator_2026-03-27-0845.html"}, {"count": 0, "date": "2026-03-26", "file": "curator_2026-03-26-0703.html"}, {"count": 0, "date": "2026-03-25", "file": "curator_2026-03-25-0845.html"}, {"count": 0, "date": "2026-03-24", "file": "curator_2026-03-24-0626.html"}, {"count": 0, "date": "2026-03-23", "file": "curator_2026-03-23-0849.html"}, {"count": 0, "date": "2026-03-22", "file": "curator_2026-03-22-0613.html"}, {"count": 0, "date": "2026-03-21", "file": "curator_2026-03-21-1751.html"}, {"count": 0, "date": "2026-03-20", "file": "curator_2026-03-20-1650.html"}, {"count": 0, "date": "2026-03-19", "file": "curator_2026-03-19-1347.html"}, {"count": 0, "date": "2026-03-18", "file": "curator_2026-03-18-0943.html"}, {"count": 0, "date": "2026-03-17", "file": "curator_2026-03-17-2243.html"}, {"count": 0, "date": "2026-03-16", "file": "curator_2026-03-16-2220.html"}, {"count": 0, "date": "2026-03-15", "file": "curator_2026-03-15-1018.html"}, {"count": 0, "date": "2026-03-14", "file": "curator_2026-03-14-1434.html"}, {"count": 0, "date": "2026-03-13", "file": "curator_2026-03-13-0829.html"}, {"count": 0, "date": "2026-03-12", "file": "curator_2026-03-12-0944.html"}, {"count": 0, "date": "2026-03-11", "file": "curator_2026-03-11-0739.html"}, {"count": 0, "date": "2026-03-10", "file": "curator_2026-03-10-0838.html"}, {"count": 0, "date": "2026-03-09", "file": "curator_2026-03-09-0738.html"}, {"count": 0, "date": "2026-03-08", "file": "curator_2026-03-08-0714.html"}, {"count": 0, "date": "2026-03-07", "file": "curator_2026-03-07-0915.html"}, {"count": 0, "date": "2026-03-06", "file": "curator_2026-03-06-1132.html"}, {"count": 0, "date": "2026-03-05", "file": "curator_2026-03-05-0511.html"}, {"count": 0, "date": "2026-03-04", "file": "curator_2026-03-04-2054.html"}, {"count": 0, "date": "2026-03-03", "file": "curator_2026-03-03-2208.html"}, {"count": 0, "date": "2026-03-02", "file": "curator_2026-03-02-0741.html"}, {"count": 0, "date": "2026-03-01", "file": "curator_2026-03-01-0710.html"}, {"count": 0, "date": "2026-02-28", "file": "curator_2026-02-28-1735.html"}, {"count": 0, "date": "2026-02-27", "file": "curator_2026-02-27-1829.html"}, {"count": 0, "date": "2026-02-26", "file": "curator_2026-02-26-0930.html"}, {"count": 0, "date": "2026-02-25", "file": "curator_2026-02-25-2113.html"}, {"count": 0, "date": "2026-02-24", "file": "curator_2026-02-24-0912.html"}, {"count": 0, "date": "2026-02-23", "file": "curator_2026-02-23-2108.html"}, {"count": 0, "date": "2026-02-22", "file": "curator_2026-02-22-0914.html"}, {"count": 0, "date": "2026-02-21", "file": "curator_2026-02-21.html"}, {"count": 0, "date": "2026-02-20", "file": "curator_2026-02-20.html"}, {"count": 0, "date": "2026-02-19", "file": "curator_2026-02-19.html"}, {"count": 0, "date": "2026-02-18", "file": "curator_2026-02-18.html"}, {"count": 0, "date": "2026-02-17", "file": "curator_2026-02-17.html"}, {"count": 0, "date": "2026-02-16", "file": "curator_2026-02-16.html"}, {"count": 0, "date": "2026-02-15", "file": "curator_2026-02-15.html"}, {"count": 0, "date": "2026-02-14", "file": "curator_2026-02-14.html"}, {"count": 0, "date": "2026-02-13", "file": "curator_2026-02-13.html"}, {"count": 0, "date": "2026-02-12", "file": "curator_2026-02-12.html"}, {"count": 0, "date": "2026-02-11", "file": "curator_2026-02-11.html"}, {"count": 0, "date": "2026-02-10", "file": "curator_2026-02-10.html"}],
+  sources: [{"date": "2026-06-10", "source": "War on the Rocks", "title": "How Can Lebanon\u2019s Partners Help Strengthen the Lebanese Armed Forces?", "url": "https://warontherocks.com/how-can-lebanons-partners-help-strengthen-the-lebanese-armed-forces/"}, {"date": "2026-06-07", "source": "Al Jazeera", "title": "How have countries around the world responded to the US-Israel war on Iran?", "url": "https://www.aljazeera.com/news/2026/6/7/how-have-countries-around-the-world-responded-to-the-us-israel-war-on-iran?traffic_source=rss"}, {"date": "2026-06-03", "source": "Deutsche Welle", "title": "Armenia\u0027s election offers a choice between Russia and EU", "url": "https://www.dw.com/en/armenia-s-election-offers-a-choice-between-russia-and-eu/a-77400608?maca=en-rss-en-all-1573-xml-mrss"}, {"date": "2026-06-03", "source": "Al Jazeera", "title": "Does Israel have nukes? \u2018Most of the world assesses they do,\u2019 says Rubio", "url": "https://www.aljazeera.com/news/2026/6/3/does-israel-have-nukes-most-of-world-assesses-they-do-says-rubio?traffic_source=rss"}, {"date": "2026-05-31", "source": "Al Jazeera", "title": "Polls open in Colombia\u2019s pivotal presidential election", "url": "https://www.aljazeera.com/video/newsfeed/2026/5/31/polls-open-in-colombias-pivotal-presidential-election?traffic_source=rss"}, {"date": "2026-05-31", "source": "Deutsche Welle", "title": "What Hungary must do to receive EU funds frozen under Orban", "url": "https://www.dw.com/en/what-hungary-must-do-to-receive-eu-funds-frozen-under-orban/a-77354206?maca=en-rss-en-all-1573-xml-mrss"}, {"date": "2026-05-29", "source": "Geopolitical Futures", "title": "For the Quad, Flexibility Is Not Weakness", "url": "https://geopoliticalfutures.com/for-the-quad-flexibility-is-not-weakness/"}, {"date": "2026-05-28", "source": "Fed On The Economy", "title": "1776 and the Economics of Government", "url": "https://www.stlouisfed.org/on-the-economy/2026/may/1776-economics-government"}, {"date": "2026-05-02", "source": "Al Jazeera", "title": "Spirit Airlines begins \u2018wind-down\u2019, cancels all flights over fuel crisis", "url": "https://www.aljazeera.com/news/2026/5/2/spirit-airlines-begins-wind-down-cancels-all-flights-over-fuel-crisis?traffic_source=rss"}, {"date": "2026-03-27", "source": "War on the Rocks", "title": "Hellscape Taiwan: A Porcupine Defense in the Drone Age", "url": "https://warontherocks.com/2026/03/hellscape-taiwan-a-porcupine-defense-in-the-drone-age/"}, {"date": "2026-03-26", "source": "Geopolitical Futures", "title": "How Iran Is Repricing Geography", "url": "https://geopoliticalfutures.com/how-iran-is-repricing-geography/"}, {"date": "2026-03-25", "source": "ZeroHedge", "title": "Israel Seeks To Disrupt Russian-Iranian Arms Transfer Route In The Caspian Sea", "url": "https://www.zerohedge.com/geopolitical/israel-seeks-disrupt-russian-iranian-arms-transfer-route-caspian-sea"}, {"date": "2026-03-23", "source": "arXiv q-fin", "title": "Generalized Stock Price Prediction for Multiple Stocks Combined with News Fusion", "url": "https://arxiv.org/abs/2603.19286"}, {"date": "2026-03-20", "source": "Deutsche Welle", "title": "Iran war: Why gold prices are not soaring", "url": "https://www.dw.com/en/iran-war-why-gold-prices-are-not-soaring/a-76381602?maca=en-rss-en-all-1573-xml-mrss"}, {"date": "2026-03-01", "source": "The Big Picture", "title": "10 Weekend Reads", "url": "https://ritholtz.com/2026/02/10-weekend-reads-80/"}, {"date": "2026-02-28", "source": "Geopolitical Futures", "title": "The Chokepoint at the Center of the US-Iran Standoff", "url": "https://geopoliticalfutures.com/the-chokepoint-at-the-center-of-the-us-iran-standoff/"}, {"date": "2026-02-28", "source": "FAZ", "title": "Pekings Aufstieg: Der unheimliche Erfolg von Chinas B\u00fcrokraten", "url": "https://www.faz.net/aktuell/wirtschaft/china-geheimnis-des-erfolgs-und-peking-plaene-110844835.html"}, {"date": "2026-02-27", "source": "Fed On The Economy", "title": "U.S. Import Price Dynamics Following the 2025 Tariffs", "url": "https://www.stlouisfed.org/on-the-economy/2026/feb/us-import-price-dynamics-2025-tariffs"}, {"date": "2026-02-26", "source": "Geopolitical Futures", "title": "The Tigray Powder Keg in the Horn of Africa", "url": "https://geopoliticalfutures.com/the-tigray-powder-keg-in-the-horn-of-africa/"}, {"date": "2026-02-26", "source": "ZeroHedge", "title": "\u0027The Mirage\u0027 Of Manufactured Calm And The Disconnect Between Markets And Reality", "url": "https://www.zerohedge.com/markets/mirage-manufactured-calm-and-disconnect-between-markets-and-reality"}, {"date": "2026-02-25", "source": "Geopolitical Futures", "title": "Daily Memo: Starlink Disruption in South China Sea, Russia\u2019s Footprint in Africa", "url": "https://geopoliticalfutures.com/daily-memo-starlink-disruption-in-south-china-sea-russias-footprint-in-africa/"}, {"date": "2026-02-24", "source": "Treasury MSPD", "title": "Monthly Statement of the Public Debt, January 31, 2026", "url": "https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding"}, {"date": "2026-02-23", "source": "Fed On The Economy", "title": "Flash Report: January Jobless Data May Signal Improving Labor Market", "url": "https://www.stlouisfed.org/on-the-economy/2026/feb/flash-report-january-jobless-data-may-signal-improving-labor-market"}, {"date": "2026-02-22", "source": "Fed On The Economy", "title": "China\u2019s Role in Global Innovation Is Changing", "url": "https://www.stlouisfed.org/on-the-economy/2025/aug/china-role-global-innovation-changing"}, {"date": "2026-02-22", "source": "Al Jazeera", "title": "Israeli army kills 2 Palestinians in strikes on Gaza during Ramadan", "url": "https://www.aljazeera.com/news/2026/2/21/israeli-military-kills-two-in-early-ramadan-strikes-in-gaza?traffic_source=rss"}, {"date": "2026-02-21", "source": "Antiwar.com", "title": "US Plans To Build a 5,000-Person Military Base in Gaza for International Force", "url": "https://news.antiwar.com/2026/02/19/us-plans-to-build-a-5000-person-military-base-in-gaza-for-international-force/?utm_source=rss\u0026utm_medium=rss\u0026utm_campaign=us-plans-to-build-a-5000-person-military-base-in-gaza-for-international-force"}, {"date": "2026-02-21", "source": "Fed On The Economy", "title": "Why AI Advancements May Push Some Workers Out of the Labor Force", "url": "https://www.stlouisfed.org/on-the-economy/2026/jan/why-ai-advancements-may-push-some-worker-out-labor-force"}, {"date": "2026-02-20", "source": "Geopolitical Futures", "title": "Why Trump is Not to Blame for Europe\u2019s Predicament | George Friedman", "url": "https://geopoliticalfutures.com/why-trump-is-not-to-blame-for-europes-predicament-george-friedman/"}, {"date": "2026-02-20", "source": "ZeroHedge", "title": "Ex-CIA Analyst Peels Back The US Information Operation In Iran", "url": "https://www.zerohedge.com/geopolitical/ex-cia-analyst-peels-back-us-information-operation-iran"}, {"date": "2026-02-20", "source": "Geopolitical Futures", "title": "Taiwan at the Center of a Fragile US-China Rapprochement", "url": "https://geopoliticalfutures.com/taiwan-at-the-center-of-a-fragile-us-china-rapprochement/"}, {"date": "2026-02-20", "source": "Deutsche Welle", "title": "Trump sweeping tariffs struck down: What happens next?", "url": "https://www.dw.com/en/trump-sweeping-tariffs-struck-down-what-happens-next/a-76060070?maca=en-rss-en-all-1573-xml-mrss"}, {"date": "2026-02-19", "source": "ZeroHedge", "title": "Futures Slide As Iran War Risks Add To Growing AI Disruption Fears; Oil Surges", "url": "https://www.zerohedge.com/markets/futures-slide-iran-war-risks-add-growing-ai-disruption-fears-oil-surges"}],
+  scans:   [{"date": "2026-05-29", "source": "Geopolitical Futures", "title": "For the Quad, Flexibility Is Not Weakness", "url": "/research/scan/fef95"}, {"date": "2026-02-22", "source": "Fed On The Economy", "title": "China\u2019s Role in Global Innovation Is Changing", "url": "/research/scan/fd0f0"}, {"date": "2026-05-31", "source": "Al Jazeera", "title": "Polls open in Colombia\u2019s pivotal presidential election", "url": "/research/scan/f86f0"}, {"date": "2026-05-02", "source": "Al Jazeera", "title": "Spirit Airlines begins \u2018wind-down\u2019, cancels all flights over fuel crisis", "url": "/research/scan/f4d71"}, {"date": "2026-03-20", "source": "Deutsche Welle", "title": "Iran war: Why gold prices are not soaring", "url": "/research/scan/f41de"}, {"date": "2026-02-25", "source": "Geopolitical Futures", "title": "Daily Memo: Starlink Disruption in South China Sea, Russia\u2019s Footprint in Africa", "url": "/research/scan/f0564"}, {"date": "2026-02-26", "source": "Geopolitical Futures", "title": "The Tigray Powder Keg in the Horn of Africa", "url": "/research/scan/e3057"}, {"date": "2026-02-20", "source": "ZeroHedge", "title": "Ex-CIA Analyst Peels Back The US Information Operation In Iran", "url": "/research/scan/d6456"}, {"date": "2026-02-26", "source": "ZeroHedge", "title": "\u0027The Mirage\u0027 Of Manufactured Calm And The Disconnect Between Markets And Reality", "url": "/research/scan/d144f"}, {"date": "2026-03-23", "source": "arXiv q-fin", "title": "Generalized Stock Price Prediction for Multiple Stocks Combined with News Fusion", "url": "/research/scan/bc66a"}, {"date": "2026-02-20", "source": "Geopolitical Futures", "title": "Taiwan at the Center of a Fragile US-China Rapprochement", "url": "/research/scan/a19c5"}, {"date": "2026-03-01", "source": "The Big Picture", "title": "10 Weekend Reads", "url": "/research/scan/a0c43"}, {"date": "2026-02-21", "source": "Fed On The Economy", "title": "Why AI Advancements May Push Some Workers Out of the Labor Force", "url": "/research/scan/94a40"}, {"date": "2026-02-20", "source": "Deutsche Welle", "title": "Trump sweeping tariffs struck down: What happens next?", "url": "/research/scan/93439"}, {"date": "2026-02-19", "source": "ZeroHedge", "title": "Futures Slide As Iran War Risks Add To Growing AI Disruption Fears; Oil Surges", "url": "/research/scan/90610"}, {"date": "2026-02-23", "source": "Fed On The Economy", "title": "Flash Report: January Jobless Data May Signal Improving Labor Market", "url": "/research/scan/8ab3d"}, {"date": "2026-06-07", "source": "Al Jazeera", "title": "How have countries around the world responded to the US-Israel war on Iran?", "url": "/research/scan/895dd"}, {"date": "2026-02-24", "source": "Treasury MSPD", "title": "Monthly Statement of the Public Debt, January 31, 2026", "url": "/research/scan/7f21a"}, {"date": "2026-03-26", "source": "Geopolitical Futures", "title": "How Iran Is Repricing Geography", "url": "/research/scan/7129d"}, {"date": "2026-02-21", "source": "Antiwar.com", "title": "US Plans To Build a 5,000-Person Military Base in Gaza for International Force", "url": "/research/scan/5bbc8"}, {"date": "2026-03-25", "source": "ZeroHedge", "title": "Israel Seeks To Disrupt Russian-Iranian Arms Transfer Route In The Caspian Sea", "url": "/research/scan/57f27"}, {"date": "2026-05-28", "source": "Fed On The Economy", "title": "1776 and the Economics of Government", "url": "/research/scan/55618"}, {"date": "2026-06-03", "source": "Deutsche Welle", "title": "Armenia\u0027s election offers a choice between Russia and EU", "url": "/research/scan/55183"}, {"date": "2026-03-27", "source": "War on the Rocks", "title": "Hellscape Taiwan: A Porcupine Defense in the Drone Age", "url": "/research/scan/43c03"}, {"date": "2026-02-20", "source": "Geopolitical Futures", "title": "Why Trump is Not to Blame for Europe\u2019s Predicament | George Friedman", "url": "/research/scan/435ce"}, {"date": "2026-06-03", "source": "Al Jazeera", "title": "Does Israel have nukes? \u2018Most of the world assesses they do,\u2019 says Rubio", "url": "/research/scan/3e1eb"}, {"date": "2026-02-28", "source": "FAZ", "title": "Pekings Aufstieg: Der unheimliche Erfolg von Chinas B\u00fcrokraten", "url": "/research/scan/3a4a0"}, {"date": "2026-06-10", "source": "War on the Rocks", "title": "How Can Lebanon\u2019s Partners Help Strengthen the Lebanese Armed Forces?", "url": "/research/scan/33f04"}, {"date": "2026-02-27", "source": "Fed On The Economy", "title": "U.S. Import Price Dynamics Following the 2025 Tariffs", "url": "/research/scan/26fa9"}, {"date": "2026-05-31", "source": "Deutsche Welle", "title": "What Hungary must do to receive EU funds frozen under Orban", "url": "/research/scan/19ff8"}, {"date": "2026-02-22", "source": "Al Jazeera", "title": "Israeli army kills 2 Palestinians in strikes on Gaza during Ramadan", "url": "/research/scan/1332e"}, {"date": "2026-02-28", "source": "Geopolitical Futures", "title": "The Chokepoint at the Center of the US-Iran Standoff", "url": "/research/scan/03624"}],
+  dives:   [{"file": "strait-of-hormuz-dive-007.md", "slug": "strait-of-hormuz-dive-007", "title": "Strait Of Hormuz Dive 007", "topic": "strait-of-hormuz-dive-007"}, {"file": "strait-of-hormuz-dive-006.md", "slug": "strait-of-hormuz-dive-006", "title": "Strait Of Hormuz Dive 006", "topic": "strait-of-hormuz-dive-006"}, {"file": "strait-of-hormuz-deeper-dive-005.md", "slug": "strait-of-hormuz-deeper-dive-005", "title": "Strait Of Hormuz", "topic": "strait-of-hormuz"}, {"file": "hellscape-taiwan-porcupine-dive-005.md", "slug": "hellscape-taiwan-porcupine-dive-005", "title": "Hellscape Taiwan Porcupine Dive 005", "topic": "hellscape-taiwan-porcupine-dive-005"}, {"file": "hellscape-taiwan-porcupine-deeper-dive-004.md", "slug": "hellscape-taiwan-porcupine-deeper-dive-004", "title": "Hellscape Taiwan Porcupine", "topic": "hellscape-taiwan-porcupine"}, {"file": "hellscape-taiwan-porcupine-deeper-dive-003.md", "slug": "hellscape-taiwan-porcupine-deeper-dive-003", "title": "Hellscape Taiwan Porcupine", "topic": "hellscape-taiwan-porcupine"}, {"file": "hellscape-taiwan-porcupine-deeper-dive-002.md", "slug": "hellscape-taiwan-porcupine-deeper-dive-002", "title": "Hellscape Taiwan Porcupine", "topic": "hellscape-taiwan-porcupine"}, {"file": "hellscape-taiwan-porcupine-deeper-dive-001.md", "slug": "hellscape-taiwan-porcupine-deeper-dive-001", "title": "Hellscape Taiwan Porcupine", "topic": "hellscape-taiwan-porcupine"}, {"file": "have-countries-around-world-dive-001.md", "slug": "have-countries-around-world-dive-001", "title": "Have Countries Around World Dive 001", "topic": "have-countries-around-world-dive-001"}, {"file": "gold-geopolitics-dive-002.md", "slug": "gold-geopolitics-dive-002", "title": "Gold Geopolitics Dive 002", "topic": "gold-geopolitics-dive-002"}, {"file": "gold-geopolitics-dive-001.md", "slug": "gold-geopolitics-dive-001", "title": "Gold Geopolitics Dive 001", "topic": "gold-geopolitics-dive-001"}, {"file": "empire-landpower-dive-001.md", "slug": "empire-landpower-dive-001", "title": "Empire Landpower Dive 001", "topic": "empire-landpower-dive-001"}, {"file": "china-rise-dive-001.md", "slug": "china-rise-dive-001", "title": "China Rise Dive 001", "topic": "china-rise-dive-001"}],
+  obs:     [{"count": 3, "date": "2026-04-21"}, {"count": 2, "date": "2026-04-20"}, {"count": 2, "date": "2026-04-19"}, {"count": 3, "date": "2026-04-18"}, {"count": 3, "date": "2026-04-17"}, {"count": 4, "date": "2026-04-16"}, {"count": 4, "date": "2026-04-15"}, {"count": 4, "date": "2026-04-14"}, {"count": 4, "date": "2026-04-12"}, {"count": 4, "date": "2026-04-11"}, {"count": 4, "date": "2026-04-10"}, {"count": 3, "date": "2026-04-05"}, {"count": 3, "date": "2026-04-04"}, {"count": 4, "date": "2026-04-03"}, {"count": 3, "date": "2026-03-31"}, {"count": 3, "date": "2026-03-29"}, {"count": 3, "date": "2026-03-28"}, {"count": 3, "date": "2026-03-27"}, {"count": 3, "date": "2026-03-26"}, {"count": 2, "date": "2026-03-25"}, {"count": 3, "date": "2026-03-24"}, {"count": 3, "date": "2026-03-23"}, {"count": 3, "date": "2026-03-17"}, {"count": 3, "date": "2026-03-16"}, {"count": 3, "date": "2026-03-15"}],
+};
+
+const PAGE_SIZE   = 3;
+const DAILY_BATCH = 10;
+let   _dailyShown = PAGE_SIZE;
+const expanded    = { sources: false, scans: false, dives: false, obs: false };
+// All four sections are toggleable — hasToggle check drives show/hide logic
+
+// ── Date formatting ────────────────────────────────────────────────────────────
+function fmtDate(iso) {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso + 'T12:00:00');
+    return d.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+  } catch { return iso; }
+}
+
+// ── Row builders ──────────────────────────────────────────────────────────────
+function dailyRow(ed) {
+  const summary = ed.count ? `${ed.count} articles` : '';
+  // TODO: link to /briefing/<date> once per-date archive route exists
+  return `<div class="archive-row daily-row" data-search="${ed.date} ${summary}">
+    <span class="row-date">${fmtDate(ed.date)}</span>
+    <span class="row-title muted">${summary || '—'}</span>
+  </div>`;
+}
+
+function sourceRow(a) {
+  return `<div class="archive-row" data-search="${a.title} ${a.source} ${a.date}">
+    <span class="row-date">${fmtDate(a.date)}</span>
+    <span class="row-title">${esc(a.title)}</span>
+    <span class="row-source">${esc(a.source)}</span>
+  </div>`;
+}
+
+function scanRow(s) {
+  return `<div class="archive-row" data-search="${s.title} ${s.source} ${s.date}">
+    <span class="row-date">${s.date || '—'}</span>
+    <span class="row-title">${esc(s.title)}</span>
+    <span class="row-source">${esc(s.source)}</span>
+  </div>`;
+}
+
+function diveRow(d) {
+  return `<div class="archive-row" data-search="${d.title} dive">
+    <span class="dive-badge">Thread</span>
+    <span class="row-title">${esc(d.title)}</span>
+    <a class="row-action" href="/research/dive-result/${encodeURIComponent(d.slug)}">View →</a>
+  </div>`;
+}
+
+function obsRow(o) {
+  const label = o.count ? `${o.count} observation${o.count !== 1 ? 's' : ''}` : 'Observations';
+  return `<div class="archive-row" data-search="${o.date} ${label}">
+    <span class="row-date">${fmtDate(o.date)}</span>
+    <span class="row-title muted">${label}</span>
+    <a class="row-action" href="/research/leanings?date=${o.date}">View →</a>
+  </div>`;
+}
+
+// ── Daily Editions: paginated, rendered once at init ──────────────────────────
+function renderDailySection() {
+  const items = DATA.daily;
+  document.getElementById('cnt-daily').textContent = items.length;
+  const el = document.getElementById('rows-daily');
+  if (!items.length) {
+    el.innerHTML = '<p class="archive-empty">Nothing archived yet.</p>';
+    return;
+  }
+  // All rows rendered in DOM; rows past PAGE_SIZE start hidden
+  let html = items.map((ed, i) => {
+    const summary = ed.count ? `${ed.count} articles` : '';
+    const cls     = i >= PAGE_SIZE ? ' daily-hidden' : '';
+    return `<div class="archive-row daily-row${cls}" data-index="${i}" data-search="${ed.date} ${summary}">
+      <span class="row-date">${fmtDate(ed.date)}</span>
+      <span class="row-title muted">${summary || '—'}</span>
+    </div>`;
+  }).join('');
+  if (items.length > PAGE_SIZE) {
+    const remaining = items.length - PAGE_SIZE;
+    html += `<div id="daily-show-more" class="archive-row show-more-row" style="justify-content:flex-end;">
+      <a href="#" id="daily-expand-btn" onclick="dailyShowMore(event)"
+         style="color:var(--accent);font-family:'DM Mono',monospace;font-size:0.7rem;text-decoration:none;">
+        show more daily ↓ <span id="daily-remaining">(+ ${remaining} more)</span>
+      </a>
+    </div>`;
+  }
+  el.innerHTML = html;
+  _dailyShown = PAGE_SIZE;
+}
+
+function dailyShowMore(e) {
+  e.preventDefault();
+  const hidden = Array.from(document.querySelectorAll('.daily-row.daily-hidden'));
+  const toShow = hidden.slice(0, DAILY_BATCH);
+  toShow.forEach(r => r.classList.remove('daily-hidden'));
+  _dailyShown += toShow.length;
+  const remaining = DATA.daily.length - _dailyShown;
+  if (remaining <= 0) {
+    const btn = document.getElementById('daily-show-more');
+    if (btn) btn.style.display = 'none';
+  } else {
+    const rem = document.getElementById('daily-remaining');
+    if (rem) rem.textContent = `(+ ${remaining} more)`;
+  }
+}
+
+// ── Section rendering (Sources, Scans, Dives, Obs) ────────────────────────────
+function renderSection(key, items, rowFn, counterId, rowsId) {
+  document.getElementById(counterId).textContent = items.length;
+  const el        = document.getElementById(rowsId);
+  const hasToggle = !!document.getElementById('toggle-' + key);
+  // Non-toggleable sections (Dives, Obs) always show all items
+  const show = hasToggle ? (expanded[key] ? items : items.slice(0, PAGE_SIZE)) : items;
+  let html   = show.map(rowFn).join('');
+  if (!items.length) {
+    html = '<p class="archive-empty">Nothing archived yet.</p>';
+  } else if (hasToggle && !expanded[key] && items.length > PAGE_SIZE) {
+    const more = items.length - PAGE_SIZE;
+    html += `<div class="archive-row show-more-row" onclick="toggleSection('${key}')">+ ${more} more ${key}</div>`;
+  } else if (hasToggle && expanded[key] && items.length > PAGE_SIZE) {
+    html += `<div class="bottom-collapse" onclick="toggleSection('${key}')">↑ top · ← show less</div>`;
+  }
+  el.innerHTML = html;
+}
+
+function toggleSection(key) {
+  const wasExpanded = expanded[key];
+  expanded[key] = !expanded[key];
+  const lnk = document.getElementById('toggle-' + key);
+  if (lnk) lnk.textContent = expanded[key] ? '← show less' : 'show all →';
+  renderAll();
+  // On collapse, scroll to section header by ID
+  if (wasExpanded) {
+    const headerEl = document.getElementById(key + '-header');
+    if (headerEl) headerEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+function showAll(key) { expanded[key] = true; renderAll(); }
+
+function renderAll() {
+  // Daily section rendered once at init — not included here to preserve pagination state
+  renderSection('sources', DATA.sources, sourceRow, 'cnt-sources', 'rows-sources');
+  renderSection('scans',   DATA.scans,   scanRow,   'cnt-scans',   'rows-scans');
+  renderSection('dives',   DATA.dives,   diveRow,   'cnt-dives',   'rows-dives');
+  renderSection('obs',     DATA.obs,     obsRow,    'cnt-obs',     'rows-obs');
+}
+
+// ── Search ────────────────────────────────────────────────────────────────────
+const allItems = [
+  ...DATA.daily.map(x   => ({...x, _type: 'EDITION',     _row: dailyRow(x)})),
+  ...DATA.sources.map(x => ({...x, _type: 'SOURCE',      _row: sourceRow(x)})),
+  ...DATA.scans.map(x   => ({...x, _type: 'SCAN',        _row: scanRow(x)})),
+  ...DATA.dives.map(x   => ({...x, _type: 'DIVE',        _row: diveRow(x)})),
+  ...DATA.obs.map(x     => ({...x, _type: 'OBSERVATION', _row: obsRow(x)})),
+];
+
+function runSearch(q) {
+  const sections = document.getElementById('allSections');
+  const results  = document.getElementById('searchResults');
+  const header   = document.getElementById('searchHeader');
+  const rows     = document.getElementById('searchRows');
+
+  if (!q) {
+    sections.style.display = '';
+    results.style.display  = 'none';
+    return;
+  }
+
+  sections.style.display = 'none';
+  results.style.display  = '';
+
+  const ql      = q.toLowerCase();
+  const matches = allItems.filter(x => {
+    const hay = `${x.title || ''} ${x.source || ''} ${x.date || ''} ${x.topic || ''}`.toLowerCase();
+    return hay.includes(ql);
+  }).sort((a, b) => (b.date || '') > (a.date || '') ? 1 : -1);
+
+  header.textContent = matches.length
+    ? `Results for "${q}"`
+    : `No results for "${q}".`;
+
+  rows.innerHTML = matches.length
+    ? matches.map(x => `<div class="archive-row" data-search="">
+        <span class="result-type-badge">${x._type}</span>
+        ${x._row.replace(/^<div[^>]*>/, '').replace(/<\/div>$/, '')}
+       </div>`).join('')
+    : '';
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+renderDailySection();  // Daily: rendered once, pagination managed independently
+renderAll();           // Sources, Scans, Dives, Obs
+document.getElementById('searchInput').addEventListener('input', e => runSearch(e.target.value.trim()));
+</script>
+
+<style id="preview-modal-style">
+.preview-modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
+}
+.preview-modal-overlay.active { display: flex; }
+.preview-modal {
+  background: #2a1f14; border: 1px solid rgba(198,138,94,0.4);
+  border-radius: 8px; padding: 28px 32px; max-width: 380px; width: 90%;
+  color: #F5F0E8; font-family: 'Source Sans 3', system-ui, sans-serif;
+}
+.preview-modal h3 {
+  font-size: 14px; font-weight: 600; margin: 0 0 12px;
+  color: #C68A5E; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.preview-modal p { font-size: 13px; color: rgba(245,240,232,0.75); line-height: 1.6; margin: 0 0 20px; }
+.preview-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.preview-modal-btn {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(198,138,94,0.5); background: transparent; color: #C68A5E;
+  text-decoration: none; display: inline-block;
+}
+.preview-modal-btn:hover { background: rgba(198,138,94,0.15); }
+.preview-modal-close {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(245,240,232,0.2); background: transparent;
+  color: rgba(245,240,232,0.6);
+}
+.preview-modal-close:hover { border-color: rgba(245,240,232,0.4); color: #F5F0E8; }
+</style>
+<div class="preview-modal-overlay" id="previewModal">
+<div class="preview-modal">
+<h3>Admin — not available in preview</h3>
+<p>This section is for authenticated users. Request guest access to explore the live platform.</p>
+<div class="preview-modal-actions">
+<a class="preview-modal-btn" data-admin-blocked="true" style="cursor: pointer;">Request access →</a>
+<button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>
+</div>
+</div>
+</div>
+<script id="preview-modal-script">
+(function() {
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('[data-admin-blocked]');
+    if (el) { e.preventDefault(); e.stopPropagation(); document.getElementById('previewModal').classList.add('active'); }
+  });
+  document.getElementById('previewModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+})();
+</script>
+</body></html>
