@@ -3737,6 +3737,18 @@ body.archiv-mode .page {
 .session-status-indicator { color: #6fcf6f; }
 .session-status-meta { color: var(--md-text-secondary); flex: 1; }
 
+.btn-session-mute {
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 4px;
+  background: transparent;
+  font-size: 0.8rem;
+  cursor: pointer;
+  margin-left: auto;
+  color: var(--md-text-secondary);
+}
+.btn-session-mute:hover { background: rgba(255,255,255,0.07); }
+
 .btn-session-end {
   padding: 0.25rem 0.7rem;
   border: 1px solid rgba(200,80,80,0.5);
@@ -3745,7 +3757,6 @@ body.archiv-mode .page {
   color: #c87878;
   font-size: 0.8rem;
   cursor: pointer;
-  margin-left: auto;
 }
 .btn-session-end:hover { background: rgba(200,80,80,0.1); }
 

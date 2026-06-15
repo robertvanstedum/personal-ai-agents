@@ -100,6 +100,7 @@
                 · <span id="session-persona-label"></span>
                 · <span id="session-model-label"></span>
               </span>
+              <button id="session-mute-btn" class="btn-session-mute" title="Ton ausschalten">🔊</button>
               <button id="end-session-btn" class="btn-session-end">■ Beenden</button>
             </div>
             <div id="session-chat-log" class="session-chat-log"></div>
@@ -655,6 +656,51 @@ document.body.classList.add('parch-mode');
   const sessionInputEl  = document.getElementById('session-input');
   const footerStatus    = document.getElementById('session-footer-status');
 
+  // ── TTS: speak persona responses ─────────────────────────────────────────
+  let sessionMuted = false;
+  let _ttsVoices   = [];
+
+  function _loadVoices() {
+    _ttsVoices = window.speechSynthesis.getVoices();
+  }
+  if (window.speechSynthesis) {
+    _loadVoices();
+    window.speechSynthesis.addEventListener('voiceschanged', _loadVoices);
+  }
+
+  function speakPersona(text) {
+    if (!window.speechSynthesis || sessionMuted || !text) return;
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'de-DE';
+    utt.rate = 0.92;
+    // Prefer a German female voice (e.g. for Maria/Frau Berger)
+    const germanVoice = _ttsVoices.find(v => v.lang.startsWith('de') && v.name.toLowerCase().includes('female'))
+                     || _ttsVoices.find(v => v.lang.startsWith('de'));
+    if (germanVoice) utt.voice = germanVoice;
+    window.speechSynthesis.speak(utt);
+  }
+
+  function stopSpeaking() {
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+  }
+
+  // Mute toggle — wired to btn added in HTML below
+  const muteBtnEl = document.getElementById('session-mute-btn');
+  if (muteBtnEl) {
+    muteBtnEl.addEventListener('click', () => {
+      sessionMuted = !sessionMuted;
+      if (sessionMuted) {
+        stopSpeaking();
+        muteBtnEl.textContent = '🔇';
+        muteBtnEl.title = 'Ton einschalten';
+      } else {
+        muteBtnEl.textContent = '🔊';
+        muteBtnEl.title = 'Ton ausschalten';
+      }
+    });
+  }
+
   function appendMessage(speaker, text, isLoading) {
     const div = document.createElement('div');
     div.className = 'chat-message ' + (speaker === 'Sie' ? 'chat-user' : 'chat-persona');
@@ -696,6 +742,7 @@ document.body.classList.add('parch-mode');
         appendMessage(personaName, reply);
         sessionHistory.push({ role: 'assistant', content: reply });
         sessionTranscript.push(personaName + ': ' + reply);
+        speakPersona(reply);
       } else {
         appendMessage('System', data.error || 'Keine Antwort.');
       }
@@ -732,6 +779,7 @@ document.body.classList.add('parch-mode');
 
   endSessionBtn.addEventListener('click', () => {
     sessionActive = false;
+    stopSpeaking();
     sessionPanel.style.display = 'none';
     startSessionBtn.style.display = '';
     startSessionBtn.disabled = false;
@@ -784,6 +832,7 @@ document.body.classList.add('parch-mode');
 
     recordBtn.addEventListener('click', async () => {
       if (!sessionActive) return;
+      stopSpeaking(); // stop persona speaking before recording
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         audioChunks = [];
