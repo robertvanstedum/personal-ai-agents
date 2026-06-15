@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Leanings — Research Intelligence</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&amp;family=DM+Mono:wght@400;500&amp;family=Source+Sans+3:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="/preview/assets/css_nav.css" rel="stylesheet"/>
+<style>
+    :root {
+      --bg: #f5f0e8;
+      --surface: #faf7f2;
+      --surface2: #f0ebe0;
+      --border: #ddd6c8;
+      --border2: #c8bfaf;
+      --text: #2a2418;
+      --text-muted: #6b5f4e;
+      --text-dim: #9e9080;
+      --accent: #8b5e2a;
+      --accent-dim: rgba(139,94,42,0.08);
+      --shadow: rgba(42,36,24,0.08);
+      --ok: #2e7d52;
+      --ok-dim: rgba(46,125,82,0.08);
+      --warn: #8b6e1a;
+      --warn-dim: rgba(139,110,26,0.1);
+      --blue: #1a5c8a;
+      --blue-dim: rgba(26,92,138,0.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Source Sans 3', sans-serif;
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+      display: block;
+    }
+
+    /* ── Subnav ── */
+    nav.curator-subnav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: 44px;
+      background: rgba(245,240,232,0.96);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 1.5rem;
+    }
+    .subnav-tab {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 0 14px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s;
+    }
+    .subnav-tab:hover { color: var(--text); }
+    .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .subnav-focus { margin-left: auto; }
+
+    /* ── Main content ── */
+    .main-content { padding: 32px 40px 80px; max-width: 860px; margin: 0 auto; }
+
+    .page-header { margin-bottom: 28px; }
+    .page-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.7rem; font-weight: 600; margin-bottom: 4px;
+    }
+    .page-sub { font-size: 0.82rem; color: var(--text-muted); }
+
+    /* ── State chips ── */
+    .state-chip {
+      display: inline-block; font-family: 'DM Mono', monospace;
+      font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em;
+      padding: 2px 8px; border-radius: 999px; font-weight: 500;
+    }
+    .state-question { background: var(--blue-dim); color: var(--blue); }
+    .state-leaning  { background: var(--warn-dim); color: var(--warn); }
+    .state-hold     { background: var(--ok-dim); color: var(--ok); }
+
+    /* ── Stance chips ── */
+    .stance-supports    { color: var(--ok); }
+    .stance-complicates { color: #b43c3c; }
+    .stance-neutral     { color: var(--text-dim); }
+
+    /* ── Badge ── */
+    .badge {
+      display: inline-block; background: var(--accent); color: white;
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      padding: 1px 6px; border-radius: 999px; margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    /* ── Add form ── */
+    .add-form-wrap {
+      background: #EDE7DC; border: 1px solid var(--border);
+      border-radius: 10px; padding: 18px 20px; margin-bottom: 24px;
+    }
+    .add-form-title {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-dim); margin-bottom: 12px;
+    }
+    .form-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+    .form-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 180px; }
+    .form-label { font-size: 0.75rem; color: var(--text-muted); }
+    .form-input, .form-select {
+      font-family: inherit; font-size: 0.875rem;
+      background: var(--bg); border: 1px solid var(--border2);
+      border-radius: 6px; padding: 7px 10px; color: var(--text);
+      outline: none;
+    }
+    .form-input:focus, .form-select:focus { border-color: var(--accent); }
+    .form-input.wide { flex: 2; min-width: 280px; }
+    .btn {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      padding: 8px 16px; border-radius: 6px; cursor: pointer;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); transition: background 0.15s;
+    }
+    .btn:hover { background: var(--surface2); }
+    .btn-primary {
+      background: var(--accent); color: white; border-color: var(--accent);
+    }
+    .btn-primary:hover { background: #7a521f; }
+    .btn-sm { padding: 4px 10px; font-size: 10px; }
+    .btn-danger { color: #b43c3c; border-color: rgba(180,60,60,0.3); }
+    .btn-danger:hover { background: rgba(180,60,60,0.06); }
+
+    /* ── Leaning cards ── */
+    .leaning-list { display: flex; flex-direction: column; gap: 14px; }
+    .leaning-card {
+      background: #EDE7DC; border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden;
+    }
+    .leaning-card-head {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 18px; cursor: pointer; user-select: none;
+    }
+    .leaning-card-head:hover { background: var(--accent-dim); }
+    .leaning-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1rem; font-weight: 600; flex: 1;
+    }
+    .leaning-meta { font-size: 0.78rem; color: var(--text-dim); }
+    .leaning-topics { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+    .topic-tag {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 4px; padding: 1px 7px; color: var(--text-muted);
+    }
+    .expand-icon { color: var(--text-dim); font-size: 1rem; transition: transform 0.15s; }
+    .expand-icon.open { transform: rotate(90deg); }
+
+    /* ── Leaning body (expanded) ── */
+    .leaning-body { display: none; border-top: 1px solid var(--border); padding: 18px 20px; }
+    .leaning-body.open { display: block; }
+
+    .section-label {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-dim); margin-bottom: 10px;
+      padding-bottom: 6px; border-bottom: 1px solid var(--border);
+    }
+
+    /* Evidence list */
+    .evidence-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+    .evidence-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 12px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 6px;
+    }
+    .stance-sym { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+    .ev-body { flex: 1; min-width: 0; }
+    .ev-title { font-size: 0.88rem; font-weight: 500; margin-bottom: 2px; }
+    .ev-title a { color: var(--accent); text-decoration: none; }
+    .ev-title a:hover { text-decoration: underline; }
+    .ev-meta { font-size: 0.75rem; color: var(--text-dim); }
+    .ev-note { font-size: 0.78rem; color: var(--text-muted); margin-top: 3px; font-style: italic; }
+    .ev-actions { display: flex; gap: 6px; align-items: flex-start; }
+
+    /* Add evidence form */
+    .add-ev-wrap {
+      background: var(--bg); border: 1px dashed var(--border2);
+      border-radius: 6px; padding: 12px 14px; margin-bottom: 16px;
+    }
+    .add-ev-toggle { font-size: 0.8rem; color: var(--accent); cursor: pointer; background: none; border: none; padding: 0; }
+    .add-ev-toggle:hover { text-decoration: underline; }
+    .add-ev-form { display: none; margin-top: 10px; }
+    .add-ev-form.visible { display: block; }
+    .add-ev-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+    .add-ev-grid .full { grid-column: 1/-1; }
+
+    /* Teammate read */
+    .teammate-read-wrap {
+      background: var(--accent-dim); border: 1px solid rgba(139,94,42,0.15);
+      border-radius: 8px; padding: 14px 16px; margin-top: 4px;
+    }
+    .teammate-read-text { font-size: 0.88rem; line-height: 1.65; white-space: pre-wrap; }
+    .teammate-read-meta { font-size: 0.72rem; color: var(--text-dim); margin-top: 8px; }
+    .teammate-read-empty { font-size: 0.82rem; color: var(--text-muted); padding: 10px 0; }
+
+    /* State editor */
+    .state-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .state-options { display: flex; gap: 6px; }
+    .state-btn {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      padding: 4px 12px; border-radius: 999px; cursor: pointer;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text-muted); transition: all 0.15s;
+    }
+    .state-btn.active-question { background: var(--blue-dim); color: var(--blue); border-color: rgba(26,92,138,0.3); }
+    .state-btn.active-leaning  { background: var(--warn-dim);  color: var(--warn);  border-color: rgba(139,110,26,0.3); }
+    .state-btn.active-hold     { background: var(--ok-dim);    color: var(--ok);    border-color: rgba(46,125,82,0.3); }
+
+    /* Notes */
+    .notes-area {
+      width: 100%; font-family: inherit; font-size: 0.875rem;
+      background: var(--bg); border: 1px solid var(--border2);
+      border-radius: 6px; padding: 8px 10px; color: var(--text);
+      resize: vertical; min-height: 60px; outline: none;
+    }
+    .notes-area:focus { border-color: var(--accent); }
+
+    .action-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .status-msg { font-size: 0.78rem; color: var(--text-muted); align-self: center; }
+    .status-msg.err { color: #b43c3c; }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state p { margin-top: 8px; font-size: 0.85rem; }
+
+    @media (max-width: 700px) {
+      .main-content { padding: 20px 16px 60px; }
+      .add-ev-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── AI Observations section ── */
+    .obs-section { margin-top: 3rem; }
+    .section-divider { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+    .section-divider hr { flex: 1; border: none; border-top: 1px solid var(--border); }
+    .divider-label { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-muted); white-space: nowrap; }
+    .obs-date-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+    .obs-section-title { font-family: 'DM Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+    .obs-date-nav { display: flex; align-items: center; gap: 0.5rem; }
+    .obs-date-btn { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--accent); background: none; border: none; cursor: pointer; padding: 2px 6px; }
+    .obs-date-btn:disabled { color: var(--border2); cursor: default; }
+    .obs-date-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-muted); }
+    .obs-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 0.75rem; }
+    .obs-tag { font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); display: block; margin-bottom: 0.5rem; }
+    .obs-body { font-size: 0.9rem; line-height: 1.6; color: var(--text); }
+    .obs-body p { margin-bottom: 0.5rem; }
+    .obs-body p:last-child { margin-bottom: 0; }
+    .obs-empty { font-size: 0.88rem; color: var(--text-dim); font-style: italic; padding: 0.75rem 0; margin: 0; }
+    .weekly-details { margin-top: 1.5rem; }
+    .weekly-details > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 0.5rem; padding: 4px 0; }
+    .weekly-details > summary::before { content: '›'; font-family: 'DM Mono', monospace; color: var(--accent); transition: transform 0.15s; display: inline-block; }
+    .weekly-details[open] > summary::before { transform: rotate(90deg); }
+    .weekly-details > summary::-webkit-details-marker { display: none; }
+    .weekly-body { margin-top: 1rem; }
+  </style>
+<style>body{padding-top:38px!important;}nav.curator-subnav{top:38px!important;}</style>
+<style id="preview-banner-style">
+.preview-banner {
+  position: sticky; top: 0; z-index: 9999;
+  background: #2A1F14; color: #F5F0E8;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 11px; letter-spacing: 0.04em;
+  padding: 7px 20px;
+  border-bottom: 1px solid rgba(198,138,94,0.3);
+  display: flex; align-items: center; gap: 8px;
+}
+.preview-banner .preview-date { color: rgba(245,240,232,0.7); }
+.preview-request-link {
+  color: #C68A5E; text-decoration: none; margin-left: auto;
+  border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
+}
+.preview-request-link:hover { background: rgba(198,138,94,0.1); }
+</style>
+</head>
+<body><div class="preview-banner">
+<span>Preview snapshot — </span>
+<span class="preview-date">Captured June 2026</span>
+<span>. Data is real but frozen.</span>
+<a class="preview-request-link" href="/contact">Request live access →</a>
+</div>
+<style id="portal-offset-css">body{padding-top:38px!important;}nav.curator-subnav{top:38px!important;}</style>
+<div id="portal-nav-bar" style="
+  position:fixed;top:0;left:0;right:0;z-index:999999;
+  height:38px;background:#12122a;color:#e8e8e8;
+  display:flex;align-items:center;padding:0 16px;gap:0;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:13px;border-bottom:1px solid rgba(255,255,255,0.12);
+  box-shadow:0 1px 8px rgba(0,0,0,0.4);
+">
+<a href="/preview/" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
+<span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
+<a href="/preview/curator/briefing.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;color:#ffffff;font-weight:600;">Curator</a>
+<a href="/preview/german/lesen.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;">German</a>
+<a href="/preview/guild/briefing.html" style="color:#C68A5E;text-decoration:none;">Guild</a>
+<span style="color:rgba(255,255,255,0.45);margin-left:auto;margin-right:12px;">Robert</span>
+<a data-admin-blocked="true" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;; cursor: pointer;">Sign out</a>
+</div>
+<nav class="curator-subnav">
+<a class="subnav-tab" href="/preview/curator/briefing.html">Daily</a>
+<a class="subnav-tab" data-admin-blocked="true" style="cursor: pointer;">Reading Room</a>
+<a class="subnav-tab" href="/preview/curator/scans_dives.html">Scans &amp; Dives</a>
+<a class="subnav-tab active" href="/preview/curator/leanings.html">Leanings</a>
+<a class="subnav-tab" href="/preview/curator/archive.html">Archive</a>
+<a class="subnav-tab subnav-focus" data-admin-blocked="true" style="cursor: pointer;">Desk</a>
+</nav>
+<div class="main-content">
+<div class="page-header">
+<h1 class="page-title">Leanings</h1>
+<p class="page-sub">Beliefs in progress — from open question to held position.</p>
+</div>
+<!-- New leaning form -->
+<div class="add-form-wrap">
+<div class="add-form-title">New Leaning</div>
+<div class="form-row">
+<div class="form-field" style="flex:3">
+<label class="form-label" for="newTitle">Statement</label>
+<input autocomplete="off" class="form-input" id="newTitle" placeholder="e.g. The Quad will hold under sustained pressure" type="text"/>
+</div>
+<div class="form-field">
+<label class="form-label" for="newState">Starting state</label>
+<select class="form-select" data-preview-disabled="true" disabled="disabled" id="newState">
+<option value="question">Question</option>
+<option value="leaning">Leaning</option>
+<option value="hold">Hold</option>
+</select>
+</div>
+<div style="align-self: flex-end;">
+<button class="btn btn-primary" onclick="createLeaning()">Add →</button>
+</div>
+</div>
+<div class="status-msg" id="createStatus" style="margin-top:8px;"></div>
+</div>
+<!-- Leaning list -->
+<div class="leaning-list" id="leaningList"><div class="leaning-card" id="card-db74b053">
+<div class="leaning-card-head" onclick="toggleCard('db74b053')">
+<span class="expand-icon" id="icon-db74b053">›</span>
+<div style="flex:1;min-width:0;">
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span class="leaning-title">Hungry and Poland, any alignment of interests and could it help Hungry catch up?</span>
+<span class="state-chip state-question">Question</span>
+</div>
+<div style="margin-top:3px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+<span class="leaning-meta">1 evidence · 2026-06-01</span>
+<div class="leaning-topics"></div>
+</div>
+</div>
+</div>
+<div class="leaning-body" id="body-db74b053">
+<!-- State -->
+<div class="state-row">
+<span class="section-label" style="border:none;padding:0;margin:0;">State</span>
+<div class="state-options"><button class="state-btn active-question" onclick="setState('db74b053','question',this)">Question</button><button class="state-btn" onclick="setState('db74b053','leaning',this)">Leaning</button><button class="state-btn" onclick="setState('db74b053','hold',this)">Hold</button></div>
+</div>
+<!-- Evidence -->
+<div class="section-label">Evidence (1)</div>
+<div class="evidence-list">
+<div class="evidence-item">
+<span class="stance-sym stance-neutral">○</span>
+<div class="ev-body">
+<div class="ev-title"><a href="https://warontherocks.com/cogs-of-war/how-america-lost-its-most-important-defense-tech-habit/" target="_blank">How America Lost Its Most Important Defense Tech Habit</a></div>
+<div class="ev-meta">neutral · War on the Rocks · 2026-06-01</div>
+</div>
+<div class="ev-actions">
+<button class="btn btn-sm btn-danger" onclick="removeEvidence('db74b053','ev-2c4650')">✕</button>
+</div>
+</div></div>
+<!-- Add evidence toggle -->
+<div class="add-ev-wrap">
+<button class="add-ev-toggle" onclick="toggleAddEv('db74b053')">+ Add evidence</button>
+<div class="add-ev-form" id="add-ev-db74b053">
+<div class="add-ev-grid">
+<div class="form-field full">
+<label class="form-label">Title</label>
+<input autocomplete="off" class="form-input" id="ev-title-db74b053" placeholder="Article or source title" type="text"/>
+</div>
+<div class="form-field">
+<label class="form-label">URL (optional)</label>
+<input class="form-input" id="ev-url-db74b053" placeholder="https://…" type="url"/>
+</div>
+<div class="form-field">
+<label class="form-label">Source</label>
+<input class="form-input" id="ev-source-db74b053" placeholder="Publication / author" type="text"/>
+</div>
+<div class="form-field">
+<label class="form-label">Stance</label>
+<select class="form-select" data-preview-disabled="true" disabled="disabled" id="ev-stance-db74b053">
+<option value="supports">▲ Supports</option>
+<option value="complicates">▽ Complicates</option>
+<option selected="" value="neutral">○ Neutral</option>
+</select>
+</div>
+<div class="form-field full">
+<label class="form-label">Note (optional)</label>
+<input class="form-input" id="ev-note-db74b053" placeholder="One-line reaction or observation" type="text"/>
+</div>
+</div>
+<div style="display:flex;gap:8px;align-items:center;">
+<button class="btn btn-primary btn-sm" onclick="addEvidence('db74b053')">Add evidence</button>
+<button class="btn btn-sm" onclick="toggleAddEv('db74b053')">Cancel</button>
+<span class="status-msg" id="ev-status-db74b053"></span>
+</div>
+</div>
+</div>
+<!-- Teammate read -->
+<div class="section-label">Teammate Read</div>
+<div class="teammate-read-wrap">
+<div class="teammate-read-text">## Assessment
+**Unresolved—evidence doesn't touch the question.** The single source is about American defense tech habits, not Hungary-Poland relations or economic convergence. You have zero data on Hungarian-Polish interests, trade patterns, institutional alignment, or development trajectories. This is a placeholder belief with no evidentiary foundation yet.
+
+## Implication
+**If right:** Hungary could leverage Poland's stronger EU position, manufacturing base, and NATO integration as a developmental scaffold—possibly gaining technology transfer, supply chain integration, or institutional knowledge. Poland gets a regional partner that diversifies dependence on Western Europe.
+
+**If wrong:** Hungary wastes political capital on a partnership that doesn't deliver catch-up growth. More importantly, you might miss that Hungary's actual constraint is governance quality or EU fund access, not lack of regional partnerships. Poland itself is still catching up; partnering with another middle-income country rarely accelerates convergence.
+
+## What's Missing
+**Comparative data on Hungary vs. Poland's economic trajectories since 2010**, especially FDI patterns, EU structural fund absorption rates, and export complexity. If Poland is pulling away *despite* similar starting conditions, the partnership theory weakens unless you can identify specific complementarities. Need concrete evidence of aligned interests beyond geographic proximity.</div>
+<div class="teammate-read-meta">Generated 2026-06-01 · 1 evidence items at read time</div>
+</div>
+<div class="action-row">
+<button class="btn btn-sm" id="tr-btn-db74b053" onclick="getTeammateRead('db74b053')">
+        ↺ Refresh read
+      </button>
+<span class="status-msg" id="tr-status-db74b053"></span>
+</div>
+<!-- Notes -->
+<div class="section-label" style="margin-top:16px;">Notes</div>
+<textarea class="notes-area" id="notes-db74b053" onblur="saveNotes('db74b053')" placeholder="Personal notes on this leaning…" rows="2"></textarea>
+<!-- Danger zone -->
+<div class="action-row" style="margin-top:16px;">
+<button class="btn btn-sm btn-danger" onclick="deleteLeaning('db74b053','Hungry and Poland, any alignment of interests and could it help Hungry catch up?')">Delete leaning</button>
+</div>
+</div>
+</div><div class="leaning-card" id="card-5fe38be6">
+<div class="leaning-card-head" onclick="toggleCard('5fe38be6')">
+<span class="expand-icon" id="icon-5fe38be6">›</span>
+<div style="flex:1;min-width:0;">
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span class="leaning-title">Capital Investment hits earning for several years</span>
+<span class="state-chip state-question">Question</span>
+<span class="badge">new</span>
+</div>
+<div style="margin-top:3px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+<span class="leaning-meta">2 evidence · 2026-06-03</span>
+<div class="leaning-topics"></div>
+</div>
+</div>
+</div>
+<div class="leaning-body" id="body-5fe38be6">
+<!-- State -->
+<div class="state-row">
+<span class="section-label" style="border:none;padding:0;margin:0;">State</span>
+<div class="state-options"><button class="state-btn active-question" onclick="setState('5fe38be6','question',this)">Question</button><button class="state-btn" onclick="setState('5fe38be6','leaning',this)">Leaning</button><button class="state-btn" onclick="setState('5fe38be6','hold',this)">Hold</button></div>
+</div>
+<!-- Evidence -->
+<div class="section-label">Evidence (2)</div>
+<div class="evidence-list">
+<div class="evidence-item">
+<span class="stance-sym stance-supports">▲</span>
+<div class="ev-body">
+<div class="ev-title"><a href="https://libertystreeteconomics.newyorkfed.org/2026/05/ais-macroeconomic-challenges-and-promises/" target="_blank">AI’s Macroeconomic Challenges and Promises</a></div>
+<div class="ev-meta">supports · NY Fed Liberty Street · 2026-06-03</div>
+</div>
+<div class="ev-actions">
+<button class="btn btn-sm btn-danger" onclick="removeEvidence('5fe38be6','ev-85b807')">✕</button>
+</div>
+</div>
+<div class="evidence-item">
+<span class="stance-sym stance-supports">▲</span>
+<div class="ev-body">
+<div class="ev-title"><a href="https://www.stlouisfed.org/on-the-economy/2026/may/how-trade-policy-is-changing-broad-rules-targeted-restrictions" target="_blank">How Trade Policy Is Changing: From Broad Rules to Targeted Restrictions</a></div>
+<div class="ev-meta">supports · Fed On The Economy · 2026-06-03</div>
+</div>
+<div class="ev-actions">
+<button class="btn btn-sm btn-danger" onclick="removeEvidence('5fe38be6','ev-291996')">✕</button>
+</div>
+</div></div>
+<!-- Add evidence toggle -->
+<div class="add-ev-wrap">
+<button class="add-ev-toggle" onclick="toggleAddEv('5fe38be6')">+ Add evidence</button>
+<div class="add-ev-form" id="add-ev-5fe38be6">
+<div class="add-ev-grid">
+<div class="form-field full">
+<label class="form-label">Title</label>
+<input autocomplete="off" class="form-input" id="ev-title-5fe38be6" placeholder="Article or source title" type="text"/>
+</div>
+<div class="form-field">
+<label class="form-label">URL (optional)</label>
+<input class="form-input" id="ev-url-5fe38be6" placeholder="https://…" type="url"/>
+</div>
+<div class="form-field">
+<label class="form-label">Source</label>
+<input class="form-input" id="ev-source-5fe38be6" placeholder="Publication / author" type="text"/>
+</div>
+<div class="form-field">
+<label class="form-label">Stance</label>
+<select class="form-select" data-preview-disabled="true" disabled="disabled" id="ev-stance-5fe38be6">
+<option value="supports">▲ Supports</option>
+<option value="complicates">▽ Complicates</option>
+<option selected="" value="neutral">○ Neutral</option>
+</select>
+</div>
+<div class="form-field full">
+<label class="form-label">Note (optional)</label>
+<input class="form-input" id="ev-note-5fe38be6" placeholder="One-line reaction or observation" type="text"/>
+</div>
+</div>
+<div style="display:flex;gap:8px;align-items:center;">
+<button class="btn btn-primary btn-sm" onclick="addEvidence('5fe38be6')">Add evidence</button>
+<button class="btn btn-sm" onclick="toggleAddEv('5fe38be6')">Cancel</button>
+<span class="status-msg" id="ev-status-5fe38be6"></span>
+</div>
+</div>
+</div>
+<!-- Teammate read -->
+<div class="section-label">Teammate Read<span class="badge">new</span></div>
+<div class="teammate-read-empty">No read yet. Click "Get teammate read" to trigger a Sonnet synthesis (~$0.01).</div>
+<div class="action-row">
+<button class="btn btn-sm" id="tr-btn-5fe38be6" onclick="getTeammateRead('5fe38be6')">
+        🔔 Get updated read
+      </button>
+<span class="status-msg" id="tr-status-5fe38be6"></span>
+</div>
+<!-- Notes -->
+<div class="section-label" style="margin-top:16px;">Notes</div>
+<textarea class="notes-area" id="notes-5fe38be6" onblur="saveNotes('5fe38be6')" placeholder="Personal notes on this leaning…" rows="2"></textarea>
+<!-- Danger zone -->
+<div class="action-row" style="margin-top:16px;">
+<button class="btn btn-sm btn-danger" onclick="deleteLeaning('5fe38be6','Capital Investment hits earning for several years')">Delete leaning</button>
+</div>
+</div>
+</div><div class="leaning-card" id="card-00a9a037">
+<div class="leaning-card-head" onclick="toggleCard('00a9a037')">
+<span class="expand-icon" id="icon-00a9a037">›</span>
+<div style="flex:1;min-width:0;">
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span class="leaning-title">Gold and Monetary Reset</span>
+<span class="state-chip state-question">Question</span>
+<span class="badge">new</span>
+</div>
+<div style="margin-top:3px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+<span class="leaning-meta">1 evidence · 2026-06-03</span>
+<div class="leaning-topics"></div>
+</div>
+</div>
+</div>
+<div class="leaning-body" id="body-00a9a037">
+<!-- State -->
+<div class="state-row">
+<span class="section-label" style="border:none;padding:0;margin:0;">State</span>
+<div class="state-options"><button class="state-btn active-question" onclick="setState('00a9a037','question',this)">Question</button><button class="state-btn" onclick="setState('00a9a037','leaning',this)">Leaning</button><button class="state-btn" onclick="setState('00a9a037','hold',this)">Hold</button></div>
+</div>
+<!-- Evidence -->
+<div class="section-label">Evidence (1)</div>
+<div class="evidence-list">
+<div class="evidence-item">
+<span class="stance-sym stance-supports">▲</span>
+<div class="ev-body">
+<div class="ev-title"><a href="https://x.com/Globalflows/status/2018173643566764503" target="_blank">This is what Druckenmiller thinks about Kevin Warsh
+
+This is setting the stage f</a></div>
+<div class="ev-meta">supports · X/@Globalflows · 2026-06-03</div>
+</div>
+<div class="ev-actions">
+<button class="btn btn-sm btn-danger" onclick="removeEvidence('00a9a037','ev-99718c')">✕</button>
+</div>
+</div></div>
+<!-- Add evidence toggle -->
+<div class="add-ev-wrap">
+<button class="add-ev-toggle" onclick="toggleAddEv('00a9a037')">+ Add evidence</button>
+<div class="add-ev-form" id="add-ev-00a9a037">
+<div class="add-ev-grid">
+<div class="form-field full">
+<label class="form-label">Title</label>
+<input autocomplete="off" class="form-input" id="ev-title-00a9a037" placeholder="Article or source title" type="text"/>
+</div>
+<div class="form-field">
+<label class="form-label">URL (optional)</label>
+<input class="form-input" id="ev-url-00a9a037" placeholder="https://…" type="url"/>
+</div>
+<div class="form-field">
+<label class="form-label">Source</label>
+<input class="form-input" id="ev-source-00a9a037" placeholder="Publication / author" type="text"/>
+</div>
+<div class="form-field">
+<label class="form-label">Stance</label>
+<select class="form-select" data-preview-disabled="true" disabled="disabled" id="ev-stance-00a9a037">
+<option value="supports">▲ Supports</option>
+<option value="complicates">▽ Complicates</option>
+<option selected="" value="neutral">○ Neutral</option>
+</select>
+</div>
+<div class="form-field full">
+<label class="form-label">Note (optional)</label>
+<input class="form-input" id="ev-note-00a9a037" placeholder="One-line reaction or observation" type="text"/>
+</div>
+</div>
+<div style="display:flex;gap:8px;align-items:center;">
+<button class="btn btn-primary btn-sm" onclick="addEvidence('00a9a037')">Add evidence</button>
+<button class="btn btn-sm" onclick="toggleAddEv('00a9a037')">Cancel</button>
+<span class="status-msg" id="ev-status-00a9a037"></span>
+</div>
+</div>
+</div>
+<!-- Teammate read -->
+<div class="section-label">Teammate Read<span class="badge">new</span></div>
+<div class="teammate-read-empty">No read yet. Click "Get teammate read" to trigger a Sonnet synthesis (~$0.01).</div>
+<div class="action-row">
+<button class="btn btn-sm" id="tr-btn-00a9a037" onclick="getTeammateRead('00a9a037')">
+        🔔 Get updated read
+      </button>
+<span class="status-msg" id="tr-status-00a9a037"></span>
+</div>
+<!-- Notes -->
+<div class="section-label" style="margin-top:16px;">Notes</div>
+<textarea class="notes-area" id="notes-00a9a037" onblur="saveNotes('00a9a037')" placeholder="Personal notes on this leaning…" rows="2"></textarea>
+<!-- Danger zone -->
+<div class="action-row" style="margin-top:16px;">
+<button class="btn btn-sm btn-danger" onclick="deleteLeaning('00a9a037','Gold and Monetary Reset')">Delete leaning</button>
+</div>
+</div>
+</div></div>
+<!-- ── AI Observations section ── -->
+<div class="obs-section">
+<div class="section-divider">
+<hr/><span class="divider-label">AI observations</span><hr/>
+</div>
+<div class="obs-date-bar">
+<span class="obs-section-title">Today's observations</span>
+<span class="obs-date-nav">
+<button class="obs-date-btn" disabled="" id="btnObsPrev" onclick="shiftObsDate(-1)">← prev</button>
+<span class="obs-date-label" id="obsDateLabel">Jun 15</span>
+<button class="obs-date-btn" disabled="" id="btnObsToday" onclick="loadObservations('')">today →</button>
+</span>
+</div>
+<div id="obsDaily"><p class="obs-empty">No observations for this date.</p></div>
+<details class="weekly-details">
+<summary class="obs-section-title">Weekly connections</summary>
+<div class="weekly-body" id="obsWeekly"><div class="obs-card"><span class="obs-tag">Connections</span><div class="obs-body"><p>🧠 <b>Weekly Connections — Apr 19</b></p><p>Based on your reading patterns, here are underexplored areas that connect directly to your interests:</p><p><b>1. Central Bank Digital Currencies (CBDCs) and Cross-Border Payment Systems</b></p><p>You follow monetary policy and geopolitics closely, but haven't engaged with how CBDCs are reshaping international settlement systems and challenging dollar dominance—a second-order implication of the fiscal/monetary dynamics you already track.</p><p><b>Suggested sources:</b> BIS Quarterly Review (Bank for International Settlements), Financial Times' "Cryptofinance" section</p><p><b>2. Supranational Fiscal Architecture and Climate Finance Mechanisms</b></p><p>Your interest in institutional debates and fiscal policy would benefit from examining how climate financing (IMF's Resilience and Sustainability Trust, EU's Carbon Border Adjustment Mechanism) is creating new forms of conditionality and reshaping North-South economic relations.</p><p><b>Suggested sources:</b> Center for Global Development, ODI (Overseas Development Institute)</p><p><b>3. Commodity Market Financialization and Food Security Geopolitics</b></p><p>You analyze markets and geopolitics separately, but the intersection—how derivatives markets, sovereign wealth fund positioning, and export restrictions interact during supply shocks—would deepen your understanding of both inflation dynamics and strategic competition.</p><p><b>Suggested sources:</b> UNCTAD reports, Chatham House's Resources &amp; Environment Programme</p><p>All three topics offer the analytical depth you prefer in written format, with institutional-level implications across your core interest areas.</p></div></div></div>
+</details>
+</div>
+</div>
+<script>
+// ── Data ─────────────────────────────────────────────────────────────────────
+
+let leanings = [];
+
+async function loadLeanings() {
+  try {
+    const res  = await fetch('/app/curator/api/research/leanings');
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    leanings = data.leanings;
+    renderList();
+  } catch (e) {
+    document.getElementById('leaningList').innerHTML =
+      `<div class="empty-state"><p>Error loading leanings: ${esc(e.message)}</p></div>`;
+  }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+
+function renderList() {
+  const el = document.getElementById('leaningList');
+  if (!leanings.length) {
+    el.innerHTML = `<div class="empty-state">
+      <div style="font-size:2rem">🤔</div>
+      <p>No leanings yet. Add one above to start tracking a belief.</p>
+    </div>`;
+    return;
+  }
+  el.innerHTML = leanings.map(renderCard).join('');
+}
+
+function renderCard(l) {
+  const stateClass = `state-${l.state}`;
+  const stateLabel = {question:'Question', leaning:'Leaning', hold:'Hold'}[l.state] || l.state;
+  const badge = l.badge ? `<span class="badge">new</span>` : '';
+  const evCount = l.evidence ? l.evidence.length : 0;
+  const topicTags = (l.topics || []).map(t =>
+    `<span class="topic-tag">${esc(t)}</span>`).join('');
+
+  const trSection = renderTeammateRead(l);
+  const evSection = renderEvidence(l);
+  const stateButtons = ['question','leaning','hold'].map(s => {
+    const active = s === l.state ? ` active-${s}` : '';
+    return `<button class="state-btn${active}" onclick="setState('${esc(l.id)}','${s}',this)">${
+      {question:'Question',leaning:'Leaning',hold:'Hold'}[s]
+    }</button>`;
+  }).join('');
+
+  return `<div class="leaning-card" id="card-${l.id}">
+  <div class="leaning-card-head" onclick="toggleCard('${esc(l.id)}')">
+    <span class="expand-icon" id="icon-${l.id}">›</span>
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span class="leaning-title">${esc(l.title)}</span>
+        <span class="state-chip ${stateClass}">${stateLabel}</span>
+        ${badge}
+      </div>
+      <div style="margin-top:3px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span class="leaning-meta">${evCount} evidence · ${esc(l.updated)}</span>
+        <div class="leaning-topics">${topicTags}</div>
+      </div>
+    </div>
+  </div>
+  <div class="leaning-body" id="body-${l.id}">
+    <!-- State -->
+    <div class="state-row">
+      <span class="section-label" style="border:none;padding:0;margin:0;">State</span>
+      <div class="state-options">${stateButtons}</div>
+    </div>
+
+    <!-- Evidence -->
+    <div class="section-label">Evidence (${evCount})</div>
+    ${evSection}
+
+    <!-- Add evidence toggle -->
+    <div class="add-ev-wrap">
+      <button class="add-ev-toggle" onclick="toggleAddEv('${esc(l.id)}')">+ Add evidence</button>
+      <div class="add-ev-form" id="add-ev-${l.id}">
+        <div class="add-ev-grid">
+          <div class="form-field full">
+            <label class="form-label">Title</label>
+            <input class="form-input" id="ev-title-${l.id}" type="text" placeholder="Article or source title" autocomplete="off">
+          </div>
+          <div class="form-field">
+            <label class="form-label">URL (optional)</label>
+            <input class="form-input" id="ev-url-${l.id}" type="url" placeholder="https://…">
+          </div>
+          <div class="form-field">
+            <label class="form-label">Source</label>
+            <input class="form-input" id="ev-source-${l.id}" type="text" placeholder="Publication / author">
+          </div>
+          <div class="form-field">
+            <label class="form-label">Stance</label>
+            <select class="form-select" id="ev-stance-${l.id}">
+              <option value="supports">▲ Supports</option>
+              <option value="complicates">▽ Complicates</option>
+              <option value="neutral" selected>○ Neutral</option>
+            </select>
+          </div>
+          <div class="form-field full">
+            <label class="form-label">Note (optional)</label>
+            <input class="form-input" id="ev-note-${l.id}" type="text" placeholder="One-line reaction or observation">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-primary btn-sm" onclick="addEvidence('${esc(l.id)}')">Add evidence</button>
+          <button class="btn btn-sm" onclick="toggleAddEv('${esc(l.id)}')">Cancel</button>
+          <span class="status-msg" id="ev-status-${l.id}"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Teammate read -->
+    <div class="section-label">Teammate Read${badge}</div>
+    ${trSection}
+    <div class="action-row">
+      <button class="btn btn-sm" id="tr-btn-${l.id}" onclick="getTeammateRead('${esc(l.id)}')">
+        ${l.badge ? '🔔 Get updated read' : l.teammate_read ? '↺ Refresh read' : 'Get teammate read'}
+      </button>
+      <span class="status-msg" id="tr-status-${l.id}"></span>
+    </div>
+
+    <!-- Notes -->
+    <div class="section-label" style="margin-top:16px;">Notes</div>
+    <textarea class="notes-area" id="notes-${l.id}" rows="2"
+      placeholder="Personal notes on this leaning…"
+      onblur="saveNotes('${esc(l.id)}')">${esc(l.notes || '')}</textarea>
+
+    <!-- Danger zone -->
+    <div class="action-row" style="margin-top:16px;">
+      <button class="btn btn-sm btn-danger" onclick="deleteLeaning('${esc(l.id)}','${esc(l.title)}')">Delete leaning</button>
+    </div>
+  </div>
+</div>`;
+}
+
+function renderEvidence(l) {
+  if (!l.evidence || !l.evidence.length) {
+    return `<div class="evidence-list"><div style="font-size:0.82rem;color:var(--text-muted);padding:6px 0;">No evidence attached yet.</div></div>`;
+  }
+  const stanceSym = {supports:'▲', complicates:'▽', neutral:'○'};
+  const stanceClass = {supports:'stance-supports', complicates:'stance-complicates', neutral:'stance-neutral'};
+  const rows = l.evidence.map(e => `
+    <div class="evidence-item">
+      <span class="stance-sym ${stanceClass[e.stance] || ''}">${stanceSym[e.stance] || '○'}</span>
+      <div class="ev-body">
+        <div class="ev-title">${e.url
+          ? `<a href="${esc(e.url)}" target="_blank">${esc(e.title)}</a>`
+          : esc(e.title)}</div>
+        <div class="ev-meta">${esc(e.stance)} · ${esc(e.source || '')} · ${esc(e.added)}</div>
+        ${e.note ? `<div class="ev-note">${esc(e.note)}</div>` : ''}
+      </div>
+      <div class="ev-actions">
+        <button class="btn btn-sm btn-danger" onclick="removeEvidence('${esc(l.id)}','${esc(e.id)}')">✕</button>
+      </div>
+    </div>`).join('');
+  return `<div class="evidence-list">${rows}</div>`;
+}
+
+function renderTeammateRead(l) {
+  if (!l.teammate_read) {
+    return `<div class="teammate-read-empty">No read yet. Click "Get teammate read" to trigger a Sonnet synthesis (~$0.01).</div>`;
+  }
+  const tr = l.teammate_read;
+  return `<div class="teammate-read-wrap">
+    <div class="teammate-read-text">${esc(tr.text)}</div>
+    <div class="teammate-read-meta">Generated ${tr.generated_at ? tr.generated_at.slice(0,10) : '?'} · ${tr.evidence_count_at_read || 0} evidence items at read time</div>
+  </div>`;
+}
+
+// ── Interactions ──────────────────────────────────────────────────────────────
+
+function toggleCard(id) {
+  const body = document.getElementById(`body-${id}`);
+  const icon = document.getElementById(`icon-${id}`);
+  const open = body.classList.toggle('open');
+  icon.classList.toggle('open', open);
+}
+
+function toggleAddEv(id) {
+  const form = document.getElementById(`add-ev-${id}`);
+  form.classList.toggle('visible');
+}
+
+async function createLeaning() {
+  const title = document.getElementById('newTitle').value.trim();
+  const state = document.getElementById('newState').value;
+  const statusEl = document.getElementById('createStatus');
+  if (!title) { statusEl.textContent = 'Title required.'; statusEl.className = 'status-msg err'; return; }
+  statusEl.textContent = 'Creating…'; statusEl.className = 'status-msg';
+  try {
+    const res  = await fetch('/app/curator/api/research/leanings', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({title, state}),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    document.getElementById('newTitle').value = '';
+    statusEl.textContent = '';
+    await loadLeanings();
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message;
+    statusEl.className = 'status-msg err';
+  }
+}
+
+async function setState(id, state, btn) {
+  try {
+    const res  = await fetch(`/app/curator/api/research/leanings/${id}`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({state}),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    // Update state buttons in place
+    const card = document.getElementById(`card-${id}`);
+    card.querySelectorAll('.state-btn').forEach(b => {
+      b.className = 'state-btn';
+    });
+    btn.classList.add(`active-${state}`);
+    // Update state chip in header
+    const chip = card.querySelector('.state-chip');
+    chip.className = `state-chip state-${state}`;
+    chip.textContent = {question:'Question', leaning:'Leaning', hold:'Hold'}[state];
+    // Update local data
+    const l = leanings.find(x => x.id === id);
+    if (l) l.state = state;
+  } catch (e) {
+    alert('Error updating state: ' + e.message);
+  }
+}
+
+async function addEvidence(id) {
+  const title  = document.getElementById(`ev-title-${id}`).value.trim();
+  const url    = document.getElementById(`ev-url-${id}`).value.trim();
+  const source = document.getElementById(`ev-source-${id}`).value.trim();
+  const stance = document.getElementById(`ev-stance-${id}`).value;
+  const note   = document.getElementById(`ev-note-${id}`).value.trim();
+  const status = document.getElementById(`ev-status-${id}`);
+  if (!title) { status.textContent = 'Title required.'; status.className = 'status-msg err'; return; }
+  status.textContent = 'Adding…'; status.className = 'status-msg';
+  try {
+    const res  = await fetch(`/app/curator/api/research/leanings/${id}/evidence`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({title, url, source, stance, note}),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    status.textContent = '';
+    await loadLeanings();
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+    status.className = 'status-msg err';
+  }
+}
+
+async function removeEvidence(leaningId, evId) {
+  if (!confirm('Remove this evidence item?')) return;
+  try {
+    const res  = await fetch(`/app/curator/api/research/leanings/${leaningId}/evidence/${evId}`, {method: 'DELETE'});
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    await loadLeanings();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function getTeammateRead(id) {
+  const btn    = document.getElementById(`tr-btn-${id}`);
+  const status = document.getElementById(`tr-status-${id}`);
+  btn.disabled = true;
+  btn.textContent = 'Thinking…';
+  status.textContent = 'Calling Sonnet (~10s)…'; status.className = 'status-msg';
+  try {
+    const res  = await fetch(`/app/curator/api/research/leanings/${id}/teammate-read`, {method: 'POST'});
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    status.textContent = `$${data.cost_usd} · ${data.tokens_in}in ${data.tokens_out}out`;
+    status.className = 'status-msg';
+    await loadLeanings();
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+    status.className = 'status-msg err';
+    btn.disabled = false;
+    btn.textContent = 'Get teammate read';
+  }
+}
+
+async function saveNotes(id) {
+  const notes = document.getElementById(`notes-${id}`).value;
+  try {
+    await fetch(`/app/curator/api/research/leanings/${id}`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({notes}),
+    });
+  } catch (_) { /* silent */ }
+}
+
+async function deleteLeaning(id, title) {
+  if (!confirm(`Delete leaning "${title}"? This cannot be undone.`)) return;
+  try {
+    const res  = await fetch(`/app/curator/api/research/leanings/${id}`, {method: 'DELETE'});
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    await loadLeanings();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+
+function esc(str) {
+  return String(str || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadLeanings();
+
+// ── AI Observations ───────────────────────────────────────────────────────────
+let _obsDate = '';
+const OBS_LABELS = {
+  topic_velocity: 'Topic Velocity', discovery_candidate: 'Discovery',
+  source_anomaly: 'Source Anomaly', blind_spot: 'Blind Spot',
+  lateral_connections: 'Connections'
+};
+
+async function loadObservations(dateStr) {
+  const url = dateStr ? `/api/intelligence/latest?date=${dateStr}` : '/api/intelligence/latest';
+  let data;
+  try { data = await fetch(url).then(r => r.json()); }
+  catch {
+    document.getElementById('obsDaily').innerHTML = '<p class="obs-empty">Could not load observations.</p>';
+    return;
+  }
+
+  _obsDate = data.today || '';
+  document.getElementById('obsDateLabel').textContent = _obsDate
+    ? new Date(_obsDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : '';
+  document.getElementById('btnObsPrev').disabled  = !data.has_prev;
+  document.getElementById('btnObsToday').disabled = !!data.is_today;
+
+  const daily = (data.daily?.observations || []).filter(o => o.type !== 'lateral_connections');
+  document.getElementById('obsDaily').innerHTML = daily.length
+    ? daily.map(obsCard).join('')
+    : '<p class="obs-empty">No observations for this date.</p>';
+
+  const weekly = data.weekly?.observations || [];
+  document.getElementById('obsWeekly').innerHTML = weekly.length
+    ? weekly.map(obsCard).join('')
+    : '<p class="obs-empty">No weekly connections yet.</p>';
+}
+
+function shiftObsDate(days) {
+  const base = _obsDate || new Date().toISOString().substring(0, 10);
+  const d = new Date(base + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  loadObservations(d.toISOString().substring(0, 10));
+}
+
+function obsCard(obs) {
+  const label = OBS_LABELS[obs.type] || obs.type;
+  const body  = (obs.content || '')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+  return `<div class="obs-card"><span class="obs-tag">${label}</span><div class="obs-body"><p>${body}</p></div></div>`;
+}
+
+loadObservations('');
+</script>
+
+<style id="preview-modal-style">
+.preview-modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
+}
+.preview-modal-overlay.active { display: flex; }
+.preview-modal {
+  background: #2a1f14; border: 1px solid rgba(198,138,94,0.4);
+  border-radius: 8px; padding: 28px 32px; max-width: 380px; width: 90%;
+  color: #F5F0E8; font-family: 'Source Sans 3', system-ui, sans-serif;
+}
+.preview-modal h3 {
+  font-size: 14px; font-weight: 600; margin: 0 0 12px;
+  color: #C68A5E; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.preview-modal p { font-size: 13px; color: rgba(245,240,232,0.75); line-height: 1.6; margin: 0 0 20px; }
+.preview-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.preview-modal-btn {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(198,138,94,0.5); background: transparent; color: #C68A5E;
+  text-decoration: none; display: inline-block;
+}
+.preview-modal-btn:hover { background: rgba(198,138,94,0.15); }
+.preview-modal-close {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(245,240,232,0.2); background: transparent;
+  color: rgba(245,240,232,0.6);
+}
+.preview-modal-close:hover { border-color: rgba(245,240,232,0.4); color: #F5F0E8; }
+</style>
+<div class="preview-modal-overlay" id="previewModal">
+<div class="preview-modal">
+<h3>Admin — not available in preview</h3>
+<p>Full history and interactive features require guest access. Request access to explore the live platform.</p>
+<div class="preview-modal-actions">
+<a class="preview-modal-btn" href="/contact">Request access →</a>
+<button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>
+</div>
+</div>
+</div>
+<script id="preview-modal-script">
+(function() {
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('[data-admin-blocked]');
+    if (el) { e.preventDefault(); e.stopPropagation(); document.getElementById('previewModal').classList.add('active'); }
+  });
+  document.getElementById('previewModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+})();
+</script>
+</body></html>

@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-06-15T14:49:26+00:00",
+  "captured_at": "2026-06-15T14:56:12+00:00",
   "pages": [
     {
       "domain": null,
@@ -28,6 +28,13 @@
       "label": "Curator \u2014 Archive",
       "live_path": "/app/curator/archive",
       "preview_path": "/preview/curator/archive.html"
+    },
+    {
+      "domain": "curator",
+      "name": "leanings",
+      "label": "Curator \u2014 Leanings",
+      "live_path": "/app/curator/research/leanings",
+      "preview_path": "/preview/curator/leanings.html"
     },
     {
       "domain": "german",
