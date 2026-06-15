@@ -317,6 +317,69 @@ def api_analyse_transcript():
     return jsonify({"ok": True, **result})
 
 
+@app.route("/api/transcribe", methods=["POST"])
+def api_transcribe():
+    if "audio" not in request.files:
+        return jsonify({"error": "No audio file"}), 400
+    audio_file = request.files["audio"]
+    try:
+        import keyring as _kr
+        from openai import OpenAI as _OAI
+        api_key = _kr.get_password("openai", "api_key")
+        if not api_key:
+            return jsonify({"error": "OpenAI API key not configured"}), 500
+        client = _OAI(api_key=api_key)
+        audio_file.stream.seek(0)
+        response = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=("session.webm", audio_file.stream, "audio/webm"),
+            language="de",
+            response_format="text",
+        )
+        return jsonify({"transcript": response})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/review", methods=["POST"])
+def api_review():
+    body = request.get_json(force=True)
+    transcript  = body.get("transcript", "").strip()
+    model       = body.get("model", "grok").strip()
+    persona_name = body.get("persona_name", "").strip()
+    scene       = body.get("scene", "").strip()
+    if not transcript:
+        return jsonify({"ok": False, "error": "transcript required"}), 400
+    try:
+        import sys, os
+        sys.path.insert(0, os.path.dirname(__file__))
+        from providers.review_router import run_review, ProviderError
+        result = run_review(transcript, persona_name, scene, model)
+        return jsonify({"ok": True, **result})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "model": model}), 502
+
+
+@app.route("/api/gesprache/ai-turn", methods=["POST"])
+def gesprache_ai_turn():
+    data      = request.get_json(force=True)
+    history   = data.get("history", [])
+    persona   = data.get("persona", "").strip()
+    scene     = data.get("scene", "").strip()
+    model     = data.get("model", "grok").strip()
+    user_turn = data.get("user_turn", "")
+    if not persona:
+        return jsonify({"ok": False, "error": "persona required"}), 400
+    try:
+        import sys, os
+        sys.path.insert(0, os.path.dirname(__file__))
+        from providers.review_router import run_chat_turn, ProviderError
+        response = run_chat_turn(history, persona, scene, user_turn, model)
+        return jsonify({"ok": True, "response": response, "model": model})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "model": model}), 502
+
+
 @app.route("/api/round-action", methods=["POST"])
 def api_round_action():
     body = request.get_json(force=True)

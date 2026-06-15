@@ -2443,6 +2443,74 @@ body.reading-mode nav {
   font-family: var(--font-body);
 }
 
+.gesprache-model-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+.gesprache-model-label {
+  font-size: 0.8rem;
+  color: var(--md-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.gesprache-model-select {
+  font-size: 0.85rem;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.gesprache-voice-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+.btn-record {
+  font-size: 0.85rem;
+  padding: 5px 14px;
+  border: 1px solid #c87878;
+  border-radius: 5px;
+  background: rgba(200,80,80,0.1);
+  color: #c87878;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-record:hover:not(:disabled) { background: rgba(200,80,80,0.2); }
+.btn-record:disabled { opacity: 0.5; cursor: default; }
+.btn-record.recording {
+  background: rgba(200,80,80,0.25);
+  animation: pulse-rec 1.2s ease-in-out infinite;
+}
+@keyframes pulse-rec {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+.btn-stop {
+  font-size: 0.85rem;
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.btn-stop:hover { background: rgba(255,255,255,0.07); }
+.gesprache-timer {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--md-text-secondary);
+  min-width: 3rem;
+}
+.gesprache-record-status {
+  font-size: 0.8rem;
+  color: var(--md-text-secondary);
+}
+
 .gesprache-submit-row {
   display: flex;
   align-items: center;
@@ -3631,4 +3699,121 @@ body.archiv-mode .page {
 
 .admin-list-item.runde-ready {
   border-left: 3px solid var(--md-accent);
+}
+
+/* ── Gespräche: KI-Sitzung button + session panel ── */
+
+.btn-session-start {
+  padding: 0.45rem 1.1rem;
+  border: 1px solid var(--md-accent);
+  border-radius: 20px;
+  background: var(--md-accent);
+  color: var(--md-parch);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.btn-session-start:hover { opacity: 0.85; }
+.btn-session-start:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.session-panel {
+  margin-top: 1rem;
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.session-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.75rem;
+  background: rgba(0,0,0,0.12);
+  border-bottom: 1px solid var(--md-parch-deep);
+  font-size: 0.82rem;
+}
+.session-status-indicator { color: #6fcf6f; }
+.session-status-meta { color: var(--md-text-secondary); flex: 1; }
+
+.btn-session-end {
+  padding: 0.25rem 0.7rem;
+  border: 1px solid rgba(200,80,80,0.5);
+  border-radius: 4px;
+  background: transparent;
+  color: #c87878;
+  font-size: 0.8rem;
+  cursor: pointer;
+  margin-left: auto;
+}
+.btn-session-end:hover { background: rgba(200,80,80,0.1); }
+
+.session-chat-log {
+  height: 260px;
+  overflow-y: auto;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.chat-message {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  max-width: 90%;
+}
+.chat-persona {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--md-parch-deep);
+  align-self: flex-start;
+}
+.chat-user {
+  background: rgba(var(--md-accent-rgb, 180,140,90), 0.08);
+  border: 1px solid rgba(var(--md-accent-rgb, 180,140,90), 0.2);
+  align-self: flex-end;
+  text-align: right;
+}
+
+.session-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-top: 1px solid var(--md-parch-deep);
+  background: rgba(0,0,0,0.06);
+}
+
+.session-input-field {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+}
+.session-input-field:focus { outline: none; border-color: var(--md-accent); }
+
+.btn-session-send {
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--md-text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-session-send:hover:not(:disabled) { border-color: var(--md-accent); color: var(--md-accent); }
+.btn-session-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.session-footer-status {
+  font-size: 0.8rem;
+  color: var(--md-text-secondary);
+  padding: 0 0.75rem 0.4rem;
+  min-height: 1.2em;
 }

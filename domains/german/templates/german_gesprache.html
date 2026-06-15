@@ -62,7 +62,20 @@
 
           <div class="prompt-delivery" id="prompt-delivery">
             <div class="prompt-text" id="prompt-text" style="display:none"></div>
+            <!-- Model selector — visible before session starts -->
+            <div class="gesprache-model-row" style="margin-bottom:0.75rem">
+              <label class="gesprache-model-label">Modell</label>
+              <select id="gesprache-model" class="gesprache-model-select">
+                <option value="grok" selected>Grok</option>
+                <option value="openai">OpenAI</option>
+                <option value="claude">Claude</option>
+              </select>
+            </div>
             <div class="prompt-actions">
+              <button class="btn-session-start" id="start-session-btn"
+                      title="Startet die KI-Sitzung direkt im Browser">
+                ▶ Sitzung starten
+              </button>
               <button class="btn-delivery" id="btn-telegram"
                       title="Kopiert den Prompt und öffnet Telegram — dort einfügen">
                 ✈️ Telegram öffnen
@@ -79,6 +92,28 @@
             <div class="prompt-toast" id="prompt-toast" style="display:none">✓ Vollständiger Prompt kopiert</div>
           </div>
 
+          <!-- ── KI-Sitzung session panel ──────────────────────────────────── -->
+          <div id="session-panel" class="session-panel" style="display:none">
+            <div class="session-status-bar">
+              <span class="session-status-indicator">🟢 Sitzung läuft</span>
+              <span class="session-status-meta">
+                · <span id="session-persona-label"></span>
+                · <span id="session-model-label"></span>
+              </span>
+              <button id="end-session-btn" class="btn-session-end">■ Beenden</button>
+            </div>
+            <div id="session-chat-log" class="session-chat-log"></div>
+            <div class="session-input-row">
+              <button id="session-record-btn" class="btn-record">● Aufnehmen</button>
+              <button id="session-stop-btn" class="btn-stop" style="display:none">■ Stop</button>
+              <span id="session-timer" class="gesprache-timer">00:00</span>
+              <input type="text" id="session-input" class="session-input-field"
+                     placeholder="Schreiben oder aufnehmen…">
+              <button id="session-send-btn" class="btn-session-send">→ Senden</button>
+            </div>
+            <div class="session-footer-status" id="session-footer-status"></div>
+          </div>
+
           <details class="session-brief-details" id="session-brief-panel" style="display:none">
             <summary class="session-brief-summary">🎯 Heutige Vorbereitung</summary>
             <pre class="session-brief-text" id="session-brief-text"></pre>
@@ -88,8 +123,15 @@
             <summary class="session-brief-summary">✏️ Nach der Sitzung</summary>
             <div class="nach-sitzung-body">
               <div id="transcript-input-wrap">
+                <!-- Voice recording controls -->
+                <div class="gesprache-voice-row" id="gesprache-voice-row">
+                  <button id="gesprache-record-btn" class="btn-record">● Aufnehmen</button>
+                  <button id="gesprache-stop-btn" class="btn-stop" style="display:none">■ Stop</button>
+                  <span id="gesprache-timer" class="gesprache-timer">00:00</span>
+                  <span id="gesprache-record-status" class="gesprache-record-status"></span>
+                </div>
                 <textarea class="notebook-textarea nach-sitzung-textarea" id="transcript-input" rows="6"
-                  placeholder="Transkript hier einfügen — z.B. aus Grok Voice&#10;&#10;Robert: Guten Morgen…&#10;Frau Berger: Guten Morgen!…"></textarea>
+                  placeholder="Transkript hier einfügen oder aufnehmen ↑&#10;&#10;Robert: Guten Morgen…&#10;Frau Berger: Guten Morgen!…"></textarea>
                 <div class="gesprache-submit-row">
                   <button class="btn-primary" id="btn-analysieren" title="Analyse des Gesprächs">Analysieren</button>
                   <span class="gesprache-status" id="analyse-status"></span>
@@ -259,6 +301,11 @@ document.body.classList.add('parch-mode');
   let selectedIdx = 0;
   let selectedSceneKey = null;
   let currentFullPrompt = null;
+
+  // ── KI-Sitzung state ───────────────────────────────────────────────────────
+  let sessionActive    = false;
+  let sessionHistory   = [];   // [{role, content}] for API
+  let sessionTranscript = [];  // speaker-labelled strings for Nach der Sitzung
 
   // ── Tab toggle ─────────────────────────────────────────────────────────────
 
@@ -514,6 +561,292 @@ document.body.classList.add('parch-mode');
     URL.revokeObjectURL(url);
   });
 
+  // ── Voice recording (KI-Personas pane) ───────────────────────────────────
+
+  (function() {
+    let mediaRecorder = null;
+    let audioChunks   = [];
+    let recordingTimer = null;
+    let secondsElapsed = 0;
+
+    const recordBtn  = document.getElementById('gesprache-record-btn');
+    const stopBtn    = document.getElementById('gesprache-stop-btn');
+    const timerEl    = document.getElementById('gesprache-timer');
+    const recStatus  = document.getElementById('gesprache-record-status');
+    const transcriptEl = document.getElementById('transcript-input');
+
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      recordBtn.style.display = 'none';
+      return;
+    }
+
+    recordBtn.addEventListener('click', async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunks = [];
+        secondsElapsed = 0;
+        timerEl.textContent = '00:00';
+
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+        mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+
+        mediaRecorder.onstop = async () => {
+          clearInterval(recordingTimer);
+          stream.getTracks().forEach(t => t.stop());
+          stopBtn.style.display = 'none';
+          recordBtn.disabled = false;
+          recordBtn.classList.remove('recording');
+          recordBtn.textContent = '● Aufnehmen';
+          recStatus.textContent = 'Transkribiere…';
+
+          const mimeUsed = mediaRecorder.mimeType || 'audio/webm';
+          const blob = new Blob(audioChunks, { type: mimeUsed });
+          const formData = new FormData();
+          formData.append('audio', blob, 'session.webm');
+
+          try {
+            const res  = await fetch('/api/transcribe', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.transcript) {
+              transcriptEl.value = data.transcript;
+              recStatus.textContent = 'Transkript bereit — prüfen und analysieren.';
+            } else {
+              recStatus.textContent = '⚠ Transkription fehlgeschlagen — manuell einfügen.';
+            }
+          } catch (err) {
+            recStatus.textContent = '⚠ Verbindungsfehler — manuell einfügen.';
+          }
+          // If a session is active and transcript loaded, open Nach der Sitzung is not the goal —
+          // the session panel has its own recording row (session-record-btn).
+        };
+
+        mediaRecorder.start(1000);
+        recordBtn.disabled = true;
+        recordBtn.classList.add('recording');
+        recordBtn.textContent = '● Aufnahme läuft';
+        stopBtn.style.display = 'inline-block';
+        recStatus.textContent = 'Aufnahme läuft…';
+
+        recordingTimer = setInterval(() => {
+          secondsElapsed++;
+          const mm = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
+          const ss = String(secondsElapsed % 60).padStart(2, '0');
+          timerEl.textContent = `${mm}:${ss}`;
+        }, 1000);
+
+      } catch (err) {
+        recStatus.textContent = 'Mikrofonzugriff verweigert.';
+      }
+    });
+
+    stopBtn.addEventListener('click', () => {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    });
+  })();
+
+  // ── KI-Sitzung ──────────────────────────────────────────────────────────────
+
+  const startSessionBtn = document.getElementById('start-session-btn');
+  const endSessionBtn   = document.getElementById('end-session-btn');
+  const sessionPanel    = document.getElementById('session-panel');
+  const chatLog         = document.getElementById('session-chat-log');
+  const sessionSendBtn  = document.getElementById('session-send-btn');
+  const sessionInputEl  = document.getElementById('session-input');
+  const footerStatus    = document.getElementById('session-footer-status');
+
+  function appendMessage(speaker, text, isLoading) {
+    const div = document.createElement('div');
+    div.className = 'chat-message ' + (speaker === 'Sie' ? 'chat-user' : 'chat-persona');
+    if (isLoading) div.dataset.loading = '1';
+    div.innerHTML = '<strong>' + speaker + ':</strong> ' + (text || '<em>…</em>');
+    chatLog.appendChild(div);
+    chatLog.scrollTop = chatLog.scrollHeight;
+    return div;
+  }
+
+  async function sendTurn(userText) {
+    const p = personas[selectedIdx];
+    if (!p) return;
+    const persona = p.slug;
+    const personaName = p.name;
+    const scene  = selectedSceneKey || '';
+    const model  = document.getElementById('gesprache-model').value;
+
+    if (userText) {
+      appendMessage('Sie', userText);
+      sessionHistory.push({ role: 'user', content: userText });
+      sessionTranscript.push('Sie: ' + userText);
+    }
+
+    const loadingEl = appendMessage(personaName, '', true);
+    sessionSendBtn.disabled = true;
+
+    try {
+      const res = await fetch('/api/gesprache/ai-turn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ history: sessionHistory, persona, scene, model, user_turn: userText }),
+      });
+      const data = await res.json();
+      const reply = (data.response || '').trim();
+
+      chatLog.removeChild(loadingEl);
+      if (reply) {
+        appendMessage(personaName, reply);
+        sessionHistory.push({ role: 'assistant', content: reply });
+        sessionTranscript.push(personaName + ': ' + reply);
+      } else {
+        appendMessage('System', data.error || 'Keine Antwort.');
+      }
+    } catch (err) {
+      chatLog.removeChild(loadingEl);
+      appendMessage('System', 'Verbindungsfehler — bitte erneut versuchen.');
+    } finally {
+      sessionSendBtn.disabled = false;
+    }
+  }
+
+  startSessionBtn.addEventListener('click', async () => {
+    const p = personas[selectedIdx];
+    if (!p || !selectedSceneKey) {
+      alert('Bitte zuerst Persona und Szene auswählen.');
+      return;
+    }
+    sessionActive = true;
+    sessionHistory = [];
+    sessionTranscript = [];
+    chatLog.innerHTML = '';
+    footerStatus.textContent = '';
+
+    document.getElementById('session-persona-label').textContent = p.name;
+    document.getElementById('session-model-label').textContent =
+      document.getElementById('gesprache-model').value;
+
+    sessionPanel.style.display = '';
+    startSessionBtn.style.display = 'none';
+    startSessionBtn.disabled = true;
+
+    await sendTurn('');
+  });
+
+  endSessionBtn.addEventListener('click', () => {
+    sessionActive = false;
+    sessionPanel.style.display = 'none';
+    startSessionBtn.style.display = '';
+    startSessionBtn.disabled = false;
+
+    const transcriptEl = document.getElementById('transcript-input');
+    transcriptEl.value = sessionTranscript.join('\n');
+
+    const transcriptDetails = document.getElementById('transcript-details');
+    if (transcriptDetails) transcriptDetails.setAttribute('open', '');
+    transcriptEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    footerStatus.textContent = '';
+    document.getElementById('analyse-status').textContent = 'Sitzung beendet ✓ — Transkript bereit.';
+  });
+
+  sessionSendBtn.addEventListener('click', async () => {
+    const text = sessionInputEl.value.trim();
+    if (!text || !sessionActive) return;
+    sessionInputEl.value = '';
+    await sendTurn(text);
+  });
+
+  sessionInputEl.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const text = sessionInputEl.value.trim();
+      if (text && sessionActive) {
+        sessionInputEl.value = '';
+        await sendTurn(text);
+      }
+    }
+  });
+
+  // ── Session voice recording ────────────────────────────────────────────────
+
+  (function () {
+    let mediaRecorder = null;
+    let audioChunks   = [];
+    let recordingTimer = null;
+    let secondsElapsed = 0;
+
+    const recordBtn = document.getElementById('session-record-btn');
+    const stopBtn   = document.getElementById('session-stop-btn');
+    const timerEl   = document.getElementById('session-timer');
+
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      recordBtn.style.display = 'none';
+      return;
+    }
+
+    recordBtn.addEventListener('click', async () => {
+      if (!sessionActive) return;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunks = [];
+        secondsElapsed = 0;
+        timerEl.textContent = '00:00';
+
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+        mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+
+        mediaRecorder.onstop = async () => {
+          clearInterval(recordingTimer);
+          stream.getTracks().forEach(t => t.stop());
+          stopBtn.style.display = 'none';
+          recordBtn.disabled = false;
+          recordBtn.classList.remove('recording');
+          recordBtn.textContent = '● Aufnehmen';
+
+          const mimeUsed = mediaRecorder.mimeType || 'audio/webm';
+          const blob = new Blob(audioChunks, { type: mimeUsed });
+          const formData = new FormData();
+          formData.append('audio', blob, 'session.webm');
+
+          sessionInputEl.placeholder = 'Transkribiere…';
+          try {
+            const res  = await fetch('/api/transcribe', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.transcript) {
+              sessionInputEl.value = data.transcript;
+              sessionInputEl.focus();
+            } else {
+              sessionInputEl.placeholder = '⚠ Transkription fehlgeschlagen — manuell eingeben.';
+            }
+          } catch (err) {
+            sessionInputEl.placeholder = '⚠ Verbindungsfehler — manuell eingeben.';
+          }
+          setTimeout(() => { sessionInputEl.placeholder = 'Schreiben oder aufnehmen…'; }, 4000);
+        };
+
+        mediaRecorder.start(1000);
+        recordBtn.disabled = true;
+        recordBtn.classList.add('recording');
+        recordBtn.textContent = '● Läuft';
+        stopBtn.style.display = 'inline-block';
+
+        recordingTimer = setInterval(() => {
+          secondsElapsed++;
+          const mm = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
+          const ss = String(secondsElapsed % 60).padStart(2, '0');
+          timerEl.textContent = `${mm}:${ss}`;
+        }, 1000);
+
+      } catch (err) {
+        recordBtn.textContent = '● Aufnehmen';
+        recordBtn.disabled = false;
+      }
+    });
+
+    stopBtn.addEventListener('click', () => {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    });
+  })();
+
   // ── Transcript analysis (KI-Personas pane) ────────────────────────────────
 
   document.getElementById('btn-analysieren').addEventListener('click', async () => {
@@ -524,19 +857,32 @@ document.body.classList.add('parch-mode');
     const p = personas[selectedIdx];
     const personaName = p ? p.name : '';
     const scene = selectedSceneKey ? selectedSceneKey.replace(/_/g, ' ') : '';
+    const model = document.getElementById('gesprache-model')?.value || 'grok';
 
     btn.disabled = true;
     btn.textContent = 'Analysiere…';
     status.textContent = '';
 
-    try {
-      const res = await fetch('/api/analyse-transcript', {
+    const doSubmit = async (attempt) => {
+      const res = await fetch('/api/review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript, persona_name: personaName, scene }),
+        body: JSON.stringify({ transcript, persona_name: personaName, scene, model }),
       });
       const data = await res.json();
-      if (!data.ok) throw new Error(data.error || 'Fehler');
+      if (!data.ok) {
+        if (attempt < 2 && res.status >= 500) {
+          status.textContent = `${model} fehlgeschlagen — versuche erneut…`;
+          await new Promise(r => setTimeout(r, 1500));
+          return doSubmit(attempt + 1);
+        }
+        throw new Error(data.error || 'Fehler');
+      }
+      return data;
+    };
+
+    try {
+      const data = await doSubmit(1);
 
       // Success: render feedback, collapse input to analysiert row, scroll panel
       renderFeedback(data.feedback);
