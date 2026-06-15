@@ -60,6 +60,10 @@ PAGES = [
 LINK_MAP = {
     "/":                        "/preview/",
     "/contact":                 "/contact",
+    # Curator nav paths — proxy prepends /app/curator so /briefing → /app/curator/briefing
+    "/app/curator/briefing":    "/preview/curator/briefing.html",
+    # /app/curator/scans-dives and /app/curator/archive already covered below
+    # /app/curator/curator_library.html, /research/leanings, /research/dashboard → stay blocked
     "/app/curator":             "/preview/curator/briefing.html",
     "/app/curator/scans-dives": "/preview/curator/scans_dives.html",
     "/app/curator/archive":     "/preview/curator/archive.html",
