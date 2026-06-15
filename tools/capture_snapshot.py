@@ -33,6 +33,7 @@ from playwright.sync_api import sync_playwright
 
 REPO_ROOT   = Path(__file__).parent.parent
 PREVIEW_DIR = REPO_ROOT / "minimoi_portal" / "static" / "preview"
+ASSETS_DIR  = PREVIEW_DIR / "assets"
 PORTAL_URL  = os.environ.get("PORTAL_URL", "http://localhost:5001")
 USERNAME    = "robert"
 
@@ -271,6 +272,44 @@ def _apply_career_aggregate(soup: BeautifulSoup) -> None:
             break  # Replace first substantial table only
 
 
+def _asset_local_name(url_path: str) -> str:
+    """Derive a collision-safe local filename from an asset URL path."""
+    clean = url_path.split("?")[0]
+    static_idx = clean.find("/static/")
+    relative = clean[static_idx + len("/static/"):] if static_idx >= 0 else clean.lstrip("/")
+    return relative.replace("/", "_")
+
+
+def _localize_assets(soup: BeautifulSoup, context, assets_dir: Path) -> None:
+    """Download /app/... CSS and images; rewrite paths to /preview/assets/..."""
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    downloaded: dict[str, str] = {}
+
+    targets = []
+    for tag in soup.find_all("link", rel=lambda r: r and "stylesheet" in r, href=True):
+        if tag["href"].startswith("/app/"):
+            targets.append((tag, "href", tag["href"]))
+    for tag in soup.find_all("img", src=True):
+        if tag["src"].startswith("/app/"):
+            targets.append((tag, "src", tag["src"]))
+
+    for tag, attr, url_path in targets:
+        if url_path in downloaded:
+            tag[attr] = downloaded[url_path]
+            continue
+        filename = _asset_local_name(url_path)
+        local_file = assets_dir / filename
+        try:
+            resp = context.request.get(f"{PORTAL_URL}{url_path}")
+            if resp.ok:
+                local_file.write_bytes(resp.body())
+                preview_path = f"/preview/assets/{filename}"
+                downloaded[url_path] = preview_path
+                tag[attr] = preview_path
+        except Exception as exc:
+            print(f"\n  [asset error] {url_path}: {exc}", flush=True)
+
+
 def process_page(html: str, page: dict, captured_at: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
 
@@ -346,7 +385,10 @@ def capture_all(password: str = "") -> dict:
                 page.wait_for_load_state("networkidle", timeout=15_000)
 
                 html = page.content()
-                processed = process_page(html, pg, captured_at)
+                # Download /app/... assets and rewrite to local /preview/assets/
+                _soup = BeautifulSoup(html, "html.parser")
+                _localize_assets(_soup, context, ASSETS_DIR)
+                processed = process_page(str(_soup), pg, captured_at)
                 out_file.write_text(processed, encoding="utf-8")
 
                 preview_path = f"/preview/{pg['out_path']}" if pg.get("out_path") else f"/preview/{pg['domain']}/{pg['name']}.html"
