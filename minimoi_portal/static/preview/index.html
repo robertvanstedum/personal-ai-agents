@@ -1,44 +1,169 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>mini-moi — Preview</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Source+Sans+3:wght@400;500&display=swap" rel="stylesheet">
-  <style>
-    body { font-family: 'Source Sans 3', system-ui, sans-serif; background: #1a1208; color: #F5F0E8; padding: 48px 32px; max-width: 600px; margin: 0 auto; }
-    h1 { font-family: 'Playfair Display', serif; font-weight: 400; font-size: 2rem; margin-bottom: 6px; }
-    .sub { color: rgba(245,240,232,0.5); font-size: 13px; margin-bottom: 32px; }
-    ul { list-style: none; padding: 0; }
-    li { margin-bottom: 10px; }
-    a { color: #C68A5E; text-decoration: none; font-size: 14px; }
-    a:hover { text-decoration: underline; }
-    .request { margin-top: 40px; padding: 16px 20px; border: 1px solid rgba(198,138,94,0.3); border-radius: 6px; }
-    .request p { color: rgba(245,240,232,0.65); font-size: 13px; margin: 0 0 10px; }
-  </style>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>mini-moi — Personal AI Platform</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&amp;family=Source+Sans+3:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="/static/portal.css" rel="stylesheet"/>
+
+<style id="preview-banner-style">
+.preview-banner {
+  position: sticky; top: 0; z-index: 9999;
+  background: #2A1F14; color: #F5F0E8;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 11px; letter-spacing: 0.04em;
+  padding: 7px 20px;
+  border-bottom: 1px solid rgba(198,138,94,0.3);
+  display: flex; align-items: center; gap: 8px;
+}
+.preview-banner .preview-date { color: rgba(245,240,232,0.7); }
+.preview-request-link {
+  color: #C68A5E; text-decoration: none; margin-left: auto;
+  border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
+}
+.preview-request-link:hover { background: rgba(198,138,94,0.1); }
+</style>
 </head>
-<body>
-  <h1>mini-moi</h1>
-  <p class="sub">Preview snapshot — June 2026 &nbsp;·&nbsp; Data is real but frozen</p>
-  <ul>
-<li><a href="/preview/curator/briefing.html">Curator — Daily Briefing</a></li>
-<li><a href="/preview/curator/scans_dives.html">Curator — Scans & Dives</a></li>
-<li><a href="/preview/curator/archive.html">Curator — Archive</a></li>
-<li><a href="/preview/german/lesen.html">Mein Deutsch — Lesen</a></li>
-<li><a href="/preview/german/gesprache.html">Mein Deutsch — Gespräche</a></li>
-<li><a href="/preview/german/worter.html">Mein Deutsch — Wörter</a></li>
-<li><a href="/preview/german/schreiben.html">Mein Deutsch — Schreiben</a></li>
-<li><a href="/preview/german/archiv.html">Mein Deutsch — Archiv</a></li>
-<li><a href="/preview/guild/briefing.html">Guild — Daily Briefing</a></li>
-<li><a href="/preview/guild/build_log.html">Guild — Build Log</a></li>
-<li><a href="/preview/guild/queue.html">Guild — Build Queue</a></li>
-<li><a href="/preview/guild/roadmap.html">Guild — Roadmap</a></li>
-<li><a href="/preview/guild/career.html">Guild — Career Focus</a></li>
-  </ul>
-  <div class="request">
-    <p>Want to explore the live platform?</p>
-    <a href="/contact">Request guest access →</a>
-  </div>
-</body>
-</html>
+<body class="landing"><div class="preview-banner">
+<span>Preview snapshot — </span>
+<span class="preview-date">Captured June 2026</span>
+<span>. Data is real but frozen.</span>
+<a class="preview-request-link" href="/contact">Request live access →</a>
+</div>
+<nav class="portal-nav">
+<span class="portal-nav-brand">mini-moi</span>
+<div class="portal-nav-links">
+<a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank">GitHub</a>
+<a href="https://www.linkedin.com/in/robert-van-stedum" target="_blank">LinkedIn</a>
+<a class="nav-btn" href="/contact">Request Access →</a>
+</div>
+</nav>
+<main class="landing-main">
+<section class="hero">
+<h1 class="hero-title">mini-moi</h1>
+<p class="hero-tagline"><em>Your context. Your goals. Your signal.</em></p>
+</section>
+<section class="about-section">
+<div class="about-grid">
+<div class="about-card">
+<h2>What this is</h2>
+<p>
+          LLMs have the world's knowledge. They don't have your intent, your goals,
+          your history, your risk tolerance.
+        </p>
+<p>
+          mini-moi builds toward specific intelligence in your context. It works with
+          cloud LLMs, stores memory locally, runs a local model, and acts together with you.
+        </p>
+<p>
+          Focused on specific domains first. Built to grow together over time.
+        </p>
+</div>
+<div class="about-card">
+<h2>What's running</h2>
+<ul class="feature-list">
+<li>
+<a href="/preview/curator/briefing.html" style="color: inherit; text-decoration: underline; text-decoration-color: rgba(198,138,94,0.5);"><strong>Curator v1.1</strong></a> — Geopolitics and finance briefing. ~700 candidates scored
+            daily by a reasoning model against your learned profile — counterpoints
+            by design, not an echo chamber. In daily use since February 2026.
+          </li>
+<li>
+<a href="/preview/german/lesen.html" style="color: inherit; text-decoration: underline; text-decoration-color: rgba(198,138,94,0.5);"><strong>Mein Deutsch v1.0</strong></a> — German language coaching pipeline. Create personas and
+            scenes, hold a real-time conversation, then review the transcript and
+            iterate. Vienna-tested. Lesen, Gespräche, Schreiben, Wörter. Anki cards
+            built from your own mistakes.
+          </li>
+<li>
+<a href="/preview/guild/briefing.html" style="color: inherit; text-decoration: underline; text-decoration-color: rgba(198,138,94,0.5);"><strong>Guild v0.9</strong></a> — Where the agents and I work together to get better at our
+            craft. From ideas through specs, build, and operations.
+            Guild is intentionally cross-domain (Curator, German, and beyond). A Chief
+            of Staff role coordinates the agents while keeping my real goals and
+            private concerns in view.
+          </li>
+</ul>
+<a class="text-link" href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank">
+          View source on GitHub →
+        </a>
+</div>
+<div class="about-card">
+<h2>About</h2>
+<p>
+          My focus is the intersection of business objectives and technical solutions —
+          roadmap, business case, delivery. I look for the signal through the noise.
+        </p>
+<p>
+          Fluent in Portuguese, comfortable in Spanish, functional in German.
+          Lived and worked across multiple countries and regions.
+        </p>
+<p>
+          mini-moi is built here first. Patterns developed in this personal system
+          move outward — not the other way around.
+        </p>
+<a class="text-link" href="https://www.linkedin.com/in/robert-van-stedum" target="_blank">
+          LinkedIn →
+        </a>
+</div>
+</div>
+</section>
+</main>
+<footer class="portal-footer">
+<span>mini-moi-agent-guild · v1.1</span>
+<span>·</span>
+<a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank">GitHub</a>
+<span>·</span>
+<a href="https://www.linkedin.com/in/robert-van-stedum" target="_blank">LinkedIn</a>
+</footer>
+
+<style id="preview-modal-style">
+.preview-modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
+}
+.preview-modal-overlay.active { display: flex; }
+.preview-modal {
+  background: #2a1f14; border: 1px solid rgba(198,138,94,0.4);
+  border-radius: 8px; padding: 28px 32px; max-width: 380px; width: 90%;
+  color: #F5F0E8; font-family: 'Source Sans 3', system-ui, sans-serif;
+}
+.preview-modal h3 {
+  font-size: 14px; font-weight: 600; margin: 0 0 12px;
+  color: #C68A5E; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.preview-modal p { font-size: 13px; color: rgba(245,240,232,0.75); line-height: 1.6; margin: 0 0 20px; }
+.preview-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.preview-modal-btn {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(198,138,94,0.5); background: transparent; color: #C68A5E;
+  text-decoration: none; display: inline-block;
+}
+.preview-modal-btn:hover { background: rgba(198,138,94,0.15); }
+.preview-modal-close {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(245,240,232,0.2); background: transparent;
+  color: rgba(245,240,232,0.6);
+}
+.preview-modal-close:hover { border-color: rgba(245,240,232,0.4); color: #F5F0E8; }
+</style>
+<div class="preview-modal-overlay" id="previewModal">
+<div class="preview-modal">
+<h3>Admin — not available in preview</h3>
+<p>This section is for authenticated users. Request guest access to explore the live platform.</p>
+<div class="preview-modal-actions">
+<a class="preview-modal-btn" href="/contact">Request access →</a>
+<button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>
+</div>
+</div>
+</div>
+<script id="preview-modal-script">
+(function() {
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('[data-admin-blocked]');
+    if (el) { e.preventDefault(); e.stopPropagation(); document.getElementById('previewModal').classList.add('active'); }
+  });
+  document.getElementById('previewModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+})();
+</script>
+</body></html>

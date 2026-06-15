@@ -1,6 +1,13 @@
 {
-  "captured_at": "2026-06-15T00:24:40+00:00",
+  "captured_at": "2026-06-15T13:56:14+00:00",
   "pages": [
+    {
+      "domain": null,
+      "name": "index",
+      "label": "mini-moi \u2014 Home",
+      "live_path": "/",
+      "preview_path": "/preview/index.html"
+    },
     {
       "domain": "curator",
       "name": "briefing",

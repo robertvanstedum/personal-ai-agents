@@ -39,6 +39,7 @@ USERNAME    = "robert"
 # ── Page manifest ──────────────────────────────────────────────────────────────
 
 PAGES = [
+    {"domain": None, "name": "index", "path": "/", "label": "mini-moi — Home", "out_path": "index.html", "is_index": True},
     {"domain": "curator", "name": "briefing",   "path": "/app/curator",              "label": "Curator — Daily Briefing"},
     {"domain": "curator", "name": "scans_dives", "path": "/app/curator/scans-dives", "label": "Curator — Scans & Dives"},
     {"domain": "curator", "name": "archive",    "path": "/app/curator/archive",       "label": "Curator — Archive"},
@@ -56,6 +57,8 @@ PAGES = [
 
 # Live path → preview URL mapping (for link rewriting)
 LINK_MAP = {
+    "/":                        "/preview/",
+    "/contact":                 "/contact",
     "/app/curator":             "/preview/curator/briefing.html",
     "/app/curator/scans-dives": "/preview/curator/scans_dives.html",
     "/app/curator/archive":     "/preview/curator/archive.html",
@@ -230,6 +233,23 @@ def _replace_dashboard_btn(soup: BeautifulSoup) -> None:
             a.string = "Request Access →"
 
 
+def _inject_whats_running_links(soup: BeautifulSoup) -> None:
+    """On the landing page, wrap domain names in What's running with preview links."""
+    domain_links = {
+        "Curator":     "/preview/curator/briefing.html",
+        "Mein Deutsch": "/preview/german/lesen.html",
+        "Guild":       "/preview/guild/briefing.html",
+    }
+    for strong in soup.find_all("strong"):
+        text = strong.get_text()
+        for keyword, href in domain_links.items():
+            if text.startswith(keyword):
+                a = soup.new_tag("a", href=href)
+                a["style"] = "color: inherit; text-decoration: underline; text-decoration-color: rgba(198,138,94,0.5);"
+                strong.wrap(a)
+                break
+
+
 def _apply_career_aggregate(soup: BeautifulSoup) -> None:
     """Option A: replace opportunity pipeline table with aggregate counts only."""
     # Find any table or section with opportunity rows
@@ -264,6 +284,9 @@ def process_page(html: str, page: dict, captured_at: str) -> str:
     _block_admin_links(soup)
     _rewrite_links(soup)
     _replace_dashboard_btn(soup)
+
+    if page.get("is_index"):
+        _inject_whats_running_links(soup)
 
     if page.get("career_aggregate"):
         _apply_career_aggregate(soup)
@@ -311,7 +334,10 @@ def capture_all(password: str = "") -> dict:
         # ── Capture each page ──────────────────────────────────────────────
         for pg in PAGES:
             url = f"{PORTAL_URL}{pg['path']}"
-            out_file = PREVIEW_DIR / pg["domain"] / f"{pg['name']}.html"
+            if pg.get("out_path"):
+                out_file = PREVIEW_DIR / pg["out_path"]
+            else:
+                out_file = PREVIEW_DIR / pg["domain"] / f"{pg['name']}.html"
             out_file.parent.mkdir(parents=True, exist_ok=True)
 
             print(f"  {pg['label']:<40}", end=" ", flush=True)
@@ -323,12 +349,13 @@ def capture_all(password: str = "") -> dict:
                 processed = process_page(html, pg, captured_at)
                 out_file.write_text(processed, encoding="utf-8")
 
+                preview_path = f"/preview/{pg['out_path']}" if pg.get("out_path") else f"/preview/{pg['domain']}/{pg['name']}.html"
                 manifest["pages"].append({
                     "domain": pg["domain"],
                     "name": pg["name"],
                     "label": pg["label"],
                     "live_path": pg["path"],
-                    "preview_path": f"/preview/{pg['domain']}/{pg['name']}.html",
+                    "preview_path": preview_path,
                 })
                 print("✓")
             except Exception as exc:
@@ -340,9 +367,6 @@ def capture_all(password: str = "") -> dict:
     # ── Write manifest ─────────────────────────────────────────────────────
     manifest_path = PREVIEW_DIR / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-
-    # ── Write index ────────────────────────────────────────────────────────
-    _write_index(manifest)
 
     return manifest
 
