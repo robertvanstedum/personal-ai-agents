@@ -138,7 +138,7 @@ MODAL_CSS_JS = """
 }
 .preview-modal h3 {
   font-size: 14px; font-weight: 600; margin: 0 0 12px;
-  color: #C68A5E; text-transform: uppercase; letter-spacing: 0.06em;
+  color: #C68A5E !important; text-transform: uppercase; letter-spacing: 0.06em;
 }
 .preview-modal p { font-size: 13px; color: rgba(245,240,232,0.75); line-height: 1.6; margin: 0 0 20px; }
 .preview-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
@@ -219,6 +219,8 @@ def _disable_writes(soup: BeautifulSoup) -> None:
             continue
         t = (el.get("type") or "").lower()
         if t in ("radio", "checkbox", "reset"):
+            continue
+        if el.get("data-section"):  # view-switcher tabs (archiv, etc.) — leave functional
             continue
         el["disabled"] = "disabled"
         el["data-preview-disabled"] = "true"
