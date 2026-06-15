@@ -44,7 +44,8 @@ PAGES = [
     {"domain": "curator", "name": "briefing",   "path": "/app/curator",              "label": "Curator — Daily Briefing"},
     {"domain": "curator", "name": "scans_dives", "path": "/app/curator/scans-dives", "label": "Curator — Scans & Dives"},
     {"domain": "curator", "name": "archive",    "path": "/app/curator/archive",       "label": "Curator — Archive"},
-    {"domain": "curator", "name": "leanings",  "path": "/app/curator/research/leanings", "label": "Curator — Leanings"},
+    {"domain": "curator", "name": "leanings",      "path": "/app/curator/research/leanings",      "label": "Curator — Leanings"},
+    {"domain": "curator", "name": "reading_room",  "path": "/app/curator/curator_library.html",   "label": "Curator — Reading Room"},
     {"domain": "german",  "name": "lesen",      "path": "/app/german",                "label": "Mein Deutsch — Lesen"},
     {"domain": "german",  "name": "gesprache",  "path": "/app/german/gesprache",      "label": "Mein Deutsch — Gespräche"},
     {"domain": "german",  "name": "worter",     "path": "/app/german/worter",         "label": "Mein Deutsch — Wörter"},
@@ -62,9 +63,10 @@ LINK_MAP = {
     "/":                        "/preview/",
     "/contact":                 "/contact",
     # Curator nav paths — proxy prepends /app/curator so /briefing → /app/curator/briefing
-    "/app/curator/briefing":            "/preview/curator/briefing.html",
-    "/app/curator/research/leanings":   "/preview/curator/leanings.html",
-    # /app/curator/curator_library.html, /research/dashboard → stay blocked
+    "/app/curator/briefing":                    "/preview/curator/briefing.html",
+    "/app/curator/research/leanings":           "/preview/curator/leanings.html",
+    "/app/curator/curator_library.html":        "/preview/curator/reading_room.html",
+    # /research/dashboard (Desk) → stay blocked
     "/app/curator":             "/preview/curator/briefing.html",
     "/app/curator/scans-dives": "/preview/curator/scans_dives.html",
     "/app/curator/archive":     "/preview/curator/archive.html",

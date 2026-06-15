@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-06-15T14:56:12+00:00",
+  "captured_at": "2026-06-15T14:57:09+00:00",
   "pages": [
     {
       "domain": null,
@@ -35,6 +35,13 @@
       "label": "Curator \u2014 Leanings",
       "live_path": "/app/curator/research/leanings",
       "preview_path": "/preview/curator/leanings.html"
+    },
+    {
+      "domain": "curator",
+      "name": "reading_room",
+      "label": "Curator \u2014 Reading Room",
+      "live_path": "/app/curator/curator_library.html",
+      "preview_path": "/preview/curator/reading_room.html"
     },
     {
       "domain": "german",
