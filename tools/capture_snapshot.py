@@ -156,7 +156,6 @@ MODAL_CSS_JS = """
 <div class="preview-modal-overlay" id="previewModal">
   <div class="preview-modal">
     <h3>Not available in preview</h3>
-    <p>Full history and interactive features require guest access. Request access to explore the live platform.</p>
     <div class="preview-modal-actions">
       <a href="/contact" class="preview-modal-btn">Request access →</a>
       <button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>
