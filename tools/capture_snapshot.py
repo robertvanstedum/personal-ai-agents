@@ -41,7 +41,8 @@ USERNAME    = "robert"
 
 PAGES = [
     {"domain": None, "name": "index", "path": "/", "label": "mini-moi — Home", "out_path": "index.html", "is_index": True},
-    {"domain": "curator", "name": "briefing",   "path": "/app/curator",              "label": "Curator — Daily Briefing"},
+    {"domain": "curator", "name": "briefing",   "path": "/app/curator",              "label": "Curator — Hub"},
+    {"domain": "curator", "name": "daily",      "path": "/app/curator/briefing",     "label": "Curator — Daily Briefing"},
     {"domain": "curator", "name": "scans_dives", "path": "/app/curator/scans-dives", "label": "Curator — Scans & Dives"},
     {"domain": "curator", "name": "archive",    "path": "/app/curator/archive",       "label": "Curator — Archive"},
     {"domain": "curator", "name": "leanings",      "path": "/app/curator/research/leanings",      "label": "Curator — Leanings"},
@@ -63,7 +64,7 @@ LINK_MAP = {
     "/":                        "/preview/",
     "/contact":                 "/contact",
     # Curator nav paths — proxy prepends /app/curator so /briefing → /app/curator/briefing
-    "/app/curator/briefing":                    "/preview/curator/briefing.html",
+    "/app/curator/briefing":                    "/preview/curator/daily.html",
     "/app/curator/research/leanings":           "/preview/curator/leanings.html",
     "/app/curator/curator_library.html":        "/preview/curator/reading_room.html",
     # /research/dashboard (Desk) → stay blocked

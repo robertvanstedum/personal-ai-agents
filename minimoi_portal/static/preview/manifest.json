@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-06-15T14:57:09+00:00",
+  "captured_at": "2026-06-15T14:58:45+00:00",
   "pages": [
     {
       "domain": null,
@@ -11,9 +11,16 @@
     {
       "domain": "curator",
       "name": "briefing",
-      "label": "Curator \u2014 Daily Briefing",
+      "label": "Curator \u2014 Hub",
       "live_path": "/app/curator",
       "preview_path": "/preview/curator/briefing.html"
+    },
+    {
+      "domain": "curator",
+      "name": "daily",
+      "label": "Curator \u2014 Daily Briefing",
+      "live_path": "/app/curator/briefing",
+      "preview_path": "/preview/curator/daily.html"
     },
     {
       "domain": "curator",
