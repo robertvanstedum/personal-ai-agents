@@ -131,6 +131,29 @@ def _require_owner(f):
 
 # ── Public routes ─────────────────────────────────────────────────────────────
 
+@app.route("/preview/")
+@app.route("/preview/<path:subpath>")
+def preview(subpath=""):
+    """Serve static preview snapshots — public, no auth required."""
+    from flask import send_file as _send_file
+    preview_dir = BASE_DIR / "static" / "preview"
+    target = preview_dir / (subpath or "index.html")
+    if target.is_file():
+        return _send_file(str(target))
+    # Try appending .html
+    if not subpath.endswith(".html"):
+        alt = preview_dir / f"{subpath}.html"
+        if alt.is_file():
+            return _send_file(str(alt))
+    return "Preview page not found — run tools/capture_snapshot.py to generate snapshots.", 404
+
+
+@app.route("/contact")
+def contact():
+    """Public contact / guest access request page."""
+    return render_template("contact.html", user=_current_user())
+
+
 @app.route("/")
 def landing():
     return render_template("landing.html", user=_current_user())

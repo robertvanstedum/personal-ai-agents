@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact — mini-moi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/portal.css">
+</head>
+<body class="landing">
+
+<nav class="portal-nav">
+  <a href="/" class="portal-nav-brand">mini-moi</a>
+  <div class="portal-nav-links">
+    <a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank">GitHub</a>
+    <a href="https://www.linkedin.com/in/robert-van-stedum" target="_blank">LinkedIn</a>
+    {% if user %}
+      <a href="/dashboard" class="nav-btn">Dashboard →</a>
+    {% else %}
+      <a href="/login" class="nav-btn">Sign in</a>
+    {% endif %}
+  </div>
+</nav>
+
+<main class="landing-main">
+  <section class="hero">
+    <h1 class="hero-title" style="font-size: 2rem;">Get in touch</h1>
+    <p class="hero-tagline" style="font-size: 1rem;">Guest access is available on request.</p>
+  </section>
+
+  <section class="about-section">
+    <div class="about-grid" style="max-width: 700px; margin: 0 auto;">
+      <div class="about-card">
+        <h2>Guest access</h2>
+        <p>
+          If you'd like to explore mini-moi beyond the preview snapshots —
+          see live Curator briefings, the German coaching interface, or the
+          Guild build pipeline — reach out and I'll set up guest access.
+        </p>
+        <p>
+          The fastest path is a LinkedIn message.
+        </p>
+        <a href="https://www.linkedin.com/in/robert-van-stedum" target="_blank" class="text-link">
+          LinkedIn →
+        </a>
+      </div>
+
+      <div class="about-card">
+        <h2>About the project</h2>
+        <p>
+          mini-moi is a personal AI platform — local-first, model-agnostic,
+          in daily use since February 2026. Built here first; patterns move
+          outward from this system, not the other way around.
+        </p>
+        <a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank" class="text-link">
+          View source on GitHub →
+        </a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="portal-footer">
+  <span>mini-moi · v1.1</span>
+  <span>·</span>
+  <a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank">GitHub</a>
+  <span>·</span>
+  <a href="https://www.linkedin.com/in/robert-van-stedum" target="_blank">LinkedIn</a>
+</footer>
+
+</body>
+</html>
