@@ -848,6 +848,8 @@ document.body.classList.add('parch-mode');
     recordBtn.addEventListener('click', async () => {
       if (!sessionActive) return;
       stopSpeaking(); // stop persona speaking before recording
+      // Brief pause so speaker audio clears before mic opens
+      await new Promise(r => setTimeout(r, 300));
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         audioChunks = [];
@@ -876,15 +878,21 @@ document.body.classList.add('parch-mode');
             const res  = await fetch('/api/transcribe', { method: 'POST', body: formData });
             const data = await res.json();
             if (data.transcript) {
-              sessionInputEl.value = data.transcript;
-              sessionInputEl.focus();
+              const text = data.transcript.trim();
+              sessionInputEl.value = text;
+              // Auto-send immediately during a session — no need to press Senden
+              if (sessionActive && text) {
+                sessionInputEl.value = '';
+                await sendTurn(text);
+              }
             } else {
               sessionInputEl.placeholder = '⚠ Transkription fehlgeschlagen — manuell eingeben.';
+              setTimeout(() => { sessionInputEl.placeholder = 'Schreiben oder aufnehmen…'; }, 4000);
             }
           } catch (err) {
             sessionInputEl.placeholder = '⚠ Verbindungsfehler — manuell eingeben.';
+            setTimeout(() => { sessionInputEl.placeholder = 'Schreiben oder aufnehmen…'; }, 4000);
           }
-          setTimeout(() => { sessionInputEl.placeholder = 'Schreiben oder aufnehmen…'; }, 4000);
         };
 
         mediaRecorder.start(1000);
