@@ -213,7 +213,7 @@
 <span class="section-name">Dives</span>
 <span class="section-count">13</span>
 </span>
-<button class="toggle-btn" id="dives-toggle" onclick="toggleSection('dives')">show all →</button>
+<button class="toggle-btn" data-admin-blocked="true" id="dives-toggle" style="cursor: pointer;">show all →</button>
 </div>
 <a class="row row-thread" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-badge">Thread</span>
@@ -340,7 +340,7 @@
 <span class="section-name">Scans</span>
 <span class="section-count">32</span>
 </span>
-<button class="toggle-btn" id="scans-toggle" onclick="toggleSection('scans')">show all →</button>
+<button class="toggle-btn" data-admin-blocked="true" id="scans-toggle" style="cursor: pointer;">show all →</button>
 </div>
 <a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-05-29</span>
@@ -576,7 +576,7 @@ function toggleSection(name) {
 <div class="preview-modal-overlay" id="previewModal">
 <div class="preview-modal">
 <h3>Admin — not available in preview</h3>
-<p>This section is for authenticated users. Request guest access to explore the live platform.</p>
+<p>Full history and interactive features require guest access. Request access to explore the live platform.</p>
 <div class="preview-modal-actions">
 <a class="preview-modal-btn" href="/contact">Request access →</a>
 <button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>

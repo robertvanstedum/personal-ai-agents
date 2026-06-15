@@ -565,7 +565,7 @@
 <span class="row-date">Tue, Feb 10</span>
 <span class="row-title muted">—</span>
 </div><div class="archive-row show-more-row" id="daily-show-more" style="justify-content:flex-end;">
-<a href="#" id="daily-expand-btn" onclick="dailyShowMore(event)" style="color:var(--accent);font-family:'DM Mono',monospace;font-size:0.7rem;text-decoration:none;">
+<a data-admin-blocked="true" id="daily-expand-btn" style="color:var(--accent);font-family:'DM Mono',monospace;font-size:0.7rem;text-decoration:none;; cursor: pointer;">
         show more daily ↓ <span id="daily-remaining">(+ 107 more)</span>
 </a>
 </div></div>
@@ -577,7 +577,7 @@
 <span class="section-kicker">Sources</span>
 <span class="section-count" id="cnt-sources">32</span>
 </span>
-<span class="show-all-link" id="toggle-sources" onclick="toggleSection('sources')">show all →</span>
+<span class="show-all-link" data-admin-blocked="true" id="toggle-sources" style="cursor: pointer;">show all →</span>
 </div>
 <div class="archive-rows" id="rows-sources"><div class="archive-row" data-search="How Can Lebanon’s Partners Help Strengthen the Lebanese Armed Forces? War on the Rocks 2026-06-10">
 <span class="row-date">Wed, Jun 10</span>
@@ -591,7 +591,7 @@
 <span class="row-date">Wed, Jun 3</span>
 <span class="row-title">Armenia's election offers a choice between Russia and EU</span>
 <span class="row-source">Deutsche Welle</span>
-</div><div class="archive-row show-more-row" onclick="toggleSection('sources')">+ 29 more sources</div></div>
+</div><div class="archive-row show-more-row" data-admin-blocked="true" style="cursor: pointer;">+ 29 more sources</div></div>
 </div>
 <!-- Scans -->
 <div class="archive-section">
@@ -600,7 +600,7 @@
 <span class="section-kicker">Scans</span>
 <span class="section-count" id="cnt-scans">32</span>
 </span>
-<span class="show-all-link" id="toggle-scans" onclick="toggleSection('scans')">show all →</span>
+<span class="show-all-link" data-admin-blocked="true" id="toggle-scans" style="cursor: pointer;">show all →</span>
 </div>
 <div class="archive-rows" id="rows-scans"><div class="archive-row" data-search="For the Quad, Flexibility Is Not Weakness Geopolitical Futures 2026-05-29">
 <span class="row-date">2026-05-29</span>
@@ -614,7 +614,7 @@
 <span class="row-date">2026-05-31</span>
 <span class="row-title">Polls open in Colombia’s pivotal presidential election</span>
 <span class="row-source">Al Jazeera</span>
-</div><div class="archive-row show-more-row" onclick="toggleSection('scans')">+ 29 more scans</div></div>
+</div><div class="archive-row show-more-row" data-admin-blocked="true" style="cursor: pointer;">+ 29 more scans</div></div>
 </div>
 <!-- Dives -->
 <div class="archive-section">
@@ -623,7 +623,7 @@
 <span class="section-kicker">Dives</span>
 <span class="section-count" id="cnt-dives">13</span>
 </span>
-<span class="show-all-link" id="toggle-dives" onclick="toggleSection('dives')">show all →</span>
+<span class="show-all-link" data-admin-blocked="true" id="toggle-dives" style="cursor: pointer;">show all →</span>
 </div>
 <div class="archive-rows" id="rows-dives"><div class="archive-row" data-search="Strait Of Hormuz Dive 007 dive">
 <span class="dive-badge">Thread</span>
@@ -637,7 +637,7 @@
 <span class="dive-badge">Thread</span>
 <span class="row-title">Strait Of Hormuz</span>
 <a class="row-action" data-admin-blocked="true" style="cursor: pointer;">View →</a>
-</div><div class="archive-row show-more-row" onclick="toggleSection('dives')">+ 10 more dives</div></div>
+</div><div class="archive-row show-more-row" data-admin-blocked="true" style="cursor: pointer;">+ 10 more dives</div></div>
 </div>
 <!-- Observations -->
 <div class="archive-section">
@@ -646,7 +646,7 @@
 <span class="section-kicker">Observations</span>
 <span class="section-count" id="cnt-obs">25</span>
 </span>
-<span class="show-all-link" id="toggle-obs" onclick="toggleSection('obs')">show all →</span>
+<span class="show-all-link" data-admin-blocked="true" id="toggle-obs" style="cursor: pointer;">show all →</span>
 </div>
 <div class="archive-rows" id="rows-obs"><div class="archive-row" data-search="2026-04-21 3 observations">
 <span class="row-date">Tue, Apr 21</span>
@@ -660,7 +660,7 @@
 <span class="row-date">Sun, Apr 19</span>
 <span class="row-title muted">2 observations</span>
 <a class="row-action" data-admin-blocked="true" style="cursor: pointer;">View →</a>
-</div><div class="archive-row show-more-row" onclick="toggleSection('obs')">+ 22 more obs</div></div>
+</div><div class="archive-row show-more-row" data-admin-blocked="true" style="cursor: pointer;">+ 22 more obs</div></div>
 </div>
 </div><!-- /#allSections -->
 </main>
@@ -906,7 +906,7 @@ document.getElementById('searchInput').addEventListener('input', e => runSearch(
 <div class="preview-modal-overlay" id="previewModal">
 <div class="preview-modal">
 <h3>Admin — not available in preview</h3>
-<p>This section is for authenticated users. Request guest access to explore the live platform.</p>
+<p>Full history and interactive features require guest access. Request access to explore the live platform.</p>
 <div class="preview-modal-actions">
 <a class="preview-modal-btn" href="/contact">Request access →</a>
 <button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>

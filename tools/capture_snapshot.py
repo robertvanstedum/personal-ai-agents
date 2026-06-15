@@ -137,7 +137,7 @@ MODAL_CSS_JS = """
 <div class="preview-modal-overlay" id="previewModal">
   <div class="preview-modal">
     <h3>Admin — not available in preview</h3>
-    <p>This section is for authenticated users. Request guest access to explore the live platform.</p>
+    <p>Full history and interactive features require guest access. Request access to explore the live platform.</p>
     <div class="preview-modal-actions">
       <a href="/contact" class="preview-modal-btn">Request access →</a>
       <button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>
@@ -238,6 +238,20 @@ def _replace_dashboard_btn(soup: BeautifulSoup) -> None:
             a.string = "Browse Preview →"
 
 
+EXPAND_ONCLICK_PATTERNS = ("toggleSection", "showMore", "ShowMore", "showAll", "expandAll", "dailyShowMore")
+
+def _block_expand_controls(soup: BeautifulSoup) -> None:
+    """Block JS-driven expand/show-all controls — replace with admin-blocked modal trigger."""
+    for el in soup.find_all(onclick=True):
+        onclick = el.get("onclick", "")
+        if any(p in onclick for p in EXPAND_ONCLICK_PATTERNS):
+            del el["onclick"]
+            el["data-admin-blocked"] = "true"
+            el["style"] = (el.get("style", "") + "; cursor: pointer;").lstrip("; ")
+            if el.get("href") in ("#", ""):
+                del el["href"]
+
+
 def _inject_whats_running_links(soup: BeautifulSoup) -> None:
     """On the landing page, wrap domain names in What's running with preview links."""
     domain_links = {
@@ -324,6 +338,7 @@ def process_page(html: str, page: dict, captured_at: str) -> str:
     _inject_banner(soup, captured_at)
     _inject_modal(soup)
     _disable_writes(soup)
+    _block_expand_controls(soup)
     _block_admin_links(soup)
     _rewrite_links(soup)
     _replace_dashboard_btn(soup)
