@@ -226,6 +226,18 @@
     .hist-reason { grid-column: 1/-1; font-size: 8px; padding-left: 4px; color: var(--text-dim); }
   </style>
 
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
 <style id="preview-banner-style">
 .preview-banner {
   position: sticky; top: 0; z-index: 9999;
@@ -273,7 +285,7 @@
 <h1 class="page-title">Build Log</h1>
 <span class="page-meta">19 specs</span>
 <div class="header-actions">
-<button class="new-spec-toggle" onclick="toggleNewSpec()">+ New spec</button>
+<button class="new-spec-toggle" data-preview-disabled="true" disabled="disabled" onclick="toggleNewSpec()">+ New spec</button>
 <a class="gh-link" href="https://github.com/robertvanstedum/personal-ai-agents/issues" rel="noopener" target="_blank">View GitHub Issues →</a>
 </div>
 </div>
@@ -282,15 +294,15 @@
 <div class="form-row">
 <div>
 <label>Title *</label>
-<input name="spec_title" placeholder="e.g. Guild Daily Briefing" required=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="e.g. Guild Daily Briefing" required=""/>
 </div>
 <div>
 <label>Spec file</label>
-<input name="spec_file" placeholder="spec_foo_2026-06-12.md"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_file" placeholder="spec_foo_2026-06-12.md"/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41"/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41"/>
 </div>
 <div>
 <label>Status</label>
@@ -307,11 +319,11 @@
 </div>
 <div style="margin-top:6px;">
 <label style="display:inline;margin-right:6px;">Summary</label>
-<input name="summary" placeholder="One-line description (optional)" style="width:calc(100% - 70px);display:inline;"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One-line description (optional)" style="width:calc(100% - 70px);display:inline;"/>
 </div>
 </form>
 </div>
-<form action="/guild/build" class="filters" method="GET">
+<form action="/guild/build" class="filters" data-preview-disabled="true" method="GET" onsubmit="return false;">
 <span class="filter-label">Status:</span>
 <a class="filter-btn active" href="/preview/guild/build_log.html">All</a>
 <a class="filter-btn" href="/preview/guild/build_log.html">In Build</a>
@@ -368,15 +380,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="minimoi.ai Preview Layer + Mein Deutsch Animation"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="minimoi.ai Preview Layer + Mein Deutsch Animation"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="Workstream 1: Playwright snapshot capture + /preview routing + banner + admin modal. WS2: Mein Deutsch animated walkthrough. WS3: Guest access audit + /contact."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Workstream 1: Playwright snapshot capture + /preview routing + banner + admin modal. WS2: Mein Deutsch animated walkthrough. WS3: Guest access audit + /contact."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -429,15 +441,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="minimoi.ai Preview Layer + Mein Deutsch Animation"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="minimoi.ai Preview Layer + Mein Deutsch Animation"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="Build spec for minimoi.ai preview layer and Mein Deutsch animation."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Build spec for minimoi.ai preview layer and Mein Deutsch animation."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -489,15 +501,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="minimoi.ai Always-On Landing Page"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="minimoi.ai Always-On Landing Page"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="Investigation complete: landing is fully static, no DB dependency. Recommendation: Cloudflare Pages static split. Implementation spec pending."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Investigation complete: landing is fully static, no DB dependency. Recommendation: Cloudflare Pages static split. Implementation spec pending."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -549,15 +561,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="Guild v0.9 (beta) GitHub Release"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild v0.9 (beta) GitHub Release"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="GitHub release guild-v0.9 created. Tag pushed. Release description published."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="GitHub release guild-v0.9 created. Tag pushed. Release description published."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -609,15 +621,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="Landing Copy Round 2: Guild v0.9 + Curator + Mein Deutsch"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Landing Copy Round 2: Guild v0.9 + Curator + Mein Deutsch"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="Round-2 landing copy: Guild v0.9 prefix + revised copy, Curator counterpoints line, Mein Deutsch workflow loop + Anki wording. Fixes Guild prefix duplication."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Round-2 landing copy: Guild v0.9 prefix + revised copy, Curator counterpoints line, Mein Deutsch workflow loop + Anki wording. Fixes Guild prefix duplication."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -669,15 +681,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="Guild Landing Copy: minimoi.ai &quot;What's Running&quot;"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild Landing Copy: minimoi.ai &quot;What's Running&quot;"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="Spec to update Guild landing copy on minimoi.ai What's Running section."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec to update Guild landing copy on minimoi.ai What's Running section."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -729,15 +741,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="Guild Daily Briefing (`/guild` Phase 1: the page)"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild Daily Briefing (`/guild` Phase 1: the page)"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="Spec for Guild Daily Briefing page replacing placeholders with four-section design."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for Guild Daily Briefing page replacing placeholders with four-section design."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -789,15 +801,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="Two Small Follow-ups: `/guild` Nav Contrast + Dashboard Subtitle"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Two Small Follow-ups: `/guild` Nav Contrast + Dashboard Subtitle"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="Spec for two small guild nav contrast and subtitle follow-ups."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for two small guild nav contrast and subtitle follow-ups."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -849,15 +861,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="Spec Detail View: Nav Fix + Download/Print"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Spec Detail View: Nav Fix + Download/Print"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="Spec for fixing nav and adding download/print to spec detail view."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for fixing nav and adding download/print to spec detail view."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -909,15 +921,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="Guild Type Scale (Revision): Variables, Not Per-Element Tweaks"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild Type Scale (Revision): Variables, Not Per-Element Tweaks"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="Revision to guild typography scale using CSS variables for consistent sizing. While fixing the H1/H2 split, also audited cross-domain heading fonts — German uses Georgia throughout, Curator splits Georgia/Playfair by page type, Guild uses Playfair. Decided not to unify: German’s Georgia is deliberate and shipped (Mein Deutsch, family-used), and the actual bug (H1/H2 clash within a page) is fixed. No action."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Revision to guild typography scale using CSS variables for consistent sizing. While fixing the H1/H2 split, also audited cross-domain heading fonts — German uses Georgia throughout, Curator splits Georgia/Playfair by page type, Guild uses Playfair. Decided not to unify: German’s Georgia is deliberate and shipped (Mein Deutsch, family-used), and the actual bug (H1/H2 clash within a page) is fixed. No action."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -969,15 +981,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="Surface Incomplete Reason + Document Link on Build Cards"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Surface Incomplete Reason + Document Link on Build Cards"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="Spec to display incomplete reason and spec link on build cards."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec to display incomplete reason and spec link on build cards."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -1029,15 +1041,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="Guild Typography: Section Header Tier + Oversized Stat"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild Typography: Section Header Tier + Oversized Stat"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="Spec for Guild typography hierarchy fixing section headers and stats."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for Guild typography hierarchy fixing section headers and stats."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -1089,15 +1101,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="Design/Dev Classifier Fix: Truncation + Structural Checks"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Design/Dev Classifier Fix: Truncation + Structural Checks"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="Fixes dev_agent.py truncation preventing detection of DoD and Commit sections."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Fixes dev_agent.py truncation preventing detection of DoD and Commit sections."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -1149,15 +1161,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="Housekeeping: Repo Sync Audit + Roadmap File Location"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Housekeeping: Repo Sync Audit + Roadmap File Location"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="Spec for repo sync audit and roadmap file location housekeeping tasks."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for repo sync audit and roadmap file location housekeeping tasks."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -1209,15 +1221,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="Guild Navigation Restructure"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild Navigation Restructure"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="Spec for restructuring Guild navigation to fix stacked nav rows and combined page renders."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for restructuring Guild navigation to fix stacked nav rows and combined page renders."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -1269,15 +1281,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="Career Two-Page Redesign"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Career Two-Page Redesign"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="Two-page Career redesign — collapsed cards, separate Positions table. Superseded by working single-board Kanban."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Two-page Career redesign — collapsed cards, separate Positions table. Superseded by working single-board Kanban."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -1329,15 +1341,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="Morning Build: CoS Soul + Career Entry + Gap-Check"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Morning Build: CoS Soul + Career Entry + Gap-Check"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="CoS soul injection, manual career entry form, handoff gap-check script"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="CoS soul injection, manual career entry form, handoff gap-check script"/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -1389,15 +1401,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="CoS Build Discipline"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="CoS Build Discipline"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="CoS build discipline — schema, Design/Dev completeness check, Build Clarity portal pages (Log + Queue), Loop F staleness check."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="CoS build discipline — schema, Design/Dev completeness check, Build Clarity portal pages (Log + Queue), Loop F staleness check."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
@@ -1449,15 +1461,15 @@
 <div class="edit-inner">
 <div>
 <label>Title</label>
-<input name="spec_title" placeholder="Title" value="Lesen Writing Drill"/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Lesen Writing Drill"/>
 </div>
 <div>
 <label>Summary</label>
-<input name="summary" placeholder="One line" value="German Lesen writing drill — contextual correction and retype. GitHub issue #41. Build post-Jun 13."/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="German Lesen writing drill — contextual correction and retype. GitHub issue #41. Build post-Jun 13."/>
 </div>
 <div>
 <label>GitHub issue</label>
-<input name="github_issue" placeholder="#41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
 </div>
 <div style="padding-bottom:1px;">
 <button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>

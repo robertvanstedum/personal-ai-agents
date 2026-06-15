@@ -629,6 +629,18 @@
   .queue-read:hover { text-decoration: underline; }
 </style>
 <style>body{padding-top:38px!important;}nav.curator-subnav{top:38px!important;}</style>
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
 <style id="preview-banner-style">
 .preview-banner {
   position: sticky; top: 0; z-index: 9999;
@@ -677,16 +689,16 @@
 <div class="modal-article-title" id="modal-article-title"></div>
 <div class="modal-field">
 <label class="modal-label" for="dive-interest">Why are you interested?</label>
-<textarea class="modal-textarea" id="dive-interest" placeholder="e.g. I want to understand the fiscal implications and how this connects to recent Fed policy…" rows="3"></textarea>
+<textarea class="modal-textarea" data-preview-disabled="true" disabled="disabled" id="dive-interest" placeholder="e.g. I want to understand the fiscal implications and how this connects to recent Fed policy…" rows="3"></textarea>
 </div>
 <div class="modal-field">
 <label class="modal-label" for="dive-focus">Focus areas <span style="color:var(--text-dim);font-style:italic;text-transform:none;letter-spacing:0">(optional)</span></label>
-<input class="modal-input" id="dive-focus" placeholder="e.g. monetary policy, geopolitical risk, market impact" type="text"/>
+<input class="modal-input" data-preview-disabled="true" disabled="disabled" id="dive-focus" placeholder="e.g. monetary policy, geopolitical risk, market impact" type="text"/>
 </div>
 <div class="modal-status" id="modal-status"></div>
 <div class="modal-actions">
-<button class="modal-btn cancel" onclick="closeDiveModal()">Cancel</button>
-<button class="modal-btn execute" id="dive-execute-btn" onclick="executeDive()">Execute Deep Dive</button>
+<button class="modal-btn cancel" data-preview-disabled="true" disabled="disabled" onclick="closeDiveModal()">Cancel</button>
+<button class="modal-btn execute" data-preview-disabled="true" disabled="disabled" id="dive-execute-btn" onclick="executeDive()">Execute Deep Dive</button>
 </div>
 </div>
 </div>
@@ -705,12 +717,12 @@
 <div class="controls">
 <div class="search-wrap">
 <span class="search-icon">⌕</span>
-<input id="search-input" placeholder="Search titles, sources, notes…" type="search"/>
+<input data-preview-disabled="true" disabled="disabled" id="search-input" placeholder="Search titles, sources, notes…" type="search"/>
 </div>
 <div class="filter-group" id="type-filters">
-<button class="filter-btn active-all" data-type="all">All</button>
-<button class="filter-btn" data-type="liked">Liked</button>
-<button class="filter-btn" data-type="saved">Saved</button>
+<button class="filter-btn active-all" data-preview-disabled="true" data-type="all" disabled="disabled">All</button>
+<button class="filter-btn" data-preview-disabled="true" data-type="liked" disabled="disabled">Liked</button>
+<button class="filter-btn" data-preview-disabled="true" data-type="saved" disabled="disabled">Saved</button>
 </div>
 <select class="select-filter" data-preview-disabled="true" disabled="disabled" id="category-filter">
 <option value="all">All categories</option>
@@ -735,9 +747,9 @@
 <div class="queue-source" id="qSource">War on the Rocks · Jun 10, 2026</div>
 </div>
 <div class="queue-controls">
-<button class="queue-btn" disabled="" id="qPrev" onclick="qMove(-1)">← prev</button>
+<button class="queue-btn" data-preview-disabled="true" disabled="disabled" id="qPrev" onclick="qMove(-1)">← prev</button>
 <a class="queue-read" href="https://warontherocks.com/how-can-lebanons-partners-help-strengthen-the-lebanese-armed-forces/" id="qRead" rel="noopener" target="_blank">Read →</a>
-<button class="queue-btn" id="qNext" onclick="qMove(1)">next →</button>
+<button class="queue-btn" data-preview-disabled="true" disabled="disabled" id="qNext" onclick="qMove(1)">next →</button>
 </div>
 </div>
 <div class="table-wrap">
@@ -768,7 +780,7 @@
 <td><span class="type-badge type-saved">Saved</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://warontherocks.com/how-can-lebanons-partners-help-strengthen-the-lebanese-armed-forces/" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="33f04">Start dive →</button>
+<button class="arch-link" data-hash-id="33f04" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://www.aljazeera.com/news/2026/6/7/how-have-countries-around-the-world-responded-to-the-us-israel-war-on-iran?traffic_source=rss','_blank')" style="animation-delay:20ms">
 <td><span class="date-val">Jun 7, 2026</span></td>
@@ -784,7 +796,7 @@
 <td><span class="type-badge type-liked">Liked</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://www.aljazeera.com/news/2026/6/7/how-have-countries-around-the-world-responded-to-the-us-israel-war-on-iran?traffic_source=rss" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="895dd">Start dive →</button>
+<button class="arch-link" data-hash-id="895dd" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://www.justsecurity.org/141315/what-trump-ai-eo-got-right/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=what-trump-ai-eo-got-right','_blank')" style="animation-delay:40ms">
 <td><span class="date-val">Jun 6, 2026</span></td>
@@ -800,7 +812,7 @@
 <td><span class="type-badge type-liked">Liked</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://www.justsecurity.org/141315/what-trump-ai-eo-got-right/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=what-trump-ai-eo-got-right" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="2acdc">Start dive →</button>
+<button class="arch-link" data-hash-id="2acdc" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://warontherocks.com/cogs-of-war/chinas-ai-governance-offensive-threatens-u-s-tech-leadership/','_blank')" style="animation-delay:60ms">
 <td><span class="date-val">Jun 3, 2026</span></td>
@@ -816,7 +828,7 @@
 <td><span class="type-badge type-saved">Saved</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://warontherocks.com/cogs-of-war/chinas-ai-governance-offensive-threatens-u-s-tech-leadership/" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="f56f9">Start dive →</button>
+<button class="arch-link" data-hash-id="f56f9" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://libertystreeteconomics.newyorkfed.org/2026/05/ais-macroeconomic-challenges-and-promises/','_blank')" style="animation-delay:80ms">
 <td><span class="date-val">Jun 3, 2026</span></td>
@@ -832,7 +844,7 @@
 <td><span class="type-badge type-saved">Saved</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://libertystreeteconomics.newyorkfed.org/2026/05/ais-macroeconomic-challenges-and-promises/" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="fc6fa">Start dive →</button>
+<button class="arch-link" data-hash-id="fc6fa" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://www.foreignaffairs.com/china/chinas-ai-heist','_blank')" style="animation-delay:100ms">
 <td><span class="date-val">Jun 3, 2026</span></td>
@@ -848,7 +860,7 @@
 <td><span class="type-badge type-saved">Saved</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://www.foreignaffairs.com/china/chinas-ai-heist" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="f4a1e">Start dive →</button>
+<button class="arch-link" data-hash-id="f4a1e" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://www.aljazeera.com/news/2026/6/3/does-israel-have-nukes-most-of-world-assesses-they-do-says-rubio?traffic_source=rss','_blank')" style="animation-delay:120ms">
 <td><span class="date-val">Jun 3, 2026</span></td>
@@ -864,7 +876,7 @@
 <td><span class="type-badge type-saved">Saved</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://www.aljazeera.com/news/2026/6/3/does-israel-have-nukes-most-of-world-assesses-they-do-says-rubio?traffic_source=rss" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="3e1eb">Start dive →</button>
+<button class="arch-link" data-hash-id="3e1eb" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://geopoliticalfutures.com/the-shifting-balance-in-the-taiwan-strait/','_blank')" style="animation-delay:140ms">
 <td><span class="date-val">Jun 3, 2026</span></td>
@@ -880,7 +892,7 @@
 <td><span class="type-badge type-liked">Liked</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://geopoliticalfutures.com/the-shifting-balance-in-the-taiwan-strait/" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="d0c36">Start dive →</button>
+<button class="arch-link" data-hash-id="d0c36" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://www.stlouisfed.org/on-the-economy/2026/may/how-trade-policy-is-changing-broad-rules-targeted-restrictions','_blank')" style="animation-delay:160ms">
 <td><span class="date-val">Jun 3, 2026</span></td>
@@ -896,7 +908,7 @@
 <td><span class="type-badge type-liked">Liked</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://www.stlouisfed.org/on-the-economy/2026/may/how-trade-policy-is-changing-broad-rules-targeted-restrictions" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="8b65a">Start dive →</button>
+<button class="arch-link" data-hash-id="8b65a" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://x.com/Globalflows/status/2018173643566764503','_blank')" style="animation-delay:180ms">
 <td><span class="date-val">Jun 3, 2026</span></td>
@@ -914,7 +926,7 @@ This is setting the stage f</div>
 <td><span class="type-badge type-saved">Saved</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://x.com/Globalflows/status/2018173643566764503" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="a8289">Start dive →</button>
+<button class="arch-link" data-hash-id="a8289" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://www.dw.com/en/armenia-s-election-offers-a-choice-between-russia-and-eu/a-77400608?maca=en-rss-en-all-1573-xml-mrss','_blank')" style="animation-delay:200ms">
 <td><span class="date-val">Jun 3, 2026</span></td>
@@ -930,7 +942,7 @@ This is setting the stage f</div>
 <td><span class="type-badge type-saved">Saved</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://www.dw.com/en/armenia-s-election-offers-a-choice-between-russia-and-eu/a-77400608?maca=en-rss-en-all-1573-xml-mrss" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="55183">Start dive →</button>
+<button class="arch-link" data-hash-id="55183" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://warontherocks.com/cogs-of-war/how-america-lost-its-most-important-defense-tech-habit/','_blank')" style="animation-delay:220ms">
 <td><span class="date-val">May 31, 2026</span></td>
@@ -946,7 +958,7 @@ This is setting the stage f</div>
 <td><span class="type-badge type-saved">Saved</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://warontherocks.com/cogs-of-war/how-america-lost-its-most-important-defense-tech-habit/" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="804f0">Start dive →</button>
+<button class="arch-link" data-hash-id="804f0" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://www.aljazeera.com/video/newsfeed/2026/5/31/polls-open-in-colombias-pivotal-presidential-election?traffic_source=rss','_blank')" style="animation-delay:240ms">
 <td><span class="date-val">May 31, 2026</span></td>
@@ -962,7 +974,7 @@ This is setting the stage f</div>
 <td><span class="type-badge type-saved">Saved</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://www.aljazeera.com/video/newsfeed/2026/5/31/polls-open-in-colombias-pivotal-presidential-election?traffic_source=rss" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="f86f0">Start dive →</button>
+<button class="arch-link" data-hash-id="f86f0" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://www.dw.com/en/what-hungary-must-do-to-receive-eu-funds-frozen-under-orban/a-77354206?maca=en-rss-en-all-1573-xml-mrss','_blank')" style="animation-delay:260ms">
 <td><span class="date-val">May 31, 2026</span></td>
@@ -978,7 +990,7 @@ This is setting the stage f</div>
 <td><span class="type-badge type-saved">Saved</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://www.dw.com/en/what-hungary-must-do-to-receive-eu-funds-frozen-under-orban/a-77354206?maca=en-rss-en-all-1573-xml-mrss" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="19ff8">Start dive →</button>
+<button class="arch-link" data-hash-id="19ff8" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://geopoliticalfutures.com/for-the-quad-flexibility-is-not-weakness/','_blank')" style="animation-delay:280ms">
 <td><span class="date-val">May 29, 2026</span></td>
@@ -994,7 +1006,7 @@ This is setting the stage f</div>
 <td><span class="type-badge type-liked">Liked</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://geopoliticalfutures.com/for-the-quad-flexibility-is-not-weakness/" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="fef95">Start dive →</button>
+<button class="arch-link" data-hash-id="fef95" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://www.stlouisfed.org/on-the-economy/2026/may/1776-economics-government','_blank')" style="animation-delay:300ms">
 <td><span class="date-val">May 28, 2026</span></td>
@@ -1010,7 +1022,7 @@ This is setting the stage f</div>
 <td><span class="type-badge type-saved">Saved</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://www.stlouisfed.org/on-the-economy/2026/may/1776-economics-government" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="55618">Start dive →</button>
+<button class="arch-link" data-hash-id="55618" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://news.antiwar.com/2026/04/30/irans-khamenei-says-future-of-persian-gulf-will-be-free-of-us-presence/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=irans-khamenei-says-future-of-persian-gulf-will-be-free-of-us-presence','_blank')" style="animation-delay:300ms">
 <td><span class="date-val">May 2, 2026</span></td>
@@ -1026,7 +1038,7 @@ This is setting the stage f</div>
 <td><span class="type-badge type-saved">Saved</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://news.antiwar.com/2026/04/30/irans-khamenei-says-future-of-persian-gulf-will-be-free-of-us-presence/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=irans-khamenei-says-future-of-persian-gulf-will-be-free-of-us-presence" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="67278">Start dive →</button>
+<button class="arch-link" data-hash-id="67278" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://cepr.org/voxeu/columns/macroeconomic-consequences-undermining-central-bank-independence-evidence-governor','_blank')" style="animation-delay:300ms">
 <td><span class="date-val">May 2, 2026</span></td>
@@ -1042,7 +1054,7 @@ This is setting the stage f</div>
 <td><span class="type-badge type-saved">Saved</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://cepr.org/voxeu/columns/macroeconomic-consequences-undermining-central-bank-independence-evidence-governor" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="738f4">Start dive →</button>
+<button class="arch-link" data-hash-id="738f4" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://www.aljazeera.com/news/2026/5/2/spirit-airlines-begins-wind-down-cancels-all-flights-over-fuel-crisis?traffic_source=rss','_blank')" style="animation-delay:300ms">
 <td><span class="date-val">May 2, 2026</span></td>
@@ -1058,7 +1070,7 @@ This is setting the stage f</div>
 <td><span class="type-badge type-saved">Saved</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://www.aljazeera.com/news/2026/5/2/spirit-airlines-begins-wind-down-cancels-all-flights-over-fuel-crisis?traffic_source=rss" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="f4d71">Start dive →</button>
+<button class="arch-link" data-hash-id="f4d71" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://www.foreignaffairs.com/united-states/trump-xi-and-specter-1914','_blank')" style="animation-delay:300ms">
 <td><span class="date-val">Mar 29, 2026</span></td>
@@ -1074,7 +1086,7 @@ This is setting the stage f</div>
 <td><span class="type-badge type-liked">Liked</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://www.foreignaffairs.com/united-states/trump-xi-and-specter-1914" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="92835">Start dive →</button>
+<button class="arch-link" data-hash-id="92835" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://x.com/BlackScholesMan/status/2003929891696177531','_blank')" style="animation-delay:300ms">
 <td><span class="date-val">Mar 29, 2026</span></td>
@@ -1092,7 +1104,7 @@ Not since adoption of aircraft has the mi</div>
 <td><span class="type-badge type-liked">Liked</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://x.com/BlackScholesMan/status/2003929891696177531" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="caf42">Start dive →</button>
+<button class="arch-link" data-hash-id="caf42" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr><tr onclick="window.open('https://warontherocks.com/2026/03/hellscape-taiwan-a-porcupine-defense-in-the-drone-age/','_blank')" style="animation-delay:300ms">
 <td><span class="date-val">Mar 28, 2026</span></td>
@@ -1108,7 +1120,7 @@ Not since adoption of aircraft has the mi</div>
 <td><span class="type-badge type-saved">Saved</span></td>
 <td class="actions-cell" onclick="event.stopPropagation()">
 <a class="arch-link" href="https://warontherocks.com/2026/03/hellscape-taiwan-a-porcupine-defense-in-the-drone-age/" rel="noopener" target="_blank">Read →</a>
-<button class="arch-link" data-hash-id="43c03">Start dive →</button>
+<button class="arch-link" data-hash-id="43c03" data-preview-disabled="true" disabled="disabled">Start dive →</button>
 </td>
 </tr></tbody>
 </table>

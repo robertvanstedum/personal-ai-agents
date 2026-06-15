@@ -9,6 +9,18 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
 <link href="/preview/assets/german.css" rel="stylesheet"/>
 
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
 <style id="preview-banner-style">
 .preview-banner {
   position: sticky; top: 0; z-index: 9999;
@@ -70,9 +82,9 @@
 <p class="tab-description">Schreib auf Deutsch — mit Korrektur und Verlauf.</p>
 </div>
 <div class="mode-toggle">
-<button class="mode-btn active" data-mode="tagebuch" title="Journal writing mode">Tagebuch</button>
-<button class="mode-btn" data-mode="kontext" title="Practice writing in context">Im Kontext</button>
-<button class="mode-btn" data-mode="woerter" title="Vocabulary practice mode">Wörter üben</button>
+<button class="mode-btn active" data-mode="tagebuch" data-preview-disabled="true" disabled="disabled" title="Journal writing mode">Tagebuch</button>
+<button class="mode-btn" data-mode="kontext" data-preview-disabled="true" disabled="disabled" title="Practice writing in context">Im Kontext</button>
+<button class="mode-btn" data-mode="woerter" data-preview-disabled="true" disabled="disabled" title="Vocabulary practice mode">Wörter üben</button>
 </div>
 <!-- ── Im Kontext ─────────────────────────────────────────────────────────── -->
 <div class="mode-pane hidden" id="pane-kontext">
@@ -81,12 +93,12 @@
 <span id="kontext-title"></span>
 <p id="kontext-summary"></p>
 </div>
-<textarea class="notebook-textarea" id="kontext-input" placeholder="Schreib hier auf Deutsch — über den Artikel oder ein eigenes Thema…" rows="6"></textarea>
+<textarea class="notebook-textarea" data-preview-disabled="true" disabled="disabled" id="kontext-input" placeholder="Schreib hier auf Deutsch — über den Artikel oder ein eigenes Thema…" rows="6"></textarea>
 <div class="pane-actions">
 <div class="pane-actions-left">
-<button class="btn-voice" id="voice-kontext" title="Spracheingabe">🎤</button>
+<button class="btn-voice" data-preview-disabled="true" disabled="disabled" id="voice-kontext" title="Spracheingabe">🎤</button>
 </div>
-<button class="btn-primary" id="kontext-submit" title="Request AI grammar correction">Korrigieren</button>
+<button class="btn-primary" data-preview-disabled="true" disabled="disabled" id="kontext-submit" title="Request AI grammar correction">Korrigieren</button>
 </div>
 <span class="write-status" id="kontext-status"></span>
 <div class="correction-display" id="kontext-correction" style="display:none">
@@ -100,7 +112,7 @@
 </div>
 <ul class="correction-notes" id="kontext-notes"></ul>
 <div class="correction-actions">
-<button class="btn-primary" id="kontext-save" title="Save corrected entry">Speichern</button>
+<button class="btn-primary" data-preview-disabled="true" disabled="disabled" id="kontext-save" title="Save corrected entry">Speichern</button>
 </div>
 </div>
 </div>
@@ -114,29 +126,29 @@
         Wörter-Bibliothek</a>.</p>
 </div>
 <div class="woerter-form">
-<input id="woerter-german" placeholder="Deutsches Wort / Phrase" type="text"/>
-<input id="woerter-english" placeholder="Englische Bedeutung" type="text"/>
-<input id="woerter-context" placeholder="Beispielsatz (optional)" type="text"/>
-<button class="btn-primary" id="woerter-save" title="Add word to vocabulary library">Zur Bibliothek</button>
+<input data-preview-disabled="true" disabled="disabled" id="woerter-german" placeholder="Deutsches Wort / Phrase" type="text"/>
+<input data-preview-disabled="true" disabled="disabled" id="woerter-english" placeholder="Englische Bedeutung" type="text"/>
+<input data-preview-disabled="true" disabled="disabled" id="woerter-context" placeholder="Beispielsatz (optional)" type="text"/>
+<button class="btn-primary" data-preview-disabled="true" disabled="disabled" id="woerter-save" title="Add word to vocabulary library">Zur Bibliothek</button>
 <span class="write-status" id="woerter-status"></span>
 </div>
 </div>
 <!-- ── Tagebuch ──────────────────────────────────────────────────────────── -->
 <div class="mode-pane" id="pane-tagebuch">
 <div class="tagebuch-prompt-row">
-<p class="tagebuch-prompt" id="tagebuch-prompt">Was hast du heute in Wien gesehen?</p>
-<button class="btn-ghost" id="tagebuch-next-prompt" title="Another writing prompt">↻ Anderer</button>
+<p class="tagebuch-prompt" id="tagebuch-prompt">Beschreib deinen Morgen auf Deutsch.</p>
+<button class="btn-ghost" data-preview-disabled="true" disabled="disabled" id="tagebuch-next-prompt" title="Another writing prompt">↻ Anderer</button>
 </div>
-<textarea class="notebook-textarea" id="tagebuch-input" placeholder="Schreib hier…" rows="6"></textarea>
+<textarea class="notebook-textarea" data-preview-disabled="true" disabled="disabled" id="tagebuch-input" placeholder="Schreib hier…" rows="6"></textarea>
 <div class="pane-actions">
 <div class="pane-actions-left">
-<button class="btn-voice" id="voice-tagebuch" title="Spracheingabe">🎤</button>
+<button class="btn-voice" data-preview-disabled="true" disabled="disabled" id="voice-tagebuch" title="Spracheingabe">🎤</button>
 <label class="toggle-label">
 <input checked="" id="tagebuch-correct" type="checkbox"/>
         Korrektur anfragen
       </label>
 </div>
-<button class="btn-primary" id="tagebuch-korrigieren" title="Request AI grammar correction">Korrigieren</button>
+<button class="btn-primary" data-preview-disabled="true" disabled="disabled" id="tagebuch-korrigieren" title="Request AI grammar correction">Korrigieren</button>
 </div>
 <span class="write-status" id="tagebuch-status"></span>
 <div class="correction-display" id="tagebuch-correction" style="display:none">
@@ -146,7 +158,7 @@
 </div>
 <ul class="correction-notes" id="tagebuch-notes"></ul>
 <div class="correction-actions">
-<button class="btn-primary" id="tagebuch-submit" title="Save journal entry">Speichern</button>
+<button class="btn-primary" data-preview-disabled="true" disabled="disabled" id="tagebuch-submit" title="Save journal entry">Speichern</button>
 </div>
 </div>
 </div>

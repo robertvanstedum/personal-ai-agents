@@ -87,6 +87,21 @@ LINK_MAP = {
 
 # ── Inline assets ──────────────────────────────────────────────────────────────
 
+FETCH_INTERCEPT_JS = """
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
+"""
+
 BANNER_CSS = """
 <style id="preview-banner-style">
 .preview-banner {
@@ -169,7 +184,7 @@ def _inject_banner(soup: BeautifulSoup, captured_at: str) -> None:
 
     head = soup.find("head")
     if head:
-        head.append(BeautifulSoup(BANNER_CSS, "html.parser"))
+        head.append(BeautifulSoup(FETCH_INTERCEPT_JS + BANNER_CSS, "html.parser"))
 
     banner_html = f"""<div class="preview-banner">
       <span>Preview snapshot — </span>
@@ -191,19 +206,30 @@ def _inject_modal(soup: BeautifulSoup) -> None:
 
 
 def _disable_writes(soup: BeautifulSoup) -> None:
-    """Disable all form submissions and write-action buttons."""
-    for form in soup.find_all("form", method=lambda m: m and m.upper() == "POST"):
+    """Disable all form submissions and write-action buttons/inputs."""
+    modal = soup.find(id="previewModal")
+
+    for form in soup.find_all("form"):
         form["data-preview-disabled"] = "true"
         form["onsubmit"] = "return false;"
 
-    for btn in soup.find_all(["button", "input"], type=lambda t: t and t.lower() in ("submit", "button")):
-        btn["disabled"] = "disabled"
-        btn["data-preview-disabled"] = "true"
+    for el in soup.find_all(["button", "select", "textarea"]):
+        if modal and el in modal.descendants:
+            continue
+        t = (el.get("type") or "").lower()
+        if t in ("radio", "checkbox", "reset"):
+            continue
+        el["disabled"] = "disabled"
+        el["data-preview-disabled"] = "true"
 
-    # Disable select dropdowns that trigger state changes
-    for sel in soup.find_all("select"):
-        sel["disabled"] = "disabled"
-        sel["data-preview-disabled"] = "true"
+    for el in soup.find_all("input"):
+        if modal and el in modal.descendants:
+            continue
+        t = (el.get("type") or "text").lower()
+        if t in ("hidden", "radio", "checkbox"):
+            continue
+        el["disabled"] = "disabled"
+        el["data-preview-disabled"] = "true"
 
 
 def _block_admin_links(soup: BeautifulSoup) -> None:

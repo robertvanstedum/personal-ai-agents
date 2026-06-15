@@ -258,6 +258,18 @@
     }
   </style>
 
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
 <style id="preview-banner-style">
 .preview-banner {
   position: sticky; top: 0; z-index: 9999;
@@ -303,7 +315,7 @@
 <h1 class="page-title">Positions</h1>
 <span class="page-meta">12 tracked</span>
 <span class="deadline-badge">Deadline: Aug 1, 2026</span>
-<button class="add-btn" onclick="toggleAddForm()">+ Add Position</button>
+<button class="add-btn" data-preview-disabled="true" disabled="disabled" onclick="toggleAddForm()">+ Add Position</button>
 </div>
 <div class="add-form-wrap" id="add-form-wrap">
 <div class="add-form-title">Add position manually</div>
@@ -311,15 +323,15 @@
 <div class="add-form-grid">
 <div class="add-field wide">
 <label>Title *</label>
-<input autofocus="" name="title" placeholder="Principal Engineer, Agentic AI" required="" type="text"/>
+<input autofocus="" data-preview-disabled="true" disabled="disabled" name="title" placeholder="Principal Engineer, Agentic AI" required="" type="text"/>
 </div>
 <div class="add-field">
 <label>Company</label>
-<input name="company" placeholder="Comcast" type="text"/>
+<input data-preview-disabled="true" disabled="disabled" name="company" placeholder="Comcast" type="text"/>
 </div>
 <div class="add-field">
 <label>Location</label>
-<input name="geo" placeholder="Chicago, IL" type="text"/>
+<input data-preview-disabled="true" disabled="disabled" name="geo" placeholder="Chicago, IL" type="text"/>
 </div>
 <div class="add-field">
 <label>Type</label>
@@ -348,7 +360,7 @@
 </div>
 <div class="add-field wide" style="margin-top:10px">
 <label>Job URL</label>
-<input name="url" placeholder="https://jobs.comcast.com/..." style="min-width:420px" type="url"/>
+<input data-preview-disabled="true" disabled="disabled" name="url" placeholder="https://jobs.comcast.com/..." style="min-width:420px" type="url"/>
 </div>
 <div class="add-form-actions" style="margin-top:12px">
 <button class="add-submit" data-preview-disabled="true" disabled="disabled" type="submit">Add Position</button>
@@ -357,7 +369,7 @@
 </form>
 </div>
 <div class="targeting-wrap">
-<button class="targeting-toggle" id="targeting-toggle" onclick="toggleTargeting()">
+<button class="targeting-toggle" data-preview-disabled="true" disabled="disabled" id="targeting-toggle" onclick="toggleTargeting()">
 <span class="targeting-caret">▸</span> What I'm targeting
   </button>
 <div class="targeting-body" id="targeting-body">
@@ -407,7 +419,7 @@
 </div>
 </div>
 </div>
-<form action="/guild/career" class="filters" id="filter-form" method="GET">
+<form action="/guild/career" class="filters" data-preview-disabled="true" id="filter-form" method="GET" onsubmit="return false;">
 <div class="filter-group">
 <span class="filter-label">Status</span>
 <select class="filter-select" data-preview-disabled="true" disabled="disabled" name="status" onchange="this.form.submit()">

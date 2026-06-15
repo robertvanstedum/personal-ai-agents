@@ -274,6 +274,18 @@
     .weekly-body { margin-top: 1rem; }
   </style>
 <style>body{padding-top:38px!important;}nav.curator-subnav{top:38px!important;}</style>
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
 <style id="preview-banner-style">
 .preview-banner {
   position: sticky; top: 0; z-index: 9999;
@@ -334,7 +346,7 @@
 <div class="form-row">
 <div class="form-field" style="flex:3">
 <label class="form-label" for="newTitle">Statement</label>
-<input autocomplete="off" class="form-input" id="newTitle" placeholder="e.g. The Quad will hold under sustained pressure" type="text"/>
+<input autocomplete="off" class="form-input" data-preview-disabled="true" disabled="disabled" id="newTitle" placeholder="e.g. The Quad will hold under sustained pressure" type="text"/>
 </div>
 <div class="form-field">
 <label class="form-label" for="newState">Starting state</label>
@@ -345,7 +357,7 @@
 </select>
 </div>
 <div style="align-self: flex-end;">
-<button class="btn btn-primary" onclick="createLeaning()">Add →</button>
+<button class="btn btn-primary" data-preview-disabled="true" disabled="disabled" onclick="createLeaning()">Add →</button>
 </div>
 </div>
 <div class="status-msg" id="createStatus" style="margin-top:8px;"></div>
@@ -369,7 +381,7 @@
 <!-- State -->
 <div class="state-row">
 <span class="section-label" style="border:none;padding:0;margin:0;">State</span>
-<div class="state-options"><button class="state-btn active-question" onclick="setState('db74b053','question',this)">Question</button><button class="state-btn" onclick="setState('db74b053','leaning',this)">Leaning</button><button class="state-btn" onclick="setState('db74b053','hold',this)">Hold</button></div>
+<div class="state-options"><button class="state-btn active-question" data-preview-disabled="true" disabled="disabled" onclick="setState('db74b053','question',this)">Question</button><button class="state-btn" data-preview-disabled="true" disabled="disabled" onclick="setState('db74b053','leaning',this)">Leaning</button><button class="state-btn" data-preview-disabled="true" disabled="disabled" onclick="setState('db74b053','hold',this)">Hold</button></div>
 </div>
 <!-- Evidence -->
 <div class="section-label">Evidence (1)</div>
@@ -381,25 +393,25 @@
 <div class="ev-meta">neutral · War on the Rocks · 2026-06-01</div>
 </div>
 <div class="ev-actions">
-<button class="btn btn-sm btn-danger" onclick="removeEvidence('db74b053','ev-2c4650')">✕</button>
+<button class="btn btn-sm btn-danger" data-preview-disabled="true" disabled="disabled" onclick="removeEvidence('db74b053','ev-2c4650')">✕</button>
 </div>
 </div></div>
 <!-- Add evidence toggle -->
 <div class="add-ev-wrap">
-<button class="add-ev-toggle" onclick="toggleAddEv('db74b053')">+ Add evidence</button>
+<button class="add-ev-toggle" data-preview-disabled="true" disabled="disabled" onclick="toggleAddEv('db74b053')">+ Add evidence</button>
 <div class="add-ev-form" id="add-ev-db74b053">
 <div class="add-ev-grid">
 <div class="form-field full">
 <label class="form-label">Title</label>
-<input autocomplete="off" class="form-input" id="ev-title-db74b053" placeholder="Article or source title" type="text"/>
+<input autocomplete="off" class="form-input" data-preview-disabled="true" disabled="disabled" id="ev-title-db74b053" placeholder="Article or source title" type="text"/>
 </div>
 <div class="form-field">
 <label class="form-label">URL (optional)</label>
-<input class="form-input" id="ev-url-db74b053" placeholder="https://…" type="url"/>
+<input class="form-input" data-preview-disabled="true" disabled="disabled" id="ev-url-db74b053" placeholder="https://…" type="url"/>
 </div>
 <div class="form-field">
 <label class="form-label">Source</label>
-<input class="form-input" id="ev-source-db74b053" placeholder="Publication / author" type="text"/>
+<input class="form-input" data-preview-disabled="true" disabled="disabled" id="ev-source-db74b053" placeholder="Publication / author" type="text"/>
 </div>
 <div class="form-field">
 <label class="form-label">Stance</label>
@@ -411,12 +423,12 @@
 </div>
 <div class="form-field full">
 <label class="form-label">Note (optional)</label>
-<input class="form-input" id="ev-note-db74b053" placeholder="One-line reaction or observation" type="text"/>
+<input class="form-input" data-preview-disabled="true" disabled="disabled" id="ev-note-db74b053" placeholder="One-line reaction or observation" type="text"/>
 </div>
 </div>
 <div style="display:flex;gap:8px;align-items:center;">
-<button class="btn btn-primary btn-sm" onclick="addEvidence('db74b053')">Add evidence</button>
-<button class="btn btn-sm" onclick="toggleAddEv('db74b053')">Cancel</button>
+<button class="btn btn-primary btn-sm" data-preview-disabled="true" disabled="disabled" onclick="addEvidence('db74b053')">Add evidence</button>
+<button class="btn btn-sm" data-preview-disabled="true" disabled="disabled" onclick="toggleAddEv('db74b053')">Cancel</button>
 <span class="status-msg" id="ev-status-db74b053"></span>
 </div>
 </div>
@@ -437,17 +449,17 @@
 <div class="teammate-read-meta">Generated 2026-06-01 · 1 evidence items at read time</div>
 </div>
 <div class="action-row">
-<button class="btn btn-sm" id="tr-btn-db74b053" onclick="getTeammateRead('db74b053')">
+<button class="btn btn-sm" data-preview-disabled="true" disabled="disabled" id="tr-btn-db74b053" onclick="getTeammateRead('db74b053')">
         ↺ Refresh read
       </button>
 <span class="status-msg" id="tr-status-db74b053"></span>
 </div>
 <!-- Notes -->
 <div class="section-label" style="margin-top:16px;">Notes</div>
-<textarea class="notes-area" id="notes-db74b053" onblur="saveNotes('db74b053')" placeholder="Personal notes on this leaning…" rows="2"></textarea>
+<textarea class="notes-area" data-preview-disabled="true" disabled="disabled" id="notes-db74b053" onblur="saveNotes('db74b053')" placeholder="Personal notes on this leaning…" rows="2"></textarea>
 <!-- Danger zone -->
 <div class="action-row" style="margin-top:16px;">
-<button class="btn btn-sm btn-danger" onclick="deleteLeaning('db74b053','Hungry and Poland, any alignment of interests and could it help Hungry catch up?')">Delete leaning</button>
+<button class="btn btn-sm btn-danger" data-preview-disabled="true" disabled="disabled" onclick="deleteLeaning('db74b053','Hungry and Poland, any alignment of interests and could it help Hungry catch up?')">Delete leaning</button>
 </div>
 </div>
 </div><div class="leaning-card" id="card-5fe38be6">
@@ -469,7 +481,7 @@
 <!-- State -->
 <div class="state-row">
 <span class="section-label" style="border:none;padding:0;margin:0;">State</span>
-<div class="state-options"><button class="state-btn active-question" onclick="setState('5fe38be6','question',this)">Question</button><button class="state-btn" onclick="setState('5fe38be6','leaning',this)">Leaning</button><button class="state-btn" onclick="setState('5fe38be6','hold',this)">Hold</button></div>
+<div class="state-options"><button class="state-btn active-question" data-preview-disabled="true" disabled="disabled" onclick="setState('5fe38be6','question',this)">Question</button><button class="state-btn" data-preview-disabled="true" disabled="disabled" onclick="setState('5fe38be6','leaning',this)">Leaning</button><button class="state-btn" data-preview-disabled="true" disabled="disabled" onclick="setState('5fe38be6','hold',this)">Hold</button></div>
 </div>
 <!-- Evidence -->
 <div class="section-label">Evidence (2)</div>
@@ -481,7 +493,7 @@
 <div class="ev-meta">supports · NY Fed Liberty Street · 2026-06-03</div>
 </div>
 <div class="ev-actions">
-<button class="btn btn-sm btn-danger" onclick="removeEvidence('5fe38be6','ev-85b807')">✕</button>
+<button class="btn btn-sm btn-danger" data-preview-disabled="true" disabled="disabled" onclick="removeEvidence('5fe38be6','ev-85b807')">✕</button>
 </div>
 </div>
 <div class="evidence-item">
@@ -491,25 +503,25 @@
 <div class="ev-meta">supports · Fed On The Economy · 2026-06-03</div>
 </div>
 <div class="ev-actions">
-<button class="btn btn-sm btn-danger" onclick="removeEvidence('5fe38be6','ev-291996')">✕</button>
+<button class="btn btn-sm btn-danger" data-preview-disabled="true" disabled="disabled" onclick="removeEvidence('5fe38be6','ev-291996')">✕</button>
 </div>
 </div></div>
 <!-- Add evidence toggle -->
 <div class="add-ev-wrap">
-<button class="add-ev-toggle" onclick="toggleAddEv('5fe38be6')">+ Add evidence</button>
+<button class="add-ev-toggle" data-preview-disabled="true" disabled="disabled" onclick="toggleAddEv('5fe38be6')">+ Add evidence</button>
 <div class="add-ev-form" id="add-ev-5fe38be6">
 <div class="add-ev-grid">
 <div class="form-field full">
 <label class="form-label">Title</label>
-<input autocomplete="off" class="form-input" id="ev-title-5fe38be6" placeholder="Article or source title" type="text"/>
+<input autocomplete="off" class="form-input" data-preview-disabled="true" disabled="disabled" id="ev-title-5fe38be6" placeholder="Article or source title" type="text"/>
 </div>
 <div class="form-field">
 <label class="form-label">URL (optional)</label>
-<input class="form-input" id="ev-url-5fe38be6" placeholder="https://…" type="url"/>
+<input class="form-input" data-preview-disabled="true" disabled="disabled" id="ev-url-5fe38be6" placeholder="https://…" type="url"/>
 </div>
 <div class="form-field">
 <label class="form-label">Source</label>
-<input class="form-input" id="ev-source-5fe38be6" placeholder="Publication / author" type="text"/>
+<input class="form-input" data-preview-disabled="true" disabled="disabled" id="ev-source-5fe38be6" placeholder="Publication / author" type="text"/>
 </div>
 <div class="form-field">
 <label class="form-label">Stance</label>
@@ -521,12 +533,12 @@
 </div>
 <div class="form-field full">
 <label class="form-label">Note (optional)</label>
-<input class="form-input" id="ev-note-5fe38be6" placeholder="One-line reaction or observation" type="text"/>
+<input class="form-input" data-preview-disabled="true" disabled="disabled" id="ev-note-5fe38be6" placeholder="One-line reaction or observation" type="text"/>
 </div>
 </div>
 <div style="display:flex;gap:8px;align-items:center;">
-<button class="btn btn-primary btn-sm" onclick="addEvidence('5fe38be6')">Add evidence</button>
-<button class="btn btn-sm" onclick="toggleAddEv('5fe38be6')">Cancel</button>
+<button class="btn btn-primary btn-sm" data-preview-disabled="true" disabled="disabled" onclick="addEvidence('5fe38be6')">Add evidence</button>
+<button class="btn btn-sm" data-preview-disabled="true" disabled="disabled" onclick="toggleAddEv('5fe38be6')">Cancel</button>
 <span class="status-msg" id="ev-status-5fe38be6"></span>
 </div>
 </div>
@@ -535,17 +547,17 @@
 <div class="section-label">Teammate Read<span class="badge">new</span></div>
 <div class="teammate-read-empty">No read yet. Click "Get teammate read" to trigger a Sonnet synthesis (~$0.01).</div>
 <div class="action-row">
-<button class="btn btn-sm" id="tr-btn-5fe38be6" onclick="getTeammateRead('5fe38be6')">
+<button class="btn btn-sm" data-preview-disabled="true" disabled="disabled" id="tr-btn-5fe38be6" onclick="getTeammateRead('5fe38be6')">
         🔔 Get updated read
       </button>
 <span class="status-msg" id="tr-status-5fe38be6"></span>
 </div>
 <!-- Notes -->
 <div class="section-label" style="margin-top:16px;">Notes</div>
-<textarea class="notes-area" id="notes-5fe38be6" onblur="saveNotes('5fe38be6')" placeholder="Personal notes on this leaning…" rows="2"></textarea>
+<textarea class="notes-area" data-preview-disabled="true" disabled="disabled" id="notes-5fe38be6" onblur="saveNotes('5fe38be6')" placeholder="Personal notes on this leaning…" rows="2"></textarea>
 <!-- Danger zone -->
 <div class="action-row" style="margin-top:16px;">
-<button class="btn btn-sm btn-danger" onclick="deleteLeaning('5fe38be6','Capital Investment hits earning for several years')">Delete leaning</button>
+<button class="btn btn-sm btn-danger" data-preview-disabled="true" disabled="disabled" onclick="deleteLeaning('5fe38be6','Capital Investment hits earning for several years')">Delete leaning</button>
 </div>
 </div>
 </div><div class="leaning-card" id="card-00a9a037">
@@ -567,7 +579,7 @@
 <!-- State -->
 <div class="state-row">
 <span class="section-label" style="border:none;padding:0;margin:0;">State</span>
-<div class="state-options"><button class="state-btn active-question" onclick="setState('00a9a037','question',this)">Question</button><button class="state-btn" onclick="setState('00a9a037','leaning',this)">Leaning</button><button class="state-btn" onclick="setState('00a9a037','hold',this)">Hold</button></div>
+<div class="state-options"><button class="state-btn active-question" data-preview-disabled="true" disabled="disabled" onclick="setState('00a9a037','question',this)">Question</button><button class="state-btn" data-preview-disabled="true" disabled="disabled" onclick="setState('00a9a037','leaning',this)">Leaning</button><button class="state-btn" data-preview-disabled="true" disabled="disabled" onclick="setState('00a9a037','hold',this)">Hold</button></div>
 </div>
 <!-- Evidence -->
 <div class="section-label">Evidence (1)</div>
@@ -581,25 +593,25 @@ This is setting the stage f</a></div>
 <div class="ev-meta">supports · X/@Globalflows · 2026-06-03</div>
 </div>
 <div class="ev-actions">
-<button class="btn btn-sm btn-danger" onclick="removeEvidence('00a9a037','ev-99718c')">✕</button>
+<button class="btn btn-sm btn-danger" data-preview-disabled="true" disabled="disabled" onclick="removeEvidence('00a9a037','ev-99718c')">✕</button>
 </div>
 </div></div>
 <!-- Add evidence toggle -->
 <div class="add-ev-wrap">
-<button class="add-ev-toggle" onclick="toggleAddEv('00a9a037')">+ Add evidence</button>
+<button class="add-ev-toggle" data-preview-disabled="true" disabled="disabled" onclick="toggleAddEv('00a9a037')">+ Add evidence</button>
 <div class="add-ev-form" id="add-ev-00a9a037">
 <div class="add-ev-grid">
 <div class="form-field full">
 <label class="form-label">Title</label>
-<input autocomplete="off" class="form-input" id="ev-title-00a9a037" placeholder="Article or source title" type="text"/>
+<input autocomplete="off" class="form-input" data-preview-disabled="true" disabled="disabled" id="ev-title-00a9a037" placeholder="Article or source title" type="text"/>
 </div>
 <div class="form-field">
 <label class="form-label">URL (optional)</label>
-<input class="form-input" id="ev-url-00a9a037" placeholder="https://…" type="url"/>
+<input class="form-input" data-preview-disabled="true" disabled="disabled" id="ev-url-00a9a037" placeholder="https://…" type="url"/>
 </div>
 <div class="form-field">
 <label class="form-label">Source</label>
-<input class="form-input" id="ev-source-00a9a037" placeholder="Publication / author" type="text"/>
+<input class="form-input" data-preview-disabled="true" disabled="disabled" id="ev-source-00a9a037" placeholder="Publication / author" type="text"/>
 </div>
 <div class="form-field">
 <label class="form-label">Stance</label>
@@ -611,12 +623,12 @@ This is setting the stage f</a></div>
 </div>
 <div class="form-field full">
 <label class="form-label">Note (optional)</label>
-<input class="form-input" id="ev-note-00a9a037" placeholder="One-line reaction or observation" type="text"/>
+<input class="form-input" data-preview-disabled="true" disabled="disabled" id="ev-note-00a9a037" placeholder="One-line reaction or observation" type="text"/>
 </div>
 </div>
 <div style="display:flex;gap:8px;align-items:center;">
-<button class="btn btn-primary btn-sm" onclick="addEvidence('00a9a037')">Add evidence</button>
-<button class="btn btn-sm" onclick="toggleAddEv('00a9a037')">Cancel</button>
+<button class="btn btn-primary btn-sm" data-preview-disabled="true" disabled="disabled" onclick="addEvidence('00a9a037')">Add evidence</button>
+<button class="btn btn-sm" data-preview-disabled="true" disabled="disabled" onclick="toggleAddEv('00a9a037')">Cancel</button>
 <span class="status-msg" id="ev-status-00a9a037"></span>
 </div>
 </div>
@@ -625,17 +637,17 @@ This is setting the stage f</a></div>
 <div class="section-label">Teammate Read<span class="badge">new</span></div>
 <div class="teammate-read-empty">No read yet. Click "Get teammate read" to trigger a Sonnet synthesis (~$0.01).</div>
 <div class="action-row">
-<button class="btn btn-sm" id="tr-btn-00a9a037" onclick="getTeammateRead('00a9a037')">
+<button class="btn btn-sm" data-preview-disabled="true" disabled="disabled" id="tr-btn-00a9a037" onclick="getTeammateRead('00a9a037')">
         🔔 Get updated read
       </button>
 <span class="status-msg" id="tr-status-00a9a037"></span>
 </div>
 <!-- Notes -->
 <div class="section-label" style="margin-top:16px;">Notes</div>
-<textarea class="notes-area" id="notes-00a9a037" onblur="saveNotes('00a9a037')" placeholder="Personal notes on this leaning…" rows="2"></textarea>
+<textarea class="notes-area" data-preview-disabled="true" disabled="disabled" id="notes-00a9a037" onblur="saveNotes('00a9a037')" placeholder="Personal notes on this leaning…" rows="2"></textarea>
 <!-- Danger zone -->
 <div class="action-row" style="margin-top:16px;">
-<button class="btn btn-sm btn-danger" onclick="deleteLeaning('00a9a037','Gold and Monetary Reset')">Delete leaning</button>
+<button class="btn btn-sm btn-danger" data-preview-disabled="true" disabled="disabled" onclick="deleteLeaning('00a9a037','Gold and Monetary Reset')">Delete leaning</button>
 </div>
 </div>
 </div></div>
@@ -647,9 +659,9 @@ This is setting the stage f</a></div>
 <div class="obs-date-bar">
 <span class="obs-section-title">Today's observations</span>
 <span class="obs-date-nav">
-<button class="obs-date-btn" disabled="" id="btnObsPrev" onclick="shiftObsDate(-1)">← prev</button>
+<button class="obs-date-btn" data-preview-disabled="true" disabled="disabled" id="btnObsPrev" onclick="shiftObsDate(-1)">← prev</button>
 <span class="obs-date-label" id="obsDateLabel">Jun 15</span>
-<button class="obs-date-btn" disabled="" id="btnObsToday" onclick="loadObservations('')">today →</button>
+<button class="obs-date-btn" data-preview-disabled="true" disabled="disabled" id="btnObsToday" onclick="loadObservations('')">today →</button>
 </span>
 </div>
 <div id="obsDaily"><p class="obs-empty">No observations for this date.</p></div>

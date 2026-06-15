@@ -152,6 +152,18 @@
     }
   </style>
 <style>body{padding-top:38px!important;}nav.curator-subnav{top:38px!important;}</style>
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
 <style id="preview-banner-style">
 .preview-banner {
   position: sticky; top: 0; z-index: 9999;
@@ -213,7 +225,7 @@
 <span class="section-name">Dives</span>
 <span class="section-count">13</span>
 </span>
-<button class="toggle-btn" data-admin-blocked="true" id="dives-toggle" style="cursor: pointer;">show all →</button>
+<button class="toggle-btn" data-admin-blocked="true" data-preview-disabled="true" disabled="disabled" id="dives-toggle" style="cursor: pointer;">show all →</button>
 </div>
 <a class="row row-thread" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-badge">Thread</span>
@@ -340,7 +352,7 @@
 <span class="section-name">Scans</span>
 <span class="section-count">32</span>
 </span>
-<button class="toggle-btn" data-admin-blocked="true" id="scans-toggle" style="cursor: pointer;">show all →</button>
+<button class="toggle-btn" data-admin-blocked="true" data-preview-disabled="true" disabled="disabled" id="scans-toggle" style="cursor: pointer;">show all →</button>
 </div>
 <a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-05-29</span>

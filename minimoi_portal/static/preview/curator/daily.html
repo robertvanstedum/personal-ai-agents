@@ -372,6 +372,18 @@
     </style>
 <link href="/preview/assets/css_annotations.css" rel="stylesheet"/>
 <style>body{padding-top:38px!important;}nav.curator-subnav{top:38px!important;}</style>
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
 <style id="preview-banner-style">
 .preview-banner {
   position: sticky; top: 0; z-index: 9999;
@@ -445,11 +457,11 @@
 </h2>
 <p class="card-summary">PM Sharif praises Pakistan's army chief for his efforts in securing a tentative deal, likely to be finalised in Geneva.</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 1);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 1);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 1);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 1);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 1);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 1);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -467,11 +479,11 @@
 </h2>
 <p class="card-summary">In late February 2026, Iran closed the Strait of Hormuz to foreign shipping. What began as a chaotic wartime closure has, in the past few days, hardened into something more consequential: an official…</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 2);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 2);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 2);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 2);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 2);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 2);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -489,11 +501,11 @@
 </h2>
 <p class="card-summary">A potential US-Iran deal to end the war and reopen the Strait of Hormuz could ease the global energy crunch, but oil prices and supplies may take months to stabilize as shipping restarts and…</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 3);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 3);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 3);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 3);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 3);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 3);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -511,11 +523,11 @@
 </h2>
 <p class="card-summary">Why the AI build-out was doomed from the start.</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 4);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 4);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 4);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 4);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 4);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 4);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -533,11 +545,11 @@
 </h2>
 <p class="card-summary">The most consequential drivers of the war in Sudan are foreign states, private military contractors, and transnational criminal networks.</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 5);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 5);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 5);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 5);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 5);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 5);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -548,18 +560,18 @@
 <span class="cat-badge cat-fiscal">fiscal</span>
 <span class="source-label">arXiv q-fin</span>
 <span class="score-label">5.0</span>
-<span class="time-label">10h ago</span>
+<span class="time-label">11h ago</span>
 </div>
 <h2 class="card-title">
 <a href="https://arxiv.org/abs/2606.13752" target="_blank">What is the public's social welfare function?</a>
 </h2>
 <p class="card-summary">arXiv:2606.13752v1 Announce Type: new Abstract: Optimal public policy requires a social welfare function defined over individual utilities. While there is substantial research on income-based social…</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 6);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 6);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 6);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 6);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 6);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 6);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -577,11 +589,11 @@
 </h2>
 <p class="card-summary">The war in Iran has sent oil prices sharply higher, reviving the question of who bears the cost of energy shocks and how central banks should respond. Using nearly half a century of German data, this…</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 7);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 7);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 7);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 7);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 7);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 7);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -599,11 +611,11 @@
 </h2>
 <p class="card-summary">@peterrhague Modern binaries are incredibly bloated. The size of “hello world” is absurd.</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 8);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 8);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 8);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 8);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 8);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 8);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -621,11 +633,11 @@
 </h2>
 <p class="card-summary">Great links, images, and reading from Chartbook Newsletter by Adam Tooze</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 9);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 9);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 9);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 9);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 9);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 9);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -643,11 +655,11 @@
 </h2>
 <p class="card-summary">Hormuz 5 June 2026 #1 lalasor Fri, 06/05/2026 - 17:52 Strait of Hormuz Fri, 06/05/2026 - 12:00 5 June 2026 U.S. Indo-Pacific Command (INDOPACOM) reported that “U.S. forces carried out a maritime…</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 10);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 10);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 10);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 10);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 10);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 10);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -665,11 +677,11 @@
 </h2>
 <p class="card-summary">Mali is becoming a test case for the next phase of Turkish influence in Africa. A coordinated offensive in April by militant Islamist groups exposed the limits of Russian security support and thus…</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 11);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 11);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 11);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 11);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 11);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 11);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -695,11 +707,11 @@ By December, AI won</a>
 </h2>
 <p class="card-summary">Elon Musk thinks coding dies this year. Not evolves. Dies. By December, AI won’t need programming languages. It generates machine code directly. Binary optimized beyond anything human logic could…</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 12);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 12);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 12);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 12);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 12);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 12);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -717,11 +729,11 @@ By December, AI won</a>
 </h2>
 <p class="card-summary">US Industrial Production Disappoints In May Despite strong ISM Manufacturing data, US Industrial Production disappointed in May , rising just 0.1% MoM (vs +0.3% exp), but April's print was revised up…</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 13);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 13);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 13);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 13);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 13);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 13);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -739,11 +751,11 @@ By December, AI won</a>
 </h2>
 <p class="card-summary">Die USA und der Iran haben sich auf ein vorläufiges Abkommen zur Beendigung ihres Krieges und zur Wiedereröffnung der Straße von Hormus geeinigt. Fondsmanager Eckhard Schulte erklärt im Gespräch mit…</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 14);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 14);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 14);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 14);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 14);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 14);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -761,11 +773,11 @@ By December, AI won</a>
 </h2>
 <p class="card-summary">A risky quest for strategic autonomy in a war-torn Middle East.</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 15);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 15);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 15);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 15);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 15);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 15);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -783,11 +795,11 @@ By December, AI won</a>
 </h2>
 <p class="card-summary">China’s plan to become a world leader in AI by 2030 is a fixture of practically every Congressional briefing and expert commentary on Beijing’s AI ambitions. The plan’s logic — introduced in 2017 —…</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 16);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 16);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 16);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 16);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 16);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 16);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -805,11 +817,11 @@ By December, AI won</a>
 </h2>
 <p class="card-summary">A debt-to-income ratio of 43% was long considered to be a threshold for mortgage applicants. This analysis finds the true threshold is 50%.</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 17);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 17);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 17);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 17);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 17);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 17);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -827,11 +839,11 @@ By December, AI won</a>
 </h2>
 <p class="card-summary">And I wholeheartedly recommend Doyne's book: https://t.co/ClxOObq9r0 https://t.co/gme99XPrZW</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 18);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 18);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 18);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 18);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 18);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 18);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -849,11 +861,11 @@ By December, AI won</a>
 </h2>
 <p class="card-summary">Updated on June 14, 2026, at 8:09 pm EST Pakistani Prime Minister Shehbaz Sharif said on Sunday night that a deal between the US and Iran to end the conflict in the region “has been reached” and that…</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 19);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 19);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 19);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 19);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 19);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 19);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -871,11 +883,11 @@ By December, AI won</a>
 </h2>
 <p class="card-summary">In the third quarter of 2025, America's largest tech firms for the first time spent more on capital investment than they earned from operations. The implication is that AI, a technology with the…</p>
 <div class="article-actions">
-<button class="action-btn btn-like" onclick="showFeedback(this, 'like', 20);" title="Like this article">Like</button>
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 20);" title="Like this article">Like</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-dislike" onclick="showFeedback(this, 'dislike', 20);" title="Pass on this article">Pass</button>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 20);" title="Pass on this article">Pass</button>
 <span class="action-sep">·</span>
-<button class="action-btn btn-save" onclick="showFeedback(this, 'save', 20);" title="Save to investigate">Save</button>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 20);" title="Save to investigate">Save</button>
 </div>
 </div>
 </article>
@@ -1347,32 +1359,32 @@ loadTopicsStrip();
 <div class="inv-article-title" id="inv-article-title"></div>
 <div class="inv-article-source" id="inv-article-source"></div>
 </div>
-<button class="inv-close" onclick="closeInvestigateModal()">✕</button>
+<button class="inv-close" data-preview-disabled="true" disabled="disabled" onclick="closeInvestigateModal()">✕</button>
 </div>
 <div class="inv-tabs">
-<button class="inv-tab active" data-tab="scan" onclick="switchInvTab('scan')">🔭 Scan</button>
-<button class="inv-tab" data-tab="track" onclick="switchInvTab('track')">🗓 Track</button>
-<button class="inv-tab" data-tab="lean" onclick="switchInvTab('lean')">📎 Lean</button>
+<button class="inv-tab active" data-preview-disabled="true" data-tab="scan" disabled="disabled" onclick="switchInvTab('scan')">🔭 Scan</button>
+<button class="inv-tab" data-preview-disabled="true" data-tab="track" disabled="disabled" onclick="switchInvTab('track')">🗓 Track</button>
+<button class="inv-tab" data-preview-disabled="true" data-tab="lean" disabled="disabled" onclick="switchInvTab('lean')">📎 Lean</button>
 </div>
 <!-- Scan pane -->
 <div class="inv-pane active" id="inv-pane-scan">
 <p class="inv-hint">Generate an article-level analysis with bibliography tailored to your interests (~30s, ~$0.15).</p>
 <label class="inv-label">What interests you about this article?</label>
-<textarea class="inv-textarea" id="inv-scan-interest" placeholder="e.g. Geopolitical implications, economic impact, contrarian perspectives…" rows="3"></textarea>
+<textarea class="inv-textarea" data-preview-disabled="true" disabled="disabled" id="inv-scan-interest" placeholder="e.g. Geopolitical implications, economic impact, contrarian perspectives…" rows="3"></textarea>
 <label class="inv-label" style="margin-top:10px;">Focus areas (optional)</label>
-<input class="inv-input" id="inv-scan-focus" placeholder="e.g. Historical precedents, key players, data sources…" type="text"/>
+<input class="inv-input" data-preview-disabled="true" disabled="disabled" id="inv-scan-focus" placeholder="e.g. Historical precedents, key players, data sources…" type="text"/>
 <div class="inv-actions">
-<button class="inv-btn inv-btn-primary" onclick="runScan()">Run Scan →</button>
-<button class="inv-btn" onclick="closeInvestigateModal()">Cancel</button>
+<button class="inv-btn inv-btn-primary" data-preview-disabled="true" disabled="disabled" onclick="runScan()">Run Scan →</button>
+<button class="inv-btn" data-preview-disabled="true" disabled="disabled" onclick="closeInvestigateModal()">Cancel</button>
 </div>
 </div>
 <!-- Track pane -->
 <div class="inv-pane" id="inv-pane-track">
 <p class="inv-hint">Create an active research Topic. Sessions will run searches on this subject for the duration you choose.</p>
 <label class="inv-label">Topic slug <span style="color:var(--text-dim);font-weight:400;">(letters, numbers, hyphens)</span></label>
-<input autocomplete="off" class="inv-input" id="inv-track-slug" placeholder="e.g. quad-alliance-cohesion" type="text"/>
+<input autocomplete="off" class="inv-input" data-preview-disabled="true" disabled="disabled" id="inv-track-slug" placeholder="e.g. quad-alliance-cohesion" type="text"/>
 <label class="inv-label" style="margin-top:10px;">Motivation (optional)</label>
-<textarea class="inv-textarea" id="inv-track-motivation" placeholder="Why are you tracking this? What's your prior belief?" rows="2"></textarea>
+<textarea class="inv-textarea" data-preview-disabled="true" disabled="disabled" id="inv-track-motivation" placeholder="Why are you tracking this? What's your prior belief?" rows="2"></textarea>
 <label class="inv-label" style="margin-top:10px;">Duration</label>
 <div class="inv-duration-row">
 <select class="inv-select" data-preview-disabled="true" disabled="disabled" id="inv-track-days">
@@ -1383,8 +1395,8 @@ loadTopicsStrip();
 </select>
 </div>
 <div class="inv-actions">
-<button class="inv-btn inv-btn-primary" onclick="runTrack()">Create Topic →</button>
-<button class="inv-btn" onclick="closeInvestigateModal()">Cancel</button>
+<button class="inv-btn inv-btn-primary" data-preview-disabled="true" disabled="disabled" onclick="runTrack()">Create Topic →</button>
+<button class="inv-btn" data-preview-disabled="true" disabled="disabled" onclick="closeInvestigateModal()">Cancel</button>
 <span class="inv-status" id="inv-track-status"></span>
 </div>
 </div>
@@ -1396,7 +1408,7 @@ loadTopicsStrip();
 <option value="">Loading…</option>
 </select>
 <label class="inv-label" style="margin-top:10px;">— or create a new leaning —</label>
-<input class="inv-input" id="inv-lean-new-title" placeholder="New leaning statement e.g. The Quad will hold under pressure" type="text"/>
+<input class="inv-input" data-preview-disabled="true" disabled="disabled" id="inv-lean-new-title" placeholder="New leaning statement e.g. The Quad will hold under pressure" type="text"/>
 <label class="inv-label" style="margin-top:10px;">Stance</label>
 <select class="inv-select" data-preview-disabled="true" disabled="disabled" id="inv-lean-stance" style="width:100%;">
 <option value="supports">▲ Supports</option>
@@ -1404,25 +1416,25 @@ loadTopicsStrip();
 <option selected="" value="neutral">○ Neutral</option>
 </select>
 <label class="inv-label" style="margin-top:10px;">Note (optional)</label>
-<input class="inv-input" id="inv-lean-note" placeholder="One-line reaction or observation" type="text"/>
+<input class="inv-input" data-preview-disabled="true" disabled="disabled" id="inv-lean-note" placeholder="One-line reaction or observation" type="text"/>
 <div class="inv-actions">
-<button class="inv-btn inv-btn-primary" onclick="runLean()">Add Evidence →</button>
-<button class="inv-btn" onclick="closeInvestigateModal()">Cancel</button>
+<button class="inv-btn inv-btn-primary" data-preview-disabled="true" disabled="disabled" onclick="runLean()">Add Evidence →</button>
+<button class="inv-btn" data-preview-disabled="true" disabled="disabled" onclick="closeInvestigateModal()">Cancel</button>
 <span class="inv-status" id="inv-lean-status"></span>
 </div>
 </div>
 </div>
 </div>
-<button class="ann-float-btn">💬<span class="ann-count" style="display:none">0</span></button><div class="ann-compact-overlay" id="ann-compact-overlay">
+<button class="ann-float-btn" data-preview-disabled="true" disabled="disabled">💬<span class="ann-count" style="display:none">0</span></button><div class="ann-compact-overlay" id="ann-compact-overlay">
 <div class="ann-compact-header">QUICK NOTE</div>
-<textarea class="ann-compact-textarea" id="ann-compact-textarea" placeholder="Reaction? Question? Just type..." rows="2"></textarea>
+<textarea class="ann-compact-textarea" data-preview-disabled="true" disabled="disabled" id="ann-compact-textarea" placeholder="Reaction? Question? Just type..." rows="2"></textarea>
 <div class="ann-compact-footer">
 <select class="ann-type-select" data-preview-disabled="true" disabled="disabled" id="ann-compact-type">
 <option value="reaction">reaction</option>
 <option value="note">note</option>
 <option value="direction_shift">direction shift</option>
 </select>
-<button class="ann-save-btn" onclick="AnnotationSystem.saveFromCompact()">
+<button class="ann-save-btn" data-preview-disabled="true" disabled="disabled" onclick="AnnotationSystem.saveFromCompact()">
         Save →
       </button>
 </div>

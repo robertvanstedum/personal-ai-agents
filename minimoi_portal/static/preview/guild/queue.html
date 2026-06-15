@@ -210,6 +210,18 @@
     .history-loading { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); }
   </style>
 
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
 <style id="preview-banner-style">
 .preview-banner {
   position: sticky; top: 0; z-index: 9999;
@@ -291,17 +303,17 @@
 </select>
 <button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-21" type="submit">Save</button>
 </form>
-<button class="detail-btn" id="bdbtn-21" onclick="toggleBuildDetail(21)">···</button>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-21" onclick="toggleBuildDetail(21)">···</button>
 </div>
 <div class="note-input-wrap" id="bd-21" style="padding: 0 12px; display:none;">
-<input class="note-input" id="bni-21" oninput="document.getElementById('bn-21').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-21" oninput="document.getElementById('bn-21').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
 </div>
 <div class="card-detail" id="bdetail-21">
 <div class="detail-row"><span class="detail-label">File</span>build_spec_preview_layer_2026-06-14.md</div>
 <form action="/guild/build/items/21/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input name="spec_title" placeholder="Title" value="minimoi.ai Preview Layer + Mein Deutsch Animation"/>
-<input name="summary" placeholder="Summary (one line)" value="Build spec for minimoi.ai preview layer and Mein Deutsch animation."/>
-<input name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="minimoi.ai Preview Layer + Mein Deutsch Animation"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Build spec for minimoi.ai preview layer and Mein Deutsch animation."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
 <button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
 </form>
 <div class="history-section">
@@ -334,17 +346,17 @@
 </select>
 <button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-9" type="submit">Save</button>
 </form>
-<button class="detail-btn" id="bdbtn-9" onclick="toggleBuildDetail(9)">···</button>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-9" onclick="toggleBuildDetail(9)">···</button>
 </div>
 <div class="note-input-wrap" id="bd-9" style="padding: 0 12px; display:none;">
-<input class="note-input" id="bni-9" oninput="document.getElementById('bn-9').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-9" oninput="document.getElementById('bn-9').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
 </div>
 <div class="card-detail" id="bdetail-9">
 <div class="detail-row"><span class="detail-label">File</span>spec_housekeeping_2026-06-12.md</div>
 <form action="/guild/build/items/9/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input name="spec_title" placeholder="Title" value="Housekeeping: Repo Sync Audit + Roadmap File Location"/>
-<input name="summary" placeholder="Summary (one line)" value="Spec for repo sync audit and roadmap file location housekeeping tasks."/>
-<input name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Housekeeping: Repo Sync Audit + Roadmap File Location"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Spec for repo sync audit and roadmap file location housekeeping tasks."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
 <button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
 </form>
 <div class="history-section">
@@ -377,17 +389,17 @@
 </select>
 <button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-2" type="submit">Save</button>
 </form>
-<button class="detail-btn" id="bdbtn-2" onclick="toggleBuildDetail(2)">···</button>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-2" onclick="toggleBuildDetail(2)">···</button>
 </div>
 <div class="note-input-wrap" id="bd-2" style="padding: 0 12px; display:none;">
-<input class="note-input" id="bni-2" oninput="document.getElementById('bn-2').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-2" oninput="document.getElementById('bn-2').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
 </div>
 <div class="card-detail" id="bdetail-2">
 <div class="detail-row"><span class="detail-label">File</span>feature_lesen_writing_drill_2026-06-08.md</div>
 <form action="/guild/build/items/2/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input name="spec_title" placeholder="Title" value="Lesen Writing Drill"/>
-<input name="summary" placeholder="Summary (one line)" value="German Lesen writing drill — contextual correction and retype. GitHub issue #41. Build post-Jun 13."/>
-<input name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Lesen Writing Drill"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="German Lesen writing drill — contextual correction and retype. GitHub issue #41. Build post-Jun 13."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
 <button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
 </form>
 <div class="history-section">
@@ -426,17 +438,17 @@
 </select>
 <button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-22" type="submit">Save</button>
 </form>
-<button class="detail-btn" id="bdbtn-22" onclick="toggleBuildDetail(22)">···</button>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-22" onclick="toggleBuildDetail(22)">···</button>
 </div>
 <div class="note-input-wrap" id="bd-22" style="padding: 0 12px; display:none;">
-<input class="note-input" id="bni-22" oninput="document.getElementById('bn-22').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-22" oninput="document.getElementById('bn-22').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
 </div>
 <div class="card-detail" id="bdetail-22">
 <div class="detail-row"><span class="detail-label">File</span>build_spec_preview_layer_2026-06-14.md</div>
 <form action="/guild/build/items/22/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input name="spec_title" placeholder="Title" value="minimoi.ai Preview Layer + Mein Deutsch Animation"/>
-<input name="summary" placeholder="Summary (one line)" value="Workstream 1: Playwright snapshot capture + /preview routing + banner + admin modal. WS2: Mein Deutsch animated walkthrough. WS3: Guest access audit + /contact."/>
-<input name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="minimoi.ai Preview Layer + Mein Deutsch Animation"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Workstream 1: Playwright snapshot capture + /preview routing + banner + admin modal. WS2: Mein Deutsch animated walkthrough. WS3: Guest access audit + /contact."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
 <button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
 </form>
 <div class="history-section">
@@ -469,17 +481,17 @@
 </select>
 <button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-20" type="submit">Save</button>
 </form>
-<button class="detail-btn" id="bdbtn-20" onclick="toggleBuildDetail(20)">···</button>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-20" onclick="toggleBuildDetail(20)">···</button>
 </div>
 <div class="note-input-wrap" id="bd-20" style="padding: 0 12px; display:none;">
-<input class="note-input" id="bni-20" oninput="document.getElementById('bn-20').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-20" oninput="document.getElementById('bn-20').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
 </div>
 <div class="card-detail" id="bdetail-20">
 <div class="detail-row"><span class="detail-label">File</span>spec_landing_page_uptime_2026-06-13.md</div>
 <form action="/guild/build/items/20/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input name="spec_title" placeholder="Title" value="minimoi.ai Always-On Landing Page"/>
-<input name="summary" placeholder="Summary (one line)" value="Investigation complete: landing is fully static, no DB dependency. Recommendation: Cloudflare Pages static split. Implementation spec pending."/>
-<input name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="minimoi.ai Always-On Landing Page"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Investigation complete: landing is fully static, no DB dependency. Recommendation: Cloudflare Pages static split. Implementation spec pending."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
 <button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
 </form>
 <div class="history-section">
@@ -525,17 +537,17 @@
 </select>
 <button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-19" type="submit">Save</button>
 </form>
-<button class="detail-btn" id="bdbtn-19" onclick="toggleBuildDetail(19)">···</button>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-19" onclick="toggleBuildDetail(19)">···</button>
 </div>
 <div class="note-input-wrap" id="bd-19" style="padding: 0 12px; display:none;">
-<input class="note-input" id="bni-19" oninput="document.getElementById('bn-19').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-19" oninput="document.getElementById('bn-19').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
 </div>
 <div class="card-detail" id="bdetail-19">
 <div class="detail-row"><span class="detail-label">File</span>spec_guild_v09_release_2026-06-13.md</div>
 <form action="/guild/build/items/19/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input name="spec_title" placeholder="Title" value="Guild v0.9 (beta) GitHub Release"/>
-<input name="summary" placeholder="Summary (one line)" value="GitHub release guild-v0.9 created. Tag pushed. Release description published."/>
-<input name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild v0.9 (beta) GitHub Release"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="GitHub release guild-v0.9 created. Tag pushed. Release description published."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
 <button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
 </form>
 <div class="history-section">
@@ -568,17 +580,17 @@
 </select>
 <button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-18" type="submit">Save</button>
 </form>
-<button class="detail-btn" id="bdbtn-18" onclick="toggleBuildDetail(18)">···</button>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-18" onclick="toggleBuildDetail(18)">···</button>
 </div>
 <div class="note-input-wrap" id="bd-18" style="padding: 0 12px; display:none;">
-<input class="note-input" id="bni-18" oninput="document.getElementById('bn-18').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-18" oninput="document.getElementById('bn-18').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
 </div>
 <div class="card-detail" id="bdetail-18">
 <div class="detail-row"><span class="detail-label">File</span>spec_landing_copy_round2_2026-06-13.md</div>
 <form action="/guild/build/items/18/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input name="spec_title" placeholder="Title" value="Landing Copy Round 2: Guild v0.9 + Curator + Mein Deutsch"/>
-<input name="summary" placeholder="Summary (one line)" value="Round-2 landing copy: Guild v0.9 prefix + revised copy, Curator counterpoints line, Mein Deutsch workflow loop + Anki wording. Fixes Guild prefix duplication."/>
-<input name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Landing Copy Round 2: Guild v0.9 + Curator + Mein Deutsch"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Round-2 landing copy: Guild v0.9 prefix + revised copy, Curator counterpoints line, Mein Deutsch workflow loop + Anki wording. Fixes Guild prefix duplication."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
 <button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
 </form>
 <div class="history-section">
@@ -611,17 +623,17 @@
 </select>
 <button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-17" type="submit">Save</button>
 </form>
-<button class="detail-btn" id="bdbtn-17" onclick="toggleBuildDetail(17)">···</button>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-17" onclick="toggleBuildDetail(17)">···</button>
 </div>
 <div class="note-input-wrap" id="bd-17" style="padding: 0 12px; display:none;">
-<input class="note-input" id="bni-17" oninput="document.getElementById('bn-17').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-17" oninput="document.getElementById('bn-17').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
 </div>
 <div class="card-detail" id="bdetail-17">
 <div class="detail-row"><span class="detail-label">File</span>spec_guild_landing_copy_2026-06-13.md</div>
 <form action="/guild/build/items/17/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input name="spec_title" placeholder="Title" value="Guild Landing Copy: minimoi.ai &quot;What's Running&quot;"/>
-<input name="summary" placeholder="Summary (one line)" value="Spec to update Guild landing copy on minimoi.ai What's Running section."/>
-<input name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild Landing Copy: minimoi.ai &quot;What's Running&quot;"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Spec to update Guild landing copy on minimoi.ai What's Running section."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
 <button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
 </form>
 <div class="history-section">
@@ -654,17 +666,17 @@
 </select>
 <button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-10" type="submit">Save</button>
 </form>
-<button class="detail-btn" id="bdbtn-10" onclick="toggleBuildDetail(10)">···</button>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-10" onclick="toggleBuildDetail(10)">···</button>
 </div>
 <div class="note-input-wrap" id="bd-10" style="padding: 0 12px; display:none;">
-<input class="note-input" id="bni-10" oninput="document.getElementById('bn-10').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-10" oninput="document.getElementById('bn-10').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
 </div>
 <div class="card-detail" id="bdetail-10">
 <div class="detail-row"><span class="detail-label">File</span>spec_guild_daily_briefing_2026-06-12.md</div>
 <form action="/guild/build/items/10/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input name="spec_title" placeholder="Title" value="Guild Daily Briefing (`/guild` Phase 1: the page)"/>
-<input name="summary" placeholder="Summary (one line)" value="Spec for Guild Daily Briefing page replacing placeholders with four-section design."/>
-<input name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild Daily Briefing (`/guild` Phase 1: the page)"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Spec for Guild Daily Briefing page replacing placeholders with four-section design."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
 <button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
 </form>
 <div class="history-section">
@@ -697,17 +709,17 @@
 </select>
 <button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-16" type="submit">Save</button>
 </form>
-<button class="detail-btn" id="bdbtn-16" onclick="toggleBuildDetail(16)">···</button>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-16" onclick="toggleBuildDetail(16)">···</button>
 </div>
 <div class="note-input-wrap" id="bd-16" style="padding: 0 12px; display:none;">
-<input class="note-input" id="bni-16" oninput="document.getElementById('bn-16').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-16" oninput="document.getElementById('bn-16').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
 </div>
 <div class="card-detail" id="bdetail-16">
 <div class="detail-row"><span class="detail-label">File</span>spec_guild_small_followups_2026-06-13.md</div>
 <form action="/guild/build/items/16/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input name="spec_title" placeholder="Title" value="Two Small Follow-ups: `/guild` Nav Contrast + Dashboard Subtitle"/>
-<input name="summary" placeholder="Summary (one line)" value="Spec for two small guild nav contrast and subtitle follow-ups."/>
-<input name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Two Small Follow-ups: `/guild` Nav Contrast + Dashboard Subtitle"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Spec for two small guild nav contrast and subtitle follow-ups."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
 <button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
 </form>
 <div class="history-section">
@@ -740,17 +752,17 @@
 </select>
 <button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-15" type="submit">Save</button>
 </form>
-<button class="detail-btn" id="bdbtn-15" onclick="toggleBuildDetail(15)">···</button>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-15" onclick="toggleBuildDetail(15)">···</button>
 </div>
 <div class="note-input-wrap" id="bd-15" style="padding: 0 12px; display:none;">
-<input class="note-input" id="bni-15" oninput="document.getElementById('bn-15').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-15" oninput="document.getElementById('bn-15').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
 </div>
 <div class="card-detail" id="bdetail-15">
 <div class="detail-row"><span class="detail-label">File</span>spec_spec_detail_view_fix_2026-06-13.md</div>
 <form action="/guild/build/items/15/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input name="spec_title" placeholder="Title" value="Spec Detail View: Nav Fix + Download/Print"/>
-<input name="summary" placeholder="Summary (one line)" value="Spec for fixing nav and adding download/print to spec detail view."/>
-<input name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Spec Detail View: Nav Fix + Download/Print"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Spec for fixing nav and adding download/print to spec detail view."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
 <button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
 </form>
 <div class="history-section">
@@ -783,17 +795,17 @@
 </select>
 <button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-14" type="submit">Save</button>
 </form>
-<button class="detail-btn" id="bdbtn-14" onclick="toggleBuildDetail(14)">···</button>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-14" onclick="toggleBuildDetail(14)">···</button>
 </div>
 <div class="note-input-wrap" id="bd-14" style="padding: 0 12px; display:none;">
-<input class="note-input" id="bni-14" oninput="document.getElementById('bn-14').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-14" oninput="document.getElementById('bn-14').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
 </div>
 <div class="card-detail" id="bdetail-14">
 <div class="detail-row"><span class="detail-label">File</span>spec_guild_type_scale_revision_2026-06-13.md</div>
 <form action="/guild/build/items/14/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input name="spec_title" placeholder="Title" value="Guild Type Scale (Revision): Variables, Not Per-Element Tweaks"/>
-<input name="summary" placeholder="Summary (one line)" value="Revision to guild typography scale using CSS variables for consistent sizing. While fixing the H1/H2 split, also audited cross-domain heading fonts — German uses Georgia throughout, Curator splits Georgia/Playfair by page type, Guild uses Playfair. Decided not to unify: German’s Georgia is deliberate and shipped (Mein Deutsch, family-used), and the actual bug (H1/H2 clash within a page) is fixed. No action."/>
-<input name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild Type Scale (Revision): Variables, Not Per-Element Tweaks"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Revision to guild typography scale using CSS variables for consistent sizing. While fixing the H1/H2 split, also audited cross-domain heading fonts — German uses Georgia throughout, Curator splits Georgia/Playfair by page type, Guild uses Playfair. Decided not to unify: German’s Georgia is deliberate and shipped (Mein Deutsch, family-used), and the actual bug (H1/H2 clash within a page) is fixed. No action."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
 <button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
 </form>
 <div class="history-section">
@@ -826,17 +838,17 @@
 </select>
 <button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-13" type="submit">Save</button>
 </form>
-<button class="detail-btn" id="bdbtn-13" onclick="toggleBuildDetail(13)">···</button>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-13" onclick="toggleBuildDetail(13)">···</button>
 </div>
 <div class="note-input-wrap" id="bd-13" style="padding: 0 12px; display:none;">
-<input class="note-input" id="bni-13" oninput="document.getElementById('bn-13').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-13" oninput="document.getElementById('bn-13').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
 </div>
 <div class="card-detail" id="bdetail-13">
 <div class="detail-row"><span class="detail-label">File</span>spec_incomplete_reason_visibility_2026-06-13.md</div>
 <form action="/guild/build/items/13/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input name="spec_title" placeholder="Title" value="Surface Incomplete Reason + Document Link on Build Cards"/>
-<input name="summary" placeholder="Summary (one line)" value="Spec to display incomplete reason and spec link on build cards."/>
-<input name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Surface Incomplete Reason + Document Link on Build Cards"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Spec to display incomplete reason and spec link on build cards."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
 <button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
 </form>
 <div class="history-section">
@@ -869,17 +881,17 @@
 </select>
 <button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-12" type="submit">Save</button>
 </form>
-<button class="detail-btn" id="bdbtn-12" onclick="toggleBuildDetail(12)">···</button>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-12" onclick="toggleBuildDetail(12)">···</button>
 </div>
 <div class="note-input-wrap" id="bd-12" style="padding: 0 12px; display:none;">
-<input class="note-input" id="bni-12" oninput="document.getElementById('bn-12').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-12" oninput="document.getElementById('bn-12').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
 </div>
 <div class="card-detail" id="bdetail-12">
 <div class="detail-row"><span class="detail-label">File</span>spec_guild_typography_hierarchy_2026-06-13.md</div>
 <form action="/guild/build/items/12/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input name="spec_title" placeholder="Title" value="Guild Typography: Section Header Tier + Oversized Stat"/>
-<input name="summary" placeholder="Summary (one line)" value="Spec for Guild typography hierarchy fixing section headers and stats."/>
-<input name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild Typography: Section Header Tier + Oversized Stat"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Spec for Guild typography hierarchy fixing section headers and stats."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
 <button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
 </form>
 <div class="history-section">
@@ -912,17 +924,17 @@
 </select>
 <button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-11" type="submit">Save</button>
 </form>
-<button class="detail-btn" id="bdbtn-11" onclick="toggleBuildDetail(11)">···</button>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-11" onclick="toggleBuildDetail(11)">···</button>
 </div>
 <div class="note-input-wrap" id="bd-11" style="padding: 0 12px; display:none;">
-<input class="note-input" id="bni-11" oninput="document.getElementById('bn-11').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-11" oninput="document.getElementById('bn-11').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
 </div>
 <div class="card-detail" id="bdetail-11">
 <div class="detail-row"><span class="detail-label">File</span>spec_devagent_classifier_fix_2026-06-12.md</div>
 <form action="/guild/build/items/11/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input name="spec_title" placeholder="Title" value="Design/Dev Classifier Fix: Truncation + Structural Checks"/>
-<input name="summary" placeholder="Summary (one line)" value="Fixes dev_agent.py truncation preventing detection of DoD and Commit sections."/>
-<input name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Design/Dev Classifier Fix: Truncation + Structural Checks"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Fixes dev_agent.py truncation preventing detection of DoD and Commit sections."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
 <button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
 </form>
 <div class="history-section">
@@ -955,17 +967,17 @@
 </select>
 <button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-8" type="submit">Save</button>
 </form>
-<button class="detail-btn" id="bdbtn-8" onclick="toggleBuildDetail(8)">···</button>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-8" onclick="toggleBuildDetail(8)">···</button>
 </div>
 <div class="note-input-wrap" id="bd-8" style="padding: 0 12px; display:none;">
-<input class="note-input" id="bni-8" oninput="document.getElementById('bn-8').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-8" oninput="document.getElementById('bn-8').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
 </div>
 <div class="card-detail" id="bdetail-8">
 <div class="detail-row"><span class="detail-label">File</span>spec_guild_nav_restructure_2026-06-12.md</div>
 <form action="/guild/build/items/8/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input name="spec_title" placeholder="Title" value="Guild Navigation Restructure"/>
-<input name="summary" placeholder="Summary (one line)" value="Spec for restructuring Guild navigation to fix stacked nav rows and combined page renders."/>
-<input name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild Navigation Restructure"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Spec for restructuring Guild navigation to fix stacked nav rows and combined page renders."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
 <button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
 </form>
 <div class="history-section">
@@ -998,17 +1010,17 @@
 </select>
 <button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-4" type="submit">Save</button>
 </form>
-<button class="detail-btn" id="bdbtn-4" onclick="toggleBuildDetail(4)">···</button>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-4" onclick="toggleBuildDetail(4)">···</button>
 </div>
 <div class="note-input-wrap" id="bd-4" style="padding: 0 12px; display:none;">
-<input class="note-input" id="bni-4" oninput="document.getElementById('bn-4').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-4" oninput="document.getElementById('bn-4').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
 </div>
 <div class="card-detail" id="bdetail-4">
 <div class="detail-row"><span class="detail-label">File</span>handoff_morning_build_2026-06-12.md</div>
 <form action="/guild/build/items/4/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input name="spec_title" placeholder="Title" value="Morning Build: CoS Soul + Career Entry + Gap-Check"/>
-<input name="summary" placeholder="Summary (one line)" value="CoS soul injection, manual career entry form, handoff gap-check script"/>
-<input name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Morning Build: CoS Soul + Career Entry + Gap-Check"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="CoS soul injection, manual career entry form, handoff gap-check script"/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
 <button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
 </form>
 <div class="history-section">

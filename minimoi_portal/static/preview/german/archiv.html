@@ -9,6 +9,18 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
 <link href="/preview/assets/german.css" rel="stylesheet"/>
 
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
 <style id="preview-banner-style">
 .preview-banner {
   position: sticky; top: 0; z-index: 9999;
@@ -70,9 +82,9 @@
 <p class="archiv-description">Gespeicherte Verlaufsdaten aus Gespräche, Schreiben und Lesen.</p>
 </div>
 <div class="archiv-tabs">
-<button class="archiv-tab active" data-section="gesprache">Gespräche</button>
-<button class="archiv-tab" data-section="schreiben">Schreiben</button>
-<button class="archiv-tab" data-section="artikel">Artikel</button>
+<button class="archiv-tab active" data-preview-disabled="true" data-section="gesprache" disabled="disabled">Gespräche</button>
+<button class="archiv-tab" data-preview-disabled="true" data-section="schreiben" disabled="disabled">Schreiben</button>
+<button class="archiv-tab" data-preview-disabled="true" data-section="artikel" disabled="disabled">Artikel</button>
 </div>
 <!-- Gespräche section -->
 <div class="archiv-section" id="section-gesprache">
