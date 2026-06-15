@@ -656,36 +656,51 @@ document.body.classList.add('parch-mode');
   const sessionInputEl  = document.getElementById('session-input');
   const footerStatus    = document.getElementById('session-footer-status');
 
-  // ── TTS: speak persona responses ─────────────────────────────────────────
-  let sessionMuted = false;
-  let _ttsVoices   = [];
+  // ── TTS: speak persona responses via OpenAI TTS ──────────────────────────
+  let sessionMuted    = false;
+  let _currentAudio   = null;  // track playing Audio so we can stop it
 
-  function _loadVoices() {
-    _ttsVoices = window.speechSynthesis.getVoices();
-  }
-  if (window.speechSynthesis) {
-    _loadVoices();
-    window.speechSynthesis.addEventListener('voiceschanged', _loadVoices);
+  function _personaVoice(p) {
+    // Pick OpenAI TTS voice by persona gender.
+    // Female: nova (bright, warm — good for café/pharmacy/Airbnb personas)
+    // Male:   onyx (deep, warm — good for hotel/formal personas)
+    if (!p) return 'nova';
+    const n = (p.name || '').toLowerCase();
+    if (n.includes('herr') || n.includes('fischer') || n.includes('huber') ||
+        n.includes('dr.') || n.includes('hans') || n.includes('klaus')) {
+      return 'onyx';
+    }
+    return 'nova';
   }
 
-  function speakPersona(text) {
-    if (!window.speechSynthesis || sessionMuted || !text) return;
-    window.speechSynthesis.cancel();
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.lang = 'de-DE';
-    utt.rate = 0.92;
-    // Prefer a German female voice (e.g. for Maria/Frau Berger)
-    const germanVoice = _ttsVoices.find(v => v.lang.startsWith('de') && v.name.toLowerCase().includes('female'))
-                     || _ttsVoices.find(v => v.lang.startsWith('de'));
-    if (germanVoice) utt.voice = germanVoice;
-    window.speechSynthesis.speak(utt);
+  async function speakPersona(text, p) {
+    if (sessionMuted || !text) return;
+    stopSpeaking();
+    try {
+      const voice = _personaVoice(p || personas[selectedIdx]);
+      const res = await fetch('/api/gesprache/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice }),
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      _currentAudio = new Audio(url);
+      _currentAudio.onended = () => URL.revokeObjectURL(url);
+      _currentAudio.play();
+    } catch (e) { /* TTS failure is non-fatal */ }
   }
 
   function stopSpeaking() {
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (_currentAudio) {
+      _currentAudio.pause();
+      _currentAudio.currentTime = 0;
+      _currentAudio = null;
+    }
   }
 
-  // Mute toggle — wired to btn added in HTML below
+  // Mute toggle
   const muteBtnEl = document.getElementById('session-mute-btn');
   if (muteBtnEl) {
     muteBtnEl.addEventListener('click', () => {

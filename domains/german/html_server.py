@@ -380,6 +380,33 @@ def gesprache_ai_turn():
         return jsonify({"ok": False, "error": str(e), "model": model}), 502
 
 
+@app.route("/api/gesprache/speak", methods=["POST"])
+def gesprache_speak():
+    data  = request.get_json(force=True)
+    text  = data.get("text", "").strip()
+    voice = data.get("voice", "nova")   # nova/shimmer = female, onyx/echo = male
+    if not text:
+        return jsonify({"error": "text required"}), 400
+    if voice not in ("alloy", "echo", "fable", "nova", "onyx", "shimmer"):
+        voice = "nova"
+    try:
+        import keyring as _kr
+        from openai import OpenAI as _OAI
+        from flask import Response as _Resp
+        api_key = _kr.get_password("openai", "api_key")
+        if not api_key:
+            return jsonify({"error": "OpenAI API key not configured"}), 500
+        client = _OAI(api_key=api_key)
+        resp = client.audio.speech.create(
+            model="tts-1",
+            voice=voice,
+            input=text,
+        )
+        return _Resp(resp.content, mimetype="audio/mpeg")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/round-action", methods=["POST"])
 def api_round_action():
     body = request.get_json(force=True)
