@@ -3822,6 +3822,34 @@ body.archiv-mode .page {
 .btn-session-send:hover:not(:disabled) { border-color: var(--md-accent); color: var(--md-accent); }
 .btn-session-send:disabled { opacity: 0.4; cursor: not-allowed; }
 
+.session-listen-status {
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  color: var(--md-text-secondary);
+  padding: 0.35rem 0.75rem;
+  letter-spacing: 0.03em;
+  border-top: 1px solid var(--md-parch-deep);
+  min-height: 1.6rem;
+}
+.session-listen-status.listening-speaking {
+  color: #6fcf6f;
+}
+.session-listen-status.listening-processing {
+  color: var(--md-accent);
+}
+
+.btn-session-pause {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 4px;
+  background: transparent;
+  font-size: 0.78rem;
+  cursor: pointer;
+  color: var(--md-text-secondary);
+  margin-left: auto;
+}
+.btn-session-pause:hover { background: rgba(255,255,255,0.07); }
+
 .session-footer-status {
   font-size: 0.8rem;
   color: var(--md-text-secondary);

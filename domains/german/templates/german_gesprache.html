@@ -100,16 +100,15 @@
                 · <span id="session-persona-label"></span>
                 · <span id="session-model-label"></span>
               </span>
+              <button id="session-pause-btn" class="btn-session-pause" title="Gespräch pausieren">⏸ Pause</button>
               <button id="session-mute-btn" class="btn-session-mute" title="Ton ausschalten">🔊</button>
               <button id="end-session-btn" class="btn-session-end">■ Beenden</button>
             </div>
             <div id="session-chat-log" class="session-chat-log"></div>
+            <div class="session-listen-status" id="session-listen-status">Zuhört…</div>
             <div class="session-input-row">
-              <button id="session-record-btn" class="btn-record">● Aufnehmen</button>
-              <button id="session-stop-btn" class="btn-stop" style="display:none">■ Stop</button>
-              <span id="session-timer" class="gesprache-timer">00:00</span>
               <input type="text" id="session-input" class="session-input-field"
-                     placeholder="Schreiben oder aufnehmen…">
+                     placeholder="Oder tippen und Enter…">
               <button id="session-send-btn" class="btn-session-send">→ Senden</button>
             </div>
             <div class="session-footer-status" id="session-footer-status"></div>
@@ -790,10 +789,13 @@ document.body.classList.add('parch-mode');
     startSessionBtn.disabled = true;
 
     await sendTurn('');
+    // Opening turn done — start continuous listening loop
+    if (window._sessionListenStart) window._sessionListenStart();
   });
 
   endSessionBtn.addEventListener('click', () => {
     sessionActive = false;
+    if (window._sessionListenStop) window._sessionListenStop();
     stopSpeaking();
     sessionPanel.style.display = 'none';
     startSessionBtn.style.display = '';
@@ -828,141 +830,191 @@ document.body.classList.add('parch-mode');
     }
   });
 
-  // ── Session voice recording with VAD ─────────────────────────────────────
-  // Auto-stops when you stop speaking (1.5s silence). No manual Stop needed.
+  // ── Continuous listening loop with VAD ───────────────────────────────────
+  // Session listens continuously. Pause button freezes the loop.
 
   (function () {
-    let mediaRecorder  = null;
-    let audioChunks    = [];
-    let recordingTimer = null;
-    let secondsElapsed = 0;
-    let vadInterval    = null;
-    let audioCtx       = null;
+    if (!navigator.mediaDevices || !window.MediaRecorder) return;
 
-    const recordBtn = document.getElementById('session-record-btn');
-    const stopBtn   = document.getElementById('session-stop-btn');
-    const timerEl   = document.getElementById('session-timer');
+    const listenStatusEl = document.getElementById('session-listen-status');
+    const pauseBtn       = document.getElementById('session-pause-btn');
 
-    if (!navigator.mediaDevices || !window.MediaRecorder) {
-      recordBtn.style.display = 'none';
-      return;
+    let loopRunning  = false;   // is the continuous listen loop active
+    let paused       = false;   // user paused
+    let turnInFlight = false;   // AI turn being processed
+
+    function setListenStatus(text, cls) {
+      if (!listenStatusEl) return;
+      listenStatusEl.textContent = text;
+      listenStatusEl.className = 'session-listen-status ' + (cls || '');
     }
 
-    function stopRecording() {
-      if (vadInterval)  { clearInterval(vadInterval);  vadInterval  = null; }
-      if (audioCtx)     { audioCtx.close();            audioCtx     = null; }
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-    }
+    // ── Core: capture one turn via VAD ──────────────────────────────────────
+    // Returns audio blob when speech detected + silence follows, or null if interrupted.
+    async function captureOneTurn() {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+      const chunks   = [];
+      recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
 
-    recordBtn.addEventListener('click', async () => {
-      if (!sessionActive) return;
-      stopSpeaking();
-      await new Promise(r => setTimeout(r, 300)); // let speaker audio clear
+      const audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+      const analyser  = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      audioCtx.createMediaStreamSource(stream).connect(analyser);
+      const pcmData = new Float32Array(analyser.fftSize);
 
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioChunks    = [];
-        secondsElapsed = 0;
-        timerEl.textContent = '00:00';
+      const SPEECH_RMS   = 0.018;  // RMS to consider speech started
+      const SILENCE_RMS  = 0.012;  // RMS below = silence
+      const SPEECH_MIN   = 300;    // ms of speech before VAD arms
+      const SILENCE_MS   = 1500;   // ms of silence to end turn
 
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
-        mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
-        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+      return new Promise(resolve => {
+        let speechStart  = null;
+        let silenceFrom  = null;
+        let recording    = false;
+        let done         = false;
 
-        mediaRecorder.onstop = async () => {
-          clearInterval(recordingTimer);
-          if (vadInterval)  { clearInterval(vadInterval);  vadInterval  = null; }
-          if (audioCtx)     { audioCtx.close();            audioCtx     = null; }
+        function finish(blob) {
+          if (done) return;
+          done = true;
+          clearInterval(vad);
+          recorder.onstop = null;
+          if (recorder.state !== 'inactive') recorder.stop();
+          audioCtx.close();
           stream.getTracks().forEach(t => t.stop());
+          resolve(blob);
+        }
 
-          stopBtn.style.display = 'none';
-          recordBtn.disabled = false;
-          recordBtn.classList.remove('recording');
-          recordBtn.textContent = '● Sprechen';
+        recorder.start(100);
 
-          const mimeUsed = mediaRecorder.mimeType || 'audio/webm';
-          const blob = new Blob(audioChunks, { type: mimeUsed });
-          const formData = new FormData();
-          formData.append('audio', blob, 'session.webm');
+        const vad = setInterval(() => {
+          // Interrupted by pause or session end
+          if (!loopRunning || paused || !sessionActive) { finish(null); return; }
 
-          timerEl.textContent = '⋯';
-          try {
-            const res  = await fetch('/api/transcribe', { method: 'POST', body: formData });
-            const data = await res.json();
-            timerEl.textContent = '00:00';
-            if (data.transcript) {
-              const text = data.transcript.trim();
-              if (sessionActive && text) {
-                sessionInputEl.value = text;   // show briefly so user sees it
-                await sendTurn(text);
-                sessionInputEl.value = '';
-              }
-            } else {
-              sessionInputEl.placeholder = '⚠ Nicht erkannt — nochmal versuchen.';
-              setTimeout(() => { sessionInputEl.placeholder = 'Schreiben oder sprechen…'; }, 3000);
-            }
-          } catch (err) {
-            timerEl.textContent = '00:00';
-            sessionInputEl.placeholder = '⚠ Verbindungsfehler.';
-            setTimeout(() => { sessionInputEl.placeholder = 'Schreiben oder sprechen…'; }, 3000);
-          }
-        };
-
-        mediaRecorder.start(1000);
-        recordBtn.disabled = true;
-        recordBtn.classList.add('recording');
-        recordBtn.textContent = '● Zuhören…';
-        stopBtn.style.display = 'inline-block';
-
-        recordingTimer = setInterval(() => {
-          secondsElapsed++;
-          const mm = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
-          const ss = String(secondsElapsed % 60).padStart(2, '0');
-          timerEl.textContent = `${mm}:${ss}`;
-        }, 1000);
-
-        // ── VAD: auto-stop on 1.5s silence ──────────────────────────────────
-        const MIN_SPEECH_MS  = 400;   // don't trigger VAD in first 400ms
-        const SILENCE_MS     = 1500;  // stop after 1.5s silence
-        const SILENCE_RMS    = 0.012; // RMS threshold (0–1)
-
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256;
-        audioCtx.createMediaStreamSource(stream).connect(analyser);
-        const pcmData = new Float32Array(analyser.fftSize);
-
-        const startTime   = Date.now();
-        let   silenceFrom = null;
-
-        vadInterval = setInterval(() => {
           analyser.getFloatTimeDomainData(pcmData);
           let sum = 0;
           for (let i = 0; i < pcmData.length; i++) sum += pcmData[i] * pcmData[i];
           const rms = Math.sqrt(sum / pcmData.length);
 
-          const elapsed = Date.now() - startTime;
-          if (elapsed < MIN_SPEECH_MS) { silenceFrom = null; return; }
-
-          if (rms < SILENCE_RMS) {
-            if (!silenceFrom) silenceFrom = Date.now();
-            else if (Date.now() - silenceFrom >= SILENCE_MS) {
-              clearInterval(vadInterval); vadInterval = null;
-              stopRecording();
+          if (rms >= SPEECH_RMS) {
+            if (!speechStart) speechStart = Date.now();
+            silenceFrom = null;
+            if (!recording && Date.now() - speechStart >= SPEECH_MIN) {
+              recording = true;
+              setListenStatus('● Spricht…', 'listening-speaking');
             }
           } else {
-            silenceFrom = null;
+            speechStart = null;
+            if (recording) {
+              if (!silenceFrom) silenceFrom = Date.now();
+              else if (Date.now() - silenceFrom >= SILENCE_MS) {
+                // Silence detected — capture what we have
+                recorder.requestData();
+                setTimeout(() => {
+                  const blob = new Blob(chunks, { type: mimeType || 'audio/webm' });
+                  finish(blob);
+                }, 100);
+              }
+            }
           }
         }, 80);
 
-      } catch (err) {
-        recordBtn.textContent = '● Sprechen';
-        recordBtn.disabled = false;
-      }
-    });
+        // Safety: also resolve on recorder stop in case of external stop
+        recorder.addEventListener('stop', () => finish(null), { once: true });
+      });
+    }
 
-    // Manual stop still works as override
-    stopBtn.addEventListener('click', stopRecording);
+    // ── Main listen loop ─────────────────────────────────────────────────────
+    async function startLoop() {
+      loopRunning = true;
+      paused      = false;
+
+      while (loopRunning && sessionActive) {
+        if (paused) {
+          setListenStatus('⏸ Pause');
+          await new Promise(r => setTimeout(r, 200));
+          continue;
+        }
+        if (turnInFlight) {
+          await new Promise(r => setTimeout(r, 200));
+          continue;
+        }
+
+        setListenStatus('Zuhört…', 'listening-idle');
+
+        let blob;
+        try {
+          blob = await captureOneTurn();
+        } catch (e) {
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        }
+
+        if (!blob || !sessionActive || paused) continue;
+
+        // Process turn
+        turnInFlight = true;
+        setListenStatus('Transkribiert…', 'listening-processing');
+        try {
+          const formData = new FormData();
+          formData.append('audio', blob, 'turn.webm');
+          const res  = await fetch('/api/transcribe', { method: 'POST', body: formData });
+          const data = await res.json();
+          if (data.transcript) {
+            const text = data.transcript.trim();
+            if (text && sessionActive) {
+              sessionInputEl.value = text;
+              setListenStatus('Antwortet…', 'listening-processing');
+              await sendTurn(text);
+              sessionInputEl.value = '';
+              // Wait for TTS to finish before re-listening
+              await waitForTTSEnd();
+            }
+          }
+        } catch (e) { /* non-fatal, loop continues */ }
+        turnInFlight = false;
+
+        // Brief gap before next turn
+        if (loopRunning && !paused && sessionActive) {
+          await new Promise(r => setTimeout(r, 400));
+        }
+      }
+
+      setListenStatus('');
+    }
+
+    // Wait until _currentAudio finishes playing (or 8s max)
+    function waitForTTSEnd() {
+      return new Promise(resolve => {
+        if (!_currentAudio) { resolve(); return; }
+        const audio = _currentAudio;
+        const done = () => resolve();
+        audio.addEventListener('ended', done, { once: true });
+        audio.addEventListener('pause', done, { once: true });
+        setTimeout(resolve, 8000);
+      });
+    }
+
+    // ── Pause button ─────────────────────────────────────────────────────────
+    if (pauseBtn) {
+      pauseBtn.addEventListener('click', () => {
+        paused = !paused;
+        if (paused) {
+          pauseBtn.textContent = '▶ Fortsetzen';
+          pauseBtn.title = 'Zuhören fortsetzen';
+          setListenStatus('⏸ Pause');
+        } else {
+          pauseBtn.textContent = '⏸ Pause';
+          pauseBtn.title = 'Gespräch pausieren';
+        }
+      });
+    }
+
+    // ── Expose start/stop for session lifecycle ──────────────────────────────
+    window._sessionListenStart = () => { if (!loopRunning) startLoop(); };
+    window._sessionListenStop  = () => { loopRunning = false; paused = false; };
+
   })();
 
   // ── Transcript analysis (KI-Personas pane) ────────────────────────────────
