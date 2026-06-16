@@ -3926,3 +3926,11 @@ body.archiv-mode .page {
   padding: 0 0.75rem 0.4rem;
   min-height: 1.2em;
 }
+
+/* ── Archiv responsive — mobile ─────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .archiv-row { gap: 0.5rem; }
+  .archiv-date { min-width: 62px; font-size: 0.75rem; }
+  .archiv-persona { min-width: 80px; font-size: 0.85rem; }
+  .archiv-source, .archiv-mode-badge { display: none; }
+}
