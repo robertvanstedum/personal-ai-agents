@@ -196,7 +196,7 @@ MODAL_CSS_JS = """
 
 def _inject_banner(soup: BeautifulSoup, captured_at: str) -> None:
     dt = datetime.fromisoformat(captured_at.replace("Z", "+00:00"))
-    month_label = dt.strftime("%B %Y")
+    date_label = dt.strftime("%B %-d, %Y")
 
     head = soup.find("head")
     if head:
@@ -204,9 +204,9 @@ def _inject_banner(soup: BeautifulSoup, captured_at: str) -> None:
 
     banner_html = f"""<div class="preview-banner">
       <span>Preview snapshot — </span>
-      <span class="preview-date">Captured {month_label}</span>
+      <span class="preview-date">Captured {date_label}</span>
       <span>. Data is real but frozen.</span>
-      <a href="/contact" class="preview-request-link">Request live access →</a>
+      <a href="https://app.minimoi.ai/register" class="preview-request-link">Request live access →</a>
     </div>"""
     banner = BeautifulSoup(banner_html, "html.parser")
 
