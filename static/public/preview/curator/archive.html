@@ -217,20 +217,28 @@
   font-size: 11px; letter-spacing: 0.04em;
   padding: 7px 20px;
   border-bottom: 1px solid rgba(198,138,94,0.3);
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
 .preview-banner .preview-date { color: rgba(245,240,232,0.7); }
+.preview-banner-text { flex: 1; white-space: nowrap; }
 .preview-request-link {
-  color: #C68A5E; text-decoration: none; margin-left: auto;
+  color: #C68A5E; text-decoration: none; margin-left: auto; flex-shrink: 0;
   border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
 }
 .preview-request-link:hover { background: rgba(198,138,94,0.1); }
+@media (max-width: 768px) {
+  .preview-banner { padding: 8px 14px 10px; }
+  .preview-banner-text { width: 100%; white-space: normal; }
+  .preview-request-link {
+    margin-left: 0; margin-top: 6px;
+    padding: 6px 14px; min-height: 36px;
+    display: inline-flex; align-items: center;
+  }
+}
 </style>
 </head>
 <body><div class="preview-banner">
-<span>Preview snapshot — </span>
-<span class="preview-date">Captured June 16, 2026</span>
-<span>. Data is real but frozen.</span>
+<span class="preview-banner-text">Preview snapshot — <span class="preview-date">Captured June 16, 2026</span>. Data is real but frozen.</span>
 <a class="preview-request-link" href="https://app.minimoi.ai/register">Request live access →</a>
 </div>
 <style id="portal-offset-css">body{padding-top:38px!important;}nav.curator-subnav{top:38px!important;}</style>

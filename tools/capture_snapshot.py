@@ -149,14 +149,24 @@ BANNER_CSS = """
   font-size: 11px; letter-spacing: 0.04em;
   padding: 7px 20px;
   border-bottom: 1px solid rgba(198,138,94,0.3);
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
+.preview-banner-text { flex: 1; white-space: nowrap; }
 .preview-banner .preview-date { color: rgba(245,240,232,0.7); }
 .preview-request-link {
-  color: #C68A5E; text-decoration: none; margin-left: auto;
+  color: #C68A5E; text-decoration: none; margin-left: auto; flex-shrink: 0;
   border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
 }
 .preview-request-link:hover { background: rgba(198,138,94,0.1); }
+@media (max-width: 768px) {
+  .preview-banner { padding: 8px 14px 10px; }
+  .preview-banner-text { width: 100%; white-space: normal; }
+  .preview-request-link {
+    margin-left: 0; margin-top: 6px;
+    padding: 6px 14px; min-height: 36px;
+    display: inline-flex; align-items: center;
+  }
+}
 </style>
 """
 
@@ -224,9 +234,7 @@ def _inject_banner(soup: BeautifulSoup, captured_at: str) -> None:
         head.append(BeautifulSoup(FETCH_INTERCEPT_JS + BANNER_CSS, "html.parser"))
 
     banner_html = f"""<div class="preview-banner">
-      <span>Preview snapshot — </span>
-      <span class="preview-date">Captured {date_label}</span>
-      <span>. Data is real but frozen.</span>
+      <span class="preview-banner-text">Preview snapshot — <span class="preview-date">Captured {date_label}</span>. Data is real but frozen.</span>
       <a href="https://app.minimoi.ai/register" class="preview-request-link">Request live access →</a>
     </div>"""
     banner = BeautifulSoup(banner_html, "html.parser")
@@ -440,6 +448,18 @@ def _inject_whats_running_links(soup: BeautifulSoup) -> None:
                 break
 
 
+def _fix_german_nav_mobile(soup: BeautifulSoup) -> None:
+    """Scope nav{top:38px!important} to desktop-only so mobile bottom-tab-bar works."""
+    for style_tag in soup.find_all("style", id="portal-offset-css"):
+        old = style_tag.string or ""
+        fixed = old.replace(
+            "nav{top:38px!important;}",
+            "@media (min-width:769px){nav{top:38px!important;}}",
+        )
+        if fixed != old:
+            style_tag.string = fixed
+
+
 def _apply_career_aggregate(soup: BeautifulSoup) -> None:
     """Empty the positions table and pipeline content — modal handles clicks.
 
@@ -527,6 +547,9 @@ def process_page(html: str, page: dict, captured_at: str, extra: dict | None = N
 
     if page.get("career_aggregate"):
         _apply_career_aggregate(soup)
+
+    if page.get("domain") == "german":
+        _fix_german_nav_mobile(soup)
 
     if page.get("name") == "lesen":
         _process_lesen_page(soup, (extra or {}).get("lesen_data", {}))
