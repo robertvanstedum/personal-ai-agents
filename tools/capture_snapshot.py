@@ -441,29 +441,22 @@ def _inject_whats_running_links(soup: BeautifulSoup) -> None:
 
 
 def _apply_career_aggregate(soup: BeautifulSoup) -> None:
-    """Replace the positions table with a 'not available in preview' gate."""
-    gate_html = (
-        '<div style="display:flex;flex-direction:column;align-items:center;'
-        'justify-content:center;min-height:220px;text-align:center;padding:2rem;">'
-        '<p style="color:rgba(245,240,232,0.5);font-size:0.9rem;line-height:1.65;'
-        'margin-bottom:1.25rem;font-family:\'Source Sans 3\',system-ui,sans-serif;">'
-        'Position detail is not available in preview.</p>'
-        '<a href="https://app.minimoi.ai/register" style="color:#C68A5E;'
-        'border:1px solid rgba(198,138,94,0.5);padding:7px 20px;border-radius:4px;'
-        'text-decoration:none;font-size:0.85rem;">Request live access →</a>'
-        '</div>'
-    )
-    tables = soup.find_all("table")
-    for table in tables:
-        rows = table.find_all("tr")
-        if len(rows) > 1:
-            table.replace_with(BeautifulSoup(gate_html, "html.parser"))
+    """Empty the positions table and pipeline content — modal handles clicks.
+
+    Design decision (2026-06-16): show empty UI (filters, tabs, header visible)
+    but no position data. The 'NOT AVAILABLE IN PREVIEW' modal fires on any click
+    via data-admin-blocked. No inline text or button in the content area.
+    """
+    # Remove positions table
+    for table in soup.find_all("table"):
+        if len(table.find_all("tr")) > 1:
+            table.replace_with(BeautifulSoup('<div style="min-height:180px;"></div>', "html.parser"))
             break
-    # Also replace any existing faint placeholder from prior runs
-    for wrap in soup.find_all("div", class_="table-wrap"):
-        existing = wrap.find("div", style=lambda s: s and "opportunities tracked" in (s or ""))
-        if existing:
-            existing.replace_with(BeautifulSoup(gate_html, "html.parser"))
+    # Remove pipeline content if present (active-pipeline section)
+    for section in soup.find_all(id=lambda i: i and "pipeline" in i.lower()):
+        for child in list(section.children):
+            if hasattr(child, "decompose"):
+                child.decompose()
 
 
 def _asset_local_name(url_path: str) -> str:
