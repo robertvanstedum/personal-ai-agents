@@ -168,10 +168,10 @@
       </div><!-- .ueben-layout -->
 
       <!-- Recent sessions -->
-      {% if sessions %}
+      <div id="letzte-sitzungen-section" style="{{ 'display:none' if not sessions else '' }}">
       <hr class="gesprache-divider">
       <div class="gesprache-section-label">Letzte Sitzungen</div>
-      <div class="gesprache-sessions-list">
+      <div class="gesprache-sessions-list" id="letzte-sitzungen-list">
         {% for s in sessions %}
         <div class="gesprache-session-row">
           <span class="gesprache-session-date">{{ s.date }}</span>
@@ -182,7 +182,7 @@
         {% endfor %}
       </div>
       <p class="hint" style="margin-top:0.75rem"><a href="/archiv">→ Alle Sitzungen im Archiv</a></p>
-      {% endif %}
+      </div>
 
     </div><!-- #pane-ki-personas -->
 
@@ -1090,6 +1090,20 @@ document.body.classList.add('parch-mode');
       document.getElementById('transcript-analysiert-row').style.display = '';
       btn.textContent = 'Analysieren';
       btn.disabled = false;
+
+      // Prepend new session to Letzte Sitzungen without a page reload
+      const sessionList = document.getElementById('letzte-sitzungen-list');
+      if (sessionList) {
+        const today = new Date().toISOString().slice(0, 10);
+        const row = document.createElement('div');
+        row.className = 'gesprache-session-row';
+        row.innerHTML = `<span class="gesprache-session-date">${today}</span>`
+          + `<span class="gesprache-session-persona">${personaName}</span>`
+          + `<span class="gesprache-session-scene">${scene}</span>`
+          + `<span class="gesprache-session-source">ki_sitzung</span>`;
+        sessionList.prepend(row);
+        document.getElementById('letzte-sitzungen-section').style.display = '';
+      }
 
       requestAnimationFrame(() => {
         const panel = document.getElementById('persona-detail');
