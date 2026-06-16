@@ -3934,3 +3934,30 @@ body.archiv-mode .page {
   .archiv-persona { min-width: 80px; font-size: 0.85rem; }
   .archiv-source, .archiv-mode-badge { display: none; }
 }
+
+/* ── Lesen category cards — 2-per-row grid on mobile ────────────────────────── */
+@media (max-width: 768px) {
+  .lesen-cat-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    flex-wrap: unset;
+    gap: 0.75rem;
+  }
+  .lesen-cat-card {
+    min-width: unset;
+    height: 130px;
+  }
+}
+
+/* ── Admin persona list — wrap buttons on mobile ─────────────────────────────── */
+@media (max-width: 768px) {
+  .admin-list-item {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .admin-item-actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+}
