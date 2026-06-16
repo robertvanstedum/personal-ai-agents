@@ -441,24 +441,29 @@ def _inject_whats_running_links(soup: BeautifulSoup) -> None:
 
 
 def _apply_career_aggregate(soup: BeautifulSoup) -> None:
-    """Option A: replace opportunity pipeline table with aggregate counts only."""
-    # Find any table or section with opportunity rows
+    """Replace the positions table with a 'not available in preview' gate."""
+    gate_html = (
+        '<div style="display:flex;flex-direction:column;align-items:center;'
+        'justify-content:center;min-height:220px;text-align:center;padding:2rem;">'
+        '<p style="color:rgba(245,240,232,0.5);font-size:0.9rem;line-height:1.65;'
+        'margin-bottom:1.25rem;font-family:\'Source Sans 3\',system-ui,sans-serif;">'
+        'Position detail is not available in preview.</p>'
+        '<a href="https://app.minimoi.ai/register" style="color:#C68A5E;'
+        'border:1px solid rgba(198,138,94,0.5);padding:7px 20px;border-radius:4px;'
+        'text-decoration:none;font-size:0.85rem;">Request live access →</a>'
+        '</div>'
+    )
     tables = soup.find_all("table")
     for table in tables:
-        # Count rows (minus header)
         rows = table.find_all("tr")
-        data_rows = len(rows) - 1 if rows else 0
-        if data_rows > 0:
-            placeholder = soup.new_tag("div")
-            placeholder["style"] = (
-                "padding: 16px; background: rgba(245,240,232,0.04); "
-                "border: 1px solid rgba(221,214,200,0.3); border-radius: 6px; "
-                "font-size: 13px; color: rgba(245,240,232,0.6); "
-                "font-family: 'Source Sans 3', system-ui, sans-serif;"
-            )
-            placeholder.string = f"{data_rows} opportunities tracked. Detail available with guest access."
-            table.replace_with(placeholder)
-            break  # Replace first substantial table only
+        if len(rows) > 1:
+            table.replace_with(BeautifulSoup(gate_html, "html.parser"))
+            break
+    # Also replace any existing faint placeholder from prior runs
+    for wrap in soup.find_all("div", class_="table-wrap"):
+        existing = wrap.find("div", style=lambda s: s and "opportunities tracked" in (s or ""))
+        if existing:
+            existing.replace_with(BeautifulSoup(gate_html, "html.parser"))
 
 
 def _asset_local_name(url_path: str) -> str:
