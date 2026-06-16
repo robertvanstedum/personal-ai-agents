@@ -236,7 +236,7 @@
       return Promise.resolve(new Response(JSON.stringify(libData), {status: 200, headers: {'Content-Type': 'application/json'}}));
     }
     // Leanings API — serve pre-captured data if available
-    if (u === '/api/research/leanings' && (!opts || !opts.method || opts.method === 'GET')) {
+    if (u.indexOf('/api/research/leanings') !== -1 && !(opts && opts.method && opts.method !== 'GET')) {
       var lData = window._previewLeaningsData || [];
       return Promise.resolve(new Response(JSON.stringify({ok: true, leanings: lData}), {status: 200, headers: {'Content-Type': 'application/json'}}));
     }
