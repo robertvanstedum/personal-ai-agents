@@ -702,37 +702,11 @@ document.body.classList.add('parch-mode');
         body: JSON.stringify({ text, voice }),
       });
       if (!res.ok) return;
-
-      // Stream audio via MediaSource so playback starts on first chunk (~500ms)
-      // rather than waiting for the full file (~3s).
-      if (window.MediaSource && MediaSource.isTypeSupported('audio/mpeg')) {
-        const ms  = new MediaSource();
-        const url = URL.createObjectURL(ms);
-        _currentAudio = new Audio(url);
-        _currentAudio.play().catch(() => {});
-        await new Promise(resolve => ms.addEventListener('sourceopen', resolve, {once: true}));
-        const sb = ms.addSourceBuffer('audio/mpeg');
-        const reader = res.body.getReader();
-        const _waitUpdate = () => new Promise(r => sb.addEventListener('updateend', r, {once: true}));
-        try {
-          while (true) {
-            const {done, value} = await reader.read();
-            if (done) break;
-            if (sb.updating) await _waitUpdate();
-            sb.appendBuffer(value);
-          }
-          if (sb.updating) await _waitUpdate();
-          ms.endOfStream();
-        } catch (e) { try { ms.endOfStream(); } catch(_) {} }
-        _currentAudio.onended = () => URL.revokeObjectURL(url);
-      } else {
-        // Fallback: wait for full blob (Safari MSE quirks)
-        const blob = await res.blob();
-        const url  = URL.createObjectURL(blob);
-        _currentAudio = new Audio(url);
-        _currentAudio.onended = () => URL.revokeObjectURL(url);
-        _currentAudio.play();
-      }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      _currentAudio = new Audio(url);
+      _currentAudio.onended = () => URL.revokeObjectURL(url);
+      _currentAudio.play();
     } catch (e) { /* TTS failure is non-fatal */ }
   }
 
