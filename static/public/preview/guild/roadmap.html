@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Roadmap — Guild</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&amp;family=DM+Mono:wght@400;500&amp;family=Source+Sans+3:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="/static/guild.css" rel="stylesheet"/>
+<style>
+    :root {
+      --bg: #f5f0e8; --surface: #faf7f2; --surface2: #f0ebe0;
+      --border: #ddd6c8; --text: #2a2418; --text-muted: #6b5f4e;
+      --text-dim: #9e9080; --accent: #8b5e2a; --accent-dim: rgba(139,94,42,0.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+    /* ── Guild nav ── */
+    nav.guild-nav {
+      position: sticky; top: 0; z-index: 100;
+      background: #2a1f14;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .guild-nav-brand {
+      height: 44px; display: flex; align-items: center;
+      padding: 0 1.5rem;
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); letter-spacing: 0.08em;
+    }
+    .guild-nav-brand a { color: #C68A5E; text-decoration: none; }
+    .guild-nav-brand a:hover { color: #ffffff; }
+    .guild-nav-brand a.nav-active { color: #ffffff; font-weight: 700; }
+    .nav-sep { color: rgba(255,255,255,0.2); margin: 0 12px; }
+    .guild-subnav {
+      height: 36px; display: flex; align-items: center;
+      padding: 0 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,0,0,0.15);
+    }
+    .subnav-back {
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: rgba(198,138,94,0.4); text-decoration: none;
+      padding: 0 14px 0 0; height: 36px;
+      display: flex; align-items: center;
+      margin-right: 10px;
+      border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    .subnav-back:hover { color: rgba(198,138,94,0.75); }
+    .subnav-link {
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: rgba(198,138,94,0.7); text-decoration: none;
+      padding: 0 12px; height: 36px;
+      display: flex; align-items: center;
+      border-bottom: 2px solid transparent;
+    }
+    .subnav-link:hover { color: #C68A5E; }
+    .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; font-weight: 700; }
+    .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
+
+    /* ── Markdown content ── */
+    .roadmap-wrap {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 36px 40px 72px;
+    }
+
+    .roadmap-content h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.75rem; font-weight: 400;
+      color: var(--text); margin-bottom: 6px;
+    }
+    .roadmap-content h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.2rem; font-weight: 400;
+      color: var(--text); margin-top: 36px; margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .roadmap-content h3 {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-muted); font-weight: 600;
+      margin-top: 20px; margin-bottom: 8px;
+    }
+    .roadmap-content p {
+      color: var(--text-muted); line-height: 1.65;
+      margin-bottom: 12px; font-size: 13.5px;
+    }
+    .roadmap-content ul, .roadmap-content ol {
+      padding-left: 20px; margin-bottom: 14px;
+    }
+    .roadmap-content li {
+      color: var(--text-muted); line-height: 1.6;
+      font-size: 13.5px; margin-bottom: 5px;
+    }
+    .roadmap-content li strong { color: var(--text); }
+    .roadmap-content code {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 3px; padding: 1px 5px; color: var(--accent);
+    }
+    .roadmap-content pre {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 5px; padding: 14px 16px;
+      overflow-x: auto; margin-bottom: 16px;
+    }
+    .roadmap-content pre code {
+      background: none; border: none; padding: 0;
+      font-size: 11px; color: var(--text-muted);
+    }
+    .roadmap-content blockquote {
+      border-left: 3px solid rgba(139,94,42,0.3);
+      padding: 6px 16px; margin: 14px 0;
+      color: var(--text-dim); font-style: italic;
+    }
+    .roadmap-content hr {
+      border: none; border-top: 1px solid var(--border);
+      margin: 28px 0;
+    }
+    .roadmap-content a { color: var(--accent); }
+    .roadmap-content a:hover { text-decoration: underline; }
+    .roadmap-content table {
+      width: 100%; border-collapse: collapse; margin-bottom: 16px;
+    }
+    .roadmap-content th {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--text-muted); font-weight: 600;
+      padding: 8px 12px; text-align: left;
+      border-bottom: 1px solid var(--border); background: var(--surface2);
+    }
+    .roadmap-content td {
+      font-size: 13px; color: var(--text-muted);
+      padding: 8px 12px; border-bottom: 1px solid rgba(221,214,200,0.5);
+    }
+    .roadmap-content tr:last-child td { border-bottom: none; }
+
+    /* read-only notice */
+    .readonly-notice {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-dim);
+      margin-bottom: 28px;
+    }
+  </style>
+
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  // Endpoints allowed to pass through to the real server
+  var PASSTHROUGH = ['/app/german/api/translate'];
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    // Lesen category API — serve pre-captured data if available
+    if (u.indexOf('/api/lesen-category') !== -1) {
+      var cat = '';
+      try { cat = new URL(u, location.origin).searchParams.get('category') || ''; } catch(e) {}
+      var data = window._previewLesenData || {};
+      var articles = data[cat] || [];
+      return Promise.resolve(new Response(JSON.stringify({articles: articles}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    // Allow translate through — works for authenticated users, fails silently otherwise
+    for (var i = 0; i < PASSTHROUGH.length; i++) {
+      if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
+    }
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
+<style id="preview-banner-style">
+.preview-banner {
+  position: sticky; top: 0; z-index: 9999;
+  background: #2A1F14; color: #F5F0E8;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 11px; letter-spacing: 0.04em;
+  padding: 7px 20px;
+  border-bottom: 1px solid rgba(198,138,94,0.3);
+  display: flex; align-items: center; gap: 8px;
+}
+.preview-banner .preview-date { color: rgba(245,240,232,0.7); }
+.preview-request-link {
+  color: #C68A5E; text-decoration: none; margin-left: auto;
+  border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
+}
+.preview-request-link:hover { background: rgba(198,138,94,0.1); }
+</style>
+</head>
+<body><div class="preview-banner">
+<span>Preview snapshot — </span>
+<span class="preview-date">Captured June 2026</span>
+<span>. Data is real but frozen.</span>
+<a class="preview-request-link" href="/contact">Request live access →</a>
+</div>
+<nav class="guild-nav">
+<div class="guild-nav-brand">
+<a href="/preview/">mini-moi</a>
+<span class="nav-sep">|</span>
+<a href="/preview/curator/briefing.html">Curator</a>
+<span class="nav-sep">|</span>
+<a href="/preview/german/lesen.html">German</a>
+<span class="nav-sep">|</span>
+<a class="nav-active" href="/preview/guild/briefing.html">Guild</a>
+</div>
+<div class="guild-subnav">
+<a class="subnav-back" href="/preview/guild/briefing.html">← Guild</a>
+<a class="subnav-link" href="/preview/guild/queue.html">Queue</a>
+<span class="subnav-dot"> · </span>
+<a class="subnav-link" href="/preview/guild/build_log.html">Build Log</a>
+<span class="subnav-dot"> · </span>
+<a class="subnav-link subnav-active" href="/preview/guild/roadmap.html">Roadmap</a>
+</div>
+</nav>
+<div class="roadmap-wrap">
+<p class="readonly-notice">Read-only · edit in _working/ROADMAP_2026-06-12.md</p>
+<div class="roadmap-content">
+<h1>Roadmap &amp; Backlog</h1>
+<p><em>mini-moi · living document — append freely</em></p>
+<p>This is the working list of future build ideas, roadmap items, and loose
+ends. <strong>Not spec-track</strong> — no Definition of Done or Commit sections, so
+Design/Dev's filter ignores this file entirely (per
+<code>docs/HANDOFF_PROCESS.md</code>). Add a line whenever something comes to mind.</p>
+<p>When an item is ready to build: write it up as a proper spec in <code>_working/</code>
+(with DoD + Commit), then remove or check it off here.</p>
+<hr/>
+<h2>Verify first</h2>
+<ul>
+<li>
+<p><strong>Career — what's actually live?</strong> <code>spec_career_two_page_2026-06-11.md</code>
+  (separate Positions table + filtered Active Pipeline board, collapsed
+  cards) appears unbuilt, but the close_reason/priority/closed_at schema
+  works on the existing single-board Kanban (NVIDIA test confirmed). Open
+  <code>/guild/career</code> and <code>/guild/career/active</code> — if the single board is good
+  enough for daily use, mark the two-page spec <code>deferred</code>. If it's cramped
+  at real volume, it's a real build item.</p>
+</li>
+<li>
+<p><strong>Curator — Archive nav + UI consistency.</strong> <code>spec_archive_navigation_2026-06-10.md</code>
+  and <code>spec_curator_ui_consistency_2026-06-10.md</code> were written last session
+  and may have been archived as "done" without being built (the Archive
+  page issue was re-raised with a new screenshot this session). Check
+  <code>/curator/archive</code> and Daily for the "show more" / "↑ top · show less"
+  patterns — if missing, pull specs back from <code>_working/archive/</code>.</p>
+</li>
+</ul>
+<hr/>
+<h2>Next — high value, ready to spec</h2>
+<ul>
+<li>
+<p><strong>Loop B/C/D first-run validation.</strong> B/C/D (German watch, Curator scout,
+  novelty watch) fire for the first time <strong>Sunday 6/15</strong>. No spec exists
+  for "Robert reviews the first batch, judges quality, confirms go-live or
+  recalibrates." Write before Sunday. Reference: <code>handoff_guild_phase4</code>
+  (archive).</p>
+</li>
+<li>
+<p><strong>Guild Daily Briefing</strong> (<code>/guild</code> homepage). Fully designed in
+  <code>docs/GUILD.md</code> — four sections (Systems/Career/Build/Ahead), mockup
+  built, Telegram timing resolved (7:00/7:30/8:30). Build discipline's data
+  layer (<code>design_log</code>, <code>pipeline.items</code>) now exists specifically to feed
+  this. Biggest "designed, data's ready, no page" gap.</p>
+</li>
+</ul>
+<hr/>
+<h2>Batch — small items</h2>
+<ul>
+<li><code>NAMING_CONVENTIONS.md</code> audit (read-only, Claude Code)</li>
+<li>Career "what I'm targeting" panel — read-only <code>cos_context.json</code> display</li>
+<li>Private repo sync expansion — <code>sync_private_repo.sh</code> +
+  <code>devagent_config.json</code> private paths (curator signals/sources/radar,
+  German session/anki/progress data)</li>
+<li><code>/start-build</code> + <code>/complete-build</code> discipline — dev_agent has <code>/start-build</code>
+  but no <code>/complete-build</code> endpoint; Claude Code never calls either in practice.
+  Add <code>/complete-build</code> to dev_agent, update <code>docs/HANDOFF_PROCESS.md</code> to
+  require both calls as bookends of every build session. Closes the gap where
+  specs stay <code>incomplete</code> or <code>in_build</code> forever after a build ships.</li>
+<li>Manual spec entry from <code>/guild/build</code> — hold until auto-archive test shows
+  whether classification misses are common enough to need it</li>
+<li>Build Clarity round 2 — edit <code>spec_title</code>/<code>summary</code>/<code>github_issue</code> from
+  UI, transition-history view on cards</li>
+</ul>
+<hr/>
+<h2>Later — correctly sequenced, don't pull forward</h2>
+<ul>
+<li>Challenger Phase 3 (German), Phase 4 (Career) — after current sprint, per
+  <code>docs/GUILD.md</code> roadmap. A file existing in archive doesn't mean overdue.</li>
+<li>Mein Deutsch v1.1 — Gespräche toggle (KI-Personas/Konversation pill),
+  Lesen writing drill (GitHub #41) — post Aug 1</li>
+<li>Neo4j Phase 5 — trigger: 20+ tagged sources</li>
+<li>DB password hardening (GitHub #42) — post-Guild build window</li>
+<li>Design/Dev Level 2 — routing, doc lifecycle management</li>
+<li>CoS principal profile + composite character — bookshelved per
+  <code>docs/design/GUILD_CoS_Identity_Founding_2026-06-11.md</code></li>
+</ul>
+<hr/>
+<h2>Platform / Portfolio</h2>
+<ul>
+<li>Full README update — reflect German v1.0, Curator v1.2, Guild all live</li>
+<li>Portfolio translation doc — mini-moi domains → org pattern mapping
+  (table drafted in six-week-focus session, ready to write up)</li>
+<li>minimoi.ai landing — remaining "What's running" entries (Curator, Guild
+  blurbs still need the em-dash/tightening pass "What this is" got)</li>
+</ul>
+<hr/>
+<p><em>Roadmap &amp; Backlog · Guild · 2026-06-12</em>
+<em><code>docs/GUILD.md</code>'s "Roadmap" section should point here rather than
+duplicate — single source of truth.</em></p>
+</div>
+</div>
+
+<style id="preview-modal-style">
+.preview-modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
+}
+.preview-modal-overlay.active { display: flex; }
+.preview-modal {
+  background: #2a1f14; border: 1px solid rgba(198,138,94,0.4);
+  border-radius: 8px; padding: 28px 32px; max-width: 380px; width: 90%;
+  color: #F5F0E8; font-family: 'Source Sans 3', system-ui, sans-serif;
+}
+.preview-modal h3 {
+  font-size: 14px; font-weight: 600; margin: 0 0 12px;
+  color: #C68A5E !important; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.preview-modal p { font-size: 13px; color: rgba(245,240,232,0.75); line-height: 1.6; margin: 0 0 20px; }
+.preview-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.preview-modal-btn {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(198,138,94,0.5); background: transparent; color: #C68A5E;
+  text-decoration: none; display: inline-block;
+}
+.preview-modal-btn:hover { background: rgba(198,138,94,0.15); }
+.preview-modal-close {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(245,240,232,0.2); background: transparent;
+  color: rgba(245,240,232,0.6);
+}
+.preview-modal-close:hover { border-color: rgba(245,240,232,0.4); color: #F5F0E8; }
+</style>
+<div class="preview-modal-overlay" id="previewModal">
+<div class="preview-modal">
+<h3>Not available in preview</h3>
+<div class="preview-modal-actions">
+<a class="preview-modal-btn" href="/contact">Request access →</a>
+<button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>
+</div>
+</div>
+</div>
+<script id="preview-modal-script">
+(function() {
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('[data-admin-blocked]');
+    if (el) { e.preventDefault(); e.stopPropagation(); document.getElementById('previewModal').classList.add('active'); }
+  });
+  document.getElementById('previewModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+})();
+</script>
+</body></html>

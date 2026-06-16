@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>mini-moi — Personal AI Platform</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&amp;family=Source+Sans+3:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="/static/portal.css" rel="stylesheet"/>
+
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  // Endpoints allowed to pass through to the real server
+  var PASSTHROUGH = ['/app/german/api/translate'];
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    // Lesen category API — serve pre-captured data if available
+    if (u.indexOf('/api/lesen-category') !== -1) {
+      var cat = '';
+      try { cat = new URL(u, location.origin).searchParams.get('category') || ''; } catch(e) {}
+      var data = window._previewLesenData || {};
+      var articles = data[cat] || [];
+      return Promise.resolve(new Response(JSON.stringify({articles: articles}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    // Allow translate through — works for authenticated users, fails silently otherwise
+    for (var i = 0; i < PASSTHROUGH.length; i++) {
+      if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
+    }
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
+<style id="preview-banner-style">
+.preview-banner {
+  position: sticky; top: 0; z-index: 9999;
+  background: #2A1F14; color: #F5F0E8;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 11px; letter-spacing: 0.04em;
+  padding: 7px 20px;
+  border-bottom: 1px solid rgba(198,138,94,0.3);
+  display: flex; align-items: center; gap: 8px;
+}
+.preview-banner .preview-date { color: rgba(245,240,232,0.7); }
+.preview-request-link {
+  color: #C68A5E; text-decoration: none; margin-left: auto;
+  border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
+}
+.preview-request-link:hover { background: rgba(198,138,94,0.1); }
+</style>
+</head>
+<body class="landing"><div class="preview-banner">
+<span>Preview snapshot — </span>
+<span class="preview-date">Captured June 2026</span>
+<span>. Data is real but frozen.</span>
+<a class="preview-request-link" href="/contact">Request live access →</a>
+</div>
+<nav class="portal-nav">
+<span class="portal-nav-brand">mini-moi</span>
+<div class="portal-nav-links">
+<a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank">GitHub</a>
+<a href="https://www.linkedin.com/in/robert-van-stedum" target="_blank">LinkedIn</a>
+<a class="nav-btn" href="/preview/curator/briefing.html">Browse Preview →</a>
+</div>
+</nav>
+<main class="landing-main">
+<section class="hero">
+<h1 class="hero-title">mini-moi</h1>
+<p class="hero-tagline"><em>Your context. Your goals. Your signal.</em></p>
+</section>
+<section class="about-section">
+<div class="about-grid">
+<div class="about-card">
+<h2>What this is</h2>
+<p>
+          LLMs have the world's knowledge. They don't have your intent, your goals,
+          your history, your risk tolerance.
+        </p>
+<p>
+          mini-moi builds toward specific intelligence in your context. It works with
+          cloud LLMs, stores memory locally, runs a local model, and acts together with you.
+        </p>
+<p>
+          Focused on specific domains first. Built to grow together over time.
+        </p>
+</div>
+<div class="about-card">
+<h2>What's running</h2>
+<ul class="feature-list">
+<li>
+<a href="/preview/curator/briefing.html" style="color: inherit; text-decoration: underline; text-decoration-color: rgba(198,138,94,0.5);"><strong>Curator v1.1</strong></a> — Geopolitics and finance briefing. ~700 candidates scored
+            daily by a reasoning model against your learned profile — counterpoints
+            by design, not an echo chamber. In daily use since February 2026.
+          </li>
+<li>
+<a href="/preview/german/lesen.html" style="color: inherit; text-decoration: underline; text-decoration-color: rgba(198,138,94,0.5);"><strong>Mein Deutsch v1.1</strong></a> — German language coaching pipeline. Finding real
+            German speakers to practice with depends on where you live — in Chicago,
+            they're scarce. KI-Personas fill that gap: practice offline, apply with
+            real people when you find them, then feed real conversations back into
+            new personas to close the loop. Vienna-tested. Lesen, Gespräche,
+            Schreiben, Wörter. Anki cards built from your own mistakes.
+          </li>
+<li>
+<a href="/preview/guild/briefing.html" style="color: inherit; text-decoration: underline; text-decoration-color: rgba(198,138,94,0.5);"><strong>Guild v0.9</strong></a> — Where the agents and I work together to get better at our
+            craft. From ideas through specs, build, and operations.
+            Guild is intentionally cross-domain (Curator, German, and beyond). A Chief
+            of Staff role coordinates the agents while keeping my real goals and
+            private concerns in view.
+          </li>
+</ul>
+<a class="text-link" href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank">
+          View source on GitHub →
+        </a>
+</div>
+<div class="about-card">
+<h2>About</h2>
+<p>
+          My focus is the intersection of business objectives and technical solutions —
+          roadmap, business case, delivery. I look for the signal through the noise.
+        </p>
+<p>
+          Fluent in Portuguese, comfortable in Spanish, functional in German.
+          Lived and worked across multiple countries and regions.
+        </p>
+<p>
+          mini-moi is built here first. Patterns developed in this personal system
+          move outward — not the other way around.
+        </p>
+<a class="text-link" href="https://www.linkedin.com/in/robert-van-stedum" target="_blank">
+          LinkedIn →
+        </a>
+</div>
+</div>
+</section>
+</main>
+<footer class="portal-footer">
+<span>mini-moi-agent-guild · v1.1</span>
+<span>·</span>
+<a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank">GitHub</a>
+<span>·</span>
+<a href="https://www.linkedin.com/in/robert-van-stedum" target="_blank">LinkedIn</a>
+</footer>
+
+<style id="preview-modal-style">
+.preview-modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
+}
+.preview-modal-overlay.active { display: flex; }
+.preview-modal {
+  background: #2a1f14; border: 1px solid rgba(198,138,94,0.4);
+  border-radius: 8px; padding: 28px 32px; max-width: 380px; width: 90%;
+  color: #F5F0E8; font-family: 'Source Sans 3', system-ui, sans-serif;
+}
+.preview-modal h3 {
+  font-size: 14px; font-weight: 600; margin: 0 0 12px;
+  color: #C68A5E !important; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.preview-modal p { font-size: 13px; color: rgba(245,240,232,0.75); line-height: 1.6; margin: 0 0 20px; }
+.preview-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.preview-modal-btn {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(198,138,94,0.5); background: transparent; color: #C68A5E;
+  text-decoration: none; display: inline-block;
+}
+.preview-modal-btn:hover { background: rgba(198,138,94,0.15); }
+.preview-modal-close {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(245,240,232,0.2); background: transparent;
+  color: rgba(245,240,232,0.6);
+}
+.preview-modal-close:hover { border-color: rgba(245,240,232,0.4); color: #F5F0E8; }
+</style>
+<div class="preview-modal-overlay" id="previewModal">
+<div class="preview-modal">
+<h3>Not available in preview</h3>
+<div class="preview-modal-actions">
+<a class="preview-modal-btn" href="/contact">Request access →</a>
+<button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>
+</div>
+</div>
+</div>
+<script id="preview-modal-script">
+(function() {
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('[data-admin-blocked]');
+    if (el) { e.preventDefault(); e.stopPropagation(); document.getElementById('previewModal').classList.add('active'); }
+  });
+  document.getElementById('previewModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+})();
+</script>
+</body></html>

@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Build Queue — Guild</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&amp;family=DM+Mono:wght@400;500&amp;family=Source+Sans+3:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="/static/guild.css" rel="stylesheet"/>
+<style>
+    :root {
+      --bg: #f5f0e8; --surface: #faf7f2; --surface2: #f0ebe0;
+      --border: #ddd6c8; --text: #2a2418; --text-muted: #6b5f4e;
+      --text-dim: #9e9080; --accent: #8b5e2a; --accent-dim: rgba(139,94,42,0.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+    /* ── Guild nav ── */
+    nav.guild-nav {
+      position: sticky; top: 0; z-index: 100;
+      background: #2a1f14;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .guild-nav-brand {
+      height: 44px; display: flex; align-items: center;
+      padding: 0 1.5rem;
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); letter-spacing: 0.08em;
+    }
+    .guild-nav-brand a { color: #C68A5E; text-decoration: none; }
+    .guild-nav-brand a:hover { color: #ffffff; }
+    .guild-nav-brand a.nav-active { color: #ffffff; font-weight: 700; }
+    .nav-sep { color: rgba(255,255,255,0.2); margin: 0 12px; }
+    .guild-subnav {
+      height: 36px; display: flex; align-items: center;
+      padding: 0 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,0,0,0.15);
+    }
+    .subnav-link {
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: rgba(198,138,94,0.7); text-decoration: none;
+      padding: 0 12px; height: 36px;
+      display: flex; align-items: center;
+      border-bottom: 2px solid transparent;
+    }
+    .subnav-link:hover { color: #C68A5E; }
+    .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; font-weight: 700; }
+    .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
+
+    .subnav-back {
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: rgba(198,138,94,0.4); text-decoration: none;
+      padding: 0 14px 0 0; height: 36px;
+      display: flex; align-items: center;
+      margin-right: 10px;
+      border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    .subnav-back:hover { color: rgba(198,138,94,0.75); }
+
+    /* ── Page header ── */
+    .page-header {
+      padding: 24px 32px 16px;
+      display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    }
+    .page-title { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 400; }
+    .page-meta { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); }
+    .header-actions { margin-left: auto; }
+    .gh-link {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-muted); text-decoration: none;
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 4px 10px;
+    }
+    .gh-link:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* ── Board ── */
+    .board {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0;
+      margin: 0 24px 40px;
+    }
+    .board-col {
+      padding: 0 12px 20px;
+      border-right: 1px solid #b8ae9e;
+    }
+    .board-col:last-child { border-right: none; }
+    .col-header {
+      padding: 10px 4px 12px;
+      font-family: var(--guild-h2-font); font-size: var(--guild-h2-size); font-weight: var(--guild-h2-weight);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--guild-h2-color);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .col-count {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1px 6px;
+      font-size: 9px; color: var(--text-muted);
+    }
+    .col-empty {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-dim); padding: 8px 4px;
+      text-align: center;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    .card.card-done { opacity: 0.65; }
+    .card-top { padding: 10px 12px 8px; }
+    .card-title {
+      font-size: 13px; font-weight: 500; color: var(--text);
+      line-height: 1.3;
+    }
+    .card-meta {
+      margin-top: 5px;
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-dim); display: flex; gap: 8px; flex-wrap: wrap;
+      align-items: center;
+    }
+    .card-tag {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 1px 6px; border-radius: 3px; border: 1px solid;
+    }
+    .tag-incomplete { color: #8b5a00; background: rgba(139,90,0,0.08); border-color: rgba(139,90,0,0.25); }
+    .tag-blocked    { color: #8b2020; background: rgba(139,32,32,0.08); border-color: rgba(139,32,32,0.25); }
+    .tag-gh         { color: var(--text-muted); background: transparent; border-color: var(--border); }
+
+    .card-actions {
+      padding: 6px 12px 8px;
+      border-top: 1px solid rgba(221,214,200,0.5);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .card-select {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 3px 6px; background: var(--bg); color: var(--text);
+      cursor: pointer; flex: 1; max-width: 130px;
+    }
+    .card-select:focus { outline: 1px solid var(--accent); }
+    .save-btn {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      padding: 3px 10px; border-radius: 4px;
+      background: var(--accent); color: white;
+      border: none; cursor: pointer; display: none;
+    }
+    .save-btn:hover { opacity: 0.85; }
+    .detail-btn {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      padding: 3px 8px; border-radius: 4px;
+      border: 1px solid var(--border); background: var(--surface2);
+      color: var(--text-muted); cursor: pointer;
+      margin-left: auto;
+    }
+    .detail-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Note input for blocked reason ── */
+    .note-input {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 3px 6px; background: var(--bg); color: var(--text);
+      width: 100%; margin-top: 4px; display: none;
+    }
+
+    /* ── Card detail panel ── */
+    .card-detail {
+      display: none; padding: 8px 12px 10px;
+      border-top: 1px solid rgba(221,214,200,0.5);
+      font-size: 12px; color: var(--text-muted); line-height: 1.5;
+    }
+    .card-detail .detail-row { margin-bottom: 4px; }
+    .detail-label {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-dim); margin-right: 6px;
+    }
+    /* edit form inside detail panel */
+    .edit-form { margin-top: 8px; border-top: 1px solid rgba(221,214,200,0.5); padding-top: 8px; }
+    .edit-form input {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      border: 1px solid var(--border); border-radius: 3px;
+      padding: 3px 6px; background: var(--bg); color: var(--text);
+      width: 100%; margin-bottom: 4px;
+    }
+    .edit-form input:focus { outline: 1px solid var(--accent); }
+    .edit-save-btn {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      padding: 3px 10px; border-radius: 3px;
+      background: var(--accent); color: white; border: none; cursor: pointer;
+    }
+    .edit-save-btn:hover { opacity: 0.85; }
+    /* history section */
+    .history-section { margin-top: 8px; border-top: 1px solid rgba(221,214,200,0.5); padding-top: 6px; }
+    .history-row {
+      font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-dim);
+      padding: 2px 0; border-bottom: 1px solid rgba(221,214,200,0.3);
+      display: grid; grid-template-columns: 80px 1fr 60px; gap: 4px; align-items: start;
+    }
+    .history-row:last-child { border-bottom: none; }
+    .history-transition { color: var(--text-muted); }
+    .history-reason { color: var(--text-dim); font-size: 8px; grid-column: 1/-1; padding-left: 4px; }
+    .history-loading { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); }
+  </style>
+
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  // Endpoints allowed to pass through to the real server
+  var PASSTHROUGH = ['/app/german/api/translate'];
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    // Lesen category API — serve pre-captured data if available
+    if (u.indexOf('/api/lesen-category') !== -1) {
+      var cat = '';
+      try { cat = new URL(u, location.origin).searchParams.get('category') || ''; } catch(e) {}
+      var data = window._previewLesenData || {};
+      var articles = data[cat] || [];
+      return Promise.resolve(new Response(JSON.stringify({articles: articles}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    // Allow translate through — works for authenticated users, fails silently otherwise
+    for (var i = 0; i < PASSTHROUGH.length; i++) {
+      if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
+    }
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
+<style id="preview-banner-style">
+.preview-banner {
+  position: sticky; top: 0; z-index: 9999;
+  background: #2A1F14; color: #F5F0E8;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 11px; letter-spacing: 0.04em;
+  padding: 7px 20px;
+  border-bottom: 1px solid rgba(198,138,94,0.3);
+  display: flex; align-items: center; gap: 8px;
+}
+.preview-banner .preview-date { color: rgba(245,240,232,0.7); }
+.preview-request-link {
+  color: #C68A5E; text-decoration: none; margin-left: auto;
+  border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
+}
+.preview-request-link:hover { background: rgba(198,138,94,0.1); }
+</style>
+</head>
+<body><div class="preview-banner">
+<span>Preview snapshot — </span>
+<span class="preview-date">Captured June 2026</span>
+<span>. Data is real but frozen.</span>
+<a class="preview-request-link" href="/contact">Request live access →</a>
+</div>
+<nav class="guild-nav">
+<div class="guild-nav-brand">
+<a href="/preview/">mini-moi</a>
+<span class="nav-sep">|</span>
+<a href="/preview/curator/briefing.html">Curator</a>
+<span class="nav-sep">|</span>
+<a href="/preview/german/lesen.html">German</a>
+<span class="nav-sep">|</span>
+<a class="nav-active" href="/preview/guild/briefing.html">Guild</a>
+</div>
+<div class="guild-subnav">
+<a class="subnav-back" href="/preview/guild/briefing.html">← Guild</a>
+<a class="subnav-link subnav-active" href="/preview/guild/queue.html">Queue</a>
+<span class="subnav-dot"> · </span>
+<a class="subnav-link" href="/preview/guild/build_log.html">Build Log</a>
+<span class="subnav-dot"> · </span>
+<a class="subnav-link" href="/preview/guild/roadmap.html">Roadmap</a>
+</div>
+</nav>
+<div class="page-header">
+<h1 class="page-title">Build Queue</h1>
+<span class="page-meta">17 items in motion</span>
+<div class="header-actions">
+<a class="gh-link" href="https://github.com/robertvanstedum/personal-ai-agents/issues" rel="noopener" target="_blank">View GitHub Issues →</a>
+</div>
+</div>
+<div class="board">
+<div class="board-col">
+<div class="col-header">
+      Spec Ready
+      <span class="col-count">4</span>
+</div>
+<div class="card" id="card-22">
+<div class="card-top">
+<div class="card-title">minimoi.ai Preview Layer + Mein Deutsch Animation</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Workstream 1: Playwright snapshot capture + /preview routing + banner…</div>
+<div class="card-meta">
+<span>today</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ build_spec_preview_layer_2026-06-14.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/22/status" data-preview-disabled="true" id="bf-22" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-22" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-22" name="status" onchange="queueStatus(this, 22)">
+<option selected="" value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-22" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-22" onclick="toggleBuildDetail(22)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-22" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-22" oninput="document.getElementById('bn-22').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-22">
+<div class="detail-row"><span class="detail-label">File</span>build_spec_preview_layer_2026-06-14.md</div>
+<form action="/guild/build/items/22/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="minimoi.ai Preview Layer + Mein Deutsch Animation"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Workstream 1: Playwright snapshot capture + /preview routing + banner + admin modal. WS2: Mein Deutsch animated walkthrough. WS3: Guest access audit + /contact."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-22">loading…</div>
+</div>
+</div>
+</div>
+<div class="card" id="card-27">
+<div class="card-top">
+<div class="card-title">Lesen Preview: Translate Hover via MyMemory</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Spec for replacing DeepL translate with MyMemory API in Lesen preview.</div>
+<div class="card-meta">
+<span>today</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_lesen_translate_hover_2026-06-14.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/27/status" data-preview-disabled="true" id="bf-27" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-27" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-27" name="status" onchange="queueStatus(this, 27)">
+<option selected="" value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-27" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-27" onclick="toggleBuildDetail(27)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-27" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-27" oninput="document.getElementById('bn-27').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-27">
+<div class="detail-row"><span class="detail-label">File</span>spec_lesen_translate_hover_2026-06-14.md</div>
+<form action="/guild/build/items/27/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Lesen Preview: Translate Hover via MyMemory"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Spec for replacing DeepL translate with MyMemory API in Lesen preview."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-27">loading…</div>
+</div>
+</div>
+</div>
+<div class="card" id="card-24">
+<div class="card-top">
+<div class="card-title">Security Architecture: Separate Public Site from Live Portal</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Security architecture spec for subdomain separation of public site an…</div>
+<div class="card-meta">
+<span>today</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_security_architecture_2026-06-14.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/24/status" data-preview-disabled="true" id="bf-24" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-24" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-24" name="status" onchange="queueStatus(this, 24)">
+<option selected="" value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-24" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-24" onclick="toggleBuildDetail(24)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-24" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-24" oninput="document.getElementById('bn-24').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-24">
+<div class="detail-row"><span class="detail-label">File</span>spec_security_architecture_2026-06-14.md</div>
+<form action="/guild/build/items/24/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Security Architecture: Separate Public Site from Live Portal"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Security architecture spec for subdomain separation of public site and portal."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-24">loading…</div>
+</div>
+</div>
+</div>
+<div class="card" id="card-2">
+<div class="card-top">
+<div class="card-title">Lesen Writing Drill</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">German Lesen writing drill — contextual correction and retype. GitHub…</div>
+<div class="card-meta">
+<span>8d</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ feature_lesen_writing_drill_2026-06-08.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/2/status" data-preview-disabled="true" id="bf-2" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-2" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-2" name="status" onchange="queueStatus(this, 2)">
+<option selected="" value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-2" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-2" onclick="toggleBuildDetail(2)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-2" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-2" oninput="document.getElementById('bn-2').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-2">
+<div class="detail-row"><span class="detail-label">File</span>feature_lesen_writing_drill_2026-06-08.md</div>
+<form action="/guild/build/items/2/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Lesen Writing Drill"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="German Lesen writing drill — contextual correction and retype. GitHub issue #41. Build post-Jun 13."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-2">loading…</div>
+</div>
+</div>
+</div>
+</div>
+<div class="board-col">
+<div class="col-header" style="color:#8b5e20;">
+      Incomplete
+      <span class="col-count">0</span>
+</div>
+<div class="col-empty">—</div>
+</div>
+<div class="board-col">
+<div class="col-header">
+      In Build
+      <span class="col-count">0</span>
+</div>
+<div class="col-empty">—</div>
+</div>
+<div class="board-col">
+<div class="col-header" style="color:#8b2020;">
+      Blocked
+      <span class="col-count">0</span>
+</div>
+<div class="col-empty">—</div>
+</div>
+<div class="board-col">
+<div class="col-header">
+      Recently Done
+      <span class="col-count">13</span>
+</div>
+<div class="card card-done" id="card-43">
+<div class="card-top">
+<div class="card-title">Guest Access Requests: Notification + Daily Briefing</div>
+<div class="card-meta">
+<span>today</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_cos_guest_access_2026-06-14.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/43/status" data-preview-disabled="true" id="bf-43" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-43" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-43" name="status" onchange="queueStatus(this, 43)">
+<option value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option selected="" value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-43" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-43" onclick="toggleBuildDetail(43)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-43" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-43" oninput="document.getElementById('bn-43').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-43">
+<div class="detail-row"><span class="detail-label">File</span>spec_cos_guest_access_2026-06-14.md</div>
+<form action="/guild/build/items/43/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guest Access Requests: Notification + Daily Briefing"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-43">loading…</div>
+</div>
+</div>
+</div>
+<div class="card card-done" id="card-42">
+<div class="card-top">
+<div class="card-title">Housekeeping: Repo Sync Audit + Roadmap File Location</div>
+<div class="card-meta">
+<span>today</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_housekeeping_2026-06-12.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/42/status" data-preview-disabled="true" id="bf-42" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-42" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-42" name="status" onchange="queueStatus(this, 42)">
+<option value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option selected="" value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-42" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-42" onclick="toggleBuildDetail(42)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-42" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-42" oninput="document.getElementById('bn-42').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-42">
+<div class="detail-row"><span class="detail-label">File</span>spec_housekeeping_2026-06-12.md</div>
+<form action="/guild/build/items/42/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Housekeeping: Repo Sync Audit + Roadmap File Location"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-42">loading…</div>
+</div>
+</div>
+</div>
+<div class="card card-done" id="card-41">
+<div class="card-top">
+<div class="card-title">Mein Deutsch v1.1: GitHub Release + Landing Copy Update</div>
+<div class="card-meta">
+<span>today</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_mein_deutsch_v11_release_2026-06-15.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/41/status" data-preview-disabled="true" id="bf-41" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-41" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-41" name="status" onchange="queueStatus(this, 41)">
+<option value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option selected="" value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-41" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-41" onclick="toggleBuildDetail(41)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-41" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-41" oninput="document.getElementById('bn-41').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-41">
+<div class="detail-row"><span class="detail-label">File</span>spec_mein_deutsch_v11_release_2026-06-15.md</div>
+<form action="/guild/build/items/41/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Mein Deutsch v1.1: GitHub Release + Landing Copy Update"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value=""/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-41">loading…</div>
+</div>
+</div>
+</div>
+<div class="card card-done" id="card-20">
+<div class="card-top">
+<div class="card-title">minimoi.ai Always-On Landing Page</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Investigation complete: landing is fully static, no DB dependency. Re…</div>
+<div class="card-meta">
+<span>today</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_landing_page_uptime_2026-06-13.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/20/status" data-preview-disabled="true" id="bf-20" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-20" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-20" name="status" onchange="queueStatus(this, 20)">
+<option value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option selected="" value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-20" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-20" onclick="toggleBuildDetail(20)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-20" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-20" oninput="document.getElementById('bn-20').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-20">
+<div class="detail-row"><span class="detail-label">File</span>spec_landing_page_uptime_2026-06-13.md</div>
+<form action="/guild/build/items/20/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="minimoi.ai Always-On Landing Page"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Investigation complete: landing is fully static, no DB dependency. Recommendation: Cloudflare Pages static split. Implementation spec pending."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-20">loading…</div>
+</div>
+</div>
+</div>
+<div class="card card-done" id="card-37">
+<div class="card-top">
+<div class="card-title">Gespräche: Start Session / End Session (Single Window)</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Spec for single-window Start/End Session flow in Gespräche page.</div>
+<div class="card-meta">
+<span>today</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_gesprache_ki_session_2026-06-15 copy.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/37/status" data-preview-disabled="true" id="bf-37" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-37" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-37" name="status" onchange="queueStatus(this, 37)">
+<option value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option selected="" value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-37" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-37" onclick="toggleBuildDetail(37)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-37" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-37" oninput="document.getElementById('bn-37').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-37">
+<div class="detail-row"><span class="detail-label">File</span>spec_gesprache_ki_session_2026-06-15 copy.md</div>
+<form action="/guild/build/items/37/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Gespräche: Start Session / End Session (Single Window)"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Spec for single-window Start/End Session flow in Gespräche page."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-37">loading…</div>
+</div>
+</div>
+</div>
+<div class="card card-done" id="card-40">
+<div class="card-top">
+<div class="card-title">Ways of Working — Grok Coverage for Claude.ai</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Orients Grok to cover Claude.ai design/spec work during usage limits.</div>
+<div class="card-meta">
+<span>today</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ ways_of_working_grok_handoff_2026-06-15.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/40/status" data-preview-disabled="true" id="bf-40" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-40" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-40" name="status" onchange="queueStatus(this, 40)">
+<option value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option selected="" value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-40" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-40" onclick="toggleBuildDetail(40)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-40" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-40" oninput="document.getElementById('bn-40').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-40">
+<div class="detail-row"><span class="detail-label">File</span>ways_of_working_grok_handoff_2026-06-15.md</div>
+<form action="/guild/build/items/40/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Ways of Working — Grok Coverage for Claude.ai"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Orients Grok to cover Claude.ai design/spec work during usage limits."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-40">loading…</div>
+</div>
+</div>
+</div>
+<div class="card card-done" id="card-35">
+<div class="card-top">
+<div class="card-title">Gespräche: All Current Improvements (Consolidated)</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Consolidated spec for seven improvements to Gespräche conversations f…</div>
+<div class="card-meta">
+<span>today</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_gesprache_consolidated_2026-06-15.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/35/status" data-preview-disabled="true" id="bf-35" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-35" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-35" name="status" onchange="queueStatus(this, 35)">
+<option value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option selected="" value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-35" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-35" onclick="toggleBuildDetail(35)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-35" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-35" oninput="document.getElementById('bn-35').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-35">
+<div class="detail-row"><span class="detail-label">File</span>spec_gesprache_consolidated_2026-06-15.md</div>
+<form action="/guild/build/items/35/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Gespräche: All Current Improvements (Consolidated)"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Consolidated spec for seven improvements to Gespräche conversations feature."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-35">loading…</div>
+</div>
+</div>
+</div>
+<div class="card card-done" id="card-33">
+<div class="card-top">
+<div class="card-title">Gespräche: Start Session / End Session (Single Window)</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Spec for single-window Start/End Session flow in Gespräche page.</div>
+<div class="card-meta">
+<span>today</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_gesprache_ki_session_2026-06-15.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/33/status" data-preview-disabled="true" id="bf-33" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-33" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-33" name="status" onchange="queueStatus(this, 33)">
+<option value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option selected="" value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-33" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-33" onclick="toggleBuildDetail(33)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-33" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-33" oninput="document.getElementById('bn-33').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-33">
+<div class="detail-row"><span class="detail-label">File</span>spec_gesprache_ki_session_2026-06-15.md</div>
+<form action="/guild/build/items/33/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Gespräche: Start Session / End Session (Single Window)"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Spec for single-window Start/End Session flow in Gespräche page."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-33">loading…</div>
+</div>
+</div>
+</div>
+<div class="card card-done" id="card-38">
+<div class="card-top">
+<div class="card-title">Gespräche Test-Run Follow-Up</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Follow-up spec addressing layout and performance issues from KI-Sitzu…</div>
+<div class="card-meta">
+<span>today</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_gesprache_testrun_followup_2026-06-15.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/38/status" data-preview-disabled="true" id="bf-38" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-38" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-38" name="status" onchange="queueStatus(this, 38)">
+<option value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option selected="" value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-38" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-38" onclick="toggleBuildDetail(38)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-38" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-38" oninput="document.getElementById('bn-38').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-38">
+<div class="detail-row"><span class="detail-label">File</span>spec_gesprache_testrun_followup_2026-06-15.md</div>
+<form action="/guild/build/items/38/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Gespräche Test-Run Follow-Up"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Follow-up spec addressing layout and performance issues from KI-Sitzung test run."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-38">loading…</div>
+</div>
+</div>
+</div>
+<div class="card card-done" id="card-31">
+<div class="card-top">
+<div class="card-title">Gespräche Voice Input + Provider-Agnostic Review</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Spec for voice input to Gespräche plus provider-agnostic LLM review.</div>
+<div class="card-meta">
+<span>today</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_gesprache_voice_input_2026-06-14.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/31/status" data-preview-disabled="true" id="bf-31" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-31" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-31" name="status" onchange="queueStatus(this, 31)">
+<option value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option selected="" value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-31" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-31" onclick="toggleBuildDetail(31)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-31" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-31" oninput="document.getElementById('bn-31').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-31">
+<div class="detail-row"><span class="detail-label">File</span>spec_gesprache_voice_input_2026-06-14.md</div>
+<form action="/guild/build/items/31/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Gespräche Voice Input + Provider-Agnostic Review"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Spec for voice input to Gespräche plus provider-agnostic LLM review."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-31">loading…</div>
+</div>
+</div>
+</div>
+<div class="card card-done" id="card-19">
+<div class="card-top">
+<div class="card-title">Guild v0.9 (beta) GitHub Release</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">GitHub release guild-v0.9 created. Tag pushed. Release description pu…</div>
+<div class="card-meta">
+<span>1d</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_guild_v09_release_2026-06-13.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/19/status" data-preview-disabled="true" id="bf-19" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-19" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-19" name="status" onchange="queueStatus(this, 19)">
+<option value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option selected="" value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-19" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-19" onclick="toggleBuildDetail(19)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-19" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-19" oninput="document.getElementById('bn-19').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-19">
+<div class="detail-row"><span class="detail-label">File</span>spec_guild_v09_release_2026-06-13.md</div>
+<form action="/guild/build/items/19/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild v0.9 (beta) GitHub Release"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="GitHub release guild-v0.9 created. Tag pushed. Release description published."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-19">loading…</div>
+</div>
+</div>
+</div>
+<div class="card card-done" id="card-18">
+<div class="card-top">
+<div class="card-title">Landing Copy Round 2: Guild v0.9 + Curator + Mein Deutsch</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Round-2 landing copy: Guild v0.9 prefix + revised copy, Curator count…</div>
+<div class="card-meta">
+<span>1d</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_landing_copy_round2_2026-06-13.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/18/status" data-preview-disabled="true" id="bf-18" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-18" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-18" name="status" onchange="queueStatus(this, 18)">
+<option value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option selected="" value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-18" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-18" onclick="toggleBuildDetail(18)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-18" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-18" oninput="document.getElementById('bn-18').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-18">
+<div class="detail-row"><span class="detail-label">File</span>spec_landing_copy_round2_2026-06-13.md</div>
+<form action="/guild/build/items/18/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Landing Copy Round 2: Guild v0.9 + Curator + Mein Deutsch"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Round-2 landing copy: Guild v0.9 prefix + revised copy, Curator counterpoints line, Mein Deutsch workflow loop + Anki wording. Fixes Guild prefix duplication."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-18">loading…</div>
+</div>
+</div>
+</div>
+<div class="card card-done" id="card-17">
+<div class="card-top">
+<div class="card-title">Guild Landing Copy: minimoi.ai "What's Running"</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Spec to update Guild landing copy on minimoi.ai What's Running section.</div>
+<div class="card-meta">
+<span>1d</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_guild_landing_copy_2026-06-13.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/17/status" data-preview-disabled="true" id="bf-17" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-17" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-17" name="status" onchange="queueStatus(this, 17)">
+<option value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option selected="" value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-17" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-17" onclick="toggleBuildDetail(17)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-17" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-17" oninput="document.getElementById('bn-17').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-17">
+<div class="detail-row"><span class="detail-label">File</span>spec_guild_landing_copy_2026-06-13.md</div>
+<form action="/guild/build/items/17/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild Landing Copy: minimoi.ai &quot;What's Running&quot;"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Spec to update Guild landing copy on minimoi.ai What's Running section."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-17">loading…</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+function runCheck(id, btn) {
+  const out = document.getElementById('check-result-' + id);
+  btn.disabled = true;
+  btn.textContent = 'checking…';
+  fetch('/guild/build/items/' + id + '/check')
+    .then(r => r.json())
+    .then(data => {
+      if (data.error && !data.failures) {
+        out.textContent = '⚠ ' + data.error;
+      } else if (data.failures && data.failures.length) {
+        out.innerHTML = data.failures.map(f => '• ' + f).join('<br>');
+        if (data.stale) out.innerHTML += '<br><em style="color:var(--text-dim)">File now passes — flip status to spec_ready.</em>';
+      } else {
+        out.innerHTML = '✓ File passes checks now' + (data.stale ? ' — flip status to spec_ready' : '');
+        out.style.color = 'var(--text-dim)';
+      }
+      btn.textContent = 're-check';
+      btn.disabled = false;
+    })
+    .catch(() => { out.textContent = 'unavailable'; btn.textContent = 're-check'; btn.disabled = false; });
+}
+function queueStatus(select, id) {
+  const val = select.value;
+  const saveBtn = document.getElementById('bsave-' + id);
+  const noteWrap = document.getElementById('bd-' + id);
+  // Show note input only when blocking
+  if (val === 'blocked') {
+    noteWrap.style.display = 'block';
+  } else {
+    noteWrap.style.display = 'none';
+    document.getElementById('bn-' + id).value = '';
+  }
+  saveBtn.style.display = 'inline-block';
+}
+
+function toggleBuildDetail(id) {
+  const panel = document.getElementById('bdetail-' + id);
+  const btn   = document.getElementById('bdbtn-' + id);
+  if (panel.style.display === 'block') {
+    panel.style.display = 'none';
+    btn.textContent = '···';
+  } else {
+    panel.style.display = 'block';
+    btn.textContent = '▲';
+    loadHistory(id);
+  }
+}
+
+function loadHistory(id) {
+  const el = document.getElementById('bhist-' + id);
+  if (!el || el.dataset.loaded) return;
+  fetch('/guild/build/items/' + id + '/history')
+    .then(r => r.json())
+    .then(rows => {
+      if (!rows.length) { el.textContent = 'no transitions yet'; el.dataset.loaded = '1'; return; }
+      el.innerHTML = rows.map(r => {
+        const transition = `${r.from} → ${r.to}`;
+        const reason = r.reason ? `<div class="history-reason">${r.reason}</div>` : '';
+        return `<div class="history-row">
+          <span>${r.at}</span>
+          <span class="history-transition">${transition}</span>
+          <span>${r.by}</span>
+          ${reason}
+        </div>`;
+      }).join('');
+      el.dataset.loaded = '1';
+    })
+    .catch(() => { el.textContent = 'history unavailable'; });
+}
+</script>
+
+<style id="preview-modal-style">
+.preview-modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
+}
+.preview-modal-overlay.active { display: flex; }
+.preview-modal {
+  background: #2a1f14; border: 1px solid rgba(198,138,94,0.4);
+  border-radius: 8px; padding: 28px 32px; max-width: 380px; width: 90%;
+  color: #F5F0E8; font-family: 'Source Sans 3', system-ui, sans-serif;
+}
+.preview-modal h3 {
+  font-size: 14px; font-weight: 600; margin: 0 0 12px;
+  color: #C68A5E !important; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.preview-modal p { font-size: 13px; color: rgba(245,240,232,0.75); line-height: 1.6; margin: 0 0 20px; }
+.preview-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.preview-modal-btn {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(198,138,94,0.5); background: transparent; color: #C68A5E;
+  text-decoration: none; display: inline-block;
+}
+.preview-modal-btn:hover { background: rgba(198,138,94,0.15); }
+.preview-modal-close {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(245,240,232,0.2); background: transparent;
+  color: rgba(245,240,232,0.6);
+}
+.preview-modal-close:hover { border-color: rgba(245,240,232,0.4); color: #F5F0E8; }
+</style>
+<div class="preview-modal-overlay" id="previewModal">
+<div class="preview-modal">
+<h3>Not available in preview</h3>
+<div class="preview-modal-actions">
+<a class="preview-modal-btn" href="/contact">Request access →</a>
+<button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>
+</div>
+</div>
+</div>
+<script id="preview-modal-script">
+(function() {
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('[data-admin-blocked]');
+    if (el) { e.preventDefault(); e.stopPropagation(); document.getElementById('previewModal').classList.add('active'); }
+  });
+  document.getElementById('previewModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+})();
+</script>
+</body></html>

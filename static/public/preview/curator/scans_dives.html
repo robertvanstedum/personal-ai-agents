@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Scans &amp; Dives — Curator</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&amp;family=DM+Mono:wght@400;500&amp;family=Source+Sans+3:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<style>
+    :root {
+      --bg:         #f5f0e8;
+      --bg-texture: #ede8df;
+      --surface:    #faf7f2;
+      --surface2:   #f0ebe0;
+      --border:     #ddd6c8;
+      --text:       #2a2418;
+      --text-muted: #6b5f4e;
+      --text-dim:   #9e9080;
+      --accent:     #8b5e2a;
+      --accent-dim: rgba(139,94,42,0.08);
+      --shadow:     rgba(42,36,24,0.08);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Source Sans 3', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── Subnav ── */
+    nav.curator-subnav {
+      position: sticky; top: 0; z-index: 100;
+      height: 44px;
+      background: rgba(245,240,232,0.96);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 1.5rem;
+    }
+    .subnav-tab {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-muted); text-decoration: none;
+      padding: 0 14px; height: 44px;
+      display: flex; align-items: center;
+      border-bottom: 2px solid transparent; transition: color 0.15s;
+    }
+    .subnav-tab:hover { color: var(--text); }
+    .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .subnav-focus { margin-left: auto; }
+
+    /* ── Main ── */
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 36px 32px 60px;
+    }
+
+    /* ── Page header ── */
+    .page-header { margin-bottom: 36px; }
+    .page-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.7rem; font-weight: 400; margin-bottom: 4px;
+    }
+    .page-meta {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px; color: var(--text-dim); letter-spacing: 0.04em;
+    }
+
+    /* ── Section ── */
+    .section { margin-bottom: 36px; }
+    .section-hdr {
+      display: flex; align-items: baseline;
+      justify-content: space-between;
+      padding-bottom: 9px;
+      border-bottom: 0.5px solid var(--border);
+      margin-bottom: 0;
+    }
+    .section-name {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim);
+    }
+    .section-count {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-dim); opacity: 0.6; margin-left: 6px;
+    }
+    .toggle-btn {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.06em; color: var(--accent);
+      background: none; border: none; cursor: pointer; padding: 0;
+    }
+    .toggle-btn:hover { text-decoration: underline; }
+
+    /* ── Rows ── */
+    .row {
+      display: flex; align-items: baseline; gap: 14px;
+      padding: 11px 6px;
+      border-bottom: 0.5px solid var(--border);
+      text-decoration: none; color: inherit;
+      transition: background 0.1s;
+    }
+    .row:last-of-type { border-bottom: none; }
+    .row:hover { background: rgba(139,94,42,0.04); }
+    .row-hidden { display: none !important; }
+
+    /* Thread row parts */
+    .row-badge {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      background: #fef3c7; color: #92400e;
+      border: 0.5px solid #f59e0b; border-radius: 3px;
+      padding: 2px 6px; white-space: nowrap; flex-shrink: 0;
+    }
+    .row-main { flex: 1; min-width: 0; }
+    .row-title {
+      font-size: 13px; font-weight: 600; color: var(--text);
+      display: block; line-height: 1.4;
+    }
+    .row:hover .row-title { color: var(--accent); }
+    .row-excerpt {
+      font-size: 12px; color: var(--text-dim); font-style: italic;
+      display: block; margin-top: 2px; line-height: 1.4;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 520px;
+    }
+    .row-meta {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-dim); white-space: nowrap; flex-shrink: 0;
+    }
+    .row-thread .row-date {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-dim); white-space: nowrap; flex-shrink: 0;
+    }
+    .row-action {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--accent); white-space: nowrap; flex-shrink: 0;
+    }
+
+    /* Article row parts */
+    .row-date-col {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-dim); white-space: nowrap; flex-shrink: 0; width: 88px;
+    }
+    .row-source {
+      font-size: 12px; color: var(--text-muted); font-weight: 500;
+      white-space: nowrap; flex-shrink: 0; width: 150px;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+  </style>
+<style>body{padding-top:38px!important;}nav.curator-subnav{top:38px!important;}</style>
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  // Endpoints allowed to pass through to the real server
+  var PASSTHROUGH = ['/app/german/api/translate'];
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    // Lesen category API — serve pre-captured data if available
+    if (u.indexOf('/api/lesen-category') !== -1) {
+      var cat = '';
+      try { cat = new URL(u, location.origin).searchParams.get('category') || ''; } catch(e) {}
+      var data = window._previewLesenData || {};
+      var articles = data[cat] || [];
+      return Promise.resolve(new Response(JSON.stringify({articles: articles}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    // Allow translate through — works for authenticated users, fails silently otherwise
+    for (var i = 0; i < PASSTHROUGH.length; i++) {
+      if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
+    }
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
+<style id="preview-banner-style">
+.preview-banner {
+  position: sticky; top: 0; z-index: 9999;
+  background: #2A1F14; color: #F5F0E8;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 11px; letter-spacing: 0.04em;
+  padding: 7px 20px;
+  border-bottom: 1px solid rgba(198,138,94,0.3);
+  display: flex; align-items: center; gap: 8px;
+}
+.preview-banner .preview-date { color: rgba(245,240,232,0.7); }
+.preview-request-link {
+  color: #C68A5E; text-decoration: none; margin-left: auto;
+  border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
+}
+.preview-request-link:hover { background: rgba(198,138,94,0.1); }
+</style>
+</head>
+<body><div class="preview-banner">
+<span>Preview snapshot — </span>
+<span class="preview-date">Captured June 2026</span>
+<span>. Data is real but frozen.</span>
+<a class="preview-request-link" href="/contact">Request live access →</a>
+</div>
+<style id="portal-offset-css">body{padding-top:38px!important;}nav.curator-subnav{top:38px!important;}</style>
+<div id="portal-nav-bar" style="
+  position:fixed;top:0;left:0;right:0;z-index:999999;
+  height:38px;background:#12122a;color:#e8e8e8;
+  display:flex;align-items:center;padding:0 16px;gap:0;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:13px;border-bottom:1px solid rgba(255,255,255,0.12);
+  box-shadow:0 1px 8px rgba(0,0,0,0.4);
+">
+<a href="/preview/" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
+<span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
+<a href="/preview/curator/briefing.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;color:#ffffff;font-weight:600;">Curator</a>
+<a href="/preview/german/lesen.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;">German</a>
+<a href="/preview/guild/briefing.html" style="color:#C68A5E;text-decoration:none;">Guild</a>
+<span style="color:rgba(255,255,255,0.45);margin-left:auto;margin-right:12px;">Robert</span>
+<a data-admin-blocked="true" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;; cursor: pointer;">Sign out</a>
+</div>
+<nav class="curator-subnav">
+<a class="subnav-tab" href="/preview/curator/daily.html">Daily</a>
+<a class="subnav-tab" href="/preview/curator/reading_room.html">Reading Room</a>
+<a class="subnav-tab active" href="/preview/curator/scans_dives.html">Scans &amp; Dives</a>
+<a class="subnav-tab" href="/preview/curator/leanings.html">Leanings</a>
+<a class="subnav-tab" href="/preview/curator/archive.html">Archive</a>
+<a class="subnav-tab subnav-focus" data-admin-blocked="true" style="cursor: pointer;">Desk</a>
+</nav>
+<main>
+<div class="page-header">
+<h1 class="page-title">Scans &amp; Dives</h1>
+<p class="page-meta">13 dives · 32 scans</p>
+</div>
+<!-- Dives section -->
+<div class="section">
+<div class="section-hdr">
+<span>
+<span class="section-name">Dives</span>
+<span class="section-count">13</span>
+</span>
+<button class="toggle-btn" data-admin-blocked="true" data-preview-disabled="true" disabled="disabled" id="dives-toggle" style="cursor: pointer;">show all →</button>
+</div>
+<a class="row row-thread" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-badge">Thread</span>
+<span class="row-main">
+<span class="row-title">Strait Of Hormuz</span>
+</span>
+<span class="row-meta">2026-06-10</span>
+<span class="row-date">2026-06-10</span>
+<span class="row-action">Read →</span>
+</a>
+<a class="row row-thread" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-badge">Thread</span>
+<span class="row-main">
+<span class="row-title">Strait Of Hormuz</span>
+</span>
+<span class="row-meta">2026-06-10</span>
+<span class="row-date">2026-06-10</span>
+<span class="row-action">Read →</span>
+</a>
+<a class="row row-thread" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-badge">Thread</span>
+<span class="row-main">
+<span class="row-title">Strait Of Hormuz</span>
+</span>
+<span class="row-meta">2026-03-29</span>
+<span class="row-date">2026-03-29</span>
+<span class="row-action">Read →</span>
+</a>
+<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-badge">Thread</span>
+<span class="row-main">
+<span class="row-title">Hellscape Taiwan Porcupine</span>
+</span>
+<span class="row-meta">2026-06-10</span>
+<span class="row-date">2026-06-10</span>
+<span class="row-action">Read →</span>
+</a>
+<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-badge">Thread</span>
+<span class="row-main">
+<span class="row-title">Hellscape Taiwan Porcupine</span>
+</span>
+<span class="row-meta">2026-03-29</span>
+<span class="row-date">2026-03-29</span>
+<span class="row-action">Read →</span>
+</a>
+<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-badge">Thread</span>
+<span class="row-main">
+<span class="row-title">Hellscape Taiwan Porcupine</span>
+</span>
+<span class="row-meta">2026-03-29</span>
+<span class="row-date">2026-03-29</span>
+<span class="row-action">Read →</span>
+</a>
+<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-badge">Thread</span>
+<span class="row-main">
+<span class="row-title">Hellscape Taiwan Porcupine</span>
+</span>
+<span class="row-meta">2026-03-29</span>
+<span class="row-date">2026-03-29</span>
+<span class="row-action">Read →</span>
+</a>
+<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-badge">Thread</span>
+<span class="row-main">
+<span class="row-title">Hellscape Taiwan Porcupine</span>
+</span>
+<span class="row-meta">2026-03-29</span>
+<span class="row-date">2026-03-29</span>
+<span class="row-action">Read →</span>
+</a>
+<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-badge">Thread</span>
+<span class="row-main">
+<span class="row-title">Have Countries Around World</span>
+</span>
+<span class="row-meta">2026-06-10</span>
+<span class="row-date">2026-06-10</span>
+<span class="row-action">Read →</span>
+</a>
+<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-badge">Thread</span>
+<span class="row-main">
+<span class="row-title">Gold Geopolitics</span>
+</span>
+<span class="row-meta">2026-06-10</span>
+<span class="row-date">2026-06-10</span>
+<span class="row-action">Read →</span>
+</a>
+<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-badge">Thread</span>
+<span class="row-main">
+<span class="row-title">Gold Geopolitics</span>
+</span>
+<span class="row-meta">2026-06-10</span>
+<span class="row-date">2026-06-10</span>
+<span class="row-action">Read →</span>
+</a>
+<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-badge">Thread</span>
+<span class="row-main">
+<span class="row-title">Empire Landpower</span>
+</span>
+<span class="row-meta">2026-06-10</span>
+<span class="row-date">2026-06-10</span>
+<span class="row-action">Read →</span>
+</a>
+<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-badge">Thread</span>
+<span class="row-main">
+<span class="row-title">China Rise</span>
+</span>
+<span class="row-meta">2026-06-10</span>
+<span class="row-date">2026-06-10</span>
+<span class="row-action">Read →</span>
+</a>
+</div>
+<!-- Scans section -->
+<div class="section">
+<div class="section-hdr">
+<span>
+<span class="section-name">Scans</span>
+<span class="section-count">32</span>
+</span>
+<button class="toggle-btn" data-admin-blocked="true" data-preview-disabled="true" disabled="disabled" id="scans-toggle" style="cursor: pointer;">show all →</button>
+</div>
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-05-29</span>
+<span class="row-source">Geopolitical Futures</span>
+<span class="row-main"><span class="row-title">For the Quad, Flexibility Is Not Weakness</span></span>
+</a>
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-02-22</span>
+<span class="row-source">Fed On The Economy</span>
+<span class="row-main"><span class="row-title">China’s Role in Global Innovation Is Changing</span></span>
+</a>
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-05-31</span>
+<span class="row-source">Al Jazeera</span>
+<span class="row-main"><span class="row-title">Polls open in Colombia’s pivotal presidential election</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-05-02</span>
+<span class="row-source">Al Jazeera</span>
+<span class="row-main"><span class="row-title">Spirit Airlines begins ‘wind-down’, cancels all flights over fuel crisis</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-03-20</span>
+<span class="row-source">Deutsche Welle</span>
+<span class="row-main"><span class="row-title">Iran war: Why gold prices are not soaring</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-02-25</span>
+<span class="row-source">Geopolitical Futures</span>
+<span class="row-main"><span class="row-title">Daily Memo: Starlink Disruption in South China Sea, Russia’s Footprint in Africa</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-02-26</span>
+<span class="row-source">Geopolitical Futures</span>
+<span class="row-main"><span class="row-title">The Tigray Powder Keg in the Horn of Africa</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-02-20</span>
+<span class="row-source">ZeroHedge</span>
+<span class="row-main"><span class="row-title">Ex-CIA Analyst Peels Back The US Information Operation In Iran</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-02-26</span>
+<span class="row-source">ZeroHedge</span>
+<span class="row-main"><span class="row-title">'The Mirage' Of Manufactured Calm And The Disconnect Between Markets And Reality</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-03-23</span>
+<span class="row-source">arXiv q-fin</span>
+<span class="row-main"><span class="row-title">Generalized Stock Price Prediction for Multiple Stocks Combined with News Fusion</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-02-20</span>
+<span class="row-source">Geopolitical Futures</span>
+<span class="row-main"><span class="row-title">Taiwan at the Center of a Fragile US-China Rapprochement</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-03-01</span>
+<span class="row-source">The Big Picture</span>
+<span class="row-main"><span class="row-title">10 Weekend Reads</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-02-21</span>
+<span class="row-source">Fed On The Economy</span>
+<span class="row-main"><span class="row-title">Why AI Advancements May Push Some Workers Out of the Labor Force</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-02-20</span>
+<span class="row-source">Deutsche Welle</span>
+<span class="row-main"><span class="row-title">Trump sweeping tariffs struck down: What happens next?</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-02-19</span>
+<span class="row-source">ZeroHedge</span>
+<span class="row-main"><span class="row-title">Futures Slide As Iran War Risks Add To Growing AI Disruption Fears; Oil Surges</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-02-23</span>
+<span class="row-source">Fed On The Economy</span>
+<span class="row-main"><span class="row-title">Flash Report: January Jobless Data May Signal Improving Labor Market</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-06-07</span>
+<span class="row-source">Al Jazeera</span>
+<span class="row-main"><span class="row-title">How have countries around the world responded to the US-Israel war on Iran?</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-02-24</span>
+<span class="row-source">Treasury MSPD</span>
+<span class="row-main"><span class="row-title">Monthly Statement of the Public Debt, January 31, 2026</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-03-26</span>
+<span class="row-source">Geopolitical Futures</span>
+<span class="row-main"><span class="row-title">How Iran Is Repricing Geography</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-02-21</span>
+<span class="row-source">Antiwar.com</span>
+<span class="row-main"><span class="row-title">US Plans To Build a 5,000-Person Military Base in Gaza for International Force</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-03-25</span>
+<span class="row-source">ZeroHedge</span>
+<span class="row-main"><span class="row-title">Israel Seeks To Disrupt Russian-Iranian Arms Transfer Route In The Caspian Sea</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-05-28</span>
+<span class="row-source">Fed On The Economy</span>
+<span class="row-main"><span class="row-title">1776 and the Economics of Government</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-06-03</span>
+<span class="row-source">Deutsche Welle</span>
+<span class="row-main"><span class="row-title">Armenia's election offers a choice between Russia and EU</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-03-27</span>
+<span class="row-source">War on the Rocks</span>
+<span class="row-main"><span class="row-title">Hellscape Taiwan: A Porcupine Defense in the Drone Age</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-02-20</span>
+<span class="row-source">Geopolitical Futures</span>
+<span class="row-main"><span class="row-title">Why Trump is Not to Blame for Europe’s Predicament | George Friedman</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-06-03</span>
+<span class="row-source">Al Jazeera</span>
+<span class="row-main"><span class="row-title">Does Israel have nukes? ‘Most of the world assesses they do,’ says Rubio</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-02-28</span>
+<span class="row-source">FAZ</span>
+<span class="row-main"><span class="row-title">Pekings Aufstieg: Der unheimliche Erfolg von Chinas Bürokraten</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-06-10</span>
+<span class="row-source">War on the Rocks</span>
+<span class="row-main"><span class="row-title">How Can Lebanon’s Partners Help Strengthen the Lebanese Armed Forces?</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-02-27</span>
+<span class="row-source">Fed On The Economy</span>
+<span class="row-main"><span class="row-title">U.S. Import Price Dynamics Following the 2025 Tariffs</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-05-31</span>
+<span class="row-source">Deutsche Welle</span>
+<span class="row-main"><span class="row-title">What Hungary must do to receive EU funds frozen under Orban</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-02-22</span>
+<span class="row-source">Al Jazeera</span>
+<span class="row-main"><span class="row-title">Israeli army kills 2 Palestinians in strikes on Gaza during Ramadan</span></span>
+</a>
+<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<span class="row-date-col">2026-02-28</span>
+<span class="row-source">Geopolitical Futures</span>
+<span class="row-main"><span class="row-title">The Chokepoint at the Center of the US-Iran Standoff</span></span>
+</a>
+</div>
+</main>
+<script>
+function toggleSection(name) {
+  const btn      = document.getElementById(name + '-toggle');
+  const rowClass = '.row-' + (name === 'dives' ? 'thread' : 'article');
+  const expanded = btn.dataset.expanded === '1';
+  const section  = btn.closest('.section');
+
+  if (expanded) {
+    // Collapse: re-hide rows past index 3
+    document.querySelectorAll(rowClass).forEach((r, i) => {
+      if (i >= 3) r.classList.add('row-hidden');
+    });
+    btn.textContent      = 'show all →';
+    btn.dataset.expanded = '0';
+    // Remove bottom anchor
+    const anchor = section.querySelector('.show-less-bottom');
+    if (anchor) anchor.remove();
+    // Scroll back to section header
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    // Expand
+    document.querySelectorAll(rowClass + '.row-hidden')
+      .forEach(r => r.classList.remove('row-hidden'));
+    btn.textContent      = '← show less';
+    btn.dataset.expanded = '1';
+    // Insert bottom anchor if not already present
+    if (!section.querySelector('.show-less-bottom')) {
+      const anchor = document.createElement('a');
+      anchor.href      = '#';
+      anchor.className = 'show-less-bottom';
+      anchor.textContent = '← show less';
+      anchor.style.cssText = 'display:block; margin-top:1rem; color:var(--accent); font-size:0.8rem; text-decoration:none; opacity:0.7;';
+      anchor.onclick = (e) => { e.preventDefault(); toggleSection(name); };
+      section.appendChild(anchor);
+    }
+  }
+}
+</script>
+
+<style id="preview-modal-style">
+.preview-modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
+}
+.preview-modal-overlay.active { display: flex; }
+.preview-modal {
+  background: #2a1f14; border: 1px solid rgba(198,138,94,0.4);
+  border-radius: 8px; padding: 28px 32px; max-width: 380px; width: 90%;
+  color: #F5F0E8; font-family: 'Source Sans 3', system-ui, sans-serif;
+}
+.preview-modal h3 {
+  font-size: 14px; font-weight: 600; margin: 0 0 12px;
+  color: #C68A5E !important; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.preview-modal p { font-size: 13px; color: rgba(245,240,232,0.75); line-height: 1.6; margin: 0 0 20px; }
+.preview-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.preview-modal-btn {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(198,138,94,0.5); background: transparent; color: #C68A5E;
+  text-decoration: none; display: inline-block;
+}
+.preview-modal-btn:hover { background: rgba(198,138,94,0.15); }
+.preview-modal-close {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(245,240,232,0.2); background: transparent;
+  color: rgba(245,240,232,0.6);
+}
+.preview-modal-close:hover { border-color: rgba(245,240,232,0.4); color: #F5F0E8; }
+</style>
+<div class="preview-modal-overlay" id="previewModal">
+<div class="preview-modal">
+<h3>Not available in preview</h3>
+<div class="preview-modal-actions">
+<a class="preview-modal-btn" href="/contact">Request access →</a>
+<button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>
+</div>
+</div>
+</div>
+<script id="preview-modal-script">
+(function() {
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('[data-admin-blocked]');
+    if (el) { e.preventDefault(); e.stopPropagation(); document.getElementById('previewModal').classList.add('active'); }
+  });
+  document.getElementById('previewModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+})();
+</script>
+</body></html>

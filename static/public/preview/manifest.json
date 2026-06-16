@@ -1,0 +1,125 @@
+{
+  "captured_at": "2026-06-16T13:23:08+00:00",
+  "pages": [
+    {
+      "domain": null,
+      "name": "index",
+      "label": "mini-moi \u2014 Home",
+      "live_path": "/",
+      "preview_path": "/preview/index.html"
+    },
+    {
+      "domain": "curator",
+      "name": "briefing",
+      "label": "Curator \u2014 Hub",
+      "live_path": "/app/curator",
+      "preview_path": "/preview/curator/briefing.html"
+    },
+    {
+      "domain": "curator",
+      "name": "daily",
+      "label": "Curator \u2014 Daily Briefing",
+      "live_path": "/app/curator/briefing",
+      "preview_path": "/preview/curator/daily.html"
+    },
+    {
+      "domain": "curator",
+      "name": "scans_dives",
+      "label": "Curator \u2014 Scans & Dives",
+      "live_path": "/app/curator/scans-dives",
+      "preview_path": "/preview/curator/scans_dives.html"
+    },
+    {
+      "domain": "curator",
+      "name": "archive",
+      "label": "Curator \u2014 Archive",
+      "live_path": "/app/curator/archive",
+      "preview_path": "/preview/curator/archive.html"
+    },
+    {
+      "domain": "curator",
+      "name": "leanings",
+      "label": "Curator \u2014 Leanings",
+      "live_path": "/app/curator/research/leanings",
+      "preview_path": "/preview/curator/leanings.html"
+    },
+    {
+      "domain": "curator",
+      "name": "reading_room",
+      "label": "Curator \u2014 Reading Room",
+      "live_path": "/app/curator/curator_library.html",
+      "preview_path": "/preview/curator/reading_room.html"
+    },
+    {
+      "domain": "german",
+      "name": "lesen",
+      "label": "Mein Deutsch \u2014 Lesen",
+      "live_path": "/app/german/lesen",
+      "preview_path": "/preview/german/lesen.html"
+    },
+    {
+      "domain": "german",
+      "name": "gesprache",
+      "label": "Mein Deutsch \u2014 Gespr\u00e4che",
+      "live_path": "/app/german/gesprache",
+      "preview_path": "/preview/german/gesprache.html"
+    },
+    {
+      "domain": "german",
+      "name": "worter",
+      "label": "Mein Deutsch \u2014 W\u00f6rter",
+      "live_path": "/app/german/woerter",
+      "preview_path": "/preview/german/worter.html"
+    },
+    {
+      "domain": "german",
+      "name": "schreiben",
+      "label": "Mein Deutsch \u2014 Schreiben",
+      "live_path": "/app/german/schreiben",
+      "preview_path": "/preview/german/schreiben.html"
+    },
+    {
+      "domain": "german",
+      "name": "archiv",
+      "label": "Mein Deutsch \u2014 Archiv",
+      "live_path": "/app/german/archiv",
+      "preview_path": "/preview/german/archiv.html"
+    },
+    {
+      "domain": "guild",
+      "name": "briefing",
+      "label": "Guild \u2014 Daily Briefing",
+      "live_path": "/guild",
+      "preview_path": "/preview/guild/briefing.html"
+    },
+    {
+      "domain": "guild",
+      "name": "build_log",
+      "label": "Guild \u2014 Build Log",
+      "live_path": "/guild/build",
+      "preview_path": "/preview/guild/build_log.html"
+    },
+    {
+      "domain": "guild",
+      "name": "queue",
+      "label": "Guild \u2014 Build Queue",
+      "live_path": "/guild/build/queue",
+      "preview_path": "/preview/guild/queue.html"
+    },
+    {
+      "domain": "guild",
+      "name": "roadmap",
+      "label": "Guild \u2014 Roadmap",
+      "live_path": "/guild/build/roadmap",
+      "preview_path": "/preview/guild/roadmap.html"
+    },
+    {
+      "domain": "guild",
+      "name": "career",
+      "label": "Guild \u2014 Career Focus",
+      "live_path": "/guild/career",
+      "preview_path": "/preview/guild/career.html"
+    }
+  ],
+  "failures": []
+}

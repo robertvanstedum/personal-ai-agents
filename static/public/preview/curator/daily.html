@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+
+<html><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="grok-4-1-fast-reasoning" name="curator-model"/>
+<meta content="production" name="curator-mode"/>
+<meta content="20" name="curator-articles"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&amp;family=DM+Mono:wght@400;500&amp;family=Source+Sans+3:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<title>Morning Briefing – June 16, 2026</title>
+<style>
+        :root {
+            --bg: #f5f0e8;
+            --bg-mid: #ede7dc;
+            --surface: #faf7f2;
+            --surface2: #f0ebe0;
+            --border: rgba(42,31,20,0.15);
+            --shadow: 0 2px 12px rgba(42,31,20,0.10);
+            --text: #2a1f14;
+            --text-muted: #7a6558;
+            --text-dim: #9e9080;
+            --accent: #8b5e2a;
+            --accent-light: #b07840;
+            --accent-dim: rgba(139,94,42,0.08);
+            --font-serif: 'Playfair Display', Georgia, serif;
+            --font-sans: 'Source Sans 3', system-ui, sans-serif;
+            --font-mono: 'DM Mono', 'Courier New', monospace;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg);
+            color: var(--text);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        /* ── Sub-nav ── */
+        nav.curator-subnav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            height: 44px;
+            background: rgba(245,240,232,0.96);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 1.5rem;
+        }
+
+        .subnav-tab {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 0 14px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            border-bottom: 2px solid transparent;
+            transition: color 0.15s;
+        }
+
+        .subnav-tab:hover { color: var(--text); }
+        .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .subnav-focus { margin-left: auto; }
+
+        /* ── Main layout ── */
+        main.briefing-main {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 28px 24px;
+        }
+
+        .briefing-header {
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .briefing-date-label {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+        }
+
+        .briefing-meta-label {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-dim);
+            letter-spacing: 0.06em;
+        }
+
+        /* ── Article cards ── */
+        .article-list {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            background: var(--surface);
+            box-shadow: var(--shadow);
+        }
+
+        .article-card {
+            display: flex;
+            gap: 14px;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.1s;
+        }
+
+        .article-card:last-child { border-bottom: none; }
+        .article-card:hover { background: var(--accent-dim); }
+
+        .rank-badge {
+            width: 26px;
+            height: 26px;
+            background: var(--accent);
+            color: white;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .card-body { flex: 1; min-width: 0; }
+
+        .card-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 5px;
+            flex-wrap: wrap;
+        }
+
+        .cat-badge {
+            font-family: var(--font-mono);
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 500;
+            padding: 2px 7px;
+            border-radius: 4px;
+            border: 1px solid transparent;
+        }
+
+        .cat-geo_major, .cat-geo_minor {
+            background: rgba(139,94,42,0.08); color: var(--accent); border-color: rgba(139,94,42,0.25);
+        }
+        .cat-monetary {
+            background: var(--bg-mid); color: var(--text-muted); border-color: var(--border);
+        }
+        .cat-fiscal {
+            background: rgba(139,94,42,0.06); color: var(--accent); border-color: rgba(139,94,42,0.2);
+        }
+        .cat-geo_other, .cat-technology, .cat-other, .cat-unknown {
+            background: var(--bg-mid); color: var(--text-muted); border-color: var(--border);
+        }
+
+        .source-label {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
+
+        .score-label {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-dim);
+            margin-left: auto;
+        }
+
+        .time-label {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-dim);
+        }
+
+        .card-title {
+            font-family: var(--font-serif);
+            font-size: 1.05rem;
+            font-weight: 600;
+            line-height: 1.35;
+            margin-bottom: 6px;
+        }
+
+        .card-title a {
+            color: var(--text);
+            text-decoration: none;
+        }
+
+        .card-title a:hover { color: var(--accent); }
+
+        .card-summary {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            line-height: 1.55;
+            margin-bottom: 10px;
+        }
+
+        /* ── Article actions — text-link style ── */
+        .article-actions {
+            display: flex;
+            gap: 0;
+            align-items: center;
+            margin-top: 2px;
+        }
+
+        .action-btn {
+            font-size: 0.78rem;
+            font-weight: 400;
+            font-family: inherit;
+            padding: 0;
+            border: none;
+            border-radius: 0;
+            background: transparent;
+            color: var(--accent);
+            cursor: pointer;
+            opacity: 0.65;
+            transition: opacity 0.15s;
+            letter-spacing: 0.03em;
+        }
+
+        .action-btn:hover:not(:disabled) {
+            opacity: 1;
+            background: transparent;
+            color: var(--accent);
+        }
+
+        .action-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        .action-sep {
+            color: var(--text-dim);
+            margin: 0 0.4rem;
+            font-size: 0.78rem;
+        }
+
+        /* Investigate button — overrides base text-link style */
+        .btn-investigate {
+            background: var(--accent) !important;
+            color: white !important;
+            font-weight: 600 !important;
+            opacity: 1 !important;
+            padding: 3px 12px !important;
+            border-radius: 20px !important;
+            border: 1px solid transparent !important;
+        }
+        .btn-investigate:hover:not(:disabled) { background: #7a521f !important; }
+
+        /* ── Topics strip ── */
+        #topics-strip {
+            display: flex; align-items: center; gap: 6px;
+            flex-wrap: wrap; margin-bottom: 1rem;
+        }
+        #topics-strip-label {
+            font-family: var(--font-mono); font-size: 0.65rem;
+            text-transform: uppercase; letter-spacing: 0.1em;
+            color: var(--text-dim); margin-right: 2px;
+        }
+        .topic-pill {
+            display: inline-flex; align-items: center; gap: 5px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 999px; padding: 3px 10px 3px 8px;
+            font-size: 0.72rem; font-family: var(--font-mono); line-height: 1.2;
+        }
+        .tp-active  { border-color: rgba(46,125,82,0.45); background: rgba(46,125,82,0.06); }
+        .tp-paused  { border-color: rgba(139,110,26,0.45); background: rgba(139,110,26,0.06); }
+        .tp-dormant { border-color: rgba(158,144,128,0.3); }
+        .tp-oneshot { border-color: rgba(26,92,138,0.4); background: rgba(26,92,138,0.06); }
+        .tp-dot     { font-size: 0.65rem; flex-shrink: 0; }
+        .tp-name    { color: var(--text); text-decoration: none; font-weight: 500; }
+        .tp-name:hover { color: var(--accent); }
+        .tp-sub     { color: var(--text-dim); font-size: 0.68rem; }
+        .tp-activate-btn {
+            font-family: var(--font-mono); font-size: 0.62rem;
+            background: var(--accent); color: white;
+            border: none; border-radius: 999px; padding: 1px 7px;
+            cursor: pointer; margin-left: 2px; line-height: 1.6;
+        }
+        .tp-activate-btn:hover { background: #7a521f; }
+        .tp-activate-btn:disabled { opacity: 0.5; cursor: default; }
+
+        /* ── Investigate modal ── */
+        #investigate-modal {
+            background: #faf7f2; border: 1px solid #ddd6c8;
+            border-radius: 12px; box-shadow: 0 8px 32px rgba(42,36,24,0.22);
+            width: 520px; max-width: 94vw;
+            font-family: var(--font-sans); font-size: 14px;
+            color: #2a2418; overflow: hidden;
+        }
+        .inv-header {
+            display: flex; align-items: flex-start; justify-content: space-between;
+            padding: 18px 20px 14px; border-bottom: 1px solid #ddd6c8;
+            background: #f0ebe0;
+        }
+        .inv-article-title {
+            font-family: var(--font-serif); font-size: 0.95rem; font-weight: 600;
+            line-height: 1.3; color: #2a2418; max-width: 420px;
+        }
+        .inv-article-source {
+            font-family: var(--font-mono); font-size: 10px;
+            text-transform: uppercase; letter-spacing: 0.08em;
+            color: #9e9080; margin-top: 3px;
+        }
+        .inv-close {
+            background: none; border: none; cursor: pointer;
+            font-size: 1rem; color: #9e9080; padding: 0 0 0 12px; line-height: 1;
+        }
+        .inv-close:hover { color: #2a2418; }
+        .inv-tabs { display: flex; border-bottom: 1px solid #ddd6c8; background: #f5f0e8; }
+        .inv-tab {
+            flex: 1; padding: 10px 0; border: none; background: transparent;
+            cursor: pointer; font-family: var(--font-mono);
+            font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
+            color: #9e9080; border-bottom: 2px solid transparent;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .inv-tab.active { color: #8b5e2a; border-bottom-color: #8b5e2a; }
+        .inv-tab:hover:not(.active) { color: #6b5f4e; }
+        .inv-pane { display: none; padding: 18px 20px 20px; }
+        .inv-pane.active { display: block; }
+        .inv-hint { font-size: 0.8rem; color: #6b5f4e; margin-bottom: 12px; line-height: 1.5; }
+        .inv-label {
+            display: block; font-size: 0.75rem; font-weight: 600;
+            color: #6b5f4e; margin-bottom: 4px; margin-top: 0;
+        }
+        .inv-input, .inv-select, .inv-textarea {
+            width: 100%; font-family: inherit; font-size: 0.875rem;
+            background: #f5f0e8; border: 1px solid #c8bfaf;
+            border-radius: 6px; padding: 8px 10px; color: #2a2418;
+            outline: none; box-sizing: border-box;
+        }
+        .inv-input:focus, .inv-select:focus, .inv-textarea:focus { border-color: #8b5e2a; }
+        .inv-textarea { resize: vertical; min-height: 64px; }
+        .inv-duration-row { display: flex; gap: 8px; }
+        .inv-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+        .inv-btn {
+            font-family: var(--font-mono); font-size: 11px;
+            text-transform: uppercase; letter-spacing: 0.06em;
+            padding: 8px 16px; border-radius: 6px; cursor: pointer;
+            border: 1px solid #ddd6c8; background: #f0ebe0;
+            color: #2a2418; transition: background 0.15s;
+        }
+        .inv-btn:hover { background: #e5ddd0; }
+        .inv-btn-primary { background: #8b5e2a; color: white; border-color: #8b5e2a; }
+        .inv-btn-primary:hover { background: #7a521f; }
+        .inv-status { font-size: 0.78rem; color: #6b5f4e; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to   { opacity: 1; transform: scale(1); }
+        }
+    </style>
+<link href="/preview/assets/css_annotations.css" rel="stylesheet"/>
+<style>body{padding-top:38px!important;}nav.curator-subnav{top:38px!important;}</style>
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  // Endpoints allowed to pass through to the real server
+  var PASSTHROUGH = ['/app/german/api/translate'];
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    // Lesen category API — serve pre-captured data if available
+    if (u.indexOf('/api/lesen-category') !== -1) {
+      var cat = '';
+      try { cat = new URL(u, location.origin).searchParams.get('category') || ''; } catch(e) {}
+      var data = window._previewLesenData || {};
+      var articles = data[cat] || [];
+      return Promise.resolve(new Response(JSON.stringify({articles: articles}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    // Allow translate through — works for authenticated users, fails silently otherwise
+    for (var i = 0; i < PASSTHROUGH.length; i++) {
+      if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
+    }
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
+<style id="preview-banner-style">
+.preview-banner {
+  position: sticky; top: 0; z-index: 9999;
+  background: #2A1F14; color: #F5F0E8;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 11px; letter-spacing: 0.04em;
+  padding: 7px 20px;
+  border-bottom: 1px solid rgba(198,138,94,0.3);
+  display: flex; align-items: center; gap: 8px;
+}
+.preview-banner .preview-date { color: rgba(245,240,232,0.7); }
+.preview-request-link {
+  color: #C68A5E; text-decoration: none; margin-left: auto;
+  border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
+}
+.preview-request-link:hover { background: rgba(198,138,94,0.1); }
+</style>
+</head>
+<body data-domain="curator" data-page="daily" data-run-mode="production" data-topic=""><div class="preview-banner">
+<span>Preview snapshot — </span>
+<span class="preview-date">Captured June 2026</span>
+<span>. Data is real but frozen.</span>
+<a class="preview-request-link" href="/contact">Request live access →</a>
+</div>
+<style id="portal-offset-css">body{padding-top:38px!important;}nav.curator-subnav{top:38px!important;}</style>
+<div id="portal-nav-bar" style="
+  position:fixed;top:0;left:0;right:0;z-index:999999;
+  height:38px;background:#12122a;color:#e8e8e8;
+  display:flex;align-items:center;padding:0 16px;gap:0;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:13px;border-bottom:1px solid rgba(255,255,255,0.12);
+  box-shadow:0 1px 8px rgba(0,0,0,0.4);
+">
+<a href="/preview/" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
+<span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
+<a href="/preview/curator/briefing.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;color:#ffffff;font-weight:600;">Curator</a>
+<a href="/preview/german/lesen.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;">German</a>
+<a href="/preview/guild/briefing.html" style="color:#C68A5E;text-decoration:none;">Guild</a>
+<span style="color:rgba(255,255,255,0.45);margin-left:auto;margin-right:12px;">Robert</span>
+<a data-admin-blocked="true" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;; cursor: pointer;">Sign out</a>
+</div>
+<nav class="curator-subnav">
+<a class="subnav-tab active" href="/preview/curator/daily.html">Daily</a>
+<a class="subnav-tab" href="/preview/curator/reading_room.html">Reading Room</a>
+<a class="subnav-tab" href="/preview/curator/scans_dives.html">Scans &amp; Dives</a>
+<a class="subnav-tab" href="/preview/curator/leanings.html">Leanings</a>
+<a class="subnav-tab" href="/preview/curator/archive.html">Archive</a>
+<a class="subnav-tab subnav-focus" data-admin-blocked="true" style="cursor: pointer;">Desk</a>
+</nav>
+<main class="briefing-main">
+<div class="briefing-header">
+<span class="briefing-date-label">Tuesday, June 16, 2026</span>
+<span class="briefing-meta-label">grok-4-1-fast-reasoning</span>
+</div>
+<div id="topics-strip" style="display: flex;">
+<span id="topics-strip-label">Topics</span>
+<div id="topics-pills" style="display:contents;"><div class="topic-pill tp-dormant"><span class="tp-dot" style="color:#9e9080">?</span><a class="tp-name" data-admin-blocked="true" style="cursor: pointer;" title="I would like to track this area:  artificial intelligence: open-weight, local AI models.  I would li">china-ai-local-llms</a><span class="tp-sub">active</span></div><div class="topic-pill tp-dormant"><span class="tp-dot" style="color:#9e9080">?</span><a class="tp-name" data-admin-blocked="true" style="cursor: pointer;" title="Taiwan will merge into China.  Will the other neighbors be like the US and Caribbean, a Chinese Lake">china-and-taiwan</a><span class="tp-sub">active</span></div><div class="topic-pill tp-active"><span class="tp-dot" style="color:#2e7d52">●</span><a class="tp-name" data-admin-blocked="true" style="cursor: pointer;" title="To be written">china-rise</a><span class="tp-sub">active</span></div><div class="topic-pill tp-active"><span class="tp-dot" style="color:#2e7d52">●</span><a class="tp-name" data-admin-blocked="true" style="cursor: pointer;" title="To be written">empire-landpower</a><span class="tp-sub">active</span></div><div class="topic-pill tp-active"><span class="tp-dot" style="color:#2e7d52">●</span><a class="tp-name" data-admin-blocked="true" style="cursor: pointer;" title="Gold appears to be in a long-term upward shift as currencies weaken, US Treasuries become less attra">gold-geopolitics</a><span class="tp-sub">active</span></div><div class="topic-pill tp-dormant"><span class="tp-dot" style="color:#9e9080">?</span><a class="tp-name" data-admin-blocked="true" style="cursor: pointer;" title="tell me more">have-countries-around-world</a><span class="tp-sub">active</span></div><div class="topic-pill tp-dormant"><span class="tp-dot" style="color:#9e9080">?</span><a class="tp-name" data-admin-blocked="true" style="cursor: pointer;" title="I would like to know now that Venezuela is in US camp, will Colombia benefit?">polls-open-colombia</a><span class="tp-sub">active</span></div><div class="topic-pill tp-active"><span class="tp-dot" style="color:#2e7d52">●</span><a class="tp-name" data-admin-blocked="true" style="cursor: pointer;" title="This group seems the most important in the world as a buffer to China, not an enemy but a potentiall">quad-flexibility-not</a><span class="tp-sub">-13d left · 0 sessions</span></div></div>
+</div>
+<div class="article-list">
+<article class="article-card" data-category="geo_major" data-hash-id="1f0f9" data-rank="1" data-source="Al Jazeera" data-title="Iran war day 109: Tehran, Washington, sign MoU electronically" data-url="https://www.aljazeera.com/news/2026/6/16/iran-war-day-109-tehran-washington-sign-mou-electronically?traffic_source=rss">
+<div class="rank-badge">1</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-geo_major">geo_major</span>
+<span class="source-label">Al Jazeera</span>
+<span class="score-label">9.0 ⭐</span>
+<span class="time-label">5h ago</span>
+</div>
+<h2 class="card-title">
+<a href="https://www.aljazeera.com/news/2026/6/16/iran-war-day-109-tehran-washington-sign-mou-electronically?traffic_source=rss" target="_blank">Iran war day 109: Tehran, Washington, sign MoU electronically</a>
+</h2>
+<p class="card-summary">Iran’s National Security Council said on Monday that the deal ends fighting on all fronts, including in Lebanon.</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 1);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 1);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 1);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="geo_major" data-hash-id="45261" data-rank="2" data-source="Deutsche Welle" data-title="US-Iran deal: Tehran says Israel withdrawal from Lebanon key" data-url="https://www.dw.com/en/us-iran-deal-tehran-says-israel-withdrawal-from-lebanon-key/live-77573728?maca=en-rss-en-all-1573-xml-mrss">
+<div class="rank-badge">2</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-geo_major">geo_major</span>
+<span class="source-label">Deutsche Welle</span>
+<span class="score-label">8.0 ⭐</span>
+<span class="time-label">3h ago</span>
+</div>
+<h2 class="card-title">
+<a href="https://www.dw.com/en/us-iran-deal-tehran-says-israel-withdrawal-from-lebanon-key/live-77573728?maca=en-rss-en-all-1573-xml-mrss" target="_blank">US-Iran deal: Tehran says Israel withdrawal from Lebanon key</a>
+</h2>
+<p class="card-summary">Iran’s top diplomat says any continued Israeli presence in Lebanon would violate the interim U.S.–Iran deal to end the war. Prime Minister Benjamin Netanyahu insists Israel will remain as long as…</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 2);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 2);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 2);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="monetary" data-hash-id="39fcb" data-rank="3" data-source="War on the Rocks" data-title="The Toll Booth at the Throat of World Trade" data-url="https://warontherocks.com/the-toll-booth-at-the-throat-of-world-trade/">
+<div class="rank-badge">3</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-monetary">monetary</span>
+<span class="source-label">War on the Rocks</span>
+<span class="score-label">8.0</span>
+<span class="time-label">14d ago</span>
+</div>
+<h2 class="card-title">
+<a href="https://warontherocks.com/the-toll-booth-at-the-throat-of-world-trade/" target="_blank">The Toll Booth at the Throat of World Trade</a>
+</h2>
+<p class="card-summary">In late February 2026, Iran closed the Strait of Hormuz to foreign shipping. What began as a chaotic wartime closure has, in the past few days, hardened into something more consequential: an official…</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 3);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 3);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 3);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="geo_other" data-hash-id="d45ca" data-rank="4" data-source="Foreign Affairs" data-title="How to Beat an Autocrat" data-url="https://www.foreignaffairs.com/hungary/how-beat-autocrat">
+<div class="rank-badge">4</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-geo_other">geo_other</span>
+<span class="source-label">Foreign Affairs</span>
+<span class="score-label">6.0</span>
+<span class="time-label">1d ago</span>
+</div>
+<h2 class="card-title">
+<a href="https://www.foreignaffairs.com/hungary/how-beat-autocrat" target="_blank">How to Beat an Autocrat</a>
+</h2>
+<p class="card-summary">The real lessons of Orban’s defeat.</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 4);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 4);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 4);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="technology" data-hash-id="0afd3" data-rank="5" data-source="arXiv q-fin" data-title="U.S. Policies Unintentionally Accelerated China\'s Open AI Ecosystems" data-url="https://arxiv.org/abs/2606.15999">
+<div class="rank-badge">5</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-technology">technology</span>
+<span class="source-label">arXiv q-fin</span>
+<span class="score-label">6.0</span>
+<span class="time-label">9h ago</span>
+</div>
+<h2 class="card-title">
+<a href="https://arxiv.org/abs/2606.15999" target="_blank">U.S. Policies Unintentionally Accelerated China's Open AI Ecosystems</a>
+</h2>
+<p class="card-summary">arXiv:2606.15999v1 Announce Type: new Abstract: Over the past decade, U.S. policies have increasingly aimed to preserve artificial intelligence (AI) leadership by promoting domestic free-market…</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 5);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 5);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 5);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="other" data-hash-id="a182a" data-rank="6" data-source="Just Security" data-title="Litigation Tracker: Legal Challenges to Trump Administration Actions" data-url="https://www.justsecurity.org/107087/tracker-litigation-legal-challenges-trump-administration/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=tracker-litigation-legal-challenges-trump-administration">
+<div class="rank-badge">6</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-other">other</span>
+<span class="source-label">Just Security</span>
+<span class="score-label">5.0</span>
+<span class="time-label">21h ago</span>
+</div>
+<h2 class="card-title">
+<a href="https://www.justsecurity.org/107087/tracker-litigation-legal-challenges-trump-administration/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=tracker-litigation-legal-challenges-trump-administration" target="_blank">Litigation Tracker: Legal Challenges to Trump Administration Actions</a>
+</h2>
+<p class="card-summary">A public resource tracking all the legal challenges to the Trump administration's executive orders and actions.</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 6);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 6);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 6);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="monetary" data-hash-id="0064f" data-rank="7" data-source="Crisis Group" data-title="Hormuz 5 June 2026 #1" data-url="https://www.crisisgroup.org/content/hormuz-5-june-2026-1">
+<div class="rank-badge">7</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-monetary">monetary</span>
+<span class="source-label">Crisis Group</span>
+<span class="score-label">7.0</span>
+<span class="time-label">10d ago</span>
+</div>
+<h2 class="card-title">
+<a href="https://www.crisisgroup.org/content/hormuz-5-june-2026-1" target="_blank">Hormuz 5 June 2026 #1</a>
+</h2>
+<p class="card-summary">Hormuz 5 June 2026 #1 lalasor Fri, 06/05/2026 - 17:52 Strait of Hormuz Fri, 06/05/2026 - 12:00 5 June 2026 U.S. Indo-Pacific Command (INDOPACOM) reported that “U.S. forces carried out a maritime…</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 7);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 7);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 7);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="fiscal" data-hash-id="7f21a" data-rank="8" data-source="Treasury MSPD" data-title="Monthly Statement of the Public Debt, May 31, 2026" data-url="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding">
+<div class="rank-badge">8</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-fiscal">fiscal</span>
+<span class="source-label">Treasury MSPD</span>
+<span class="score-label">7.0</span>
+<span class="time-label">11d ago</span>
+</div>
+<h2 class="card-title">
+<a href="https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/summary-of-treasury-securities-outstanding" target="_blank">Monthly Statement of the Public Debt, May 31, 2026</a>
+</h2>
+<p class="card-summary">May 31, 2026-TABLE I -- SUMMARY OF TREASURY SECURITIES OUTSTANDING</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 8);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 8);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 8);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="other" data-hash-id="d3ed8" data-rank="9" data-source="CEPR VoxEU" data-title="Taking the pulse of global trade policy" data-url="https://cepr.org/voxeu/columns/taking-pulse-global-trade-policy">
+<div class="rank-badge">9</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-other">other</span>
+<span class="source-label">CEPR VoxEU</span>
+<span class="score-label">5.0</span>
+<span class="time-label">1d ago</span>
+</div>
+<h2 class="card-title">
+<a href="https://cepr.org/voxeu/columns/taking-pulse-global-trade-policy" target="_blank">Taking the pulse of global trade policy</a>
+</h2>
+<p class="card-summary">How much has trade policy changed globally? This column introduces the Trade Policy Activity Index, a monthly measure of policy changes across 197 economies since the Global Financial Crisis.…</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 9);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 9);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 9);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="technology" data-hash-id="0a7eb" data-rank="10" data-source="Adam Tooze Chartbook" data-title="Top Links 1123 Financially conflicted. How Nvidia nudged Micron onto the AI train. Kültürkampf &amp; Chinmaxxing Russian elites." data-url="https://adamtooze.substack.com/p/top-links-1023-financially-conflicted">
+<div class="rank-badge">10</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-technology">technology</span>
+<span class="source-label">Adam Tooze Chartbook</span>
+<span class="score-label">5.0</span>
+<span class="time-label">11d ago</span>
+</div>
+<h2 class="card-title">
+<a href="https://adamtooze.substack.com/p/top-links-1023-financially-conflicted" target="_blank">Top Links 1123 Financially conflicted. How Nvidia nudged Micron onto the AI train. Kültürkampf &amp; Chinmaxxing Russian elites.</a>
+</h2>
+<p class="card-summary">Great links, images, and reading from Chartbook Newsletter by Adam Tooze</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 10);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 10);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 10);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="geo_other" data-hash-id="aff60" data-rank="11" data-source="Antiwar.com" data-title="Israeli Airstrike in Gaza City Kills Little Boy and His Father" data-url="https://news.antiwar.com/2026/06/15/israeli-airstrike-in-gaza-city-kills-little-boy-and-his-father/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=israeli-airstrike-in-gaza-city-kills-little-boy-and-his-father">
+<div class="rank-badge">11</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-geo_other">geo_other</span>
+<span class="source-label">Antiwar.com</span>
+<span class="score-label">6.0</span>
+<span class="time-label">17h ago</span>
+</div>
+<h2 class="card-title">
+<a href="https://news.antiwar.com/2026/06/15/israeli-airstrike-in-gaza-city-kills-little-boy-and-his-father/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=israeli-airstrike-in-gaza-city-kills-little-boy-and-his-father" target="_blank">Israeli Airstrike in Gaza City Kills Little Boy and His Father</a>
+</h2>
+<p class="card-summary">An Israeli airstrike in Gaza on Monday hit a rooftop in Gaza City and killed a nurse, Mohamed al-Habeel, and his young son, Mousa, as the IDF continues its constant violations of the US-backed…</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 11);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 11);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 11);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="geo_major" data-hash-id="de181" data-rank="12" data-source="Geopolitical Futures" data-title="The Tension Between the Geopolitical and the Political in the Iran War" data-url="https://geopoliticalfutures.com/the-tension-between-the-geopolitical-and-the-political-in-the-iran-war/">
+<div class="rank-badge">12</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-geo_major">geo_major</span>
+<span class="source-label">Geopolitical Futures</span>
+<span class="score-label">9.0 ⭐</span>
+<span class="time-label">3h ago</span>
+</div>
+<h2 class="card-title">
+<a href="https://geopoliticalfutures.com/the-tension-between-the-geopolitical-and-the-political-in-the-iran-war/" target="_blank">The Tension Between the Geopolitical and the Political in the Iran War</a>
+</h2>
+<p class="card-summary">The agreement reached Sunday between Iran and the United States does not end the war. It is essentially a 60-day ceasefire agreement, during which the major issues of the war will be negotiated.…</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 12);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 12);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 12);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="fiscal" data-hash-id="75f59" data-rank="13" data-source="Treasury MSPD" data-title="Monthly Statement of the Public Debt, April 30, 2022" data-url="http://www.treasurydirect.gov/govt/reports/pd/mspd/2022/2022_apr.htm">
+<div class="rank-badge">13</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-fiscal">fiscal</span>
+<span class="source-label">Treasury MSPD</span>
+<span class="score-label">7.0</span>
+<span class="time-label">1502d ago</span>
+</div>
+<h2 class="card-title">
+<a href="http://www.treasurydirect.gov/govt/reports/pd/mspd/2022/2022_apr.htm" target="_blank">Monthly Statement of the Public Debt, April 30, 2022</a>
+</h2>
+<p class="card-summary">April 30, 2022-TABLE I -- SUMMARY OF TREASURY SECURITIES OUTSTANDING</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 13);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 13);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 13);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="monetary" data-hash-id="1a412" data-rank="14" data-source="ZeroHedge" data-title="China\'s Return To The Oil Market Could Boost Inflation" data-url="https://www.zerohedge.com/energy/chinas-return-oil-market-could-boost-inflation">
+<div class="rank-badge">14</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-monetary">monetary</span>
+<span class="source-label">ZeroHedge</span>
+<span class="score-label">7.0</span>
+<span class="time-label">4h ago</span>
+</div>
+<h2 class="card-title">
+<a href="https://www.zerohedge.com/energy/chinas-return-oil-market-could-boost-inflation" target="_blank">China's Return To The Oil Market Could Boost Inflation</a>
+</h2>
+<p class="card-summary">China's Return To The Oil Market Could Boost Inflation Submitted by Tsvetana Paraskova of OilPrice.com The U.S.-Iran agreement to reopen the Strait of Hormuz could prompt China to return to buying…</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 14);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 14);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 14);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="geo_other" data-hash-id="9e6f9" data-rank="15" data-source="The Duran" data-title="Palestinian unity necessary to achieve liberation from Israeli occupation" data-url="https://theduran.com/palestinian-unity-necessary-to-achieve-liberation-from-israeli-occupation/">
+<div class="rank-badge">15</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-geo_other">geo_other</span>
+<span class="source-label">The Duran</span>
+<span class="score-label">6.0</span>
+<span class="time-label">19h ago</span>
+</div>
+<h2 class="card-title">
+<a href="https://theduran.com/palestinian-unity-necessary-to-achieve-liberation-from-israeli-occupation/" target="_blank">Palestinian unity necessary to achieve liberation from Israeli occupation</a>
+</h2>
+<p class="card-summary">Steven Sahiounie, journalist and political commentator Israel is now exposed for genocide and the illegal occupation of Palestine. Social media has caused a huge change in the American and Western…</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 15);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 15);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 15);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="technology" data-hash-id="fc6fa" data-rank="16" data-source="NY Fed Liberty Street" data-title="AI’s Macroeconomic Challenges and Promises" data-url="https://libertystreeteconomics.newyorkfed.org/2026/05/ais-macroeconomic-challenges-and-promises/">
+<div class="rank-badge">16</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-technology">technology</span>
+<span class="source-label">NY Fed Liberty Street</span>
+<span class="score-label">6.0</span>
+<span class="time-label">27d ago</span>
+</div>
+<h2 class="card-title">
+<a href="https://libertystreeteconomics.newyorkfed.org/2026/05/ais-macroeconomic-challenges-and-promises/" target="_blank">AI’s Macroeconomic Challenges and Promises</a>
+</h2>
+<p class="card-summary">In the third quarter of 2025, America's largest tech firms for the first time spent more on capital investment than they earned from operations. The implication is that AI, a technology with the…</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 16);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 16);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 16);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="other" data-hash-id="f9008" data-rank="17" data-source="X/@LukeGromen" data-title='"Anthropic is releasing a new version of its most powerful AI model that’s desig' data-url="https://x.com/LukeGromen/status/2019488862133702837">
+<div class="rank-badge">17</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-other">other</span>
+<span class="source-label">X/@LukeGromen</span>
+<span class="score-label">5.0</span>
+<span class="time-label">N/A</span>
+</div>
+<h2 class="card-title">
+<a href="https://x.com/LukeGromen/status/2019488862133702837" target="_blank">"Anthropic is releasing a new version of its most powerful AI model that’s desig</a>
+</h2>
+<p class="card-summary">"Anthropic is releasing a new version of its most powerful AI model that’s designed to carry out financial research" - Bloomberg, 2/5/26 US white collar workers today increasingly looking like…</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 17);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 17);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 17);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="geo_major" data-hash-id="10e20" data-rank="18" data-source="FAZ" data-title="Liveblog Irankrieg: Iran kündigt neue Verhandlungen mit den USA an" data-url="https://www.faz.net/aktuell/politik/ausland/liveblog-irankrieg-iran-kuendigt-neue-verhandlungen-mit-den-usa-an-faz-200583539.html">
+<div class="rank-badge">18</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-geo_major">geo_major</span>
+<span class="source-label">FAZ</span>
+<span class="score-label">8.0 ⭐</span>
+<span class="time-label">3h ago</span>
+</div>
+<h2 class="card-title">
+<a href="https://www.faz.net/aktuell/politik/ausland/liveblog-irankrieg-iran-kuendigt-neue-verhandlungen-mit-den-usa-an-faz-200583539.html" target="_blank">Liveblog Irankrieg: Iran kündigt neue Verhandlungen mit den USA an</a>
+</h2>
+<p class="card-summary">Araghchi: Direkt nach geplanter Unterzeichnung des Rahmenabkommens am Freitag +++ US-Vizepräsident Vance: Iran-Abkommen ist „sehr allgemeines Dokument“ +++ alle Entwicklungen im Liveblog</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 18);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 18);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 18);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="technology" data-hash-id="4d243" data-rank="19" data-source="Naked Capitalism" data-title="Coffee Break: OpenAI, Amazon Colluding With Trump Against Anthropic" data-url="https://www.nakedcapitalism.com/2026/06/anthropic-trump-conflict-openai-amazon-meta.html">
+<div class="rank-badge">19</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-technology">technology</span>
+<span class="source-label">Naked Capitalism</span>
+<span class="score-label">6.0</span>
+<span class="time-label">19h ago</span>
+</div>
+<h2 class="card-title">
+<a href="https://www.nakedcapitalism.com/2026/06/anthropic-trump-conflict-openai-amazon-meta.html" target="_blank">Coffee Break: OpenAI, Amazon Colluding With Trump Against Anthropic</a>
+</h2>
+<p class="card-summary">The Trump administration is in conflict with Anthropic and rival OpenAI is trying to take advantage because Anthropic is a threat to them.</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 19);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 19);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 19);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+<article class="article-card" data-category="other" data-hash-id="c7f21" data-rank="20" data-source="X/@Peter_Turchin" data-title="Donald Trump as an Elite Aspirant" data-url="https://peterturchin.com/donald-trump-as-an-elite-aspirant/">
+<div class="rank-badge">20</div>
+<div class="card-body">
+<div class="card-meta">
+<span class="cat-badge cat-other">other</span>
+<span class="source-label">X/@Peter_Turchin</span>
+<span class="score-label">5.0</span>
+<span class="time-label">N/A</span>
+</div>
+<h2 class="card-title">
+<a href="https://peterturchin.com/donald-trump-as-an-elite-aspirant/" target="_blank">Donald Trump as an Elite Aspirant</a>
+</h2>
+<p class="card-summary">Yesterday Ned Resnikoff published an article What Ancient History Has To Say About Near-Future Doom , based on interviewing me last week. It’s very well done, but several things I said didn’t make it…</p>
+<div class="article-actions">
+<button class="action-btn btn-like" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'like', 20);" title="Like this article">Like</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-dislike" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'dislike', 20);" title="Pass on this article">Pass</button>
+<span class="action-sep">·</span>
+<button class="action-btn btn-save" data-preview-disabled="true" disabled="disabled" onclick="showFeedback(this, 'save', 20);" title="Save to investigate">Save</button>
+</div>
+</div>
+</article>
+</div>
+<details class="radar-section">
+<summary class="radar-summary">
+    📡 On Radar
+    
+      — 10 articles matching active Topics
+      <span class="radar-hint">(not in today's top 20)</span>
+</summary>
+<div class="radar-body">
+<table class="radar-table">
+<thead>
+<tr><th>Article</th><th>Source</th><th>Topic</th></tr>
+</thead>
+<tbody>
+<tr class="radar-row">
+<td class="radar-title"><a href="https://www.stlouisfed.org/on-the-economy/2026/jun/declining-fertility-rates-across-world" rel="noopener" target="_blank">Declining Fertility Rates across the World</a></td>
+<td class="radar-source">Fed On The Economy</td>
+<td class="radar-topic">📡 have-countries-around-world</td>
+</tr>
+<tr class="radar-row">
+<td class="radar-title"><a href="https://www.stlouisfed.org/on-the-economy/2026/jun/flash-report-may-unemployment-job-gains-signal-steady-labor-market" rel="noopener" target="_blank">Flash Report: May Unemployment, Job Gains Signal Steady Labor Market</a></td>
+<td class="radar-source">Fed On The Economy</td>
+<td class="radar-topic">📡 china-ai-local-llms</td>
+</tr>
+<tr class="radar-row">
+<td class="radar-title"><a href="https://ritholtz.com/2026/06/mib-jean-eric-salata/" rel="noopener" target="_blank">MiB: Jean Eric Salata, Chair of EQT group</a></td>
+<td class="radar-source">The Big Picture</td>
+<td class="radar-topic">📡 china-ai-local-llms</td>
+</tr>
+<tr class="radar-row">
+<td class="radar-title"><a href="https://www.zerohedge.com/geopolitical/lebanon-hosts-worlds-highest-concentration-refugees-us-ranks-82nd" rel="noopener" target="_blank">Lebanon Hosts The World's Highest Concentration Of Refugees, US Ranks 82nd</a></td>
+<td class="radar-source">ZeroHedge</td>
+<td class="radar-topic">📡 have-countries-around-world</td>
+</tr>
+<tr class="radar-row">
+<td class="radar-title"><a href="https://www.zerohedge.com/markets/open-letter-elizabeth-warren-about-trillionaires-and-inequality" rel="noopener" target="_blank">An Open Letter To Elizabeth Warren About Trillionaires And Inequality</a></td>
+<td class="radar-source">ZeroHedge</td>
+<td class="radar-topic">📡 china-ai-local-llms, polls-open-colombia</td>
+</tr>
+<tr class="radar-row">
+<td class="radar-title"><a href="https://www.zerohedge.com/personal-finance/which-us-states-have-highest-gdp-capita" rel="noopener" target="_blank">Which US States Have The Highest GDP Per Capita?</a></td>
+<td class="radar-source">ZeroHedge</td>
+<td class="radar-topic">📡 have-countries-around-world</td>
+</tr>
+<tr class="radar-row">
+<td class="radar-title"><a href="https://www.zerohedge.com/military/b-52-bomber-crashes-after-take-edwards-air-force-base-california" rel="noopener" target="_blank">B-52 Bomber Crashes After Take-Off From Edwards Air Force Base In California</a></td>
+<td class="radar-source">ZeroHedge</td>
+<td class="radar-topic">📡 china-ai-local-llms</td>
+</tr>
+<tr class="radar-row">
+<td class="radar-title"><a href="https://www.zerohedge.com/medical/how-world-added-decades-life-expectancy" rel="noopener" target="_blank">How The World Added Decades To Life Expectancy</a></td>
+<td class="radar-source">ZeroHedge</td>
+<td class="radar-topic">📡 have-countries-around-world</td>
+</tr>
+<tr class="radar-row">
+<td class="radar-title"><a href="https://geopoliticalfutures.com/daily-memo-us-iran-deal-french-diplomacy-in-north-africa/" rel="noopener" target="_blank">Daily Memo: US-Iran Deal, French Diplomacy in North Africa</a></td>
+<td class="radar-source">Geopolitical Futures</td>
+<td class="radar-topic">📡 china-ai-local-llms</td>
+</tr>
+<tr class="radar-row">
+<td class="radar-title"><a href="https://www.zerohedge.com/ai/domesticating-ai-its-not-coming-its-already-here" rel="noopener" target="_blank">Domesticating AI - It's Not Coming, It's Already Here</a></td>
+<td class="radar-source">ZeroHedge</td>
+<td class="radar-topic">📡 china-ai-local-llms</td>
+</tr>
+</tbody>
+</table>
+</div>
+</details>
+<style>
+.radar-section { margin: 1.5rem 0; border: 1px solid var(--border); border-radius: 6px; background: var(--surface2); }
+.radar-summary { padding: 0.75rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); user-select: none; list-style: none; }
+.radar-summary::-webkit-details-marker { display: none; }
+.radar-hint { font-weight: 400; font-size: 0.8rem; color: var(--text-dim); margin-left: 0.5rem; }
+.radar-body { padding: 0 0.5rem 0.75rem; }
+.radar-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.radar-table th { text-align: left; padding: 0.4rem 0.75rem; color: var(--text-dim); font-weight: 500; border-bottom: 1px solid var(--border); }
+.radar-row td { padding: 0.4rem 0.75rem; border-bottom: 1px solid var(--border); }
+.radar-title a { color: var(--text); text-decoration: none; }
+.radar-title a:hover { color: var(--accent); text-decoration: underline; }
+.radar-source { color: var(--text-muted); white-space: nowrap; }
+.radar-topic { color: var(--text-dim); font-size: 0.8rem; white-space: nowrap; }
+.radar-empty { color: var(--text-dim); font-size: 0.82rem; padding: 0.5rem 0.75rem; margin: 0; }
+</style>
+</main>
+<script>
+// ── HTML-escape helper ───────────────────────────────────────────────────────
+function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Feedback (Like / Pass / Save) ───────────────────────────────────────────
+function showFeedback(button, action, rank) {
+    var row = button.closest('.article-card');
+    var articleData = {
+        id:       row.dataset.hashId || ('row-' + rank),
+        title:    row.dataset.title  || 'Unknown',
+        link:     row.dataset.url    || '#',
+        source:   row.dataset.source || 'Unknown',
+        category: row.dataset.category || 'other'
+    };
+
+    button.style.opacity = '0.3';
+    button.style.cursor  = 'not-allowed';
+    button.disabled = true;
+
+    fetch('/app/curator/feedback', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ action: action, rank: rank, article: articleData })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            var allBtns = row.querySelectorAll('.action-btn');
+            allBtns.forEach(function(btn) {
+                btn.disabled = true;
+                btn.style.cursor = 'not-allowed';
+                if (btn === button) {
+                    btn.innerHTML = btn.textContent + ' ✓';
+                    btn.style.opacity    = '1';
+                    btn.style.fontWeight = '700';
+                    btn.style.boxShadow  = '0 0 0 2px currentColor';
+                } else {
+                    btn.style.opacity = '0.2';
+                }
+            });
+            showToast(data.message || 'Article #' + rank + ' ' + action + 'd', 'success');
+            if (action === 'like' || action === 'save') {
+                var hashId = button.closest('.article-card').dataset.hashId;
+                addInvestigateButton(rank, hashId);
+            }
+        } else {
+            button.style.opacity = '1';
+            button.style.cursor  = 'pointer';
+            button.disabled = false;
+            showToast(data.message || 'Error saving feedback', 'error');
+        }
+    })
+    .catch(function(error) {
+        console.error('Feedback error:', error);
+        button.style.opacity = '1';
+        button.style.cursor  = 'pointer';
+        button.disabled = false;
+        showToast('Server error — is curator_server.py running?', 'error');
+    });
+}
+
+// ── Toast ────────────────────────────────────────────────────────────────────
+function showToast(message, type) {
+    type = type || 'success';
+    var toast = document.createElement('div');
+    toast.textContent = message;
+    var bgColor = (type === 'error') ? '#ef4444' : '#10b981';
+    toast.style.cssText = 'position:fixed;top:20px;right:20px;background:' + bgColor + ';color:white;padding:12px 20px;border-radius:8px;font-weight:500;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:9999;opacity:0;transform:translateY(-20px);transition:all 0.3s ease;';
+    document.body.appendChild(toast);
+    requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+            toast.style.opacity   = '1';
+            toast.style.transform = 'translateY(0)';
+        });
+    });
+    setTimeout(function() {
+        toast.style.opacity   = '0';
+        toast.style.transform = 'translateY(-20px)';
+        setTimeout(function() { if (toast.parentNode) document.body.removeChild(toast); }, 300);
+    }, 2500);
+}
+
+// ── Investigate modal ────────────────────────────────────────────────────────
+var _inv = { hashId: '', title: '', url: '', source: '', btn: null };
+
+function openInvestigateModal(hashId, title, url, source, btn) {
+    _inv = { hashId: hashId, title: title, url: url, source: source, btn: btn };
+    document.getElementById('inv-article-title').textContent  = title;
+    document.getElementById('inv-article-source').textContent = source || '';
+    switchInvTab('scan');
+    document.getElementById('investigate-overlay').style.display = 'flex';
+    document.getElementById('inv-scan-interest').focus();
+}
+
+function closeInvestigateModal() {
+    document.getElementById('investigate-overlay').style.display = 'none';
+    ['inv-scan-interest','inv-scan-focus','inv-track-slug',
+     'inv-track-motivation','inv-lean-new-title','inv-lean-note'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    ['inv-track-status','inv-lean-status'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = '';
+    });
+}
+
+function switchInvTab(tab) {
+    document.querySelectorAll('.inv-tab').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.tab === tab);
+    });
+    document.querySelectorAll('.inv-pane').forEach(function(p) {
+        p.classList.toggle('active', p.id === 'inv-pane-' + tab);
+    });
+    if (tab === 'lean') loadLeaningsForModal();
+}
+
+// Tab 1: Scan
+function runScan() {
+    var interest = document.getElementById('inv-scan-interest').value.trim();
+    var focus    = document.getElementById('inv-scan-focus').value.trim();
+    if (!interest) { document.getElementById('inv-scan-interest').focus(); return; }
+
+    closeInvestigateModal();
+    var btn = _inv.btn;
+    btn.disabled    = true;
+    btn.textContent = '⏳ Scanning…';
+
+    var url = '/deepdive?hash_id=' + _inv.hashId + '&interest=' + encodeURIComponent(interest);
+    if (focus) url += '&focus=' + encodeURIComponent(focus);
+
+    fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success && data.html_path) {
+            window.open(data.html_path, '_blank');
+            btn.textContent = '✅ View Scan';
+            btn.disabled = false;
+            btn.onclick = function() { window.open(data.html_path, '_blank'); };
+        } else {
+            btn.textContent = '✅ Done';
+            btn.disabled = false;
+            showToast(data.message || 'Scan complete!', 'success');
+        }
+    })
+    .catch(function(e) {
+        btn.textContent = '❌ Failed';
+        btn.disabled = false;
+        showToast('Scan failed: ' + e.message, 'error');
+    });
+}
+
+// Tab 2: Track as Topic
+function runTrack() {
+    var slug       = document.getElementById('inv-track-slug').value.trim()
+                        .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    var motivation = document.getElementById('inv-track-motivation').value.trim();
+    var days       = parseInt(document.getElementById('inv-track-days').value) || 14;
+    var statusEl   = document.getElementById('inv-track-status');
+
+    if (!slug) { statusEl.textContent = 'Topic slug required.'; return; }
+    statusEl.textContent = 'Creating topic…';
+
+    fetch('/app/curator/api/research/spawn-thread', {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify({
+            topic:         slug,
+            motivation:    motivation || ('Research triggered from: ' + _inv.title),
+            queries:       [slug.replace(/-/g, ' ')],
+            duration_days: days,
+            scan_id:       _inv.hashId,
+            scan_title:    _inv.title,
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            statusEl.textContent = 'Topic "' + slug + '" created.';
+            showToast('Topic "' + slug + '" created — ' + days + 'd active pull', 'success');
+            setTimeout(closeInvestigateModal, 800);
+        } else {
+            statusEl.textContent = 'Error: ' + (data.error || 'failed');
+        }
+    })
+    .catch(function(e) { statusEl.textContent = 'Error: ' + e.message; });
+}
+
+// Tab 3: Add to Leaning
+function loadLeaningsForModal() {
+    var sel = document.getElementById('inv-lean-select');
+    sel.innerHTML = '<option value="">Loading…</option>';
+    fetch('/app/curator/api/research/leanings')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        var leanings = data.leanings || [];
+        sel.innerHTML = '<option value="">— add to existing leaning —</option>' +
+            leanings.map(function(l) {
+                var label = {question:'?', leaning:'→', hold:'✓'}[l.state] || '';
+                return '<option value="' + l.id + '">' + label + ' ' + l.title + '</option>';
+            }).join('');
+        if (!leanings.length) {
+            sel.innerHTML = '<option value="">— no leanings yet, create below —</option>';
+        }
+    })
+    .catch(function() { sel.innerHTML = '<option value="">Error loading leanings</option>'; });
+}
+
+function runLean() {
+    var leaningId = document.getElementById('inv-lean-select').value;
+    var newTitle  = document.getElementById('inv-lean-new-title').value.trim();
+    var stance    = document.getElementById('inv-lean-stance').value;
+    var note      = document.getElementById('inv-lean-note').value.trim();
+    var statusEl  = document.getElementById('inv-lean-status');
+
+    if (!leaningId && !newTitle) {
+        statusEl.textContent = 'Select a leaning or enter a new leaning title.';
+        return;
+    }
+    statusEl.textContent = 'Saving…';
+
+    function doAddEvidence(id) {
+        return fetch('/app/curator/api/research/leanings/' + id + '/evidence', {
+            method:  'POST',
+            headers: {'Content-Type': 'application/json'},
+            body:    JSON.stringify({
+                title: _inv.title, url: _inv.url,
+                source: _inv.source, stance: stance, note: note,
+            })
+        }).then(function(r) { return r.json(); });
+    }
+
+    var promise;
+    if (leaningId) {
+        promise = doAddEvidence(leaningId);
+    } else {
+        promise = fetch('/app/curator/api/research/leanings', {
+            method:  'POST',
+            headers: {'Content-Type': 'application/json'},
+            body:    JSON.stringify({title: newTitle, state: 'question'})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.ok) throw new Error(data.error);
+            return doAddEvidence(data.leaning.id);
+        });
+    }
+
+    promise
+    .then(function(data) {
+        if (!data.ok) throw new Error(data.error);
+        statusEl.textContent = 'Added.';
+        showToast('Evidence added to leaning', 'success');
+        setTimeout(closeInvestigateModal, 600);
+    })
+    .catch(function(e) { statusEl.textContent = 'Error: ' + e.message; });
+}
+
+// Append Investigate button after like/save
+function addInvestigateButton(rank, hashId) {
+    var cards = document.querySelectorAll('.article-card');
+    for (var i = 0; i < cards.length; i++) {
+        var card = cards[i];
+        if (card.dataset.rank == rank) {
+            var cardActions = card.querySelector('.article-actions');
+            if (!cardActions || cardActions.querySelector('.btn-investigate')) return;
+
+            var btn = document.createElement('button');
+            btn.className   = 'action-btn btn-investigate';
+            btn.textContent = '🔍 Investigate →';
+
+            var isDryRun = document.body.getAttribute('data-run-mode') === 'dry-run';
+            if (isDryRun) {
+                btn.title    = 'Dry run — disabled';
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+            } else {
+                btn.title = 'Investigate — Scan, Track as Topic, or add to Leaning';
+                var t = card.dataset.title  || '';
+                var u = card.dataset.url    || '';
+                var s = card.dataset.source || '';
+                btn.onclick = (function(h, ti, ur, so, b) {
+                    return function() { openInvestigateModal(h, ti, ur, so, b); };
+                })(hashId, t, u, s, btn);
+            }
+            btn.style.animation = 'fadeIn 0.3s ease';
+            cardActions.insertBefore(btn, cardActions.firstChild);
+            break;
+        }
+    }
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeInvestigateModal();
+});
+
+// ── Topics strip ─────────────────────────────────────────────────────────────
+function loadTopicsStrip() {
+    fetch('/app/curator/api/research/topics/status')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (!data.ok) return;
+        var visible = (data.topics || []).filter(function(t) {
+            return t.status !== 'closed' && t.status !== 'retired' && t.status !== 'archived';
+        });
+        if (!visible.length) return;
+        document.getElementById('topics-pills').innerHTML = visible.map(renderTopicPill).join('');
+        document.getElementById('topics-strip').style.display = 'flex';
+    })
+    .catch(function() { /* silent — informational only */ });
+}
+
+function renderTopicPill(t) {
+    var cfg = ({
+        'active-pull': { cls: 'tp-active',  dot: '●', dotColor: '#2e7d52' },
+        'paused':      { cls: 'tp-paused',  dot: '◐', dotColor: '#8b6e1a' },
+        'dormant':     { cls: 'tp-dormant', dot: '○', dotColor: '#9e9080' },
+        'one-shot':    { cls: 'tp-oneshot', dot: '◆', dotColor: '#1a5c8a' },
+    })[t.status] || { cls: 'tp-dormant', dot: '?', dotColor: '#9e9080' };
+
+    var sub = t.status;
+    if (t.status === 'active-pull') {
+        sub = t.days_remaining !== null && t.days_remaining !== undefined
+            ? t.days_remaining + 'd left · ' + t.session_count + ' sessions'
+            : 'active';
+    } else if (t.status === 'dormant') {
+        sub = t.session_count ? t.session_count + ' sessions' : 'no sessions';
+    } else if (t.status === 'paused') {
+        sub = 'paused';
+    }
+
+    var activateBtn = (t.status === 'dormant' || t.status === 'paused')
+        ? '<button class="tp-activate-btn" onclick="quickActivate(\'' + esc(t.slug) + '\',this)">Activate</button>'
+        : '';
+
+    return '<div class="topic-pill ' + cfg.cls + '">' +
+        '<span class="tp-dot" style="color:' + cfg.dotColor + '">' + cfg.dot + '</span>' +
+        '<a class="tp-name" href="/research/dashboard" title="' + esc(t.motivation || '') + '">' + esc(t.slug) + '</a>' +
+        '<span class="tp-sub">' + esc(sub) + '</span>' +
+        activateBtn +
+        '</div>';
+}
+
+function quickActivate(slug, btn) {
+    btn.disabled    = true;
+    btn.textContent = '…';
+    fetch('/app/curator/api/research/topic/' + slug + '/activate', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            showToast('Topic "' + slug + '" activated', 'success');
+            loadTopicsStrip();
+        } else {
+            showToast('Error: ' + (data.error || 'failed'), 'error');
+            btn.disabled    = false;
+            btn.textContent = 'Activate';
+        }
+    })
+    .catch(function(e) {
+        showToast('Error: ' + e.message, 'error');
+        btn.disabled    = false;
+        btn.textContent = 'Activate';
+    });
+}
+
+loadTopicsStrip();
+</script>
+<script src="/app/curator/research/static/js/annotations.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        AnnotationSystem.initFloating();
+        AnnotationSystem.initSelectionPopup();
+    });
+</script>
+<!-- ── Investigate modal ─────────────────────────────────────────────────── -->
+<div id="investigate-overlay" onclick="if(event.target===this)closeInvestigateModal();" style="display:none; position:fixed; inset:0; background:rgba(42,36,24,0.55); z-index:10000; align-items:center; justify-content:center;">
+<div id="investigate-modal">
+<div class="inv-header">
+<div>
+<div class="inv-article-title" id="inv-article-title"></div>
+<div class="inv-article-source" id="inv-article-source"></div>
+</div>
+<button class="inv-close" data-preview-disabled="true" disabled="disabled" onclick="closeInvestigateModal()">✕</button>
+</div>
+<div class="inv-tabs">
+<button class="inv-tab active" data-preview-disabled="true" data-tab="scan" disabled="disabled" onclick="switchInvTab('scan')">🔭 Scan</button>
+<button class="inv-tab" data-preview-disabled="true" data-tab="track" disabled="disabled" onclick="switchInvTab('track')">🗓 Track</button>
+<button class="inv-tab" data-preview-disabled="true" data-tab="lean" disabled="disabled" onclick="switchInvTab('lean')">📎 Lean</button>
+</div>
+<!-- Scan pane -->
+<div class="inv-pane active" id="inv-pane-scan">
+<p class="inv-hint">Generate an article-level analysis with bibliography tailored to your interests (~30s, ~$0.15).</p>
+<label class="inv-label">What interests you about this article?</label>
+<textarea class="inv-textarea" data-preview-disabled="true" disabled="disabled" id="inv-scan-interest" placeholder="e.g. Geopolitical implications, economic impact, contrarian perspectives…" rows="3"></textarea>
+<label class="inv-label" style="margin-top:10px;">Focus areas (optional)</label>
+<input class="inv-input" data-preview-disabled="true" disabled="disabled" id="inv-scan-focus" placeholder="e.g. Historical precedents, key players, data sources…" type="text"/>
+<div class="inv-actions">
+<button class="inv-btn inv-btn-primary" data-preview-disabled="true" disabled="disabled" onclick="runScan()">Run Scan →</button>
+<button class="inv-btn" data-preview-disabled="true" disabled="disabled" onclick="closeInvestigateModal()">Cancel</button>
+</div>
+</div>
+<!-- Track pane -->
+<div class="inv-pane" id="inv-pane-track">
+<p class="inv-hint">Create an active research Topic. Sessions will run searches on this subject for the duration you choose.</p>
+<label class="inv-label">Topic slug <span style="color:var(--text-dim);font-weight:400;">(letters, numbers, hyphens)</span></label>
+<input autocomplete="off" class="inv-input" data-preview-disabled="true" disabled="disabled" id="inv-track-slug" placeholder="e.g. quad-alliance-cohesion" type="text"/>
+<label class="inv-label" style="margin-top:10px;">Motivation (optional)</label>
+<textarea class="inv-textarea" data-preview-disabled="true" disabled="disabled" id="inv-track-motivation" placeholder="Why are you tracking this? What's your prior belief?" rows="2"></textarea>
+<label class="inv-label" style="margin-top:10px;">Duration</label>
+<div class="inv-duration-row">
+<select class="inv-select" data-preview-disabled="true" disabled="disabled" id="inv-track-days">
+<option value="3">3 days</option>
+<option value="7">7 days</option>
+<option selected="" value="14">14 days</option>
+<option value="30">30 days</option>
+</select>
+</div>
+<div class="inv-actions">
+<button class="inv-btn inv-btn-primary" data-preview-disabled="true" disabled="disabled" onclick="runTrack()">Create Topic →</button>
+<button class="inv-btn" data-preview-disabled="true" disabled="disabled" onclick="closeInvestigateModal()">Cancel</button>
+<span class="inv-status" id="inv-track-status"></span>
+</div>
+</div>
+<!-- Lean pane -->
+<div class="inv-pane" id="inv-pane-lean">
+<p class="inv-hint">Attach this article as evidence to a belief you're tracking.</p>
+<label class="inv-label">Add to existing leaning</label>
+<select class="inv-select" data-preview-disabled="true" disabled="disabled" id="inv-lean-select" style="width:100%;">
+<option value="">Loading…</option>
+</select>
+<label class="inv-label" style="margin-top:10px;">— or create a new leaning —</label>
+<input class="inv-input" data-preview-disabled="true" disabled="disabled" id="inv-lean-new-title" placeholder="New leaning statement e.g. The Quad will hold under pressure" type="text"/>
+<label class="inv-label" style="margin-top:10px;">Stance</label>
+<select class="inv-select" data-preview-disabled="true" disabled="disabled" id="inv-lean-stance" style="width:100%;">
+<option value="supports">▲ Supports</option>
+<option value="complicates">▽ Complicates</option>
+<option selected="" value="neutral">○ Neutral</option>
+</select>
+<label class="inv-label" style="margin-top:10px;">Note (optional)</label>
+<input class="inv-input" data-preview-disabled="true" disabled="disabled" id="inv-lean-note" placeholder="One-line reaction or observation" type="text"/>
+<div class="inv-actions">
+<button class="inv-btn inv-btn-primary" data-preview-disabled="true" disabled="disabled" onclick="runLean()">Add Evidence →</button>
+<button class="inv-btn" data-preview-disabled="true" disabled="disabled" onclick="closeInvestigateModal()">Cancel</button>
+<span class="inv-status" id="inv-lean-status"></span>
+</div>
+</div>
+</div>
+</div>
+<button class="ann-float-btn" data-preview-disabled="true" disabled="disabled">💬<span class="ann-count" style="display:none">0</span></button><div class="ann-compact-overlay" id="ann-compact-overlay">
+<div class="ann-compact-header">QUICK NOTE</div>
+<textarea class="ann-compact-textarea" data-preview-disabled="true" disabled="disabled" id="ann-compact-textarea" placeholder="Reaction? Question? Just type..." rows="2"></textarea>
+<div class="ann-compact-footer">
+<select class="ann-type-select" data-preview-disabled="true" disabled="disabled" id="ann-compact-type">
+<option value="reaction">reaction</option>
+<option value="note">note</option>
+<option value="direction_shift">direction shift</option>
+</select>
+<button class="ann-save-btn" data-preview-disabled="true" disabled="disabled" onclick="AnnotationSystem.saveFromCompact()">
+        Save →
+      </button>
+</div>
+</div>
+<style id="preview-modal-style">
+.preview-modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
+}
+.preview-modal-overlay.active { display: flex; }
+.preview-modal {
+  background: #2a1f14; border: 1px solid rgba(198,138,94,0.4);
+  border-radius: 8px; padding: 28px 32px; max-width: 380px; width: 90%;
+  color: #F5F0E8; font-family: 'Source Sans 3', system-ui, sans-serif;
+}
+.preview-modal h3 {
+  font-size: 14px; font-weight: 600; margin: 0 0 12px;
+  color: #C68A5E !important; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.preview-modal p { font-size: 13px; color: rgba(245,240,232,0.75); line-height: 1.6; margin: 0 0 20px; }
+.preview-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.preview-modal-btn {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(198,138,94,0.5); background: transparent; color: #C68A5E;
+  text-decoration: none; display: inline-block;
+}
+.preview-modal-btn:hover { background: rgba(198,138,94,0.15); }
+.preview-modal-close {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(245,240,232,0.2); background: transparent;
+  color: rgba(245,240,232,0.6);
+}
+.preview-modal-close:hover { border-color: rgba(245,240,232,0.4); color: #F5F0E8; }
+</style>
+<div class="preview-modal-overlay" id="previewModal">
+<div class="preview-modal">
+<h3>Not available in preview</h3>
+<div class="preview-modal-actions">
+<a class="preview-modal-btn" href="/contact">Request access →</a>
+<button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>
+</div>
+</div>
+</div>
+<script id="preview-modal-script">
+(function() {
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('[data-admin-blocked]');
+    if (el) { e.preventDefault(); e.stopPropagation(); document.getElementById('previewModal').classList.add('active'); }
+  });
+  document.getElementById('previewModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+})();
+</script>
+</body></html>

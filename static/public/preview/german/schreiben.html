@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+
+<html lang="de"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Schreiben — Mein Deutsch</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="/preview/assets/german.css" rel="stylesheet"/>
+
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  // Endpoints allowed to pass through to the real server
+  var PASSTHROUGH = ['/app/german/api/translate'];
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    // Lesen category API — serve pre-captured data if available
+    if (u.indexOf('/api/lesen-category') !== -1) {
+      var cat = '';
+      try { cat = new URL(u, location.origin).searchParams.get('category') || ''; } catch(e) {}
+      var data = window._previewLesenData || {};
+      var articles = data[cat] || [];
+      return Promise.resolve(new Response(JSON.stringify({articles: articles}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    // Allow translate through — works for authenticated users, fails silently otherwise
+    for (var i = 0; i < PASSTHROUGH.length; i++) {
+      if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
+    }
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
+<style id="preview-banner-style">
+.preview-banner {
+  position: sticky; top: 0; z-index: 9999;
+  background: #2A1F14; color: #F5F0E8;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 11px; letter-spacing: 0.04em;
+  padding: 7px 20px;
+  border-bottom: 1px solid rgba(198,138,94,0.3);
+  display: flex; align-items: center; gap: 8px;
+}
+.preview-banner .preview-date { color: rgba(245,240,232,0.7); }
+.preview-request-link {
+  color: #C68A5E; text-decoration: none; margin-left: auto;
+  border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
+}
+.preview-request-link:hover { background: rgba(198,138,94,0.1); }
+</style>
+</head>
+<body class="schreiben-mode parch-mode"><div class="preview-banner">
+<span>Preview snapshot — </span>
+<span class="preview-date">Captured June 2026</span>
+<span>. Data is real but frozen.</span>
+<a class="preview-request-link" href="/contact">Request live access →</a>
+</div>
+<style id="portal-offset-css">body{padding-top:38px!important;}nav{top:38px!important;}</style>
+<div id="portal-nav-bar" style="
+  position:fixed;top:0;left:0;right:0;z-index:999999;
+  height:38px;background:#12122a;color:#e8e8e8;
+  display:flex;align-items:center;padding:0 16px;gap:0;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:13px;border-bottom:1px solid rgba(255,255,255,0.12);
+  box-shadow:0 1px 8px rgba(0,0,0,0.4);
+">
+<a href="/preview/" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
+<span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
+<a href="/preview/curator/briefing.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;">Curator</a>
+<a href="/preview/german/lesen.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;color:#ffffff;font-weight:600;">German</a>
+<a href="/preview/guild/briefing.html" style="color:#C68A5E;text-decoration:none;">Guild</a>
+<span style="color:rgba(255,255,255,0.45);margin-left:auto;margin-right:12px;">Robert</span>
+<a data-admin-blocked="true" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;; cursor: pointer;">Sign out</a>
+</div>
+<nav>
+<a class="logo" href="/preview/german/lesen.html">Mein Deutsch</a>
+<ul class="nav-links">
+<li><a href="/preview/german/lesen.html" title="Read">Lesen</a></li>
+<li><a href="/preview/german/gesprache.html" title="Conversations">Gespräche</a></li>
+<li><a class="active" href="/preview/german/schreiben.html" title="Write">Schreiben</a></li>
+<li><a href="/preview/german/worter.html" title="Words / Phrasebook">Wörter</a></li>
+<li><a href="/preview/german/archiv.html" title="Archive">Archiv</a></li>
+<li><a data-admin-blocked="true" style="cursor: pointer;" title="Admin">Admin</a></li>
+</ul>
+</nav>
+<main class="page">
+<div class="tab-layout-split">
+<div class="tab-content">
+<div class="tab-split-header">
+<div class="tab-hero-label">[SCHREIBTISCH]</div>
+<h1>Schreiben</h1>
+<p class="tab-description">Schreib auf Deutsch — mit Korrektur und Verlauf.</p>
+</div>
+<div class="mode-toggle">
+<button class="mode-btn active" data-mode="tagebuch" data-preview-disabled="true" disabled="disabled" title="Journal writing mode">Tagebuch</button>
+<button class="mode-btn" data-mode="kontext" data-preview-disabled="true" disabled="disabled" title="Practice writing in context">Im Kontext</button>
+<button class="mode-btn" data-mode="woerter" data-preview-disabled="true" disabled="disabled" title="Vocabulary practice mode">Wörter üben</button>
+</div>
+<!-- ── Im Kontext ─────────────────────────────────────────────────────────── -->
+<div class="mode-pane hidden" id="pane-kontext">
+<div class="kontext-source" id="kontext-source" style="display:none">
+<span class="kontext-label">Aus Lesen:</span>
+<span id="kontext-title"></span>
+<p id="kontext-summary"></p>
+</div>
+<textarea class="notebook-textarea" data-preview-disabled="true" disabled="disabled" id="kontext-input" placeholder="Schreib hier auf Deutsch — über den Artikel oder ein eigenes Thema…" rows="6"></textarea>
+<div class="pane-actions">
+<div class="pane-actions-left">
+<button class="btn-voice" data-preview-disabled="true" disabled="disabled" id="voice-kontext" title="Spracheingabe">🎤</button>
+</div>
+<button class="btn-primary" data-preview-disabled="true" disabled="disabled" id="kontext-submit" title="Request AI grammar correction">Korrigieren</button>
+</div>
+<span class="write-status" id="kontext-status"></span>
+<div class="correction-display" id="kontext-correction" style="display:none">
+<div class="correction-section">
+<div class="correction-label">Original</div>
+<div class="correction-original" id="kontext-original"></div>
+</div>
+<div class="correction-section">
+<div class="correction-label">Korrigiert</div>
+<div class="correction-corrected" id="kontext-corrected"></div>
+</div>
+<ul class="correction-notes" id="kontext-notes"></ul>
+<div class="correction-actions">
+<button class="btn-primary" data-preview-disabled="true" disabled="disabled" id="kontext-save" title="Save corrected entry">Speichern</button>
+</div>
+</div>
+</div>
+<!-- ── Wörter üben ───────────────────────────────────────────────────────── -->
+<div class="mode-pane hidden" id="pane-woerter">
+<div class="mode-explainer">
+<p>Wörter und Phrasen manuell erfassen — zum Beispiel aus
+    einem Gespräch oder einem Buch. Gespeicherte Einträge
+    erscheinen in der
+    <a href="/preview/german/worter.html" title="Go to vocabulary library">
+        Wörter-Bibliothek</a>.</p>
+</div>
+<div class="woerter-form">
+<input data-preview-disabled="true" disabled="disabled" id="woerter-german" placeholder="Deutsches Wort / Phrase" type="text"/>
+<input data-preview-disabled="true" disabled="disabled" id="woerter-english" placeholder="Englische Bedeutung" type="text"/>
+<input data-preview-disabled="true" disabled="disabled" id="woerter-context" placeholder="Beispielsatz (optional)" type="text"/>
+<button class="btn-primary" data-preview-disabled="true" disabled="disabled" id="woerter-save" title="Add word to vocabulary library">Zur Bibliothek</button>
+<span class="write-status" id="woerter-status"></span>
+</div>
+</div>
+<!-- ── Tagebuch ──────────────────────────────────────────────────────────── -->
+<div class="mode-pane" id="pane-tagebuch">
+<div class="tagebuch-prompt-row">
+<p class="tagebuch-prompt" id="tagebuch-prompt">Was hast du heute auf Deutsch gelesen oder gehört?</p>
+<button class="btn-ghost" data-preview-disabled="true" disabled="disabled" id="tagebuch-next-prompt" title="Another writing prompt">↻ Anderer</button>
+</div>
+<textarea class="notebook-textarea" data-preview-disabled="true" disabled="disabled" id="tagebuch-input" placeholder="Schreib hier…" rows="6"></textarea>
+<div class="pane-actions">
+<div class="pane-actions-left">
+<button class="btn-voice" data-preview-disabled="true" disabled="disabled" id="voice-tagebuch" title="Spracheingabe">🎤</button>
+<label class="toggle-label">
+<input checked="" id="tagebuch-correct" type="checkbox"/>
+        Korrektur anfragen
+      </label>
+</div>
+<button class="btn-primary" data-preview-disabled="true" disabled="disabled" id="tagebuch-korrigieren" title="Request AI grammar correction">Korrigieren</button>
+</div>
+<span class="write-status" id="tagebuch-status"></span>
+<div class="correction-display" id="tagebuch-correction" style="display:none">
+<div class="correction-section">
+<div class="correction-label">Korrigiert</div>
+<div class="correction-corrected" id="tagebuch-corrected"></div>
+</div>
+<ul class="correction-notes" id="tagebuch-notes"></ul>
+<div class="correction-actions">
+<button class="btn-primary" data-preview-disabled="true" disabled="disabled" id="tagebuch-submit" title="Save journal entry">Speichern</button>
+</div>
+</div>
+</div>
+<!-- ── Session history ───────────────────────────────────────────────────── -->
+<section class="session-history">
+<h3>Verlauf</h3>
+<div class="session-entry" data-mode="tagebuch">
+<span class="session-mode-badge">tagebuch</span>
+<span class="session-date">2026-05-22</span>
+<span class="session-preview">Ich bin im Haus bei meiner Torchter gekommen.</span>
+<span class="session-errors">2 Hinweise</span>
+</div>
+<div class="session-entry" data-mode="tagebuch">
+<span class="session-mode-badge">tagebuch</span>
+<span class="session-date">2026-05-22</span>
+<span class="session-preview">Ich bin jetzt hier zu Hause von meiner Torchter.</span>
+<span class="session-errors">2 Hinweise</span>
+</div>
+<div class="session-entry" data-mode="tagebuch">
+<span class="session-mode-badge">tagebuch</span>
+<span class="session-date">2026-05-21</span>
+<span class="session-preview">Ich werde nächste woche ein "Interview" haben.  Wie sagt man das?</span>
+<span class="session-errors">1 Hinweis</span>
+</div>
+<div class="session-entry" data-mode="tagebuch">
+<span class="session-mode-badge">tagebuch</span>
+<span class="session-date">2026-05-21</span>
+<span class="session-preview">Heute ich habe ein Kaffee in Wien getrunken. Es war sehr gut.</span>
+<span class="session-errors">3 Hinweise</span>
+</div>
+</section>
+</div><!-- .tab-content -->
+<div class="tab-panel-photo">
+<img alt="Café Sperl" src="/preview/assets/photos_Vera_cafe_IMG_5211_2.jpg" style="object-position: right 20%"/>
+</div>
+</div><!-- .tab-layout-split -->
+</main>
+<script>
+document.body.classList.add('parch-mode');
+(function () {
+  'use strict';
+
+  const prompts = ["Was hast du heute in Wien gesehen?", "Beschreib deinen Morgen auf Deutsch.", "Was war heute interessant oder \u00fcberraschend?", "Beschreib ein Gespr\u00e4ch, das du heute gef\u00fchrt hast.", "Was hast du gegessen oder getrunken? Wie hat es geschmeckt?", "Was planst du f\u00fcr morgen?", "Beschreib das Wetter und wie es dich gestimmt hat.", "Was hast du heute auf Deutsch gelesen oder geh\u00f6rt?"];
+  let promptIdx = Math.floor(Math.random() * prompts.length);
+
+  // ── Mode toggle ─────────────────────────────────────────────────────────────
+  function activateMode(mode) {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.mode-pane').forEach(p => p.classList.add('hidden'));
+    const btn = document.querySelector(`.mode-btn[data-mode="${mode}"]`);
+    const pane = document.getElementById('pane-' + mode);
+    if (btn) btn.classList.add('active');
+    if (pane) pane.classList.remove('hidden');
+    sessionStorage.setItem('schreibenMode', mode);
+  }
+
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => activateMode(btn.dataset.mode));
+  });
+
+  // ── Restore mode + check Lesen handoff ─────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', () => {
+    const saved = sessionStorage.getItem('schreibenMode') || 'tagebuch';
+    activateMode(saved);
+
+    const kontext = sessionStorage.getItem('schreiben_kontext');
+    if (kontext) {
+      try {
+        const data = JSON.parse(kontext);
+        document.getElementById('kontext-title').textContent = data.title || '';
+        document.getElementById('kontext-summary').textContent = data.summary || '';
+        document.getElementById('kontext-source').style.display = 'block';
+        activateMode('kontext');
+      } catch (e) {}
+      sessionStorage.removeItem('schreiben_kontext');
+    }
+
+    document.getElementById('tagebuch-prompt').textContent = prompts[promptIdx] || '';
+  });
+
+  // ── Tagebuch prompt rotation ────────────────────────────────────────────────
+  document.getElementById('tagebuch-next-prompt').addEventListener('click', () => {
+    promptIdx = (promptIdx + 1) % prompts.length;
+    document.getElementById('tagebuch-prompt').textContent = prompts[promptIdx];
+  });
+
+  // ── Im Kontext — step 1: Korrigieren ────────────────────────────────────────
+  document.getElementById('kontext-submit').addEventListener('click', async () => {
+    const text = document.getElementById('kontext-input').value.trim();
+    if (!text) return;
+    const status = document.getElementById('kontext-status');
+    const btn = document.getElementById('kontext-submit');
+    btn.disabled = true;
+    status.textContent = 'Korrektur läuft…';
+
+    const contextTitle = document.getElementById('kontext-title').textContent;
+    try {
+      const res = await fetch('/app/german/api/write-correct', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text, context: contextTitle}),
+      });
+      const data = await res.json();
+      document.getElementById('kontext-original').textContent = text;
+      document.getElementById('kontext-corrected').textContent = data.corrected || text;
+      const notesList = document.getElementById('kontext-notes');
+      notesList.innerHTML = '';
+      (data.notes || []).forEach(note => {
+        const li = document.createElement('li');
+        li.textContent = note;
+        notesList.appendChild(li);
+      });
+      document.getElementById('kontext-correction').style.display = 'block';
+      status.textContent = '';
+      document.getElementById('kontext-save').dataset.original = text;
+      document.getElementById('kontext-save').dataset.corrected = data.corrected || '';
+      document.getElementById('kontext-save').dataset.notes = JSON.stringify(data.notes || []);
+    } catch (e) {
+      status.textContent = 'Fehler bei der Korrektur.';
+    }
+    btn.disabled = false;
+  });
+
+  // ── Im Kontext — step 2: Speichern ──────────────────────────────────────────
+  document.getElementById('kontext-save').addEventListener('click', async () => {
+    const btn = document.getElementById('kontext-save');
+    const contextTitle = document.getElementById('kontext-title').textContent;
+    try {
+      await fetch('/app/german/api/write-save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          mode: 'kontext',
+          text_original: btn.dataset.original || '',
+          text_corrected: btn.dataset.corrected || '',
+          notes: JSON.parse(btn.dataset.notes || '[]'),
+          context_title: contextTitle,
+        }),
+      });
+      btn.textContent = '✓ Gespeichert';
+      btn.disabled = true;
+      setTimeout(() => { window.location.reload(); }, 800);
+    } catch (e) {}
+  });
+
+  // ── Wörter save ─────────────────────────────────────────────────────────────
+  document.getElementById('woerter-save').addEventListener('click', async () => {
+    const german = document.getElementById('woerter-german').value.trim();
+    const english = document.getElementById('woerter-english').value.trim();
+    const context = document.getElementById('woerter-context').value.trim();
+    const status = document.getElementById('woerter-status');
+    if (!german) { status.textContent = 'Bitte ein Wort eingeben.'; return; }
+    try {
+      await fetch('/app/german/api/save-phrase', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({german, english, context_sentence: context, article_title: ''}),
+      });
+      status.textContent = '✓ Gespeichert';
+      document.getElementById('woerter-german').value = '';
+      document.getElementById('woerter-english').value = '';
+      document.getElementById('woerter-context').value = '';
+      setTimeout(() => { status.textContent = ''; }, 2000);
+    } catch (e) {
+      status.textContent = 'Fehler beim Speichern.';
+    }
+  });
+
+  // ── Tagebuch — step 1: Korrigieren (or direct save if checkbox off) ──────────
+  const tagebuchCorrectBox = document.getElementById('tagebuch-correct');
+  const tagebuchKorrigierenBtn = document.getElementById('tagebuch-korrigieren');
+
+  function syncTagebuchBtn() {
+    tagebuchKorrigierenBtn.textContent = tagebuchCorrectBox.checked ? 'Korrigieren' : 'Speichern';
+  }
+  tagebuchCorrectBox.addEventListener('change', syncTagebuchBtn);
+  syncTagebuchBtn();
+
+  tagebuchKorrigierenBtn.addEventListener('click', async () => {
+    const text = document.getElementById('tagebuch-input').value.trim();
+    if (!text) return;
+    const status = document.getElementById('tagebuch-status');
+
+    if (!tagebuchCorrectBox.checked) {
+      await saveTagebuchEntry(text, '', []);
+      return;
+    }
+
+    tagebuchKorrigierenBtn.disabled = true;
+    status.textContent = 'Korrektur läuft…';
+
+    try {
+      const res = await fetch('/app/german/api/write-correct', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text, context: ''}),
+      });
+      const data = await res.json();
+      const corrected = data.corrected || '';
+      const notes = data.notes || [];
+
+      document.getElementById('tagebuch-corrected').textContent = corrected;
+      const notesList = document.getElementById('tagebuch-notes');
+      notesList.innerHTML = '';
+      notes.forEach(note => {
+        const li = document.createElement('li');
+        li.textContent = note;
+        notesList.appendChild(li);
+      });
+      document.getElementById('tagebuch-correction').style.display = 'block';
+
+      const submitBtn = document.getElementById('tagebuch-submit');
+      submitBtn.dataset.original = text;
+      submitBtn.dataset.corrected = corrected;
+      submitBtn.dataset.notes = JSON.stringify(notes);
+      status.textContent = '';
+    } catch (e) {
+      status.textContent = 'Fehler bei der Korrektur.';
+    }
+    tagebuchKorrigierenBtn.disabled = false;
+  });
+
+  // ── Tagebuch — step 2: Speichern ─────────────────────────────────────────────
+  document.getElementById('tagebuch-submit').addEventListener('click', async () => {
+    const btn = document.getElementById('tagebuch-submit');
+    await saveTagebuchEntry(
+      btn.dataset.original || '',
+      btn.dataset.corrected || '',
+      JSON.parse(btn.dataset.notes || '[]')
+    );
+  });
+
+  async function saveTagebuchEntry(text, corrected, notes) {
+    const status = document.getElementById('tagebuch-status');
+    try {
+      await fetch('/app/german/api/write-save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          mode: 'tagebuch',
+          text_original: text,
+          text_corrected: corrected,
+          notes,
+          context_title: prompts[promptIdx] || '',
+        }),
+      });
+      status.textContent = '✓ Gespeichert';
+      document.getElementById('tagebuch-input').value = '';
+      setTimeout(() => { window.location.reload(); }, 1000);
+    } catch (e) {
+      status.textContent = 'Fehler beim Speichern.';
+    }
+  }
+
+  // ── Voice input ─────────────────────────────────────────────────────────────
+  function attachVoiceButton(textareaId, buttonId, lang) {
+    const btn = document.getElementById(buttonId);
+    const textarea = document.getElementById(textareaId);
+    if (!btn || !textarea) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { btn.style.display = 'none'; return; }
+    let recognition = null;
+    btn.addEventListener('click', () => {
+      if (recognition) { recognition.stop(); recognition = null; btn.textContent = '🎤'; return; }
+      recognition = new SR();
+      recognition.lang = lang || 'de-DE';
+      recognition.interimResults = false;
+      recognition.onresult = e => {
+        textarea.value += (textarea.value ? ' ' : '') + e.results[0][0].transcript;
+      };
+      recognition.onend = () => { recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
+      recognition.onerror = () => { recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
+      recognition.onstart = () => { btn.textContent = '⏹'; btn.classList.add('listening'); };
+      recognition.start();
+    });
+  }
+  attachVoiceButton('tagebuch-input', 'voice-tagebuch', 'de-DE');
+  attachVoiceButton('kontext-input', 'voice-kontext', 'de-DE');
+
+})();
+</script>
+
+<style id="preview-modal-style">
+.preview-modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
+}
+.preview-modal-overlay.active { display: flex; }
+.preview-modal {
+  background: #2a1f14; border: 1px solid rgba(198,138,94,0.4);
+  border-radius: 8px; padding: 28px 32px; max-width: 380px; width: 90%;
+  color: #F5F0E8; font-family: 'Source Sans 3', system-ui, sans-serif;
+}
+.preview-modal h3 {
+  font-size: 14px; font-weight: 600; margin: 0 0 12px;
+  color: #C68A5E !important; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.preview-modal p { font-size: 13px; color: rgba(245,240,232,0.75); line-height: 1.6; margin: 0 0 20px; }
+.preview-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.preview-modal-btn {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(198,138,94,0.5); background: transparent; color: #C68A5E;
+  text-decoration: none; display: inline-block;
+}
+.preview-modal-btn:hover { background: rgba(198,138,94,0.15); }
+.preview-modal-close {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(245,240,232,0.2); background: transparent;
+  color: rgba(245,240,232,0.6);
+}
+.preview-modal-close:hover { border-color: rgba(245,240,232,0.4); color: #F5F0E8; }
+</style>
+<div class="preview-modal-overlay" id="previewModal">
+<div class="preview-modal">
+<h3>Not available in preview</h3>
+<div class="preview-modal-actions">
+<a class="preview-modal-btn" href="/contact">Request access →</a>
+<button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>
+</div>
+</div>
+</div>
+<script id="preview-modal-script">
+(function() {
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('[data-admin-blocked]');
+    if (el) { e.preventDefault(); e.stopPropagation(); document.getElementById('previewModal').classList.add('active'); }
+  });
+  document.getElementById('previewModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+})();
+</script>
+</body></html>

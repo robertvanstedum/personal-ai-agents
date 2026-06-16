@@ -1,0 +1,2150 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Build Log — Guild</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&amp;family=DM+Mono:wght@400;500&amp;family=Source+Sans+3:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="/static/guild.css" rel="stylesheet"/>
+<style>
+    :root {
+      --bg: #f5f0e8; --surface: #faf7f2; --surface2: #f0ebe0;
+      --border: #ddd6c8; --text: #2a2418; --text-muted: #6b5f4e;
+      --text-dim: #9e9080; --accent: #8b5e2a; --accent-dim: rgba(139,94,42,0.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+    /* ── Guild nav ── */
+    nav.guild-nav {
+      position: sticky; top: 0; z-index: 100;
+      background: #2a1f14;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .guild-nav-brand {
+      height: 44px; display: flex; align-items: center;
+      padding: 0 1.5rem;
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); letter-spacing: 0.08em;
+    }
+    .guild-nav-brand a { color: #C68A5E; text-decoration: none; }
+    .guild-nav-brand a:hover { color: #ffffff; }
+    .guild-nav-brand a.nav-active { color: #ffffff; font-weight: 700; }
+    .nav-sep { color: rgba(255,255,255,0.2); margin: 0 12px; }
+    .guild-subnav {
+      height: 36px; display: flex; align-items: center;
+      padding: 0 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,0,0,0.15);
+    }
+    .subnav-link {
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: rgba(198,138,94,0.7); text-decoration: none;
+      padding: 0 12px; height: 36px;
+      display: flex; align-items: center;
+      border-bottom: 2px solid transparent;
+    }
+    .subnav-link:hover { color: #C68A5E; }
+    .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; font-weight: 700; }
+    .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
+
+    .subnav-back {
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: rgba(198,138,94,0.4); text-decoration: none;
+      padding: 0 14px 0 0; height: 36px;
+      display: flex; align-items: center;
+      margin-right: 10px;
+      border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    .subnav-back:hover { color: rgba(198,138,94,0.75); }
+
+    /* ── Page header ── */
+    .page-header {
+      padding: 24px 32px 0;
+      display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    }
+    .page-title { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 400; }
+    .page-meta { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); }
+    .header-actions {
+      margin-left: auto; display: flex; gap: 10px; align-items: center;
+    }
+    .gh-link {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-muted); text-decoration: none;
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 4px 10px;
+    }
+    .gh-link:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* ── Filters ── */
+    .filters {
+      padding: 16px 32px 0;
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .filter-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); margin-right: 4px; }
+    .filter-btn {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; padding: 4px 10px; border-radius: 4px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text-muted); text-decoration: none; cursor: pointer;
+    }
+    .filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .filter-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+    /* ── Table ── */
+    .table-wrap {
+      margin: 20px 32px 40px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      font-family: var(--guild-h2-font); font-size: var(--guild-h2-size); text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--guild-h2-color); font-weight: var(--guild-h2-weight);
+      padding: 10px 14px; text-align: left;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    td {
+      padding: 11px 14px; border-bottom: 1px solid rgba(221,214,200,0.5);
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(139,94,42,0.03); }
+
+    .title-cell { max-width: 400px; }
+    .title-main { font-weight: 500; color: var(--text); line-height: 1.3; }
+    .title-summary {
+      font-size: 12px; color: var(--text-muted);
+      margin-top: 3px; line-height: 1.4;
+    }
+    .title-file {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-dim); margin-top: 4px;
+    }
+    .title-file a { color: inherit; text-decoration: none; }
+    .title-file a:hover { color: var(--accent); }
+
+    .status-badge {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; padding: 2px 7px; border-radius: 3px;
+      border: 1px solid; white-space: nowrap;
+    }
+    .s-spec_ready  { color: #2a6e4e; background: rgba(42,110,78,0.08);  border-color: rgba(42,110,78,0.25); }
+    .s-in_build    { color: #1a5c8a; background: rgba(26,92,138,0.08);  border-color: rgba(26,92,138,0.25); }
+    .s-blocked     { color: #8b2020; background: rgba(139,32,32,0.08);  border-color: rgba(139,32,32,0.25); }
+    .s-done        { color: var(--text-dim); background: rgba(0,0,0,0.04); border-color: var(--border); }
+    .s-deferred    { color: var(--text-dim); background: rgba(0,0,0,0.03); border-color: var(--border); opacity: 0.7; }
+    .s-incomplete  { color: #8b5a00; background: rgba(139,90,0,0.08);   border-color: rgba(139,90,0,0.25); }
+
+    .age-cell { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+    .gh-badge {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-muted); text-decoration: none;
+    }
+    .gh-badge:hover { color: var(--accent); }
+
+    .empty-state {
+      padding: 40px 32px; text-align: center;
+      font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim);
+    }
+
+    /* ── New spec form ── */
+    .new-spec-toggle {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-muted); text-decoration: none;
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 4px 10px; cursor: pointer; background: none;
+    }
+    .new-spec-toggle:hover { color: var(--accent); border-color: var(--accent); }
+    .new-spec-form {
+      display: none;
+      margin: 0 32px 0;
+      background: var(--surface);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 14px 16px 12px;
+    }
+    .new-spec-form .form-row {
+      display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 8px; align-items: end;
+    }
+    .new-spec-form input, .new-spec-form select {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      border: 1px solid var(--border); border-radius: 3px;
+      padding: 5px 8px; background: var(--bg); color: var(--text); width: 100%;
+    }
+    .new-spec-form input:focus, .new-spec-form select:focus { outline: 1px solid var(--accent); }
+    .new-spec-form label {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em;
+      display: block; margin-bottom: 3px;
+    }
+    .new-spec-submit {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      padding: 5px 14px; border-radius: 3px;
+      background: var(--accent); color: white; border: none; cursor: pointer;
+      white-space: nowrap;
+    }
+    .new-spec-submit:hover { opacity: 0.85; }
+
+    /* ── Inline edit row ── */
+    .edit-link {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      color: var(--text-dim); text-decoration: none; cursor: pointer;
+    }
+    .edit-link:hover { color: var(--accent); }
+    .edit-row { display: none; background: rgba(139,94,42,0.03); }
+    .edit-row td { padding: 8px 14px; }
+    .edit-row .edit-inner {
+      display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; align-items: end;
+    }
+    .edit-row input {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      border: 1px solid var(--border); border-radius: 3px;
+      padding: 4px 7px; background: var(--bg); color: var(--text); width: 100%;
+    }
+    .edit-row input:focus { outline: 1px solid var(--accent); }
+    .edit-row label {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      color: var(--text-dim); text-transform: uppercase; display: block; margin-bottom: 2px;
+    }
+    .edit-save { font-family: 'DM Mono', monospace; font-size: 10px;
+      padding: 4px 12px; border-radius: 3px;
+      background: var(--accent); color: white; border: none; cursor: pointer; }
+    .edit-save:hover { opacity: 0.85; }
+    /* history inside build log */
+    .hist-section { margin-top: 8px; font-size: 11px; }
+    .hist-row {
+      font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-dim);
+      display: grid; grid-template-columns: 80px 140px 60px; gap: 4px;
+      padding: 2px 0; border-bottom: 1px solid rgba(221,214,200,0.3);
+    }
+    .hist-row:last-child { border-bottom: none; }
+    .hist-reason { grid-column: 1/-1; font-size: 8px; padding-left: 4px; color: var(--text-dim); }
+  </style>
+
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  // Endpoints allowed to pass through to the real server
+  var PASSTHROUGH = ['/app/german/api/translate'];
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    // Lesen category API — serve pre-captured data if available
+    if (u.indexOf('/api/lesen-category') !== -1) {
+      var cat = '';
+      try { cat = new URL(u, location.origin).searchParams.get('category') || ''; } catch(e) {}
+      var data = window._previewLesenData || {};
+      var articles = data[cat] || [];
+      return Promise.resolve(new Response(JSON.stringify({articles: articles}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    // Allow translate through — works for authenticated users, fails silently otherwise
+    for (var i = 0; i < PASSTHROUGH.length; i++) {
+      if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
+    }
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
+<style id="preview-banner-style">
+.preview-banner {
+  position: sticky; top: 0; z-index: 9999;
+  background: #2A1F14; color: #F5F0E8;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 11px; letter-spacing: 0.04em;
+  padding: 7px 20px;
+  border-bottom: 1px solid rgba(198,138,94,0.3);
+  display: flex; align-items: center; gap: 8px;
+}
+.preview-banner .preview-date { color: rgba(245,240,232,0.7); }
+.preview-request-link {
+  color: #C68A5E; text-decoration: none; margin-left: auto;
+  border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
+}
+.preview-request-link:hover { background: rgba(198,138,94,0.1); }
+</style>
+</head>
+<body><div class="preview-banner">
+<span>Preview snapshot — </span>
+<span class="preview-date">Captured June 2026</span>
+<span>. Data is real but frozen.</span>
+<a class="preview-request-link" href="/contact">Request live access →</a>
+</div>
+<nav class="guild-nav">
+<div class="guild-nav-brand">
+<a href="/preview/">mini-moi</a>
+<span class="nav-sep">|</span>
+<a href="/preview/curator/briefing.html">Curator</a>
+<span class="nav-sep">|</span>
+<a href="/preview/german/lesen.html">German</a>
+<span class="nav-sep">|</span>
+<a class="nav-active" href="/preview/guild/briefing.html">Guild</a>
+</div>
+<div class="guild-subnav">
+<a class="subnav-back" href="/preview/guild/briefing.html">← Guild</a>
+<a class="subnav-link" href="/preview/guild/queue.html">Queue</a>
+<span class="subnav-dot"> · </span>
+<a class="subnav-link subnav-active" href="/preview/guild/build_log.html">Build Log</a>
+<span class="subnav-dot"> · </span>
+<a class="subnav-link" href="/preview/guild/roadmap.html">Roadmap</a>
+</div>
+</nav>
+<div class="page-header">
+<h1 class="page-title">Build Log</h1>
+<span class="page-meta">28 specs</span>
+<div class="header-actions">
+<button class="new-spec-toggle" data-preview-disabled="true" disabled="disabled" onclick="toggleNewSpec()">+ New spec</button>
+<a class="gh-link" href="https://github.com/robertvanstedum/personal-ai-agents/issues" rel="noopener" target="_blank">View GitHub Issues →</a>
+</div>
+</div>
+<div class="new-spec-form" id="new-spec-form">
+<form action="/guild/build/items/new" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="form-row">
+<div>
+<label>Title *</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="e.g. Guild Daily Briefing" required=""/>
+</div>
+<div>
+<label>Spec file</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_file" placeholder="spec_foo_2026-06-12.md"/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41"/>
+</div>
+<div>
+<label>Status</label>
+<select data-preview-disabled="true" disabled="disabled" name="status">
+<option value="spec_ready">Spec Ready</option>
+<option value="in_build">In Build</option>
+<option value="incomplete">Incomplete</option>
+<option value="deferred">Deferred</option>
+</select>
+</div>
+<div style="padding-bottom:1px;">
+<button class="new-spec-submit" data-preview-disabled="true" disabled="disabled" type="submit">Add</button>
+</div>
+</div>
+<div style="margin-top:6px;">
+<label style="display:inline;margin-right:6px;">Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One-line description (optional)" style="width:calc(100% - 70px);display:inline;"/>
+</div>
+</form>
+</div>
+<form action="/guild/build" class="filters" data-preview-disabled="true" method="GET" onsubmit="return false;">
+<span class="filter-label">Status:</span>
+<a class="filter-btn active" href="/preview/guild/build_log.html">All</a>
+<a class="filter-btn" href="/preview/guild/build_log.html">In Build</a>
+<a class="filter-btn" href="/preview/guild/build_log.html">Spec Ready</a>
+<a class="filter-btn" href="/preview/guild/build_log.html">Incomplete</a>
+<a class="filter-btn" href="/preview/guild/build_log.html">Blocked</a>
+<a class="filter-btn" href="/preview/guild/build_log.html">Done</a>
+<a class="filter-btn" href="/preview/guild/build_log.html">Deferred</a>
+</form>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Spec</th>
+<th>Status</th>
+<th>Age</th>
+<th>Issue</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Guest Access Requests: Notification + Daily Briefing
+            
+          </div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_cos_guest_access_2026-06-14.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            today
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-43">
+<td colspan="4">
+<form action="/guild/build/items/43/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guest Access Requests: Notification + Daily Briefing"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value=""/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-43">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-43" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Housekeeping: Repo Sync Audit + Roadmap File Location
+            
+          </div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_housekeeping_2026-06-12.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            today
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-42">
+<td colspan="4">
+<form action="/guild/build/items/42/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Housekeeping: Repo Sync Audit + Roadmap File Location"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value=""/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-42">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-42" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Mein Deutsch v1.1: GitHub Release + Landing Copy Update
+            
+          </div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_mein_deutsch_v11_release_2026-06-15.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            today
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-41">
+<td colspan="4">
+<form action="/guild/build/items/41/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Mein Deutsch v1.1: GitHub Release + Landing Copy Update"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value=""/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-41">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-41" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              minimoi.ai Preview Layer + Mein Deutsch Animation
+            
+          </div>
+<div class="title-summary">Workstream 1: Playwright snapshot capture + /preview routing + banner + admin modal. WS2:…</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">build_spec_preview_layer_2026-06-14.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-spec_ready">
+            spec ready
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            today
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-22">
+<td colspan="4">
+<form action="/guild/build/items/22/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="minimoi.ai Preview Layer + Mein Deutsch Animation"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Workstream 1: Playwright snapshot capture + /preview routing + banner + admin modal. WS2: Mein Deutsch animated walkthrough. WS3: Guest access audit + /contact."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-22">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-22" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Lesen Preview: Translate Hover via MyMemory
+            
+          </div>
+<div class="title-summary">Spec for replacing DeepL translate with MyMemory API in Lesen preview.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_lesen_translate_hover_2026-06-14.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-spec_ready">
+            spec ready
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            today
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-27">
+<td colspan="4">
+<form action="/guild/build/items/27/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Lesen Preview: Translate Hover via MyMemory"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for replacing DeepL translate with MyMemory API in Lesen preview."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-27">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-27" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Security Architecture: Separate Public Site from Live Portal
+            
+          </div>
+<div class="title-summary">Security architecture spec for subdomain separation of public site and portal.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_security_architecture_2026-06-14.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-spec_ready">
+            spec ready
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            today
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-24">
+<td colspan="4">
+<form action="/guild/build/items/24/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Security Architecture: Separate Public Site from Live Portal"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Security architecture spec for subdomain separation of public site and portal."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-24">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-24" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              minimoi.ai Always-On Landing Page
+            
+          </div>
+<div class="title-summary">Investigation complete: landing is fully static, no DB dependency. Recommendation: Cloudf…</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_landing_page_uptime_2026-06-13.md ↗</a></div>
+<div style="font-size:11px;color:#8b2020;margin-top:3px;">⚠ Superseded by spec_security_architecture_2026-06-14.md</div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            today
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-20">
+<td colspan="4">
+<form action="/guild/build/items/20/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="minimoi.ai Always-On Landing Page"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Investigation complete: landing is fully static, no DB dependency. Recommendation: Cloudflare Pages static split. Implementation spec pending."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-20">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-20" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Gespräche: Start Session / End Session (Single Window)
+            
+          </div>
+<div class="title-summary">Spec for single-window Start/End Session flow in Gespräche page.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_gesprache_ki_session_2026-06-15 copy.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            today
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-37">
+<td colspan="4">
+<form action="/guild/build/items/37/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Gespräche: Start Session / End Session (Single Window)"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for single-window Start/End Session flow in Gespräche page."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-37">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-37" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Ways of Working — Grok Coverage for Claude.ai
+            
+          </div>
+<div class="title-summary">Orients Grok to cover Claude.ai design/spec work during usage limits.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">ways_of_working_grok_handoff_2026-06-15.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            today
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-40">
+<td colspan="4">
+<form action="/guild/build/items/40/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Ways of Working — Grok Coverage for Claude.ai"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Orients Grok to cover Claude.ai design/spec work during usage limits."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-40">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-40" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Gespräche: Start Session / End Session (Single Window)
+            
+          </div>
+<div class="title-summary">Spec for single-window Start/End Session flow in Gespräche page.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_gesprache_ki_session_2026-06-15.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            today
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-33">
+<td colspan="4">
+<form action="/guild/build/items/33/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Gespräche: Start Session / End Session (Single Window)"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for single-window Start/End Session flow in Gespräche page."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-33">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-33" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Gespräche Test-Run Follow-Up
+            
+          </div>
+<div class="title-summary">Follow-up spec addressing layout and performance issues from KI-Sitzung test run.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_gesprache_testrun_followup_2026-06-15.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            today
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-38">
+<td colspan="4">
+<form action="/guild/build/items/38/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Gespräche Test-Run Follow-Up"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Follow-up spec addressing layout and performance issues from KI-Sitzung test run."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-38">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-38" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Gespräche Voice Input + Provider-Agnostic Review
+            
+          </div>
+<div class="title-summary">Spec for voice input to Gespräche plus provider-agnostic LLM review.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_gesprache_voice_input_2026-06-14.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            today
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-31">
+<td colspan="4">
+<form action="/guild/build/items/31/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Gespräche Voice Input + Provider-Agnostic Review"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for voice input to Gespräche plus provider-agnostic LLM review."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-31">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-31" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Gespräche: All Current Improvements (Consolidated)
+            
+          </div>
+<div class="title-summary">Consolidated spec for seven improvements to Gespräche conversations feature.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_gesprache_consolidated_2026-06-15.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            today
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-35">
+<td colspan="4">
+<form action="/guild/build/items/35/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Gespräche: All Current Improvements (Consolidated)"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Consolidated spec for seven improvements to Gespräche conversations feature."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-35">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-35" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Guild v0.9 (beta) GitHub Release
+            
+          </div>
+<div class="title-summary">GitHub release guild-v0.9 created. Tag pushed. Release description published.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_guild_v09_release_2026-06-13.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            1d
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-19">
+<td colspan="4">
+<form action="/guild/build/items/19/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild v0.9 (beta) GitHub Release"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="GitHub release guild-v0.9 created. Tag pushed. Release description published."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-19">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-19" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Landing Copy Round 2: Guild v0.9 + Curator + Mein Deutsch
+            
+          </div>
+<div class="title-summary">Round-2 landing copy: Guild v0.9 prefix + revised copy, Curator counterpoints line, Mein …</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_landing_copy_round2_2026-06-13.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            1d
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-18">
+<td colspan="4">
+<form action="/guild/build/items/18/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Landing Copy Round 2: Guild v0.9 + Curator + Mein Deutsch"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Round-2 landing copy: Guild v0.9 prefix + revised copy, Curator counterpoints line, Mein Deutsch workflow loop + Anki wording. Fixes Guild prefix duplication."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-18">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-18" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Guild Landing Copy: minimoi.ai "What's Running"
+            
+          </div>
+<div class="title-summary">Spec to update Guild landing copy on minimoi.ai What's Running section.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_guild_landing_copy_2026-06-13.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            1d
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-17">
+<td colspan="4">
+<form action="/guild/build/items/17/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild Landing Copy: minimoi.ai &quot;What's Running&quot;"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec to update Guild landing copy on minimoi.ai What's Running section."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-17">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-17" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Guild Daily Briefing (`/guild` Phase 1: the page)
+            
+          </div>
+<div class="title-summary">Spec for Guild Daily Briefing page replacing placeholders with four-section design.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_guild_daily_briefing_2026-06-12.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            3d
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-10">
+<td colspan="4">
+<form action="/guild/build/items/10/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild Daily Briefing (`/guild` Phase 1: the page)"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for Guild Daily Briefing page replacing placeholders with four-section design."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-10">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-10" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Two Small Follow-ups: `/guild` Nav Contrast + Dashboard Subtitle
+            
+          </div>
+<div class="title-summary">Spec for two small guild nav contrast and subtitle follow-ups.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_guild_small_followups_2026-06-13.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            3d
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-16">
+<td colspan="4">
+<form action="/guild/build/items/16/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Two Small Follow-ups: `/guild` Nav Contrast + Dashboard Subtitle"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for two small guild nav contrast and subtitle follow-ups."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-16">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-16" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Spec Detail View: Nav Fix + Download/Print
+            
+          </div>
+<div class="title-summary">Spec for fixing nav and adding download/print to spec detail view.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_spec_detail_view_fix_2026-06-13.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            3d
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-15">
+<td colspan="4">
+<form action="/guild/build/items/15/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Spec Detail View: Nav Fix + Download/Print"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for fixing nav and adding download/print to spec detail view."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-15">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-15" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Guild Type Scale (Revision): Variables, Not Per-Element Tweaks
+            
+          </div>
+<div class="title-summary">Revision to guild typography scale using CSS variables for consistent sizing. While fixin…</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_guild_type_scale_revision_2026-06-13.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            3d
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-14">
+<td colspan="4">
+<form action="/guild/build/items/14/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild Type Scale (Revision): Variables, Not Per-Element Tweaks"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Revision to guild typography scale using CSS variables for consistent sizing. While fixing the H1/H2 split, also audited cross-domain heading fonts — German uses Georgia throughout, Curator splits Georgia/Playfair by page type, Guild uses Playfair. Decided not to unify: German’s Georgia is deliberate and shipped (Mein Deutsch, family-used), and the actual bug (H1/H2 clash within a page) is fixed. No action."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-14">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-14" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Surface Incomplete Reason + Document Link on Build Cards
+            
+          </div>
+<div class="title-summary">Spec to display incomplete reason and spec link on build cards.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_incomplete_reason_visibility_2026-06-13.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            3d
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-13">
+<td colspan="4">
+<form action="/guild/build/items/13/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Surface Incomplete Reason + Document Link on Build Cards"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec to display incomplete reason and spec link on build cards."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-13">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-13" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Guild Typography: Section Header Tier + Oversized Stat
+            
+          </div>
+<div class="title-summary">Spec for Guild typography hierarchy fixing section headers and stats.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_guild_typography_hierarchy_2026-06-13.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            3d
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-12">
+<td colspan="4">
+<form action="/guild/build/items/12/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild Typography: Section Header Tier + Oversized Stat"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for Guild typography hierarchy fixing section headers and stats."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-12">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-12" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Design/Dev Classifier Fix: Truncation + Structural Checks
+            
+          </div>
+<div class="title-summary">Fixes dev_agent.py truncation preventing detection of DoD and Commit sections.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_devagent_classifier_fix_2026-06-12.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            3d
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-11">
+<td colspan="4">
+<form action="/guild/build/items/11/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Design/Dev Classifier Fix: Truncation + Structural Checks"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Fixes dev_agent.py truncation preventing detection of DoD and Commit sections."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-11">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-11" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Guild Navigation Restructure
+            
+          </div>
+<div class="title-summary">Spec for restructuring Guild navigation to fix stacked nav rows and combined page renders.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_guild_nav_restructure_2026-06-12.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            3d
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-8">
+<td colspan="4">
+<form action="/guild/build/items/8/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guild Navigation Restructure"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for restructuring Guild navigation to fix stacked nav rows and combined page renders."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-8">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-8" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Career Two-Page Redesign
+            
+          </div>
+<div class="title-summary">Two-page Career redesign — collapsed cards, separate Positions table. Superseded by worki…</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_career_two_page_2026-06-11.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-deferred">
+            deferred
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            3d
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-7">
+<td colspan="4">
+<form action="/guild/build/items/7/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Career Two-Page Redesign"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Two-page Career redesign — collapsed cards, separate Positions table. Superseded by working single-board Kanban."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-7">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-7" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Morning Build: CoS Soul + Career Entry + Gap-Check
+            
+          </div>
+<div class="title-summary">CoS soul injection, manual career entry form, handoff gap-check script</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">handoff_morning_build_2026-06-12.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            3d
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-4">
+<td colspan="4">
+<form action="/guild/build/items/4/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Morning Build: CoS Soul + Career Entry + Gap-Check"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="CoS soul injection, manual career entry form, handoff gap-check script"/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-4">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-4" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              CoS Build Discipline
+            
+          </div>
+<div class="title-summary">CoS build discipline — schema, Design/Dev completeness check, Build Clarity portal pages …</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">build_spec_build_discipline_2026-06-12.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-done">
+            done
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            3d
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-1">
+<td colspan="4">
+<form action="/guild/build/items/1/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="CoS Build Discipline"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="CoS build discipline — schema, Design/Dev completeness check, Build Clarity portal pages (Log + Queue), Loop F staleness check."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-1">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-1" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Lesen Writing Drill
+            
+          </div>
+<div class="title-summary">German Lesen writing drill — contextual correction and retype. GitHub issue #41. Build po…</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">feature_lesen_writing_drill_2026-06-08.md ↗</a></div>
+</td>
+<td>
+<span class="status-badge s-spec_ready">
+            spec ready
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            8d
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-2">
+<td colspan="4">
+<form action="/guild/build/items/2/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Lesen Writing Drill"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="German Lesen writing drill — contextual correction and retype. GitHub issue #41. Build post-Jun 13."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-2">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-2" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<script>
+function toggleNewSpec() {
+  const f = document.getElementById('new-spec-form');
+  f.style.display = f.style.display === 'block' ? 'none' : 'block';
+}
+function toggleEditRow(id) {
+  const r = document.getElementById('edit-row-' + id);
+  r.style.display = r.style.display === 'table-row' ? 'none' : 'table-row';
+}
+function toggleHistRow(id) {
+  const r = document.getElementById('hist-row-' + id);
+  const showing = r.style.display === 'table-row';
+  r.style.display = showing ? 'none' : 'table-row';
+  if (!showing) loadLogHistory(id);
+}
+function runCheck(id, btn) {
+  const out = document.getElementById('check-result-' + id);
+  btn.disabled = true;
+  btn.textContent = 'checking…';
+  fetch('/guild/build/items/' + id + '/check')
+    .then(r => r.json())
+    .then(data => {
+      if (data.error && !data.failures) {
+        out.textContent = '⚠ ' + data.error;
+      } else if (data.failures && data.failures.length) {
+        out.innerHTML = data.failures.map(f => '• ' + f).join('<br>');
+        if (data.stale) out.innerHTML += '<br><em style="color:var(--text-dim)">File now passes — refresh status to update.</em>';
+      } else {
+        out.innerHTML = '✓ File passes checks now' + (data.stale ? ' — status is stale, flip to spec_ready' : '');
+        out.style.color = 'var(--text-dim)';
+      }
+      btn.textContent = 're-check';
+      btn.disabled = false;
+    })
+    .catch(() => { out.textContent = 'unavailable'; btn.textContent = 're-check'; btn.disabled = false; });
+}
+function loadLogHistory(id) {
+  const el = document.getElementById('lhist-' + id);
+  if (!el || el.dataset.loaded) return;
+  fetch('/guild/build/items/' + id + '/history')
+    .then(r => r.json())
+    .then(rows => {
+      if (!rows.length) { el.textContent = 'no transitions yet'; el.dataset.loaded = '1'; return; }
+      el.innerHTML = rows.map(r => {
+        const reason = r.reason ? `<div class="hist-reason">${r.reason}</div>` : '';
+        return `<div class="hist-row">
+          <span>${r.at}</span>
+          <span>${r.from} → ${r.to}</span>
+          <span>${r.by}</span>
+          ${reason}
+        </div>`;
+      }).join('');
+      el.dataset.loaded = '1';
+    })
+    .catch(() => { el.textContent = 'unavailable'; });
+}
+</script>
+
+<style id="preview-modal-style">
+.preview-modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
+}
+.preview-modal-overlay.active { display: flex; }
+.preview-modal {
+  background: #2a1f14; border: 1px solid rgba(198,138,94,0.4);
+  border-radius: 8px; padding: 28px 32px; max-width: 380px; width: 90%;
+  color: #F5F0E8; font-family: 'Source Sans 3', system-ui, sans-serif;
+}
+.preview-modal h3 {
+  font-size: 14px; font-weight: 600; margin: 0 0 12px;
+  color: #C68A5E !important; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.preview-modal p { font-size: 13px; color: rgba(245,240,232,0.75); line-height: 1.6; margin: 0 0 20px; }
+.preview-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.preview-modal-btn {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(198,138,94,0.5); background: transparent; color: #C68A5E;
+  text-decoration: none; display: inline-block;
+}
+.preview-modal-btn:hover { background: rgba(198,138,94,0.15); }
+.preview-modal-close {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(245,240,232,0.2); background: transparent;
+  color: rgba(245,240,232,0.6);
+}
+.preview-modal-close:hover { border-color: rgba(245,240,232,0.4); color: #F5F0E8; }
+</style>
+<div class="preview-modal-overlay" id="previewModal">
+<div class="preview-modal">
+<h3>Not available in preview</h3>
+<div class="preview-modal-actions">
+<a class="preview-modal-btn" href="/contact">Request access →</a>
+<button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>
+</div>
+</div>
+</div>
+<script id="preview-modal-script">
+(function() {
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('[data-admin-blocked]');
+    if (el) { e.preventDefault(); e.stopPropagation(); document.getElementById('previewModal').classList.add('active'); }
+  });
+  document.getElementById('previewModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+})();
+</script>
+</body></html>

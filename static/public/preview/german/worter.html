@@ -1,0 +1,1639 @@
+<!DOCTYPE html>
+
+<html lang="de"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Wörter — Mein Deutsch</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="/preview/assets/german.css" rel="stylesheet"/>
+
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  // Endpoints allowed to pass through to the real server
+  var PASSTHROUGH = ['/app/german/api/translate'];
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    // Lesen category API — serve pre-captured data if available
+    if (u.indexOf('/api/lesen-category') !== -1) {
+      var cat = '';
+      try { cat = new URL(u, location.origin).searchParams.get('category') || ''; } catch(e) {}
+      var data = window._previewLesenData || {};
+      var articles = data[cat] || [];
+      return Promise.resolve(new Response(JSON.stringify({articles: articles}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    // Allow translate through — works for authenticated users, fails silently otherwise
+    for (var i = 0; i < PASSTHROUGH.length; i++) {
+      if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
+    }
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
+<style id="preview-banner-style">
+.preview-banner {
+  position: sticky; top: 0; z-index: 9999;
+  background: #2A1F14; color: #F5F0E8;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 11px; letter-spacing: 0.04em;
+  padding: 7px 20px;
+  border-bottom: 1px solid rgba(198,138,94,0.3);
+  display: flex; align-items: center; gap: 8px;
+}
+.preview-banner .preview-date { color: rgba(245,240,232,0.7); }
+.preview-request-link {
+  color: #C68A5E; text-decoration: none; margin-left: auto;
+  border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
+}
+.preview-request-link:hover { background: rgba(198,138,94,0.1); }
+</style>
+</head>
+<body class="woerter-mode parch-mode"><div class="preview-banner">
+<span>Preview snapshot — </span>
+<span class="preview-date">Captured June 2026</span>
+<span>. Data is real but frozen.</span>
+<a class="preview-request-link" href="/contact">Request live access →</a>
+</div>
+<style id="portal-offset-css">body{padding-top:38px!important;}nav{top:38px!important;}</style>
+<div id="portal-nav-bar" style="
+  position:fixed;top:0;left:0;right:0;z-index:999999;
+  height:38px;background:#12122a;color:#e8e8e8;
+  display:flex;align-items:center;padding:0 16px;gap:0;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:13px;border-bottom:1px solid rgba(255,255,255,0.12);
+  box-shadow:0 1px 8px rgba(0,0,0,0.4);
+">
+<a href="/preview/" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
+<span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
+<a href="/preview/curator/briefing.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;">Curator</a>
+<a href="/preview/german/lesen.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;color:#ffffff;font-weight:600;">German</a>
+<a href="/preview/guild/briefing.html" style="color:#C68A5E;text-decoration:none;">Guild</a>
+<span style="color:rgba(255,255,255,0.45);margin-left:auto;margin-right:12px;">Robert</span>
+<a data-admin-blocked="true" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;; cursor: pointer;">Sign out</a>
+</div>
+<nav>
+<a class="logo" href="/preview/german/lesen.html">Mein Deutsch</a>
+<ul class="nav-links">
+<li><a href="/preview/german/lesen.html" title="Read">Lesen</a></li>
+<li><a href="/preview/german/gesprache.html" title="Conversations">Gespräche</a></li>
+<li><a href="/preview/german/schreiben.html" title="Write">Schreiben</a></li>
+<li><a class="active" href="/preview/german/worter.html" title="Words / Phrasebook">Wörter</a></li>
+<li><a href="/preview/german/archiv.html" title="Archive">Archiv</a></li>
+<li><a data-admin-blocked="true" style="cursor: pointer;" title="Admin">Admin</a></li>
+</ul>
+</nav>
+<main class="page">
+<div class="tab-layout-split">
+<div class="tab-content">
+<div class="tab-split-header">
+<div class="tab-hero-label">[NOTIZBUCH]</div>
+<h1>Wörter</h1>
+</div>
+<p class="tab-description">Gespeicherte Vokabeln und Phrasen — aus dem Lesen, dem Schreiben und dem Üben.</p>
+<!-- ── Subnav ──────────────────────────────────────────────────────────── -->
+<div class="ueben-subnav">
+<button class="ueben-subnav-btn active" data-section="vokabeln" title="Vocabulary library">Vokabeln</button>
+<button class="ueben-subnav-btn" data-section="drill-pool" title="Active drill queue">
+    Drill-Pool <span class="pool-badge">1</span>
+</button>
+</div>
+<!-- ── Vokabeln section ─────────────────────────────────────────────────── -->
+<div class="woerter-section" id="section-vokabeln">
+<!-- ── Filter bar ──────────────────────────────────────────────────────── -->
+<div class="woerter-filter-bar">
+<label class="filter-label">
+<span>Quelle <span class="filter-hint">(Herkunft)</span></span>
+<select class="filter-select" data-preview-disabled="true" disabled="disabled" id="filter-quelle" title="Wo wurde diese Phrase gespeichert? Lesen = aus Artikeln, Telegram = vom Handy, Manuell = selbst eingegeben">
+<option value="">Alle</option>
+<option value="lesen">Lesen</option>
+<option value="telegram">Telegram</option>
+<option value="manual">Manuell</option>
+</select>
+</label>
+<label class="filter-label">
+<span>Status <span class="filter-hint">(Lernstand)</span></span>
+<select class="filter-select" data-preview-disabled="true" disabled="disabled" id="filter-status" title="Bibliothek = gespeichert, Üben = im Drill-Pool, Prüfen = 5× korrekt, Gelernt = bestätigt gelernt">
+<option value="">Alle</option>
+<option value="library">Bibliothek</option>
+<option value="practice">Üben</option>
+<option value="review_ready">Bereit zu prüfen</option>
+<option value="mastered">Gelernt</option>
+</select>
+</label>
+<span class="filter-count" id="filter-count">18 Einträge</span>
+<button class="btn-filter-reset" data-preview-disabled="true" disabled="disabled" id="btn-reset-filters" title="Show all entries">Alle anzeigen</button>
+<a class="btn-ghost woerter-export-all" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export all vocabulary to Anki flashcard deck">Anki Export — Alle</a>
+</div>
+<!-- ── Word table ──────────────────────────────────────────────────────── -->
+<div class="woerter-table-wrap">
+<table class="woerter-table" id="woerter-table">
+<thead>
+<tr>
+<th>Deutsch</th>
+<th>Englisch</th>
+<th></th>
+</tr>
+</thead>
+<tbody id="woerter-tbody">
+<tr class="woerter-row" data-id="ph_20260521_012" data-source="lesen" data-status="library">
+<td class="w-german">beantragte</td>
+<td class="w-english">applied for</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="applied for" data-german="beantragte" id="detail-ph_20260521_012" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>lesen
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-21
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Bibliothek
+              </span>
+</div>
+<div class="detail-context">"Der Wiener Reparaturbon ist bereits knapp einen Monat nach dem Start am 22. April wieder ausgeschöpft. Heuer stand ein Budget von 250.000 Euro zur Verfügung. Bereits beantragte Bons können noch eingel"</div>
+<div class="expand-source">
+<span class="expand-source-label">Aus Artikel:</span>
+<span class="expand-source-text">Reparaturbon schon wieder ausgeschöpft</span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">beantragte</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="beantragte" disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260521_012" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-promote" data-id="ph_20260521_012" data-next="practice" data-preview-disabled="true" disabled="disabled" title="Move to practice queue">
+                Fördern → Üben
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="beantragte" disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+<tr class="woerter-row" data-id="ph_20260521_013" data-source="lesen" data-status="library">
+<td class="w-german">Behandlung</td>
+<td class="w-english">treatment</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="treatment" data-german="Behandlung" id="detail-ph_20260521_013" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>lesen
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-21
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Bibliothek
+              </span>
+</div>
+<div class="detail-context">"Seit Jänner 2026 gibt es Kassenplätze für klinisch-psychologische Behandlung. Eine Zwischenbilanz der Serviceplattform Psyhelp, die für die Vermittlung zuständig ist, zeigt, dass die Nachfrage groß is"</div>
+<div class="expand-source">
+<span class="expand-source-label">Aus Artikel:</span>
+<span class="expand-source-text">Kürzere Wartezeit auf psychologische Behandlung</span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">Behandlung</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="Behandlung" disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260521_013" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-promote" data-id="ph_20260521_013" data-next="practice" data-preview-disabled="true" disabled="disabled" title="Move to practice queue">
+                Fördern → Üben
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="Behandlung" disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+<tr class="woerter-row" data-id="ph_20260521_014" data-source="lesen" data-status="library">
+<td class="w-german">zuständig</td>
+<td class="w-english">responsible</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="responsible" data-german="zuständig" id="detail-ph_20260521_014" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>lesen
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-21
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Bibliothek
+              </span>
+</div>
+<div class="detail-context">"Seit Jänner 2026 gibt es Kassenplätze für klinisch-psychologische Behandlung. Eine Zwischenbilanz der Serviceplattform Psyhelp, die für die Vermittlung zuständig ist, zeigt, dass die Nachfrage groß is"</div>
+<div class="expand-source">
+<span class="expand-source-label">Aus Artikel:</span>
+<span class="expand-source-text">Kürzere Wartezeit auf psychologische Behandlung</span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">zuständig</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="zuständig" disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260521_014" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-promote" data-id="ph_20260521_014" data-next="practice" data-preview-disabled="true" disabled="disabled" title="Move to practice queue">
+                Fördern → Üben
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="zuständig" disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+<tr class="woerter-row" data-id="ph_20260521_015" data-source="lesen" data-status="library">
+<td class="w-german">Behandlungsplatz</td>
+<td class="w-english">treatment place</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="treatment place" data-german="Behandlungsplatz" id="detail-ph_20260521_015" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>lesen
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-21
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Bibliothek
+              </span>
+</div>
+<div class="detail-context">"Seit Jänner 2026 gibt es Kassenplätze für klinisch-psychologische Behandlung. Eine Zwischenbilanz der Serviceplattform Psyhelp, die für die Vermittlung zuständig ist, zeigt, dass die Nachfrage groß is"</div>
+<div class="expand-source">
+<span class="expand-source-label">Aus Artikel:</span>
+<span class="expand-source-text">Kürzere Wartezeit auf psychologische Behandlung</span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">Behandlungsplatz</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="Behandlungsplatz" disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260521_015" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-promote" data-id="ph_20260521_015" data-next="practice" data-preview-disabled="true" disabled="disabled" title="Move to practice queue">
+                Fördern → Üben
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="Behandlungsplatz" disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+<tr class="woerter-row" data-id="ph_20260521_016" data-source="lesen" data-status="library">
+<td class="w-german">Ziel</td>
+<td class="w-english">goal</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="goal" data-german="Ziel" id="detail-ph_20260521_016" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>lesen
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-21
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Bibliothek
+              </span>
+</div>
+<div class="detail-context">"Die beiden Bezirksvorsteher Georg Papai und Marcus Franz (beide SPÖ) wollen die Forderung nach mehr Polizei in Floridsdorf und Favoriten mit einer Unterschriftenaktion untermauern. Ziel ist eine Disku"</div>
+<div class="expand-source">
+<span class="expand-source-label">Aus Artikel:</span>
+<span class="expand-source-text">Favoriten und Floridsdorf wollen mehr Polizisten</span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">Ziel</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="Ziel" disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260521_016" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-promote" data-id="ph_20260521_016" data-next="practice" data-preview-disabled="true" disabled="disabled" title="Move to practice queue">
+                Fördern → Üben
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="Ziel" disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+<tr class="woerter-row" data-id="ph_20260521_017" data-source="lesen" data-status="library">
+<td class="w-german">die zunehmende Verschmutzung vorgehen</td>
+<td class="w-english">tackle the increasing pollution</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="tackle the increasing pollution" data-german="die zunehmende Verschmutzung vorgehen" id="detail-ph_20260521_017" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>lesen
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-21
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Bibliothek
+              </span>
+</div>
+<div class="detail-context">"Der Wiener Landtag hat in seiner heutigen Sitzung das Verbot der Altkleidersammelcontainer beschlossen. Die Maßnahme wurde vor einigen Wochen angekündigt. Die Stadt will damit gegen die zunehmende Ver"</div>
+<div class="expand-source">
+<span class="expand-source-label">Aus Artikel:</span>
+<span class="expand-source-text">Landtag beschloss Altkleidercontainerverbot</span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">die zunehmende Verschmutzung vorgehen</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="die zunehmende Verschmutzung vorgehen" disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260521_017" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-promote" data-id="ph_20260521_017" data-next="practice" data-preview-disabled="true" disabled="disabled" title="Move to practice queue">
+                Fördern → Üben
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="die zunehmende Verschmutzung vorgehen" disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+<tr class="woerter-row" data-id="ph_20260521_018" data-source="lesen" data-status="library">
+<td class="w-german">Favoriten mit einer Unterschriftenaktion</td>
+<td class="w-english">Favorites with a signature campaign</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="Favorites with a signature campaign" data-german="Favoriten mit einer Unterschriftenaktion" id="detail-ph_20260521_018" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>lesen
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-21
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Bibliothek
+              </span>
+</div>
+<div class="detail-context">"Die beiden Bezirksvorsteher Georg Papai und Marcus Franz (beide SPÖ) wollen die Forderung nach mehr Polizei in Floridsdorf und Favoriten mit einer Unterschriftenaktion untermauern. Ziel ist eine Disku"</div>
+<div class="expand-source">
+<span class="expand-source-label">Aus Artikel:</span>
+<span class="expand-source-text">Favoriten und Floridsdorf wollen mehr Polizisten</span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">Favoriten mit einer Unterschriftenaktion</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="Favoriten mit einer Unterschriftenaktion" disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260521_018" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-promote" data-id="ph_20260521_018" data-next="practice" data-preview-disabled="true" disabled="disabled" title="Move to practice queue">
+                Fördern → Üben
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="Favoriten mit einer Unterschriftenaktion" disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+<tr class="woerter-row" data-id="ph_20260514_010" data-source="" data-status="library">
+<td class="w-german">Er wertete die Daten aus.</td>
+<td class="w-english">He evaluated the data.</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="He evaluated the data." data-german="Er wertete die Daten aus." id="detail-ph_20260514_010" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>—
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-14
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Bibliothek
+              </span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">Er wertete die Daten aus.</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="Er wertete die Daten aus." disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260514_010" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-promote" data-id="ph_20260514_010" data-next="practice" data-preview-disabled="true" disabled="disabled" title="Move to practice queue">
+                Fördern → Üben
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="Er wertete die Daten aus." disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+<tr class="woerter-row" data-id="ph_20260514_011" data-source="" data-status="library">
+<td class="w-german">Moskau sieht Deutschland inzwischen als Feind Nummer eins</td>
+<td class="w-english">Moscow now sees Germany as enemy number one</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="Moscow now sees Germany as enemy number one" data-german="Moskau sieht Deutschland inzwischen als Feind Nummer eins" id="detail-ph_20260514_011" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>—
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-14
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Bibliothek
+              </span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">Moskau sieht Deutschland inzwischen als Feind Nummer eins</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="Moskau sieht Deutschland inzwischen als Feind Nummer eins" disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260514_011" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-promote" data-id="ph_20260514_011" data-next="practice" data-preview-disabled="true" disabled="disabled" title="Move to practice queue">
+                Fördern → Üben
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="Moskau sieht Deutschland inzwischen als Feind Nummer eins" disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+<tr class="woerter-row" data-id="ph_20260513_006" data-source="" data-status="library">
+<td class="w-german">in Bedrängnis geraten</td>
+<td class="w-english">to get into trouble</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="to get into trouble" data-german="in Bedrängnis geraten" id="detail-ph_20260513_006" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>—
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-13
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Bibliothek
+              </span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">in Bedrängnis geraten</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="in Bedrängnis geraten" disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260513_006" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-promote" data-id="ph_20260513_006" data-next="practice" data-preview-disabled="true" disabled="disabled" title="Move to practice queue">
+                Fördern → Üben
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="in Bedrängnis geraten" disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+<tr class="woerter-row" data-id="ph_20260513_007" data-source="" data-status="library">
+<td class="w-german">Durch Mangel an Rohstoffen</td>
+<td class="w-english">Due to a shortage of raw materials</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="Due to a shortage of raw materials" data-german="Durch Mangel an Rohstoffen" id="detail-ph_20260513_007" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>—
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-13
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Bibliothek
+              </span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">Durch Mangel an Rohstoffen</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="Durch Mangel an Rohstoffen" disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260513_007" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-promote" data-id="ph_20260513_007" data-next="practice" data-preview-disabled="true" disabled="disabled" title="Move to practice queue">
+                Fördern → Üben
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="Durch Mangel an Rohstoffen" disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+<tr class="woerter-row" data-id="ph_20260513_008" data-source="" data-status="library">
+<td class="w-german">Was ist denn jetzt wieder los?</td>
+<td class="w-english">What's the matter now again?</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="What's the matter now again?" data-german="Was ist denn jetzt wieder los?" id="detail-ph_20260513_008" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>—
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-13
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Bibliothek
+              </span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">Was ist denn jetzt wieder los?</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="Was ist denn jetzt wieder los?" disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260513_008" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-promote" data-id="ph_20260513_008" data-next="practice" data-preview-disabled="true" disabled="disabled" title="Move to practice queue">
+                Fördern → Üben
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="Was ist denn jetzt wieder los?" disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+<tr class="woerter-row" data-id="ph_20260513_009" data-source="" data-status="library">
+<td class="w-german">Mineralwasser mit Sprudel</td>
+<td class="w-english">sparkling mineral water</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="sparkling mineral water" data-german="Mineralwasser mit Sprudel" id="detail-ph_20260513_009" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>—
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-13
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Bibliothek
+              </span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">Mineralwasser mit Sprudel</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="Mineralwasser mit Sprudel" disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260513_009" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-promote" data-id="ph_20260513_009" data-next="practice" data-preview-disabled="true" disabled="disabled" title="Move to practice queue">
+                Fördern → Üben
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="Mineralwasser mit Sprudel" disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+<tr class="woerter-row" data-id="ph_20260512_001" data-source="shopping" data-status="library">
+<td class="w-german">Nein danke, ich schaue nur.</td>
+<td class="w-english">No thanks, I'm just looking.</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="No thanks, I'm just looking." data-german="Nein danke, ich schaue nur." id="detail-ph_20260512_001" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>shopping
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-12
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Bibliothek
+              </span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">Nein danke, ich schaue nur.</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="Nein danke, ich schaue nur." disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260512_001" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-promote" data-id="ph_20260512_001" data-next="practice" data-preview-disabled="true" disabled="disabled" title="Move to practice queue">
+                Fördern → Üben
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="Nein danke, ich schaue nur." disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+<tr class="woerter-row" data-id="ph_20260512_002" data-source="" data-status="library">
+<td class="w-german">Kann ich hier mein Handy aufladen?</td>
+<td class="w-english">Can I charge my phone here?</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="Can I charge my phone here?" data-german="Kann ich hier mein Handy aufladen?" id="detail-ph_20260512_002" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>—
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-12
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Bibliothek
+              </span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">Kann ich hier mein Handy aufladen?</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="Kann ich hier mein Handy aufladen?" disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260512_002" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-promote" data-id="ph_20260512_002" data-next="practice" data-preview-disabled="true" disabled="disabled" title="Move to practice queue">
+                Fördern → Üben
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="Kann ich hier mein Handy aufladen?" disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+<tr class="woerter-row" data-id="ph_20260512_003" data-source="" data-status="library">
+<td class="w-german">Könnten Sie bitte die Betten zusammenschieben?</td>
+<td class="w-english">Could you please push the beds together?</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="Could you please push the beds together?" data-german="Könnten Sie bitte die Betten zusammenschieben?" id="detail-ph_20260512_003" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>—
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-12
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Bibliothek
+              </span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">Könnten Sie bitte die Betten zusammenschieben?</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="Könnten Sie bitte die Betten zusammenschieben?" disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260512_003" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-promote" data-id="ph_20260512_003" data-next="practice" data-preview-disabled="true" disabled="disabled" title="Move to practice queue">
+                Fördern → Üben
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="Könnten Sie bitte die Betten zusammenschieben?" disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+<tr class="woerter-row" data-id="ph_20260512_004" data-source="" data-status="practice">
+<td class="w-german">Es hat mir sehr gut gefallen.</td>
+<td class="w-english">I really liked it.</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="I really liked it." data-german="Es hat mir sehr gut gefallen." id="detail-ph_20260512_004" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>—
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-12
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Üben
+              </span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">Es hat mir sehr gut gefallen.</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="Es hat mir sehr gut gefallen." disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260512_004" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-demote" data-id="ph_20260512_004" data-next="library" data-preview-disabled="true" disabled="disabled" title="Demote back to library">
+                ← Bibliothek
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="Es hat mir sehr gut gefallen." disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+<tr class="woerter-row" data-id="ph_20260512_005" data-source="" data-status="library">
+<td class="w-german">Es war wirklich sehr schön hier</td>
+<td class="w-english">It was really very nice here</td>
+<td class="w-expand-col"><button aria-label="Details" class="btn-expand" data-preview-disabled="true" disabled="disabled" title="Show details">Details</button></td>
+</tr>
+<tr class="woerter-detail" data-english="It was really very nice here" data-german="Es war wirklich sehr schön hier" id="detail-ph_20260512_005" style="display:none">
+<td colspan="3">
+<div class="detail-inner">
+<div class="expand-meta">
+<span class="expand-meta-item">
+<span class="expand-meta-label">Quelle:</span>—
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Datum:</span>2026-05-12
+              </span>
+<span class="expand-meta-item">
+<span class="expand-meta-label">Status:</span>Bibliothek
+              </span>
+</div>
+<!-- Practice section -->
+<div class="expand-practice">
+<div class="expand-label">ÜBEN</div>
+<div class="direction-toggle-inline">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" title="German to English">🇩🇪 → 🇺🇸</button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" title="English to German">🇺🇸 → 🇩🇪</button>
+</div>
+<div class="practice-prompt">
+<span class="practice-prompt-text">Es war wirklich sehr schön hier</span>
+<button class="btn-voice-out btn-speak-practice" data-preview-disabled="true" data-text="Es war wirklich sehr schön hier" disabled="disabled" title="Hear pronunciation">🔊</button>
+</div>
+<div class="practice-input-wrap">
+<textarea class="practice-input" data-preview-disabled="true" disabled="disabled" placeholder="Deine Antwort…" rows="2"></textarea>
+<div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+<button class="btn-voice-mic btn-voice-practice" data-direction="de-en" data-preview-disabled="true" disabled="disabled" title="Speak your answer">🎤</button>
+<button class="btn-delivery btn-pruefen-practice" data-id="ph_20260512_005" data-preview-disabled="true" disabled="disabled" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="practice-correction" style="display:none">
+<div class="correction-attempt result-label"></div>
+<div class="correction-answer result-value"></div>
+<div class="correction-notes-block" style="display:none">
+<ul class="drill-notes correction-notes-list"></ul>
+</div>
+</div>
+</div>
+<div class="detail-actions">
+<button class="btn-ghost btn-promote" data-id="ph_20260512_005" data-next="practice" data-preview-disabled="true" disabled="disabled" title="Move to practice queue">
+                Fördern → Üben
+              </button>
+<button class="btn-ghost btn-speak" data-preview-disabled="true" data-text="Es war wirklich sehr schön hier" disabled="disabled" title="Hear pronunciation">🔊</button>
+<a class="btn-ghost" data-admin-blocked="true" download="" style="cursor: pointer;" title="Export to Anki flashcard deck">Anki Export</a>
+</div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="empty-filter-state" id="empty-filter-state" style="display:none">
+    Keine Phrasen in dieser Kategorie.
+    <a href="/preview/german/lesen.html">Zum Lesen →</a> um neue Vokabeln zu speichern.
+  </div>
+</div>
+</div><!-- #section-vokabeln -->
+<!-- ── Drill-Pool section ──────────────────────────────────────────────── -->
+<div class="woerter-section" id="section-drill-pool" style="display:none">
+<div class="direction-toggle" id="direction-toggle">
+<button class="dir-btn active" data-dir="de-en" data-preview-disabled="true" disabled="disabled" id="dir-de-en" title="German to English">
+      🇩🇪 → 🇺🇸 Deutsch zu Englisch
+    </button>
+<button class="dir-btn" data-dir="en-de" data-preview-disabled="true" disabled="disabled" id="dir-en-de" title="English to German">
+      🇺🇸 → 🇩🇪 Englisch zu Deutsch
+    </button>
+</div>
+<div class="drill-stats">
+<span id="drill-progress">0 von 1 geübt</span>
+<button class="btn-ghost btn-sm" data-preview-disabled="true" disabled="disabled" id="drill-restart" title="Restart drill session">Neu starten</button>
+</div>
+<div class="drill-card" id="drill-card">
+<div class="drill-prompt" id="drill-prompt">Es hat mir sehr gut gefallen.</div>
+<button class="btn-voice-out" data-preview-disabled="true" disabled="disabled" id="btn-speak-prompt" title="Hear the prompt">🔊 anhören</button>
+<div class="drill-input-area" id="drill-input-area">
+<textarea data-preview-disabled="true" disabled="disabled" id="drill-input" placeholder="Deine Antwort hier eingeben…" rows="3"></textarea>
+<div class="drill-input-row">
+<button class="btn-voice-mic" data-preview-disabled="true" disabled="disabled" id="voice-drill" title="Spracheingabe">🎤</button>
+<button class="btn-delivery" data-preview-disabled="true" disabled="disabled" id="btn-pruefen" title="Check answer">Prüfen</button>
+</div>
+</div>
+<div class="drill-result-block" id="drill-result-block" style="display:none">
+<div class="result-row">
+<span class="result-label">Deine Antwort</span>
+<span class="result-value" id="drill-attempt-text"></span>
+</div>
+<div class="result-row">
+<span class="result-label" id="drill-answer-label">Lösung</span>
+<span class="result-value" id="drill-answer-text"></span>
+</div>
+<div id="drill-corrected-block" style="display:none">
+<div class="result-row">
+<span class="result-label">Korrigiert</span>
+<span class="result-value" id="drill-corrected-text"></span>
+</div>
+<ul class="drill-notes" id="drill-notes-list"></ul>
+</div>
+</div>
+<div class="drill-assess" id="drill-assess" style="display:none">
+<button class="btn-richtig" data-preview-disabled="true" disabled="disabled" id="drill-correct" title="Mark correct">✓ Richtig</button>
+<button class="btn-falsch" data-preview-disabled="true" disabled="disabled" id="drill-wrong" title="Mark wrong">✗ Falsch</button>
+<button class="btn-skip" data-preview-disabled="true" disabled="disabled" id="drill-skip" title="Skip this card">→ Überspringen</button>
+</div>
+</div>
+<div class="drill-done" id="drill-done" style="display:none">
+<p>Runde abgeschlossen.</p>
+<button class="btn-ghost" data-preview-disabled="true" disabled="disabled" id="drill-done-restart" title="Start a new drill session">Neu starten</button>
+</div>
+</div><!-- #section-drill-pool -->
+</div><!-- .tab-content -->
+<div class="tab-panel-photo">
+<img alt="Wien Parkweg" src="/preview/assets/photos_bike_trail_IMG_5464.jpg" style="object-position: center 35%"/>
+</div>
+</div><!-- .tab-layout-split -->
+</main>
+<script>
+document.body.classList.add('parch-mode');
+(function () {
+  'use strict';
+
+  const drillPool = [{"added": "2026-05-12", "english": "I really liked it.", "german": "Es hat mir sehr gut gefallen.", "id": "ph_20260512_004", "last_practiced": "2026-05-21T23:40:46.442259", "practice_count": 4, "scene": "", "status": "practice", "user": "robert", "verb_hint": ""}];
+
+  // ── Subnav ───────────────────────────────────────────────────────────
+  document.querySelectorAll('.ueben-subnav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.ueben-subnav-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.woerter-section').forEach(s => s.style.display = 'none');
+      btn.classList.add('active');
+      document.getElementById('section-' + btn.dataset.section).style.display = 'block';
+    });
+  });
+
+  // ── Row expand/collapse ──────────────────────────────────────────────
+  document.querySelectorAll('.btn-expand').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row = btn.closest('.woerter-row');
+      const id = row.dataset.id;
+      const detail = document.getElementById('detail-' + id);
+      const open = detail.style.display !== 'none';
+      detail.style.display = open ? 'none' : 'table-row';
+      btn.textContent = open ? 'Details' : 'Schließen';
+      if (!open) {
+        setTimeout(() => {
+          detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 50);
+      }
+    });
+  });
+
+  // ── Status promote/demote ────────────────────────────────────────────
+  document.querySelectorAll('.btn-promote, .btn-demote').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const next = btn.dataset.next;
+      const resp = await fetch('/app/german/api/phrase-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: next })
+      });
+      if ((await resp.json()).ok) {
+        // Reload to reflect updated status
+        window.location.reload();
+      }
+    });
+  });
+
+  // ── Voice output ─────────────────────────────────────────────────────
+  document.querySelectorAll('.btn-speak').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const text = btn.dataset.text;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'de-DE';
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    });
+  });
+
+  // ── Filter ───────────────────────────────────────────────────────────
+  const rows = Array.from(document.querySelectorAll('.woerter-row'));
+  const countEl = document.getElementById('filter-count');
+  const emptyFilterEl = document.getElementById('empty-filter-state');
+
+  function applyFilters() {
+    const quelle = document.getElementById('filter-quelle').value;
+    const status = document.getElementById('filter-status').value;
+    let visible = 0;
+    rows.forEach(row => {
+      const matchQ = !quelle || row.dataset.source === quelle;
+      const matchS = !status || row.dataset.status === status;
+      const show = matchQ && matchS;
+      row.style.display = show ? '' : 'none';
+      const detail = document.getElementById('detail-' + row.dataset.id);
+      if (detail && !show) {
+        detail.style.display = 'none';
+        const btn = row.querySelector('.btn-expand');
+        if (btn) btn.textContent = 'Details';
+      }
+      if (show) visible++;
+    });
+    countEl.textContent = visible + ' Eintr' + (visible === 1 ? 'ag' : 'äge');
+    if (emptyFilterEl) {
+      emptyFilterEl.style.display = (visible === 0 && rows.length > 0) ? 'block' : 'none';
+    }
+  }
+
+  document.getElementById('filter-quelle').addEventListener('change', applyFilters);
+  document.getElementById('filter-status').addEventListener('change', applyFilters);
+  document.getElementById('btn-reset-filters').addEventListener('click', () => {
+    document.getElementById('filter-quelle').value = '';
+    document.getElementById('filter-status').value = '';
+    applyFilters();
+  });
+  applyFilters();
+
+  // ── Wörter inline practice ────────────────────────────────────────────
+
+  // Direction toggle inside each expand
+  document.querySelectorAll('.direction-toggle-inline').forEach(toggle => {
+    const detail = toggle.closest('.woerter-detail');
+    toggle.querySelectorAll('.dir-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        toggle.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        // Update prompt text and voice mic lang
+        const dir = btn.dataset.dir;
+        const german = detail.dataset.german;
+        const english = detail.dataset.english;
+        const promptEl = toggle.closest('.expand-practice').querySelector('.practice-prompt-text');
+        promptEl.textContent = dir === 'de-en' ? german : english;
+        const micBtn = toggle.closest('.expand-practice').querySelector('.btn-voice-practice');
+        if (micBtn) micBtn.dataset.direction = dir;
+        // Reset correction block
+        const corr = toggle.closest('.expand-practice').querySelector('.practice-correction');
+        if (corr) corr.style.display = 'none';
+        const input = toggle.closest('.expand-practice').querySelector('.practice-input');
+        if (input) input.value = '';
+      });
+    });
+  });
+
+  // 🔊 speak buttons in practice section — never auto
+  document.querySelectorAll('.btn-speak-practice').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const text = btn.dataset.text;
+      if (!text || !window.speechSynthesis) return;
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'de-DE'; u.rate = 0.9;
+      window.speechSynthesis.speak(u);
+    });
+  });
+
+  // 🎤 voice input in practice section
+  document.querySelectorAll('.btn-voice-practice').forEach(btn => {
+    if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
+      btn.style.display = 'none'; return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    btn.addEventListener('click', () => {
+      if (recognition) { recognition.stop(); recognition = null; btn.textContent = '🎤'; return; }
+      const input = btn.closest('.expand-practice').querySelector('.practice-input');
+      recognition = new SR();
+      recognition.lang = btn.dataset.direction === 'de-en' ? 'en-US' : 'de-DE';
+      recognition.interimResults = false;
+      recognition.onresult = e => { input.value = e.results[0][0].transcript; };
+      recognition.onend = () => { recognition = null; btn.textContent = '🎤'; };
+      recognition.start();
+      btn.textContent = '⏹';
+    });
+  });
+
+  // Prüfen in practice section
+  document.querySelectorAll('.btn-pruefen-practice').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const expand = btn.closest('.expand-practice');
+      const detail = btn.closest('.woerter-detail');
+      const activeDir = expand.querySelector('.dir-btn.active').dataset.dir;
+      const input = expand.querySelector('.practice-input').value.trim();
+      const corr = expand.querySelector('.practice-correction');
+      if (!input) return;
+
+      corr.style.display = 'block';
+      corr.querySelector('.correction-attempt').textContent = 'Deine Antwort: ' + input;
+      corr.querySelector('.correction-notes-block').style.display = 'none';
+
+      if (activeDir === 'de-en') {
+        const english = detail.dataset.english;
+        corr.querySelector('.correction-answer').textContent = 'Lösung: ' + english;
+      } else {
+        corr.querySelector('.correction-answer').textContent = 'Wird korrigiert…';
+        const promptText = expand.querySelector('.practice-prompt-text').textContent;
+        try {
+          const res = await fetch('/app/german/api/write-correct', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: input, context: promptText })
+          });
+          const data = await res.json();
+          corr.querySelector('.correction-answer').textContent =
+            'Korrektur: ' + (data.corrected || detail.dataset.german);
+          const notes = data.notes || [];
+          if (notes.length) {
+            corr.querySelector('.correction-notes-list').innerHTML =
+              notes.map(n => `<li>${n}</li>`).join('');
+            corr.querySelector('.correction-notes-block').style.display = 'block';
+          }
+        } catch {
+          corr.querySelector('.correction-answer').textContent =
+            'Lösung: ' + detail.dataset.german;
+        }
+      }
+    });
+  });
+  // ── Drill-Pool state machine ─────────────────────────────────────────
+  if (drillPool.length > 0) {
+    const drill = {
+      queue: [...drillPool],
+      pos: 0,
+      practiced: 0,
+      direction: sessionStorage.getItem('drillDirection') || 'de-en',
+    };
+
+    function setDirection(dir) {
+      drill.direction = dir;
+      sessionStorage.setItem('drillDirection', dir);
+      document.querySelectorAll('#direction-toggle .dir-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.dir === dir);
+      });
+      showPhrase(drill.pos);
+    }
+
+    document.querySelectorAll('#direction-toggle .dir-btn').forEach(btn => {
+      btn.addEventListener('click', () => setDirection(btn.dataset.dir));
+    });
+
+    setDirection(drill.direction);
+
+    function updateProgress() {
+      document.getElementById('drill-progress').textContent =
+        `${drill.practiced} von ${drill.queue.length} geübt`;
+    }
+
+    function showPhrase(idx) {
+      if (idx >= drill.queue.length) {
+        document.getElementById('drill-card').style.display = 'none';
+        document.getElementById('drill-done').style.display = 'block';
+        return;
+      }
+      const phrase = drill.queue[idx];
+      const prompt = drill.direction === 'de-en' ? phrase.german : phrase.english;
+      document.getElementById('drill-prompt').textContent = prompt;
+      document.getElementById('drill-input').value = '';
+      document.getElementById('drill-result-block').style.display = 'none';
+      document.getElementById('drill-corrected-block').style.display = 'none';
+      document.getElementById('drill-assess').style.display = 'none';
+      document.getElementById('drill-input-area').style.display = '';
+      document.getElementById('btn-pruefen').disabled = false;
+      document.getElementById('drill-card').style.display = '';
+      document.getElementById('drill-done').style.display = 'none';
+    }
+
+    async function submitAttempt() {
+      const phrase = drill.queue[drill.pos];
+      const attempt = document.getElementById('drill-input').value.trim();
+      if (!attempt) return;
+
+      document.getElementById('btn-pruefen').disabled = true;
+      document.getElementById('drill-attempt-text').textContent = attempt;
+
+      if (drill.direction === 'de-en') {
+        document.getElementById('drill-answer-label').textContent = 'Lösung';
+        document.getElementById('drill-answer-text').textContent = phrase.english;
+        document.getElementById('drill-corrected-block').style.display = 'none';
+        document.getElementById('drill-result-block').style.display = 'block';
+        document.getElementById('drill-assess').style.display = 'flex';
+      } else {
+        document.getElementById('drill-answer-label').textContent = 'Korrektur';
+        document.getElementById('drill-answer-text').textContent = 'Wird korrigiert…';
+        document.getElementById('drill-result-block').style.display = 'block';
+
+        try {
+          const res = await fetch('/app/german/api/write-correct', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: attempt,
+              context: `Expected German for: ${phrase.english}`
+            })
+          });
+          const data = await res.json();
+          document.getElementById('drill-answer-text').textContent = data.corrected || phrase.german;
+
+          const notes = data.notes || [];
+          if (notes.length) {
+            document.getElementById('drill-corrected-text').textContent = phrase.german;
+            document.getElementById('drill-notes-list').innerHTML =
+              notes.map(n => `<li>${n}</li>`).join('');
+            document.getElementById('drill-corrected-block').style.display = 'block';
+          }
+        } catch {
+          document.getElementById('drill-answer-text').textContent = phrase.german;
+        }
+        document.getElementById('drill-assess').style.display = 'flex';
+      }
+    }
+
+    async function recordResult(result) {
+      const phrase = drill.queue[drill.pos];
+      await fetch('/app/german/api/drill-result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phrase_id: phrase.id, result })
+      });
+      if (result !== 'skip') drill.practiced++;
+      drill.pos++;
+      updateProgress();
+      showPhrase(drill.pos);
+    }
+
+    document.getElementById('btn-speak-prompt').addEventListener('click', () => {
+      const phrase = drill.queue[drill.pos];
+      if (!phrase || !window.speechSynthesis) return;
+      const u = new SpeechSynthesisUtterance(phrase.german);
+      u.lang = 'de-DE'; u.rate = 0.9;
+      window.speechSynthesis.speak(u);
+    });
+
+    const voiceDrillBtn = document.getElementById('voice-drill');
+    if (voiceDrillBtn && (window.SpeechRecognition || window.webkitSpeechRecognition)) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      let recognition = null;
+      voiceDrillBtn.addEventListener('click', () => {
+        if (recognition) { recognition.stop(); recognition = null; voiceDrillBtn.textContent = '🎤 Sprechen'; return; }
+        recognition = new SR();
+        recognition.lang = drill.direction === 'de-en' ? 'en-US' : 'de-DE';
+        recognition.interimResults = false;
+        recognition.onresult = e => {
+          document.getElementById('drill-input').value = e.results[0][0].transcript;
+        };
+        recognition.onend = () => { recognition = null; voiceDrillBtn.textContent = '🎤'; };
+        recognition.start();
+        voiceDrillBtn.textContent = '⏹';
+      });
+    } else if (voiceDrillBtn) {
+      voiceDrillBtn.style.display = 'none';
+    }
+
+    document.getElementById('btn-pruefen').addEventListener('click', submitAttempt);
+    document.getElementById('drill-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitAttempt();
+    });
+
+    document.getElementById('drill-correct').addEventListener('click', () => recordResult('correct'));
+    document.getElementById('drill-wrong').addEventListener('click',   () => recordResult('wrong'));
+    document.getElementById('drill-skip').addEventListener('click',    () => recordResult('skip'));
+
+    function restart() {
+      drill.pos = 0; drill.practiced = 0; drill.queue = [...drillPool];
+      updateProgress(); showPhrase(0);
+    }
+
+    document.getElementById('drill-restart').addEventListener('click', restart);
+    document.getElementById('drill-done-restart').addEventListener('click', restart);
+
+    updateProgress(); showPhrase(0);
+  }
+
+})();
+</script>
+
+<style id="preview-modal-style">
+.preview-modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
+}
+.preview-modal-overlay.active { display: flex; }
+.preview-modal {
+  background: #2a1f14; border: 1px solid rgba(198,138,94,0.4);
+  border-radius: 8px; padding: 28px 32px; max-width: 380px; width: 90%;
+  color: #F5F0E8; font-family: 'Source Sans 3', system-ui, sans-serif;
+}
+.preview-modal h3 {
+  font-size: 14px; font-weight: 600; margin: 0 0 12px;
+  color: #C68A5E !important; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.preview-modal p { font-size: 13px; color: rgba(245,240,232,0.75); line-height: 1.6; margin: 0 0 20px; }
+.preview-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.preview-modal-btn {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(198,138,94,0.5); background: transparent; color: #C68A5E;
+  text-decoration: none; display: inline-block;
+}
+.preview-modal-btn:hover { background: rgba(198,138,94,0.15); }
+.preview-modal-close {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(245,240,232,0.2); background: transparent;
+  color: rgba(245,240,232,0.6);
+}
+.preview-modal-close:hover { border-color: rgba(245,240,232,0.4); color: #F5F0E8; }
+</style>
+<div class="preview-modal-overlay" id="previewModal">
+<div class="preview-modal">
+<h3>Not available in preview</h3>
+<div class="preview-modal-actions">
+<a class="preview-modal-btn" href="/contact">Request access →</a>
+<button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>
+</div>
+</div>
+</div>
+<script id="preview-modal-script">
+(function() {
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('[data-admin-blocked]');
+    if (el) { e.preventDefault(); e.stopPropagation(); document.getElementById('previewModal').classList.add('active'); }
+  });
+  document.getElementById('previewModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+})();
+</script>
+</body></html>

@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+
+<html lang="de"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Lesen — Mein Deutsch</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="/preview/assets/german.css" rel="stylesheet"/>
+
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  // Endpoints allowed to pass through to the real server
+  var PASSTHROUGH = ['/app/german/api/translate'];
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    // Lesen category API — serve pre-captured data if available
+    if (u.indexOf('/api/lesen-category') !== -1) {
+      var cat = '';
+      try { cat = new URL(u, location.origin).searchParams.get('category') || ''; } catch(e) {}
+      var data = window._previewLesenData || {};
+      var articles = data[cat] || [];
+      return Promise.resolve(new Response(JSON.stringify({articles: articles}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    // Allow translate through — works for authenticated users, fails silently otherwise
+    for (var i = 0; i < PASSTHROUGH.length; i++) {
+      if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
+    }
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
+<style id="preview-banner-style">
+.preview-banner {
+  position: sticky; top: 0; z-index: 9999;
+  background: #2A1F14; color: #F5F0E8;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 11px; letter-spacing: 0.04em;
+  padding: 7px 20px;
+  border-bottom: 1px solid rgba(198,138,94,0.3);
+  display: flex; align-items: center; gap: 8px;
+}
+.preview-banner .preview-date { color: rgba(245,240,232,0.7); }
+.preview-request-link {
+  color: #C68A5E; text-decoration: none; margin-left: auto;
+  border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
+}
+.preview-request-link:hover { background: rgba(198,138,94,0.1); }
+</style>
+</head>
+<body class="lesen-mode browse-mode"><div class="preview-banner">
+<span>Preview snapshot — </span>
+<span class="preview-date">Captured June 2026</span>
+<span>. Data is real but frozen.</span>
+<a class="preview-request-link" href="/contact">Request live access →</a>
+</div>
+<style id="portal-offset-css">body{padding-top:38px!important;}nav{top:38px!important;}</style>
+<div id="portal-nav-bar" style="
+  position:fixed;top:0;left:0;right:0;z-index:999999;
+  height:38px;background:#12122a;color:#e8e8e8;
+  display:flex;align-items:center;padding:0 16px;gap:0;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:13px;border-bottom:1px solid rgba(255,255,255,0.12);
+  box-shadow:0 1px 8px rgba(0,0,0,0.4);
+">
+<a href="/preview/" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
+<span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
+<a href="/preview/curator/briefing.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;">Curator</a>
+<a href="/preview/german/lesen.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;color:#ffffff;font-weight:600;">German</a>
+<a href="/preview/guild/briefing.html" style="color:#C68A5E;text-decoration:none;">Guild</a>
+<span style="color:rgba(255,255,255,0.45);margin-left:auto;margin-right:12px;">Robert</span>
+<a data-admin-blocked="true" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;; cursor: pointer;">Sign out</a>
+</div>
+<nav>
+<a class="logo" href="/preview/german/lesen.html">Mein Deutsch</a>
+<ul class="nav-links">
+<li><a class="active" href="/preview/german/lesen.html" title="Read">Lesen</a></li>
+<li><a href="/preview/german/gesprache.html" title="Conversations">Gespräche</a></li>
+<li><a href="/preview/german/schreiben.html" title="Write">Schreiben</a></li>
+<li><a href="/preview/german/worter.html" title="Words / Phrasebook">Wörter</a></li>
+<li><a href="/preview/german/archiv.html" title="Archive">Archiv</a></li>
+<li><a data-admin-blocked="true" style="cursor: pointer;" title="Admin">Admin</a></li>
+</ul>
+</nav>
+<main class="page">
+<!-- ── Browse state (hero only — dark) ───────────────────────────────── -->
+<div id="browse-state">
+<!-- HERO POSITION OPTIONS
+       Option A (signage): object-position: 55% 50%
+       Option B (books):   object-position: 55% 68%  ← current
+  -->
+<img alt="Franz Leo &amp; Comp. Buchhandlung Wien" class="hero-img" src="/preview/assets/photos_Bookstore_2.jpg" style="object-position: 55% 68%"/>
+<div class="browse-hero-content">
+<h1>Lesen</h1>
+<p class="subtitle">Wiener Nachrichten — Lokales, Kultur, Sport.</p>
+</div>
+</div>
+<!-- ── Parchment content area ────────────────────────────────────────── -->
+<div class="no-selection" id="lesen-content-area">
+<!-- Day toggle (hidden until a category is selected) -->
+<div class="day-toggle" id="day-toggle" style="display:none">
+<button class="day-btn active" data-day="heute" data-preview-disabled="true">Heute</button>
+<button class="day-btn" data-day="gestern" data-preview-disabled="true">Gestern</button>
+</div>
+<!-- Staleness notice (shown when pool is older than yesterday) -->
+<div class="lesen-stale-notice" id="lesen-stale-notice" style="display:none"></div>
+<!-- Category cards -->
+<div class="lesen-cat-row">
+<div class="lesen-cat-card" data-category="alltag" style="background-image: url('/preview/assets/photos_croissant.jpg');
+                background-position: center 40%;">
+<div class="cat-card-overlay"></div>
+<div class="cat-card-content">
+<span class="cat-emoji">☕</span>
+<span class="cat-name">Alltag</span>
+<span class="cat-sub">Haushalt · Sport · Alltägliches</span>
+</div>
+</div>
+<div class="lesen-cat-card" data-category="kultur" style="background-image: url('/preview/assets/photos_Museum_2.jpg');
+                background-position: center 35%;">
+<div class="cat-card-overlay"></div>
+<div class="cat-card-content">
+<span class="cat-emoji">🎭</span>
+<span class="cat-name">Kultur</span>
+<span class="cat-sub">Musik · Kunst · Theater</span>
+</div>
+</div>
+<div class="lesen-cat-card" data-category="politik" style="background-image: url('/preview/assets/photos_Newspaper.jpg');
+                background-position: center 25%;">
+<div class="cat-card-overlay"></div>
+<div class="cat-card-content">
+<span class="cat-emoji">📰</span>
+<span class="cat-name">Politik</span>
+<span class="cat-sub">Nachrichten · Wirtschaft</span>
+</div>
+</div>
+<div class="lesen-cat-card" data-category="wien" style="background-image: url('/preview/assets/photos_Schnitzel_and_Beer.jpg');
+                background-position: center 45%;">
+<div class="cat-card-overlay"></div>
+<div class="cat-card-content">
+<span class="cat-emoji">🏛️</span>
+<span class="cat-name">Wien</span>
+<span class="cat-sub">Stadt · Bezirke · Lokales</span>
+</div>
+</div>
+</div>
+<!-- Article list (filled by JS on category select) -->
+<div id="lesen-article-list"></div>
+<!-- Empty / refresh state -->
+<div class="strip-empty" id="lesen-empty-state" style="display:none">
+<span class="strip-empty-text">Keine Artikel geladen.</span>
+<button class="strip-action-btn" data-preview-disabled="true" id="btn-artikel-laden" title="Refresh article feed">Artikel laden ↻</button>
+</div>
+</div>
+<!-- ── Reading state ─────────────────────────────────────────────────── -->
+<div class="lesen-state-hidden" id="reading-state">
+<div class="wien-banner">
+<span class="wien-banner-label">[Wien Stadtbild]</span>
+</div>
+<div class="article-bar">
+<button class="article-bar-btn" data-preview-disabled="true" id="btn-back-liste" title="Back to article list">← Liste</button>
+<div class="article-bar-center">
+<button class="article-bar-btn" data-preview-disabled="true" id="btn-art-prev" title="Previous article">‹</button>
+<span class="article-bar-counter" id="art-counter">1 / 1</span>
+<button class="article-bar-btn" data-preview-disabled="true" id="btn-art-next" title="Next article">›</button>
+</div>
+</div>
+<div class="reading-body">
+<div class="reading-article-col">
+<div class="reading-article-scroll">
+<h2 class="reading-headline" id="reading-headline"></h2>
+<div class="reading-byline-row">
+<span class="reading-byline" id="reading-byline"></span>
+<a class="reading-art-open" href="#" id="btn-art-open" rel="noopener" target="_blank">↗ Artikel öffnen</a>
+</div>
+<div class="reading-text selectable-text" id="reading-text"></div>
+<div class="reading-notizen" id="reading-notizen">
+<div class="sidebar-panel-title">Notizen</div>
+<div class="input-with-voice">
+<textarea class="notizen-input" data-preview-disabled="true" disabled="disabled" id="notizen-original" placeholder="Notiz schreiben…" rows="4"></textarea>
+<button class="btn-voice" data-preview-disabled="true" disabled="disabled" id="voice-notizen" title="Spracheingabe — funktioniert am besten in Chrome/Safari">🎤</button>
+</div>
+<div class="notizen-actions">
+<button class="notizen-btn" data-preview-disabled="true" disabled="disabled" id="btn-notizen-correct" title="Get AI grammar correction">Korrektur anfragen</button>
+<span class="notizen-status" id="notizen-status"></span>
+</div>
+<div class="notizen-correction" id="notizen-correction" style="display:none">
+<div class="notizen-correction-label">Korrektur:</div>
+<div class="notizen-correction-text" id="notizen-correction-text"></div>
+<textarea class="notizen-input notizen-rewrite" data-preview-disabled="true" disabled="disabled" id="notizen-rewritten" placeholder="Neu schreiben…" rows="3"></textarea>
+<div class="notizen-actions">
+<button class="notizen-btn notizen-btn-save" data-preview-disabled="true" disabled="disabled" id="btn-notizen-save" title="Save note">Speichern</button>
+</div>
+</div>
+</div>
+</div>
+<div class="reading-footer">
+<button class="reading-footer-btn" data-preview-disabled="true" id="btn-mehr" title="Expand full article text">＋ Mehr</button>
+<button class="reading-footer-btn" data-preview-disabled="true" id="btn-weniger" title="Collapse article text">－ Weniger</button>
+<button class="reading-footer-btn" data-preview-disabled="true" disabled="disabled" id="btn-merken" title="Save article for later">🔖 Merken</button>
+<button class="reading-footer-btn" data-preview-disabled="true" id="btn-vorlesen" title="Artikel vorlesen lassen">🔊 Vorlesen</button>
+</div>
+</div>
+<aside class="reading-sidebar">
+<div class="sidebar-panel sidebar-panel-woerter">
+<div class="sidebar-panel-title">Wörter</div>
+<ul class="woerter-list" id="woerter-list">
+<li class="woerter-empty-hint">Wörter markieren zum Speichern.</li>
+</ul>
+</div>
+</aside>
+</div>
+</div>
+<!-- ── Word capture popover ──────────────────────────────────────────── -->
+<div class="word-popover" id="word-popover" style="display:none">
+<div class="popover-phrase" id="popover-phrase"></div>
+<div class="popover-translation" id="popover-translation">Übersetzung…</div>
+<div class="popover-timing" id="popover-timing"></div>
+<div class="popover-actions">
+<button class="btn-save-phrase" data-preview-disabled="true" disabled="disabled" id="btn-save-phrase" title="Save word or phrase to library">＋ In Bibliothek</button>
+<button class="btn-close-popover" data-preview-disabled="true" id="btn-close-popover" title="Close">✕</button>
+</div>
+</div>
+</main>
+<script>
+(function () {
+  'use strict';
+
+  // ── State ────────────────────────────────────────────────────────────
+  let categoryArticles = [];   // all articles for selected category
+  let filteredArticles = [];   // articles after day filter
+  let currentIdx      = 0;
+  let currentCategory = null;
+  let currentDay      = 'heute';
+  let heuteDate       = null;
+  let gesternDate     = null;
+  let textTruncated   = true;
+  let currentTranslation = '';
+
+  // ── Helpers ──────────────────────────────────────────────────────────
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  async function postJSON(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+
+  // ── State switching ──────────────────────────────────────────────────
+  function enterBrowse() {
+    document.body.classList.remove('reading-mode', 'parch-mode');
+    document.body.classList.add('browse-mode');
+    document.getElementById('browse-state').classList.remove('lesen-state-hidden');
+    document.getElementById('lesen-content-area').classList.remove('lesen-state-hidden');
+    document.getElementById('reading-state').classList.add('lesen-state-hidden');
+  }
+
+  function enterReading(articleId) {
+    const idx = filteredArticles.findIndex(a => a.id === articleId);
+    if (idx === -1) return;
+    currentIdx = idx;
+    document.body.classList.remove('browse-mode', 'parch-mode');
+    document.body.classList.add('reading-mode');
+    document.getElementById('browse-state').classList.add('lesen-state-hidden');
+    document.getElementById('lesen-content-area').classList.add('lesen-state-hidden');
+    document.getElementById('reading-state').classList.remove('lesen-state-hidden');
+    populateArticle(currentIdx);
+    // Push reading state so browser back returns to browse instead of leaving Lesen
+    history.pushState({ lesenMode: 'reading', articleId }, '');
+  }
+
+  // Browser back button: if in reading mode, go to browse — do NOT leave the page
+  window.addEventListener('popstate', e => {
+    if (document.body.classList.contains('reading-mode')) {
+      // Back pressed while reading an article → return to article list
+      enterBrowse();
+    }
+    // If already in browse mode, let the browser navigate away normally
+  });
+
+  // ── Category selection ────────────────────────────────────────────────
+  async function selectCategory(cat) {
+    currentCategory = cat;
+    document.getElementById('lesen-content-area').classList.remove('no-selection');
+
+    // Highlight active card
+    document.querySelectorAll('.lesen-cat-card').forEach(b => {
+      b.classList.toggle('active', b.dataset.category === cat);
+    });
+
+    // Show loading hint
+    const list = document.getElementById('lesen-article-list');
+    list.innerHTML = '<div class="lesen-loading">Wird geladen…</div>';
+    document.getElementById('lesen-empty-state').style.display = 'none';
+
+    try {
+      const res = await fetch(`/app/german/api/lesen-category?category=${encodeURIComponent(cat)}`);
+      const data = await res.json();
+      categoryArticles = data.articles || [];
+    } catch {
+      categoryArticles = [];
+    }
+
+    // Derive heute / gestern from returned articles
+    const allDates = [...new Set(categoryArticles.map(a => a.date_fetched))].sort().reverse();
+    heuteDate   = allDates[0] || null;
+    gesternDate = allDates[1] || null;
+
+    // Show/hide day toggle
+    const dayToggle = document.getElementById('day-toggle');
+    dayToggle.style.display = gesternDate ? '' : 'none';
+
+    applyDayFilter(currentDay);
+
+    // Staleness notice — show if newest article is older than yesterday
+    const staleNotice = document.getElementById('lesen-stale-notice');
+    if (staleNotice) {
+      if (heuteDate) {
+        const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+        if (heuteDate < yesterday) {
+          const days = Math.round((Date.now() - new Date(heuteDate)) / 864e5);
+          staleNotice.textContent = `Letzte Aktualisierung vor ${days} Tag${days === 1 ? '' : 'en'} — tippe auf ↻ um zu aktualisieren`;
+          staleNotice.style.display = '';
+        } else {
+          staleNotice.style.display = 'none';
+        }
+      } else {
+        staleNotice.style.display = 'none';
+      }
+    }
+  }
+
+  // ── Day filter ────────────────────────────────────────────────────────
+  function applyDayFilter(day) {
+    currentDay = day;
+    // Update active day button
+    document.querySelectorAll('.day-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.day === day);
+    });
+
+    const filterDate = day === 'heute' ? heuteDate : gesternDate;
+    filteredArticles = filterDate
+      ? categoryArticles.filter(a => a.date_fetched === filterDate)
+      : categoryArticles;
+
+    renderArticles(filteredArticles);
+  }
+
+  // ── Article row rendering ─────────────────────────────────────────────
+  function renderArticles(list) {
+    const container = document.getElementById('lesen-article-list');
+    const emptyState = document.getElementById('lesen-empty-state');
+    container.innerHTML = '';
+
+    if (list.length === 0) {
+      emptyState.style.display = '';
+      return;
+    }
+    emptyState.style.display = 'none';
+
+    list.forEach(art => {
+      const row = document.createElement('div');
+      row.className = 'lesen-article-row';
+      row.dataset.id = art.id;
+      row.innerHTML =
+        `<span class="lesen-source-tag">${escapeHtml(art.source)}</span>` +
+        `<span class="lesen-dot">·</span>` +
+        `<span class="lesen-headline">${escapeHtml(art.title)}</span>`;
+      row.addEventListener('click', () => enterReading(art.id));
+      container.appendChild(row);
+    });
+  }
+
+  // ── Article population (reading view) ────────────────────────────────
+  function populateArticle(idx) {
+    const art = filteredArticles[idx];
+    if (!art) return;
+    document.getElementById('reading-headline').textContent = art.title || '';
+    document.getElementById('reading-byline').textContent =
+      [art.source, art.date_fetched].filter(Boolean).join(' · ');
+    document.getElementById('reading-text').textContent = art.summary || '';
+    document.getElementById('art-counter').textContent =
+      `${idx + 1} / ${filteredArticles.length}`;
+    const openLink = document.getElementById('btn-art-open');
+    openLink.href = art.url || '#';
+    textTruncated = true;
+    applyTruncation();
+    const btnM = document.getElementById('btn-merken');
+    btnM.textContent = '🔖 Merken';
+    btnM.disabled = false;
+    document.getElementById('woerter-list').innerHTML =
+      '<li class="woerter-empty-hint">Wörter markieren zum Speichern.</li>';
+  }
+
+  function applyTruncation() {
+    const el = document.getElementById('reading-text');
+    el.classList.toggle('text-truncated', textTruncated);
+  }
+
+  // ── Category cards ────────────────────────────────────────────────────
+  document.querySelectorAll('.lesen-cat-card').forEach(btn => {
+    btn.addEventListener('click', () => selectCategory(btn.dataset.category));
+  });
+
+  // ── Day toggle ────────────────────────────────────────────────────────
+  document.querySelectorAll('.day-btn').forEach(btn => {
+    btn.addEventListener('click', () => applyDayFilter(btn.dataset.day));
+  });
+
+  // ── Reading navigation ────────────────────────────────────────────────
+  document.getElementById('btn-back-liste').addEventListener('click', enterBrowse);
+
+  document.getElementById('btn-art-prev').addEventListener('click', () => {
+    if (currentIdx > 0) enterReading(filteredArticles[currentIdx - 1].id);
+  });
+
+  document.getElementById('btn-art-next').addEventListener('click', () => {
+    if (currentIdx < filteredArticles.length - 1) enterReading(filteredArticles[currentIdx + 1].id);
+  });
+
+  // ── Text truncation ───────────────────────────────────────────────────
+  document.getElementById('btn-mehr').addEventListener('click', () => {
+    textTruncated = false;
+    applyTruncation();
+  });
+
+  document.getElementById('btn-weniger').addEventListener('click', () => {
+    textTruncated = true;
+    applyTruncation();
+    const scroll = document.querySelector('.reading-article-scroll');
+    if (scroll) scroll.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  // ── Merken (reading view) ─────────────────────────────────────────────
+  document.getElementById('btn-merken').addEventListener('click', async function () {
+    const art = filteredArticles[currentIdx];
+    if (!art) return;
+    await postJSON('/app/german/api/lesen-action', { article_id: art.id, action: 'pin' });
+    this.textContent = '🔖 Gemerkt';
+    this.disabled = true;
+  });
+
+  // ── Refresh feed ──────────────────────────────────────────────────────
+  const btnLaden = document.getElementById('btn-artikel-laden');
+  if (btnLaden) {
+    btnLaden.addEventListener('click', async () => {
+      btnLaden.textContent = 'Laden…';
+      btnLaden.disabled = true;
+      try {
+        await postJSON('/app/german/api/lesen-refresh', {});
+        if (currentCategory) selectCategory(currentCategory);
+        else { btnLaden.textContent = 'Artikel laden ↻'; btnLaden.disabled = false; }
+      } catch {
+        btnLaden.textContent = 'Fehler — neu versuchen';
+        btnLaden.disabled = false;
+      }
+    });
+  }
+
+  // ── Word capture ──────────────────────────────────────────────────────
+  const popover    = document.getElementById('word-popover');
+  const popPhrase  = document.getElementById('popover-phrase');
+  const popTrans   = document.getElementById('popover-translation');
+  const popTiming  = document.getElementById('popover-timing');
+  const btnSave    = document.getElementById('btn-save-phrase');
+  const btnClose   = document.getElementById('btn-close-popover');
+  const translationCache = new Map();
+  let currentPhrase = '';
+
+  let selectionTimer = null;
+  document.getElementById('reading-text').addEventListener('mouseup', () => {
+    clearTimeout(selectionTimer);
+    selectionTimer = setTimeout(handleSelection, 300);
+  });
+
+  document.addEventListener('mousedown', e => {
+    if (!popover.contains(e.target)) hidePopover();
+  });
+
+  btnClose.addEventListener('click', hidePopover);
+
+  // ── Draggable popover ─────────────────────────────────────────────
+  let _popDrag = null;
+
+  popover.addEventListener('mousedown', e => {
+    if (e.target.closest('button, a')) return;   // don't intercept action buttons
+    e.preventDefault();                           // prevent text selection during drag
+    _popDrag = {
+      startX:   e.clientX,
+      startY:   e.clientY,
+      origTop:  parseInt(popover.style.top,  10) || 0,
+      origLeft: parseInt(popover.style.left, 10) || 0,
+    };
+    popover.style.cursor = 'grabbing';
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!_popDrag) return;
+    const top  = _popDrag.origTop  + (e.clientY - _popDrag.startY);
+    const left = _popDrag.origLeft + (e.clientX - _popDrag.startX);
+    popover.style.top  = Math.max(4, top)  + 'px';
+    popover.style.left = Math.max(4, left) + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (_popDrag) { _popDrag = null; popover.style.cursor = ''; }
+  });
+
+  function handleSelection() {
+    const sel = window.getSelection();
+    const phrase = sel ? sel.toString().trim() : '';
+    if (!phrase || phrase.length < 2 || phrase.length > 300) return;
+    const range = sel.getRangeAt(0);
+    const before = range.startContainer.textContent[range.startOffset - 1];
+    const after  = range.endContainer.textContent[range.endOffset];
+    if ((before && /\w/.test(before)) || (after && /\w/.test(after))) return;
+    currentPhrase = phrase;
+    currentTranslation = '';
+    const rect = range.getBoundingClientRect();
+    popPhrase.textContent = phrase;
+    popTrans.textContent = 'Übersetzung…';
+    popTiming.textContent = '';
+    btnSave.disabled = true;
+    btnSave.textContent = '＋ In Bibliothek';
+    showPopover(rect);
+    fetchTranslation(phrase);
+  }
+
+  async function fetchTranslation(phrase) {
+    const key = phrase.toLowerCase().trim();
+    if (translationCache.has(key)) {
+      currentTranslation = translationCache.get(key);
+      popTrans.textContent = currentTranslation || '(keine Übersetzung)';
+      popTiming.textContent = 'cache';
+      btnSave.disabled = !currentTranslation;
+      return;
+    }
+    const t0 = performance.now();
+    try {
+      const data = await postJSON('/app/german/api/translate', { phrase });
+      const roundTrip = Math.round(performance.now() - t0);
+      currentTranslation = data.translation || '';
+      translationCache.set(key, currentTranslation);
+      popTrans.textContent = currentTranslation || '(keine Übersetzung)';
+      btnSave.disabled = !currentTranslation;
+      const t = data.timing || {};
+      const parts = [`${roundTrip}ms`];
+      if (t.deepl_ms) parts.push(`DeepL ${t.deepl_ms}ms`);
+      else if (t.llm_ms) parts.push(`LLM ${t.llm_ms}ms`);
+      if (t.total_ms) parts.push(`server ${t.total_ms}ms`);
+      popTiming.textContent = parts.join(' · ');
+    } catch {
+      popTrans.textContent = '(Fehler)';
+      popTiming.textContent = '';
+    }
+  }
+
+  function showPopover(rect) {
+    popover.style.display = 'block';
+    const top  = rect.bottom + window.scrollY + 8;
+    const left = Math.min(rect.left, window.innerWidth - 280);
+    popover.style.top  = Math.max(8, top) + 'px';
+    popover.style.left = Math.max(8, left) + 'px';
+  }
+
+  function hidePopover() {
+    popover.style.display = 'none';
+    currentPhrase = '';
+    currentTranslation = '';
+  }
+
+  btnSave.addEventListener('click', async () => {
+    if (!currentPhrase || !currentTranslation) return;
+    const art = filteredArticles[currentIdx];
+    const contextEl = document.getElementById('reading-text');
+    const contextSentence = contextEl ? contextEl.textContent.slice(0, 200) : '';
+    btnSave.textContent = 'Speichern…';
+    btnSave.disabled = true;
+    try {
+      await postJSON('/app/german/api/save-phrase', {
+        german: currentPhrase,
+        english: currentTranslation,
+        context_sentence: contextSentence,
+        article_title: art ? art.title : '',
+      });
+      const list = document.getElementById('woerter-list');
+      const empty = list.querySelector('.woerter-empty-hint');
+      if (empty) empty.remove();
+      const li = document.createElement('li');
+      li.className = 'woerter-item';
+      li.textContent = `${currentPhrase} — ${currentTranslation}`;
+      list.prepend(li);
+      btnSave.textContent = '✓ Gespeichert';
+      setTimeout(hidePopover, 700);
+    } catch {
+      btnSave.textContent = 'Fehler';
+      btnSave.disabled = false;
+    }
+  });
+
+  // ── Notizen flow ──────────────────────────────────────────────────────
+  const btnNotizenCorrect = document.getElementById('btn-notizen-correct');
+  const btnNotizenSave    = document.getElementById('btn-notizen-save');
+  const notizenStatus     = document.getElementById('notizen-status');
+  const notizenCorrection = document.getElementById('notizen-correction');
+  const notizenCorrText   = document.getElementById('notizen-correction-text');
+  let notizenCorrected    = '';
+
+  if (btnNotizenCorrect) {
+    btnNotizenCorrect.addEventListener('click', async () => {
+      const text = document.getElementById('notizen-original').value.trim();
+      if (!text) return;
+      btnNotizenCorrect.disabled = true;
+      notizenStatus.textContent = 'Korrektur läuft…';
+      try {
+        const data = await postJSON('/app/german/api/write-correct', { text, context: '' });
+        notizenCorrected = data.corrected || text;
+        notizenCorrText.textContent = notizenCorrected;
+        notizenCorrection.style.display = 'block';
+        notizenStatus.textContent = '';
+      } catch {
+        notizenStatus.textContent = 'Fehler';
+      }
+      btnNotizenCorrect.disabled = false;
+    });
+  }
+
+  if (btnNotizenSave) {
+    btnNotizenSave.addEventListener('click', async () => {
+      const original  = document.getElementById('notizen-original').value.trim();
+      const rewritten = document.getElementById('notizen-rewritten').value.trim();
+      const art = filteredArticles[currentIdx];
+      btnNotizenSave.disabled = true;
+      btnNotizenSave.textContent = 'Speichern…';
+      try {
+        await postJSON('/app/german/api/note-save', {
+          article_id:    art ? art.id    : '',
+          article_title: art ? art.title : '',
+          original,
+          corrected:  notizenCorrected,
+          rewritten,
+        });
+        btnNotizenSave.textContent = '✓ Gespeichert';
+        setTimeout(() => {
+          document.getElementById('notizen-original').value  = '';
+          document.getElementById('notizen-rewritten').value = '';
+          notizenCorrection.style.display = 'none';
+          notizenCorrected = '';
+          btnNotizenSave.textContent = 'Speichern';
+          btnNotizenSave.disabled = false;
+          if (btnNotizenCorrect) btnNotizenCorrect.disabled = false;
+        }, 1200);
+      } catch {
+        btnNotizenSave.textContent = 'Fehler';
+        btnNotizenSave.disabled = false;
+      }
+    });
+  }
+
+  // ── Voice input on Notizen ────────────────────────────────────────────
+  (function () {
+    const btn = document.getElementById('voice-notizen');
+    const textarea = document.getElementById('notizen-original');
+    if (!btn || !textarea) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { btn.style.display = 'none'; return; }
+    let recognition = null;
+    btn.addEventListener('click', () => {
+      if (recognition) { recognition.stop(); recognition = null; btn.textContent = '🎤'; return; }
+      recognition = new SR();
+      recognition.lang = 'de-DE';
+      recognition.interimResults = false;
+      recognition.onresult = e => {
+        textarea.value += (textarea.value ? ' ' : '') + e.results[0][0].transcript;
+      };
+      recognition.onend = () => {
+        recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening');
+      };
+      recognition.onerror = () => {
+        recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening');
+      };
+      recognition.onstart = () => { btn.textContent = '⏹'; btn.classList.add('listening'); };
+      recognition.start();
+    });
+  })();
+
+  // ── Vorlesen ──────────────────────────────────────────────────────────
+  document.getElementById('btn-vorlesen').addEventListener('click', () => {
+    const text = document.getElementById('reading-text').textContent.trim();
+    if (!text || !window.speechSynthesis) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'de-DE'; u.rate = 0.9;
+    window.speechSynthesis.speak(u);
+  });
+
+  // ── Init ──────────────────────────────────────────────────────────────
+  enterBrowse();
+
+})();
+</script>
+
+<style id="preview-modal-style">
+.preview-modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
+}
+.preview-modal-overlay.active { display: flex; }
+.preview-modal {
+  background: #2a1f14; border: 1px solid rgba(198,138,94,0.4);
+  border-radius: 8px; padding: 28px 32px; max-width: 380px; width: 90%;
+  color: #F5F0E8; font-family: 'Source Sans 3', system-ui, sans-serif;
+}
+.preview-modal h3 {
+  font-size: 14px; font-weight: 600; margin: 0 0 12px;
+  color: #C68A5E !important; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.preview-modal p { font-size: 13px; color: rgba(245,240,232,0.75); line-height: 1.6; margin: 0 0 20px; }
+.preview-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.preview-modal-btn {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(198,138,94,0.5); background: transparent; color: #C68A5E;
+  text-decoration: none; display: inline-block;
+}
+.preview-modal-btn:hover { background: rgba(198,138,94,0.15); }
+.preview-modal-close {
+  font-size: 12px; padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(245,240,232,0.2); background: transparent;
+  color: rgba(245,240,232,0.6);
+}
+.preview-modal-close:hover { border-color: rgba(245,240,232,0.4); color: #F5F0E8; }
+</style>
+<div class="preview-modal-overlay" id="previewModal">
+<div class="preview-modal">
+<h3>Not available in preview</h3>
+<div class="preview-modal-actions">
+<a class="preview-modal-btn" href="/contact">Request access →</a>
+<button class="preview-modal-close" onclick="document.getElementById('previewModal').classList.remove('active')">Close</button>
+</div>
+</div>
+</div>
+<script id="preview-modal-script">
+(function() {
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('[data-admin-blocked]');
+    if (el) { e.preventDefault(); e.stopPropagation(); document.getElementById('previewModal').classList.add('active'); }
+  });
+  document.getElementById('previewModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+})();
+</script>
+<script id="preview-lesen-data">
+window._previewLesenData = {"alltag": [{"category": "alltag", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_vie_00", "source": "Vienna.at", "status": "active", "summary": "Am 21. Mai fuhr eine gut gelaunte Runde von 42 SeniorenInnen von Vorarlberg 50plus Hard in das benachbarte Appenzell zum „Hohen Hirschberg“.", "title": "Ausflug ins Appenzell", "url": "https://www.vienna.at/ausflug-ins-appenzell/10243376"}, {"category": "alltag", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_orf_00", "source": "ORF Sport", "status": "active", "summary": "Ospelt löst Eliasch als FIS-Präsident ab", "title": "Ospelt löst Eliasch als FIS-Präsident ab", "url": "https://sport.orf.at/stories/3156915/"}, {"category": "alltag", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_orf_01", "source": "ORF Sport", "status": "active", "summary": "College-Student erzielt neuen Hürdenweltrekord", "title": "College-Student erzielt neuen Hürdenweltrekord", "url": "https://sport.orf.at/stories/3156911/"}, {"category": "alltag", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_orf_02", "source": "ORF Sport", "status": "active", "summary": "Es ist so weit: Am Donnerstag (ab 19.00 Uhr, live in ORF1, Anpfiff um 21.00 Uhr) startet die 23. Fußballweltmeisterschaft mit dem Duell zwischen Kogastgeber Mexiko und Südafrika. Noch nie gab es so viele Ausrichter (drei) und vor allem so viele Mannschaften (48). Nach 28 Jahren wieder mittendrin: Österreich. Die Mannschaft von Teamchef Ralf Rangnick will wie vor zwei Jahren bei der EM in Deutschland erneut positiv überraschen. Favoriten sind freilich andere. Klar ist: Beim XXL-Event geht es auch um Geld, Show und US-Präsident Donald Trump.", "title": "XXL-Endrunde mit Österreichs Comeback", "url": "https://sport.orf.at/stories/3156823/"}, {"category": "alltag", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_orf_03", "source": "ORF Sport", "status": "active", "summary": "Nüßle startet stark in zweite Profisaison", "title": "Nüßle startet stark in zweite Profisaison", "url": "https://sport.orf.at/stories/3156908/"}, {"category": "alltag", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_orf_04", "source": "ORF Sport", "status": "active", "summary": "Den New York Knicks fehlt nur noch ein Sieg zum Ende ihrer 53-jährigen Titeldurststrecke in der National Basketball Association (NBA). Die „Knickerbocker“ setzten sich am Mittwoch (Ortszeit) im vierten Spiel der Finalserie gegen die San Antonio Spurs daheim mit 107:106 durch und stellten damit im „Best-of-seven“ auf 3:1. New York benötigte allerdings eine Rekordnacht, um den Ausgleich in der Serie zu verhindern.", "title": "Rekordnacht bringt Knicks Titel ganz nah", "url": "https://sport.orf.at/stories/3156904/"}, {"category": "alltag", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_orf_05", "source": "ORF Sport", "status": "active", "summary": "Algerien stimmt sich mit Schützenfest ein", "title": "Algerien stimmt sich mit Schützenfest ein", "url": "https://sport.orf.at/stories/3156905/"}, {"category": "alltag", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_01", "source": "ORF Wien", "status": "active", "summary": "Der Vatertag gewinnt nicht nur in den Familien immer mehr an Bedeutung, er wird auch für den Handel immer wichtiger. Allein in Wien erwartet die Wirtschaftskammer 45 Millionen Euro Gesamtausgaben, wie aus einer aktuellen Studie hervorgeht.", "title": "Väter und Handel freuen sich auf Vatertag", "url": "https://wien.orf.at/stories/3358093/"}, {"category": "alltag", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_vie_02", "source": "Vienna.at", "status": "active", "summary": "Jubilare Lochau und Admira Dornbirn kämpfen um die Westliga-Teilnahme.", "title": "LIVE! Jubilar Lochau vor historischem Coup: Aufstieg liegt in eigener Hand", "url": "https://www.vienna.at/live-jubilar-lochau-vor-historischem-coup-aufstieg-liegt-in-eigener-hand/10246457"}, {"category": "alltag", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_00", "source": "ORF Sport", "status": "active", "summary": "WM-Eröffnungsspiel in Mexiko als Quotenhit", "title": "WM-Eröffnungsspiel in Mexiko als Quotenhit", "url": "https://sport.orf.at/stories/3156990/"}, {"category": "alltag", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_01", "source": "ORF Sport", "status": "active", "summary": "Salzburg holt Verteidiger Schmid aus Basel", "title": "Salzburg holt Verteidiger Schmid aus Basel", "url": "https://sport.orf.at/stories/3156989/"}, {"category": "alltag", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_02", "source": "ORF Sport", "status": "active", "summary": "Auf die heimischen 3x3-Basketballer wartet an diesem Wochenende beim Heimspiel in Wien das nächste Highlight. Nur wenige Tage nach Rang sieben bei der Männer-WM in Warschau rechnet sich das Team Vienna mit den beiden Nationalspielern Toni Blazan und Quincy Diggs sowie Stefan Stojacic und Steven Kaltenbrunner beim World-Tour-Event gute Chancen aus. Auch die heimischen Frauen wollen auf dem Heumarkt glänzen.", "title": "3x3-Asse wollen bei Heimspiel glänzen", "url": "https://sport.orf.at/stories/3156930/"}, {"category": "alltag", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_03", "source": "ORF Sport", "status": "active", "summary": "Die 23. Weltmeisterschaft der Geschichte hat zumindest einmal für einen der drei Gastgeber perfekt begonnen. Mexiko holte am Donnerstag in einer turbulenten Eröffnungspartie im Aztekenstadion einen 2:0-Erfolg über Südafrika und darf damit bereits Richtung K.-o.-Runde schielen. Das Spiel war geprägt von vielen Emotionen, speziell rund um den Torschützen Raul Jimenez, aber auch von lautstarken Protesten vor dem Stadion und im Zentrum von Mexiko-Stadt.", "title": "Emotionaler Start im Schatten des Protests", "url": "https://sport.orf.at/stories/3156985/"}, {"category": "alltag", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_04", "source": "ORF Sport", "status": "active", "summary": "Adamu wechselt zu Aufsteiger Schalke 04", "title": "Adamu wechselt zu Aufsteiger Schalke 04", "url": "https://sport.orf.at/stories/3156988/"}, {"category": "alltag", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_05", "source": "ORF Sport", "status": "active", "summary": "Australien verlängert Vertrag mit Teamchef Popovic", "title": "Australien verlängert Vertrag mit Teamchef Popovic", "url": "https://sport.orf.at/stories/3156987/"}, {"category": "alltag", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_wie_00", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Die Caritas Schulen Wolfsberg starten mit dem kommenden Schuljahr an einem neuen Standort: Ab Schulbeginn findet der Unterricht in der Spanheimerstraße 20, 9400 Wolfsberg, statt. Die Umbauarbeiten haben bereits begonnen, die Übersiedlung erfolgt in den Sommerferien. Damit ist der Schulstandort in Wolfsberg langfristig gesichert. WOLFSBERG. Ab kommenden Schuljahr werden die Caritas Schulen Wolfsberg an einen neuen Standort stehen. \"Mit dem neuen Standort schaffen wir gute Rahmenbedingungen für...", "title": "Caritas Schulen Wolfsberg übersiedeln", "url": "https://www.meinbezirk.at/lavanttal/c-lokales/caritas-schulen-wolfsberg-uebersiedeln_a8688986"}, {"category": "alltag", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_wie_02", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Cineplexx Donau Zentrum, Linz und Salzburg übertragt als Public-Viewing-Event etwa den WM-Auftakt des ÖFB-Teams gegen Jordanien am 17. Juni, den Kracher gegen Argentinien am 22. Juni sowie das Finale. MeinBezirk verlost dazu 3x2 Tickets. ÖSTERREICH. Langsam, aber sicher sind wir alle im rot-weiß-roten WM-Fieber! Die Fußball-Weltmeisterschaft in den USA, Mexiko und Kanada startete am 11. Juni, für die ÖFB-Auswahl von Ralf Rangnick fängt das Abenteuer erst am frühen Morgen des 17. Juni unserer...", "title": "Mit MeinBezirk drei Fußball-WM-Kracher live im Kino verfolgen", "url": "https://www.meinbezirk.at/c-sport/mit-meinbezirk-drei-fussball-wm-kracher-live-im-kino-verfolgen_a8688854"}, {"category": "alltag", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_wie_04", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Mit 15. Juni starten in Österreich die sogenannten \"TikTok-Shops\". Wie sehen das Villachs Unternehmer? VILLACH/ÖSTERREICH. Ab dem 15. Juni können Nutzer in Österreich direkt über TikTok einkaufen. Mit dem Start von TikTok Shop erweitert die Social-Media-Plattform ihr Geschäftsmodell und will auch heimische Unternehmen für den Verkauf über Videos und Livestreams gewinnen. TikTok Shop ermöglicht es, Produkte direkt aus Videos, Livestreams oder über spezielle Shop-Bereiche in der App zu kaufen....", "title": "\"Regional einkaufen finde ich immer besser\"", "url": "https://www.meinbezirk.at/villach/c-wirtschaft/regional-einkaufen-finde-ich-immer-besser_a8680029"}, {"category": "alltag", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_wie_05", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Zum 34. Mal findet der Alpe Adria Segelflug Cup heuer statt. Zum 30. Mal ist der Flugplatz in Rabensdorf Start- und Landeplatz. RABENSDORF. Wenn der Juni ins Land zieht, dann zieht es Segelflugzeug-Piloten nach Feldkirchen. Der Flugplatz des Flugsportvereins Feldkirchen-Ossiacher See in Rabensdorf ist Start- und Landeplatz für die Segelflieger. Teilnehmer aus sieben Nationen\"Heuer wird der Alpe Adria Segelflug Cup bereits zum 30. Mal ausschließlich in Feldkirchen ausgetragen. 45 Teilnehmer aus...", "title": "45 tollkühne Piloten sind bereit zum Abheben", "url": "https://www.meinbezirk.at/feldkirchen/c-sport/45-tollkuehne-piloten-sind-bereit-zum-abheben_a8669090"}, {"category": "alltag", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_vie_03", "source": "Vienna.at", "status": "active", "summary": "Nach Rang sechs im Europacup kehren die Dornbirn Indians in den Bundesligaalltag zurück. Am Samstag wartet auf die Messestädter mit dem Spiel gegen die Hard Bulls das traditionsreiche Derby, zudem stehen mehrere personelle Veränderungen im Kader an.", "title": "Europacup vorbei, Derby wartet", "url": "https://www.vienna.at/europacup-vorbei-derby-wartet/10247621"}, {"category": "alltag", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_00", "source": "ORF Sport", "status": "active", "summary": "Schweiz klarer Favorit im Duell mit Katar", "title": "Schweiz klarer Favorit im Duell mit Katar", "url": "https://sport.orf.at/stories/3157008/"}, {"category": "alltag", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_01", "source": "ORF Sport", "status": "active", "summary": "Christoph Baumgartners Karriere im ÖFB-Team ist kapitelreich: Von der „Sohle von Bukarest“ (Tor zum Aufstieg bei der EM 2021, Anm.) über das Weltrekordtor in Bratislava (6,3 Sekunden, 2024) bis hin zu den bitteren Tränen von Leipzig (Achtelfinal-Aus bei der EM 2024) war viel dabei. Negativer Höhepunkt ist nun aber eine Muskelverletzung, die ihm die WM-Teilnahme kostete. Nach dem „Wahnsinnsschock“ blickte Baumgartner bald nach vorne, reiste zum Team in die USA – und schlüpft als Energie- und Ratgeber für Spieler und Trainer in eine neue Rolle.", "title": "Baumgartner schlüpft in neue Rolle", "url": "https://sport.orf.at/stories/3157056/"}, {"category": "alltag", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_02", "source": "ORF Sport", "status": "active", "summary": "WAC verstärkt sich mit Schabauer von Admira", "title": "WAC verstärkt sich mit Schabauer von Admira", "url": "https://sport.orf.at/stories/3157061/"}, {"category": "alltag", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_03", "source": "ORF Sport", "status": "active", "summary": "Haareziehen in England nicht mehr automatisch Rot", "title": "Haareziehen in England nicht mehr automatisch Rot", "url": "https://sport.orf.at/stories/3157060/"}, {"category": "alltag", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_04", "source": "ORF Sport", "status": "active", "summary": "VAR nutzt bei US-Sieg erstmals neue Befugnisse", "title": "VAR nutzt bei US-Sieg erstmals neue Befugnisse", "url": "https://sport.orf.at/stories/3157059/"}, {"category": "alltag", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_05", "source": "ORF Sport", "status": "active", "summary": "Die USA sind am Freitag (Ortszeit) mit einem klaren 4:1-Sieg gegen Paraguay ins WM-Turnier im eigenen Land gestartet. Im Los Angeles Stadium in Inglewood führten die Gastgeber nach einer einseitigen Hälfte durch Tore von Damian Bobadilla (7./Eigentor) und Folarin Balogun (31./45.+5) bereits mit 3:0. Nach der Pause betrieb Mauricio (73.)  Ergebniskosmetik, ehe der eingewechselte Giovanni Reyna noch sehenswert den Endstand erzielte (90.+8). Damit feierten die USA erstmals seit 96 Jahren wieder einen WM-Sieg mit drei Toren Differenz.", "title": "Perfekter Start für USA ins Heimturnier", "url": "https://sport.orf.at/stories/3157057/"}, {"category": "alltag", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_wie_00", "source": "Wiener Bezirksblätter", "status": "active", "summary": "10 Jahre K & K Küchen – das musste gefeiert werden. Am Standort in St. Veit ging es dieses Wochenende heiß her bei der großen Geburtstagsparty. Rund 1000 Gäste stürmten das Festzelt. ST. VEIT. Vor zehn Jahren gründeten Paul Kral und Gernot Kokal die K & K Küchen und Wohnkonzept GmbH – ein Anlass, der nun mit einer großen Feier gewürdigt wurde. Rund 1.000 Kundinnen und Kunden sowie Geschäftspartner folgten der Einladung zum Firmenjubiläum. Vom Küchenstudio zum Anbieter für Wohnlösungen Was einst...", "title": "Küchenprofi feierte 10 Jahre Jubiläum", "url": "https://www.meinbezirk.at/st-veit/c-leute/kuechenprofi-feierte-10-jahre-jubilaeum_a8689754"}, {"category": "alltag", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_wie_02", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Der RZ Pellets WAC freut sich über den Neuzugang eines jungen Mittelfledspielers und die Vertragsverlängerung  ihres Eigenbautorhüters.   Die Wölfe verpflichten den offensiven Mittelfeldspieler Marco Schabauer von Admira Wacker. Der 20-jährige Niederösterreicher begann seine fußballerische Laufbahn in der Jugend des SC Aspang, bevor es über den USV Scheiblingkirchen-Warth in die Akademie St. Pölten NÖ ging. Nach einem Jahr bei der zweiten Mannschaft des LASK wurde er an Admira Wacker verliehen,...", "title": "Marco Schabauer, David Skubl und Giacomo Vrioni unterschrieben beim WAC", "url": "https://www.meinbezirk.at/villach-land/c-sport/marco-schabauer-david-skubl-und-giacomo-vrioni-unterschrieben-beim-wac_a8690009"}, {"category": "alltag", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_wie_04", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Grund zur Freude beim SC Stadtwerke Bruck 1921; nach einer erfolgreichen Saison wurde der Klassenerhalt gemeistert.  BRUCK AN DER MUR. Nachdem der SC Stadtwerke Bruck 1921 den Wiederaufstieg in die steirische Landesliga schaffte, setzte man sich als Ziel, den Klassenerhalt zu sichern. Dies gelang der Mannschaft rund um Cheftrainer Dragan Jovic in der Saison 2025/26 souverän. Mit dem Erreichen des zehnten Tabellenplatz wurden diese sportlichen Erwartungen mehr als erfüllt.  Ein besonderer Dank...", "title": "Klassenerhalt, Trainerwechsel und Sponsoren-News", "url": "https://www.meinbezirk.at/bruck-an-der-mur/c-sport/klassenerhalt-trainerwechsel-und-sponsoren-news_a8689178"}, {"category": "alltag", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_vie_03", "source": "Vienna.at", "status": "active", "summary": "Erfolgreiche 2. Gürtelprüfung der Saison 2025/2026 am Samstag 13. Juni 2026.", "title": "Taekwondo Gürtelprüfung", "url": "https://www.vienna.at/taekwondo-guertelpruefung-8/10248902"}, {"category": "alltag", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_00", "source": "ORF Sport", "status": "active", "summary": "Teamchef Ralf Rangnick hat drei Tage vor dem Auftaktspiel der österreichischen Nationalmannschaft bei der Fußball-WM seinen Vertrag beim ÖFB verlängert. Der 67-jährige Deutsche sprach am Samstag in Santa Barbara von der „richtigen Entscheidung“. Ausschlaggebend neben finanziellen Aspekten sei vor allem die Zukunft und Zufriedenheit seines Trainerteams gewesen.", "title": "Verbleib für Rangnick ‚richtige Entscheidung‘", "url": "https://sport.orf.at/stories/3157105/"}, {"category": "alltag", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_01", "source": "ORF Sport", "status": "active", "summary": "Der dritte Tag der 23. Weltmeisterschaft in Nordamerika hat am Samstag mit einer kleinen Überraschung geendet. Australien wies in Gruppe D in Vancouver die Türkei mit 2:0 (1:0) in die Schranken und machte damit den ersten großen Schritt in die K.-o.-Runde. Nestory Irankunda und Connor Metcalfe sorgten für einen Traumstart aus Sicht der „Socceroos“.", "title": "Australien weist Türkei in die Schranken", "url": "https://sport.orf.at/stories/3157132/"}, {"category": "alltag", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_02", "source": "ORF Sport", "status": "active", "summary": "Medien: Deutscher Röhl wird Salzburg-Coach", "title": "Medien: Deutscher Röhl wird Salzburg-Coach", "url": "https://sport.orf.at/stories/3157131/"}, {"category": "alltag", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_03", "source": "ORF Sport", "status": "active", "summary": "Der Meister der National Basketball Association (NBA) heißt erstmals seit über fünf Jahrzehnten wieder New York Knicks. Das Team aus dem „Big Apple“ gewann am Samstagabend (Ortszeit) das fünfte Spiel der Finalserie bei den San Antonio Spurs mit 94:90 und entschied damit das „Best of seven“ mit 4:1 für sich. Damit kehrten die Knicks nach 53 Jahren Titelflaute wieder auf den Thron zurück.", "title": "Knicks beenden 53 Jahre Titelflaute", "url": "https://sport.orf.at/stories/3157130/"}, {"category": "alltag", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_04", "source": "ORF Sport", "status": "active", "summary": "NY Knicks sind neuer NBA-Champion", "title": "NY Knicks sind neuer NBA-Champion", "url": "https://sport.orf.at/stories/3157129/"}, {"category": "alltag", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_05", "source": "ORF Sport", "status": "active", "summary": "Schottland hat bei der WM in Nordamerika einen wichtigen Schritt zum erstmaligen Aufstieg in eine K.-o.-Runde bei einem großen Turnier geschafft. Die Schotten setzten sich am Samstag (Ortszeit) in Foxborough gegen Außenseiter Haiti mit 1:0 (1:0) durch und übernahmen damit nach dem ersten Spieltag die Führung in Gruppe C. John McGinn wurde vor den Toren Bostons zum Matchwinner.", "title": "Schottland hat Haiti knapp im Griff", "url": "https://sport.orf.at/stories/3157124/"}, {"category": "alltag", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_wie_00", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Triathlon-Fieber in Kärnten: Beim 27. IRONMAN Kärnten-Klagenfurt, Austria kämpfen am heutigen Sonntag mehr als 3.000 Athletinnen und Athleten aus über 70 Nationen um den Sieg und persönliche Bestleistungen. MeinBezirk berichtet im Liveticker direkt von der Strecke und hält euch den ganzen Tag über auf dem Laufenden. KLAGENFURT. Bereits in den frühen Morgenstunden herrscht rund um das Strandbad Klagenfurt Ausnahmezustand. Tausende Athletinnen und Athleten, Betreuer sowie Zuschauer bereiten sich...", "title": "Laufende Informationen zum Ironman Austria 2026", "url": "https://www.meinbezirk.at/klagenfurt/c-sport/laufende-informationen-zum-ironman-austria-2026_a8681292"}, {"category": "alltag", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_wie_02", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Im Rahmen der österreichweiten Initiative „Herz am Herd“ machten zwei Tiroler Kochprofis bei der Team Österreich Tafel in Innsbruck gemeinsame Sache für den guten Zweck. Sternekoch Hannes Nuding und Lehrlingsstaatsmeisterin Anna Lea Hausberger bereiteten für Menschen, die auf Lebensmittelhilfe angewiesen sind, eine vegetarische Tiroler Variante des Erdäpfelgulaschs zu. INNSBRUCK. Die österreichweite Cooking Roadshow „Herz am Herd“ des Roten Kreuzes machte am 13. Juni Halt in Innsbruck. Für...", "title": "Spitzenköche kochen für die Team Österreich Tafel in Innsbruck", "url": "https://www.meinbezirk.at/innsbruck/c-lokales/spitzenkoeche-kochen-fuer-die-team-oesterreich-tafel-in-innsbruck_a8690633"}, {"category": "alltag", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_orf_03", "source": "ORF Wien", "status": "active", "summary": "„Danke, dass du auf meine Mama/meinen Papa aufpasst“: ASFINAG und ÖAMTC starten eine Offensive für einen sichereren „Arbeitsplatz Straße“, Botschafter sind die Kinder der Mitarbeitenden. Neben der Bewusstseinsbildung soll ein KI-basiertes System das Arbeiten unter Verkehr sicherer machen.", "title": "„Arbeitsplatz Straße“ soll sicherer werden", "url": "https://wien.orf.at/stories/3358520/"}, {"category": "alltag", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_orf_00", "source": "ORF Sport", "status": "active", "summary": "Tunesiens Trainer nach Auftaktpleite vor Rauswurf", "title": "Tunesiens Trainer nach Auftaktpleite vor Rauswurf", "url": "https://sport.orf.at/stories/3157257/"}, {"category": "alltag", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_orf_01", "source": "ORF Sport", "status": "active", "summary": "Potapova muss in erster Berlin-Runde aufgeben", "title": "Potapova muss in erster Berlin-Runde aufgeben", "url": "https://sport.orf.at/stories/3157254/"}, {"category": "alltag", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_orf_02", "source": "ORF Sport", "status": "active", "summary": "Während die Belgier bei vergangenen Endrunden oftmals als Mitfavoriten gehandelt wurden, gehören die „Roten Teufel“ bei dieser WM nicht zum engeren Favoritenkreis. Das Team befindet sich in einem Generationenwechsel, die Altstars Kevin De Bruyne und Romelu Lukaku zählen beim Auftakt gegen Ägypten in Seattle (Montag, 21 Uhr live in Servus TV) aber nach wie vor zu den belgischen Hoffnungsträgern. Für sie ist die WM-Endrunde die letzte Chance auf einen großen Titel mit dem Nationalteam.", "title": "Letzte Titelchance für Belgiens Altstars", "url": "https://sport.orf.at/stories/3157154/"}, {"category": "alltag", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_orf_03", "source": "ORF Sport", "status": "active", "summary": "Bundesligist SV Oberbank Ried geht mit dem kroatischen Trainer Mario Despotovic in die kommende Saison. Wie die Innviertler am Montag bekanntgaben, einigte man sich mit dem 41-Jährigen auf eine Zusammenarbeit bis Sommer 2028. Despotovic, der zuletzt beim ägyptischen Erstligisten Wadi Degla als Sportdirektor tätig war, tritt die Nachfolge von Maximilian Senft an, der künftig den deutschen Zweitligisten Karlsruher SC betreut. Der Club sprach von einer „typischen Rieder Lösung“.", "title": "Ried überrascht mit Nachfolger für Senft", "url": "https://sport.orf.at/stories/3157249/"}, {"category": "alltag", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_orf_04", "source": "ORF Sport", "status": "active", "summary": "Medien: Amorim soll neuer Milan-Trainer werden", "title": "Medien: Amorim soll neuer Milan-Trainer werden", "url": "https://sport.orf.at/stories/3157251/"}, {"category": "alltag", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_orf_05", "source": "ORF Sport", "status": "active", "summary": "Misolic arbeitet mit neuem Trainer an Comeback", "title": "Misolic arbeitet mit neuem Trainer an Comeback", "url": "https://sport.orf.at/stories/3157250/"}, {"category": "alltag", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_wie_00", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Nachdem es in den vergangenen Stunden in Kärnten vermehrt zu Fahrraddiebstählen gekommen ist, werden Fahrradbesitzer zu besonderer Vorsicht aufgerufen. Die Landespolizeidirektion Kärnten gibt wichtige Präventionstipps. KÄRNTEN. In den vergangenen Stunden soll es in Kärnten vermehrt zu Fahrraddiebstählen gekommen sein. Dadurch entstanden, so die Polizei, \"Schäden in der Höhe von mehreren tausend Euro\". Aus diesem Grund warnt die Landespolizeidirektion Kärnten vor Fahrraddieben. Dazu einige...", "title": "Zunahme von Fahrraddiebstählen in Kärnten", "url": "https://www.meinbezirk.at/kaernten/c-lokales/zunahme-von-fahrraddiebstaehlen-in-kaernten_a8693279"}, {"category": "alltag", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_wie_02", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Beim Bezirksleistungsbewerb der Feuerwehren aus Spittal traten fast 100 Gruppen gegeneinander an. DÖBRIACH. Am 13. und am 14. Juni fanden in Döbriach die diesjährigen Bezirksleistungsbewerbe der Feuerwehren des Bezirkes Spittal statt. Als Austragungsort wurde das Festgelände genutzt, die Veranstaltung wurde von der FF Döbriach organisiert. Eine beeindruckende Zuschauer- und Fankulisse begleitete die Teilnehmergruppen an diesem Wochenende und sorgte für beste Stimmung. Fast 100 Gruppen 99...", "title": "99 Wettkampfgruppen kämpften in Döbriach um den Sieg", "url": "https://www.meinbezirk.at/spittal/c-lokales/99-wettkampfgruppen-kaempften-in-doebriach-um-den-sieg_a8691533"}, {"category": "alltag", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_wie_04", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Sonntag, 21. Juni | 14:00 bis 17:00 Uhr • Schönschwimmbewerb und Sprungbewerb für Kinder: Powered by René Kaiser • Spiele und Kinderprogramm, Hüpfburg: Powered by Kinderfreunde • Teilnahme am Kinderfest-Programm kostenlos! • Eintritt ins Freibad laut Tarifblatt (Kinder unter 6 Jahren gratis, Kinder und         Schüler:innenbis 15 Jahre: 3,80 Euro) + Akzeptanz der Familienkarte des Landes OÖ. Spiel, Sport und jede Menge gute Laune stehen am Sonntag, 21. Juni, von 14 bis 17 Uhr beim großen...", "title": "Ein Sonntag zu Sommerbeginn - Voller Spaß, Freude und Action für die ganze Familie!", "url": "https://www.meinbezirk.at/steyr-steyr-land/c-regionauten-community/ein-sonntag-zu-sommerbeginn-voller-spass-freude-und-action-fuer-die-ganze-familie_a8693246"}, {"category": "alltag", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_01", "source": "ORF Wien", "status": "active", "summary": "Überalterung und ungenutzte Ausbildungsplätze stellen die Pathologie in Österreich vor Herausforderungen, warnt die Österreichische Ärztekammer am Dienstag. Es brauche etwa 150 Pathologinnen und Pathologen mehr.", "title": "Pathologie fehlt es an Nachwuchs", "url": "https://wien.orf.at/stories/3358681/"}, {"category": "alltag", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_03", "source": "ORF Wien", "status": "active", "summary": "Einmal eine Allergie entwickelt zu haben muss kein lebenslanges Schicksal sein. Das belegt eine wissenschaftliche Reihenuntersuchung von Wiener Fachleuten. Vor allem bei über 60-Jährigen kann eine Sensibilisierung gegen bestimmte Allergene auch wieder verschwinden.", "title": "Einmal Allergie bedeutet nicht immer Allergie", "url": "https://wien.orf.at/stories/3358639/"}, {"category": "alltag", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_vie_00", "source": "Vienna.at", "status": "active", "summary": "Wer in der bevorstehenden Hitzewelle in österreichischen Seen oder Flüssen schwimmen geht, kann das bis auf eine Ausnahme bedenkenlos tun. Ein Bericht der Europäischen Umweltagentur EEA in Kopenhagen bescheinigt Europas Badegewässern überwiegend eine ausgezeichnete Wasserqualität. Bei den Binnenbadegewässern liegt Österreich gar auf Platz eins vor Finnland und Dänemark. 96,5 Prozent der untersuchten 260 Badegewässer wurden hierzulande als \"ausgezeichnet\" beurteilt.", "title": "Österreichs Badegewässer überzeugen mit der Wasserqualität", "url": "https://www.vienna.at/oesterreichs-badegewaesser-ueberzeugen-mit-der-wasserqualitaet/10257035"}, {"category": "alltag", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_00", "source": "ORF Sport", "status": "active", "summary": "Norwegen startet mit großen Ambitionen", "title": "Norwegen startet mit großen Ambitionen", "url": "https://sport.orf.at/stories/3157259/"}, {"category": "alltag", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_01", "source": "ORF Sport", "status": "active", "summary": "Williams-Schwestern spielen gemeinsam Wimbledon-Doppel", "title": "Williams-Schwestern spielen gemeinsam Wimbledon-Doppel", "url": "https://sport.orf.at/stories/3157342/"}, {"category": "alltag", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_02", "source": "ORF Sport", "status": "active", "summary": "Das 2:2 des Iran gegen Neuseeland war weit mehr als eines von 104 Spielen der Fußball-WM. Vor und in dem riesigen Stadion in Inglewood bei Los Angeles wurden immer wieder Botschaften im Zusammenhang mit dem monatelangen Krieg der USA und Israels gegen den Iran kundgetan. Im Stadion versammelten sich Anhänger und Gegner des Kurses Teherans. Pfiffe waren ebenso zu hören wie Anfeuerungen.", "title": "Pfiffe und Jubel bei erstem Auftritt des Iran", "url": "https://sport.orf.at/stories/3157337/"}, {"category": "alltag", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_03", "source": "ORF Sport", "status": "active", "summary": "Ried verpflichtet Defensivspieler Malicsek", "title": "Ried verpflichtet Defensivspieler Malicsek", "url": "https://sport.orf.at/stories/3157341/"}, {"category": "alltag", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_04", "source": "ORF Sport", "status": "active", "summary": "Neuer Trainer für ÖFB-Legionär Baidoo bei Lens", "title": "Neuer Trainer für ÖFB-Legionär Baidoo bei Lens", "url": "https://sport.orf.at/stories/3157340/"}, {"category": "alltag", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_05", "source": "ORF Sport", "status": "active", "summary": "Das Comeback der heimischen Kletter-Asse Jessica Pilz und Jakob Schubert steht in dieser Woche in Innsbruck im Fokus. Von Mittwoch bis Sonntag (live in ORF Sport +) trifft sich die internationale Elite im Bouldern und Vorstieg in Tirols Landeshauptstadt zum Weltcup. Im Vorjahr mussten die Lokalmatadoren Pilz und Schubert verletzungsbedingt passen, nun peilen die beiden vor heimischem Publikum Topresultate an.", "title": "Pilz und Schubert brennen auf Heimspiel", "url": "https://sport.orf.at/stories/3157256/"}, {"category": "alltag", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_wie_00", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Kulinarium Steiermark und MeinBezirk zeigen heute, wie das Hotel Restaurant Stigenwirth in Krakau ein steirisches Zirben Parfait zubereitet. KRAKAU. Gemeinsam präsentieren Kulinarium Steiermark und MeinBezirk ein Jahr lang regionale Rezepte aus der gesamten Steiermark – heute aus der Erlebnisregion Murau. Hier kommt im Hotel Restaurant Stigenwirth ein steirisches Zirben Parfait auf den Tisch. Steirisches Zirben Parfait: ca. sechs Portionen 4 Eier150 Gramm Kristallzucker3/4 Liter Schlagobers1/8...", "title": "[Anzeige] So kann man steirisches Zirben Parfait ganz einfach selber machen", "url": "https://www.meinbezirk.at/steiermark/c-ungelistet/so-kann-man-steirisches-zirben-parfait-ganz-einfach-selber-machen_a8694975"}, {"category": "alltag", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_04", "source": "ORF News", "status": "active", "summary": "Wasserqualität in Europas Badegewässern meist sehr hoch", "title": "Wasserqualität in Europas Badegewässern meist sehr hoch", "url": "https://orf.at/stories/3433479/"}], "kultur": [{"category": "kultur", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_sta_00", "source": "Standard Kultur", "status": "active", "summary": "Die Tanzperformance der baltischen Performer Agnietė Lisičkinaitė und Igor Shugaleev weiß bei den Wiener Festwochen nicht ganz zu überzeugen", "title": "\"Clap & Slap\": Eiertanz zwischen Verantwortung und Angeberei", "url": "https://www.derstandard.at/story/3000000326885/clap-slap-performance-zwischen-eiertanz-zwischen-verantwortung-und-angeberei?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_sta_01", "source": "Standard Kultur", "status": "active", "summary": "Am 11. Juni ist wieder Welttag der Puppe. Zeit für eine Liebeserklärung an einen der ältesten Gegenstände der Menschheit", "title": "Die Puppe als Schatz und Schatzkiste der Kreativität", "url": "https://www.derstandard.at/story/3000000323236/die-puppe-als-schatz-und-schatzkiste-der-kreativitaet?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_sta_03", "source": "Standard Kultur", "status": "active", "summary": "An der Volksoper wird die \"Pride Edition\" der Strauß-Operette zum stimmigen Gesamtkunstwerk. Die Bande zwischen Operette und queerer Community waren immer schon eng", "title": "Eine \"Fledermaus\" mit Conchita: So findet zusammen, was zusammengehört", "url": "https://www.derstandard.at/story/3000000324308/eine-fledermaus-mit-conchita-so-findet-zusammen-was-zusammengehoert?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_sta_04", "source": "Standard Kultur", "status": "active", "summary": "Stein des Anstoßes und letztlich Nutznießerin des Abgangs von Markus Hinterhäuser? Im Gespräch erklärt die neue Salzburg-Intendantin, wie es zu ihrer erstaunlichen Kür kam", "title": "Karin Bergmann zu Causa Hinterhäuser: \"Bei einigen gelte ich deshalb als Verräterin\"", "url": "https://www.derstandard.at/story/3000000326779/karin-bergmann-zu-causa-hinterhaeuser-bei-einigen-gelte-ich-deshalb-als-verraeterin?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_wie_00", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Die Marktmusik Timelkam feiert heuer ihr 175-jähriges Bestehen und richtet zu diesem Jubiläum das Bezirksmusikfest aus. TIMELKAM. Von 12. bis 14. Juni werden rund 7.000 Gäste erwartet, 57 Musikkapellen treten bei der Marschwertung an: am Freitag ab 16.30 Uhr und am Samstag ab 15.30 Uhr am Rathausplatz, um 19.30 Uhr gibt's dann an beiden Tagen einen Festakt und das Gesamtspiel. Im Festzelt am Michaelimarkt-Gelände sorgen mehrere junge Bands für gute Stimmung. Am Freitag sind dies \"Seeblech\" und...", "title": "Wertung, Bands und Spaß beim Bezirksmusikfest", "url": "https://www.meinbezirk.at/voecklabruck/c-freizeit/wertung-bands-und-spass-beim-bezirksmusikfest_a8671635"}, {"category": "kultur", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_wie_04", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Ein altes Foto bringt eine ganze Familiengeschichte ins Wanken. SCHWANENSTADT. Gabi Kreslehners liest am Donnerstag, 18. Juni, um 19 Uhr im Pfarrzentrum St. Michael aus ihrem neuen Roman \"Wer wir geworden sind\". Die Autorin nimmt ihr Publikum mit auf eine Reise durch ein Jahrhundert voller Geheimnisse, Verluste und Heimkehr. Im Mittelpunkt steht Joanna, die kurz vor der Jahrtausendwende ein rätselhaftes Kinderfoto findet und damit eine Geschichte freilegt, die bei ihrer Großmutter Juli im...", "title": "Gabi Kreslehner liest aus ihrem neuen Roman", "url": "https://www.meinbezirk.at/voecklabruck/c-freizeit/gabi-kreslehner-liest-aus-ihrem-neuen-roman_a8679045"}, {"category": "kultur", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_orf_04", "source": "ORF News", "status": "active", "summary": "Prix Serdang geht an Pianistin Eva Geworgjan", "title": "Prix Serdang geht an Pianistin Eva Geworgjan", "url": "https://orf.at/stories/3433011/"}, {"category": "kultur", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_05", "source": "ORF Wien", "status": "active", "summary": "Ab Freitag macht die Ausstellung „Impressionisten – Die Immersive Ausstellung“ erstmals in Wien Station. Dabei verwandelt sich die Stadthalle in eine Kunstwelt, in der Werke des Impressionismus durch Projektionen, Animationen und Musik erlebbar gemacht werden.", "title": "Immersive Reise durch den Impressionismus", "url": "https://wien.orf.at/stories/3357937/"}, {"category": "kultur", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_vie_00", "source": "Vienna.at", "status": "active", "summary": "Der britische Künstler David Hockney ist tot. Er starb am Donnerstag im Alter von 88 Jahren in seiner Londoner Wohnung, wie seine Agentin am Freitag mitteilte.", "title": "Britischer Künstler David Hockney gestorben", "url": "https://www.vienna.at/britischer-kuenstler-david-hockney-gestorben/10246193"}, {"category": "kultur", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_vie_01", "source": "Vienna.at", "status": "active", "summary": "Die Gewinner der Gildenball-Tombola der Bregenzer Faschingsgesellschaft besuchten mit Landesrätin Martina Rüscher das Umweltinstitut Vorarlberg.", "title": "Gildenball-Gewinner zu Besuch im Umweltinstitut", "url": "https://www.vienna.at/gildenball-gewinner-zu-besuch-im-umweltinstitut-2/10246469"}, {"category": "kultur", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_sta_00", "source": "Standard Kultur", "status": "active", "summary": "Im Burgenland beginnt wieder einmal das Fest des Biers und der Rockmusik. Diesmal mit etwa 50.000 Enthusiasten, Sex Pistols, Tom Morello und Volbeat", "title": "Nova Rock, Tag 1: Rap-Mönche, Mittelalter – und wo sind die Frauen?", "url": "https://www.derstandard.at/story/3000000326999/nova-rock-tag-1-rap-moenche-mittelalter-und-wo-sind-die-frauen?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_sta_01", "source": "Standard Kultur", "status": "active", "summary": "Das HGM erfindet sich mit seiner gänzlich umgestalteten Ausstellung zum kritischen Zeitraum 1918 bis 1955 neu. Der Rest des Hauses soll dem Beispiel folgen", "title": "Heeresmuseum macht mit neuer Ausstellung einen großen Reformschritt", "url": "https://www.derstandard.at/story/3000000326863/heeresmuseum-macht-mit-neuer-ausstellung-einen-grossen-reformschritt?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_sta_02", "source": "Standard Kultur", "status": "active", "summary": "Der britische Maler war einer der einflussreichsten Künstler des 20. Jahrhunderts und wurde 88 Jahre alt", "title": "Britischer Künstler David Hockney gestorben", "url": "https://www.derstandard.at/story/3000000327062/-britischer-k252nstler-david-hockney-gestorben?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_sta_05", "source": "Standard Kultur", "status": "active", "summary": "Die Aufnahme Swifts wurde mit ihrer Fähigkeit begründet, sich als Songwriterin zu wandeln. Songwriter können aufgenommen werden, sobald ihre erste Single 20 Jahre zurückliegt", "title": "Taylor Swift als jüngste Frau in Songwriters Hall of Fame aufgenommen", "url": "https://www.derstandard.at/story/3000000326993/taylor-swift-als-j252ngste-frau-in-songwriters-hall-of-fame-aufgenommen?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_01", "source": "ORF News", "status": "active", "summary": "David Hockney ist tot", "title": "David Hockney ist tot", "url": "https://orf.at/stories/3433128/"}, {"category": "kultur", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_vie_00", "source": "Vienna.at", "status": "active", "summary": "Das Berliner Präsidenten-Schloss Bellevue verwandelt sich für zwei Wochen in eine Pop-up-Galerie. Am Samstag wurde im Amtssitz von Bundespräsident Frank-Walter Steinmeier eine Ausstellung mit zeitgenössischer Kunst für die Öffentlichkeit geöffnet. Der Eintritt ist kostenlos. Das Schloss wird Anfang Juli für eine mehrjährige Sanierung geschlossen. In den schon leeren Räumen zeigen mehr als 20 Mitglieder der Akademie der Künste ihre Werke.", "title": "Im Berliner Schloss Bellevue regiert derzeit die Kunst", "url": "https://www.vienna.at/im-berliner-schloss-bellevue-regiert-derzeit-die-kunst/10248131"}, {"category": "kultur", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_vie_05", "source": "Vienna.at", "status": "active", "summary": "Mit der traditionellen Sommernachtsgala am Wolkenturm ist am Freitagabend die 20. Open-Air-Saison in Grafenegg eröffnet worden. Die amerikanische Sopranistin Angel Blue, der aus der Ukraine stammende Tenor Bogdan Volkov, die österreichische Cellistin Julia Hagen sowie das Tonkünstler-Orchester Niederösterreich unter der Leitung seines Chefdirigenten Fabien Gabel sorgten für einen bunten Strauß aus vorwiegend bekannten Melodien.", "title": "Sommer in Grafenegg mit einer bunten Gala eröffnet", "url": "https://www.vienna.at/sommer-in-grafenegg-mit-einer-bunten-gala-eroeffnet/10248113"}, {"category": "kultur", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_sta_00", "source": "Standard Kultur", "status": "active", "summary": "Der zweite Tag begann mit brachialem Death Metal und hatte außerdem The Pretty Reckless und The Offspring zu bieten. Mit The Cure war das Ende dann zart und voller Wehmut", "title": "Nova Rock, Tag 2: The Cure haben das Burgenland verzaubert", "url": "https://www.derstandard.at/story/3000000327088/nova-rock-tag-2-the-cure-haben-das-burgenland-verzaubert?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_sta_01", "source": "Standard Kultur", "status": "active", "summary": "Hlynur Pálmason versteht es wie kaum ein anderer, die feinen Dynamiken zwischen Familienmitgliedern aufzufächern und mit Naturschönheit und Groteske zu verweben", "title": "Eine Familie wie ein Gewächshaus: Der isländische Film \"The Love that Remains\"", "url": "https://www.derstandard.at/story/3000000326853/eine-familie-wie-ein-gewaechshaus-der-islaendische-film-the-love-that-remains?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_sta_02", "source": "Standard Kultur", "status": "active", "summary": "Cornelia Rainer ist Regisseurin und künstlerische Leiterin des Festivals \"Bühne der Macht\"", "title": "Hallo, was lesen Sie, Cornelia Rainer?", "url": "https://www.derstandard.at/story/3000000323928/hallo-was-lesen-sie-cornelia-rainer?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_sta_05", "source": "Standard Kultur", "status": "active", "summary": "Die in Frankreich hoch gehandelte Regisseurin Rébecca Chaillon zeigt bei den Wiener Festwochen \"La Parabole du Seum\". Turbulent und etwas ermüdend", "title": "Mit gelblich wohliger Butter nackt gegen die Widrigkeit der Welt", "url": "https://www.derstandard.at/story/3000000327071/mit-gelblich-wohliger-butter-nackt-gegen-die-widrigkeit-der-welt?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_wie_03", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Der dritte Nova Rock Tag, Samstag, verspricht Regen und Wolken, und das kann nur eines heißen: Die Schlammschlacht kann beginnen! Am dritten Festivaltag des Nova Rock 2026 in Nickelsdorf stehen mit Iron Maiden und Madsen echte Headliner auf dem Programm.  BURGENLAND/NICKELSDORF. Der Samstag beim Nova Rock 2026 wird laut Prognosen erneut ein intensiver Festivaltag. Besonders in den Morgenstunden kam es immer wieder zu Regenepisoden, wodurch sich die Pannonia Fields in Nickelsdorf in eine große,...", "title": "Iron Maiden, Frühschoppen und Schlamm – der dritte Festivaltag", "url": "https://www.meinbezirk.at/burgenland/c-lokales/iron-maiden-fruehschoppen-und-schlamm-der-dritte-festivaltag_a8685449"}, {"category": "kultur", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_sta_00", "source": "Standard Kultur", "status": "active", "summary": "Die internationale Pace Gallery (New York, Los Angeles, London, Berlin, Genf, Seoul, Tokio) redimensioniert und trennte sich jetzt von 30 Künstlerinnen und Künstlern", "title": "Mega-Galerie schmeißt Hermann Nitsch aus dem Programm", "url": "https://www.derstandard.at/story/3000000324050/mega-galerie-schmeisst-hermann-nitsch-aus-dem-programm?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_sta_01", "source": "Standard Kultur", "status": "active", "summary": "Das Festwochen-Projekt Akademie Zweite Moderne ließ im Radiokulturhaus gegen das männerdominierte Musikgeschäft aufspielen", "title": "Bäume und Baulärm: Klangforum mit Werken zeitgenössischer Komponistinnen", "url": "https://www.derstandard.at/story/3000000327211/baeume-und-baulaerm-klangforum-mit-werken-zeitgenoessischer-komponistinnen?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_sta_02", "source": "Standard Kultur", "status": "active", "summary": "Im Burgenland kann sich das Publikum am Samstag zwischen hart und locker entscheiden. Es spielen auch A Day To Remember, Alter Bridge und Madsen", "title": "Nova Rock, Tag 3, mit Iron Maiden: Schwermetall-Papas und ihre Nachkommen", "url": "https://www.derstandard.at/story/3000000327185/nova-rock-tag-3-mit-iron-maiden-schwermetall-papas-und-ihre-nachkommen?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_sta_03", "source": "Standard Kultur", "status": "active", "summary": "Der Schweizer Jungdirigent reüssierte am Samstag im Musikverein", "title": "Lorenzo Viotti und die Philharmoniker: Gefühle müssen raus", "url": "https://www.derstandard.at/story/3000000327202/lorenzo-viotti-und-die-philharmoniker-gefuehle-muessen-raus?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_sta_04", "source": "Standard Kultur", "status": "active", "summary": "Hoffen nützt nichts, diszipliniert Warten bedeutet nur Stillstand. Drama in drei Akten", "title": "Antonio Fian: Den Radweg queren", "url": "https://www.derstandard.at/story/3000000326782/antonio-fian-den-radweg-queren?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_sta_05", "source": "Standard Kultur", "status": "active", "summary": "In ihrem autobiografisch grundierten Roman \"Ilaria\" schreibt Gabriella Zalapì über Schutzlosigkeit, einen Roadtrip – und ein vom Vater entführtes Mädchen", "title": "Gabriella Zalapìs Roman über eine vom Vater gestohlene Kindheit", "url": "https://www.derstandard.at/story/3000000324012/gabriella-zalapis-roman-ueber-eine-vom-vater-gestohlene-kindheit?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_wie_01", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Ein Fest jagt das andere. Nach der großen Feier zum 125-Jahr-Jubiläum der TMK Krispl-Gaißau feierte am Wochenende drei Tage lang die Trachtenmusikkapelle Golling ihr 175-Jahre Jubiläum. GOLLING. Das bunte Programm begann mit einem Konzert der Kultgruppe Oberkrainer mit Saso Avsenik und endete am Sonntag mit einem Festmesse, Festakt und einen Umzug durch den Markt mit den Vereinen des Ortes und der Nachbargemeinden. Außerdem wurde die neue CD „Tradition mit Herz“ vorgestellt. Wie Obmann Othmar...", "title": "Musikalische Tradition und gewachsene Wurzeln", "url": "https://www.meinbezirk.at/tennengau/c-lokales/musikalische-tradition-und-gewachsene-wurzeln_a8690636"}, {"category": "kultur", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_wie_04", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Vatertags-Grüße vom Nova Rock 2026 – Auf den Pannonia Fields in Nickelsdorf werden nicht bloß die gegenwärtig größten Rock- und Metalbands gefeiert, sondern auch die Papas der Musikfans. Der vierte und letzte Festivaltag des Nova Rock 2026 fällt gleichzeitig auf den Vatertag. Das sind einige der lustigsten und bewegendsten Grüße an die Nova-Rocker-Papas. BURGENLAND/NICKELSDORF. Vatertag auf den Pannonia Fields in Nickelsdorf – die einen sind gleich mit dem Papa angereist, die anderen schicken...", "title": "Papa Roach, Bring Me The Horizon – Finale am Nova Rock 2026", "url": "https://www.meinbezirk.at/burgenland/c-lokales/papa-roach-bring-me-the-horizon-finale-am-nova-rock-2026_a8685518"}, {"category": "kultur", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_sta_00", "source": "Standard Kultur", "status": "active", "summary": "Im Sommer 1976 führte die Besetzung des ehemaligen Schlachthofs in St. Marx zur Entstehung der Arena Wien. Ein neues Buch und eine Ausstellung beleuchten das Jubiläum", "title": "50 Jahre Besetzung der Arena Wien: Vom Konflikt zur Kulturinstitution", "url": "https://www.derstandard.at/story/3000000326919/50-jahre-besetzung-der-arena-wien-vom-konflikt-zur-kulturinstitution?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_sta_01", "source": "Standard Kultur", "status": "active", "summary": "Igor Bezinović erzählt in dem unterhaltsamen Dokumentarfilm die bizarre Episode, als seine Heimatstadt Rijeka durch den Protofaschisten besetzt wurde", "title": "\"Fiume o Morte!\" über Gabriele D'Annunzio: Punk-Zeitreise nach Rijeka", "url": "https://www.derstandard.at/story/3000000327354/fiume-o-morte-ueber-gabriele-dannunzio-punk-zeitreise-nach-rijeka?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_sta_02", "source": "Standard Kultur", "status": "active", "summary": "Petr Popelka und die Wiener Symphoniker lassen Robert Schumanns \"Das Paradies und die Peri\" erstrahlen", "title": "Symphoniker mit Schumann: Rausschmiss aus dem Paradies im Musikverein", "url": "https://www.derstandard.at/story/3000000327370/symphoniker-mit-schumann-rausschmiss-aus-dem-paradies-im-musikverein?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_sta_03", "source": "Standard Kultur", "status": "active", "summary": "Für den \"unvergleichlichen literarischen Sound\" des 1972 in Brünn geborenen Autors", "title": "Alois-Vogel-Literaturpreis an Michael Stavarič", "url": "https://www.derstandard.at/story/3000000327377/aloisvogel-literaturpreis-an-michael-stavaric?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_sta_04", "source": "Standard Kultur", "status": "active", "summary": "Die Pomali-Elektroniker Boards of Canada sind zurück und Zoh Amba und Modern Woman liefern – Drama, Baby, Drama! – Rumpelrock und Theatralik", "title": "Der gute Ton: Das ist Dystopie, langweilig wird sie nie", "url": "https://www.derstandard.at/story/3000000327301/der-gute-ton-das-ist-dystopie-langweilig-wird-sie-nie?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_sta_05", "source": "Standard Kultur", "status": "active", "summary": "Die Polizei spricht von einem ruhigen Verlauf, der ÖAMTC zählte über 300 Einsätze. Insgesamt wurden 215.000 Fans an vier Tagen Festival gezählt", "title": "Nova Rock: Abreise vom Festivalgelände läuft", "url": "https://www.derstandard.at/story/3000000327322/nova-rock-abreise-vom-festivalgel228nde-l228uft?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_wie_05", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Der Gleisdorfer Kabarettist Andreas Schlintl setzt seinen Erfolgslauf fort. Bei der renommierten Kabarett-Talentshow im Mirage Wien konnte er den Sieg mit nach Hause holen.  GLEISDORF/WIEN. Mit einem Mix aus feinem Humor, ehrlicher Selbstironie und musikalischen Elementen konnte der Gleisdorfer Andreas Schlintl die Jury sowie das Publikum bei der Kabarett-Talentshow überzeugen und sich letztendlich den Sieg holen. Die Aufzeichnung des Finales wird am 18. Juni auf ORF III ausgestrahlt.  ﻿Auf...", "title": "Gleisdorfer Andreas Schlintl erobert mit Humor die Bühne", "url": "https://www.meinbezirk.at/weiz/c-leute/gleisdorfer-andreas-schlintl-erobert-mit-humor-die-buehne_a8687510"}, {"category": "kultur", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_sta_00", "source": "Standard Kultur", "status": "active", "summary": "Es begann mit zwei leeren Räumen, Teppichboden und einem merkwürdigen Gelb auf 4Chan. Dann sprang das Kultstudio A24 auf. Regisseur Kane Parsons ist erst 20", "title": "Ein 20-jähriger Youtuber erobert mit dem Horrorfilm \"Backrooms\" Hollywood", "url": "https://www.derstandard.at/story/3000000327285/von-youtube-auf-die-leinwand-backrooms-als-bedrohliche-rueckseite?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_sta_01", "source": "Standard Kultur", "status": "active", "summary": "Maria Hofstätter liest aus \"Josef Finster\" im Theater Tribüne in Linz, Barbara Pacholik zeigt ihre Porträtgemälde in Wien und dann in St. Pölten", "title": "Kulturtipps der Woche: Festivals im Stifterhaus und in Do:now:stadt", "url": "https://www.derstandard.at/story/3000000326916/kulturtipps-der-woche-festivals-im-stifterhaus-und-in-donowstadt?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_sta_02", "source": "Standard Kultur", "status": "active", "summary": "Die Filmschauspielerin und Regisseurin erhält heuer den Lebenswerkpreis – sie war und ist eine starke Stimme von MeToo", "title": "Asia Argento wird beim Locarno Film Festival für ihr Lebenswerk geehrt", "url": "https://www.derstandard.at/story/3000000327504/79-locarno-film-festival-ehrt-asia-argento-f252r-ihr-lebenswerk?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_sta_03", "source": "Standard Kultur", "status": "active", "summary": "Während des Zusammentreffens der beiden Regierungschefs lief das Lied \"Lieblingsmensch\" von Namika. Auch andere Gäste wurden mit nationalem Liedgut begrüßt", "title": "Macrons Musikauswahl für Merz erheitert Publikum bei G7-Treffen", "url": "https://www.derstandard.at/story/3000000327502/g7-macrons-musikauswahl-f252r-merz-erheitert-zuschauer?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_sta_05", "source": "Standard Kultur", "status": "active", "summary": "Die durch Wetterkapriolen entstandenen Risse an der begehbaren Höhle sind geflickt", "title": "Verhüllte Brücke: Installation an Pariser Pont Neuf eröffnet", "url": "https://www.derstandard.at/story/3000000327443/verh252llte-br252cke-installation-an-pariser-pont-neuf-offen?ref=rss"}, {"category": "kultur", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_wie_01", "source": "Wiener Bezirksblätter", "status": "active", "summary": "„Zeichne dein Fantasierad!“ heißt es jährlich beim Crazy Bike Malwettbewerb von Klimabündnis und Land Tirol. Lea Henninger aus Mieders mischte im Bezirk ganz vorne mit. MIEDERS. Ziel des Crazy Bike Malwettbewerbs ist es, die Begeisterung der Kinder für das Fahrrad zu fördern. Fast 1.500 Zeichnungen von Tiroler Volkschülern aus 76 Schulen wurden dieses Jahr eingereicht. Vor kurzem fand die Preisverleihung für die kreativsten Zeichnungen aus dem Bezirk Innsbruck-Land statt. Drei Kinder konnten...", "title": "\"Crazy Bike\" aus Mieders bei kreativsten Zeichnungen im Bezirk", "url": "https://www.meinbezirk.at/stubai-wipptal/c-lokales/crazy-bike-aus-mieders-bei-kreativsten-zeichnungen-im-bezirk_a8694948"}, {"category": "kultur", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_wie_04", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Ein besonderes musikalisches Erlebnis bot sich am Dienstagvormittag - 16. Juni 2026 -im Schulhof des Schulzentrums Tamsweg: Um 11:40 Uhr trat der Schulchor des Lothar-Meyer-Gymnasiums aus Varel (Deutschland) zu einem spontanen Konzert auf – und sorgte für große Begeisterung unter den Zuhörerinnen und Zuhörern. TAMSWEG. Der Auftritt war kurzfristig organisiert worden. Chorleiter und Pädagoge Morten Kollstede wollte seinen Schülerinnen und Schülern zum Abschluss ihrer rund eintausend Kilometer...", "title": "Deutsche Gäste überraschten Schüler mit spontanem Konzert", "url": "https://www.meinbezirk.at/lungau/c-lokales/deutsche-gaeste-ueberraschten-schueler-mit-spontanem-konzert_a8694957"}, {"category": "kultur", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_wie_05", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Märchenfans und solche, die es noch werden möchten, können sich heuer auf eine Neuinterpretation des bekannten Grimm'schen Klassikers Rapunzel freuen. Beim Märchensommer 2026 wird \"Rapunzel - neu frisiert\" unter der Intendanz und künstlerischen Leitung von Nina Blum wieder zahlreiche kleine und große Besucherinnen und Besucher in den Hof des Priesterseminars locken. Premiere ist am 22. Juli, bis 23. August wird in Graz gespielt. GRAZ. \"Wir greifen das archaische Grundthema auf und zeigen, dass...", "title": "„Rapunzel – neu frisiert“ verspricht magisches Theatererlebnis in Graz", "url": "https://www.meinbezirk.at/graz/c-lokales/rapunzel-neu-frisiert-verspricht-magisches-theatererlebnis-in-graz_a8694951"}, {"category": "kultur", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_02", "source": "ORF News", "status": "active", "summary": "Als einzige Opernproduktion zeigen die Wiener Festwochen heuer Richard Wagners „Parsifal“. Von der Regisseurin Susanne Kennedy und Videokünstler Markus Selg inszeniert, hatte die Koproduktion mit der Oper Gent am Montag ihre Wien-Premiere. Musikalisch gefeiert, hinterließ der Abend ein gespaltenes Publikum: Das religiöse Gralsritterdrama in LED-Videoinstallation ignoriert Konventionen im Versuch, neue Perspektiven zu öffnen.", "title": "„Parsifal“ im LED-Rausch", "url": "https://orf.at/stories/3433350/"}], "politik": [{"category": "politik", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_orf_03", "source": "ORF Wien", "status": "active", "summary": "Die Wiener Börse verzeichnet ein steigendes Interesse an ihren Finanzbildungskursen. Auch die Zahl der Menschen, die in Aktien und Fonds investieren, steigt. „Der Start ist wichtiger als das Startkapital“, rät die Sprecherin der Wiener Börse, Julia Resch, im „Wien heute“-Interview.", "title": "Börse: „Start wichtiger als  Startkapital“", "url": "https://wien.orf.at/stories/3357997/"}, {"category": "politik", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_orf_04", "source": "ORF Wien", "status": "active", "summary": "Finanzminister Markus Marterbauer (SPÖ) hat am Mittwoch in seiner Budgetrede die weitreichenden Sparpläne der Regierung skizziert. Aus den Ländern kommt bereits Kritik. Wiens Bürgermeister Michael Ludwig (SPÖ) fordert etwa eine Kompensierung für die Gemeinden.", "title": "Budget: Ludwig will  Ausgleich für Gemeinden", "url": "https://wien.orf.at/stories/3357955/"}, {"category": "politik", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_vie_05", "source": "Vienna.at", "status": "active", "summary": "Was haben wir doch für ein Glück mit unserer Landesregierung. Investitionen in Straßenbau verbessern die Lebensqualität! Aber für welche Bevölkerungsgruppe? Da fallen mir in erster Linie die Autofahrer ein. Oder? Wo bleiben die Menschen, die sich kein Auto leisten können oder bewusst aufs Auto verzichten? Im Gegenzug werden die Preise für Öffis um bis zu", "title": "Leserbrief: Landesregierung auf der Überholspur für Autofahrer", "url": "https://www.vienna.at/leserbrief-landesregierung-auf-der-ueberholspur-fuer-autofahrer/10243724"}, {"category": "politik", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_wie_03", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Der persönliche Austausch, starke Netzwerke und das gemeinsame Bekenntnis zum Wirtschaftsstandort standen bei der Langen Nacht der Wirtschaft im Mittelpunkt. Zahlreiche Unternehmerinnen und Unternehmer aus dem Bezirk nutzten die Veranstaltung, um sich zu vernetzen, Herausforderungen zu diskutieren und die Bedeutung der regionalen Wirtschaft sichtbar zu machen. TULLN. Die Lange Nacht der Wirtschaft bot eine wertvolle Gelegenheit für persönliche Gespräche zwischen Unternehmern und...", "title": "Lange Nacht stärkt den Austausch der Unternehmer, wichtig für die Region", "url": "https://www.meinbezirk.at/tulln/c-wirtschaft/lange-nacht-staerkt-den-austausch-der-unternehmer-wichtig-fuer-die-region_a8686751"}, {"category": "politik", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_wie_05", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Der oberösterreichische Stahlkonzern voestalpine ist auf fünf Kontinenten aktiv und beschäftigt knapp 50.000 Mitarbeiter. 620 davon arbeiten im belgischen Städtchen Hooglede, eineinhalb Autostunden westlich von Brüssel.   OÖ/BELGIEN. 1991 übernahm die Voestalpine einen belgischen Familienbetrieb – es war der erste große Zukauf des Stahlkonzerns im Ausland. Wo früher Teile für Autobusse gebaut wurden, setzt die Voestalpine sadef heute etwa 270 Millionen Euro um. Gefertigt werden Profile für Lkw,...", "title": "\"Neue Technologie hat uns immer gepusht\"", "url": "https://www.meinbezirk.at/oberoesterreich/c-wirtschaft/neue-technologie-hat-uns-immer-gepusht_a8686658"}, {"category": "politik", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_orf_00", "source": "ORF News", "status": "active", "summary": "Am Donnerstag entscheidet sich, wer den ORF ab 1. Jänner 2027 führt. Die nicht öffentliche Sitzung des Stiftungsrats dürfte sich bis in den späten Nachmittag ziehen. Vor der Abstimmung müssen die neun nominierten Bewerberinnen und Bewerber den 35 Gremiumsmitgliedern ihre Konzepte präsentieren. Der von der SPÖ nominierte Stiftungsratsvorsitzende Heinz Lederer betonte, alle gesetzlichen Vorgaben seien erfüllt worden. Der FPÖ-nominierte Stiftungsrat Peter Westenthaler kündigte bereits eine Anfechtung der Bestellung an.", "title": "Hearings laufen", "url": "https://orf.at/stories/3433015/"}, {"category": "politik", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_orf_01", "source": "ORF News", "status": "active", "summary": "Strengere und einheitliche Verkehrsstrafen ab 2027", "title": "Strengere und einheitliche Verkehrsstrafen ab 2027", "url": "https://orf.at/stories/3433029/"}, {"category": "politik", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_orf_02", "source": "ORF News", "status": "active", "summary": "Am Tag nach der Budgetrede von Finanzminister Markus Marterbauer (SPÖ) ist traditionell die Opposition am Wort. Diese fand am Donnerstag bei der Ersten Lesung im Nationalrat wenig Gutes an dem von der Regierung vorgelegten Doppelbudget. FPÖ-Klubobmann Herbert Kickl sprach von einer „Belastungskeule für die Bevölkerung“, während die Regierung bis zum letzten Moment um eine Erhöhung der Parteienförderung gerungen habe. Die Grünen kritisierten die Konsolidierung als ungerecht.", "title": "Opposition lässt kein gutes Haar an Budget", "url": "https://orf.at/stories/3433018/"}, {"category": "politik", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_orf_03", "source": "ORF News", "status": "active", "summary": "Einigung auf rascheren Ausbau erneuerbarer Energien", "title": "Einigung auf rascheren Ausbau erneuerbarer Energien", "url": "https://orf.at/stories/3433016/"}, {"category": "politik", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_orf_05", "source": "ORF News", "status": "active", "summary": "AKW Saporischschja erneut ohne Stromversorgung", "title": "AKW Saporischschja erneut ohne Stromversorgung", "url": "https://orf.at/stories/3433009/"}, {"category": "politik", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_00", "source": "ORF Wien", "status": "active", "summary": "Die Wiener Spediteure lehnen die geplante Paketabgabe in Höhe von zwei Euro pro Sendung ab. Die neue Abgabe schade nicht nur der Logistikbranche, sondern dem gesamten Wirtschaftsstandort Österreich, lautet die Kritik.", "title": "Spediteure kritisieren Paketabgabe", "url": "https://wien.orf.at/stories/3358179/"}, {"category": "politik", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_04", "source": "ORF Wien", "status": "active", "summary": "Wegen der Sicherheitslage in Nahost setzt die AUA ihre Flüge von und nach Tel Aviv bis 15. Juni aus. Das sei mit der Lufthansa Group Konzernsicherheit entschieden worden, teilte die heimische Fluggesellschaft Donnerstagabend mit.", "title": "AUA setzt Tel-Aviv-Flüge aus", "url": "https://wien.orf.at/stories/3358145/"}, {"category": "politik", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_vie_03", "source": "Vienna.at", "status": "active", "summary": "Over 100 experts see enormous savings potential in the Austrian food system. According to a new analysis, billions could be saved without making food more expensive.", "title": "Why Austria's Food System Is So Expensive", "url": "https://www.vienna.at/why-austrias-food-system-is-so-expensive/10246451"}, {"category": "politik", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_vie_04", "source": "Vienna.at", "status": "active", "summary": "Unternehmerin Verena Eugster über fehlenden Mut der Regierung und die hohe Rechnung für die nächste Generation.", "title": "“Doppelbudget ist kein Aufbruch, sondern eine vertane Chance”", "url": "https://www.vienna.at/doppelbudget-ist-kein-aufbruch-sondern-eine-vertane-chance/10246463"}, {"category": "politik", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_vie_05", "source": "Vienna.at", "status": "active", "summary": "Über 100 Expertinnen und Experten sehen enormes Sparpotenzial im österreichischen Ernährungssystem. Laut einer neuen Analyse könnten Milliarden eingespart werden – ohne dass Lebensmittel teurer werden.", "title": "Warum Österreichs Ernährungssystem so teuer ist", "url": "https://www.vienna.at/warum-oesterreichs-ernaehrungssystem-so-teuer-ist/10245986"}, {"category": "politik", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_sta_03", "source": "Standard Kultur", "status": "active", "summary": "In Paris steht eine georgische Bande wegen des Diebstahls von Originalwerken russischer Autoren vor Gericht", "title": "Puschkins Bücher verschwinden aus Europas Bibliotheken. Steckt der Kreml dahinter?", "url": "https://www.derstandard.at/story/3000000326867/puschkins-buecher-verschwinden-aus-europas-bibliotheken-steckt-der-kreml-dahinter?ref=rss"}, {"category": "politik", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_wie_01", "source": "Wiener Bezirksblätter", "status": "active", "summary": "ÖVP und SPÖ diskutieren in Neunkirchen bereits die Koalitionsbedingungen. NEUNKIRCHEN. Über den Inhalt der Gespräche haben ÖVP und SPÖ laut ÖVP-Stadtchef Peter Teix Stillschweigen vereinbart. Teix sprach lediglich von einem \"guten Klima; Gespräche im Laufen\". Dennoch sickerte durch, dass ein Thema diskutiert wurde: Der Wechsel des Bürgermeister-Amtes zur Hälfte der Amtszeit von der ÖVP zur SPÖ. Ein Vorstoß, der allerdings keine Zustimmung fand. Bleibe dran, wir tun es auch! Das könnte dich auch...", "title": "Nein zum Teilen des Bürgermeister-Amts", "url": "https://www.meinbezirk.at/neunkirchen/c-politik/nein-zum-teilen-des-buergermeister-amts_a8688977"}, {"category": "politik", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_00", "source": "ORF News", "status": "active", "summary": "Iranische Medien veröffentlichen Entwurf für Abkommen", "title": "Iranische Medien veröffentlichen Entwurf für Abkommen", "url": "https://orf.at/stories/3433132/"}, {"category": "politik", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_02", "source": "ORF News", "status": "active", "summary": "Kiew nimmt Krim intensiv ins Visier", "title": "Kiew nimmt Krim intensiv ins Visier", "url": "https://orf.at/stories/3433127/"}, {"category": "politik", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_03", "source": "ORF News", "status": "active", "summary": "Die Staatsanwaltschaft (StA) Eisenstadt hat die Ermittlungen zum Tod des ehemaligen Justizsektionschefs Christian Pilnacek beendet. Das wurde am Freitag bekanntgegeben. Die Behörde führte zusätzliche Erhebungen durch. Dabei ergab sich offenbar keine entscheidend neue Beweislage.", "title": "Ermittlungen zu Pilnacek-Tod eingestellt", "url": "https://orf.at/stories/3433116/"}, {"category": "politik", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_04", "source": "ORF News", "status": "active", "summary": "Peking warnt vor „Spionageschildkröten“", "title": "Peking warnt vor „Spionageschildkröten“", "url": "https://orf.at/stories/3433119/"}, {"category": "politik", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_05", "source": "ORF News", "status": "active", "summary": "StA Eisenstadt beendet Pilnacek-Verfahren", "title": "StA Eisenstadt beendet Pilnacek-Verfahren", "url": "https://orf.at/stories/3433115/"}, {"category": "politik", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_03", "source": "ORF Wien", "status": "active", "summary": "Ein 23-Jähriger ist am Freitag wegen fahrlässiger Körperverletzung zu fünf Monaten bedingt verurteilt worden. Er ließ nach einer durchzechten Nacht Drogen in seinem Zimmer liegen. Seine 19 Monate alte Tochter erwischte sie und wurde mit einem Drogencocktail im Blut ins Spital eingeliefert.", "title": "Kleinkind erwischte Drogen: Vater verurteilt", "url": "https://wien.orf.at/stories/3358269/"}, {"category": "politik", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_vie_04", "source": "Vienna.at", "status": "active", "summary": "Die KI-Firma Anthropic hat nach einer Anordnung der US-Regierung den Zugang zu ihrer erst vor wenigen Tagen veröffentlichten Top-Software mit Künstlicher Intelligenz (KI) blockiert.", "title": "US-Regierung lässt Top-KI-Modell von Anthropic sperren", "url": "https://www.vienna.at/us-regierung-laesst-top-ki-modell-von-anthropic-sperren/10248107"}, {"category": "politik", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_sta_03", "source": "Standard Kultur", "status": "active", "summary": "Die Flaggschiffe der heimischen Kulturbranche machen sich weniger Sorgen als Vertreter der freien Szene", "title": "Reaktionen aufs Kulturbudget: \"Es sind gerade viele schlechte Nachrichten\"", "url": "https://www.derstandard.at/story/3000000326937/reaktionen-aufs-kulturbudget-es-sind-gerade-viele-schlechte-nachrichten?ref=rss"}, {"category": "politik", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_wie_01", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Mit viel Lob für verdiente Parteifunktionäre und scharfen Angriffen auf politische Gegner hat Staatssekretärin Michaela Schmidt beim SPÖ-Landesparteitag den designierten Parteichef Peter Eder als künftigen Oppositionsführer im Land aufgebaut. ST. JOHANN, SALZBURG. Mit einer kämpferischen Rede stimmte Staatssekretärin Michaela Schmidt die Delegierten auf den Führungswechsel in der Salzburger SPÖ ein. Eveline Huber sei „ein Vorbild für alle Frauen in der Salzburger Sozialdemokratie“, sagte...", "title": "„Diese Frechheit hätte es mit uns nicht gegeben.“", "url": "https://www.meinbezirk.at/salzburg/c-politik/diese-frechheit-haette-es-mit-uns-nicht-gegeben_a8690015"}, {"category": "politik", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_wie_05", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Auch das Bundesheer kämpft mit Auswirkungen der angespannten Budgetlage. Das Ziel, bis 2032 die Verteidigungsausgaben auf zwei Prozent des BIP zu erhöhen, wackelt gewaltig. ÖSTERREICH. Die angespannte Budgetlage trifft alle Ministerien in der Bundesregierung, so auch das Verteidigungsministerium. Trotz Sparkurs soll das Budget im Ministerium ansteigen, jedoch fehlen zur Erfüllung des sogenannten „Aufbauplans 2032+“ in den Bundesfinanzrahmen bis 2031 12,6 Milliarden Euro. Das habe laut...", "title": "Heeres-Aufbauplan 2032 steht vor einem Milliarden-Problem", "url": "https://www.meinbezirk.at/c-wirtschaft/heeres-aufbauplan-2032-steht-vor-einem-milliarden-problem_a8690003"}, {"category": "politik", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_00", "source": "ORF News", "status": "active", "summary": "Transportflugzeug der indischen Armee abgestürzt", "title": "Transportflugzeug der indischen Armee abgestürzt", "url": "https://orf.at/stories/3433212/"}, {"category": "politik", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_01", "source": "ORF News", "status": "active", "summary": "Die USA und der Iran stehen nach Darstellung beider Seiten sowie des Vermittlers Pakistans kurz vor einem Abkommen zur Beendigung des Kriegs. „Wir können bestätigen, dass ein endgültiger, von allen Seiten abgestimmter Text des Friedensabkommens erreicht wurde“, schrieb Pakistans Premierminister Shehbaz Sharif am Freitag auf X. Doch wenig später meldete das US-Militär neuerlich iranische Angriffe in der Straße von Hormus.", "title": "Annäherung und ein neuerlicher Angriff", "url": "https://orf.at/stories/3433209/"}, {"category": "politik", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_02", "source": "ORF News", "status": "active", "summary": "Parteifinanzen: Social-Media-Regeln auch für Staatssekretäre", "title": "Parteifinanzen: Social-Media-Regeln auch für Staatssekretäre", "url": "https://orf.at/stories/3433210/"}, {"category": "politik", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_03", "source": "ORF News", "status": "active", "summary": "Anthropic sperrt KI-Modell nach Regierungsanordnung", "title": "Anthropic sperrt KI-Modell nach Regierungsanordnung", "url": "https://orf.at/stories/3433208/"}, {"category": "politik", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_04", "source": "ORF News", "status": "active", "summary": "Russland meldet Toten nach ukrainischem Drohnenangriff", "title": "Russland meldet Toten nach ukrainischem Drohnenangriff", "url": "https://orf.at/stories/3433201/"}, {"category": "politik", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_05", "source": "ORF News", "status": "active", "summary": "Bundesheer: 12,6 Mrd. Euro fehlen für Aufbauplan", "title": "Bundesheer: 12,6 Mrd. Euro fehlen für Aufbauplan", "url": "https://orf.at/stories/3433200/"}, {"category": "politik", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_03", "source": "ORF Wien", "status": "active", "summary": "Gerichtsverfahren werden zunehmend komplexer, so die Sprecherin des Landesgerichts Wien, Christina Salzborn in „Wien heute“. Ein Fall, der sie lange beschäftigt habe, sei der „Fall Anna“. Mehrere Angeklagte wurden vom sexuellen Missbrauch an einer Zwölfjährigen freigesprochen.", "title": "Gerichtssprecherin: „Fall Anna“ hat lange beschäftigt", "url": "https://wien.orf.at/stories/3358332/"}, {"category": "politik", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_vie_00", "source": "Vienna.at", "status": "active", "summary": "Die israelische Armee hat die Menschen in 29 Orten im Süden des Libanon dazu aufgerufen, sich wegen geplanter Angriffe in Sicherheit zu bringen. Der arabischsprachige Armeesprecher Avichay Adraee gab am Sonntag im Onlinedienst X zwei aufeinanderfolgende Warnungen aus, zunächst eine für 13 Orte im Süden des Libanon, anschließend für 16 weitere Orte nördlich des Flusses Sahrani. Zuvor hatte die proiranische Hisbollah-Miliz den Norden Israels mit Sprengstoff-Drohnen angegriffen.", "title": "Israel ruft in 29 Orten im Südlibanon zur Evakuierung auf", "url": "https://www.vienna.at/hisbollah-greift-norden-israels-mit-sprengstoff-drohnen-an/10248833"}, {"category": "politik", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_vie_01", "source": "Vienna.at", "status": "active", "summary": "Unvorstellbare Armut, steigende Kriminalität, eine für die meisten Menschen unerschwingliche medizinische Versorgung, politische Instabilität und immer weniger Hilfe aus dem Westen. So fasst der in Wien tätige Priester Hanna Ghoneim aus Syrien die aktuelle Lage in seiner Heimat zusammen. Ghoneim leitet das Wiener Hilfswerk \"Korbgemeinschaft\", das in Syrien tätig ist. Darüber berichtete die Katholische Presseagentur Kathpress am Sonntag.", "title": "Priester schildert dramatische Zustände in Syrien", "url": "https://www.vienna.at/priester-schildert-dramatische-zustaende-in-syrien/10249169"}, {"category": "politik", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_vie_02", "source": "Vienna.at", "status": "active", "summary": "Fast eine Woche nach dem schweren Erdbeben auf den Philippinen ist die Zahl der Toten nach dem Fund weiterer Leichen auf mindestens 61 gestiegen. 40 Menschen würden vermisst und mehr als 1.400 seien verletzt worden, teilte der Nationale Katastrophenschutz am Sonntag mit.", "title": "Zahl der Toten nach Philippinen-Beben stieg auf 61", "url": "https://www.vienna.at/zahl-der-toten-nach-philippinen-beben-stieg-auf/10248908"}, {"category": "politik", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_vie_04", "source": "Vienna.at", "status": "active", "summary": "Die Ermittlungen der Staatsanwaltschaft Feldkirch gegen vier Innsbrucker Justizwachebeamte wegen Körperverletzung unter Ausnutzung der Amtsgewalt gegen einen 17-jährigen Häftling sind eingestellt worden. Staatsanwaltschaftssprecherin Karin Dragosits bestätigte gegenüber der APA einen entsprechenden Bericht der Tirol-Ausgabe der \"Kronen Zeitung\" (Sonntag). Die Ermittlungen waren nach einem Vorfall Mitte Jänner in einem Krankenhaus aufgenommen worden.", "title": "Ermittlungen gegen Tiroler Justizanstalt-Beamte eingestellt", "url": "https://www.vienna.at/ermittlungen-gegen-tiroler-justizanstalt-beamte-eingestellt/10248896"}, {"category": "politik", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_wie_03", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Bad Leonfelden und Vorderweißenbach bündeln Kräfte: Neue Verwaltungsgemeinschaft im Finanzbereich gestartet. BAD LEONFELDEN/VORDERWEISSENBACH. Die Stadtgemeinde Bad Leonfelden und die Marktgemeinde Vorderweißenbach gehen einen wichtigen Schritt in Richtung moderner und effizienter Gemeindeverwaltung. Beide Gemeinden bündeln künftig ihre Finanz- und Vermögensverwaltung in einer gemeinsamen Organisationseinheit. Damit entsteht eine Kooperation, die im oberen Mühlviertel Vorbildcharakter hat....", "title": "Bad Leonfelden und Vorderweißenbach stärken sich mit cleverem Schritt", "url": "https://www.meinbezirk.at/urfahr-umgebung/c-lokales/bad-leonfelden-und-vorderweissenbach-staerken-sich-mit-cleverem-schritt_a8690627"}, {"category": "politik", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_00", "source": "ORF News", "status": "active", "summary": "Neuer israelischer Evakuierungsaufruf für 29 Orte im Libanon", "title": "Neuer israelischer Evakuierungsaufruf für 29 Orte im Libanon", "url": "https://orf.at/stories/3433286/"}, {"category": "politik", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_01", "source": "ORF News", "status": "active", "summary": "Rumäniens Präsident ernennt Vestea zu neuem Premier", "title": "Rumäniens Präsident ernennt Vestea zu neuem Premier", "url": "https://orf.at/stories/3433282/"}, {"category": "politik", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_02", "source": "ORF News", "status": "active", "summary": "Starmer: Tanker von Russlands „Schattenflotte“ gestoppt", "title": "Starmer: Tanker von Russlands „Schattenflotte“ gestoppt", "url": "https://orf.at/stories/3433279/"}, {"category": "politik", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_03", "source": "ORF News", "status": "active", "summary": "Ringen um Abkommen: Katar schickt Delegation nach Teheran", "title": "Ringen um Abkommen: Katar schickt Delegation nach Teheran", "url": "https://orf.at/stories/3433277/"}, {"category": "politik", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_04", "source": "ORF News", "status": "active", "summary": "Die Ukraine hat in der Nacht auf Sonntag mit Drohnenangriffen auf Russland in Industrieanlagen in den Gebieten Tula und Jaroslawl Brände ausgelöst. In der südlich von Moskau gelegenen Region Tula berichtete Gouverneur Dmitri Miljajew, dass Trümmer einer abgeschossenen Drohne auf das Gelände einer Chemiefabrik in Nowomoskowsk gefallen seien.", "title": "Ukraine zielt weiter auf Russlands Industrie", "url": "https://orf.at/stories/3433276/"}, {"category": "politik", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_05", "source": "ORF News", "status": "active", "summary": "Bericht: Hochrangiger Regierungsbeamter in Haiti entführt", "title": "Bericht: Hochrangiger Regierungsbeamter in Haiti entführt", "url": "https://orf.at/stories/3433275/"}, {"category": "politik", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_vie_01", "source": "Vienna.at", "status": "active", "summary": "Donald Trump hat sich zum Geburtstag einen feschen Kampfkäfig vor das Weiße Haus stellen lassen. Genauer genommen zu seinem Achtziger und zum 250. Unabhängigkeitstag der USA, welches davon nun das bedeutendere Jubiläum sein mag, liegt im Auge des Betrachtenden. Bei den brutalen Käfigkämpfen, die am vergangenen Sonntag ausgetragen wurden, ist de facto alles erlaubt, selbst", "title": "Kommentar: Raus aus  dem Kampfkäfig!", "url": "https://www.vienna.at/kommentar-raus-aus-dem-kampfkaefig/10254989"}, {"category": "politik", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_vie_02", "source": "Vienna.at", "status": "active", "summary": "Steigende Anfallszahlen im Zivil- und Strafbereich bringen die Justiz an die Grenzen der Belastbarkeit.", "title": "Zu viele Straftdelikte, zu wenig Richter: Vorarlberger Justiz am absoluten Limit", "url": "https://www.vienna.at/zu-viele-straftdelikte-zu-wenig-richter-vorarlberger-justiz-am-absoluten-limit/10254977"}, {"category": "politik", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_wie_01", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Der WWF sieht beim Schutz von Biber, Wolf, Fischotter und Luchs erhebliche Defizite in Österreich. Laut einem aktuellen Barometer erreicht kein Bundesland eine gute Gesamtbewertung. Kritisiert werden u. a. Abschussregelungen, fehlende Präventionsmaßnahmen und lückenhafte Managementpläne. ÖSTERREICH. Die aktuelle Ausgabe des WWF-Bundesländerbarometers fällt für Österreichs Bundesländer überwiegend negativ aus. Von insgesamt 35 Bewertungen wurden lediglich vier mit \"gut\" eingestuft. Diese...", "title": "Artenschutz in Österreichs Bundesländern weist große Mängel auf", "url": "https://www.meinbezirk.at/c-lokales/artenschutz-in-oesterreichs-bundeslaendern-weist-grosse-maengel-auf_a8692976"}, {"category": "politik", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_wie_03", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Mit einer Absenkung des Höchstsatzes, degressiven Sätzen für Minderjährige, Kürzungen bei Fehlverhalten und strengeren Voraussetzungen für den Leistungsbezug stieß die Novelle des Steiermärkischen Sozialunterstützungsgesetzes, die mit 1. Februar in Kraft trat, bereits auf harte Kritik. Die Opposition bringt das Gesetz nun zur Prüfung vor den Verfassungsgerichtshof. Die FPÖ reagiert mit Unverständnis. STEIERMARK. Die steirische Sozialhilfe sorgte in den vergangenen Monaten für Aufsehen. Im...", "title": "Steirisches Sozialhilfegesetz kommt vor den Verfassungsgerichtshof", "url": "https://www.meinbezirk.at/steiermark/c-politik/steirisches-sozialhilfegesetz-kommt-vor-den-verfassungsgerichtshof_a8692184"}, {"category": "politik", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_orf_01", "source": "ORF News", "status": "active", "summary": "UNO: 18 Demonstranten im Iran in diesem Jahr hingerichtet", "title": "UNO: 18 Demonstranten im Iran in diesem Jahr hingerichtet", "url": "https://orf.at/stories/3433380/"}, {"category": "politik", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_orf_02", "source": "ORF News", "status": "active", "summary": "In der Nacht auf Montag haben sich Teheran und Washington auf ein Abkommen zur Beilegung des Iran-Krieges geeinigt. Staaten weltweit begrüßten die Einigung und forderten eine rasche Umsetzung. Nach Angaben des Libanon setzte die israelische Armee jedoch ihre Angriffe fort.", "title": "Iran-Abkommen zwischen Hoffen und Bangen", "url": "https://orf.at/stories/3433363/"}, {"category": "politik", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_orf_03", "source": "ORF News", "status": "active", "summary": "Iran-Abkommen: Ölpreis deutlich gesunken", "title": "Iran-Abkommen: Ölpreis deutlich gesunken", "url": "https://orf.at/stories/3433370/"}, {"category": "politik", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_orf_04", "source": "ORF News", "status": "active", "summary": "US-Präsident Donald Trump hat an seinem 80. Geburtstag am Sonntag zu einer speziellen Veranstaltung geladen. Bei einem Käfigkampf der UFC auf dem Rasen des Weißen Hauses schlugen sich Mixed-Martial-Arts-Kämpfer, während das Publikum „USA, USA“ skandierte.", "title": "Blut und Spiele zum Geburtstag", "url": "https://orf.at/stories/3433360/"}, {"category": "politik", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_orf_05", "source": "ORF News", "status": "active", "summary": "Fars: Gebühren für Straße von Hormus in Iran-Vereinbarung", "title": "Fars: Gebühren für Straße von Hormus in Iran-Vereinbarung", "url": "https://orf.at/stories/3433365/"}, {"category": "politik", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_00", "source": "ORF Wien", "status": "active", "summary": "Wiens Kulturstadträtin Veronica Kaup-Hasler (SPÖ) hat am Dienstag im Gemeinderat Einsparungen im Kulturbereich verteidigt. „Es gibt einen Rahmen, der gegeben wird, das ist die Finanzlage der Stadt“, sagte sie in der Fragestunde.", "title": "Kaup-Hasler verteidigte Sparstift bei Kultur", "url": "https://wien.orf.at/stories/3358687/"}, {"category": "politik", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_02", "source": "ORF Wien", "status": "active", "summary": "Die ehemalige US-Vizepräsidentin Kamala Harris nimmt heute an der von Arnold Schwarzenegger initiierten Klimakonferenz Austrian World Summit in der Hofburg teil. Sie übt scharfe Kritik am Iran-Krieg und dem von US-Präsident Donald Trump verkündeten Deal.", "title": "Harris übt scharfe Kritik an Trump", "url": "https://wien.orf.at/stories/3358590/"}, {"category": "politik", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_vie_03", "source": "Vienna.at", "status": "active", "summary": "Das EU-Parlament hat am Dienstag dem EU-US-Handelsdeal zugestimmt. Während der letzten Plenartagung im Mai hatten die Verhandler von Parlament und Rat (der Mitgliedsländer) eine Einigung zu dem von EU-Kommissionspräsidentin Ursula von der Leyen und US-Präsident Donald Trump vorigen Sommer in Schottland ausverhandelten Abkommen erzielt. Die USA werden die meisten Einfuhren aus der EU mit einem Zollsatz von 15 Prozent belegen; die EU zahlreiche Zölle auf US-Produkte streichen.", "title": "EU-Parlament stimmt für Umsetzung von EU-US-Zolldeal", "url": "https://www.vienna.at/eu-parlament-stimmt-fuer-umsetzung-von-eu-us-zolldeal/10257029"}, {"category": "politik", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_sta_04", "source": "Standard Kultur", "status": "active", "summary": "Verlage müssen sich künftig zu Antifaschismus bekennen. Ministerpräsidentin Giorgia Meloni spricht von Zensur", "title": "Neuregelung bei Buchmesse in Italien ärgert Meloni", "url": "https://www.derstandard.at/story/3000000327465/neuregelung-bei-buchmesse-in-italien-228rgert-meloni?ref=rss"}, {"category": "politik", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_wie_02", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Die Junge Volkspartei Niederösterreich hat unter dem Motto „Setz dich ein daheim“ den Start ihrer diesjährigen Sommertour angekündigt. Nach dem Vorjahresprojekt, bei dem in 100 Tagen insgesamt 101 Vereine besucht wurden, will die Organisation auch heuer wieder quer durch Niederösterreich unterwegs sein, um junges ehrenamtliches Engagement sichtbar zu machen. NÖ. JVP NÖ-Landesobmann Sebastian Stark betont den Fokus auf persönliche Begegnungen in allen Regionen des Landes: „Von Gmünd bis...", "title": "„Setz dich ein daheim“ bringt junge Ehrenamtliche vor den Vorhang", "url": "https://www.meinbezirk.at/niederoesterreich/c-politik/setz-dich-ein-daheim-bringt-junge-ehrenamtliche-vor-den-vorhang_a8694438"}, {"category": "politik", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_00", "source": "ORF News", "status": "active", "summary": "Die demokratische Ex-Vizepräsidentin Kamala Harris hat am Dienstag in Wien auf dem Austrian World Summit in der Hofburg in ihrer Rede mit US-Präsident Donald Trump scharf abgerechnet. Sie übte Kritik am Iran-Krieg und der von Trump verkündeten Einigung.", "title": "Scharfe Abrechnung mit Trump in Wien", "url": "https://orf.at/stories/3433463/"}, {"category": "politik", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_01", "source": "ORF News", "status": "active", "summary": "EU-Parlament erlaubt „Veggie-Burger“ und „Tofu-Schnitzel“", "title": "EU-Parlament erlaubt „Veggie-Burger“ und „Tofu-Schnitzel“", "url": "https://orf.at/stories/3433483/"}, {"category": "politik", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_03", "source": "ORF News", "status": "active", "summary": "Grünes Licht für Umsetzung des Zolldeals mit USA", "title": "Grünes Licht für Umsetzung des Zolldeals mit USA", "url": "https://orf.at/stories/3433482/"}, {"category": "politik", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_05", "source": "ORF News", "status": "active", "summary": "Trump kritisiert israelische Angriffe auf Beirut", "title": "Trump kritisiert israelische Angriffe auf Beirut", "url": "https://orf.at/stories/3433478/"}], "wien": [{"category": "wien", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_orf_00", "source": "ORF Wien", "status": "active", "summary": "Rund eine Tonne Cannabis im Wert von 4,5 Millionen Euro haben Ermittler der Wiener Polizei in Liesing sichergestellt, wie heute bekanntgegeben worden ist. Dabei handelt es sich um die bisher größte in Österreich sichergestellte Menge des Suchtmittels.", "title": "Rund eine Tonne Cannabis sichergestellt", "url": "https://wien.orf.at/stories/3358039/"}, {"category": "wien", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_orf_01", "source": "ORF Wien", "status": "active", "summary": "Die Wiener Suchthilfeeinrichtungen haben heute Vormittag vor der Pensionsversicherung in Wien-Brigittenau protestiert. Grund war der Ausstieg der Pensionsversicherung aus der Finanzierung eines Projekts für alkoholkranke Menschen.", "title": "Protest gegen Sparen bei Alkoholtherapie", "url": "https://wien.orf.at/stories/3357933/"}, {"category": "wien", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_orf_02", "source": "ORF Wien", "status": "active", "summary": "Ein Gründerzeithaus in der Harmoniegasse 10 am Alsergrund steht seit Jahren weitgehend leer und verfällt. Das Gebäude ist Teil eines Otto-Wagner-Ensembles und befand sich bisher im Besitz einer städtischen Armenstiftung. Diese Woche wurde das Haus verkauft, es soll saniert werden.", "title": "Nach Verfall: Otto-Wagner-Haus wird saniert", "url": "https://wien.orf.at/stories/3357616/"}, {"category": "wien", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_vie_01", "source": "Vienna.at", "status": "active", "summary": "Das Dach der Sporthalle Rieden in Bregenz ist undicht. Bei starkem Regen dringt Wasser in die Halle ein, die von zwei Schulen und Rekordmeister Bregenz Handball genutzt wird. Die Stadt kennt das Problem, ein konkreter Sanierungszeitplan fehlt jedoch.", "title": "Nach Dornbirn nun Bregenz: Auch die Sporthalle Rieden hat ein Dachproblem", "url": "https://www.vienna.at/nach-dornbirn-nun-bregenz-auch-die-sporthalle-rieden-hat-ein-dachproblem/10241954"}, {"category": "wien", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_vie_02", "source": "Vienna.at", "status": "active", "summary": "A man alerted the police and fire department about a person allegedly trapped in a canal. When the emergency call turned out to be false, the situation escalated completely.", "title": "False Emergency Call in Vienna-Floridsdorf Ends with Attack on Policewoman", "url": "https://www.vienna.at/false-emergency-call-in-vienna-floridsdorf-ends-with-attack-on-policewoman/10243733"}, {"category": "wien", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_vie_03", "source": "Vienna.at", "status": "active", "summary": "Auf der Rheintal/Walgau Autobahn (A14) kommt es zwischen Wolfurt und Lauterach in Fahrtrichtung Deutschland aufgrund eines Unfalls zu Verkehrsbehinderungen. Autofahrer müssen seit Donnerstag, 11. Juni 2026, 11.13 Uhr mit Stau und Verzögerungen rechnen.", "title": "Unfall auf der A14", "url": "https://www.vienna.at/unfall-auf-der-a14/10243700"}, {"category": "wien", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_vie_04", "source": "Vienna.at", "status": "active", "summary": "Ein Mann alarmierte Polizei und Feuerwehr wegen einer angeblich im Kanal eingeschlossenen Person. Als sich der Notruf als falsch herausstellte, eskalierte die Situation völlig.", "title": "Falscher Notruf in Wien-Floridsdorf endet mit Angriff auf Polizistin", "url": "https://www.vienna.at/falscher-notruf-in-wien-floridsdorf-endet-mit-angriff-auf-polizistin/10243538"}, {"category": "wien", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_wie_01", "source": "Wiener Bezirksblätter", "status": "active", "summary": "💙Vatertag mit Geschichte, Genuss und Eisenbahnflair! 💙🚆 Am 14.06.2026 erwartet euch ein ganz besonderes Erlebnis: Steigt ein in den legendären „Blauen Blitz“ und genießt eine nostalgische Reise durch wunderschöne Landschaften, ganz wie in den goldenen Zeiten der Eisenbahn. ✨ Wir starten im Eisenbahnmuseum Strasshof. Unser Ziel ist das Kleine Bahn-Museum, wo faszinierende Eisenbahngeschichte, liebevoll erhaltene Exponate und jede Menge nostalgischer Charme auf euch warten. Unterwegs sorgen die...", "title": "Vatertagsfahrt 14.06.2026 mit dem Blauen Blitz", "url": "https://www.meinbezirk.at/gaenserndorf/c-regionauten-community/vatertagsfahrt-14062026-mit-dem-blauen-blitz_a8686775"}, {"category": "wien", "date_fetched": "2026-06-11", "feedback": null, "id": "art_20260611_wie_02", "source": "Wiener Bezirksblätter", "status": "active", "summary": "STEYR. Bei Sanierungsarbeiten am Belag des Museumsstegs wurden erhebliche Schäden an der Tragkonstruktion festgestellt. Wie die Stadt mitteilt, weisen die unter dem Bohlenbelag liegenden Holzträger starke Feuchtigkeitsschäden auf. Eine daraufhin beauftragte statische Überprüfung durch ein Zivilingenieurbüro ergab, dass die erforderliche Tragsicherheit für größere Menschenansammlungen nicht mehr gewährleistet ist. Insbesondere bei einer hohen Belastung durch viele Personen gleichzeitig könnte...", "title": "Museumssteg Steyr wird während Boatmania aus Sicherheitsgründen gesperrt", "url": "https://www.meinbezirk.at/steyr-steyr-land/c-lokales/museumssteg-steyr-wird-waehrend-boatmania-aus-sicherheitsgruenden-gesperrt_a8686766"}, {"category": "wien", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_02", "source": "ORF Wien", "status": "active", "summary": "Ein eher unglückliches Zusammentreffen des Donauinselfests mit dem Beginn der Bauarbeiten auf der S-Bahn-Stammstrecke hat für Aufregung gesorgt. Nun liegt ein Verkehrskonzept vor, mit dem die Anreise zum Donauinselfest trotzdem gelingen soll.", "title": "Ohne S-Bahn zum Donauinselfest", "url": "https://wien.orf.at/stories/3358094/"}, {"category": "wien", "date_fetched": "2026-06-12", "feedback": null, "id": "art_20260612_orf_03", "source": "ORF Wien", "status": "active", "summary": "Heute wird am Wiener Landesgericht ein Urteil im Prozess gegen eine Ex-Leiterin einer Seniorenresidenz erwartet. Der Angeklagten werden zahlreiche Missstände in ihrem Wiener Pflegeheim angekreidet. Der Frau drohen bis zu drei Jahre Haft.", "title": "Elend im Pflegeheim: Urteil erwartet", "url": "https://wien.orf.at/stories/3358092/"}, {"category": "wien", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_00", "source": "ORF Wien", "status": "active", "summary": "Bereits zum 30. Mal zieht die Pride-Parade über die Ringstraße. Tausende Teilnehmerinnen und Teilnehmer werden heute erwartet, um für Akzeptanz, Respekt und gleiche Rechte für die LGBTQIA+-Community einzutreten. Das Motto lautet heuer „Sichtbar seit 1996“.", "title": "30. Regenbogenparade geht über die Bühne", "url": "https://wien.orf.at/stories/3357887/"}, {"category": "wien", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_01", "source": "ORF Wien", "status": "active", "summary": "In den Blumengärten Hirschstetten finden am Samstag und Sonntag die Lavendeltage statt. Besucherinnen und Besucher erhalten Informationen rund um die Lavendelblüte, können an Kinderaktionen teilnehmen und verschiedene Lavendelprodukte kennenlernen.", "title": "Lavendelwochenende in Hirschstetten", "url": "https://wien.orf.at/stories/3358262/"}, {"category": "wien", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_02", "source": "ORF Wien", "status": "active", "summary": "Anfang des Jahres hat die Stadt subsidiär Schutzberechtigten die Sozialhilfe gestrichen. Seither sind sie statt in der Mindestsicherung in der Grundversorgung. Die Folge: weniger Arbeitslose in der Statistik, die Caritas warnt aber gleichzeitig vor mehr Armut.", "title": "Caritas: „Weniger Arbeitslose, mehr Armut“", "url": "https://wien.orf.at/stories/3358300/"}, {"category": "wien", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_04", "source": "ORF Wien", "status": "active", "summary": "In Wien ist ein 79-jähriger Mann Opfer eines Trickdiebstahls geworden. Ein Verdächtiger läutete bei seiner Wohnung am Alsergrund an und gab sich als Mitarbeiter einer Firma für Schimmelbekämpfung aus. Er soll dem Pensionisten einen Tresor gestohlen haben.", "title": "Trickdiebe stahlen Tresor aus Wohnung", "url": "https://wien.orf.at/stories/3358251/"}, {"category": "wien", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_orf_05", "source": "ORF Wien", "status": "active", "summary": "In Simmering ist Donnerstagnacht ein 37-Jähriger von einer Gruppe von etwa 15 Männern mit Eisenstangen und Fußtritten attackiert worden. Der Mann wurde schwer verletzt. Von den mutmaßlichen Tätern fehlt jede Spur.", "title": "Mann mit Eisenstangen attackiert", "url": "https://wien.orf.at/stories/3358250/"}, {"category": "wien", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_vie_01", "source": "Vienna.at", "status": "active", "summary": "Ab Sonntag, 14. Juni, wird die Bahnstrecke zwischen Feldkirch und Buchs SG für vier Monate vollständig gesperrt. Die ÖBB führen entlang der rund 18 Kilometer langen Strecke umfangreiche Modernisierungsarbeiten durch. Für Fahrgäste bringt das erhebliche Änderungen im Nah- und Fernverkehr mit sich.", "title": "Vier Monate lang keine Züge: Sperre zwischen Feldkirch und Buchs startet", "url": "https://www.vienna.at/vier-monate-lang-keine-zuege-sperre-zwischen-feldkirch-und-buchs-startet/10245728"}, {"category": "wien", "date_fetched": "2026-06-13", "feedback": null, "id": "art_20260613_vie_02", "source": "Vienna.at", "status": "active", "summary": "Bei einem Femizid in einer Schule in Taufkirchen an der Pram (Bezirk Schärding) soll am Freitag ein 29-jähriger Pädagoge seine um ein Jahr jüngere Kollegin mit einem zweischneidigen Dolch und einer Schusswaffe in der Schulbibliothek getötet haben. Die Waffe hatte der Mann legal besessen. Hintergrund der Tat dürfte offenbar unerwiderte Liebe sein, und dass die Frau eine andere Beziehung einging, wie Staatsanwalt Alois Ebner der APA am Samstag erklärte.", "title": "Lehrerin an Schule in OÖ mit Schuss- und Stichwaffe getötet", "url": "https://www.vienna.at/lehrerin-an-schule-in-ooe-mit-schuss-und-stichwaffe-getoetet/10248125"}, {"category": "wien", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_00", "source": "ORF Wien", "status": "active", "summary": "Wo früher die Alte Wirtschaftsuniversität am Alsergrund stand, soll ein neuer Bildungscampus entstehen. Viel von der Bausubstanz soll erhalten bleiben. Bevor gebaut werden kann, muss allerdings Asbest entfernt werden, derzeit eine der größten Asbestsanierungen des Landes.", "title": "Alte WU wird von Asbest befreit", "url": "https://wien.orf.at/stories/3358392/"}, {"category": "wien", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_01", "source": "ORF Wien", "status": "active", "summary": "Von Yoga bis Quidditch: Morgen startet zum zehnten Mal das Programm „Bewegt im Park“ mit zahlreichen kostenlosen Sportprogrammen unter freiem Himmel. Allein in Wien gibt es heuer rund 150 Kurse.", "title": "Gemeinsam turnen bei „Bewegt im Park“", "url": "https://wien.orf.at/stories/3358363/"}, {"category": "wien", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_02", "source": "ORF Wien", "status": "active", "summary": "Heute Abend fährt erstmals der neue Nightjet der ÖBB nach Zürich. Laut ÖBB handelt es sich um Europas modernsten Nachtzug. Bahnreisende können zwischen verschiedenen Komfortkategorien wählen. Insgesamt sind damit auf neun Linien ÖBB-Nachtzüge der neuen Generation im Einsatz.", "title": "Nightjet auf Premierenfahrt nach Zürich", "url": "https://wien.orf.at/stories/3358338/"}, {"category": "wien", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_04", "source": "ORF Wien", "status": "active", "summary": "Ein mutmaßlicher Einbrecher hat in der Nacht auf Freitag in Favoriten trotz anwesender Bewohner eine Erdgeschoßwohnung nach Wertgegenständen durchsucht. Selbst die Alarmierung der Polizei brachte ihn nicht von seinem Vorhaben ab.", "title": "Bewohner wach: Einbrecher durchwühlte Räume", "url": "https://wien.orf.at/stories/3358350/"}, {"category": "wien", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_orf_05", "source": "ORF Wien", "status": "active", "summary": "Ein 25-jähriger Mann soll am Freitag in Hietzing seine Ex-Partnerin überwältigt, mehrere Stunden in ihrer Wohnung festgehalten und sie mit einem Küchenmesser mit dem Umbringen bedroht haben. Die Frau konnte letztlich unbemerkt einen Notruf absetzen.", "title": "Frau von Ex-Freund stundenlang festgehalten", "url": "https://wien.orf.at/stories/3358344/"}, {"category": "wien", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_vie_05", "source": "Vienna.at", "status": "active", "summary": "Nach dem Femizid in einer Schule in Taufkirchen an der Pram (Bezirk Schärding) am Freitag wird am Sonntag über den weiteren Schulbetrieb entschieden. Eine Runde aus Vertretern der Bildungsdirektion, der Krisenhilfe Oberösterreich, des Lehrpersonals sowie der Gemeinde führt dazu ein Abstimmungsgespräch. Laut APA-Informationen soll dabei über eine Schulschließung für Montag diskutiert werden.", "title": "Innviertler Schule könnte nach Femizid vorerst zu bleiben", "url": "https://www.vienna.at/innviertler-schule-koennte-nach-femizid-vorerst-zu-bleiben/10248890"}, {"category": "wien", "date_fetched": "2026-06-14", "feedback": null, "id": "art_20260614_wie_05", "source": "Wiener Bezirksblätter", "status": "active", "summary": "In Favoriten kam es am Freitagnachmittag zu einem Einsatz von Rettung und Polizei. Ein 50-jähriger Mann soll Sanitäter beschimpft, bespuckt und mit einer abgebrochenen Glasflasche bedroht haben. WIEN/FAVORITEN. Passanten bemerkten am Freitagnachmittag einen reglos auf einer Parkbank sitzenden Mann. Daraufhin alarmierten die besorgten Anrainer den Notruf. Als Mitarbeiter des Rettungsdienstes kurz darauf in Favoriten eintrafen und Erste-Hilfe-Maßnahmen setzen wollten, kam der Mann wieder zu sich....", "title": "Mann bedroht Rettungskräfte mit zerbrochener Glasflasche", "url": "https://www.meinbezirk.at/favoriten/c-lokales/mann-bedroht-rettungskraefte-mit-zerbrochener-glasflasche_a8690624"}, {"category": "wien", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_orf_00", "source": "ORF Wien", "status": "active", "summary": "Am Wiener Landesgericht hat heute der Prozess um einen „Bandenkrieg“ begonnen, der im Vorjahr in Floridsdorf eskaliert ist. Mehrere Menschen wurden schwer verletzt, ein 15-Jähriger ist sogar wegen versuchten Mordes angeklagt. Die Urteile werden jedoch erst im Juli gefällt.", "title": "Prozess um „Bandenkrieg“: Urteile im Juli", "url": "https://wien.orf.at/stories/3358370/"}, {"category": "wien", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_orf_02", "source": "ORF Wien", "status": "active", "summary": "Mit einem Aufprall auf einen Zaun hat die Raserfahrt eines Pkw-Lenkers am Sonntag geendet. Der 39-Jährige war zuvor vor einer Polizeikontrolle in Wien auf die Südautobahn (A2) geflüchtet und beschleunigte dort auf bis zu 230 km/h.", "title": "Verfolgungsjagd mit 230 km/h endete in Zaun", "url": "https://wien.orf.at/stories/3358499/"}, {"category": "wien", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_orf_04", "source": "ORF Wien", "status": "active", "summary": "Die Artenvielfalt von Taufliegen (Drosophila) in Wien hat in den vergangenen drei Jahrzehnten um rund 50 Prozent abgenommen. Ein Forschungsteam des Naturhistorischen Museums (NHM) fand heraus, dass offenbar zugewanderte Taufliegenarten andere Arten verdrängt haben.", "title": "Taufliegen zeigen Verlust der Artenvielfalt", "url": "https://wien.orf.at/stories/3358476/"}, {"category": "wien", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_orf_05", "source": "ORF Wien", "status": "active", "summary": "Auf der Südosttangente (A23) stehen weitere Arbeiten für die Generalsanierung des Knotens Prater an. Mehrere Auf- und Abfahrten müssen diese Woche in der Nacht gesperrt werden, das erste Mal heute ab 22.00 Uhr.", "title": "Sperre auf A23 wegen Sanierungsarbeiten", "url": "https://wien.orf.at/stories/3358472/"}, {"category": "wien", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_vie_00", "source": "Vienna.at", "status": "active", "summary": "Betrunkener Autofahrer bot Beamten 800 Euro, um Promilletest zu vermeiden.", "title": "Alkolenker wollte Polizist bestechen", "url": "https://www.vienna.at/alkolenker-wollte-polizist-bestechen/10254998"}, {"category": "wien", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_vie_03", "source": "Vienna.at", "status": "active", "summary": "The trial concerning a brutal group attack in the water park in Floridsdorf has begun at the Vienna Regional Criminal Court. Ten defendants are accused of having attacked four teenagers with knives, sticks, brass knuckles, and pepper spray in November 2025, together with other participants.", "title": "\"Offended Honor\": Trial After Violent Attack in Water Park Vienna-Floridsdorf", "url": "https://www.vienna.at/offended-honor-trial-after-violent-attack-in-water-park-vienna-floridsdorf/10254959"}, {"category": "wien", "date_fetched": "2026-06-15", "feedback": null, "id": "art_20260615_vie_04", "source": "Vienna.at", "status": "active", "summary": "Im Wiener Straflandesgericht hat der Prozess um eine brutale Gruppenattacke im Wasserpark in Floridsdorf begonnen. Zehn Angeklagte sollen im November 2025 gemeinsam mit weiteren Beteiligten vier Jugendliche mit Messern, Stöcken, Schlagringen und Pfefferspray angegriffen haben.", "title": "„Gekränkte Ehre“: Prozess nach Gewaltattacke im Wasserpark Wien-Floridsdorf", "url": "https://www.vienna.at/gekraenkte-ehre-prozess-nach-gewaltattacke-im-wasserpark-wien-floridsdorf/10254668"}, {"category": "wien", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_04", "source": "ORF Wien", "status": "active", "summary": "Ab heute um 14.00 Uhr können Eltern ihre Kinder für die Kinderuni Wien anmelden. Für mehr als 4.000 Sieben- bis Zwölfjährige stehen heuer rund 370 Lehrveranstaltungen auf dem Programm. Sie sollen dabei gratis Einblicke in aktuelle Wissenschaft und Forschung erhalten.", "title": "Kinderuni Wien startet Anmeldung", "url": "https://wien.orf.at/stories/3358402/"}, {"category": "wien", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_orf_05", "source": "ORF Wien", "status": "active", "summary": "Die Post stellt in Wien Briefe und Pakete auf der letzten Meile nun ausschließlich CO2-frei zu – also nur mehr elektrisch oder mit Muskelkraft. Dieser Meilenstein wurde am Montag mit Arnold Schwarzenegger gefeiert.", "title": "Post setzt in Wien nur auf Strom und Muskeln", "url": "https://wien.orf.at/stories/3358614/"}, {"category": "wien", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_vie_01", "source": "Vienna.at", "status": "active", "summary": "Die am 14. Mai verstorbene Performance-Ikone VALIE EXPORT findet ihre letzte Ruhestätte in einem Ehrengrab der Stadt Wien auf dem Zentralfriedhof. Die Verabschiedung findet am 30. Juni um 14 Uhr in der Friedhofskirche zum Hl. Karl Borromäus (Eingang Tor 2) statt, wie aus der Traueranzeige der VALIE EXPORT Stiftung hervorgeht. Die Künstlerin war wenige Tage vor ihrem 86. Geburtstag verstorben.", "title": "Wien verabschiedet VALIE EXPORT am 30. Juni", "url": "https://www.vienna.at/wien-verabschiedet-valie-export-am-30-juni/10257047"}, {"category": "wien", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_vie_04", "source": "Vienna.at", "status": "active", "summary": "In early April 2026, a 37-year-old was seriously injured during a mobile phone robbery in Vienna-Brigittenau. Now, photos of the suspect have been released. The Vienna police are asking for information from the public.", "title": "37-Year-Old Seriously Injured in Robbery at Vienna S-Bahn Station: Who Knows This Suspect?", "url": "https://www.vienna.at/37-year-old-seriously-injured-in-robbery-at-vienna-s-bahn-station-who-knows-this-suspect/10256981"}, {"category": "wien", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_vie_05", "source": "Vienna.at", "status": "active", "summary": "Anfang April 2026 wurde ein 37-Jähriger im Zuge eines Handyraubes in Wien-Brigittenau schwer verletzt. Nun wurden Fotos des Tatverdächtigen veröffentlicht. Die Polizei Wien bittet um Hinweise aus der Bevölkerung.", "title": "37-Jähriger bei Raub in Wiener S-Bahn-Station schwer verletzt: Wer kennt diesen Tatverdächtigen?", "url": "https://www.vienna.at/37-jaehriger-bei-raub-in-wiener-s-bahn-station-schwer-verletzt-wer-kennt-diesen-tatverdaechtigen/10256879"}, {"category": "wien", "date_fetched": "2026-06-16", "feedback": null, "id": "art_20260616_wie_03", "source": "Wiener Bezirksblätter", "status": "active", "summary": "Besitzer Sigurd Hochfellner und der Kastellverein Sulz, dem das Objekt bis 2018 gehörte, einigten sich vor dem Landesgericht auf einen bedingten Vergleich. SULZ. Im mittlerweile vor Gericht ausgetragenen Streit um die behördlich auf Eis gelegte Renovierung des denkmalgeschützten Kastells deutet sich eine Aufweichung der verhärteten Fronten an. Besitzer Sigurd Hochfellner und der Kastellverein Sulz, dem das Gebäude bis 2018 gehörte, haben am Landesgericht Eisenstadt einen bedingten Vergleich...", "title": "Annäherung im Streit um denkmalgeschütztes Sulzer Kastell", "url": "https://www.meinbezirk.at/guessing/c-lokales/annaeherung-im-streit-um-denkmalgeschuetztes-sulzer-kastell_a8692289"}]};
+document.addEventListener('DOMContentLoaded', function() {
+  if (typeof selectCategory === 'function') selectCategory('alltag');
+});
+</script></body></html>

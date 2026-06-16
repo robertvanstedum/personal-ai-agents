@@ -21,6 +21,7 @@ Output:
 """
 
 import os
+import re
 import sys
 import json
 import getpass
@@ -32,7 +33,7 @@ from playwright.sync_api import sync_playwright
 # ── Paths ──────────────────────────────────────────────────────────────────────
 
 REPO_ROOT   = Path(__file__).parent.parent
-PREVIEW_DIR = REPO_ROOT / "minimoi_portal" / "static" / "preview"
+PREVIEW_DIR = REPO_ROOT / "static" / "public" / "preview"
 ASSETS_DIR  = PREVIEW_DIR / "assets"
 PORTAL_URL  = os.environ.get("PORTAL_URL", "http://localhost:5001")
 USERNAME    = "robert"
@@ -47,9 +48,9 @@ PAGES = [
     {"domain": "curator", "name": "archive",    "path": "/app/curator/archive",       "label": "Curator — Archive"},
     {"domain": "curator", "name": "leanings",      "path": "/app/curator/research/leanings",      "label": "Curator — Leanings"},
     {"domain": "curator", "name": "reading_room",  "path": "/app/curator/curator_library.html",   "label": "Curator — Reading Room"},
-    {"domain": "german",  "name": "lesen",      "path": "/app/german",                "label": "Mein Deutsch — Lesen"},
+    {"domain": "german",  "name": "lesen",      "path": "/app/german/lesen",          "label": "Mein Deutsch — Lesen"},
     {"domain": "german",  "name": "gesprache",  "path": "/app/german/gesprache",      "label": "Mein Deutsch — Gespräche"},
-    {"domain": "german",  "name": "worter",     "path": "/app/german/worter",         "label": "Mein Deutsch — Wörter"},
+    {"domain": "german",  "name": "worter",     "path": "/app/german/woerter",        "label": "Mein Deutsch — Wörter"},
     {"domain": "german",  "name": "schreiben",  "path": "/app/german/schreiben",      "label": "Mein Deutsch — Schreiben"},
     {"domain": "german",  "name": "archiv",     "path": "/app/german/archiv",         "label": "Mein Deutsch — Archiv"},
     {"domain": "guild",   "name": "briefing",   "path": "/guild",                     "label": "Guild — Daily Briefing"},
@@ -93,8 +94,22 @@ FETCH_INTERCEPT_JS = """
 <script id="preview-fetch-intercept">
 (function() {
   var _orig = window.fetch;
+  // Endpoints allowed to pass through to the real server
+  var PASSTHROUGH = ['/app/german/api/translate'];
   window.fetch = function(url, opts) {
     var u = typeof url === 'string' ? url : (url && url.url) || '';
+    // Lesen category API — serve pre-captured data if available
+    if (u.indexOf('/api/lesen-category') !== -1) {
+      var cat = '';
+      try { cat = new URL(u, location.origin).searchParams.get('category') || ''; } catch(e) {}
+      var data = window._previewLesenData || {};
+      var articles = data[cat] || [];
+      return Promise.resolve(new Response(JSON.stringify({articles: articles}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    // Allow translate through — works for authenticated users, fails silently otherwise
+    for (var i = 0; i < PASSTHROUGH.length; i++) {
+      if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
+    }
     if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
       return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
     }
@@ -271,7 +286,8 @@ def _replace_dashboard_btn(soup: BeautifulSoup) -> None:
             a.string = "Browse Preview →"
 
 
-EXPAND_ONCLICK_PATTERNS = ("toggleSection", "showMore", "ShowMore", "showAll", "expandAll", "dailyShowMore")
+EXPAND_ONCLICK_PATTERNS = ("toggleSection", "showMore", "ShowMore", "showAll", "expandAll", "dailyShowMore",
+                           "toggleEditRow", "toggleHistRow")
 
 def _block_expand_controls(soup: BeautifulSoup) -> None:
     """Block JS-driven expand/show-all controls — replace with admin-blocked modal trigger."""
@@ -283,6 +299,47 @@ def _block_expand_controls(soup: BeautifulSoup) -> None:
             el["style"] = (el.get("style", "") + "; cursor: pointer;").lstrip("; ")
             if el.get("href") in ("#", ""):
                 del el["href"]
+
+
+# Buttons that navigation/reading needs to stay enabled in Lesen preview
+LESEN_NAV_BUTTON_IDS = {
+    "btn-back-liste", "btn-art-prev", "btn-art-next",
+    "btn-mehr", "btn-weniger", "btn-laden", "btn-vorlesen",
+    "btn-close-popover",   # must be enabled so user can dismiss translation popover
+    "btn-artikel-laden",   # refresh articles — works via pre-cached data
+}
+
+
+def _process_lesen_page(soup: BeautifulSoup, lesen_data: dict) -> None:
+    """Enable full Lesen reading experience in preview using pre-captured article data."""
+    # Un-block category cards and article rows — they work via injected data
+    for card in soup.find_all("div", class_=lambda c: c and "lesen-cat-card" in c):
+        card.attrs.pop("data-admin-blocked", None)
+    for row in soup.find_all("div", class_=lambda c: c and "lesen-article-row" in c):
+        row.attrs.pop("data-admin-blocked", None)
+
+    # Re-enable navigation/reading buttons that _disable_writes disabled
+    for btn_id in LESEN_NAV_BUTTON_IDS:
+        el = soup.find(id=btn_id)
+        if el and el.get("disabled"):
+            del el["disabled"]
+    # Day-toggle buttons
+    for btn in soup.find_all(class_=lambda c: c and "day-btn" in c):
+        btn.attrs.pop("disabled", None)
+
+    # Inject pre-captured article data and auto-select first category
+    if lesen_data:
+        data_json = json.dumps(lesen_data, ensure_ascii=False)
+        first_cat = next(iter(lesen_data), "alltag")
+        script = f"""<script id="preview-lesen-data">
+window._previewLesenData = {data_json};
+document.addEventListener('DOMContentLoaded', function() {{
+  if (typeof selectCategory === 'function') selectCategory('{first_cat}');
+}});
+</script>"""
+        body = soup.find("body")
+        if body:
+            body.append(BeautifulSoup(script, "html.parser"))
 
 
 def _inject_whats_running_links(soup: BeautifulSoup) -> None:
@@ -343,10 +400,17 @@ def _localize_assets(soup: BeautifulSoup, context, assets_dir: Path) -> None:
     for tag in soup.find_all("img", src=True):
         if tag["src"].startswith("/app/"):
             targets.append((tag, "src", tag["src"]))
+    # Inline style background-image: url('/app/...')
+    for tag in soup.find_all(style=True):
+        for match in re.finditer(r"url\(['\"]?(/app/[^)'\"]+)['\"]?\)", tag.get("style", "")):
+            targets.append((tag, "_style", match.group(1)))
 
     for tag, attr, url_path in targets:
         if url_path in downloaded:
-            tag[attr] = downloaded[url_path]
+            if attr == "_style":
+                tag["style"] = tag["style"].replace(url_path, downloaded[url_path])
+            else:
+                tag[attr] = downloaded[url_path]
             continue
         filename = _asset_local_name(url_path)
         local_file = assets_dir / filename
@@ -356,12 +420,15 @@ def _localize_assets(soup: BeautifulSoup, context, assets_dir: Path) -> None:
                 local_file.write_bytes(resp.body())
                 preview_path = f"/preview/assets/{filename}"
                 downloaded[url_path] = preview_path
-                tag[attr] = preview_path
+                if attr == "_style":
+                    tag["style"] = tag["style"].replace(url_path, preview_path)
+                else:
+                    tag[attr] = preview_path
         except Exception as exc:
             print(f"\n  [asset error] {url_path}: {exc}", flush=True)
 
 
-def process_page(html: str, page: dict, captured_at: str) -> str:
+def process_page(html: str, page: dict, captured_at: str, extra: dict | None = None) -> str:
     soup = BeautifulSoup(html, "html.parser")
 
     # Remove any existing <base> tags that could mess up relative paths
@@ -381,6 +448,9 @@ def process_page(html: str, page: dict, captured_at: str) -> str:
 
     if page.get("career_aggregate"):
         _apply_career_aggregate(soup)
+
+    if page.get("name") == "lesen":
+        _process_lesen_page(soup, (extra or {}).get("lesen_data", {}))
 
     return str(soup)
 
@@ -436,11 +506,27 @@ def capture_all(password: str = "") -> dict:
                 page.goto(url, timeout=30_000)
                 page.wait_for_load_state("networkidle", timeout=15_000)
 
+                extra: dict = {}
+                # Lesen: fetch article data for all categories via authenticated page context
+                if pg["name"] == "lesen":
+                    try:
+                        lesen_data = {}
+                        for cat in ["alltag", "kultur", "politik", "wien"]:
+                            result = page.evaluate(f"""async () => {{
+                                const res = await fetch('/app/german/api/lesen-category?category={cat}');
+                                return res.ok ? await res.json() : null;
+                            }}""")
+                            if result and "articles" in result:
+                                lesen_data[cat] = result["articles"]
+                        extra["lesen_data"] = lesen_data
+                    except Exception as exc:
+                        print(f"\n  [lesen-data error] {exc}", end="", flush=True)
+
                 html = page.content()
                 # Download /app/... assets and rewrite to local /preview/assets/
                 _soup = BeautifulSoup(html, "html.parser")
                 _localize_assets(_soup, context, ASSETS_DIR)
-                processed = process_page(str(_soup), pg, captured_at)
+                processed = process_page(str(_soup), pg, captured_at, extra=extra)
                 out_file.write_text(processed, encoding="utf-8")
 
                 preview_path = f"/preview/{pg['out_path']}" if pg.get("out_path") else f"/preview/{pg['domain']}/{pg['name']}.html"
@@ -531,4 +617,4 @@ if __name__ == "__main__":
         for f in manifest["failures"]:
             print(f"  {f['page']}: {f['error']}")
     print(f"manifest.json → {PREVIEW_DIR / 'manifest.json'}")
-    print(f"\nNext: git add minimoi_portal/static/preview/ && git push")
+    print(f"\nNext: git add static/public/preview/ && git push")
