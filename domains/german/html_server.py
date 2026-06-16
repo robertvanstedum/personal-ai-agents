@@ -430,13 +430,19 @@ def gesprache_speak():
         client = _OAI(api_key=api_key, timeout=12.0)
         import time as _t
         _t0 = _t.time()
-        resp = client.audio.speech.create(
-            model="tts-1",
-            voice=voice,
-            input=text,
-        )
-        print(f"[TIMING] tts_ms={int((_t.time()-_t0)*1000)} chars={len(text)}", flush=True)
-        return _Resp(resp.content, mimetype="audio/mpeg")
+        _first = [True]
+        def _stream():
+            with client.audio.speech.with_streaming_response.create(
+                model="tts-1",
+                voice=voice,
+                input=text,
+            ) as r:
+                for chunk in r.iter_bytes(chunk_size=4096):
+                    if _first[0]:
+                        print(f"[TIMING] tts_ttfb_ms={int((_t.time()-_t0)*1000)} chars={len(text)}", flush=True)
+                        _first[0] = False
+                    yield chunk
+        return _Resp(_stream(), mimetype="audio/mpeg", direct_passthrough=True)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
