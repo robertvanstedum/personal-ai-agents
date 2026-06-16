@@ -846,7 +846,7 @@ def guild_career():
         geo_filter=geo_filter,
         type_filter=type_filter,
         priority_filter=priority_filter,
-        deadline="Aug 1, 2026",
+        deadline="Sep 1, 2026",
         targeting=targeting,
     )
 
@@ -957,18 +957,23 @@ def add_position():
 @_require_owner
 def guild_build():
     status_filter = request.args.get('status', 'all')
-    where = "WHERE dl.status = %s" if status_filter != 'all' else ""
+    outer_where = "WHERE dl.status = %s" if status_filter != 'all' else ""
     params = [status_filter] if status_filter != 'all' else []
     query = f"""
         SELECT dl.*,
                t.reason AS incomplete_reason
-        FROM guild.design_log dl
+        FROM (
+            SELECT DISTINCT ON (COALESCE(spec_file, file_path))
+                   *
+            FROM guild.design_log
+            ORDER BY COALESCE(spec_file, file_path), last_transition_at DESC NULLS LAST, id DESC
+        ) dl
         LEFT JOIN LATERAL (
             SELECT reason FROM guild.design_log_transitions
             WHERE design_log_id = dl.id AND to_status = 'incomplete'
             ORDER BY created_at DESC LIMIT 1
         ) t ON true
-        {where}
+        {outer_where}
         ORDER BY dl.last_transition_at DESC NULLS LAST
     """
     try:
@@ -985,7 +990,12 @@ def guild_build_queue():
     sql = """
         SELECT dl.*,
                t.reason AS incomplete_reason
-        FROM guild.design_log dl
+        FROM (
+            SELECT DISTINCT ON (COALESCE(spec_file, file_path))
+                   *
+            FROM guild.design_log
+            ORDER BY COALESCE(spec_file, file_path), last_transition_at DESC NULLS LAST, id DESC
+        ) dl
         LEFT JOIN LATERAL (
             SELECT reason FROM guild.design_log_transitions
             WHERE design_log_id = dl.id AND to_status = 'incomplete'
@@ -999,9 +1009,9 @@ def guild_build_queue():
             WHEN 'blocked'    THEN 1
             WHEN 'in_build'   THEN 2
             WHEN 'spec_ready' THEN 3
-            WHEN 'incomplete' THEN 3
-            WHEN 'done'       THEN 4
-            ELSE 5
+            WHEN 'incomplete' THEN 4
+            WHEN 'done'       THEN 5
+            ELSE 6
           END,
           dl.last_transition_at DESC NULLS LAST
     """
@@ -1051,12 +1061,46 @@ def guild_build_spec_raw(filename):
     )
 
 
+@app.route("/guild/build/items/<int:item_id>/check")
+@_require_owner
+def guild_build_check(item_id):
+    """Re-run completeness check on a spec file and return current failures as JSON."""
+    from pathlib import Path
+    rows = _guild_db_query(
+        "SELECT spec_file, status FROM guild.design_log WHERE id = %s", (item_id,)
+    )
+    if not rows:
+        return jsonify({"error": "not found"}), 404
+    spec_file = rows[0].get("spec_file")
+    if not spec_file:
+        return jsonify({"error": "no spec file attached to this entry"}), 400
+    spec_path = Path(__file__).parent.parent / "_working" / spec_file
+    if not spec_path.exists():
+        return jsonify({"error": f"{spec_file} not found in _working/", "failures": [f"file missing: {spec_file}"]})
+    content = spec_path.read_text()
+    _lower = content.lower()
+    failures = []
+    if "## definition of done" not in _lower:
+        failures.append("missing ## Definition of Done section")
+    if "## commit" not in _lower:
+        failures.append("missing ## Commit section")
+    current_status = "spec_ready" if not failures else "incomplete"
+    db_status = rows[0].get("status")
+    return jsonify({
+        "spec_file": spec_file,
+        "current_status": current_status,
+        "db_status": db_status,
+        "stale": db_status != current_status,
+        "failures": failures,
+    })
+
+
 @app.route("/guild/build/roadmap")
 @_require_owner
 def guild_build_roadmap():
     import markdown as _md
     from pathlib import Path
-    roadmap_path = Path(__file__).parent.parent / "_working/ROADMAP_2026-06-12.md"
+    roadmap_path = Path(__file__).parent.parent / "docs/ROADMAP.md"
     try:
         raw = roadmap_path.read_text()
         content = _md.markdown(raw, extensions=["fenced_code", "tables"])
