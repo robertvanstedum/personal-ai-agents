@@ -111,8 +111,11 @@ FETCH_INTERCEPT_JS = """
       var libData = window._previewLibraryData || {articles: []};
       return Promise.resolve(new Response(JSON.stringify(libData), {status: 200, headers: {'Content-Type': 'application/json'}}));
     }
-    // Leanings API — serve pre-captured data if available
-    if (u.indexOf('/api/research/leanings') !== -1 && !(opts && opts.method && opts.method !== 'GET')) {
+    // Leanings API — serve pre-captured data (GET) or silently succeed (writes)
+    if (u.indexOf('/api/research/leanings') !== -1) {
+      if (opts && opts.method && opts.method !== 'GET') {
+        return Promise.resolve(new Response(JSON.stringify({ok: true}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+      }
       var lData = window._previewLeaningsData || [];
       return Promise.resolve(new Response(JSON.stringify({ok: true, leanings: lData}), {status: 200, headers: {'Content-Type': 'application/json'}}));
     }
