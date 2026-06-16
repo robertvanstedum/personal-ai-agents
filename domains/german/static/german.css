@@ -2078,7 +2078,7 @@ body.reading-mode nav {
   border: 1px solid var(--md-parch-deep);
   border-radius: 999px;
   padding: 3px;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.75rem;
   background: var(--md-parch-mid);
 }
 
@@ -2270,7 +2270,7 @@ body.reading-mode nav {
 /* ── Detail panel ── */
 
 .persona-detail {
-  padding: 1.75rem 2rem;
+  padding: 1rem 1.75rem 1.75rem;
   overflow-y: auto;
   max-height: 600px;
 }
@@ -2426,7 +2426,7 @@ body.reading-mode nav {
 .gesprache-divider {
   border: none;
   border-top: 1px solid var(--md-parch-deep);
-  margin: 2rem 0;
+  margin: 1rem 0;
 }
 
 .gesprache-section-label {
@@ -2524,31 +2524,54 @@ body.reading-mode nav {
 }
 
 .gesprache-feedback {
-  background: rgba(60, 47, 47, 0.55);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--md-parch);
+  border-left: 3px solid var(--md-accent);
+  border-radius: 6px;
   overflow: hidden;
 }
 
 .feedback-summary {
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid rgba(198,138,94,0.15);
+  border-bottom: 1px solid var(--md-parch-deep);
   font-size: 0.95rem;
-  color: var(--text);
+  color: var(--md-text-primary);
   line-height: 1.6;
 }
 
 .feedback-block {
   padding: 0.75rem 1.25rem;
-  border-bottom: 1px solid rgba(198,138,94,0.1);
+  border-bottom: 1px solid var(--md-parch-deep);
 }
 
 .feedback-block:last-child { border-bottom: none; }
 
+/* Collapsible: details/summary pattern */
+details.feedback-block > summary.feedback-block-label {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  user-select: none;
+  margin-bottom: 0;
+}
+details.feedback-block > summary.feedback-block-label::-webkit-details-marker { display: none; }
+details.feedback-block > summary.feedback-block-label::before {
+  content: '▸';
+  font-size: 0.6rem;
+  color: var(--md-accent);
+}
+details.feedback-block[open] > summary.feedback-block-label::before {
+  content: '▾';
+}
+details.feedback-block[open] > summary.feedback-block-label {
+  margin-bottom: 0.5rem;
+}
+
 .feedback-block-label {
   font-family: var(--font-mono);
   font-size: 0.65rem;
-  color: var(--text-dim);
+  color: var(--md-accent);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-bottom: 0.5rem;
@@ -2566,7 +2589,7 @@ body.reading-mode nav {
 
 .feedback-errors-list li {
   font-size: 0.875rem;
-  color: var(--text-muted);
+  color: var(--md-text-secondary);
   padding-left: 1rem;
   position: relative;
 }
@@ -2580,7 +2603,7 @@ body.reading-mode nav {
 
 .feedback-strengths-list li {
   font-size: 0.875rem;
-  color: var(--text-muted);
+  color: var(--md-text-secondary);
   padding-left: 1rem;
   position: relative;
 }
@@ -2594,7 +2617,7 @@ body.reading-mode nav {
 
 .feedback-next-focus {
   font-size: 0.875rem;
-  color: var(--text-muted);
+  color: var(--md-text-secondary);
   font-style: italic;
 }
 
@@ -3586,7 +3609,7 @@ body.schreiben-mode .page {
 }
 
 .tab-split-header {
-    margin-bottom: 2rem;
+    margin-bottom: 1.25rem;
 }
 
 .tab-split-header h1 {
@@ -3700,6 +3723,16 @@ body.archiv-mode .page {
 .admin-list-item.runde-ready {
   border-left: 3px solid var(--md-accent);
 }
+
+/* ── Gespräche: two-mode layout — session-active state ── */
+
+.persona-detail.session-active .detail-description  { display: none; }
+.persona-detail.session-active .scene-list           { display: none; }
+.persona-detail.session-active .prompt-actions       { display: none; }
+.persona-detail.session-active .gesprache-model-row  { display: none; }
+.persona-detail.session-active .session-brief-details { display: none; }
+.persona-detail.session-active .nach-sitzung-details  { display: none; }
+.persona-detail.session-active #gesprache-feedback-wrap { display: none; }
 
 /* ── Gespräche: KI-Sitzung button + session panel ── */
 

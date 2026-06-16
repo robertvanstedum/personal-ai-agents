@@ -12,8 +12,8 @@
 
     <!-- ── Mode toggle ─────────────────────────────────────────────────────── -->
     <div class="gesprache-toggle" role="tablist">
-      <button class="gesprache-toggle-btn active" id="btn-tab-personas" role="tab">KI-Personas</button>
-      <button class="gesprache-toggle-btn" id="btn-tab-konversation" role="tab">Konversation</button>
+      <button class="gesprache-toggle-btn active" id="btn-tab-personas" role="tab">Mit KI-Persona</button>
+      <button class="gesprache-toggle-btn" id="btn-tab-konversation" role="tab">Mit echtem Mensch</button>
     </div>
 
     <!-- ── KI-Personas pane ────────────────────────────────────────────────── -->
@@ -104,7 +104,7 @@
               <button id="session-mute-btn" class="btn-session-mute" title="Ton ausschalten">🔊</button>
               <button id="end-session-btn" class="btn-session-end">■ Beenden</button>
             </div>
-            <div class="session-listen-status" id="session-listen-status">Zuhört…</div>
+            <div class="session-listen-status" id="session-listen-status" style="display:none"></div>
             <div class="session-input-row">
               <input type="text" id="session-input" class="session-input-field"
                      placeholder="Oder tippen und Enter…">
@@ -138,6 +138,7 @@
               <div id="transcript-analysiert-row" class="transcript-analysiert-row" style="display:none">
                 <span class="transcript-analysiert-label">✓ analysiert</span>
                 <button class="btn-ghost btn-sm" id="btn-transcript-bearbeiten">bearbeiten</button>
+                <button class="btn-ghost btn-sm" id="btn-neue-sitzung">Neue Sitzung →</button>
               </div>
             </div>
           </details>
@@ -148,18 +149,18 @@
             <div class="gesprache-section-label">Feedback</div>
             <div class="gesprache-feedback">
               <div class="feedback-summary" id="feedback-summary"></div>
-              <div class="feedback-block" id="feedback-errors-block" style="display:none">
-                <div class="feedback-block-label">Fehler</div>
+              <details class="feedback-block" id="feedback-errors-block" style="display:none" open>
+                <summary class="feedback-block-label">Fehler</summary>
                 <ul class="feedback-errors-list" id="feedback-errors-list"></ul>
-              </div>
-              <div class="feedback-block" id="feedback-strengths-block" style="display:none">
-                <div class="feedback-block-label">Stärken</div>
+              </details>
+              <details class="feedback-block" id="feedback-strengths-block" style="display:none">
+                <summary class="feedback-block-label">Stärken</summary>
                 <ul class="feedback-strengths-list" id="feedback-strengths-list"></ul>
-              </div>
-              <div class="feedback-block" id="feedback-focus-block" style="display:none">
-                <div class="feedback-block-label">Für nächste Mal</div>
+              </details>
+              <details class="feedback-block" id="feedback-focus-block" style="display:none" open>
+                <summary class="feedback-block-label">Für nächste Mal</summary>
                 <p class="feedback-next-focus" id="feedback-next-focus"></p>
-              </div>
+              </details>
             </div>
           </div>
         </div>
@@ -337,6 +338,22 @@ document.body.classList.add('parch-mode');
   document.getElementById('btn-tab-personas').addEventListener('click', () => switchTab('personas'));
   document.getElementById('btn-tab-konversation').addEventListener('click', () => switchTab('konversation'));
 
+  // ── Reset to resting state (clears session + analysis, keeps persona) ────────
+
+  function resetToRestingState() {
+    if (sessionActive) {
+      sessionActive = false;
+      if (window._sessionListenStop) window._sessionListenStop();
+      stopSpeaking();
+    }
+    if (sessionPanel) sessionPanel.style.display = 'none';
+    if (startSessionBtn) { startSessionBtn.style.display = ''; startSessionBtn.disabled = false; }
+    document.getElementById('persona-detail').classList.remove('session-active');
+    resetNachDerSitzung();
+    const detail = document.getElementById('persona-detail');
+    if (detail) detail.scrollTop = 0;
+  }
+
   // ── Nach der Sitzung — state reset ────────────────────────────────────────
 
   function resetNachDerSitzung() {
@@ -365,6 +382,11 @@ document.body.classList.add('parch-mode');
   function selectPersona(idx) {
     const p = personas[idx];
     if (!p) return;
+    // Exit session or analysis state when switching persona
+    const detail = document.getElementById('persona-detail');
+    if (sessionActive || (detail && detail.classList.contains('session-active'))) {
+      resetToRestingState();
+    }
     selectedIdx = idx;
     selectedSceneKey = null;
     currentFullPrompt = null;
@@ -733,6 +755,9 @@ document.body.classList.add('parch-mode');
     }
 
     sessionSendBtn.disabled = true;
+    const _modelLbl = document.getElementById('session-model-label');
+    const _modelOrig = _modelLbl ? _modelLbl.textContent : '';
+    if (_modelLbl) _modelLbl.textContent = 'denkt nach…';
     try {
       const res = await fetch('/api/gesprache/ai-turn', {
         method: 'POST',
@@ -749,6 +774,7 @@ document.body.classList.add('parch-mode');
       }
     } catch (err) { /* non-fatal — loop continues */ }
     finally {
+      if (_modelLbl) _modelLbl.textContent = _modelOrig;
       sessionSendBtn.disabled = false;
     }
   }
@@ -785,6 +811,15 @@ document.body.classList.add('parch-mode');
     sessionPanel.style.display = '';
     startSessionBtn.style.display = 'none';
     startSessionBtn.disabled = true;
+    document.getElementById('persona-detail').classList.add('session-active');
+
+    // Immediate audio cue — fires before AI fetch, covers the silent gap
+    try {
+      const _utter = new SpeechSynthesisUtterance('Sitzung beginnt.');
+      _utter.lang = 'de-DE';
+      _utter.rate = 1.05;
+      speechSynthesis.speak(_utter);
+    } catch (_) {}
 
     await sendTurn('');
     // Opening turn done — start continuous listening loop
@@ -798,6 +833,7 @@ document.body.classList.add('parch-mode');
     sessionPanel.style.display = 'none';
     startSessionBtn.style.display = '';
     startSessionBtn.disabled = false;
+    document.getElementById('persona-detail').classList.remove('session-active');
 
     const transcriptEl = document.getElementById('transcript-input');
     transcriptEl.value = sessionTranscript.join('\n');
@@ -864,7 +900,7 @@ document.body.classList.add('parch-mode');
       const SPEECH_RMS   = 0.018;  // RMS to consider speech started
       const SILENCE_RMS  = 0.012;  // RMS below = silence
       const SPEECH_MIN   = 300;    // ms of speech before VAD arms
-      const SILENCE_MS   = 1500;   // ms of silence to end turn
+      const SILENCE_MS   = 2000;   // ms of silence to end turn
 
       return new Promise(resolve => {
         let speechStart  = null;
@@ -961,10 +997,7 @@ document.body.classList.add('parch-mode');
           if (data.transcript) {
             const text = data.transcript.trim();
             if (text && sessionActive) {
-              sessionInputEl.value = text;
-              setListenStatus('Antwortet…', 'listening-processing');
               await sendTurn(text);
-              sessionInputEl.value = '';
               // Wait for TTS to finish before re-listening
               await waitForTTSEnd();
             }
@@ -1076,6 +1109,10 @@ document.body.classList.add('parch-mode');
   document.getElementById('btn-transcript-bearbeiten').addEventListener('click', () => {
     document.getElementById('transcript-input-wrap').style.display = '';
     document.getElementById('transcript-analysiert-row').style.display = 'none';
+  });
+
+  document.getElementById('btn-neue-sitzung').addEventListener('click', () => {
+    resetToRestingState();
   });
 
   function renderFeedback(fb) {

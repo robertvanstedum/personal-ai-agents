@@ -323,19 +323,21 @@ def api_transcribe():
         return jsonify({"error": "No audio file"}), 400
     audio_file = request.files["audio"]
     try:
-        import keyring as _kr
+        import keyring as _kr, time as _t
         from openai import OpenAI as _OAI
         api_key = _kr.get_password("openai", "api_key")
         if not api_key:
             return jsonify({"error": "OpenAI API key not configured"}), 500
         client = _OAI(api_key=api_key)
         audio_file.stream.seek(0)
+        _t0 = _t.time()
         response = client.audio.transcriptions.create(
             model="whisper-1",
             file=("session.webm", audio_file.stream, "audio/webm"),
             language="de",
             response_format="text",
         )
+        print(f"[TIMING] transcribe_ms={int((_t.time()-_t0)*1000)}", flush=True)
         return jsonify({"transcript": response})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -371,10 +373,12 @@ def gesprache_ai_turn():
     if not persona:
         return jsonify({"ok": False, "error": "persona required"}), 400
     try:
-        import sys, os
+        import sys, os, time as _t
         sys.path.insert(0, os.path.dirname(__file__))
         from providers.review_router import run_chat_turn, ProviderError
+        _t0 = _t.time()
         response = run_chat_turn(history, persona, scene, user_turn, model)
+        print(f"[TIMING] ai_turn_ms={int((_t.time()-_t0)*1000)} model={model}", flush=True)
         return jsonify({"ok": True, "response": response, "model": model})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e), "model": model}), 502
@@ -396,12 +400,15 @@ def gesprache_speak():
         api_key = _kr.get_password("openai", "api_key")
         if not api_key:
             return jsonify({"error": "OpenAI API key not configured"}), 500
-        client = _OAI(api_key=api_key)
+        client = _OAI(api_key=api_key, timeout=12.0)
+        import time as _t
+        _t0 = _t.time()
         resp = client.audio.speech.create(
             model="tts-1",
             voice=voice,
             input=text,
         )
+        print(f"[TIMING] tts_ms={int((_t.time()-_t0)*1000)} chars={len(text)}", flush=True)
         return _Resp(resp.content, mimetype="audio/mpeg")
     except Exception as e:
         return jsonify({"error": str(e)}), 500

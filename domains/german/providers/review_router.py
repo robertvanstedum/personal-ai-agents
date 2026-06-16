@@ -209,7 +209,7 @@ def _chat_grok(system_prompt: str, history: list, user_turn: str) -> str:
     client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
     resp = client.chat.completions.create(
         model="grok-4.3",
-        max_tokens=500,
+        max_tokens=200,
         temperature=0.7,
         messages=[{"role": "system", "content": system_prompt}] + _build_chat_messages(history),
     )
@@ -223,8 +223,8 @@ def _chat_openai(system_prompt: str, history: list, user_turn: str) -> str:
         raise ProviderError("OpenAI API key not found in keyring")
     client = OpenAI(api_key=api_key)
     resp = client.chat.completions.create(
-        model="gpt-4o",
-        max_tokens=500,
+        model="gpt-4o-mini",
+        max_tokens=200,
         temperature=0.7,
         messages=[{"role": "system", "content": system_prompt}] + _build_chat_messages(history),
     )
