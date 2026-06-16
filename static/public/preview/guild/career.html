@@ -287,6 +287,10 @@
     if (u.indexOf('/api/intelligence/') !== -1) {
       return Promise.resolve(new Response(JSON.stringify({daily: null, weekly: null, today: '', has_prev: false, is_today: true}), {status: 200, headers: {'Content-Type': 'application/json'}}));
     }
+    // Translation — return placeholder (live translation requires auth)
+    if (u.indexOf('/api/translate') !== -1) {
+      return Promise.resolve(new Response(JSON.stringify({translation: '(live access only)'}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
     // Allow translate through — works for authenticated users, fails silently otherwise
     for (var i = 0; i < PASSTHROUGH.length; i++) {
       if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
