@@ -1,0 +1,23 @@
+/* Guild type scale — single source of truth.
+   Link before per-page <style> blocks so variables resolve everywhere. */
+
+:root {
+  /* H2 — section & column headers (SYSTEMS, SPEC READY, table th, kanban cols) */
+  --guild-h2-size:   0.875rem;          /* ~55% of 1.6rem H1 */
+  --guild-h2-font:   'Source Sans 3', system-ui, sans-serif;
+  --guild-h2-weight: 700;
+  --guild-h2-color:  #2a2418;
+
+  /* Nav rows — brand (row 1) and subnav (row 2) */
+  --guild-nav-size: 13px;
+}
+
+/* Apply to any element that functions as a major section or column divider. */
+.guild-h2 {
+  font-family:    var(--guild-h2-font);
+  font-size:      var(--guild-h2-size);
+  font-weight:    var(--guild-h2-weight);
+  color:          var(--guild-h2-color);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}

@@ -431,14 +431,14 @@ def _localize_assets(soup: BeautifulSoup, context, assets_dir: Path) -> None:
 
     targets = []
     for tag in soup.find_all("link", rel=lambda r: r and "stylesheet" in r, href=True):
-        if tag["href"].startswith("/app/"):
+        if tag["href"].startswith(("/app/", "/static/")):
             targets.append((tag, "href", tag["href"]))
     for tag in soup.find_all("img", src=True):
-        if tag["src"].startswith("/app/"):
+        if tag["src"].startswith(("/app/", "/static/")):
             targets.append((tag, "src", tag["src"]))
-    # Inline style background-image: url('/app/...')
+    # Inline style background-image: url('/app/...') or url('/static/...')
     for tag in soup.find_all(style=True):
-        for match in re.finditer(r"url\(['\"]?(/app/[^)'\"]+)['\"]?\)", tag.get("style", "")):
+        for match in re.finditer(r"url\(['\"]?((?:/app/|/static/)[^)'\"]+)['\"]?\)", tag.get("style", "")):
             targets.append((tag, "_style", match.group(1)))
 
     for tag, attr, url_path in targets:
