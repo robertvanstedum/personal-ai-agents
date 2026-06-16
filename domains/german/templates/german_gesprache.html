@@ -179,7 +179,7 @@
       <div class="gesprache-section-label">Letzte Sitzungen</div>
       <div class="gesprache-sessions-list" id="letzte-sitzungen-list">
         {% for s in sessions %}
-        <div class="gesprache-session-row">
+        <div class="gesprache-session-row gesprache-session-row--clickable" data-stem="{{ s.stem }}">
           <span class="gesprache-session-date">{{ s.date }}</span>
           <span class="gesprache-session-persona">{{ s.persona }}</span>
           <span class="gesprache-session-scene">{{ s.scenario }}</span>
@@ -1148,6 +1148,33 @@ document.body.classList.add('parch-mode');
 
   document.getElementById('btn-neue-sitzung').addEventListener('click', () => {
     resetToRestingState();
+  });
+
+  // ── Letzte Sitzungen — click to load session feedback ────────────────────
+  document.getElementById('letzte-sitzungen-list').addEventListener('click', async (e) => {
+    const row = e.target.closest('.gesprache-session-row--clickable');
+    if (!row) return;
+    const stem = row.dataset.stem;
+    if (!stem) return;
+
+    // toggle off if already active
+    if (row.classList.contains('gesprache-session-row--active')) {
+      row.classList.remove('gesprache-session-row--active');
+      document.getElementById('gesprache-feedback-wrap').style.display = 'none';
+      return;
+    }
+    document.querySelectorAll('.gesprache-session-row--active').forEach(r => r.classList.remove('gesprache-session-row--active'));
+    row.classList.add('gesprache-session-row--active');
+
+    try {
+      const res = await fetch(`/api/gesprache-session/${stem}`);
+      const data = await res.json();
+      if (!data.ok) return;
+      const fb = data.session.reviewer_output || {};
+      renderFeedback(fb);
+      document.getElementById('transcript-input-wrap').style.display = 'none';
+      document.getElementById('transcript-analysiert-row').style.display = 'none';
+    } catch (_) {}
   });
 
   function renderFeedback(fb) {

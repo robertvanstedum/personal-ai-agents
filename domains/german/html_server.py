@@ -468,6 +468,16 @@ def api_gesprache_sessions():
     return jsonify(sessions)
 
 
+@app.route("/api/gesprache-session/<stem>")
+def api_gesprache_session_detail(stem):
+    from german_domain import _SESSIONS_DIR
+    path = _SESSIONS_DIR / f"{stem}.json"
+    if not path.exists():
+        return jsonify({"ok": False, "error": "not found"}), 404
+    data = json.loads(path.read_text())
+    return jsonify({"ok": True, "session": data})
+
+
 @app.route("/api/persona-prompt")
 def api_persona_prompt():
     persona_slug = request.args.get("persona", "")

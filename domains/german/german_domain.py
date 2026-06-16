@@ -1755,6 +1755,7 @@ def get_gesprache_sessions(limit: int = 5) -> list:
             data = json.loads(path.read_text())
             result.append({
                 "session_id": data.get("session_id", path.stem),
+                "stem": path.stem,
                 "date": data.get("date", ""),
                 "persona": data.get("persona", ""),
                 "scenario": data.get("scenario", ""),

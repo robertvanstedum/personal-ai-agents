@@ -2671,6 +2671,9 @@ details.feedback-block[open] > summary.feedback-block-label {
 }
 
 .gesprache-session-row:last-child { border-bottom: none; }
+.gesprache-session-row--clickable { cursor: pointer; }
+.gesprache-session-row--clickable:hover { background: var(--md-parch-deep); margin: 0 -0.5rem; padding-left: 0.5rem; padding-right: 0.5rem; }
+.gesprache-session-row--active { background: var(--md-parch-deep); margin: 0 -0.5rem; padding-left: 0.5rem; padding-right: 0.5rem; }
 
 .gesprache-session-date { color: var(--md-text-muted); white-space: nowrap; flex-shrink: 0; }
 .gesprache-session-persona { color: var(--md-accent); white-space: nowrap; flex-shrink: 0; }
