@@ -1172,8 +1172,12 @@ document.body.classList.add('parch-mode');
       if (!data.ok) return;
       const fb = data.session.reviewer_output || {};
       renderFeedback(fb);
-      document.getElementById('transcript-input-wrap').style.display = 'none';
-      document.getElementById('transcript-analysiert-row').style.display = 'none';
+      document.getElementById('gesprache-feedback-wrap').style.display = '';
+      // scroll feedback into view inside the panel
+      requestAnimationFrame(() => {
+        const wrap = document.getElementById('gesprache-feedback-wrap');
+        if (wrap) wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     } catch (_) {}
   });
 
