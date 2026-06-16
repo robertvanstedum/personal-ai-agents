@@ -759,6 +759,20 @@ document.body.classList.add('parch-mode');
       alert('Bitte zuerst Persona und Szene auswählen.');
       return;
     }
+
+    // Unlock browser autoplay NOW, while we're still inside the user gesture.
+    // By the time AI + TTS fetches complete (2-4s total), the gesture context
+    // will have expired — this silent play keeps the permission alive.
+    try {
+      const _ac = new (window.AudioContext || window.webkitAudioContext)();
+      await _ac.resume();
+      const buf = _ac.createBuffer(1, 1, 22050);
+      const src = _ac.createBufferSource();
+      src.buffer = buf;
+      src.connect(_ac.destination);
+      src.start(0);
+    } catch (_) {}
+
     sessionActive = true;
     sessionHistory = [];
     sessionTranscript = [];
