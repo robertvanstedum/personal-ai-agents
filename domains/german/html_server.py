@@ -350,6 +350,7 @@ def api_review():
     model       = body.get("model", "grok").strip()
     persona_name = body.get("persona_name", "").strip()
     scene       = body.get("scene", "").strip()
+    source      = body.get("source", "ki_sitzung").strip()
     if not transcript:
         return jsonify({"ok": False, "error": "transcript required"}), 400
     try:
@@ -357,6 +358,32 @@ def api_review():
         sys.path.insert(0, os.path.dirname(__file__))
         from providers.review_router import run_review, ProviderError
         result = run_review(transcript, persona_name, scene, model)
+
+        # Save session to disk so it appears in Letzte Sitzungen
+        try:
+            from german_domain import _next_session_filename, _SESSIONS_DIR, _parse_transcript_turns
+            import datetime as _dt, json as _json
+            date_str = _dt.datetime.now().strftime("%Y-%m-%d")
+            file_stem = _next_session_filename(date_str)
+            session_data = {
+                "session_id": f"session_{file_stem}",
+                "date": date_str,
+                "persona": persona_name,
+                "scenario": scene,
+                "duration_estimate_min": max(1, len(transcript) // 300),
+                "source": source,
+                "raw_transcript": _parse_transcript_turns(transcript),
+                "reviewer_output": result.get("feedback", {}),
+                "model": model,
+                "anki_generated": False,
+                "next_lesson_generated": False,
+            }
+            (_SESSIONS_DIR / f"{file_stem}.json").write_text(
+                _json.dumps(session_data, indent=2, ensure_ascii=False)
+            )
+        except Exception as save_err:
+            pass  # Don't fail the review response if save fails
+
         return jsonify({"ok": True, **result})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e), "model": model}), 502
