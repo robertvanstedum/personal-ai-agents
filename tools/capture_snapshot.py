@@ -106,6 +106,11 @@ FETCH_INTERCEPT_JS = """
       var articles = data[cat] || [];
       return Promise.resolve(new Response(JSON.stringify({articles: articles}), {status: 200, headers: {'Content-Type': 'application/json'}}));
     }
+    // Reading Room library API — serve pre-captured data if available
+    if (u === '/api/library' || u.indexOf('/api/library') !== -1) {
+      var libData = window._previewLibraryData || {articles: []};
+      return Promise.resolve(new Response(JSON.stringify(libData), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
     // Allow translate through — works for authenticated users, fails silently otherwise
     for (var i = 0; i < PASSTHROUGH.length; i++) {
       if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
@@ -342,6 +347,37 @@ document.addEventListener('DOMContentLoaded', function() {{
             body.append(BeautifulSoup(script, "html.parser"))
 
 
+def _process_reading_room_page(soup: BeautifulSoup, library_data: dict) -> None:
+    """Inject pre-captured library data into <head> so fetch interceptor can serve it.
+
+    Must be in <head> because loadData() runs inline (not in DOMContentLoaded)
+    and the interceptor checks window._previewLibraryData synchronously.
+    """
+    if not library_data:
+        return
+    data_json = json.dumps(library_data, ensure_ascii=False)
+    script = f"""<script id="preview-library-data">
+window._previewLibraryData = {data_json};
+</script>"""
+    head = soup.find("head")
+    if head:
+        head.append(BeautifulSoup(script, "html.parser"))
+
+
+def _process_scans_dives_page(soup: BeautifulSoup) -> None:
+    """Remove row-hidden from all thread/article rows so all content is visible."""
+    for el in soup.find_all(class_=lambda c: c and "row-hidden" in c):
+        classes = el.get("class", [])
+        el["class"] = [c for c in classes if c != "row-hidden"]
+    # Un-block the show-all toggle buttons so JS can run
+    for btn_id in ("dives-toggle", "scans-toggle"):
+        el = soup.find(id=btn_id)
+        if el:
+            el.attrs.pop("data-admin-blocked", None)
+            el.attrs.pop("data-preview-disabled", None)
+            el.attrs.pop("disabled", None)
+
+
 def _inject_whats_running_links(soup: BeautifulSoup) -> None:
     """On the landing page, wrap domain names in What's running with preview links."""
     domain_links = {
@@ -452,6 +488,12 @@ def process_page(html: str, page: dict, captured_at: str, extra: dict | None = N
     if page.get("name") == "lesen":
         _process_lesen_page(soup, (extra or {}).get("lesen_data", {}))
 
+    if page.get("name") == "reading_room":
+        _process_reading_room_page(soup, (extra or {}).get("library_data", {}))
+
+    if page.get("name") == "scans_dives":
+        _process_scans_dives_page(soup)
+
     return str(soup)
 
 
@@ -535,6 +577,19 @@ def capture_all(password: str = "") -> dict:
                         extra["lesen_data"] = lesen_data
                     except Exception as exc:
                         print(f"\n  [lesen-data error] {exc}", end="", flush=True)
+
+                # Reading Room: capture library data so fetch interceptor can serve it
+                if pg["name"] == "reading_room":
+                    try:
+                        result = page.evaluate("""async () => {
+                            const res = await fetch('/api/library');
+                            return res.ok ? await res.json() : null;
+                        }""")
+                        if result:
+                            extra["library_data"] = result
+                            print(f"\n  [library-data] {len(result.get('articles', []))} articles captured", end="", flush=True)
+                    except Exception as exc:
+                        print(f"\n  [library-data error] {exc}", end="", flush=True)
 
                 html = page.content()
                 # Download /app/... assets and rewrite to local /preview/assets/

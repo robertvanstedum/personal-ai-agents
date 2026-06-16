@@ -167,6 +167,11 @@
       var articles = data[cat] || [];
       return Promise.resolve(new Response(JSON.stringify({articles: articles}), {status: 200, headers: {'Content-Type': 'application/json'}}));
     }
+    // Reading Room library API — serve pre-captured data if available
+    if (u === '/api/library' || u.indexOf('/api/library') !== -1) {
+      var libData = window._previewLibraryData || {articles: []};
+      return Promise.resolve(new Response(JSON.stringify(libData), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
     // Allow translate through — works for authenticated users, fails silently otherwise
     for (var i = 0; i < PASSTHROUGH.length; i++) {
       if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
@@ -239,7 +244,7 @@
 <span class="section-name">Dives</span>
 <span class="section-count">13</span>
 </span>
-<button class="toggle-btn" data-admin-blocked="true" data-preview-disabled="true" disabled="disabled" id="dives-toggle" style="cursor: pointer;">show all →</button>
+<button class="toggle-btn" id="dives-toggle" style="cursor: pointer;">show all →</button>
 </div>
 <a class="row row-thread" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-badge">Thread</span>
@@ -268,7 +273,7 @@
 <span class="row-date">2026-03-29</span>
 <span class="row-action">Read →</span>
 </a>
-<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-thread" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-badge">Thread</span>
 <span class="row-main">
 <span class="row-title">Hellscape Taiwan Porcupine</span>
@@ -277,7 +282,7 @@
 <span class="row-date">2026-06-10</span>
 <span class="row-action">Read →</span>
 </a>
-<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-thread" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-badge">Thread</span>
 <span class="row-main">
 <span class="row-title">Hellscape Taiwan Porcupine</span>
@@ -286,7 +291,7 @@
 <span class="row-date">2026-03-29</span>
 <span class="row-action">Read →</span>
 </a>
-<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-thread" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-badge">Thread</span>
 <span class="row-main">
 <span class="row-title">Hellscape Taiwan Porcupine</span>
@@ -295,7 +300,7 @@
 <span class="row-date">2026-03-29</span>
 <span class="row-action">Read →</span>
 </a>
-<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-thread" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-badge">Thread</span>
 <span class="row-main">
 <span class="row-title">Hellscape Taiwan Porcupine</span>
@@ -304,7 +309,7 @@
 <span class="row-date">2026-03-29</span>
 <span class="row-action">Read →</span>
 </a>
-<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-thread" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-badge">Thread</span>
 <span class="row-main">
 <span class="row-title">Hellscape Taiwan Porcupine</span>
@@ -313,7 +318,7 @@
 <span class="row-date">2026-03-29</span>
 <span class="row-action">Read →</span>
 </a>
-<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-thread" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-badge">Thread</span>
 <span class="row-main">
 <span class="row-title">Have Countries Around World</span>
@@ -322,7 +327,7 @@
 <span class="row-date">2026-06-10</span>
 <span class="row-action">Read →</span>
 </a>
-<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-thread" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-badge">Thread</span>
 <span class="row-main">
 <span class="row-title">Gold Geopolitics</span>
@@ -331,7 +336,7 @@
 <span class="row-date">2026-06-10</span>
 <span class="row-action">Read →</span>
 </a>
-<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-thread" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-badge">Thread</span>
 <span class="row-main">
 <span class="row-title">Gold Geopolitics</span>
@@ -340,7 +345,7 @@
 <span class="row-date">2026-06-10</span>
 <span class="row-action">Read →</span>
 </a>
-<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-thread" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-badge">Thread</span>
 <span class="row-main">
 <span class="row-title">Empire Landpower</span>
@@ -349,7 +354,7 @@
 <span class="row-date">2026-06-10</span>
 <span class="row-action">Read →</span>
 </a>
-<a class="row row-thread row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-thread" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-badge">Thread</span>
 <span class="row-main">
 <span class="row-title">China Rise</span>
@@ -366,7 +371,7 @@
 <span class="section-name">Scans</span>
 <span class="section-count">32</span>
 </span>
-<button class="toggle-btn" data-admin-blocked="true" data-preview-disabled="true" disabled="disabled" id="scans-toggle" style="cursor: pointer;">show all →</button>
+<button class="toggle-btn" id="scans-toggle" style="cursor: pointer;">show all →</button>
 </div>
 <a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-05-29</span>
@@ -383,147 +388,147 @@
 <span class="row-source">Al Jazeera</span>
 <span class="row-main"><span class="row-title">Polls open in Colombia’s pivotal presidential election</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-05-02</span>
 <span class="row-source">Al Jazeera</span>
 <span class="row-main"><span class="row-title">Spirit Airlines begins ‘wind-down’, cancels all flights over fuel crisis</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-03-20</span>
 <span class="row-source">Deutsche Welle</span>
 <span class="row-main"><span class="row-title">Iran war: Why gold prices are not soaring</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-02-25</span>
 <span class="row-source">Geopolitical Futures</span>
 <span class="row-main"><span class="row-title">Daily Memo: Starlink Disruption in South China Sea, Russia’s Footprint in Africa</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-02-26</span>
 <span class="row-source">Geopolitical Futures</span>
 <span class="row-main"><span class="row-title">The Tigray Powder Keg in the Horn of Africa</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-02-20</span>
 <span class="row-source">ZeroHedge</span>
 <span class="row-main"><span class="row-title">Ex-CIA Analyst Peels Back The US Information Operation In Iran</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-02-26</span>
 <span class="row-source">ZeroHedge</span>
 <span class="row-main"><span class="row-title">'The Mirage' Of Manufactured Calm And The Disconnect Between Markets And Reality</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-03-23</span>
 <span class="row-source">arXiv q-fin</span>
 <span class="row-main"><span class="row-title">Generalized Stock Price Prediction for Multiple Stocks Combined with News Fusion</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-02-20</span>
 <span class="row-source">Geopolitical Futures</span>
 <span class="row-main"><span class="row-title">Taiwan at the Center of a Fragile US-China Rapprochement</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-03-01</span>
 <span class="row-source">The Big Picture</span>
 <span class="row-main"><span class="row-title">10 Weekend Reads</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-02-21</span>
 <span class="row-source">Fed On The Economy</span>
 <span class="row-main"><span class="row-title">Why AI Advancements May Push Some Workers Out of the Labor Force</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-02-20</span>
 <span class="row-source">Deutsche Welle</span>
 <span class="row-main"><span class="row-title">Trump sweeping tariffs struck down: What happens next?</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-02-19</span>
 <span class="row-source">ZeroHedge</span>
 <span class="row-main"><span class="row-title">Futures Slide As Iran War Risks Add To Growing AI Disruption Fears; Oil Surges</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-02-23</span>
 <span class="row-source">Fed On The Economy</span>
 <span class="row-main"><span class="row-title">Flash Report: January Jobless Data May Signal Improving Labor Market</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-06-07</span>
 <span class="row-source">Al Jazeera</span>
 <span class="row-main"><span class="row-title">How have countries around the world responded to the US-Israel war on Iran?</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-02-24</span>
 <span class="row-source">Treasury MSPD</span>
 <span class="row-main"><span class="row-title">Monthly Statement of the Public Debt, January 31, 2026</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-03-26</span>
 <span class="row-source">Geopolitical Futures</span>
 <span class="row-main"><span class="row-title">How Iran Is Repricing Geography</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-02-21</span>
 <span class="row-source">Antiwar.com</span>
 <span class="row-main"><span class="row-title">US Plans To Build a 5,000-Person Military Base in Gaza for International Force</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-03-25</span>
 <span class="row-source">ZeroHedge</span>
 <span class="row-main"><span class="row-title">Israel Seeks To Disrupt Russian-Iranian Arms Transfer Route In The Caspian Sea</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-05-28</span>
 <span class="row-source">Fed On The Economy</span>
 <span class="row-main"><span class="row-title">1776 and the Economics of Government</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-06-03</span>
 <span class="row-source">Deutsche Welle</span>
 <span class="row-main"><span class="row-title">Armenia's election offers a choice between Russia and EU</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-03-27</span>
 <span class="row-source">War on the Rocks</span>
 <span class="row-main"><span class="row-title">Hellscape Taiwan: A Porcupine Defense in the Drone Age</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-02-20</span>
 <span class="row-source">Geopolitical Futures</span>
 <span class="row-main"><span class="row-title">Why Trump is Not to Blame for Europe’s Predicament | George Friedman</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-06-03</span>
 <span class="row-source">Al Jazeera</span>
 <span class="row-main"><span class="row-title">Does Israel have nukes? ‘Most of the world assesses they do,’ says Rubio</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-02-28</span>
 <span class="row-source">FAZ</span>
 <span class="row-main"><span class="row-title">Pekings Aufstieg: Der unheimliche Erfolg von Chinas Bürokraten</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-06-10</span>
 <span class="row-source">War on the Rocks</span>
 <span class="row-main"><span class="row-title">How Can Lebanon’s Partners Help Strengthen the Lebanese Armed Forces?</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-02-27</span>
 <span class="row-source">Fed On The Economy</span>
 <span class="row-main"><span class="row-title">U.S. Import Price Dynamics Following the 2025 Tariffs</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-05-31</span>
 <span class="row-source">Deutsche Welle</span>
 <span class="row-main"><span class="row-title">What Hungary must do to receive EU funds frozen under Orban</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-02-22</span>
 <span class="row-source">Al Jazeera</span>
 <span class="row-main"><span class="row-title">Israeli army kills 2 Palestinians in strikes on Gaza during Ramadan</span></span>
 </a>
-<a class="row row-article row-hidden" data-admin-blocked="true" style="cursor: pointer;">
+<a class="row row-article" data-admin-blocked="true" style="cursor: pointer;">
 <span class="row-date-col">2026-02-28</span>
 <span class="row-source">Geopolitical Futures</span>
 <span class="row-main"><span class="row-title">The Chokepoint at the Center of the US-Iran Standoff</span></span>

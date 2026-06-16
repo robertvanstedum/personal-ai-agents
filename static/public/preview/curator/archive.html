@@ -177,6 +177,11 @@
       var articles = data[cat] || [];
       return Promise.resolve(new Response(JSON.stringify({articles: articles}), {status: 200, headers: {'Content-Type': 'application/json'}}));
     }
+    // Reading Room library API — serve pre-captured data if available
+    if (u === '/api/library' || u.indexOf('/api/library') !== -1) {
+      var libData = window._previewLibraryData || {articles: []};
+      return Promise.resolve(new Response(JSON.stringify(libData), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
     // Allow translate through — works for authenticated users, fails silently otherwise
     for (var i = 0; i < PASSTHROUGH.length; i++) {
       if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
