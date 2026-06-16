@@ -105,7 +105,7 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
     elif portal_prefix == "/app/german":
         offset_css = (
             "body{padding-top:38px!important;}"
-            "nav{top:38px!important;}"
+            "@media (min-width:769px){nav{top:38px!important;}}"
         )
     else:
         offset_css = "body{padding-top:38px!important;}"
