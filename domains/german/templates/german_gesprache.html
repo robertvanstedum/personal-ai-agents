@@ -130,6 +130,12 @@
                 </div>
                 <textarea class="notebook-textarea nach-sitzung-textarea" id="transcript-input" rows="6"
                   placeholder="Transkript hier einfügen oder aufnehmen ↑&#10;&#10;Robert: Guten Morgen…&#10;Frau Berger: Guten Morgen!…"></textarea>
+                <div class="gesprache-source-row">
+                  <span class="gesprache-source-label">Quelle</span>
+                  <button class="gesprache-source-pill active" data-source="ki_sitzung">KI-Sitzung</button>
+                  <button class="gesprache-source-pill" data-source="mobile">📱 Mobil</button>
+                  <button class="gesprache-source-pill" data-source="desktop">💻 Desktop</button>
+                </div>
                 <div class="gesprache-submit-row">
                   <button class="btn-primary" id="btn-analysieren" title="Analyse des Gesprächs">Analysieren</button>
                   <span class="gesprache-status" id="analyse-status"></span>
@@ -177,7 +183,7 @@
           <span class="gesprache-session-date">{{ s.date }}</span>
           <span class="gesprache-session-persona">{{ s.persona }}</span>
           <span class="gesprache-session-scene">{{ s.scenario }}</span>
-          <span class="gesprache-session-source">{{ s.source }}</span>
+          <span class="gesprache-session-source">{{ {'ki_sitzung':'KI-Sitzung','mobile':'Mobil','desktop':'Desktop','manual':'manuell','html':'HTML'}.get(s.source, s.source) }}</span>
         </div>
         {% endfor %}
       </div>
@@ -1047,6 +1053,19 @@ document.body.classList.add('parch-mode');
 
   })();
 
+  // ── Source pill selection ─────────────────────────────────────────────────
+  document.querySelectorAll('.gesprache-source-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.gesprache-source-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+    });
+  });
+
+  function getSelectedSource() {
+    const active = document.querySelector('.gesprache-source-pill.active');
+    return active ? active.dataset.source : 'ki_sitzung';
+  }
+
   // ── Transcript analysis (KI-Personas pane) ────────────────────────────────
 
   document.getElementById('btn-analysieren').addEventListener('click', async () => {
@@ -1067,7 +1086,7 @@ document.body.classList.add('parch-mode');
       const res = await fetch('/api/review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript, persona_name: personaName, scene, model }),
+        body: JSON.stringify({ transcript, persona_name: personaName, scene, model, source: getSelectedSource() }),
       });
       const data = await res.json();
       if (!data.ok) {
@@ -1095,12 +1114,14 @@ document.body.classList.add('parch-mode');
       const sessionList = document.getElementById('letzte-sitzungen-list');
       if (sessionList) {
         const today = new Date().toISOString().slice(0, 10);
+        const src = getSelectedSource();
+        const srcLabel = {'ki_sitzung':'KI-Sitzung','mobile':'Mobil','desktop':'Desktop'}[src] || src;
         const row = document.createElement('div');
         row.className = 'gesprache-session-row';
         row.innerHTML = `<span class="gesprache-session-date">${today}</span>`
           + `<span class="gesprache-session-persona">${personaName}</span>`
           + `<span class="gesprache-session-scene">${scene}</span>`
-          + `<span class="gesprache-session-source">ki_sitzung</span>`;
+          + `<span class="gesprache-session-source">${srcLabel}</span>`;
         sessionList.prepend(row);
         document.getElementById('letzte-sitzungen-section').style.display = '';
       }
