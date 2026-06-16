@@ -393,6 +393,22 @@ window._previewLibraryData = {data_json};
         head.append(BeautifulSoup(script, "html.parser"))
 
 
+ARCHIVE_GATE_HTML = """<main>
+<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:55vh;text-align:center;padding:3rem 2rem;">
+  <div style="font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:400;color:#3d2e1e;margin-bottom:1rem;">Archive</div>
+  <p style="color:rgba(61,46,30,0.6);max-width:380px;line-height:1.65;margin-bottom:2rem;font-size:0.95rem;">Your personal reading history is not available in preview. Request live access to see it.</p>
+  <a href="https://app.minimoi.ai/register" style="color:#C68A5E;border:1px solid rgba(198,138,94,0.5);padding:8px 22px;border-radius:4px;text-decoration:none;font-size:0.875rem;">Request live access →</a>
+</div>
+</main>"""
+
+
+def _apply_archive_gate(soup: BeautifulSoup) -> None:
+    """Replace archive main content with an access gate."""
+    main = soup.find("main")
+    if main:
+        main.replace_with(BeautifulSoup(ARCHIVE_GATE_HTML, "html.parser"))
+
+
 def _process_scans_dives_page(soup: BeautifulSoup) -> None:
     """Remove row-hidden from all thread/article rows so all content is visible."""
     for el in soup.find_all(class_=lambda c: c and "row-hidden" in c):
@@ -522,6 +538,9 @@ def process_page(html: str, page: dict, captured_at: str, extra: dict | None = N
 
     if page.get("name") == "reading_room":
         _process_reading_room_page(soup, (extra or {}).get("library_data", {}))
+
+    if page.get("name") == "archive":
+        _apply_archive_gate(soup)
 
     if page.get("name") == "scans_dives":
         _process_scans_dives_page(soup)
