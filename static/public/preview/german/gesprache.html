@@ -282,7 +282,7 @@
 </div>
 <details class="session-brief-details" id="session-brief-panel" style="">
 <summary class="session-brief-summary">🎯 Heutige Vorbereitung</summary>
-<pre class="session-brief-text" id="session-brief-text">📚 Sitzung 69 — Frau Berger / Bakery Order [use formal_sie]
+<pre class="session-brief-text" id="session-brief-text">📚 Sitzung 70 — Frau Berger / Bakery Order [use formal_sie]
 Carry forward: Erste Sitzung — kein Carry-forward
 Ziel: You walk into Frau Berger's Bäckerei near the Naschmarkt. She greets you warmly. Order bread or pastries, ask about today's specials, and pay. Speak politely — use 'Ich hätte gerne' or 'Ich möchte'.
 
@@ -308,6 +308,12 @@ Ziel: You walk into Frau Berger's Bäckerei near the Naschmarkt. She greets you 
 
 Robert: Guten Morgen…
 Frau Berger: Guten Morgen!…" rows="6"></textarea>
+<div class="gesprache-source-row">
+<span class="gesprache-source-label">Quelle</span>
+<button class="gesprache-source-pill active" data-preview-disabled="true" data-source="ki_sitzung" disabled="disabled">KI-Sitzung</button>
+<button class="gesprache-source-pill" data-preview-disabled="true" data-source="mobile" disabled="disabled">📱 Mobil</button>
+<button class="gesprache-source-pill" data-preview-disabled="true" data-source="desktop" disabled="disabled">💻 Desktop</button>
+</div>
 <div class="gesprache-submit-row">
 <button class="btn-primary" data-preview-disabled="true" disabled="disabled" id="btn-analysieren" title="Analyse des Gesprächs">Analysieren</button>
 <span class="gesprache-status" id="analyse-status"></span>
@@ -343,41 +349,43 @@ Frau Berger: Guten Morgen!…" rows="6"></textarea>
 </div>
 </div><!-- .ueben-layout -->
 <!-- Recent sessions -->
+<div id="letzte-sitzungen-section" style="">
 <hr class="gesprache-divider"/>
 <div class="gesprache-section-label">Letzte Sitzungen</div>
-<div class="gesprache-sessions-list">
-<div class="gesprache-session-row">
+<div class="gesprache-sessions-list" id="letzte-sitzungen-list">
+<div class="gesprache-session-row gesprache-session-row--clickable" data-stem="2026-06-16_002">
+<span class="gesprache-session-date">2026-06-16</span>
+<span class="gesprache-session-persona">Frau Berger</span>
+<span class="gesprache-session-scene">Bakery morning order near Naschmarkt</span>
+<span class="gesprache-session-source">manuell</span>
+</div>
+<div class="gesprache-session-row gesprache-session-row--clickable" data-stem="2026-06-16_001">
+<span class="gesprache-session-date">2026-06-16</span>
+<span class="gesprache-session-persona">Frau Berger</span>
+<span class="gesprache-session-scene">bakery order</span>
+<span class="gesprache-session-source">KI-Sitzung</span>
+</div>
+<div class="gesprache-session-row gesprache-session-row--clickable" data-stem="2026-06-03_001">
 <span class="gesprache-session-date">2026-06-03</span>
 <span class="gesprache-session-persona">Frau Berger</span>
 <span class="gesprache-session-scene">Bakery Order near Naschmarkt</span>
-<span class="gesprache-session-source">manual</span>
+<span class="gesprache-session-source">manuell</span>
 </div>
-<div class="gesprache-session-row">
+<div class="gesprache-session-row gesprache-session-row--clickable" data-stem="2026-05-25_001">
 <span class="gesprache-session-date">2026-05-25</span>
 <span class="gesprache-session-persona">Maria</span>
 <span class="gesprache-session-scene">cafe bill</span>
-<span class="gesprache-session-source">html</span>
+<span class="gesprache-session-source">HTML</span>
 </div>
-<div class="gesprache-session-row">
+<div class="gesprache-session-row gesprache-session-row--clickable" data-stem="2026-05-21_001">
 <span class="gesprache-session-date">2026-05-21</span>
 <span class="gesprache-session-persona">Maria</span>
 <span class="gesprache-session-scene">Viennese café</span>
-<span class="gesprache-session-source">manual</span>
-</div>
-<div class="gesprache-session-row">
-<span class="gesprache-session-date">2026-05-08</span>
-<span class="gesprache-session-persona">Maria</span>
-<span class="gesprache-session-scene">Viennese café waitress</span>
-<span class="gesprache-session-source">manual</span>
-</div>
-<div class="gesprache-session-row">
-<span class="gesprache-session-date">2026-05-08</span>
-<span class="gesprache-session-persona">Herr Fischer</span>
-<span class="gesprache-session-scene">Hotel receptionist near Ringstraße</span>
-<span class="gesprache-session-source">manual</span>
+<span class="gesprache-session-source">manuell</span>
 </div>
 </div>
 <p class="hint" style="margin-top:0.75rem"><a href="/preview/german/archiv.html">→ Alle Sitzungen im Archiv</a></p>
+</div>
 </div><!-- #pane-ki-personas -->
 <!-- ── Konversation pane ───────────────────────────────────────────────── -->
 <div id="pane-konversation" style="display:none">
@@ -1072,7 +1080,7 @@ document.body.classList.add('parch-mode');
       const SPEECH_RMS   = 0.018;  // RMS to consider speech started
       const SILENCE_RMS  = 0.012;  // RMS below = silence
       const SPEECH_MIN   = 300;    // ms of speech before VAD arms
-      const SILENCE_MS   = 2000;   // ms of silence to end turn
+      const SILENCE_MS   = 1200;   // ms of silence to end turn
 
       return new Promise(resolve => {
         let speechStart  = null;
@@ -1219,6 +1227,19 @@ document.body.classList.add('parch-mode');
 
   })();
 
+  // ── Source pill selection ─────────────────────────────────────────────────
+  document.querySelectorAll('.gesprache-source-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.gesprache-source-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+    });
+  });
+
+  function getSelectedSource() {
+    const active = document.querySelector('.gesprache-source-pill.active');
+    return active ? active.dataset.source : 'ki_sitzung';
+  }
+
   // ── Transcript analysis (KI-Personas pane) ────────────────────────────────
 
   document.getElementById('btn-analysieren').addEventListener('click', async () => {
@@ -1239,7 +1260,7 @@ document.body.classList.add('parch-mode');
       const res = await fetch('/app/german/api/review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript, persona_name: personaName, scene, model }),
+        body: JSON.stringify({ transcript, persona_name: personaName, scene, model, source: getSelectedSource() }),
       });
       const data = await res.json();
       if (!data.ok) {
@@ -1263,6 +1284,22 @@ document.body.classList.add('parch-mode');
       btn.textContent = 'Analysieren';
       btn.disabled = false;
 
+      // Prepend new session to Letzte Sitzungen without a page reload
+      const sessionList = document.getElementById('letzte-sitzungen-list');
+      if (sessionList) {
+        const today = new Date().toISOString().slice(0, 10);
+        const src = getSelectedSource();
+        const srcLabel = {'ki_sitzung':'KI-Sitzung','mobile':'Mobil','desktop':'Desktop'}[src] || src;
+        const row = document.createElement('div');
+        row.className = 'gesprache-session-row';
+        row.innerHTML = `<span class="gesprache-session-date">${today}</span>`
+          + `<span class="gesprache-session-persona">${personaName}</span>`
+          + `<span class="gesprache-session-scene">${scene}</span>`
+          + `<span class="gesprache-session-source">${srcLabel}</span>`;
+        sessionList.prepend(row);
+        document.getElementById('letzte-sitzungen-section').style.display = '';
+      }
+
       requestAnimationFrame(() => {
         const panel = document.getElementById('persona-detail');
         const wrap  = document.getElementById('gesprache-feedback-wrap');
@@ -1285,6 +1322,37 @@ document.body.classList.add('parch-mode');
 
   document.getElementById('btn-neue-sitzung').addEventListener('click', () => {
     resetToRestingState();
+  });
+
+  // ── Letzte Sitzungen — click to load session feedback ────────────────────
+  document.getElementById('letzte-sitzungen-list').addEventListener('click', async (e) => {
+    const row = e.target.closest('.gesprache-session-row--clickable');
+    if (!row) return;
+    const stem = row.dataset.stem;
+    if (!stem) return;
+
+    // toggle off if already active
+    if (row.classList.contains('gesprache-session-row--active')) {
+      row.classList.remove('gesprache-session-row--active');
+      document.getElementById('gesprache-feedback-wrap').style.display = 'none';
+      return;
+    }
+    document.querySelectorAll('.gesprache-session-row--active').forEach(r => r.classList.remove('gesprache-session-row--active'));
+    row.classList.add('gesprache-session-row--active');
+
+    try {
+      const res = await fetch(`/app/german/api/gesprache-session/${stem}`);
+      const data = await res.json();
+      if (!data.ok) return;
+      const fb = data.session.reviewer_output || {};
+      renderFeedback(fb);
+      document.getElementById('gesprache-feedback-wrap').style.display = '';
+      // scroll feedback into view inside the panel
+      requestAnimationFrame(() => {
+        const wrap = document.getElementById('gesprache-feedback-wrap');
+        if (wrap) wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    } catch (_) {}
   });
 
   function renderFeedback(fb) {
@@ -1497,6 +1565,27 @@ document.body.classList.add('parch-mode');
   // Restore last tab: URL param → sessionStorage → default KI-Personas
   const _urlTab = new URLSearchParams(window.location.search).get('tab');
   switchTab(_urlTab || sessionStorage.getItem('gesprache-tab') || 'personas');
+
+  // ── Refresh Letzte Sitzungen when tab becomes visible (e.g. after Telegram pipeline) ──
+  const SOURCE_LABELS = {'ki_sitzung':'KI-Sitzung','mobile':'Mobil','desktop':'Desktop','manual':'manuell','html':'HTML'};
+  document.addEventListener('visibilitychange', async () => {
+    if (document.hidden) return;
+    try {
+      const res = await fetch('/app/german/api/gesprache-sessions?limit=5');
+      const sessions = await res.json();
+      if (!sessions.length) return;
+      const list = document.getElementById('letzte-sitzungen-list');
+      if (!list) return;
+      list.innerHTML = sessions.map(s => `
+        <div class="gesprache-session-row gesprache-session-row--clickable" data-stem="${s.stem || ''}">
+          <span class="gesprache-session-date">${s.date}</span>
+          <span class="gesprache-session-persona">${s.persona}</span>
+          <span class="gesprache-session-scene">${s.scenario}</span>
+          <span class="gesprache-session-source">${SOURCE_LABELS[s.source] || s.source}</span>
+        </div>`).join('');
+      document.getElementById('letzte-sitzungen-section').style.display = '';
+    } catch (_) {}
+  });
 
 })();
 </script>

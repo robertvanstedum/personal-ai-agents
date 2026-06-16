@@ -281,7 +281,7 @@
 </nav>
 <div class="page-header">
 <h1 class="page-title">Build Queue</h1>
-<span class="page-meta">17 items in motion</span>
+<span class="page-meta">18 items in motion</span>
 <div class="header-actions">
 <a class="gh-link" href="https://github.com/robertvanstedum/personal-ai-agents/issues" rel="noopener" target="_blank">View GitHub Issues →</a>
 </div>
@@ -291,6 +291,49 @@
 <div class="col-header">
       Spec Ready
       <span class="col-count">4</span>
+</div>
+<div class="card" id="card-24">
+<div class="card-top">
+<div class="card-title">Security Architecture: Separate Public Site from Live Portal</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Security architecture spec for subdomain separation of public site an…</div>
+<div class="card-meta">
+<span>today</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_security_architecture_2026-06-14.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/24/status" data-preview-disabled="true" id="bf-24" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-24" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-24" name="status" onchange="queueStatus(this, 24)">
+<option selected="" value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-24" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-24" onclick="toggleBuildDetail(24)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-24" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-24" oninput="document.getElementById('bn-24').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-24">
+<div class="detail-row"><span class="detail-label">File</span>spec_security_architecture_2026-06-14.md</div>
+<form action="/guild/build/items/24/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Security Architecture: Separate Public Site from Live Portal"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Security architecture spec for subdomain separation of public site and portal."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-24">loading…</div>
+</div>
+</div>
 </div>
 <div class="card" id="card-22">
 <div class="card-top">
@@ -378,49 +421,6 @@
 </div>
 </div>
 </div>
-<div class="card" id="card-24">
-<div class="card-top">
-<div class="card-title">Security Architecture: Separate Public Site from Live Portal</div>
-<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Security architecture spec for subdomain separation of public site an…</div>
-<div class="card-meta">
-<span>today</span>
-</div>
-<div style="margin-top:5px;">
-<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_security_architecture_2026-06-14.md</a>
-</div>
-</div>
-<div class="card-actions">
-<form action="/guild/build/items/24/status" data-preview-disabled="true" id="bf-24" method="POST" onsubmit="return false;" style="display:contents">
-<input id="bn-24" name="note" type="hidden" value=""/>
-<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-24" name="status" onchange="queueStatus(this, 24)">
-<option selected="" value="spec_ready">Spec Ready</option>
-<option value="incomplete">Incomplete</option>
-<option value="in_build">In Build</option>
-<option value="blocked">Blocked</option>
-<option value="done">Done</option>
-<option value="deferred">Deferred</option>
-</select>
-<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-24" type="submit">Save</button>
-</form>
-<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-24" onclick="toggleBuildDetail(24)">···</button>
-</div>
-<div class="note-input-wrap" id="bd-24" style="padding: 0 12px; display:none;">
-<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-24" oninput="document.getElementById('bn-24').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
-</div>
-<div class="card-detail" id="bdetail-24">
-<div class="detail-row"><span class="detail-label">File</span>spec_security_architecture_2026-06-14.md</div>
-<form action="/guild/build/items/24/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Security Architecture: Separate Public Site from Live Portal"/>
-<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Security architecture spec for subdomain separation of public site and portal."/>
-<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
-<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
-</form>
-<div class="history-section">
-<div class="detail-label" style="margin-bottom:4px;">History</div>
-<div class="history-loading" id="bhist-24">loading…</div>
-</div>
-</div>
-</div>
 <div class="card" id="card-2">
 <div class="card-top">
 <div class="card-title">Lesen Writing Drill</div>
@@ -468,9 +468,56 @@
 <div class="board-col">
 <div class="col-header" style="color:#8b5e20;">
       Incomplete
-      <span class="col-count">0</span>
+      <span class="col-count">1</span>
 </div>
-<div class="col-empty">—</div>
+<div class="card" id="card-45">
+<div class="card-top">
+<div class="card-title">Mein Deutsch v1.1 Landing Blurb + GitHub Release Notes Update</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Spec for Mein Deutsch v1.1 landing blurb and release notes update.</div>
+<div class="card-meta">
+<span>today</span>
+<span class="card-tag tag-incomplete">⚠ incomplete</span>
+</div>
+<div style="margin-top:5px;display:flex;align-items:flex-start;gap:6px;">
+<button class="check-btn" data-preview-disabled="true" disabled="disabled" onclick="runCheck(45, this)" style="font-size:10px;padding:2px 7px;border:1px solid #c8a060;border-radius:3px;background:rgba(139,90,0,0.07);color:#8b5a00;cursor:pointer;white-space:nowrap;">why incomplete?</button>
+<div id="check-result-45" style="font-size:10px;color:#8b5a00;line-height:1.5;"></div>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_mein_deutsch_blurb_release_update_2026-06-15.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/45/status" data-preview-disabled="true" id="bf-45" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-45" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-45" name="status" onchange="queueStatus(this, 45)">
+<option value="spec_ready">Spec Ready</option>
+<option selected="" value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-45" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-45" onclick="toggleBuildDetail(45)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-45" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-45" oninput="document.getElementById('bn-45').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-45">
+<div class="detail-row"><span class="detail-label">File</span>spec_mein_deutsch_blurb_release_update_2026-06-15.md</div>
+<form action="/guild/build/items/45/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Mein Deutsch v1.1 Landing Blurb + GitHub Release Notes Update"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Spec for Mein Deutsch v1.1 landing blurb and release notes update."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-45">loading…</div>
+</div>
+</div>
+</div>
 </div>
 <div class="board-col">
 <div class="col-header">
@@ -617,49 +664,6 @@
 </div>
 </div>
 </div>
-<div class="card card-done" id="card-20">
-<div class="card-top">
-<div class="card-title">minimoi.ai Always-On Landing Page</div>
-<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Investigation complete: landing is fully static, no DB dependency. Re…</div>
-<div class="card-meta">
-<span>today</span>
-</div>
-<div style="margin-top:5px;">
-<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_landing_page_uptime_2026-06-13.md</a>
-</div>
-</div>
-<div class="card-actions">
-<form action="/guild/build/items/20/status" data-preview-disabled="true" id="bf-20" method="POST" onsubmit="return false;" style="display:contents">
-<input id="bn-20" name="note" type="hidden" value=""/>
-<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-20" name="status" onchange="queueStatus(this, 20)">
-<option value="spec_ready">Spec Ready</option>
-<option value="incomplete">Incomplete</option>
-<option value="in_build">In Build</option>
-<option value="blocked">Blocked</option>
-<option selected="" value="done">Done</option>
-<option value="deferred">Deferred</option>
-</select>
-<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-20" type="submit">Save</button>
-</form>
-<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-20" onclick="toggleBuildDetail(20)">···</button>
-</div>
-<div class="note-input-wrap" id="bd-20" style="padding: 0 12px; display:none;">
-<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-20" oninput="document.getElementById('bn-20').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
-</div>
-<div class="card-detail" id="bdetail-20">
-<div class="detail-row"><span class="detail-label">File</span>spec_landing_page_uptime_2026-06-13.md</div>
-<form action="/guild/build/items/20/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="minimoi.ai Always-On Landing Page"/>
-<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Investigation complete: landing is fully static, no DB dependency. Recommendation: Cloudflare Pages static split. Implementation spec pending."/>
-<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
-<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
-</form>
-<div class="history-section">
-<div class="detail-label" style="margin-bottom:4px;">History</div>
-<div class="history-loading" id="bhist-20">loading…</div>
-</div>
-</div>
-</div>
 <div class="card card-done" id="card-37">
 <div class="card-top">
 <div class="card-title">Gespräche: Start Session / End Session (Single Window)</div>
@@ -700,6 +704,49 @@
 <div class="history-section">
 <div class="detail-label" style="margin-bottom:4px;">History</div>
 <div class="history-loading" id="bhist-37">loading…</div>
+</div>
+</div>
+</div>
+<div class="card card-done" id="card-20">
+<div class="card-top">
+<div class="card-title">minimoi.ai Always-On Landing Page</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Investigation complete: landing is fully static, no DB dependency. Re…</div>
+<div class="card-meta">
+<span>today</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_landing_page_uptime_2026-06-13.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/20/status" data-preview-disabled="true" id="bf-20" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-20" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-20" name="status" onchange="queueStatus(this, 20)">
+<option value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option selected="" value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-20" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-20" onclick="toggleBuildDetail(20)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-20" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-20" oninput="document.getElementById('bn-20').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-20">
+<div class="detail-row"><span class="detail-label">File</span>spec_landing_page_uptime_2026-06-13.md</div>
+<form action="/guild/build/items/20/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="minimoi.ai Always-On Landing Page"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Investigation complete: landing is fully static, no DB dependency. Recommendation: Cloudflare Pages static split. Implementation spec pending."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-20">loading…</div>
 </div>
 </div>
 </div>
