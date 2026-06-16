@@ -111,6 +111,15 @@ FETCH_INTERCEPT_JS = """
       var libData = window._previewLibraryData || {articles: []};
       return Promise.resolve(new Response(JSON.stringify(libData), {status: 200, headers: {'Content-Type': 'application/json'}}));
     }
+    // Leanings API — serve pre-captured data if available
+    if (u === '/api/research/leanings' && (!opts || !opts.method || opts.method === 'GET')) {
+      var lData = window._previewLeaningsData || [];
+      return Promise.resolve(new Response(JSON.stringify({ok: true, leanings: lData}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    // Intelligence/observations API — return empty state for preview
+    if (u.indexOf('/api/intelligence/') !== -1) {
+      return Promise.resolve(new Response(JSON.stringify({daily: null, weekly: null, today: '', has_prev: false, is_today: true}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
     // Allow translate through — works for authenticated users, fails silently otherwise
     for (var i = 0; i < PASSTHROUGH.length; i++) {
       if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
@@ -347,6 +356,19 @@ document.addEventListener('DOMContentLoaded', function() {{
             body.append(BeautifulSoup(script, "html.parser"))
 
 
+def _process_leanings_page(soup: BeautifulSoup, leanings_data: list) -> None:
+    """Inject pre-captured leanings into <head> so fetch interceptor can serve them."""
+    if not leanings_data:
+        return
+    data_json = json.dumps(leanings_data, ensure_ascii=False)
+    script = f"""<script id="preview-leanings-data">
+window._previewLeaningsData = {data_json};
+</script>"""
+    head = soup.find("head")
+    if head:
+        head.append(BeautifulSoup(script, "html.parser"))
+
+
 def _process_reading_room_page(soup: BeautifulSoup, library_data: dict) -> None:
     """Inject pre-captured library data into <head> so fetch interceptor can serve it.
 
@@ -488,6 +510,9 @@ def process_page(html: str, page: dict, captured_at: str, extra: dict | None = N
     if page.get("name") == "lesen":
         _process_lesen_page(soup, (extra or {}).get("lesen_data", {}))
 
+    if page.get("name") == "leanings":
+        _process_leanings_page(soup, (extra or {}).get("leanings_data", []))
+
     if page.get("name") == "reading_room":
         _process_reading_room_page(soup, (extra or {}).get("library_data", {}))
 
@@ -577,6 +602,19 @@ def capture_all(password: str = "") -> dict:
                         extra["lesen_data"] = lesen_data
                     except Exception as exc:
                         print(f"\n  [lesen-data error] {exc}", end="", flush=True)
+
+                # Leanings: capture leanings list so fetch interceptor can serve it
+                if pg["name"] == "leanings":
+                    try:
+                        result = page.evaluate("""async () => {
+                            const res = await fetch('/api/research/leanings');
+                            return res.ok ? await res.json() : null;
+                        }""")
+                        if result and result.get("ok"):
+                            extra["leanings_data"] = result.get("leanings", [])
+                            print(f"\n  [leanings-data] {len(extra['leanings_data'])} leanings captured", end="", flush=True)
+                    except Exception as exc:
+                        print(f"\n  [leanings-data error] {exc}", end="", flush=True)
 
                 # Reading Room: capture library data so fetch interceptor can serve it
                 if pg["name"] == "reading_room":

@@ -392,6 +392,15 @@
       var libData = window._previewLibraryData || {articles: []};
       return Promise.resolve(new Response(JSON.stringify(libData), {status: 200, headers: {'Content-Type': 'application/json'}}));
     }
+    // Leanings API — serve pre-captured data if available
+    if (u === '/api/research/leanings' && (!opts || !opts.method || opts.method === 'GET')) {
+      var lData = window._previewLeaningsData || [];
+      return Promise.resolve(new Response(JSON.stringify({ok: true, leanings: lData}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    // Intelligence/observations API — return empty state for preview
+    if (u.indexOf('/api/intelligence/') !== -1) {
+      return Promise.resolve(new Response(JSON.stringify({daily: null, weekly: null, today: '', has_prev: false, is_today: true}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
     // Allow translate through — works for authenticated users, fails silently otherwise
     for (var i = 0; i < PASSTHROUGH.length; i++) {
       if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
@@ -491,7 +500,7 @@
 <span class="cat-badge cat-geo_major">geo_major</span>
 <span class="source-label">Deutsche Welle</span>
 <span class="score-label">8.0 ⭐</span>
-<span class="time-label">6h ago</span>
+<span class="time-label">7h ago</span>
 </div>
 <h2 class="card-title">
 <a href="https://www.dw.com/en/us-iran-deal-tehran-says-israel-withdrawal-from-lebanon-key/live-77573728?maca=en-rss-en-all-1573-xml-mrss" target="_blank">US-Iran deal: Tehran says Israel withdrawal from Lebanon key</a>
@@ -557,7 +566,7 @@
 <span class="cat-badge cat-technology">technology</span>
 <span class="source-label">arXiv q-fin</span>
 <span class="score-label">6.0</span>
-<span class="time-label">12h ago</span>
+<span class="time-label">13h ago</span>
 </div>
 <h2 class="card-title">
 <a href="https://arxiv.org/abs/2606.15999" target="_blank">U.S. Policies Unintentionally Accelerated China's Open AI Ecosystems</a>
@@ -755,7 +764,7 @@
 <span class="cat-badge cat-monetary">monetary</span>
 <span class="source-label">ZeroHedge</span>
 <span class="score-label">7.0</span>
-<span class="time-label">7h ago</span>
+<span class="time-label">8h ago</span>
 </div>
 <h2 class="card-title">
 <a href="https://www.zerohedge.com/energy/chinas-return-oil-market-could-boost-inflation" target="_blank">China's Return To The Oil Market Could Boost Inflation</a>
@@ -865,7 +874,7 @@
 <span class="cat-badge cat-technology">technology</span>
 <span class="source-label">Naked Capitalism</span>
 <span class="score-label">6.0</span>
-<span class="time-label">22h ago</span>
+<span class="time-label">23h ago</span>
 </div>
 <h2 class="card-title">
 <a href="https://www.nakedcapitalism.com/2026/06/anthropic-trump-conflict-openai-amazon-meta.html" target="_blank">Coffee Break: OpenAI, Amazon Colluding With Trump Against Anthropic</a>

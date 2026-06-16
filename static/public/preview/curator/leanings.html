@@ -294,6 +294,15 @@
       var libData = window._previewLibraryData || {articles: []};
       return Promise.resolve(new Response(JSON.stringify(libData), {status: 200, headers: {'Content-Type': 'application/json'}}));
     }
+    // Leanings API — serve pre-captured data if available
+    if (u === '/api/research/leanings' && (!opts || !opts.method || opts.method === 'GET')) {
+      var lData = window._previewLeaningsData || [];
+      return Promise.resolve(new Response(JSON.stringify({ok: true, leanings: lData}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    // Intelligence/observations API — return empty state for preview
+    if (u.indexOf('/api/intelligence/') !== -1) {
+      return Promise.resolve(new Response(JSON.stringify({daily: null, weekly: null, today: '', has_prev: false, is_today: true}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
     // Allow translate through — works for authenticated users, fails silently otherwise
     for (var i = 0; i < PASSTHROUGH.length; i++) {
       if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
@@ -322,7 +331,9 @@
 }
 .preview-request-link:hover { background: rgba(198,138,94,0.1); }
 </style>
-</head>
+<script id="preview-leanings-data">
+window._previewLeaningsData = [{"badge": false, "created": "2026-06-01", "evidence": [{"added": "2026-06-01", "id": "ev-2c4650", "note": "", "source": "War on the Rocks", "stance": "neutral", "title": "How America Lost Its Most Important Defense Tech Habit", "url": "https://warontherocks.com/cogs-of-war/how-america-lost-its-most-important-defense-tech-habit/"}], "id": "db74b053", "notes": "", "state": "question", "teammate_read": {"evidence_count_at_read": 1, "generated_at": "2026-06-01T03:11:47.078063+00:00", "text": "## Assessment\n**Unresolved—evidence doesn't touch the question.** The single source is about American defense tech habits, not Hungary-Poland relations or economic convergence. You have zero data on Hungarian-Polish interests, trade patterns, institutional alignment, or development trajectories. This is a placeholder belief with no evidentiary foundation yet.\n\n## Implication\n**If right:** Hungary could leverage Poland's stronger EU position, manufacturing base, and NATO integration as a developmental scaffold—possibly gaining technology transfer, supply chain integration, or institutional knowledge. Poland gets a regional partner that diversifies dependence on Western Europe.\n\n**If wrong:** Hungary wastes political capital on a partnership that doesn't deliver catch-up growth. More importantly, you might miss that Hungary's actual constraint is governance quality or EU fund access, not lack of regional partnerships. Poland itself is still catching up; partnering with another middle-income country rarely accelerates convergence.\n\n## What's Missing\n**Comparative data on Hungary vs. Poland's economic trajectories since 2010**, especially FDI patterns, EU structural fund absorption rates, and export complexity. If Poland is pulling away *despite* similar starting conditions, the partnership theory weakens unless you can identify specific complementarities. Need concrete evidence of aligned interests beyond geographic proximity."}, "title": "Hungry and Poland, any alignment of interests and could it help Hungry catch up?", "topics": [], "updated": "2026-06-01"}, {"badge": true, "created": "2026-06-03", "evidence": [{"added": "2026-06-03", "id": "ev-85b807", "note": "", "source": "NY Fed Liberty Street", "stance": "supports", "title": "AI’s Macroeconomic Challenges and Promises", "url": "https://libertystreeteconomics.newyorkfed.org/2026/05/ais-macroeconomic-challenges-and-promises/"}, {"added": "2026-06-03", "id": "ev-291996", "note": "", "source": "Fed On The Economy", "stance": "supports", "title": "How Trade Policy Is Changing: From Broad Rules to Targeted Restrictions", "url": "https://www.stlouisfed.org/on-the-economy/2026/may/how-trade-policy-is-changing-broad-rules-targeted-restrictions"}], "id": "5fe38be6", "notes": "", "state": "question", "teammate_read": null, "title": "Capital Investment hits earning for several years", "topics": [], "updated": "2026-06-03"}, {"badge": true, "created": "2026-06-03", "evidence": [{"added": "2026-06-03", "id": "ev-99718c", "note": "", "source": "X/@Globalflows", "stance": "supports", "title": "This is what Druckenmiller thinks about Kevin Warsh\n\nThis is setting the stage f", "url": "https://x.com/Globalflows/status/2018173643566764503"}], "id": "00a9a037", "notes": "", "state": "question", "teammate_read": null, "title": "Gold and Monetary Reset", "topics": [], "updated": "2026-06-03"}];
+</script></head>
 <body><div class="preview-banner">
 <span>Preview snapshot — </span>
 <span class="preview-date">Captured June 16, 2026</span>
