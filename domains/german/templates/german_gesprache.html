@@ -104,14 +104,12 @@
               <button id="session-mute-btn" class="btn-session-mute" title="Ton ausschalten">🔊</button>
               <button id="end-session-btn" class="btn-session-end">■ Beenden</button>
             </div>
-            <div id="session-chat-log" class="session-chat-log"></div>
             <div class="session-listen-status" id="session-listen-status">Zuhört…</div>
             <div class="session-input-row">
               <input type="text" id="session-input" class="session-input-field"
                      placeholder="Oder tippen und Enter…">
               <button id="session-send-btn" class="btn-session-send">→ Senden</button>
             </div>
-            <div class="session-footer-status" id="session-footer-status"></div>
           </div>
 
           <details class="session-brief-details" id="session-brief-panel" style="display:none">
@@ -650,10 +648,9 @@ document.body.classList.add('parch-mode');
   const startSessionBtn = document.getElementById('start-session-btn');
   const endSessionBtn   = document.getElementById('end-session-btn');
   const sessionPanel    = document.getElementById('session-panel');
-  const chatLog         = document.getElementById('session-chat-log');
   const sessionSendBtn  = document.getElementById('session-send-btn');
   const sessionInputEl  = document.getElementById('session-input');
-  const footerStatus    = document.getElementById('session-footer-status');
+  let   sessionTurns    = 0;
 
   // ── TTS: speak persona responses via OpenAI TTS ──────────────────────────
   let sessionMuted    = false;
@@ -715,14 +712,9 @@ document.body.classList.add('parch-mode');
     });
   }
 
-  function appendMessage(speaker, text, isLoading) {
-    const div = document.createElement('div');
-    div.className = 'chat-message ' + (speaker === 'Sie' ? 'chat-user' : 'chat-persona');
-    if (isLoading) div.dataset.loading = '1';
-    div.innerHTML = '<strong>' + speaker + ':</strong> ' + (text || '<em>…</em>');
-    chatLog.appendChild(div);
-    chatLog.scrollTop = chatLog.scrollHeight;
-    return div;
+  function updateTurnCounter() {
+    const el = document.getElementById('session-persona-label');
+    if (el) el.textContent = personas[selectedIdx]?.name + (sessionTurns ? '  ·  ' + sessionTurns + ' Runden' : '');
   }
 
   async function sendTurn(userText) {
@@ -734,14 +726,13 @@ document.body.classList.add('parch-mode');
     const model  = document.getElementById('gesprache-model').value;
 
     if (userText) {
-      appendMessage('Sie', userText);
       sessionHistory.push({ role: 'user', content: userText });
       sessionTranscript.push('Sie: ' + userText);
+      sessionTurns++;
+      updateTurnCounter();
     }
 
-    const loadingEl = appendMessage(personaName, '', true);
     sessionSendBtn.disabled = true;
-
     try {
       const res = await fetch('/api/gesprache/ai-turn', {
         method: 'POST',
@@ -751,19 +742,13 @@ document.body.classList.add('parch-mode');
       const data = await res.json();
       const reply = (data.response || '').trim();
 
-      chatLog.removeChild(loadingEl);
       if (reply) {
-        appendMessage(personaName, reply);
         sessionHistory.push({ role: 'assistant', content: reply });
         sessionTranscript.push(personaName + ': ' + reply);
-        speakPersona(reply);
-      } else {
-        appendMessage('System', data.error || 'Keine Antwort.');
+        await speakPersona(reply);
       }
-    } catch (err) {
-      chatLog.removeChild(loadingEl);
-      appendMessage('System', 'Verbindungsfehler — bitte erneut versuchen.');
-    } finally {
+    } catch (err) { /* non-fatal — loop continues */ }
+    finally {
       sessionSendBtn.disabled = false;
     }
   }
@@ -777,8 +762,7 @@ document.body.classList.add('parch-mode');
     sessionActive = true;
     sessionHistory = [];
     sessionTranscript = [];
-    chatLog.innerHTML = '';
-    footerStatus.textContent = '';
+    sessionTurns = 0;
 
     document.getElementById('session-persona-label').textContent = p.name;
     document.getElementById('session-model-label').textContent =
@@ -808,7 +792,6 @@ document.body.classList.add('parch-mode');
     if (transcriptDetails) transcriptDetails.setAttribute('open', '');
     transcriptEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-    footerStatus.textContent = '';
     document.getElementById('analyse-status').textContent = 'Sitzung beendet ✓ — Transkript bereit.';
   });
 
