@@ -281,7 +281,7 @@
 </nav>
 <div class="page-header">
 <h1 class="page-title">Build Queue</h1>
-<span class="page-meta">18 items in motion</span>
+<span class="page-meta">19 items in motion</span>
 <div class="header-actions">
 <a class="gh-link" href="https://github.com/robertvanstedum/personal-ai-agents/issues" rel="noopener" target="_blank">View GitHub Issues →</a>
 </div>
@@ -291,6 +291,49 @@
 <div class="col-header">
       Spec Ready
       <span class="col-count">4</span>
+</div>
+<div class="card" id="card-27">
+<div class="card-top">
+<div class="card-title">Lesen Preview: Translate Hover via MyMemory</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Spec for replacing DeepL translate with MyMemory API in Lesen preview.</div>
+<div class="card-meta">
+<span>today</span>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_lesen_translate_hover_2026-06-14.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/27/status" data-preview-disabled="true" id="bf-27" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-27" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-27" name="status" onchange="queueStatus(this, 27)">
+<option selected="" value="spec_ready">Spec Ready</option>
+<option value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-27" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-27" onclick="toggleBuildDetail(27)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-27" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-27" oninput="document.getElementById('bn-27').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-27">
+<div class="detail-row"><span class="detail-label">File</span>spec_lesen_translate_hover_2026-06-14.md</div>
+<form action="/guild/build/items/27/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Lesen Preview: Translate Hover via MyMemory"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Spec for replacing DeepL translate with MyMemory API in Lesen preview."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-27">loading…</div>
+</div>
+</div>
 </div>
 <div class="card" id="card-24">
 <div class="card-top">
@@ -378,49 +421,6 @@
 </div>
 </div>
 </div>
-<div class="card" id="card-27">
-<div class="card-top">
-<div class="card-title">Lesen Preview: Translate Hover via MyMemory</div>
-<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Spec for replacing DeepL translate with MyMemory API in Lesen preview.</div>
-<div class="card-meta">
-<span>today</span>
-</div>
-<div style="margin-top:5px;">
-<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ spec_lesen_translate_hover_2026-06-14.md</a>
-</div>
-</div>
-<div class="card-actions">
-<form action="/guild/build/items/27/status" data-preview-disabled="true" id="bf-27" method="POST" onsubmit="return false;" style="display:contents">
-<input id="bn-27" name="note" type="hidden" value=""/>
-<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-27" name="status" onchange="queueStatus(this, 27)">
-<option selected="" value="spec_ready">Spec Ready</option>
-<option value="incomplete">Incomplete</option>
-<option value="in_build">In Build</option>
-<option value="blocked">Blocked</option>
-<option value="done">Done</option>
-<option value="deferred">Deferred</option>
-</select>
-<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-27" type="submit">Save</button>
-</form>
-<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-27" onclick="toggleBuildDetail(27)">···</button>
-</div>
-<div class="note-input-wrap" id="bd-27" style="padding: 0 12px; display:none;">
-<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-27" oninput="document.getElementById('bn-27').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
-</div>
-<div class="card-detail" id="bdetail-27">
-<div class="detail-row"><span class="detail-label">File</span>spec_lesen_translate_hover_2026-06-14.md</div>
-<form action="/guild/build/items/27/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
-<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Lesen Preview: Translate Hover via MyMemory"/>
-<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Spec for replacing DeepL translate with MyMemory API in Lesen preview."/>
-<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
-<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
-</form>
-<div class="history-section">
-<div class="detail-label" style="margin-bottom:4px;">History</div>
-<div class="history-loading" id="bhist-27">loading…</div>
-</div>
-</div>
-</div>
 <div class="card" id="card-2">
 <div class="card-top">
 <div class="card-title">Lesen Writing Drill</div>
@@ -468,7 +468,55 @@
 <div class="board-col">
 <div class="col-header" style="color:#8b5e20;">
       Incomplete
-      <span class="col-count">1</span>
+      <span class="col-count">2</span>
+</div>
+<div class="card" id="card-46">
+<div class="card-top">
+<div class="card-title">Domain Product Descriptions: Content Writing Session</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">Plan for Claude.ai writing session to create three domain product des…</div>
+<div class="card-meta">
+<span>today</span>
+<span class="card-tag tag-incomplete">⚠ incomplete</span>
+</div>
+<div style="margin-top:5px;display:flex;align-items:flex-start;gap:6px;">
+<button class="check-btn" data-preview-disabled="true" disabled="disabled" onclick="runCheck(46, this)" style="font-size:10px;padding:2px 7px;border:1px solid #c8a060;border-radius:3px;background:rgba(139,90,0,0.07);color:#8b5a00;cursor:pointer;white-space:nowrap;">why incomplete?</button>
+<div id="check-result-46" style="font-size:10px;color:#8b5a00;line-height:1.5;"></div>
+</div>
+<div style="margin-top:5px;">
+<a data-admin-blocked="true" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" rel="noopener" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim);text-decoration:none;; cursor: pointer;" target="_blank">↗ plan_domain_product_descriptions_writing_session_2026-06-16.md</a>
+</div>
+</div>
+<div class="card-actions">
+<form action="/guild/build/items/46/status" data-preview-disabled="true" id="bf-46" method="POST" onsubmit="return false;" style="display:contents">
+<input id="bn-46" name="note" type="hidden" value=""/>
+<select class="card-select" data-preview-disabled="true" disabled="disabled" id="bs-46" name="status" onchange="queueStatus(this, 46)">
+<option value="spec_ready">Spec Ready</option>
+<option selected="" value="incomplete">Incomplete</option>
+<option value="in_build">In Build</option>
+<option value="blocked">Blocked</option>
+<option value="done">Done</option>
+<option value="deferred">Deferred</option>
+</select>
+<button class="save-btn" data-preview-disabled="true" disabled="disabled" id="bsave-46" type="submit">Save</button>
+</form>
+<button class="detail-btn" data-preview-disabled="true" disabled="disabled" id="bdbtn-46" onclick="toggleBuildDetail(46)">···</button>
+</div>
+<div class="note-input-wrap" id="bd-46" style="padding: 0 12px; display:none;">
+<input class="note-input" data-preview-disabled="true" disabled="disabled" id="bni-46" oninput="document.getElementById('bn-46').value=this.value" placeholder="Reason for blocking…" style="display:block;width:100%;margin-bottom:6px;" type="text"/>
+</div>
+<div class="card-detail" id="bdetail-46">
+<div class="detail-row"><span class="detail-label">File</span>plan_domain_product_descriptions_writing_session_2026-06-16.md</div>
+<form action="/guild/build/items/46/edit" class="edit-form" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Domain Product Descriptions: Content Writing Session"/>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="Summary (one line)" value="Plan for Claude.ai writing session to create three domain product descriptions."/>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="GitHub issue  e.g. #41" value=""/>
+<button class="edit-save-btn" data-preview-disabled="true" disabled="disabled" type="submit">Save edits</button>
+</form>
+<div class="history-section">
+<div class="detail-label" style="margin-bottom:4px;">History</div>
+<div class="history-loading" id="bhist-46">loading…</div>
+</div>
+</div>
 </div>
 <div class="card" id="card-45">
 <div class="card-top">

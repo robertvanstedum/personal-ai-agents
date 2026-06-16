@@ -506,6 +506,20 @@ def capture_all(password: str = "") -> dict:
                 page.goto(url, timeout=30_000)
                 page.wait_for_load_state("networkidle", timeout=15_000)
 
+                # Reading Room: wait for JS-rendered table rows
+                if pg["name"] == "reading_room":
+                    try:
+                        page.wait_for_selector("#table-body tr", timeout=8_000)
+                    except Exception:
+                        pass  # capture whatever loaded
+
+                # Scans & Dives: wait for JS-rendered rows
+                if pg["name"] == "scans_dives":
+                    try:
+                        page.wait_for_selector(".row.row-thread", timeout=8_000)
+                    except Exception:
+                        pass
+
                 extra: dict = {}
                 # Lesen: fetch article data for all categories via authenticated page context
                 if pg["name"] == "lesen":
