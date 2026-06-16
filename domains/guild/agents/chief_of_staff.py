@@ -250,6 +250,68 @@ def _run_build_discipline_check() -> dict:
     return {"flagged": flagged, "threshold_days": threshold_days}
 
 
+def _run_guest_nudge_check() -> dict:
+    """
+    Loop G — hourly guest access request staleness nudge.
+    First nudge after 2h pending; repeat every 6h thereafter.
+    Sends one combined Telegram message for all stale requests.
+    """
+    try:
+        with _db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT id, name
+                    FROM guild.guest_requests
+                    WHERE status = 'requested'
+                      AND (
+                        (last_nudged_at IS NULL     AND requested_at < NOW() - INTERVAL '2 hours')
+                        OR
+                        (last_nudged_at IS NOT NULL AND last_nudged_at < NOW() - INTERVAL '6 hours')
+                      )
+                """)
+                stale = cur.fetchall()
+
+                if not stale:
+                    return {"nudged": 0}
+
+                ids = [r["id"] for r in stale]
+                names = [r["name"] for r in stale]
+
+                cur.execute(
+                    "UPDATE guild.guest_requests SET last_nudged_at=NOW() WHERE id = ANY(%s)",
+                    [ids]
+                )
+    except Exception as e:
+        log.error("guest_nudge_check error: %s", e)
+        return {"nudged": 0, "error": str(e)}
+
+    count = len(names)
+    if count == 1:
+        body = f"  • {names[0]}"
+    else:
+        body = "\n".join(f"  • {n}" for n in names)
+
+    msg = (
+        f"🔔 <b>Guest access — {count} pending request{'s' if count > 1 else ''}</b>\n"
+        f"{body}\n"
+        f"Review at /guild"
+    )
+    try:
+        token   = keyring.get_password("telegram", "bot_token")
+        chat_id = os.environ.get("TELEGRAM_CHAT_ID", "8379221702")
+        if token:
+            requests.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"},
+                timeout=5,
+            )
+    except Exception:
+        pass
+
+    log.info("guest_nudge_check: %d request(s) nudged", count)
+    return {"nudged": count}
+
+
 def _build_system_prompt() -> str:
     try:
         raw_context = json.loads(COS_CONTEXT_FILE.read_text())
@@ -531,6 +593,7 @@ _loop_state: dict[str, dict] = {
     "loop_c": {"name": "curator_scout",          "last_run": None, "last_result": None, "error": None},
     "loop_d": {"name": "novelty_watch",          "last_run": None, "last_result": None, "error": None},
     "loop_f": {"name": "build_discipline_check", "last_run": None, "last_result": None, "error": None},
+    "loop_g": {"name": "guest_nudge_check",      "last_run": None, "last_result": None, "error": None},
 }
 _loop_lock = threading.Lock()
 
@@ -930,6 +993,11 @@ def main():
         lambda: _run_loop("loop_f", _run_build_discipline_check),
         "cron", hour=7, minute=30, id="loop_f", misfire_grace_time=600
     )
+    # Loop G — guest access staleness nudge (hourly, always available)
+    scheduler.add_job(
+        lambda: _run_loop("loop_g", _run_guest_nudge_check),
+        "interval", hours=1, id="loop_g", misfire_grace_time=300
+    )
 
     if loops_ok:
         # Loop A — twice daily
@@ -952,9 +1020,9 @@ def main():
             lambda: _run_loop("loop_d", run_novelty_watch),
             "cron", day="1,15", hour=8, id="loop_d", misfire_grace_time=600
         )
-        print("   Scheduler: loop_a(6+18h) loop_b(Sun 9h) loop_c(Sun 10h) loop_d(1st+15th 8h) loop_f(daily 7:30) ✅")
+        print("   Scheduler: loop_a(6+18h) loop_b(Sun 9h) loop_c(Sun 10h) loop_d(1st+15th 8h) loop_f(daily 7:30) loop_g(hourly) ✅")
     else:
-        print("   Scheduler: loop_f(daily 7:30) ✅ — loop_a/b/c/d disabled (import error)")
+        print("   Scheduler: loop_f(daily 7:30) loop_g(hourly) ✅ — loop_a/b/c/d disabled (import error)")
 
     scheduler.start()
 

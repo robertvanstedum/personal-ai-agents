@@ -197,6 +197,27 @@
       letter-spacing: 0.06em; color: var(--accent); text-decoration: none;
     }
     .section-goto:hover { text-decoration: underline; }
+
+    /* ── Guest request rows ── */
+    .guest-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 9px 0; border-bottom: 1px solid rgba(221,214,200,0.4);
+      font-size: 13px;
+    }
+    .guest-row:last-child { border-bottom: none; }
+    .guest-name { font-weight: 600; color: var(--text); flex: 1; }
+    .guest-reason { font-size: 12px; color: var(--text-dim); flex: 2; }
+    .guest-time { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); white-space: nowrap; }
+    .btn-action {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.05em; padding: 3px 10px; border-radius: 3px; border: 1px solid;
+      cursor: pointer; background: none; white-space: nowrap;
+    }
+    .btn-grant  { color: var(--ok);     border-color: var(--ok-border); }
+    .btn-grant:hover  { background: var(--ok-bg); }
+    .btn-reject { color: var(--danger); border-color: var(--danger-border); }
+    .btn-reject:hover { background: var(--danger-bg); }
+    .access-full-width { grid-column: 1 / -1; }
   </style>
 </head>
 <body>
@@ -214,7 +235,7 @@
   <div class="guild-subnav">
     <a href="/guild/career" class="subnav-link subnav-active">Career Focus</a>
     <span class="subnav-dot">&nbsp;·&nbsp;</span>
-    <a href="/guild/build" class="subnav-link subnav-active">Build</a>
+    <a href="/guild/build/queue" class="subnav-link subnav-active">Build</a>
   </div>
 </nav>
 
@@ -377,6 +398,35 @@
     {% endif %}
   </div>
 
+  {# ── ACCESS REQUESTS ─────────────────────────────────────────── #}
+  {% if guest_requests %}
+  <div class="section access-full-width">
+    <div class="section-label">Access Requests <span class="section-label-line"></span></div>
+    {% for req in guest_requests %}
+    <div class="guest-row">
+      <span class="guest-name">{{ req.name }}</span>
+      <span class="guest-reason">{{ req.reason or '—' }}</span>
+      <span class="guest-time">{{ req.requested_at.strftime('%-d %b') if req.requested_at else '—' }}</span>
+      {% if req.status == 'requested' %}
+        <span class="pill pill-warn">pending</span>
+        <form method="POST" action="/guild/guest-requests/{{ req.id }}/status" style="display:inline">
+          <input type="hidden" name="status" value="granted">
+          <button type="submit" class="btn-action btn-grant">Grant</button>
+        </form>
+        <form method="POST" action="/guild/guest-requests/{{ req.id }}/status" style="display:inline">
+          <input type="hidden" name="status" value="rejected">
+          <button type="submit" class="btn-action btn-reject">Reject</button>
+        </form>
+      {% elif req.status == 'granted' %}
+        <span class="pill pill-ok">granted</span>
+      {% else %}
+        <span class="pill pill-dim">{{ req.status }}</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {# ── BUILD ────────────────────────────────────────────────────── #}
   <div class="section">
     <div class="section-label">
@@ -480,7 +530,7 @@
     <div class="section-label" style="margin-top:8px;">Key dates <span class="section-label-line"></span></div>
 
     <div class="brief-row">
-      <span class="brief-label">Aug 1</span>
+      <span class="brief-label">Sep 1</span>
       <span class="brief-value">Career placement deadline
         {% if ahead.career_deadline is not none %}
         · <strong>{{ ahead.career_deadline }}d</strong>
@@ -489,7 +539,7 @@
     </div>
     <div class="brief-row">
       <span class="brief-label">Aug 3</span>
-      <span class="brief-value" style="color:var(--text-dim)">T-Mobile contract end</span>
+      <span class="brief-value" style="color:var(--text-dim)">Summer preparation end</span>
     </div>
     <div class="brief-row">
       <span class="brief-label">Jun 15</span>

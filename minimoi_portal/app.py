@@ -221,6 +221,8 @@ def register():
             error = "Password must be at least 6 characters."
         else:
             pending = _auth.create_pending(display_name, email, password)
+            reason = request.form.get("reason", "").strip()
+            _log_guest_request(display_name, email, reason)
             _notify_telegram_new_request(display_name, email)
             return render_template("register.html", pending=True)
 
@@ -644,6 +646,38 @@ def _guild_db_execute(sql, params=None):
     conn.close()
 
 
+def _log_guest_request(name: str, email: str, reason: str) -> None:
+    """Log a guest access request to guild.guest_requests. Silent on failure."""
+    try:
+        _guild_db_execute(
+            "INSERT INTO guild.guest_requests (name, email, reason) VALUES (%s, %s, %s)"
+            " ON CONFLICT (email) DO NOTHING",
+            [name, email, reason or ""]
+        )
+    except Exception:
+        pass
+
+
+def _get_guest_requests() -> list:
+    """Return guest requests sorted: pending first, then actioned, newest first."""
+    try:
+        return _guild_db_query(
+            "SELECT id, name, reason, requested_at, status, actioned_at"
+            " FROM guild.guest_requests"
+            " ORDER BY CASE status WHEN 'requested' THEN 0 ELSE 1 END,"
+            " requested_at DESC"
+        )
+    except Exception:
+        return []
+
+
+def _update_guest_request_status(req_id: int, status: str) -> None:
+    _guild_db_execute(
+        "UPDATE guild.guest_requests SET status=%s, actioned_at=NOW() WHERE id=%s",
+        [status, req_id]
+    )
+
+
 @app.route("/guild")
 @app.route("/guild/")
 @_require_owner
@@ -782,13 +816,25 @@ def guild_landing():
         "urgency_note": career.get("urgency_note", ""),
     }
 
+    guest_requests = _get_guest_requests()
+
     return render_template("guild/guild_landing.html",
         ops=ops,
         career=career,
         build=build,
         ahead=ahead,
+        guest_requests=guest_requests,
         user=_current_user()
     )
+
+
+@app.route("/guild/guest-requests/<int:req_id>/status", methods=["POST"])
+@_require_owner
+def update_guest_request_status(req_id):
+    status = request.form.get("status")
+    if status in ("granted", "rejected"):
+        _update_guest_request_status(req_id, status)
+    return redirect(url_for("guild_landing"))
 
 
 @app.route("/guild/career")
