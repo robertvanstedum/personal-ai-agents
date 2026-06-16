@@ -1392,6 +1392,27 @@ document.body.classList.add('parch-mode');
   const _urlTab = new URLSearchParams(window.location.search).get('tab');
   switchTab(_urlTab || sessionStorage.getItem('gesprache-tab') || 'personas');
 
+  // ── Refresh Letzte Sitzungen when tab becomes visible (e.g. after Telegram pipeline) ──
+  const SOURCE_LABELS = {'ki_sitzung':'KI-Sitzung','mobile':'Mobil','desktop':'Desktop','manual':'manuell','html':'HTML'};
+  document.addEventListener('visibilitychange', async () => {
+    if (document.hidden) return;
+    try {
+      const res = await fetch('/api/gesprache-sessions?limit=5');
+      const sessions = await res.json();
+      if (!sessions.length) return;
+      const list = document.getElementById('letzte-sitzungen-list');
+      if (!list) return;
+      list.innerHTML = sessions.map(s => `
+        <div class="gesprache-session-row gesprache-session-row--clickable" data-stem="${s.stem || ''}">
+          <span class="gesprache-session-date">${s.date}</span>
+          <span class="gesprache-session-persona">${s.persona}</span>
+          <span class="gesprache-session-scene">${s.scenario}</span>
+          <span class="gesprache-session-source">${SOURCE_LABELS[s.source] || s.source}</span>
+        </div>`).join('');
+      document.getElementById('letzte-sitzungen-section').style.display = '';
+    } catch (_) {}
+  });
+
 })();
 </script>
 {% endblock %}
