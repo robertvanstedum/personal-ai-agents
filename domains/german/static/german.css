@@ -2270,7 +2270,7 @@ body.reading-mode nav {
 /* ── Detail panel ── */
 
 .persona-detail {
-  padding: 1rem 1.75rem 1.75rem;
+  padding: 0.5rem 1.75rem 1.75rem;
   overflow-y: auto;
   max-height: 600px;
 }
@@ -2777,7 +2777,7 @@ details[open] > .gesprache-transcript-summary::before {
 /* ── Nach der Sitzung — transcript collapsible in right panel ── */
 
 .nach-sitzung-details {
-  margin-top: 1.25rem;
+  margin-top: 0.75rem;
   border-top: 1px solid var(--md-parch-deep);
 }
 

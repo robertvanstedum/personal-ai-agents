@@ -921,7 +921,7 @@ document.body.classList.add('parch-mode');
       const SPEECH_RMS   = 0.018;  // RMS to consider speech started
       const SILENCE_RMS  = 0.012;  // RMS below = silence
       const SPEECH_MIN   = 300;    // ms of speech before VAD arms
-      const SILENCE_MS   = 1200;   // ms of silence to end turn
+      const SILENCE_MS   = 2000;   // ms of silence to end turn
 
       return new Promise(resolve => {
         let speechStart  = null;
