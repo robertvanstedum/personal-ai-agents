@@ -69,10 +69,38 @@
 
     /* ── Roadmap content area ── */
     .roadmap-wrap {
-      padding: 20px 32px 48px;
+      padding: 8px 32px 48px;
     }
 
-    /* How this works — plain preamble, no card */
+    /* Hide the h1 from markdown — page-header title replaces it */
+    .roadmap-content h1 { display: none; }
+
+    /* "How this works" collapsible */
+    details.how-it-works {
+      margin-bottom: 14px;
+    }
+    details.how-it-works summary {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.15rem; font-weight: 400;
+      color: var(--text); cursor: pointer;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(139,94,42,0.2);
+      list-style: none;
+      display: flex; align-items: center; gap: 8px;
+      user-select: none;
+    }
+    details.how-it-works summary::after {
+      content: '▸';
+      font-size: 10px; color: var(--text-dim);
+      font-family: 'DM Mono', monospace;
+      margin-left: auto;
+    }
+    details.how-it-works[open] summary::after { content: '▾'; }
+    details.how-it-works .details-body {
+      padding: 10px 0 4px;
+    }
+
+    /* Domain section h2 — plain preamble style */
     .roadmap-content h2 {
       font-family: 'Playfair Display', serif;
       font-size: 1.15rem; font-weight: 400;
@@ -214,8 +242,8 @@
   </div>
 </nav>
 
-<div class="page-header">
-  <h1 class="page-title">Roadmap</h1>
+<div class="page-header" style="padding-bottom: 12px;">
+  <h1 class="page-title">mini-moi Roadmap</h1>
   <span class="page-meta">Read-only · edit in _working/ROADMAP.md{% if last_modified %} · {{ last_modified }}{% endif %}</span>
 </div>
 

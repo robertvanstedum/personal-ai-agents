@@ -1249,6 +1249,14 @@ def guild_build_roadmap():
     content = content.replace('</div><div class="roadmap-domain">', '<div class="roadmap-domain">', 1)
     content += '</div>'  # close last card
 
+    # Collapse "How this works" into a <details> — reference text, not primary content
+    content = _re.sub(
+        r'<h2>How this works</h2>(.*?)(?=<div class="roadmap-domain">)',
+        r'<details class="how-it-works"><summary>How this works</summary>\1</details>',
+        content,
+        flags=_re.DOTALL
+    )
+
     # Section h3 styling — discussion first (contains "agreed"), then agreed
     content = _re.sub(
         r'<h3>([^<]*[Dd]iscussion[^<]*)</h3>',
