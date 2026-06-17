@@ -130,6 +130,20 @@
     "recently_done_grace_days": 3
   },
 
+  "periodic_tasks": {
+    "github_sanity_check": {
+      "frequency": "after significant build sessions or when queue drift is suspected",
+      "what_to_check": [
+        "Confirm what is actually committed to the repo vs. what specs say was shipped",
+        "Check for drift between _working/ROADMAP.md status and actual commit history",
+        "Flag any specs marked done in the queue that have no corresponding commit",
+        "Flag any commits that did not produce a queue update"
+      ],
+      "output": "Short briefing note to Robert — not build queue items. Format: '3 items confirmed, 1 drift found: X was marked done but no commit found.'",
+      "note": "Audit function, not a build function. Surface findings only."
+    }
+  },
+
   "mini_moi": {
     "novelty_watch": true,
     "watch_terms": [
