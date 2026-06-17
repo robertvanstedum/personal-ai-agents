@@ -109,6 +109,13 @@ Use this format exactly:
 # Decision Record — [topic]
 *[Date] · [Model] · mini-moi*
 
+---
+type: decision-record
+domain: [german / curator / guild / platform]
+status: active
+lora-candidate: [yes / no]
+---
+
 ## Decision
 One paragraph. What was decided. Plain language, no marketing.
 
@@ -163,6 +170,12 @@ flagged.
 ## Open questions
 Things we didn't resolve. Not deferrals — genuine unknowns that could
 affect this decision later.
+
+## Impact / Follow-up
+*Update this section as the decision plays out — don't leave it blank forever.*
+- Implemented: [yes / no / partial — link to spec or commit]
+- Superseded by: [DR filename if this decision was later revised]
+- Follow-up needed: [anything that emerged from implementation]
 
 ---
 

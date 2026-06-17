@@ -2,6 +2,11 @@
 *2026-06-16 · Claude.ai · mini-moi*
 
 ---
+type: decision-record
+domain: german / platform
+status: active
+lora-candidate: yes
+---
 
 ## Decision
 
@@ -351,6 +356,17 @@ worth building.
 - Does the Design Session Prompt format need adjustment after the first
   5 uses? Treat the format as provisional for the first month. Adjust
   based on what's actually captured vs. what would have been useful.
+
+---
+
+## Impact / Follow-up
+*Update as decisions play out.*
+- Gespräche mobile fixes: in build queue, Part C (dead-end) highest priority
+- Learning system foundation: committed to repo 2026-06-16
+- Design session prompt: adopted, first DR produced (this document)
+- Local LLM evaluation: not yet started — this week
+- Superseded by: n/a
+- Follow-up needed: run evaluation harness at Phase 0/1 boundary
 
 ---
 

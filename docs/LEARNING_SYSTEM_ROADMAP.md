@@ -53,6 +53,9 @@ to have the local model carry the institutional knowledge so that when
 frontier models are brought in, they're consulting on a well-understood
 system rather than being handed a session summary and asked to catch up.
 
+**In one line:** Frontier models for capability. Local system for ownership
+and continuous learning.
+
 **The long-term employee / consultant analogy:**
 The local LLM is the senior employee who has been on the project for years
 — knows every corner of the codebase, remembers every decision and why,
@@ -118,11 +121,28 @@ that would be valuable to have internalized (not just looked up), mark it:
 `[LoRA candidate]`. This is the curation step that makes the eventual
 training run high-signal rather than high-noise.
 
+**0.5 — Define evaluation harness**
+Before Phase 1 begins, define a small set of concrete questions the local
+LLM should be able to answer correctly once RAG is wired. These become
+the before/after test at the Phase 0/1 boundary. No infrastructure needed
+to define them — just write them down.
+
+Example eval questions:
+- "What is the current mobile priority for Gespräche and why?"
+- "What was the reasoning behind keeping Meet-specific labeling?"
+- "What does `run_chat_turn()` do and why is it separate from `run_review()`?"
+- "What was rejected when we considered building RAG without LoRA?"
+- "What are the standing principles for Gespräche development?"
+
+Pass/fail against known correct answers. This turns "it feels better"
+into measurable progress. The eval set grows as the project grows.
+
 **Completion criteria for Phase 0:**
 - Design session prompt in use for at least 5 significant sessions
 - At least 10 decision records produced and stored
 - Local LLM consulted on at least 3 design questions with responses noted
 - LoRA candidates flagged in session summaries going forward
+- Evaluation harness defined (minimum 5 questions with known correct answers)
 
 ---
 
@@ -132,7 +152,7 @@ training run high-signal rather than high-noise.
 the project accurately — from the actual codebase and documents, not
 from training data.
 
-**1.1 — Index the repo**
+**1.1 — Index the repo with metadata**
 Set up a local vector store (ChromaDB or SQLite-vec, both run on Mac Mini).
 Index the entire `personal-ai-agents` repo:
 - All `.py` files chunked at function/class boundaries
@@ -140,6 +160,22 @@ Index the entire `personal-ai-agents` repo:
 - Persona `.txt` files
 - Session summaries and decision records
 - Git commit messages (history awareness)
+
+Index with metadata — not just raw text. Each chunk carries:
+- `type`: decision-record / session-summary / code / spec / intent
+- `domain`: german / curator / guild / platform
+- `recency`: file date or commit date
+- `status`: active / superseded (for DRs and specs)
+
+Metadata enables filtered retrieval: "show me only active decision records
+for the German domain" rather than naive top-k across everything. This
+also prepares for a graph layer later without requiring a rebuild.
+
+**Architecture note:** Keep the memory and retrieval system in its own
+module (`memory/` or `learning/`) from day one. Clean interface, domain
+logic separate from retrieval logic. This allows the retrieval approach
+to evolve (vector → hybrid → agentic) without touching the rest of the
+codebase.
 
 **1.2 — Wire to local LLM**
 Local LLM (Ollama) receives: query + retrieved chunks.
@@ -164,10 +200,30 @@ and answers from the actual file. Ask "what specs are in the build queue"
 the Google Meet labeling" → it finds the decision record. No more
 re-explaining current state.
 
+**1.5 — Run evaluation harness**
+At Phase 1 completion, run the eval questions defined in Phase 0 against
+the RAG-equipped local LLM. Record results. This is the baseline that
+Phase 2 (LoRA) improves on.
+
+**Known evolution path (not Phase 1 scope):**
+Pure vector RAG scales well to start but gets retrieval noise as the
+corpus grows. The next step is hybrid retrieval: vector search for
+semantic similarity plus a lightweight graph layer for entity relationships
+(Personas, Decisions, Constraints, their connections). This is the
+direction the field is moving (GraphRAG, knowledge graph + vector hybrids).
+The `memory/` module architecture makes this evolution possible without
+a full rebuild. Don't build it in Phase 1 — note it and keep the door open.
+
+Similarly, agentic retrieval (the model decides what to fetch rather than
+naive top-k) is emerging and will be more practical by Phase 2/3 time.
+Design for it; don't build it yet.
+
 **Completion criteria:**
-- Full repo indexed, local LLM answering questions from actual files
+- Full repo indexed with metadata, local LLM answering questions from
+  actual files
 - Incremental update on commit working
 - OpenClaw memory files in the index
+- Evaluation harness run, results recorded
 - At least 2 weeks of daily use before moving to Phase 2
 
 ---
@@ -261,8 +317,8 @@ make them for him.
 **Not a replacement for frontier models.**
 Frontier models improve faster than local ones. Claude and Grok will
 always bring something the local model doesn't have — current capability,
-outside perspective, broad training across domains. The goal is
-complementarity, not substitution.
+outside perspective, broad training. The goal is complementarity, not
+substitution.
 
 **Not a training project for its own sake.**
 Every phase must earn its place by making the daily workflow better.
