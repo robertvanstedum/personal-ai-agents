@@ -140,7 +140,29 @@
     .readonly-notice {
       font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
       letter-spacing: 0.06em; color: var(--text-dim);
-      margin-bottom: 28px;
+      margin-bottom: 4px;
+    }
+    .last-modified {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-dim); margin-bottom: 28px;
+    }
+
+    /* status badges */
+    .status-badge {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      padding: 2px 7px; border-radius: 3px; white-space: nowrap;
+    }
+    .status-target      { background: rgba(139,94,42,0.08); color: var(--text-muted); }
+    .status-queued      { background: rgba(139,94,42,0.15); color: var(--accent); }
+    .status-in-progress { background: rgba(90,138,90,0.12); color: #4a7a4a; }
+    .status-done        { background: var(--surface2); color: var(--text-dim); text-decoration: line-through; }
+
+    /* section h3 variants */
+    .roadmap-content h3.h3-agreed    { color: var(--text); opacity: 0.9; }
+    .roadmap-content h3.h3-discussion { opacity: 0.55; }
+    .roadmap-content h3.h3-discussion::before {
+      content: '— '; font-style: italic;
     }
   </style>
 </head>
@@ -158,16 +180,17 @@
   </div>
   <div class="guild-subnav">
     <a href="/guild" class="subnav-back">← Guild</a>
-    <a href="/guild/build" class="subnav-link">Build Log</a>
-    <span class="subnav-dot">&nbsp;·&nbsp;</span>
     <a href="/guild/build/queue" class="subnav-link">Queue</a>
+    <span class="subnav-dot">&nbsp;·&nbsp;</span>
+    <a href="/guild/build" class="subnav-link">Build Log</a>
     <span class="subnav-dot">&nbsp;·&nbsp;</span>
     <a href="/guild/build/roadmap" class="subnav-link subnav-active">Roadmap</a>
   </div>
 </nav>
 
 <div class="roadmap-wrap">
-  <p class="readonly-notice">Read-only · edit in _working/ROADMAP_2026-06-12.md</p>
+  <p class="readonly-notice">Read-only · edit in _working/ROADMAP.md</p>
+  {% if last_modified %}<p class="last-modified">Last updated: {{ last_modified }}</p>{% endif %}
   <div class="roadmap-content">
     {{ content | safe }}
   </div>

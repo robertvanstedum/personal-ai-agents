@@ -1169,15 +1169,73 @@ def guild_build_check(item_id):
 @_require_owner
 def guild_build_roadmap():
     import markdown as _md
-    from pathlib import Path
-    roadmap_path = Path(__file__).parent.parent / "docs/ROADMAP.md"
+    import subprocess
+    import re as _re
+    roadmap_path = Path(__file__).parent.parent / "_working/ROADMAP.md"
+
+    # Git last-modified date
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%ci", "_working/ROADMAP.md"],
+            capture_output=True, text=True,
+            cwd=str(Path(__file__).parent.parent)
+        )
+        last_modified = result.stdout.strip()[:10] if result.stdout.strip() else None
+    except Exception:
+        last_modified = None
+    if not last_modified:
+        try:
+            from datetime import datetime as _dt
+            last_modified = _dt.fromtimestamp(roadmap_path.stat().st_mtime).strftime('%Y-%m-%d')
+        except Exception:
+            last_modified = None
+
     try:
         raw = roadmap_path.read_text()
         content = _md.markdown(raw, extensions=["fenced_code", "tables"])
     except Exception:
         content = "<p><em>Roadmap file not found.</em></p>"
+
+    # Status badges — exact cell match
+    _STATUS = {
+        'target':      ('status-target',      'target'),
+        'queued':      ('status-queued',       'queued'),
+        'in_progress': ('status-in-progress',  'in progress'),
+        'done':        ('status-done',         'done'),
+    }
+    for val, (cls, label) in _STATUS.items():
+        content = content.replace(
+            f'<td>{val}</td>',
+            f'<td><span class="status-badge {cls}">{label}</span></td>'
+        )
+
+    # Source doc links — link cells that exactly match a docs/ filename
+    _docs_files = {f.name for f in (Path(__file__).parent.parent / "docs").iterdir()
+                   if f.is_file() and f.suffix == '.md'}
+    _gh_base = "https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/"
+
+    def _linkify(m):
+        cell = m.group(1).strip()
+        if cell in _docs_files:
+            return f'<td><a href="{_gh_base}{cell}" target="_blank">{cell}</a></td>'
+        return m.group(0)
+
+    content = _re.sub(r'<td>([^<]+)</td>', _linkify, content)
+
+    # Section styling — discussion first (contains "agreed"), then agreed
+    content = _re.sub(
+        r'<h3>([^<]*[Dd]iscussion[^<]*)</h3>',
+        r'<h3 class="h3-discussion">\1</h3>',
+        content
+    )
+    content = _re.sub(
+        r'<h3>([^<]*[Aa]greed[^<]*)</h3>',
+        r'<h3 class="h3-agreed">\1</h3>',
+        content
+    )
+
     return render_template("guild/build_roadmap.html", content=content,
-                           user=_current_user())
+                           last_modified=last_modified, user=_current_user())
 
 
 @app.route("/guild/build/items/<int:item_id>/status", methods=["POST"])
