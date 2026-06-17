@@ -240,9 +240,14 @@ See [ROADMAP.md](ROADMAP.md) for full detail.
 - [`docs/GUILD.md`](docs/GUILD.md) — personal operating system: agents, pipeline, daily briefing, communication layer
 - [`docs/GUILD_AGENTS_DESIGN.md`](docs/GUILD_AGENTS_DESIGN.md) — Chief of Staff + Operations autonomous agents
 - [`docs/GUILD_BUILD_LOG.md`](docs/GUILD_BUILD_LOG.md) — build sessions, calibration learnings, proof of value
-- [`docs/LEARNING_SYSTEM_ROADMAP.md`](docs/LEARNING_SYSTEM_ROADMAP.md) — how mini-moi builds institutional knowledge over time
-- [`docs/GESPRACHE_ROADMAP.md`](docs/GESPRACHE_ROADMAP.md) — mobile-first voice practice vision and build queue
-- [`docs/DESIGN_SESSION_PROMPT.md`](docs/DESIGN_SESSION_PROMPT.md) — how design conversations are structured and captured
+
+**Learning System** — mini-moi builds institutional knowledge over time. Decision Records
+capture design reasoning now so the local LLM training pipeline has signal when Phase 2
+(LoRA) arrives. Decision Records are the first feature of this capability plan.
+- [`docs/LEARNING_SYSTEM_ROADMAP.md`](docs/LEARNING_SYSTEM_ROADMAP.md) — phased plan: Decision Records (Phase 0) → RAG (Phase 1) → LoRA training (Phase 2) → local-first operation (Phase 3)
+- [`docs/DECISION_RECORD_PRACTICE.md`](docs/DECISION_RECORD_PRACTICE.md) — highest-signal artifacts for future LoRA adaptation; how design reasoning is captured, reviewed, and committed
+- [`docs/DESIGN_SESSION_PROMPT.md`](docs/DESIGN_SESSION_PROMPT.md) — structured design conversations across Claude, Grok, and local LLM; produces Decision Records on command
+- [`docs/GESPRACHE_ROADMAP.md`](docs/GESPRACHE_ROADMAP.md) — mobile-first voice practice vision; the domain where LoRA signal accumulates first
 
 ---
 

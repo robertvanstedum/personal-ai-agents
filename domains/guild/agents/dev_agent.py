@@ -83,6 +83,14 @@ class DesignDocHandler(FileSystemEventHandler):
         for skip in ("_working/trash", "_working/archive"):
             if skip in path:
                 return False
+        # .md allowlist — only spec_* and build_plan_* are build items.
+        # Session summaries, handoffs, approach docs, DR files, etc. are not.
+        if p.suffix == ".md":
+            if not (p.name.startswith("spec_") or p.name.startswith("build_plan_")):
+                return False
+        # Decision records are reasoning artifacts, not queue items
+        if "decision-records" in path:
+            return False
         return True
 
     def on_created(self, event):
@@ -178,7 +186,8 @@ def process_doc(file_path: str, event_type: str) -> None:
 
     maybe_archive_superseded(file_path, doc_type)
     log_to_db(event_type, file_path, doc_type, summary, agent_source,
-              spec_file=spec_file, spec_title=spec_title, build_status=build_status)
+              spec_file=spec_file, spec_title=spec_title, build_status=build_status,
+              completeness_failures=completeness_failures or None)
     append_to_memory(file_path, event_type, summary)
     notify_parallel(file_path, event_type, doc_type, summary)
 
@@ -297,16 +306,16 @@ def _check_completeness(classification: dict) -> tuple[str, list[str]]:
         ref_path = BASE_DIR / ref if not os.path.isabs(ref) else Path(ref)
         if not ref_path.exists():
             failures.append(f"referenced file not found: {ref}")
-    return ("incomplete" if failures else "spec_ready"), failures
+    return ("design" if failures else "spec_ready"), failures
 
 
 def _notify_incomplete(file_path: str, failures: list[str]) -> None:
-    """Notify Robert via Telegram when a spec/handoff fails completeness check."""
+    """Notify Robert via Telegram when a spec needs design work (missing DoD or Commit)."""
     bullets = "\n".join(f"  • {f}" for f in failures)
     msg = (
-        f"⚠️ <b>Incomplete spec:</b> {Path(file_path).name}\n"
-        f"Completeness check failed:\n{bullets}\n"
-        "Fix the doc or override status in /guild/build/queue"
+        f"📐 <b>Spec needs design work:</b> {Path(file_path).name}\n"
+        f"Missing sections:\n{bullets}\n"
+        "Add DoD + Commit section, or set status manually in /guild/build/queue"
     )
     _send_telegram(msg)
 
@@ -450,7 +459,8 @@ def log_to_db(event_type: str, file_path: str, doc_type: str,
               summary: str, agent_source: str,
               spec_file: str | None = None,
               spec_title: str | None = None,
-              build_status: str | None = None) -> None:
+              build_status: str | None = None,
+              completeness_failures: list[str] | None = None) -> None:
     try:
         import psycopg2
         conn = psycopg2.connect(
@@ -472,11 +482,12 @@ def log_to_db(event_type: str, file_path: str, doc_type: str,
 
             # Write initial transition row for tracked docs
             if log_id and build_status:
+                reason = "; ".join(completeness_failures) if completeness_failures else None
                 cur.execute(
                     "INSERT INTO guild.design_log_transitions "
-                    "(design_log_id, from_status, to_status, triggered_by) "
-                    "VALUES (%s, NULL, %s, 'design_dev')",
-                    (log_id, build_status)
+                    "(design_log_id, from_status, to_status, triggered_by, reason) "
+                    "VALUES (%s, NULL, %s, 'design_dev', %s)",
+                    (log_id, build_status, reason)
                 )
         conn.commit()
         conn.close()

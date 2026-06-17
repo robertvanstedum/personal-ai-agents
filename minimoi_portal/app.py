@@ -646,6 +646,18 @@ def _guild_db_execute(sql, params=None):
     conn.close()
 
 
+def _career_deadline(career_focus: dict) -> str:
+    """Format the deadline from cos_context career_focus for display."""
+    raw = career_focus.get("deadline", "")
+    if not raw:
+        return ""
+    try:
+        from datetime import datetime
+        return datetime.strptime(raw, "%Y-%m-%d").strftime("%b %-d, %Y")
+    except Exception:
+        return raw
+
+
 def _log_guest_request(name: str, email: str, reason: str) -> None:
     """Log a guest access request to guild.guest_requests. Silent on failure."""
     try:
@@ -884,6 +896,8 @@ def guild_career():
     except Exception:
         targeting = {}
 
+    deadline = _career_deadline(targeting)
+
     return render_template(
         "guild/career_focus.html",
         opportunities=opportunities,
@@ -892,7 +906,7 @@ def guild_career():
         geo_filter=geo_filter,
         type_filter=type_filter,
         priority_filter=priority_filter,
-        deadline="Sep 1, 2026",
+        deadline=deadline,
         targeting=targeting,
     )
 
@@ -915,7 +929,17 @@ def guild_career_active():
         positions = _guild_db_query(sql)
     except Exception:
         positions = []
-    return render_template("guild/career_active.html", positions=positions, deadline="Aug 1, 2026")
+
+    try:
+        import json as _json
+        _cf = _json.loads(
+            (__import__('pathlib').Path(__file__).parent.parent /
+             "domains/guild/config/cos_context.json").read_text()
+        ).get("career_focus", {})
+    except Exception:
+        _cf = {}
+
+    return render_template("guild/career_active.html", positions=positions, deadline=_career_deadline(_cf))
 
 
 @app.route("/guild/career/positions/<int:opp_id>/status", methods=["POST"])
@@ -1016,7 +1040,7 @@ def guild_build():
         ) dl
         LEFT JOIN LATERAL (
             SELECT reason FROM guild.design_log_transitions
-            WHERE design_log_id = dl.id AND to_status = 'incomplete'
+            WHERE design_log_id = dl.id AND to_status IN ('incomplete', 'design')
             ORDER BY created_at DESC LIMIT 1
         ) t ON true
         {outer_where}
@@ -1044,7 +1068,7 @@ def guild_build_queue():
         ) dl
         LEFT JOIN LATERAL (
             SELECT reason FROM guild.design_log_transitions
-            WHERE design_log_id = dl.id AND to_status = 'incomplete'
+            WHERE design_log_id = dl.id AND to_status IN ('incomplete', 'design')
             ORDER BY created_at DESC LIMIT 1
         ) t ON true
         WHERE dl.status IN ('spec_ready','in_build','blocked','incomplete')
@@ -1161,7 +1185,7 @@ def guild_build_roadmap():
 def update_build_status(item_id):
     new_status = request.form.get('status')
     note = request.form.get('note') or None
-    valid = {'spec_ready', 'in_build', 'blocked', 'done', 'deferred', 'incomplete'}
+    valid = {'design', 'spec_ready', 'in_build', 'blocked', 'done', 'deferred', 'incomplete'}
     if new_status not in valid:
         return redirect(url_for('guild_build_queue'))
 
@@ -1259,7 +1283,7 @@ def new_build_item():
     summary      = request.form.get('summary',      '').strip() or None
     github_issue = request.form.get('github_issue', '').strip() or None
     status       = request.form.get('status', 'spec_ready')
-    valid_status = {'spec_ready', 'in_build', 'blocked', 'incomplete', 'deferred'}
+    valid_status = {'design', 'spec_ready', 'in_build', 'blocked', 'incomplete', 'deferred'}
     if not spec_title:
         return redirect(url_for('guild_build'))
     if status not in valid_status:
