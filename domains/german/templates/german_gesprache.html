@@ -129,7 +129,14 @@
                   <span id="gesprache-record-status" class="gesprache-record-status"></span>
                 </div>
                 <textarea class="notebook-textarea nach-sitzung-textarea" id="transcript-input" rows="6"
-                  placeholder="Transkript hier einfügen oder aufnehmen ↑&#10;&#10;Robert: Guten Morgen…&#10;Frau Berger: Guten Morgen!…"></textarea>
+                  placeholder="Transkript hier einfügen oder Sitzung beenden…"
+                  inputmode="text" autocapitalize="off"
+                  style="font-size:16px;min-height:160px"></textarea>
+                <div id="paste-status" class="paste-status"></div>
+                <div class="paste-actions-row">
+                  <button class="btn-ghost btn-sm" id="btn-clipboard">📋 Aus Zwischenablage</button>
+                  <button class="paste-clear-btn" id="btn-paste-clear">Löschen</button>
+                </div>
                 <div class="gesprache-source-row">
                   <span class="gesprache-source-label">Quelle</span>
                   <button class="gesprache-source-pill active" data-source="ki_sitzung">KI-Sitzung</button>
@@ -137,9 +144,10 @@
                   <button class="gesprache-source-pill" data-source="desktop">💻 Desktop</button>
                 </div>
                 <div class="gesprache-submit-row">
-                  <button class="btn-primary" id="btn-analysieren" title="Analyse des Gesprächs">Analysieren</button>
+                  <button class="btn-primary btn-analysieren-full" id="btn-analysieren" title="Analyse des Gesprächs" disabled>Analysieren →</button>
                   <span class="gesprache-status" id="analyse-status"></span>
                 </div>
+                <div class="analysieren-helper" id="analysieren-helper">Transkript zum Analysieren einfügen</div>
               </div>
               <div id="transcript-analysiert-row" class="transcript-analysiert-row" style="display:none">
                 <span class="transcript-analysiert-label">✓ analysiert</span>
@@ -373,8 +381,9 @@ document.body.classList.add('parch-mode');
     document.getElementById('transcript-input').value = '';
     document.getElementById('analyse-status').textContent = '';
     const btn = document.getElementById('btn-analysieren');
-    btn.disabled = false;
-    btn.textContent = 'Analysieren';
+    btn.textContent = 'Analysieren →';
+    setPasteStatus('', '');
+    updateAnalysierenState();
     // Show input wrap, hide analysiert row
     document.getElementById('transcript-input-wrap').style.display = '';
     document.getElementById('transcript-analysiert-row').style.display = 'none';
@@ -858,6 +867,8 @@ document.body.classList.add('parch-mode');
 
     const transcriptEl = document.getElementById('transcript-input');
     transcriptEl.value = sessionTranscript.join('\n');
+    setPasteStatus('Aus letzter KI-Sitzung', 'source');
+    updateAnalysierenState();
 
     const transcriptDetails = document.getElementById('transcript-details');
     if (transcriptDetails) transcriptDetails.setAttribute('open', '');
@@ -1122,7 +1133,7 @@ document.body.classList.add('parch-mode');
       renderFeedback(data.feedback);
       document.getElementById('transcript-input-wrap').style.display = 'none';
       document.getElementById('transcript-analysiert-row').style.display = '';
-      btn.textContent = 'Analysieren';
+      btn.textContent = 'Analysieren →';
       btn.disabled = false;
 
       // Prepend new session to Letzte Sitzungen without a page reload
@@ -1151,7 +1162,7 @@ document.body.classList.add('parch-mode');
     } catch (e) {
       // Error: show message in feedback slot, preserve textarea, re-enable button
       renderFeedbackError(e.message || 'Fehler bei der Analyse.');
-      btn.textContent = 'Analysieren';
+      btn.textContent = 'Analysieren →';
       btn.disabled = false;
     }
   });
@@ -1163,6 +1174,60 @@ document.body.classList.add('parch-mode');
 
   document.getElementById('btn-neue-sitzung').addEventListener('click', () => {
     resetToRestingState();
+  });
+
+  // ── Transcript paste panel ────────────────────────────────────────────────
+
+  function setPasteStatus(text, variant) {
+    const el = document.getElementById('paste-status');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'paste-status' + (variant ? ' paste-status--' + variant : '');
+  }
+
+  function updateAnalysierenState() {
+    const ta = document.getElementById('transcript-input');
+    const btn = document.getElementById('btn-analysieren');
+    const helper = document.getElementById('analysieren-helper');
+    if (!ta || !btn) return;
+    const hasContent = ta.value.trim().length > 0;
+    btn.disabled = !hasContent;
+    if (helper) helper.style.display = hasContent ? 'none' : '';
+  }
+
+  document.getElementById('transcript-input').addEventListener('input', updateAnalysierenState);
+
+  (function initClipboardBtn() {
+    const btn = document.getElementById('btn-clipboard');
+    if (!btn) return;
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      btn.style.display = 'none';
+      setPasteStatus('Manuelles Einfügen', '');
+      return;
+    }
+    btn.addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        const ta = document.getElementById('transcript-input');
+        ta.value = text;
+        updateAnalysierenState();
+        ta.focus();
+        ta.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        setPasteStatus('Eingefügt ✓', 'ok');
+        setTimeout(() => setPasteStatus('', ''), 2000);
+      } catch (_) {
+        const ta = document.getElementById('transcript-input');
+        setPasteStatus('Bitte manuell einfügen', 'warn');
+        ta.focus();
+      }
+    });
+  })();
+
+  document.getElementById('btn-paste-clear').addEventListener('click', () => {
+    const ta = document.getElementById('transcript-input');
+    ta.value = '';
+    setPasteStatus('', '');
+    updateAnalysierenState();
   });
 
   // ── Letzte Sitzungen — click to load session feedback ────────────────────

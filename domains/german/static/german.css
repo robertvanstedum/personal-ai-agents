@@ -2552,6 +2552,51 @@ body.reading-mode nav {
   margin-top: 0.75rem;
 }
 
+/* ── Paste panel ── */
+
+.paste-status {
+  font-size: 0.8rem;
+  color: var(--md-text-secondary);
+  min-height: 1.2em;
+  margin-top: 0.35rem;
+}
+.paste-status--ok   { color: #5a8a5a; }
+.paste-status--warn { color: var(--md-accent); }
+.paste-status--source { color: var(--md-accent); opacity: 0.75; }
+
+.paste-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.paste-clear-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--md-accent);
+  font-size: 0.875rem;
+  font-family: var(--font-body);
+  padding: 0.35rem 0.25rem;
+  min-height: 44px;
+}
+.paste-clear-btn:hover { opacity: 0.65; }
+
+.btn-analysieren-full { width: 100%; justify-content: center; }
+
+.analysieren-helper {
+  font-size: 0.78rem;
+  color: var(--md-text-secondary);
+  margin-top: 0.35rem;
+}
+
+@media (max-width: 768px) {
+  .paste-actions-row { flex-wrap: wrap; }
+  .paste-actions-row .btn-ghost { flex: 1; min-height: 44px; }
+  .paste-clear-btn { min-height: 44px; }
+}
+
 .gesprache-status {
   font-size: 0.875rem;
   color: var(--md-text-secondary);
