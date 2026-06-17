@@ -164,6 +164,53 @@
     .roadmap-content h3.h3-discussion::before {
       content: '— '; font-style: italic;
     }
+
+    /* domain cards */
+    .roadmap-domain {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px 24px 16px;
+      margin-bottom: 20px;
+    }
+    .roadmap-domain > h2:first-child { margin-top: 0; border-bottom-color: rgba(139,94,42,0.2); }
+
+    /* parent rows — initiative header */
+    .roadmap-content tr.row-parent td {
+      background: rgba(198,138,94,0.06);
+      font-size: 13px;
+      border-bottom: 1px solid var(--border);
+    }
+    .roadmap-content tr.row-parent td strong { color: var(--text); font-weight: 600; }
+
+    /* child rows — phase detail */
+    .roadmap-content tr.row-child td:first-child {
+      padding-left: 2rem;
+      opacity: 0.8;
+      font-size: 12.5px;
+    }
+    .roadmap-content tr.row-child td { border-bottom-color: rgba(221,214,200,0.3); }
+
+    /* status-driven left border */
+    .roadmap-content tr.row-in_progress td:first-child {
+      border-left: 3px solid rgba(90,138,90,0.6);
+      padding-left: calc(12px - 3px);
+    }
+    .roadmap-content tr.row-child.row-in_progress td:first-child {
+      padding-left: calc(2rem - 3px);
+    }
+    .roadmap-content tr.row-queued td:first-child {
+      border-left: 2px solid rgba(139,94,42,0.5);
+      padding-left: calc(12px - 2px);
+    }
+    .roadmap-content tr.row-child.row-queued td:first-child {
+      padding-left: calc(2rem - 2px);
+    }
+    .roadmap-content tr.row-in_progress td,
+    .roadmap-content tr.row-queued td { color: var(--text); }
+
+    /* done rows recede */
+    .roadmap-content tr.row-done td { opacity: 0.55; }
   </style>
 </head>
 <body>

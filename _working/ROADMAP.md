@@ -24,13 +24,14 @@ DoD + Commit, then update the item's status here to `queued`.
 
 | Item | Phase | Status | Source |
 |------|-------|--------|--------|
-| Gespräche mobile fixes | Phase 0 | queued | GESPRACHE_ROADMAP.md |
-| Automatic transcript handoff | Phase 1 | target | GESPRACHE_ROADMAP.md |
-| Voice command routing | Phase 2 | target | GESPRACHE_ROADMAP.md |
-| PWA wrapper | post-mobile | target | LEARNING_SYSTEM_ROADMAP.md |
-| LoRA German error adapter | Phase 2 | target | LEARNING_SYSTEM_ROADMAP.md |
-| Persona aus echtem Gespräch | Phase 3 | target | GESPRACHE_ROADMAP.md |
-| Cross-session error detection | Phase 4 | target | GESPRACHE_ROADMAP.md |
+| **Gespräche mobile** | | | GESPRACHE_ROADMAP.md |
+| · Mobile fixes | Phase 0 | queued | |
+| · Automatic transcript handoff | Phase 1 | target | |
+| · Voice command routing | Phase 2 | target | |
+| · PWA wrapper | post-mobile | target | |
+| · LoRA German error adapter | Phase 2 | target | LEARNING_SYSTEM_ROADMAP.md |
+| · Persona aus echtem Gespräch | Phase 3 | target | |
+| · Cross-session error detection | Phase 4 | target | |
 
 ### Discussion — not yet agreed
 
@@ -46,11 +47,12 @@ DoD + Commit, then update the item's status here to `queued`.
 
 | Item | Phase | Status | Source |
 |------|-------|--------|--------|
-| Learning System Phase 0 · Foundation | Phase 0 | in_progress | LEARNING_SYSTEM_ROADMAP.md |
-| Learning System Phase 1 · RAG layer | Phase 1 | target | LEARNING_SYSTEM_ROADMAP.md |
-| Learning System Phase 2 · LoRA training | Phase 2 | target | LEARNING_SYSTEM_ROADMAP.md |
-| Learning System Phase 3 · local-first | Phase 3 | target | LEARNING_SYSTEM_ROADMAP.md |
 | Decision Records practice | Phase 0 | done | DECISION_RECORD_PRACTICE.md |
+| **Learning System** | | | LEARNING_SYSTEM_ROADMAP.md |
+| · Phase 0 · Foundation | Phase 0 | in_progress | |
+| · Phase 1 · RAG layer | Phase 1 | target | |
+| · Phase 2 · LoRA training | Phase 2 | target | |
+| · Phase 3 · local-first | Phase 3 | target | |
 
 ### Discussion — not yet agreed
 

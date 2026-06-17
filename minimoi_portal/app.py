@@ -1196,18 +1196,34 @@ def guild_build_roadmap():
     except Exception:
         content = "<p><em>Roadmap file not found.</em></p>"
 
-    # Status badges — exact cell match
+    # Status badges + row classes — process <tr> blocks to add row-level classes
     _STATUS = {
         'target':      ('status-target',      'target'),
         'queued':      ('status-queued',       'queued'),
         'in_progress': ('status-in-progress',  'in progress'),
         'done':        ('status-done',         'done'),
     }
-    for val, (cls, label) in _STATUS.items():
-        content = content.replace(
-            f'<td>{val}</td>',
-            f'<td><span class="status-badge {cls}">{label}</span></td>'
-        )
+
+    def _process_row(m):
+        row_html = m.group(0)
+        row_classes = []
+        if _re.search(r'<td><strong>[^<]+</strong></td>', row_html):
+            row_classes.append('row-parent')
+        elif _re.search(r'<td>·', row_html):
+            row_classes.append('row-child')
+        for val, (cls, label) in _STATUS.items():
+            if f'<td>{val}</td>' in row_html:
+                row_html = row_html.replace(
+                    f'<td>{val}</td>',
+                    f'<td><span class="status-badge {cls}">{label}</span></td>'
+                )
+                row_classes.append(f'row-{val}')
+                break
+        if row_classes:
+            row_html = row_html.replace('<tr>', f'<tr class="{" ".join(row_classes)}">', 1)
+        return row_html
+
+    content = _re.sub(r'<tr>.*?</tr>', _process_row, content, flags=_re.DOTALL)
 
     # Source doc links — link cells that exactly match a docs/ filename
     _docs_files = {f.name for f in (Path(__file__).parent.parent / "docs").iterdir()
@@ -1222,7 +1238,12 @@ def guild_build_roadmap():
 
     content = _re.sub(r'<td>([^<]+)</td>', _linkify, content)
 
-    # Section styling — discussion first (contains "agreed"), then agreed
+    # Domain cards — wrap each ## section in a card div
+    content = _re.sub(r'(<h2>[^<]+</h2>)', r'</div><div class="roadmap-domain">\1', content)
+    content = content.lstrip('</div>')  # remove leading close-div before first card
+    content += '</div>'                 # close last card
+
+    # Section h3 styling — discussion first (contains "agreed"), then agreed
     content = _re.sub(
         r'<h3>([^<]*[Dd]iscussion[^<]*)</h3>',
         r'<h3 class="h3-discussion">\1</h3>',
