@@ -247,7 +247,8 @@ capture design reasoning now so the local LLM training pipeline has signal when 
 - [`docs/LEARNING_SYSTEM_ROADMAP.md`](docs/LEARNING_SYSTEM_ROADMAP.md) — phased plan: Decision Records (Phase 0) → RAG (Phase 1) → LoRA training (Phase 2) → local-first operation (Phase 3)
 - [`docs/DECISION_RECORD_PRACTICE.md`](docs/DECISION_RECORD_PRACTICE.md) — highest-signal artifacts for future LoRA adaptation; how design reasoning is captured, reviewed, and committed
 - [`docs/DESIGN_SESSION_PROMPT.md`](docs/DESIGN_SESSION_PROMPT.md) — structured design conversations across Claude, Grok, and local LLM; produces Decision Records on command
-- [`docs/GESPRACHE_ROADMAP.md`](docs/GESPRACHE_ROADMAP.md) — mobile-first voice practice vision; the domain where LoRA signal accumulates first
+- [`docs/GESPRACHE_FORWARD_SPEC.md`](docs/GESPRACHE_FORWARD_SPEC.md) — mobile-first voice practice vision, current build state, and next tier items; the domain where LoRA signal accumulates first
+- [`docs/COS_PAGE_ROADMAP.md`](docs/COS_PAGE_ROADMAP.md) — voice-first CoS interaction page, design session pending
 
 ---
 

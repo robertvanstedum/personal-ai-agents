@@ -9,7 +9,7 @@
 
 | Item | Phase | Status | Source |
 |------|-------|--------|--------|
-| **Gespräche mobile** | | | GESPRACHE_ROADMAP.md |
+| **Gespräche mobile** | | | GESPRACHE_FORWARD_SPEC.md |
 | · Mobile fixes | Phase 0 | queued | |
 | · Automatic transcript handoff | Phase 1 | target | |
 | · Voice command routing | Phase 2 | target | |
@@ -68,6 +68,7 @@
 
 | Item | Phase | Status | Source |
 |------|-------|--------|--------|
+| CoS interaction page | v1 | target | COS_PAGE_ROADMAP.md |
 | Guest access + CoS nudge | v1 | queued | spec_cos_guest_access |
 | Security architecture split | v1 | queued | spec_security_architecture |
 | Career focus editor | v1 | queued | spec_guild_career_focus_editor |
