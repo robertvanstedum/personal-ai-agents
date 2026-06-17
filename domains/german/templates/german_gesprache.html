@@ -788,25 +788,31 @@ document.body.classList.add('parch-mode');
     const _modelLbl = document.getElementById('session-model-label');
     const _modelOrig = _modelLbl ? _modelLbl.textContent : '';
     if (_modelLbl) _modelLbl.textContent = 'denkt nach…';
+    let ai_ms = 0, tts_ms = 0;
     try {
+      const t0_ai = Date.now();
       const res = await fetch('/api/gesprache/ai-turn', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ history: sessionHistory, persona, scene, model, user_turn: userText }),
       });
       const data = await res.json();
+      ai_ms = Date.now() - t0_ai;
       const reply = (data.response || '').trim();
 
       if (reply) {
         sessionHistory.push({ role: 'assistant', content: reply });
         sessionTranscript.push(personaName + ': ' + reply);
+        const t0_tts = Date.now();
         await speakPersona(reply);
+        tts_ms = Date.now() - t0_tts;
       }
     } catch (err) { /* non-fatal — loop continues */ }
     finally {
       if (_modelLbl) _modelLbl.textContent = _modelOrig;
       sessionSendBtn.disabled = false;
     }
+    return { ai_ms, tts_ms };
   }
 
   startSessionBtn.addEventListener('click', async () => {
@@ -1020,16 +1026,22 @@ document.body.classList.add('parch-mode');
 
         // Process turn
         turnInFlight = true;
+        const t_turn_start = Date.now();
         setListenStatus('Transkribiert…', 'listening-processing');
         try {
           const formData = new FormData();
           formData.append('audio', blob, 'turn.webm');
+          const t0_transcribe = Date.now();
           const res  = await fetch('/api/transcribe', { method: 'POST', body: formData });
           const data = await res.json();
+          const transcribe_ms = Date.now() - t0_transcribe;
           if (data.transcript) {
             const text = data.transcript.trim();
             if (text && sessionActive) {
-              await sendTurn(text);
+              setListenStatus('denkt nach…', 'listening-processing');
+              const { ai_ms, tts_ms } = await sendTurn(text);
+              const total_ms = Date.now() - t_turn_start;
+              console.log(`[turn] transcribe:${transcribe_ms}ms  ai:${ai_ms}ms  tts:${tts_ms}ms  total:${total_ms}ms`);
               // Wait for TTS to finish before re-listening
               await waitForTTSEnd();
             }
