@@ -1,20 +1,5 @@
 # mini-moi Roadmap
 *Living document — versioned in GitHub*
-*Updated: via git — see commit history for changes*
-
----
-
-## How this works
-
-Agreed targets are committed to `docs/` in the repo and listed below
-with their source document. Discussion items that haven't been agreed
-live in session summaries — not here.
-
-The act of committing is the promotion. If it's not in `docs/`, it's
-not an agreed target.
-
-When an item is ready to build: write a spec in `_working/` with
-DoD + Commit, then update the item's status here to `queued`.
 
 ---
 
