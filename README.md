@@ -240,6 +240,9 @@ See [ROADMAP.md](ROADMAP.md) for full detail.
 - [`docs/GUILD.md`](docs/GUILD.md) — personal operating system: agents, pipeline, daily briefing, communication layer
 - [`docs/GUILD_AGENTS_DESIGN.md`](docs/GUILD_AGENTS_DESIGN.md) — Chief of Staff + Operations autonomous agents
 - [`docs/GUILD_BUILD_LOG.md`](docs/GUILD_BUILD_LOG.md) — build sessions, calibration learnings, proof of value
+- [`docs/LEARNING_SYSTEM_ROADMAP.md`](docs/LEARNING_SYSTEM_ROADMAP.md) — how mini-moi builds institutional knowledge over time
+- [`docs/GESPRACHE_ROADMAP.md`](docs/GESPRACHE_ROADMAP.md) — mobile-first voice practice vision and build queue
+- [`docs/DESIGN_SESSION_PROMPT.md`](docs/DESIGN_SESSION_PROMPT.md) — how design conversations are structured and captured
 
 ---
 
