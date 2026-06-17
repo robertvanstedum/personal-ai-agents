@@ -358,6 +358,12 @@ document.body.classList.add('parch-mode');
     resetNachDerSitzung();
     const detail = document.getElementById('persona-detail');
     if (detail) detail.scrollTop = 0;
+    if (window.innerWidth <= 768) {
+      requestAnimationFrame(() => {
+        document.getElementById('persona-detail')
+          .scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
   }
 
   // ── Nach der Sitzung — state reset ────────────────────────────────────────
@@ -393,6 +399,7 @@ document.body.classList.add('parch-mode');
     if (sessionActive || (detail && detail.classList.contains('session-active'))) {
       resetToRestingState();
     }
+    if (detail) detail.scrollTop = 0;
     selectedIdx = idx;
     selectedSceneKey = null;
     currentFullPrompt = null;
@@ -445,6 +452,14 @@ document.body.classList.add('parch-mode');
     } else {
       sceneList.innerHTML = '<p class="hint">Keine Szenen konfiguriert.</p>';
       document.getElementById('prompt-delivery').style.display = 'none';
+    }
+
+    // On mobile the detail panel stacks below the list — scroll it into view
+    if (window.innerWidth <= 768) {
+      requestAnimationFrame(() => {
+        document.getElementById('persona-detail')
+          .scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     }
   }
 
