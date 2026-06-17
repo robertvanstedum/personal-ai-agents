@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Edit Goals — Career Focus — Guild</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/guild.css">
+  <style>
+    :root {
+      --bg: #f5f0e8; --surface: #faf7f2; --surface2: #f0ebe0;
+      --border: #ddd6c8; --text: #2a2418; --text-muted: #6b5f4e;
+      --text-dim: #9e9080; --accent: #8b5e2a; --accent-dim: rgba(139,94,42,0.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+    nav.guild-nav {
+      position: sticky; top: 0; z-index: 100;
+      background: #2a1f14; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .guild-nav-brand {
+      height: 44px; display: flex; align-items: center; padding: 0 1.5rem;
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); letter-spacing: 0.08em;
+    }
+    .guild-nav-brand a { color: #C68A5E; text-decoration: none; }
+    .guild-nav-brand a:hover { color: #fff; }
+    .guild-nav-brand a.nav-active { color: #fff; font-weight: 700; }
+    .nav-sep { color: rgba(255,255,255,0.2); margin: 0 12px; }
+    .guild-subnav {
+      height: 36px; display: flex; align-items: center; padding: 0 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.15);
+    }
+    .subnav-back {
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: rgba(198,138,94,0.4); text-decoration: none;
+      padding: 0 14px 0 0; height: 36px; display: flex; align-items: center;
+      margin-right: 10px; border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    .subnav-back:hover { color: rgba(198,138,94,0.75); }
+    .subnav-link {
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: rgba(198,138,94,0.7); text-decoration: none;
+      padding: 0 12px; height: 36px; display: flex; align-items: center;
+      border-bottom: 2px solid transparent;
+    }
+    .subnav-link:hover { color: #C68A5E; }
+    .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; font-weight: 700; }
+    .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
+
+    .page-header {
+      padding: 24px 32px 0; display: flex; align-items: baseline; gap: 14px;
+    }
+    .page-title { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 400; }
+
+    .editor-wrap { padding: 20px 32px 56px; max-width: 680px; }
+
+    .field-group { margin-bottom: 22px; }
+    .field-label {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--text-dim); margin-bottom: 6px; display: block;
+    }
+    input[type="text"], input[type="date"], select, textarea {
+      font-family: 'Source Sans 3', sans-serif; font-size: 13.5px;
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 7px 10px; background: var(--surface); color: var(--text);
+      width: 100%; transition: border-color 0.15s;
+    }
+    input[type="text"]:focus, input[type="date"]:focus,
+    select:focus, textarea:focus {
+      outline: none; border-color: var(--accent);
+    }
+    textarea { resize: vertical; min-height: 52px; }
+
+    .deadline-row { display: grid; grid-template-columns: 160px 1fr; gap: 10px; }
+
+    /* milestone rows */
+    .milestones-header {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--text-dim); margin-bottom: 8px;
+    }
+    .milestone-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+    .milestone-row {
+      display: grid; grid-template-columns: 148px 1fr 110px 28px;
+      gap: 6px; align-items: center;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 4px; padding: 7px 10px;
+    }
+    .milestone-row input[type="date"],
+    .milestone-row input[type="text"],
+    .milestone-row select {
+      border: none; background: transparent; padding: 0;
+      font-size: 13px;
+    }
+    .milestone-row input[type="date"]:focus,
+    .milestone-row input[type="text"]:focus,
+    .milestone-row select:focus { outline: none; border-bottom: 1px solid var(--accent); }
+    .milestone-row select { color: var(--text-muted); font-size: 12px; }
+    .del-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-dim); font-size: 14px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .del-btn:hover { color: #8b2020; }
+
+    .add-btn {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-muted); background: none;
+      border: 1px dashed var(--border); border-radius: 4px;
+      padding: 6px 14px; cursor: pointer; width: 100%;
+    }
+    .add-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .warn-msg {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: #8b5a00; margin-top: 6px;
+    }
+
+    .actions { margin-top: 28px; display: flex; align-items: center; gap: 14px; }
+    .save-btn {
+      font-family: 'DM Mono', monospace; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.06em; padding: 8px 22px; border-radius: 4px;
+      background: var(--accent); color: #fff; border: none; cursor: pointer;
+    }
+    .save-btn:hover { opacity: 0.85; }
+    .save-btn:disabled { opacity: 0.5; cursor: default; }
+    .save-confirm {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: #4a7a4a; display: none;
+    }
+    .save-error {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: #8b2020; display: none;
+    }
+    .divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+  </style>
+</head>
+<body>
+
+<nav class="guild-nav">
+  <div class="guild-nav-brand">
+    <a href="/dashboard">mini-moi</a>
+    <span class="nav-sep">|</span>
+    <a href="/app/curator">Curator</a>
+    <span class="nav-sep">|</span>
+    <a href="/app/german">German</a>
+    <span class="nav-sep">|</span>
+    <a href="/guild" class="nav-active">Guild</a>
+  </div>
+  <div class="guild-subnav">
+    <a href="/guild/career" class="subnav-back">← Career</a>
+    <a href="/guild/career" class="subnav-link">Positions</a>
+    <span class="subnav-dot">&nbsp;·&nbsp;</span>
+    <a href="/guild/career/active" class="subnav-link">Active Pipeline</a>
+    <span class="subnav-dot">&nbsp;·&nbsp;</span>
+    <a href="/guild/career-focus/edit" class="subnav-link subnav-active">Edit Goals</a>
+  </div>
+</nav>
+
+<div class="page-header">
+  <h1 class="page-title">Career Focus</h1>
+</div>
+
+<div class="editor-wrap">
+
+  <div class="field-group">
+    <label class="field-label">Goal</label>
+    <textarea id="goal_text" maxlength="120" rows="2">{{ goal_text }}</textarea>
+  </div>
+
+  <hr class="divider">
+
+  <div class="field-group">
+    <label class="field-label">Primary deadline</label>
+    <div class="deadline-row">
+      <input type="date" id="deadline" value="{{ deadline }}">
+      <input type="text" id="deadline_label" value="{{ deadline_label }}" placeholder="e.g. Career placement deadline" maxlength="60">
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="milestones-header">Milestones</div>
+  <div class="milestone-list" id="milestone-list">
+    {% for m in milestones %}
+    <div class="milestone-row" data-id="{{ m.id }}">
+      <input type="date" class="m-date" value="{{ m.date }}">
+      <input type="text" class="m-label" value="{{ m.label }}" placeholder="Label" maxlength="60">
+      <select class="m-status">
+        <option value="pending" {% if m.status == 'pending' %}selected{% endif %}>Pending</option>
+        <option value="completed" {% if m.status == 'completed' %}selected{% endif %}>Completed</option>
+      </select>
+      <button class="del-btn" onclick="deleteRow(this)" title="Remove">✕</button>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="warn-msg" id="warn-msg" style="display:none">Consider archiving completed milestones — list is getting long.</div>
+  <button class="add-btn" onclick="addRow()">+ Add milestone</button>
+
+  <div class="actions">
+    <button class="save-btn" id="save-btn" onclick="save()">Save</button>
+    <span class="save-confirm" id="save-confirm">Saved ✓</span>
+    <span class="save-error" id="save-error"></span>
+  </div>
+
+</div>
+
+<script>
+let _idCounter = {{ milestones | length }};
+
+function addRow() {
+  _idCounter++;
+  const list = document.getElementById('milestone-list');
+  const div = document.createElement('div');
+  div.className = 'milestone-row';
+  div.dataset.id = 'new' + _idCounter;
+  div.innerHTML = `
+    <input type="date" class="m-date">
+    <input type="text" class="m-label" placeholder="Label" maxlength="60">
+    <select class="m-status">
+      <option value="pending" selected>Pending</option>
+      <option value="completed">Completed</option>
+    </select>
+    <button class="del-btn" onclick="deleteRow(this)" title="Remove">✕</button>
+  `;
+  list.appendChild(div);
+  div.querySelector('.m-date').focus();
+  checkWarn();
+}
+
+function deleteRow(btn) {
+  btn.closest('.milestone-row').remove();
+  checkWarn();
+}
+
+function checkWarn() {
+  const count = document.querySelectorAll('.milestone-row').length;
+  document.getElementById('warn-msg').style.display = count > 10 ? 'block' : 'none';
+}
+
+function save() {
+  const btn = document.getElementById('save-btn');
+  const confirm = document.getElementById('save-confirm');
+  const errEl = document.getElementById('save-error');
+  confirm.style.display = 'none';
+  errEl.style.display = 'none';
+
+  const milestones = [];
+  document.querySelectorAll('.milestone-row').forEach(row => {
+    milestones.push({
+      id: row.dataset.id,
+      date: row.querySelector('.m-date').value,
+      label: row.querySelector('.m-label').value,
+      status: row.querySelector('.m-status').value,
+    });
+  });
+
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  fetch('/guild/career-focus/save', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      goal_text: document.getElementById('goal_text').value,
+      deadline: document.getElementById('deadline').value,
+      deadline_label: document.getElementById('deadline_label').value,
+      milestones,
+    }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    btn.disabled = false;
+    btn.textContent = 'Save';
+    if (data.status === 'ok') {
+      confirm.style.display = 'inline';
+      setTimeout(() => confirm.style.display = 'none', 2000);
+    } else {
+      errEl.textContent = data.message || 'Save failed';
+      errEl.style.display = 'inline';
+    }
+  })
+  .catch(() => {
+    btn.disabled = false;
+    btn.textContent = 'Save';
+    errEl.textContent = 'Network error — try again';
+    errEl.style.display = 'inline';
+  });
+}
+</script>
+</body>
+</html>

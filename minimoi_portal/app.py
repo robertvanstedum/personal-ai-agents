@@ -1021,6 +1021,77 @@ def add_position():
     return redirect(url_for("guild_career"))
 
 
+@app.route("/guild/career-focus/edit")
+@_require_owner
+def guild_career_focus_edit():
+    ctx_path = REPO_DIR / "domains/guild/config/cos_context.json"
+    try:
+        ctx = json.loads(ctx_path.read_text())
+    except Exception:
+        ctx = {}
+    cf = ctx.get("career_focus", {})
+    return render_template(
+        "guild/career_focus_editor.html",
+        goal_text=cf.get("goal_text", cf.get("urgency_note", "")),
+        deadline=cf.get("deadline", ""),
+        deadline_label=cf.get("deadline_label", ""),
+        milestones=cf.get("milestones", []),
+        user=_current_user(),
+    )
+
+
+@app.route("/guild/career-focus/save", methods=["POST"])
+@_require_owner
+def guild_career_focus_save():
+    ctx_path = REPO_DIR / "domains/guild/config/cos_context.json"
+    try:
+        ctx = json.loads(ctx_path.read_text())
+    except Exception:
+        return jsonify({"status": "error", "message": "Could not read config"}), 500
+
+    data = request.get_json(silent=True) or {}
+    cf = ctx.setdefault("career_focus", {})
+
+    goal_text = (data.get("goal_text") or "").strip()[:120]
+    deadline = (data.get("deadline") or "").strip()
+    deadline_label = (data.get("deadline_label") or "").strip()[:60]
+    milestones = data.get("milestones", [])
+
+    if not goal_text:
+        return jsonify({"status": "error", "message": "Goal text is required"}), 400
+    if not deadline:
+        return jsonify({"status": "error", "message": "Deadline date is required"}), 400
+
+    # Validate and sanitise milestones
+    clean_milestones = []
+    for i, m in enumerate(milestones[:20]):
+        label = (m.get("label") or "").strip()[:60]
+        date = (m.get("date") or "").strip()
+        status = m.get("status", "pending") if m.get("status") in ("pending", "completed") else "pending"
+        if not label or not date:
+            continue
+        clean_milestones.append({
+            "id": m.get("id") or f"m{i+1}",
+            "date": date,
+            "label": label,
+            "domain": "career",
+            "status": status,
+        })
+
+    cf["goal_text"] = goal_text
+    cf["urgency_note"] = goal_text  # keep in sync for dashboard display
+    cf["deadline"] = deadline
+    cf["deadline_label"] = deadline_label
+    cf["milestones"] = clean_milestones
+
+    try:
+        ctx_path.write_text(json.dumps(ctx, indent=2, ensure_ascii=False))
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+    return jsonify({"status": "ok"})
+
+
 # ── Build Clarity ─────────────────────────────────────────────────────────────
 
 @app.route("/guild/build")
