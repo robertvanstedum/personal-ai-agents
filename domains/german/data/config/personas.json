@@ -1,5 +1,35 @@
 [
   {
+    "name": "Maria",
+    "emoji": "☕",
+    "role": "Café Waitress",
+    "description": "Young, slightly hurried, uses some Viennese slang. Works at a classic Kaffeehaus. Tests natural pace and informal register.",
+    "scenarios": [
+      "cafe_order",
+      "cafe_bill",
+      "cafe_meal"
+    ],
+    "speaking_prompts": {
+      "cafe_order": "You sit down at a classic Viennese Kaffeehaus. Maria comes to your table. Order a Melange or Verlängerter and a pastry. She speaks quickly — keep up and be polite.",
+      "cafe_bill": "You've finished your coffee. Get Maria's attention and ask for the bill. She'll tell you the total — pay and leave a tip.",
+      "cafe_meal": "It's lunchtime. Order a full small meal from the Tageskarte (daily menu). Ask what the soup of the day is, then order a main and a drink."
+    },
+    "style": "casual, slightly fast, informal",
+    "register": "formal_sie",
+    "difficulty": "intermediate",
+    "warm_up_variants": [
+      "Order a Melange and a Kipferl.",
+      "Order a Verlängerter and ask for the Tageskarte.",
+      "Ask if the Gugelhupf is fresh, then order a Kleiner Brauner.",
+      "Ask for a table for two, order drinks, and ask for the bill."
+    ],
+    "labels": {
+      "cafe_order": "Ich hätte gerne…",
+      "cafe_bill": "Zahlen, bitte.",
+      "cafe_meal": "Was empfehlen Sie?"
+    }
+  },
+  {
     "name": "Frau Berger",
     "emoji": "🥐",
     "role": "Bakery Owner",
@@ -57,36 +87,6 @@
       "hotel_checkout": "Ich möchte auschecken.",
       "room_problem": "Es gibt ein Problem.",
       "directions": "Können Sie mir helfen?"
-    }
-  },
-  {
-    "name": "Maria",
-    "emoji": "☕",
-    "role": "Café Waitress",
-    "description": "Young, slightly hurried, uses some Viennese slang. Works at a classic Kaffeehaus. Tests natural pace and informal register.",
-    "scenarios": [
-      "cafe_order",
-      "cafe_bill",
-      "cafe_meal"
-    ],
-    "speaking_prompts": {
-      "cafe_order": "You sit down at a classic Viennese Kaffeehaus. Maria comes to your table. Order a Melange or Verlängerter and a pastry. She speaks quickly — keep up and be polite.",
-      "cafe_bill": "You've finished your coffee. Get Maria's attention and ask for the bill. She'll tell you the total — pay and leave a tip.",
-      "cafe_meal": "It's lunchtime. Order a full small meal from the Tageskarte (daily menu). Ask what the soup of the day is, then order a main and a drink."
-    },
-    "style": "casual, slightly fast, informal",
-    "register": "formal_sie",
-    "difficulty": "intermediate",
-    "warm_up_variants": [
-      "Order a Melange and a Kipferl.",
-      "Order a Verlängerter and ask for the Tageskarte.",
-      "Ask if the Gugelhupf is fresh, then order a Kleiner Brauner.",
-      "Ask for a table for two, order drinks, and ask for the bill."
-    ],
-    "labels": {
-      "cafe_order": "Ich hätte gerne…",
-      "cafe_bill": "Zahlen, bitte.",
-      "cafe_meal": "Was empfehlen Sie?"
     }
   },
   {
