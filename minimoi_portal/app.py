@@ -1238,10 +1238,16 @@ def guild_build_roadmap():
 
     content = _re.sub(r'<td>([^<]+)</td>', _linkify, content)
 
-    # Domain cards — wrap each ## section in a card div
-    content = _re.sub(r'(<h2>[^<]+</h2>)', r'</div><div class="roadmap-domain">\1', content)
-    content = content.lstrip('</div>')  # remove leading close-div before first card
-    content += '</div>'                 # close last card
+    # Domain cards — wrap domain ## sections in a card div (skip "How this works")
+    def _wrap_domain(m):
+        heading = m.group(1)
+        if 'How this works' in heading:
+            return heading
+        return f'</div><div class="roadmap-domain">{heading}'
+    content = _re.sub(r'(<h2>[^<]+</h2>)', _wrap_domain, content)
+    # Replace FIRST </div> prefix (before first real domain card) cleanly
+    content = content.replace('</div><div class="roadmap-domain">', '<div class="roadmap-domain">', 1)
+    content += '</div>'  # close last card
 
     # Section h3 styling — discussion first (contains "agreed"), then agreed
     content = _re.sub(

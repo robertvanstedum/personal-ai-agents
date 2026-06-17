@@ -59,70 +59,68 @@
     .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; font-weight: 700; }
     .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
 
-    /* ── Markdown content ── */
+    /* ── Page header ── */
+    .page-header {
+      padding: 24px 32px 0;
+      display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    }
+    .page-title { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 400; }
+    .page-meta { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); }
+
+    /* ── Roadmap content area ── */
     .roadmap-wrap {
-      max-width: 760px;
-      margin: 0 auto;
-      padding: 36px 40px 72px;
+      padding: 20px 32px 48px;
     }
 
-    .roadmap-content h1 {
-      font-family: 'Playfair Display', serif;
-      font-size: 1.75rem; font-weight: 400;
-      color: var(--text); margin-bottom: 6px;
-    }
+    /* How this works — plain preamble, no card */
     .roadmap-content h2 {
       font-family: 'Playfair Display', serif;
-      font-size: 1.2rem; font-weight: 400;
-      color: var(--text); margin-top: 36px; margin-bottom: 10px;
+      font-size: 1.15rem; font-weight: 400;
+      color: var(--text); margin-top: 24px; margin-bottom: 10px;
       padding-bottom: 6px;
-      border-bottom: 1px solid var(--border);
-    }
-    .roadmap-content h3 {
-      font-family: 'DM Mono', monospace;
-      font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
-      color: var(--text-muted); font-weight: 600;
-      margin-top: 20px; margin-bottom: 8px;
+      border-bottom: 1px solid rgba(139,94,42,0.2);
     }
     .roadmap-content p {
       color: var(--text-muted); line-height: 1.65;
-      margin-bottom: 12px; font-size: 13.5px;
+      margin-bottom: 10px; font-size: 13.5px;
     }
     .roadmap-content ul, .roadmap-content ol {
       padding-left: 20px; margin-bottom: 14px;
     }
     .roadmap-content li {
       color: var(--text-muted); line-height: 1.6;
-      font-size: 13.5px; margin-bottom: 5px;
+      font-size: 13.5px; margin-bottom: 4px;
     }
     .roadmap-content li strong { color: var(--text); }
+    .roadmap-content hr {
+      border: none; border-top: 1px solid var(--border);
+      margin: 6px 0 0;
+    }
     .roadmap-content code {
       font-family: 'DM Mono', monospace; font-size: 11px;
       background: var(--surface2); border: 1px solid var(--border);
       border-radius: 3px; padding: 1px 5px; color: var(--accent);
     }
-    .roadmap-content pre {
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 5px; padding: 14px 16px;
-      overflow-x: auto; margin-bottom: 16px;
-    }
-    .roadmap-content pre code {
-      background: none; border: none; padding: 0;
-      font-size: 11px; color: var(--text-muted);
-    }
-    .roadmap-content blockquote {
-      border-left: 3px solid rgba(139,94,42,0.3);
-      padding: 6px 16px; margin: 14px 0;
-      color: var(--text-dim); font-style: italic;
-    }
-    .roadmap-content hr {
-      border: none; border-top: 1px solid var(--border);
-      margin: 28px 0;
-    }
     .roadmap-content a { color: var(--accent); }
     .roadmap-content a:hover { text-decoration: underline; }
+
+    /* ── Domain cards ── */
+    .roadmap-domain {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 18px 22px 14px;
+      margin-bottom: 16px;
+    }
+    .roadmap-domain h2 {
+      margin-top: 0;
+      border-bottom-color: rgba(139,94,42,0.2);
+    }
+    .roadmap-domain hr { display: none; } /* hr inside cards = redundant */
+
+    /* ── Tables ── */
     .roadmap-content table {
-      width: 100%; border-collapse: collapse; margin-bottom: 16px;
+      width: 100%; border-collapse: collapse; margin-bottom: 14px;
     }
     .roadmap-content th {
       font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
@@ -133,57 +131,40 @@
     .roadmap-content td {
       font-size: 13px; color: var(--text-muted);
       padding: 8px 12px; border-bottom: 1px solid rgba(221,214,200,0.5);
+      vertical-align: middle;
     }
     .roadmap-content tr:last-child td { border-bottom: none; }
 
-    /* read-only notice */
-    .readonly-notice {
-      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
-      letter-spacing: 0.06em; color: var(--text-dim);
-      margin-bottom: 4px;
+    /* ── h3 variants (agreed / discussion) ── */
+    .roadmap-content h3 {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-muted); font-weight: 600;
+      margin-top: 16px; margin-bottom: 6px;
     }
-    .last-modified {
-      font-family: 'DM Mono', monospace; font-size: 10px;
-      color: var(--text-dim); margin-bottom: 28px;
-    }
+    .roadmap-content h3.h3-agreed    { color: var(--text); opacity: 0.9; }
+    .roadmap-content h3.h3-discussion { opacity: 0.55; }
+    .roadmap-content h3.h3-discussion::before { content: '— '; font-style: italic; }
 
-    /* status badges */
+    /* ── Status badges ── */
     .status-badge {
       font-family: 'DM Mono', monospace; font-size: 10px;
       text-transform: uppercase; letter-spacing: 0.06em;
       padding: 2px 7px; border-radius: 3px; white-space: nowrap;
     }
-    .status-target      { background: rgba(139,94,42,0.08); color: var(--text-muted); }
+    .status-target      { background: rgba(139,94,42,0.06); color: var(--text-muted); }
     .status-queued      { background: rgba(139,94,42,0.15); color: var(--accent); }
     .status-in-progress { background: rgba(90,138,90,0.12); color: #4a7a4a; }
     .status-done        { background: var(--surface2); color: var(--text-dim); text-decoration: line-through; }
 
-    /* section h3 variants */
-    .roadmap-content h3.h3-agreed    { color: var(--text); opacity: 0.9; }
-    .roadmap-content h3.h3-discussion { opacity: 0.55; }
-    .roadmap-content h3.h3-discussion::before {
-      content: '— '; font-style: italic;
-    }
-
-    /* domain cards */
-    .roadmap-domain {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 20px 24px 16px;
-      margin-bottom: 20px;
-    }
-    .roadmap-domain > h2:first-child { margin-top: 0; border-bottom-color: rgba(139,94,42,0.2); }
-
-    /* parent rows — initiative header */
+    /* ── Parent rows (initiative header) ── */
     .roadmap-content tr.row-parent td {
       background: rgba(198,138,94,0.06);
-      font-size: 13px;
       border-bottom: 1px solid var(--border);
     }
-    .roadmap-content tr.row-parent td strong { color: var(--text); font-weight: 600; }
+    .roadmap-content tr.row-parent td strong { color: var(--text); font-size: 13px; font-weight: 600; }
 
-    /* child rows — phase detail */
+    /* ── Child rows (phase detail) ── */
     .roadmap-content tr.row-child td:first-child {
       padding-left: 2rem;
       opacity: 0.8;
@@ -191,7 +172,7 @@
     }
     .roadmap-content tr.row-child td { border-bottom-color: rgba(221,214,200,0.3); }
 
-    /* status-driven left border */
+    /* ── Status-driven left border (scan signal) ── */
     .roadmap-content tr.row-in_progress td:first-child {
       border-left: 3px solid rgba(90,138,90,0.6);
       padding-left: calc(12px - 3px);
@@ -208,9 +189,7 @@
     }
     .roadmap-content tr.row-in_progress td,
     .roadmap-content tr.row-queued td { color: var(--text); }
-
-    /* done rows recede */
-    .roadmap-content tr.row-done td { opacity: 0.55; }
+    .roadmap-content tr.row-done td   { opacity: 0.55; }
   </style>
 </head>
 <body>
@@ -235,9 +214,12 @@
   </div>
 </nav>
 
+<div class="page-header">
+  <h1 class="page-title">Roadmap</h1>
+  <span class="page-meta">Read-only · edit in _working/ROADMAP.md{% if last_modified %} · {{ last_modified }}{% endif %}</span>
+</div>
+
 <div class="roadmap-wrap">
-  <p class="readonly-notice">Read-only · edit in _working/ROADMAP.md</p>
-  {% if last_modified %}<p class="last-modified">Last updated: {{ last_modified }}</p>{% endif %}
   <div class="roadmap-content">
     {{ content | safe }}
   </div>
