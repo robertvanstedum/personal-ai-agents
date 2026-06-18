@@ -104,6 +104,78 @@ interface to the project's institutional memory.
 
 ---
 
+## Non-build task tracking — design note
+
+**The problem (surfaced 2026-06-17):**
+OpenClaw tasks, CoS periodic tasks, and one-off requests have no clean
+home. They don't belong in the build queue. They're not roadmap items.
+But some of them matter and shouldn't be lost.
+
+**The principle:**
+- **Track:** Decisions made with/by CoS that have lasting effect.
+  Things that shape how the system behaves. Eventually LoRA-relevant
+  CoS reasoning (same DR discipline as design sessions).
+- **Don't track:** Adhoc requests, one-off lookups, routine briefing
+  interactions. These are conversations, not records.
+- **Middle ground:** Occasional to-dos that matter but aren't build specs.
+
+**Interim solution (until CoS page exists):**
+A `cos_todos` section in `cos_context.json`. CoS reads it, acts on items,
+marks them done. Robert adds via Telegram or direct file edit. No UI
+needed yet.
+
+Example structure:
+```json
+"cos_todos": [
+  {
+    "id": "t1",
+    "note": "Produce local LLM how-to note for Robert",
+    "status": "done",
+    "added": "2026-06-17"
+  }
+]
+```
+
+**Learned preferences — intentional only:**
+CoS never infers preferences from rejected recommendations or conversation
+patterns. Background inference can drift and encode wrong patterns silently.
+
+Robert says "note this" → CoS records it. That's the only path.
+
+Examples:
+- "Note this — I don't want automated pushes without my confirmation"
+- "Note this — rejecting a suggestion means not now, not never"
+
+CoS writes to `cos_preferences` in `cos_context.json`. Before making a
+recommendation, CoS checks whether a relevant preference exists and
+surfaces it: "I have a note that says X — still want me to suggest Y?"
+That's retrieval, not inference. Reading back what Robert told it,
+not deciding what it thinks he meant.
+
+```json
+"cos_preferences": [
+  {
+    "learned": "2026-06-17",
+    "noted_by": "Robert",
+    "note": "No automated git pushes without Robert's confirmation, even low-risk commits"
+  }
+]
+```
+
+**CoS decisions and LoRA:**
+When CoS makes a decision that affects system behavior — a routing choice,
+a periodic task threshold, a response pattern — that is eventually LoRA
+signal, same as design session DRs. The same DR discipline applies:
+produce a short DR when CoS reasoning is worth internalizing, not for
+every interaction. This is a Phase 2 concern but worth designing for now.
+
+**What this means for the CoS page v1:**
+The page should show `cos_todos` — pending and recently done — alongside
+the briefing and periodic task status. Completing a todo from the voice
+interface ("mark the local LLM task done") is a natural first voice command.
+
+---
+
 *Roadmap Entry · 2026-06-17 · Claude.ai*
 *Add to _working/ROADMAP.md under Guild → Agreed targets*
 *Commit to docs/COS_PAGE_ROADMAP.md*

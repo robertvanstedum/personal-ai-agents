@@ -102,6 +102,37 @@ The FLAG label indicates who flagged: you (topic only) or Robert explicitly.
 
 Produce a Decision Record from the conversation that just happened.
 Collect all flags — yours and mine — and incorporate them.
+
+**This is a draft pending Claude review.** Save to:
+`docs/decision-records/drafts/dr_[topic]_YYYY-MM-DD.md`
+
+Claude reviews all drafts before they are committed — not Robert.
+Claude checks quality, completeness, and that the conservative criteria
+were met. If the draft passes, Claude moves it to `docs/decision-records/`
+and hands it to Claude Code for commit. If the draft needs correction,
+Claude corrects it in place, then moves and commits. One pass, one outcome.
+Robert is not in the per-DR loop.
+
+**Handoff to Claude Code** for commit alongside any specs from the session.
+Claude Code is the only party that commits to the repo.
+
+**Be conservative. Produce a DR only when:**
+- A genuine decision was made with real alternatives considered
+- The negative reasoning would be lost otherwise
+- A generalizable principle emerged
+- A roadmap direction was cancelled and the reasoning should be captured
+
+**Do not produce a DR for:**
+- Minor spec refinements or wording adjustments
+- Decisions with only one obvious path
+- Routine build confirmations
+- Anything already covered by an existing DR
+
+A short DR on a real decision is better than a thorough DR on a trivial
+one. If uncertain whether a DR is warranted, produce a short one rather
+than asking Robert — the overhead of a short unnecessary DR is lower than
+the overhead of interrupting the session to ask.
+
 Use this format exactly:
 
 ---
@@ -273,6 +304,56 @@ A DR is not needed for:
 - Straightforward spec refinements
 
 When in doubt, produce a short one. A 200-word DR is better than none.
+
+---
+
+---
+
+## Claude review checklist — for use when reviewing DR drafts
+
+When a DR draft lands in `docs/decision-records/drafts/`, Claude runs
+this checklist before approving. This is not Robert's job — Claude does
+this review autonomously.
+
+**Criteria check (reject / correct if any fail):**
+
+- [ ] Was this a real decision with genuine alternatives? If the DR
+      documents a trivial wording change or a decision with only one
+      obvious path, it should not exist. Delete it.
+
+- [ ] Does each alternative have a genuine rejection reason — not just
+      "we didn't do this" but the specific constraint, risk, or reasoning?
+      If not, add it from the session context.
+
+- [ ] Is the Principles section present and specific enough to be
+      useful for LoRA training? Vague principles ("keep it simple") are
+      not useful. Specific ones ("don't add operational complexity to a
+      daily-use system for functionality achievable more simply") are.
+      Sharpen if needed.
+
+- [ ] Were all flags collected? Check that flagged moments from the
+      session appear in the Flags section.
+
+- [ ] Is `dr_type` correct? design / roadmap / cancelled.
+
+- [ ] If this supersedes an existing DR, is the superseded DR referenced
+      in the Impact section and is the superseded DR's status updated?
+
+- [ ] Is the frontmatter block complete and correctly formatted?
+      type / dr-type / domain / status / lora-candidate all present.
+
+**On passing all criteria:**
+Move file from `docs/decision-records/drafts/` to `docs/decision-records/`.
+Hand to Claude Code for commit. Note in the commit: "DR reviewed and
+approved by Claude."
+
+**On failing criteria:**
+Correct the DR in place within the drafts folder. Then move and commit.
+Do not send back for re-production — one pass, one outcome.
+
+**On a DR that should not exist:**
+Delete it from drafts. Note in session summary: "DR draft deleted —
+trivial decision, did not meet criteria."
 
 ---
 

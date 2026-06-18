@@ -1,108 +1,146 @@
 # Decision Record Practice — mini-moi
 *Created: 2026-06-17 — Claude.ai*
-*This document is the reference all agents read. Keep it short.*
+*Location: docs/DECISION_RECORD_PRACTICE.md*
+*Keep this short. The point is the habit, not the process.*
 
 ---
 
-## What a Decision Record is
+## Why we do this
 
-A Decision Record (DR) captures the reasoning behind a significant design
-decision — what was considered, what was rejected, and why. Specs say what
-to build. Decision Records say how we decided to build it.
+Design sessions produce reasoning that specs don't capture. Specs say
+what to build. Decision records say what was considered, what was
+rejected, why, and what the failure modes are.
 
-This reasoning is the primary training signal for the local LLM adaptation
-planned in the Learning System Roadmap. A model trained on DRs learns how
-to think about decisions in this project. A model trained only on specs
-learns what was built.
+This reasoning is the primary training signal for the local LLM we're
+building toward. A model trained on specs learns what was built. A model
+trained on decision records learns how to think about what to build.
+That's the difference between a model that can describe the codebase
+and one that can reason about it.
+
+**Decision Records are the highest-signal artifacts for future LoRA
+adaptation of the local LLM.** They are produced now so the signal
+exists when Phase 2 arrives — not reconstructed from memory.
+
+We are in early stage. The infrastructure (UI, index, LoRA export) comes
+later when there's an inventory worth using. What matters now is the
+habit of capturing. A folder of well-structured markdown files in a
+private repo is sufficient to start.
+
+**Don't let this get in the way of other builds.** A session that produces
+no DR because there was nothing worth capturing is correct behavior.
+Quality over volume.
 
 ---
 
-## When to produce one
+## The habit — one line
 
-A DR is worth producing when:
-- Multiple alternatives were genuinely considered
-- The negative reasoning would be non-obvious from the spec alone
-- A constraint shaped the decision that might change later (time, compute,
-  operational risk, contract window)
+Session agent produces draft → Claude reviews →
+Claude Code commits → Robert does periodic LoRA scan.
+
+---
+
+## When to produce a DR
+
+**Produce one when:**
+- A real decision was made with genuine alternatives considered
+- The negative reasoning would be lost otherwise — what wasn't built and why
+- A direction was cancelled (roadmap item removed, approach replaced)
 - A generalizable principle emerged from a specific case
 
-A DR is not needed for:
-- Implementation decisions with one obvious path
-- Pure spec refinements with no alternatives considered
-- Decisions already covered by an existing locked DR
+**Do not produce one for:**
+- Minor wording or spec refinements
+- Decisions with only one obvious path
+- Routine build confirmations
+- Anything already covered by an existing DR
 
-When in doubt, produce a short one. **200 words is better than nothing.**
-
----
-
-## The habit
-
-Design sessions produce DRs. The trigger is saying **"write decision record"**
-to Claude.ai or Grok at the end of a session where a significant decision
-was made. The LLM produces a structured DR from the conversation and flags
-it captured.
-
-DRs go to `docs/decision-records/drafts/` when produced in a session.
-Claude reviews drafts against the checklist in `docs/DESIGN_SESSION_PROMPT.md`
-before Claude Code commits them to `docs/decision-records/`.
+If uncertain: produce a short one. A 200-word DR on a real decision is
+better than nothing. A thorough DR on a trivial decision is noise.
 
 ---
 
-## Claude's review role
-
-Before committing a draft DR, Claude checks:
-- Decision section is one clear paragraph — no marketing language
-- Alternatives include the negative reasoning (why rejected/deferred),
-  not just what the alternatives were
-- Constraints that shaped the decision are named explicitly
-- Flags from the session are included
-- Frontmatter is present: `type`, `domain`, `status`, `lora-candidate`
-- Impact/Follow-up section is present (can be sparse initially)
-
-Claude does not require Robert's review per DR. Robert is not in the
-per-DR loop unless there's a question.
-
----
-
-## Robert's periodic role
-
-Every few weeks: scan the `docs/decision-records/` index for DRs that
-are `lora-candidate: yes` and tag them with any additional context worth
-preserving. This is the curation step that makes LoRA training runs
-high-signal rather than high-noise.
-
----
-
-## Naming and location
+## Where they live
 
 ```
-docs/decision-records/dr_[topic]_[YYYY-MM-DD].md
-docs/decision-records/drafts/dr_[topic]_[YYYY-MM-DD].md  ← before review
+docs/decision-records/drafts/    ← agent produces here
+docs/decision-records/           ← Claude approves, Claude Code commits
 ```
 
-Spec reference (optional, one line in the spec):
-> *Reasoning: see `dr_[name].md`*
+Naming: `dr_[topic]_YYYY-MM-DD.md`
 
 ---
 
-## Format
+## Claude's review — what to check
 
-Use the format in `docs/DESIGN_SESSION_PROMPT.md`. Required sections:
-- Decision, Context, Alternatives considered, Constraints, Assumptions,
-  Known failure modes, Principles, What this is not, Flags, Open questions,
-  Impact/Follow-up
+Claude reviews drafts autonomously. Robert is not in the loop per DR.
 
-Frontmatter block immediately after the title:
+Check:
+1. Real decision with genuine alternatives? If trivial — delete.
+2. Each rejection reason specific and honest? If vague — sharpen.
+3. Principles section present and LoRA-useful? If missing — add.
+4. Flags from session collected?
+5. `dr_type` correct? (design / roadmap / cancelled)
+6. Frontmatter complete?
+
+One pass. Correct in place if needed, then move to `docs/decision-records/`
+and hand to Claude Code. If the DR should not exist, delete it and note
+it in the session summary.
+
+---
+
+## Required frontmatter
+
+Every DR starts with this block:
+
 ```
 ---
 type: decision-record
-domain: german / curator / guild / platform
-status: active
-lora-candidate: yes / no
+dr-type: design | roadmap | cancelled
+domain: german | curator | guild | platform
+status: active | superseded | cancelled
+lora-candidate: yes | no
 ---
 ```
+
+`lora-candidate` is set by the producing agent based on whether the
+reasoning patterns are worth the local LLM internalizing. Robert may
+adjust during periodic scans — that is his only required touch.
+
+---
+
+## Correction model
+
+Committed DRs are not edited retroactively. If a DR is wrong or
+misleading, mark it `status: superseded`, produce a short correcting DR
+that references it, and commit both. The original stays — the correction
+is additive. The record is permanent; corrections are new entries.
+
+---
+
+## Robert's role — periodic only
+
+Robert does not review DRs before commit. His role:
+- Periodic scan of `docs/decision-records/` to review LoRA candidates
+- Adjust `lora-candidate` tags if needed
+- Note any DRs that should be marked superseded
+
+Frequency: whenever it feels useful, not on a schedule.
+This is the one human judgment gate before training data is used.
+
+---
+
+## Full DR format
+
+See `docs/DESIGN_SESSION_PROMPT.md` for the complete template with all
+sections. The required sections are:
+
+Decision / Context / Alternatives considered / Constraints /
+Assumptions / Known failure modes / Principles /
+What this is not / Flags / Open questions / Impact & follow-up
+
+Short DRs that cover only the relevant sections are fine.
+Not every section needs content for every DR.
 
 ---
 
 *Decision Record Practice · 2026-06-17 · Claude.ai*
-*See also: `docs/DESIGN_SESSION_PROMPT.md`, `docs/LEARNING_SYSTEM_ROADMAP.md`*
+*This document is the reference. Keep it short. Update if the habit changes.*
