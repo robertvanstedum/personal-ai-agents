@@ -1032,6 +1032,14 @@ document.body.classList.add('parch-mode');
       src.start(0);
     } catch (_) {}
 
+    // Unlock HTMLAudioElement for iOS — Audio() needs its own gesture unlock,
+    // separate from the AudioContext unlock above.
+    try {
+      const _sil = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+      await _sil.play();
+      _sil.pause();
+    } catch (_) {}
+
     sessionActive = true;
     sessionHistory = [];
     sessionTranscript = [];
@@ -1161,6 +1169,7 @@ document.body.classList.add('parch-mode');
       recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
 
       const audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+      await audioCtx.resume().catch(() => {});
       const analyser  = audioCtx.createAnalyser();
       analyser.fftSize = 256;
       audioCtx.createMediaStreamSource(stream).connect(analyser);
