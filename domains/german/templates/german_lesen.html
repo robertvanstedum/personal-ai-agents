@@ -719,6 +719,12 @@
           _resetNotizen();
           btnNotizenSave.textContent = 'Speichern';
           btnNotizenSave.disabled = false;
+          notizenStatus.textContent = 'Notiz gespeichert — sichtbar in Archiv → Lesen';
+          notizenStatus.className = 'notizen-status notizen-status--saved';
+          setTimeout(() => {
+            notizenStatus.textContent = '';
+            notizenStatus.className = 'notizen-status';
+          }, 5000);
         }, 1200);
       } catch {
         btnNotizenSave.textContent = 'Fehler';

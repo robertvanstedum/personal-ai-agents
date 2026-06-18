@@ -1882,6 +1882,10 @@ body.reading-mode nav {
   color: rgba(42, 31, 20, 0.5);
   font-style: italic;
 }
+.notizen-status--saved {
+  color: var(--md-accent);
+  font-style: normal;
+}
 
 .notizen-correction {
   margin-top: 1rem;
