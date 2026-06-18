@@ -1032,15 +1032,6 @@ document.body.classList.add('parch-mode');
       src.start(0);
     } catch (_) {}
 
-    // Pre-request microphone permission while still in the gesture context.
-    // iOS Safari blocks getUserMedia from async callbacks — granting it here
-    // means the listen loop can call it freely afterward.
-    if (navigator.mediaDevices && window.MediaRecorder) {
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(s => s.getTracks().forEach(t => t.stop()))
-        .catch(() => {});
-    }
-
     sessionActive = true;
     sessionHistory = [];
     sessionTranscript = [];
@@ -1149,6 +1140,7 @@ document.body.classList.add('parch-mode');
     const pauseBtn       = document.getElementById('session-pause-btn');
 
     let loopRunning  = false;   // is the continuous listen loop active
+    let loopGen      = 0;       // incremented on force-restart to kill stale loops
     let paused       = false;   // user paused
     let turnInFlight = false;   // AI turn being processed
 
@@ -1238,10 +1230,11 @@ document.body.classList.add('parch-mode');
 
     // ── Main listen loop ─────────────────────────────────────────────────────
     async function startLoop() {
+      const myGen = ++loopGen;
       loopRunning = true;
       paused      = false;
 
-      while (loopRunning && sessionActive) {
+      while (loopRunning && sessionActive && loopGen === myGen) {
         if (paused) {
           setListenStatus('⏸ Pause');
           await new Promise(r => setTimeout(r, 200));
@@ -1328,8 +1321,8 @@ document.body.classList.add('parch-mode');
 
     // ── Expose start/stop for session lifecycle ──────────────────────────────
     window._sessionListenStart      = () => { if (!loopRunning) startLoop(); };
-    window._sessionListenForceStart = () => { loopRunning = false; startLoop(); };
-    window._sessionListenStop       = () => { loopRunning = false; paused = false; };
+    window._sessionListenForceStart = () => { loopGen++; loopRunning = false; startLoop(); };
+    window._sessionListenStop       = () => { loopGen++; loopRunning = false; paused = false; };
 
   })();
 
