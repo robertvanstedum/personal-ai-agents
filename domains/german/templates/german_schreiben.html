@@ -116,11 +116,29 @@
     <img src="/static/photos/Vera_cafe_IMG_5211_2.jpg" alt="Café Sperl" style="object-position: right 20%">
   </div>
 </div><!-- .tab-layout-split -->
+
+<div id="save-toast" style="
+  position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(12px);
+  background:#2a2418; color:#f5f0e8; font-family:'DM Mono',monospace; font-size:12px;
+  padding:8px 20px; border-radius:20px; opacity:0; pointer-events:none;
+  transition:opacity 0.2s, transform 0.2s; z-index:9999; white-space:nowrap;
+">Gespeichert ✓</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 document.body.classList.add('parch-mode');
+
+function showSaveToast() {
+  const t = document.getElementById('save-toast');
+  t.style.opacity = '1';
+  t.style.transform = 'translateX(-50%) translateY(0)';
+  setTimeout(() => {
+    t.style.opacity = '0';
+    t.style.transform = 'translateX(-50%) translateY(12px)';
+  }, 1500);
+}
+
 (function () {
   'use strict';
 
@@ -221,9 +239,9 @@ document.body.classList.add('parch-mode');
           context_title: contextTitle,
         }),
       });
-      btn.textContent = '✓ Gespeichert';
+      showSaveToast();
       btn.disabled = true;
-      setTimeout(() => { window.location.reload(); }, 800);
+      setTimeout(() => { window.location.reload(); }, 1500);
     } catch (e) {}
   });
 
@@ -328,9 +346,9 @@ document.body.classList.add('parch-mode');
           context_title: prompts[promptIdx] || '',
         }),
       });
-      status.textContent = '✓ Gespeichert';
+      showSaveToast();
       document.getElementById('tagebuch-input').value = '';
-      setTimeout(() => { window.location.reload(); }, 1000);
+      setTimeout(() => { window.location.reload(); }, 1500);
     } catch (e) {
       status.textContent = 'Fehler beim Speichern.';
     }
