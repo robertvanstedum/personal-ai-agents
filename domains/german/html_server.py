@@ -22,8 +22,10 @@ from german_domain import (
     save_lesen_phrase,
     get_tagebuch_prompts,
     correct_writing,
+    correct_lesen_note,
     save_writing_entry,
     save_note,
+    save_lesen_drill,
     get_phrasebook_entries,
     update_phrase_status,
     get_personas,
@@ -164,9 +166,18 @@ def archiv():
         except Exception:
             pass
     gesprache_sessions = get_gesprache_sessions(limit=50)
+    notes_file = GERMAN_DIR / "config" / "notes.json"
+    lesen_notes = []
+    if notes_file.exists():
+        try:
+            data = json.loads(notes_file.read_text())
+            lesen_notes = list(reversed(data.get("notes", [])))[:50]
+        except Exception:
+            pass
     return render_template("german_archiv.html", active="archiv",
                            gesprache_sessions=gesprache_sessions,
-                           writing_sessions=writing_sessions)
+                           writing_sessions=writing_sessions,
+                           lesen_notes=lesen_notes)
 
 
 # ── Lesen API ─────────────────────────────────────────────────────────────────
@@ -255,6 +266,36 @@ def api_note_save():
         rewritten=body.get("rewritten", ""),
     )
     return jsonify({"success": True, "note_id": note["note_id"]})
+
+
+@app.route("/api/lesen/correct", methods=["POST"])
+def api_lesen_correct():
+    body = request.get_json(force=True)
+    text = body.get("text", "").strip()
+    if not text:
+        return jsonify({"corrected": "", "translation": "", "notes": [], "direction": "de_in"}), 400
+    result = correct_lesen_note(
+        text,
+        article_title=body.get("article_title", ""),
+        article_summary=body.get("article_summary", ""),
+    )
+    return jsonify(result)
+
+
+@app.route("/api/lesen/drill-save", methods=["POST"])
+def api_lesen_drill_save():
+    body = request.get_json(force=True)
+    record = save_lesen_drill(
+        article_id=body.get("article_id", ""),
+        article_title=body.get("article_title", ""),
+        direction=body.get("direction", "de_in"),
+        original=body.get("original", ""),
+        corrected=body.get("corrected", ""),
+        translation=body.get("translation", ""),
+        retyped=body.get("retyped", ""),
+        retyped_correct=bool(body.get("retyped_correct", False)),
+    )
+    return jsonify({"success": True, "id": record["id"]})
 
 
 # ── Üben API ─────────────────────────────────────────────────────────────────

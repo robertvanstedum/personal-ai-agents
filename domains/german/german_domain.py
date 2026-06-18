@@ -1096,6 +1096,105 @@ def save_note(article_id: str, article_title: str, original: str,
     return note
 
 
+# ─── Lesen — writing drill ────────────────────────────────────────────────────
+
+_LESEN_DRILLS_DIR = GERMAN_DIR / "lesen_drills"
+
+_GERMAN_MARKERS = set("äöüÄÖÜß")
+_COMMON_GERMAN  = {
+    "ich", "ist", "die", "der", "das", "und", "in", "nicht", "war", "habe",
+    "bin", "wir", "sie", "er", "es", "den", "dem", "ein", "eine", "haben",
+    "sein", "auf", "mit", "auch", "für", "von", "an", "bei", "nach", "noch",
+}
+
+
+def correct_lesen_note(text: str, article_title: str = "", article_summary: str = "") -> dict:
+    """Correct/translate a Lesen notiz. Detects direction (de_in or en_in).
+    Returns {corrected, translation, notes, direction}."""
+    words = set(text.lower().split())
+    has_umlaut = any(c in _GERMAN_MARKERS for c in text)
+    has_german = len(words & _COMMON_GERMAN) >= 2
+    direction = "de_in" if (has_umlaut or has_german) else "en_in"
+
+    ctx_block = f"Article: {article_title}\n" if article_title else ""
+
+    if direction == "de_in":
+        prompt = (
+            "You are a German language tutor. The learner wrote a note in German.\n"
+            "Return ONLY valid JSON with exactly these fields:\n"
+            '- "corrected": the corrected German text (string)\n'
+            '- "translation": English translation of the corrected text (string)\n'
+            '- "notes": array of short strings explaining corrections (max 5). '
+            "Empty array if no corrections needed.\n"
+            '- "direction": "de_in"\n\n'
+            f"{ctx_block}"
+            f"Note:\n{text}"
+        )
+    else:
+        prompt = (
+            "You are a German language tutor. The learner wrote a note in English.\n"
+            "Translate it to natural German suitable for a B1-B2 learner to study.\n"
+            "Return ONLY valid JSON with exactly these fields:\n"
+            '- "corrected": the German translation (string)\n'
+            '- "translation": the original English text (string)\n'
+            '- "notes": array of up to 3 short notes about interesting grammar or '
+            "vocabulary choices. Empty array if none.\n"
+            '- "direction": "en_in"\n\n'
+            f"{ctx_block}"
+            f"Note:\n{text}"
+        )
+
+    raw = _call_llm(prompt, max_tokens=400)
+    if not raw:
+        return {"corrected": text, "translation": "", "notes": [], "direction": direction}
+    try:
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        result = json.loads(raw.strip())
+        return {
+            "corrected":   result.get("corrected", text),
+            "translation": result.get("translation", ""),
+            "notes":       result.get("notes", []),
+            "direction":   result.get("direction", direction),
+        }
+    except Exception:
+        return {"corrected": text, "translation": "", "notes": [], "direction": direction}
+
+
+def save_lesen_drill(article_id: str, article_title: str, direction: str,
+                     original: str, corrected: str, translation: str,
+                     retyped: str, retyped_correct: bool) -> dict:
+    """Save a Lesen drill record to data/lesen_drills/YYYY-MM-DD.json."""
+    import uuid
+    _LESEN_DRILLS_DIR.mkdir(exist_ok=True)
+    today = datetime.date.today().isoformat()
+    drill_file = _LESEN_DRILLS_DIR / f"{today}.json"
+    data = []
+    if drill_file.exists():
+        try:
+            data = json.loads(drill_file.read_text())
+        except Exception:
+            pass
+    record = {
+        "id":              str(uuid.uuid4()),
+        "date":            today,
+        "article_id":      article_id,
+        "article_title":   article_title,
+        "user":            DEFAULT_USER,
+        "direction":       direction,
+        "original":        original,
+        "corrected":       corrected,
+        "translation":     translation,
+        "retyped":         retyped,
+        "retyped_correct": retyped_correct,
+    }
+    data.append(record)
+    drill_file.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    return record
+
+
 def save_writing_entry(mode: str, text_original: str, text_corrected: str = "",
                        notes: list = None, context_title: str = "") -> dict:
     """Append a writing session entry. Trims to last 50. Returns new entry."""

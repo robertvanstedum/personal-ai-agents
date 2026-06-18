@@ -15,7 +15,7 @@
     <div class="archiv-tabs">
       <button class="archiv-tab active" data-section="gesprache">Gespräche</button>
       <button class="archiv-tab" data-section="schreiben">Schreiben</button>
-      <button class="archiv-tab" data-section="artikel">Artikel</button>
+      <button class="archiv-tab" data-section="artikel">Lesen</button>
     </div>
 
     <!-- Gespräche section -->
@@ -54,8 +54,23 @@
 
     <!-- Artikel section -->
     <div class="archiv-section hidden" id="section-artikel">
-      <div class="archiv-section-label">Gespeicherte Artikel</div>
-      <p class="archiv-empty">Noch keine Artikel gespeichert. Klick <a href="/lesen">🔖 Merken in Lesen</a>, um Artikel zu speichern.</p>
+      <div class="archiv-section-label">Artikel — Notizen</div>
+      {% if lesen_notes %}
+        {% for n in lesen_notes %}
+        <div class="archiv-row archiv-row-notizen">
+          <div class="archiv-notizen-meta">
+            <span class="archiv-date">{{ n.date }}</span>
+            <span class="archiv-notizen-title">{{ n.article_title }}</span>
+          </div>
+          <div class="archiv-notizen-original">{{ n.original }}</div>
+          {% if n.corrected and n.corrected != n.original %}
+          <div class="archiv-notizen-corrected">→ {{ n.corrected }}</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="archiv-empty">Noch keine Notizen. Schreib etwas in <a href="/lesen">Lesen</a> und speichere es.</p>
+      {% endif %}
     </div>
 
     <!-- Drill placeholder -->

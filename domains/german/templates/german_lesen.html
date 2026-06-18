@@ -125,17 +125,21 @@
           <div class="notizen-actions">
             <button class="notizen-btn" id="btn-notizen-correct"
                     title="Get AI grammar correction">Korrektur anfragen</button>
+            <button class="notizen-btn notizen-btn-save" id="btn-notizen-save"
+                    title="Save note">Speichern</button>
             <span class="notizen-status" id="notizen-status"></span>
           </div>
           <div class="notizen-correction" id="notizen-correction" style="display:none">
-            <div class="notizen-correction-label">Korrektur:</div>
-            <div class="notizen-correction-text" id="notizen-correction-text"></div>
-            <textarea class="notizen-input notizen-rewrite" id="notizen-rewritten" rows="3"
-              placeholder="Neu schreiben…"></textarea>
-            <div class="notizen-actions">
-              <button class="notizen-btn notizen-btn-save" id="btn-notizen-save"
-                      title="Save note">Speichern</button>
+            <div class="notizen-correction-label" id="notizen-corrected-label">Korrektur:</div>
+            <div class="notizen-corrected-row">
+              <div class="notizen-correction-text" id="notizen-correction-text"></div>
+              <button class="notizen-accept-btn" id="btn-notizen-accept" title="Copy correction into text box">← Übernehmen</button>
             </div>
+            <div class="notizen-translation-row" id="notizen-translation-row" style="display:none">
+              <div class="notizen-correction-label notizen-translation-label" id="notizen-translation-label">Auf Englisch:</div>
+              <div class="notizen-correction-text notizen-translation-text" id="notizen-translation-text"></div>
+            </div>
+            <ul class="notizen-notes-list" id="notizen-notes-list"></ul>
           </div>
         </div>
       </div>
@@ -329,6 +333,24 @@
         `<span class="lesen-dot">·</span>` +
         `<span class="lesen-headline">${escapeHtml(art.title)}</span>`;
       row.addEventListener('click', () => enterReading(art.id));
+
+      // Hover-to-translate: reuse word popover after 400ms
+      let _titleHoverTimer = null;
+      row.addEventListener('mouseenter', () => {
+        _titleHoverTimer = setTimeout(() => {
+          currentPhrase      = art.title;
+          currentTranslation = '';
+          popPhrase.textContent  = art.title;
+          popTrans.textContent   = 'Übersetzung…';
+          popTiming.textContent  = '';
+          btnSave.disabled       = true;
+          btnSave.textContent    = '＋ In Bibliothek';
+          showPopover(row.getBoundingClientRect());
+          fetchTranslation(art.title);
+        }, 1500);
+      });
+      row.addEventListener('mouseleave', () => clearTimeout(_titleHoverTimer));
+
       container.appendChild(row);
     });
   }
@@ -429,8 +451,15 @@
   const translationCache = new Map();
   let currentPhrase = '';
 
+  const readingTextEl = document.getElementById('reading-text');
   let selectionTimer = null;
-  document.getElementById('reading-text').addEventListener('mouseup', () => {
+  document.addEventListener('mouseup', () => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !readingTextEl) return;
+    try {
+      const range = sel.getRangeAt(0);
+      if (!readingTextEl.contains(range.commonAncestorContainer)) return;
+    } catch { return; }
     clearTimeout(selectionTimer);
     selectionTimer = setTimeout(handleSelection, 300);
   });
@@ -472,13 +501,9 @@
     const sel = window.getSelection();
     const phrase = sel ? sel.toString().trim() : '';
     if (!phrase || phrase.length < 2 || phrase.length > 300) return;
-    const range = sel.getRangeAt(0);
-    const before = range.startContainer.textContent[range.startOffset - 1];
-    const after  = range.endContainer.textContent[range.endOffset];
-    if ((before && /\w/.test(before)) || (after && /\w/.test(after))) return;
     currentPhrase = phrase;
     currentTranslation = '';
-    const rect = range.getBoundingClientRect();
+    const rect = sel.getRangeAt(0).getBoundingClientRect();
     popPhrase.textContent = phrase;
     popTrans.textContent = 'Übersetzung…';
     popTiming.textContent = '';
@@ -488,7 +513,12 @@
     fetchTranslation(phrase);
   }
 
+  let _translateAbort = null;
+
   async function fetchTranslation(phrase) {
+    // Cancel any in-flight request so rapid hovers don't queue on the server
+    if (_translateAbort) { _translateAbort.abort(); _translateAbort = null; }
+
     const key = phrase.toLowerCase().trim();
     if (translationCache.has(key)) {
       currentTranslation = translationCache.get(key);
@@ -497,9 +527,18 @@
       btnSave.disabled = !currentTranslation;
       return;
     }
+    const controller = new AbortController();
+    _translateAbort = controller;
     const t0 = performance.now();
     try {
-      const data = await postJSON('/api/translate', { phrase });
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phrase }),
+        signal: controller.signal,
+      });
+      const data = await res.json();
+      _translateAbort = null;
       const roundTrip = Math.round(performance.now() - t0);
       currentTranslation = data.translation || '';
       translationCache.set(key, currentTranslation);
@@ -511,7 +550,8 @@
       else if (t.llm_ms) parts.push(`LLM ${t.llm_ms}ms`);
       if (t.total_ms) parts.push(`server ${t.total_ms}ms`);
       popTiming.textContent = parts.join(' · ');
-    } catch {
+    } catch (e) {
+      if (e.name === 'AbortError') return;
       popTrans.textContent = '(Fehler)';
       popTiming.textContent = '';
     }
@@ -519,10 +559,14 @@
 
   function showPopover(rect) {
     popover.style.display = 'block';
-    const top  = rect.bottom + window.scrollY + 8;
-    const left = Math.min(rect.left, window.innerWidth - 280);
-    popover.style.top  = Math.max(8, top) + 'px';
-    popover.style.left = Math.max(8, left) + 'px';
+    // position:fixed → viewport coords only (no scrollY)
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top  = spaceBelow >= 120
+      ? rect.bottom + 8                      // default: below
+      : Math.max(8, rect.top - 8 - 120);    // flip: above if near bottom
+    const left = Math.min(Math.max(8, rect.left), window.innerWidth - 290);
+    popover.style.top  = top + 'px';
+    popover.style.left = left + 'px';
   }
 
   function hidePopover() {
@@ -563,54 +607,118 @@
   // ── Notizen flow ──────────────────────────────────────────────────────
   const btnNotizenCorrect = document.getElementById('btn-notizen-correct');
   const btnNotizenSave    = document.getElementById('btn-notizen-save');
+  const btnNotizenAccept  = document.getElementById('btn-notizen-accept');
   const notizenStatus     = document.getElementById('notizen-status');
   const notizenCorrection = document.getElementById('notizen-correction');
   const notizenCorrText   = document.getElementById('notizen-correction-text');
+  const notizenTransRow   = document.getElementById('notizen-translation-row');
+  const notizenTransText  = document.getElementById('notizen-translation-text');
+  const notizenTransLabel = document.getElementById('notizen-translation-label');
+  const notizenNotesList  = document.getElementById('notizen-notes-list');
+  const notizenTextarea   = document.getElementById('notizen-original');
+  let notizenOrigSnapshot = '';   // text at the moment Korrektur was clicked
   let notizenCorrected    = '';
+  let notizenTranslation  = '';
+  let notizenDirection    = 'de_in';
+
+  function _resetNotizen() {
+    if (notizenTextarea) notizenTextarea.value = '';
+    notizenCorrection.style.display = 'none';
+    notizenTransRow.style.display   = 'none';
+    notizenNotesList.innerHTML      = '';
+    notizenOrigSnapshot = '';
+    notizenCorrected    = '';
+    notizenTranslation  = '';
+    notizenDirection    = 'de_in';
+  }
 
   if (btnNotizenCorrect) {
     btnNotizenCorrect.addEventListener('click', async () => {
-      const text = document.getElementById('notizen-original').value.trim();
+      const text = notizenTextarea ? notizenTextarea.value.trim() : '';
       if (!text) return;
+      const art = filteredArticles[currentIdx];
+      notizenOrigSnapshot = text;
       btnNotizenCorrect.disabled = true;
       notizenStatus.textContent = 'Korrektur läuft…';
       try {
-        const data = await postJSON('/api/write-correct', { text, context: '' });
-        notizenCorrected = data.corrected || text;
+        const data = await postJSON('/api/lesen/correct', {
+          text,
+          article_title:   art ? art.title   : '',
+          article_summary: art ? (art.summary || '') : '',
+        });
+        notizenCorrected   = data.corrected   || text;
+        notizenTranslation = data.translation || '';
+        notizenDirection   = data.direction   || 'de_in';
+
+        document.getElementById('notizen-corrected-label').textContent =
+          notizenDirection === 'en_in' ? 'Auf Deutsch:' : 'Korrektur:';
         notizenCorrText.textContent = notizenCorrected;
+
+        if (notizenTranslation) {
+          notizenTransLabel.textContent = notizenDirection === 'en_in' ? 'Deine Eingabe:' : 'Auf Englisch:';
+          notizenTransText.textContent  = notizenTranslation;
+          notizenTransRow.style.display = 'block';
+        } else {
+          notizenTransRow.style.display = 'none';
+        }
+
+        notizenNotesList.innerHTML = '';
+        (data.notes || []).forEach(n => {
+          const li = document.createElement('li'); li.textContent = n;
+          notizenNotesList.appendChild(li);
+        });
+
         notizenCorrection.style.display = 'block';
         notizenStatus.textContent = '';
-      } catch {
+      } catch(e) {
+        console.error('Korrektur error:', e);
         notizenStatus.textContent = 'Fehler';
       }
       btnNotizenCorrect.disabled = false;
     });
   }
 
+  // ← Übernehmen: copy corrected text into the textarea
+  if (btnNotizenAccept) {
+    btnNotizenAccept.addEventListener('click', () => {
+      if (notizenCorrected && notizenTextarea) {
+        notizenTextarea.value = notizenCorrected;
+        notizenTextarea.focus();
+      }
+    });
+  }
+
   if (btnNotizenSave) {
     btnNotizenSave.addEventListener('click', async () => {
-      const original  = document.getElementById('notizen-original').value.trim();
-      const rewritten = document.getElementById('notizen-rewritten').value.trim();
-      const art = filteredArticles[currentIdx];
+      const final = notizenTextarea ? notizenTextarea.value.trim() : '';
+      const art   = filteredArticles[currentIdx];
       btnNotizenSave.disabled = true;
       btnNotizenSave.textContent = 'Speichern…';
       try {
-        await postJSON('/api/note-save', {
-          article_id:    art ? art.id    : '',
-          article_title: art ? art.title : '',
-          original,
-          corrected:  notizenCorrected,
-          rewritten,
-        });
+        await Promise.all([
+          postJSON('/api/note-save', {
+            article_id:    art ? art.id    : '',
+            article_title: art ? art.title : '',
+            original:  notizenOrigSnapshot || final,
+            corrected: notizenCorrected,
+            rewritten: final,
+          }),
+          postJSON('/api/lesen/drill-save', {
+            article_id:      art ? art.id    : '',
+            article_title:   art ? art.title : '',
+            direction:       notizenDirection,
+            original:        notizenOrigSnapshot || final,
+            corrected:       notizenCorrected,
+            translation:     notizenTranslation,
+            retyped:         final,
+            retyped_correct: notizenCorrected ? final.trim() === notizenCorrected.trim() : null,
+          }),
+        ]);
         btnNotizenSave.textContent = '✓ Gespeichert';
         setTimeout(() => {
-          document.getElementById('notizen-original').value  = '';
-          document.getElementById('notizen-rewritten').value = '';
-          notizenCorrection.style.display = 'none';
-          notizenCorrected = '';
+          _resetNotizen();
           btnNotizenSave.textContent = 'Speichern';
           btnNotizenSave.disabled = false;
-          if (btnNotizenCorrect) btnNotizenCorrect.disabled = false;
         }, 1200);
       } catch {
         btnNotizenSave.textContent = 'Fehler';

@@ -1906,9 +1906,105 @@ body.reading-mode nav {
   line-height: 1.6;
 }
 
-.notizen-rewrite {
-  margin-top: 1.5rem;
+.notizen-corrected-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
 }
+
+.notizen-corrected-row .notizen-correction-text {
+  flex: 1;
+}
+
+.notizen-accept-btn {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid rgba(122, 92, 58, 0.35);
+  border-radius: 4px;
+  color: rgba(42, 31, 20, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.notizen-accept-btn:hover {
+  background: rgba(122, 92, 58, 0.08);
+  color: var(--parch-text);
+}
+
+.notizen-translation-row {
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(122, 92, 58, 0.15);
+}
+
+.notizen-translation-text {
+  font-size: 0.88rem;
+  color: rgba(42, 31, 20, 0.6);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+.notizen-notes-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0;
+}
+
+.notizen-notes-list:empty { display: none; }
+
+.notizen-notes-list li {
+  font-size: 0.8rem;
+  color: rgba(42, 31, 20, 0.55);
+  padding: 2px 0 2px 1em;
+  position: relative;
+  line-height: 1.5;
+}
+
+.notizen-notes-list li::before {
+  content: '–';
+  position: absolute;
+  left: 0;
+  color: rgba(139, 94, 42, 0.5);
+}
+
+.notizen-retype-hint {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: rgba(42, 31, 20, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-top: 1.25rem;
+  margin-bottom: 0.4rem;
+}
+
+.notizen-rewrite-wrap {
+  position: relative;
+}
+
+.notizen-rewrite {
+  margin-top: 0;
+  transition: border-color 0.2s;
+}
+
+.notizen-rewrite.notizen-rewrite-match {
+  border-color: rgba(60, 120, 60, 0.6) !important;
+}
+
+.notizen-match-indicator {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: #3a7a3a;
+  margin-top: 0.35rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+.notizen-match-indicator.visible { opacity: 1; }
 
 /* ── Word popover — fixed position for reading mode ──────────── */
 
@@ -3160,6 +3256,34 @@ details[open] > .gesprache-transcript-summary::before {
     margin: 0 -0.5rem;
     padding: 0.6rem 0.5rem;
     cursor: pointer;
+}
+
+.archiv-row-notizen {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3rem;
+}
+
+.archiv-notizen-meta {
+    display: flex;
+    gap: 0.75rem;
+    align-items: baseline;
+}
+
+.archiv-notizen-title {
+    font-size: 0.82rem;
+    color: rgba(42, 31, 20, 0.55);
+    font-style: italic;
+}
+
+.archiv-notizen-original {
+    font-size: 0.9rem;
+    color: var(--parch-text);
+}
+
+.archiv-notizen-corrected {
+    font-size: 0.85rem;
+    color: rgba(42, 31, 20, 0.55);
 }
 
 .archiv-date {
