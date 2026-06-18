@@ -2848,22 +2848,24 @@ details.feedback-block[open] > summary.feedback-block-label {
   flex-shrink: 0;
 }
 
-/* ── Gespräche v2: fixed-height two-column layout ── */
+/* ── Gespräche v2: fixed-height two-column layout (desktop only) ── */
 
-#pane-ki-personas .ueben-layout {
-  height: calc(100vh - 220px);
-  min-height: 380px;
-  overflow: hidden;
-}
+@media (min-width: 769px) {
+  #pane-ki-personas .ueben-layout {
+    height: calc(100vh - 220px);
+    min-height: 380px;
+    overflow: hidden;
+  }
 
-#pane-ki-personas .persona-list {
-  height: 100%;
-  max-height: none;
-}
+  #pane-ki-personas .persona-list {
+    height: 100%;
+    max-height: none;
+  }
 
-#pane-ki-personas .persona-detail {
-  height: 100%;
-  max-height: none;
+  #pane-ki-personas .persona-detail {
+    height: 100%;
+    max-height: none;
+  }
 }
 
 /* ── Gespräche v2: collapsible transcript sections ── */
