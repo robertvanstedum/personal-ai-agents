@@ -2484,8 +2484,43 @@ body.reading-mode nav {
 
 .prompt-actions {
   display: flex;
-  gap: 0.6rem;
+  gap: 1.25rem;
   flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.prompt-action-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.prompt-action-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--md-text-secondary);
+  opacity: 0.7;
+}
+
+.prompt-action-btns {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.detail-mehr-btn {
+  display: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.8rem;
+  color: var(--md-accent);
+  cursor: pointer;
+  margin-top: -0.75rem;
+  margin-bottom: 0.75rem;
+  touch-action: manipulation;
 }
 
 .btn-delivery {
@@ -4322,6 +4357,50 @@ body.archiv-mode .page {
   touch-action: manipulation;
 }
 .btn-session-card-anzeigen:hover { border-color: var(--md-accent); }
+
+/* ── Gespräche: mobile scroll fix + button hierarchy ────────────────────────── */
+@media (max-width: 768px) {
+  /* Tighten vertical space to bring buttons above fold */
+  #pane-ki-personas .persona-detail {
+    padding-top: 4px;
+  }
+  .detail-description {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-bottom: 0.75rem;
+  }
+  .detail-description.expanded {
+    display: block;
+    overflow: visible;
+  }
+  .detail-mehr-btn { display: inline-block; }
+  .scene-list { margin-bottom: 0.75rem; }
+  .prompt-delivery { margin-top: 4px; }
+
+  /* Button groups stack on mobile */
+  .prompt-actions { flex-direction: column; gap: 0.85rem; }
+  .prompt-action-label { opacity: 1; }
+
+  /* Prompt kopieren → primary amber on mobile */
+  .btn-copy-primary {
+    background: var(--md-accent);
+    color: var(--md-parch);
+    border-color: var(--md-accent);
+    font-weight: 600;
+  }
+  .btn-copy-primary:hover { opacity: 0.88; border-color: var(--md-accent); color: var(--md-parch); }
+
+  /* Im Browser → secondary bordered on mobile */
+  #start-session-btn {
+    background: transparent;
+    border-color: var(--md-parch-deep);
+    color: var(--md-text-secondary);
+    font-weight: normal;
+  }
+  #start-session-btn:hover { border-color: var(--md-accent); color: var(--md-accent); opacity: 1; }
+}
 
 /* ── Gespräche: KI-Sitzung mobile tuning ─────────────────────────────────────── */
 @media (max-width: 768px) {
