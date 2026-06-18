@@ -2635,6 +2635,7 @@ body.reading-mode nav {
   background: transparent;
   color: var(--md-text-secondary);
   cursor: pointer;
+  touch-action: manipulation;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .gesprache-source-pill:hover {
@@ -4102,6 +4103,40 @@ body.archiv-mode .page {
   min-height: 1.2em;
 }
 
+.chat-speaker {
+  font-weight: 600;
+  color: var(--md-accent);
+  margin-right: 0.25em;
+}
+.chat-user .chat-speaker {
+  color: var(--md-text-secondary);
+}
+.chat-thinking {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.session-mode-row {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--md-parch-deep);
+  background: rgba(0,0,0,0.04);
+}
+.btn-session-mode {
+  padding: 0.3rem 1rem;
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 16px;
+  background: transparent;
+  color: var(--md-text-secondary);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.btn-session-mode:hover { border-color: var(--md-accent); color: var(--md-accent); }
+.btn-session-sprechen { margin-left: 0.5rem; }
+
 /* ── Archiv responsive — mobile ─────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .archiv-row { gap: 0.5rem; }
@@ -4134,5 +4169,97 @@ body.archiv-mode .page {
   .admin-item-actions {
     flex-wrap: wrap;
     width: 100%;
+  }
+}
+
+/* ── Gespräche: KI-Sitzung mobile tuning ─────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Session panel fills full width */
+  .persona-detail.session-active .session-panel {
+    margin-left: -0.75rem;
+    margin-right: -0.75rem;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  /* Chat log: taller, 16px font, no Safari auto-zoom */
+  .session-chat-log {
+    min-height: 200px;
+    height: auto;
+    max-height: 45vh;
+    font-size: 16px;
+  }
+  .chat-message {
+    font-size: 16px;
+    max-width: 100%;
+  }
+
+  /* Listen status always pinned, readable */
+  .session-listen-status {
+    font-size: 0.85rem;
+    padding: 0.45rem 0.75rem;
+  }
+
+  /* Beenden: full-width, large touch target, amber fill */
+  .session-status-bar {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .btn-session-end {
+    width: 100%;
+    min-height: 52px;
+    font-size: 1rem;
+    font-weight: 600;
+    background: var(--md-accent);
+    color: var(--md-parch);
+    border-color: var(--md-accent);
+    border-radius: 6px;
+    order: 10;
+  }
+  .btn-session-end:hover { background: var(--md-accent); opacity: 0.88; }
+
+  /* Mode row: Tippen button full-width */
+  .session-mode-row {
+    padding: 0.6rem 0.75rem;
+  }
+  .btn-session-mode {
+    width: 100%;
+    min-height: 44px;
+    font-size: 0.95rem;
+    border-radius: 8px;
+  }
+  .btn-session-sprechen {
+    margin-left: 0;
+    margin-top: 0.4rem;
+  }
+
+  /* Text input row: 16px to prevent iOS auto-zoom */
+  .session-input-field {
+    font-size: 16px;
+  }
+  .session-input-row {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .btn-session-send {
+    width: 100%;
+    min-height: 44px;
+    font-size: 0.95rem;
+  }
+
+  /* Suggestion pills: full-width rows, 44px touch targets */
+  .persona-detail.session-active .gesprache-source-row {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .persona-detail.session-active .gesprache-source-pill {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 }

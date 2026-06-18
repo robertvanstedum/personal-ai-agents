@@ -105,10 +105,15 @@
               <button id="end-session-btn" class="btn-session-end">■ Beenden</button>
             </div>
             <div class="session-listen-status" id="session-listen-status" style="display:none"></div>
-            <div class="session-input-row">
+            <div id="session-chat-log" class="session-chat-log"></div>
+            <div class="session-mode-row" id="session-mode-row">
+              <button id="session-tippen-btn" class="btn-session-mode">Tippen</button>
+            </div>
+            <div class="session-input-row" id="session-input-row" style="display:none">
               <input type="text" id="session-input" class="session-input-field"
-                     placeholder="Oder tippen und Enter…">
+                     placeholder="Tippen und Enter…">
               <button id="session-send-btn" class="btn-session-send">→ Senden</button>
+              <button id="session-sprechen-btn" class="btn-session-mode btn-session-sprechen">← Sprechen</button>
             </div>
           </div>
 
@@ -780,6 +785,21 @@ document.body.classList.add('parch-mode');
     if (el) el.textContent = personas[selectedIdx]?.name + (sessionTurns ? '  ·  ' + sessionTurns + ' Runden' : '');
   }
 
+  function appendChatMessage(speaker, text, isPersona) {
+    const log = document.getElementById('session-chat-log');
+    if (!log) return;
+    const div = document.createElement('div');
+    div.className = 'chat-message ' + (isPersona ? 'chat-persona' : 'chat-user');
+    const label = document.createElement('span');
+    label.className = 'chat-speaker';
+    label.textContent = speaker + ': ';
+    div.appendChild(label);
+    div.appendChild(document.createTextNode(text));
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+    return div;
+  }
+
   async function sendTurn(userText) {
     const p = personas[selectedIdx];
     if (!p) return;
@@ -791,6 +811,7 @@ document.body.classList.add('parch-mode');
     if (userText) {
       sessionHistory.push({ role: 'user', content: userText });
       sessionTranscript.push('Sie: ' + userText);
+      appendChatMessage('Sie', userText, false);
       sessionTurns++;
       updateTurnCounter();
     }
@@ -799,6 +820,8 @@ document.body.classList.add('parch-mode');
     const _modelLbl = document.getElementById('session-model-label');
     const _modelOrig = _modelLbl ? _modelLbl.textContent : '';
     if (_modelLbl) _modelLbl.textContent = 'denkt nach…';
+    const thinkingEl = appendChatMessage(personaName, '…', true);
+    if (thinkingEl) thinkingEl.classList.add('chat-thinking');
     let ai_ms = 0, tts_ms = 0;
     try {
       const t0_ai = Date.now();
@@ -811,14 +834,18 @@ document.body.classList.add('parch-mode');
       ai_ms = Date.now() - t0_ai;
       const reply = (data.response || '').trim();
 
+      if (thinkingEl) thinkingEl.remove();
       if (reply) {
         sessionHistory.push({ role: 'assistant', content: reply });
         sessionTranscript.push(personaName + ': ' + reply);
+        appendChatMessage(personaName, reply, true);
         const t0_tts = Date.now();
         await speakPersona(reply);
         tts_ms = Date.now() - t0_tts;
       }
-    } catch (err) { /* non-fatal — loop continues */ }
+    } catch (err) {
+      if (thinkingEl) thinkingEl.remove();
+    }
     finally {
       if (_modelLbl) _modelLbl.textContent = _modelOrig;
       sessionSendBtn.disabled = false;
@@ -850,6 +877,10 @@ document.body.classList.add('parch-mode');
     sessionHistory = [];
     sessionTranscript = [];
     sessionTurns = 0;
+    const chatLog = document.getElementById('session-chat-log');
+    if (chatLog) chatLog.innerHTML = '';
+    document.getElementById('session-input-row').style.display = 'none';
+    document.getElementById('session-mode-row').style.display = '';
 
     document.getElementById('session-persona-label').textContent = p.name;
     document.getElementById('session-model-label').textContent =
@@ -910,6 +941,20 @@ document.body.classList.add('parch-mode');
         await sendTurn(text);
       }
     }
+  });
+
+  document.getElementById('session-tippen-btn').addEventListener('click', () => {
+    document.getElementById('session-input-row').style.display = '';
+    document.getElementById('session-mode-row').style.display = 'none';
+    if (window._sessionListenStop) window._sessionListenStop();
+    sessionInputEl.focus();
+  });
+
+  document.getElementById('session-sprechen-btn').addEventListener('click', () => {
+    document.getElementById('session-input-row').style.display = 'none';
+    document.getElementById('session-mode-row').style.display = '';
+    sessionInputEl.value = '';
+    if (window._sessionListenStart) window._sessionListenStart();
   });
 
   // ── Continuous listening loop with VAD ───────────────────────────────────
