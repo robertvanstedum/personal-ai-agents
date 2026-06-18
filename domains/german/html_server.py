@@ -372,9 +372,11 @@ def api_transcribe():
         client = _OAI(api_key=api_key)
         audio_file.stream.seek(0)
         _t0 = _t.time()
+        fname = audio_file.filename or "session.webm"
+        content_type = audio_file.content_type or "audio/webm"
         response = client.audio.transcriptions.create(
             model="whisper-1",
-            file=("session.webm", audio_file.stream, "audio/webm"),
+            file=(fname, audio_file.stream, content_type),
             language="de",
             response_format="text",
         )

@@ -1032,6 +1032,15 @@ document.body.classList.add('parch-mode');
       src.start(0);
     } catch (_) {}
 
+    // Pre-request microphone permission while still in the gesture context.
+    // iOS Safari blocks getUserMedia from async callbacks — granting it here
+    // means the listen loop can call it freely afterward.
+    if (navigator.mediaDevices && window.MediaRecorder) {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(s => s.getTracks().forEach(t => t.stop()))
+        .catch(() => {});
+    }
+
     sessionActive = true;
     sessionHistory = [];
     sessionTranscript = [];
@@ -1125,7 +1134,9 @@ document.body.classList.add('parch-mode');
     document.getElementById('session-input-row').style.display = 'none';
     document.getElementById('session-mode-row').style.display = '';
     sessionInputEl.value = '';
-    if (window._sessionListenStart) window._sessionListenStart();
+    // Force-restart — loop may be spinning-but-failing (e.g. iOS gesture block)
+    if (window._sessionListenForceStart) window._sessionListenForceStart();
+    else if (window._sessionListenStart) window._sessionListenStart();
   });
 
   // ── Continuous listening loop with VAD ───────────────────────────────────
@@ -1151,7 +1162,8 @@ document.body.classList.add('parch-mode');
     // Returns audio blob when speech detected + silence follows, or null if interrupted.
     async function captureOneTurn() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+      const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg;codecs=opus']
+        .find(t => MediaRecorder.isTypeSupported(t)) || '';
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
       const chunks   = [];
       recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
@@ -1210,7 +1222,8 @@ document.body.classList.add('parch-mode');
                 // Silence detected — capture what we have
                 recorder.requestData();
                 setTimeout(() => {
-                  const blob = new Blob(chunks, { type: mimeType || 'audio/webm' });
+                  const actualMime = recorder.mimeType || mimeType || 'audio/webm';
+                  const blob = new Blob(chunks, { type: actualMime });
                   finish(blob);
                 }, 100);
               }
@@ -1257,7 +1270,8 @@ document.body.classList.add('parch-mode');
         setListenStatus('Transkribiert…', 'listening-processing');
         try {
           const formData = new FormData();
-          formData.append('audio', blob, 'turn.webm');
+          const ext = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm';
+          formData.append('audio', blob, `turn.${ext}`);
           const t0_transcribe = Date.now();
           const res  = await fetch('/api/transcribe', { method: 'POST', body: formData });
           const data = await res.json();
@@ -1313,8 +1327,9 @@ document.body.classList.add('parch-mode');
     }
 
     // ── Expose start/stop for session lifecycle ──────────────────────────────
-    window._sessionListenStart = () => { if (!loopRunning) startLoop(); };
-    window._sessionListenStop  = () => { loopRunning = false; paused = false; };
+    window._sessionListenStart      = () => { if (!loopRunning) startLoop(); };
+    window._sessionListenForceStart = () => { loopRunning = false; startLoop(); };
+    window._sessionListenStop       = () => { loopRunning = false; paused = false; };
 
   })();
 
