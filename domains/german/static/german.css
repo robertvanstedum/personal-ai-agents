@@ -2473,6 +2473,11 @@ body.reading-mode nav {
   white-space: pre-wrap;
 }
 
+.prompt-text[contenteditable="true"]:focus {
+  border-color: var(--md-accent);
+  outline: none;
+}
+
 .prompt-actions {
   display: flex;
   gap: 0.6rem;
@@ -2489,6 +2494,7 @@ body.reading-mode nav {
   font-size: 0.85rem;
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
+  touch-action: manipulation;
 }
 
 .btn-delivery:hover { border-color: var(--md-accent); color: var(--md-accent); }

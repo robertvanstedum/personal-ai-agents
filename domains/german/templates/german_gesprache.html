@@ -61,7 +61,7 @@
           <div class="scene-list" id="scene-list"></div>
 
           <div class="prompt-delivery" id="prompt-delivery">
-            <div class="prompt-text" id="prompt-text" style="display:none"></div>
+            <div class="prompt-text" id="prompt-text" contenteditable="true" style="display:none"></div>
             <!-- Model selector — visible before session starts -->
             <div class="gesprache-model-row" style="margin-bottom:0.75rem">
               <label class="gesprache-model-label">Modell</label>
@@ -76,20 +76,20 @@
                       title="Startet die KI-Sitzung direkt im Browser">
                 ▶ Sitzung starten
               </button>
+              <button class="btn-delivery" id="btn-copy"
+                      title="Prompt in die Zwischenablage kopieren — kein App-Wechsel">
+                📋 Prompt kopieren
+              </button>
               <button class="btn-delivery" id="btn-telegram"
                       title="Kopiert den Prompt und öffnet Telegram — dort einfügen">
-                ✈️ Telegram öffnen
-              </button>
-              <button class="btn-delivery" id="btn-copy"
-                      title="Kopiert den vollständigen Grok-Prompt in die Zwischenablage">
-                📋 Kopieren
+                ✈ Telegram
               </button>
               <button class="btn-delivery" id="btn-download"
-                      title="Speichert den vollständigen Grok-Prompt als Textdatei">
-                💾 Als .txt speichern
+                      title="Speichert den vollständigen Prompt als Textdatei">
+                💾 Als .txt
               </button>
             </div>
-            <div class="prompt-toast" id="prompt-toast" style="display:none">✓ Vollständiger Prompt kopiert</div>
+            <div class="prompt-toast" id="prompt-toast" style="display:none"></div>
           </div>
 
           <!-- ── KI-Sitzung session panel ──────────────────────────────────── -->
@@ -436,7 +436,9 @@ document.body.classList.add('parch-mode');
           document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
           selectedSceneKey = 'warm_up_' + i;
-          document.getElementById('prompt-text').textContent = variant;
+          const ptEl = document.getElementById('prompt-text');
+          ptEl.textContent = variant;
+          ptEl.style.display = '';
           document.getElementById('prompt-delivery').style.display = '';
           fetchAndStorePrompt(p.slug, 'warm_up_' + i);
         });
@@ -451,7 +453,9 @@ document.body.classList.add('parch-mode');
           document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
           selectedSceneKey = key;
-          document.getElementById('prompt-text').textContent = prompts[key];
+          const ptEl = document.getElementById('prompt-text');
+          ptEl.textContent = prompts[key];
+          ptEl.style.display = '';
           document.getElementById('prompt-delivery').style.display = '';
           fetchAndStorePrompt(p.slug, key);
         });
@@ -534,6 +538,7 @@ document.body.classList.add('parch-mode');
       if (!res.ok) return;
       const data = await res.json();
       currentFullPrompt = data.prompt;
+      document.getElementById('prompt-text').textContent = data.prompt;
       const briefEl = document.getElementById('session-brief-text');
       briefEl.textContent = data.session_brief || '';
       document.getElementById('session-brief-panel').style.display = data.session_brief ? '' : 'none';
@@ -543,7 +548,7 @@ document.body.classList.add('parch-mode');
   }
 
   function getFullPrompt() {
-    return currentFullPrompt || document.getElementById('prompt-text').textContent.trim();
+    return document.getElementById('prompt-text').textContent.trim() || currentFullPrompt;
   }
 
   document.getElementById('btn-telegram').addEventListener('click', () => {
@@ -587,17 +592,23 @@ document.body.classList.add('parch-mode');
   });
 
   document.getElementById('btn-copy').addEventListener('click', () => {
-    navigator.clipboard.writeText(getFullPrompt()).then(() => {
-      const toast = document.getElementById('prompt-toast');
+    const toast = document.getElementById('prompt-toast');
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(getFullPrompt()).then(() => {
+        toast.textContent = 'Kopiert ✓';
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; }, 1500);
+      }).catch(() => {
+        toast.textContent = 'Manuell kopieren — Text oben markieren und kopieren';
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; }, 3000);
+      });
+    } else {
+      toast.textContent = 'Manuell kopieren — Text oben markieren und kopieren';
       toast.style.display = 'block';
-      setTimeout(() => toast.style.display = 'none', 2500);
-    }).catch(() => {
-      const el = document.getElementById('prompt-text');
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      window.getSelection().removeAllRanges();
-      window.getSelection().addRange(range);
-    });
+      setTimeout(() => { toast.style.display = 'none'; }, 3000);
+      document.getElementById('prompt-text').focus();
+    }
   });
 
   document.getElementById('btn-download').addEventListener('click', () => {
