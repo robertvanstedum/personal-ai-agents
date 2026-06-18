@@ -122,6 +122,9 @@
             <pre class="session-brief-text" id="session-brief-text"></pre>
           </details>
 
+          <!-- Session cards — auto-saved on Beenden from KI-Sitzung -->
+          <div id="session-cards-list"></div>
+
           <details class="nach-sitzung-details" id="transcript-details">
             <summary class="session-brief-summary">✏️ Nach der Sitzung</summary>
             <div class="nach-sitzung-body">
@@ -370,6 +373,10 @@ document.body.classList.add('parch-mode');
     document.getElementById('persona-detail').classList.remove('session-active');
     resetNachDerSitzung();
     const detail = document.getElementById('persona-detail');
+    const cardsList = document.getElementById('session-cards-list');
+    if (cardsList) cardsList.innerHTML = '';
+    savedSessions = [];
+    sessionRound = 0;
     if (detail) detail.scrollTop = 0;
     if (window.innerWidth <= 768) {
       requestAnimationFrame(() => {
@@ -719,6 +726,9 @@ document.body.classList.add('parch-mode');
   const sessionSendBtn  = document.getElementById('session-send-btn');
   const sessionInputEl  = document.getElementById('session-input');
   let   sessionTurns    = 0;
+  let   sessionRound    = 0;
+  let   sessionStartTime = null;
+  let   savedSessions   = [];
 
   // ── TTS: speak persona responses via OpenAI TTS ──────────────────────────
   let sessionMuted    = false;
@@ -783,6 +793,123 @@ document.body.classList.add('parch-mode');
   function updateTurnCounter() {
     const el = document.getElementById('session-persona-label');
     if (el) el.textContent = personas[selectedIdx]?.name + (sessionTurns ? '  ·  ' + sessionTurns + ' Runden' : '');
+  }
+
+  function formatDuration(ms) {
+    const s = Math.round(ms / 1000);
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+  }
+
+  function renderSessionCard(session) {
+    const container = document.getElementById('session-cards-list');
+    if (!container) return;
+    const card = document.createElement('div');
+    card.className = 'session-saved-card';
+    card.dataset.sessionId = session.id;
+    const dur = formatDuration(session.durationMs);
+    card.innerHTML =
+      `<div class="session-saved-meta">✓ ${session.personaName} · Runde ${session.round} · ${session.turns} Züge · ${dur}</div>` +
+      `<div class="session-saved-actions">` +
+        `<button class="btn-session-card-delete" title="Sitzung löschen">✕</button>` +
+        `<button class="btn-session-card-analyse">Analysieren →</button>` +
+      `</div>`;
+
+    card.querySelector('.btn-session-card-delete').addEventListener('click', () => {
+      if (confirm('Diese Sitzung löschen?')) {
+        savedSessions = savedSessions.filter(s => s.id !== session.id);
+        card.remove();
+      }
+    });
+
+    card.querySelector('.btn-session-card-analyse').addEventListener('click', async () => {
+      await analyseSession(session, card);
+    });
+
+    container.prepend(card);
+  }
+
+  async function analyseSession(session, card) {
+    const analyseBtn = card.querySelector('.btn-session-card-analyse');
+    analyseBtn.disabled = true;
+    analyseBtn.textContent = 'Analysiere…';
+
+    const doSubmit = async (attempt) => {
+      const res = await fetch('/api/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript: session.transcript,
+          persona_name: session.personaName,
+          scene: session.scene,
+          model: session.model,
+          source: 'ki_sitzung',
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        if (attempt < 2 && res.status >= 500) {
+          await new Promise(r => setTimeout(r, 1500));
+          return doSubmit(attempt + 1);
+        }
+        throw new Error(data.error || 'Fehler');
+      }
+      return data;
+    };
+
+    try {
+      const data = await doSubmit(1);
+      session.feedbackData = data.feedback;
+
+      // Collapse card to summary row with anzeigen link
+      card.innerHTML =
+        `<div class="session-saved-meta session-saved-analysiert">` +
+          `✓ Analysiert — ${session.personaName} · ${formatDuration(session.durationMs)}` +
+          ` <button class="btn-session-card-anzeigen">anzeigen</button>` +
+        `</div>`;
+      card.querySelector('.btn-session-card-anzeigen').addEventListener('click', () => {
+        renderFeedback(session.feedbackData);
+        requestAnimationFrame(() => {
+          const panel = document.getElementById('persona-detail');
+          const wrap  = document.getElementById('gesprache-feedback-wrap');
+          if (panel && wrap) {
+            const panelRect = panel.getBoundingClientRect();
+            const wrapRect  = wrap.getBoundingClientRect();
+            panel.scrollBy({ top: wrapRect.top - panelRect.top, behavior: 'smooth' });
+          }
+        });
+      });
+
+      // Prepend to Letzte Sitzungen
+      const sessionList = document.getElementById('letzte-sitzungen-list');
+      if (sessionList) {
+        const today = new Date().toISOString().slice(0, 10);
+        const row = document.createElement('div');
+        row.className = 'gesprache-session-row';
+        row.innerHTML = `<span class="gesprache-session-date">${today}</span>` +
+          `<span class="gesprache-session-persona">${session.personaName}</span>` +
+          `<span class="gesprache-session-scene">${session.scene}</span>` +
+          `<span class="gesprache-session-source">KI-Sitzung</span>`;
+        sessionList.prepend(row);
+        document.getElementById('letzte-sitzungen-section').style.display = '';
+      }
+
+      renderFeedback(data.feedback);
+      requestAnimationFrame(() => {
+        const panel = document.getElementById('persona-detail');
+        const wrap  = document.getElementById('gesprache-feedback-wrap');
+        if (panel && wrap) {
+          const panelRect = panel.getBoundingClientRect();
+          const wrapRect  = wrap.getBoundingClientRect();
+          panel.scrollBy({ top: wrapRect.top - panelRect.top, behavior: 'smooth' });
+        }
+      });
+    } catch (e) {
+      analyseBtn.disabled = false;
+      analyseBtn.textContent = 'Analysieren →';
+      renderFeedbackError(e.message || 'Fehler bei der Analyse.');
+    }
   }
 
   function appendChatMessage(speaker, text, isPersona) {
@@ -877,6 +1004,7 @@ document.body.classList.add('parch-mode');
     sessionHistory = [];
     sessionTranscript = [];
     sessionTurns = 0;
+    sessionStartTime = Date.now();
     const chatLog = document.getElementById('session-chat-log');
     if (chatLog) chatLog.innerHTML = '';
     document.getElementById('session-input-row').style.display = 'none';
@@ -913,16 +1041,23 @@ document.body.classList.add('parch-mode');
     startSessionBtn.disabled = false;
     document.getElementById('persona-detail').classList.remove('session-active');
 
-    const transcriptEl = document.getElementById('transcript-input');
-    transcriptEl.value = sessionTranscript.join('\n');
-    setPasteStatus('Aus letzter KI-Sitzung', 'source');
-    updateAnalysierenState();
-
-    const transcriptDetails = document.getElementById('transcript-details');
-    if (transcriptDetails) transcriptDetails.setAttribute('open', '');
-    transcriptEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-    document.getElementById('analyse-status').textContent = 'Sitzung beendet ✓ — Transkript bereit.';
+    if (sessionTranscript.length > 0) {
+      sessionRound++;
+      const p = personas[selectedIdx];
+      const session = {
+        id: Date.now(),
+        round: sessionRound,
+        personaName: p ? p.name : '',
+        scene: selectedSceneKey ? selectedSceneKey.replace(/_/g, ' ') : '',
+        turns: sessionTurns,
+        durationMs: sessionStartTime ? Date.now() - sessionStartTime : 0,
+        transcript: sessionTranscript.join('\n'),
+        model: document.getElementById('gesprache-model')?.value || 'grok',
+        feedbackData: null,
+      };
+      savedSessions.push(session);
+      renderSessionCard(session);
+    }
   });
 
   sessionSendBtn.addEventListener('click', async () => {

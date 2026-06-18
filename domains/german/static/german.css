@@ -4172,6 +4172,89 @@ body.archiv-mode .page {
   }
 }
 
+/* ── Gespräche: session saved cards ─────────────────────────────────────────── */
+
+#session-cards-list {
+  margin-top: 0.75rem;
+}
+
+.session-saved-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.5rem;
+  background: var(--md-parch-light, rgba(255,255,255,0.04));
+  border: 1px solid var(--md-parch-deep);
+  border-left: 3px solid var(--md-accent);
+  border-radius: 6px;
+  flex-wrap: wrap;
+}
+
+.session-saved-meta {
+  font-size: 0.85rem;
+  color: var(--md-text-secondary);
+  flex: 1;
+  min-width: 0;
+}
+
+.session-saved-analysiert {
+  color: var(--md-text-secondary);
+  opacity: 0.75;
+}
+
+.session-saved-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.btn-session-card-analyse {
+  padding: 0.35rem 0.85rem;
+  min-height: 44px;
+  border: 1px solid var(--md-accent);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--md-accent);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  white-space: nowrap;
+}
+.btn-session-card-analyse:hover:not(:disabled) { background: rgba(var(--md-accent-rgb,180,140,90),0.1); }
+.btn-session-card-analyse:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-session-card-delete {
+  padding: 0.3rem 0.55rem;
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--md-text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  opacity: 0.6;
+}
+.btn-session-card-delete:hover { opacity: 1; color: #c87878; border-color: rgba(200,80,80,0.3); }
+
+.btn-session-card-anzeigen {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--md-accent);
+  font-size: 0.8rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.btn-session-card-anzeigen:hover { border-color: var(--md-accent); }
+
 /* ── Gespräche: KI-Sitzung mobile tuning ─────────────────────────────────────── */
 @media (max-width: 768px) {
   /* Session panel fills full width */
