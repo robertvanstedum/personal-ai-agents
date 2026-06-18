@@ -2525,6 +2525,17 @@ body.reading-mode nav {
     max-height: 220px;
   }
   .persona-detail { max-height: none; }
+
+  /* Break out of fixed-height grid on mobile so the page scrolls naturally */
+  #pane-ki-personas .ueben-layout {
+    height: auto;
+    min-height: unset;
+    overflow: visible;
+  }
+  #pane-ki-personas .persona-detail {
+    height: auto;
+    overflow-y: visible;
+  }
 }
 
 /* ── Gespräche — transcript + feedback + session list ── */
