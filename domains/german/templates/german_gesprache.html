@@ -57,7 +57,6 @@
             </div>
           </div>
           <p class="detail-description" id="detail-description"></p>
-          <button class="detail-mehr-btn" id="detail-description-mehr" style="display:none">mehr ▾</button>
 
           <div class="scene-list" id="scene-list"></div>
 
@@ -76,32 +75,22 @@
               </select>
             </div>
             <div class="prompt-actions">
-              <div class="prompt-action-group">
-                <div class="prompt-action-label">Extern — Grok, Claude…</div>
-                <div class="prompt-action-btns">
-                  <button class="btn-delivery btn-copy-primary" id="btn-copy"
-                          title="Prompt in die Zwischenablage kopieren — kein App-Wechsel">
-                    📋 Prompt kopieren
-                  </button>
-                  <button class="btn-delivery" id="btn-telegram"
-                          title="Kopiert den Prompt und öffnet Telegram — dort einfügen">
-                    ✈ Telegram
-                  </button>
-                  <button class="btn-delivery" id="btn-download"
-                          title="Speichert den vollständigen Prompt als Textdatei">
-                    💾 Als .txt
-                  </button>
-                </div>
-              </div>
-              <div class="prompt-action-group">
-                <div class="prompt-action-label">Im Browser</div>
-                <div class="prompt-action-btns">
-                  <button class="btn-session-start" id="start-session-btn"
-                          title="Startet die KI-Sitzung direkt im Browser">
-                    ▶ Im Browser
-                  </button>
-                </div>
-              </div>
+              <button class="btn-session-start" id="start-session-btn"
+                      title="Startet die KI-Sitzung direkt im Browser">
+                ▶ Sitzung starten
+              </button>
+              <button class="btn-delivery" id="btn-copy"
+                      title="Prompt in die Zwischenablage kopieren — kein App-Wechsel">
+                📋 Prompt kopieren
+              </button>
+              <button class="btn-delivery" id="btn-telegram"
+                      title="Kopiert den Prompt und öffnet Telegram — dort einfügen">
+                ✈ Telegram
+              </button>
+              <button class="btn-delivery" id="btn-download"
+                      title="Speichert den vollständigen Prompt als Textdatei">
+                💾 Als .txt
+              </button>
             </div>
             <div class="prompt-toast" id="prompt-toast" style="display:none"></div>
           </div>
@@ -374,13 +363,6 @@ document.body.classList.add('parch-mode');
   document.getElementById('btn-tab-personas').addEventListener('click', () => switchTab('personas'));
   document.getElementById('btn-tab-konversation').addEventListener('click', () => switchTab('konversation'));
 
-  document.getElementById('detail-description-mehr').addEventListener('click', () => {
-    const desc = document.getElementById('detail-description');
-    const btn  = document.getElementById('detail-description-mehr');
-    const expanded = desc.classList.toggle('expanded');
-    btn.textContent = expanded ? 'weniger ▴' : 'mehr ▾';
-  });
-
   // ── Reset to resting state (clears session + analysis, keeps persona) ────────
 
   function resetToRestingState() {
@@ -458,19 +440,7 @@ document.body.classList.add('parch-mode');
     document.getElementById('detail-avatar').textContent = p.emoji || p.name[0];
     document.getElementById('detail-name').textContent = p.name;
     document.getElementById('detail-role').textContent = p.role;
-    const descEl = document.getElementById('detail-description');
-    descEl.textContent = p.description || '';
-    descEl.classList.remove('expanded');
-    const mehrBtn = document.getElementById('detail-description-mehr');
-    if (mehrBtn) {
-      mehrBtn.style.display = 'none';
-      mehrBtn.textContent = 'mehr ▾';
-      if (window.innerWidth <= 768) {
-        requestAnimationFrame(() => {
-          if (descEl.scrollHeight > descEl.clientHeight + 2) mehrBtn.style.display = '';
-        });
-      }
-    }
+    document.getElementById('detail-description').textContent = p.description || '';
 
     const sceneList = document.getElementById('scene-list');
     sceneList.innerHTML = '';
