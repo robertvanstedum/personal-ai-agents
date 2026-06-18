@@ -4176,6 +4176,59 @@ body.archiv-mode .page {
   }
 }
 
+/* ── Gespräche: prompt collapse block ───────────────────────────────────────── */
+
+.prompt-details-block {
+  margin-bottom: 0.5rem;
+}
+.prompt-details-summary {
+  font-size: 0.8rem;
+  color: var(--md-text-secondary);
+  cursor: pointer;
+  padding: 0.3rem 0;
+  user-select: none;
+  list-style: none;
+}
+.prompt-details-summary::-webkit-details-marker { display: none; }
+.prompt-details-summary::before {
+  content: '▾ ';
+  font-size: 0.75rem;
+}
+.prompt-details-block[open] .prompt-details-summary::before { content: '▴ '; }
+
+/* ── Gespräche: session card transcript expand ───────────────────────────────── */
+
+.session-card-transcript-wrap {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--md-parch-deep);
+}
+.session-card-transcript-text {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--md-text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  line-height: 1.55;
+}
+
+.btn-session-card-transcript {
+  padding: 0.3rem 0.65rem;
+  min-height: 44px;
+  border: 1px solid var(--md-parch-deep);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--md-text-secondary);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  white-space: nowrap;
+}
+.btn-session-card-transcript:hover { border-color: var(--md-accent); color: var(--md-accent); }
+
 /* ── Gespräche: session saved cards ─────────────────────────────────────────── */
 
 #session-cards-list {

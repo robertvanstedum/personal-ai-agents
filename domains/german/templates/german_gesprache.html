@@ -61,7 +61,10 @@
           <div class="scene-list" id="scene-list"></div>
 
           <div class="prompt-delivery" id="prompt-delivery">
-            <div class="prompt-text" id="prompt-text" contenteditable="true" style="display:none"></div>
+            <details id="prompt-details" class="prompt-details-block" style="display:none">
+              <summary class="prompt-details-summary">Prompt anzeigen</summary>
+              <div class="prompt-text" id="prompt-text" contenteditable="true"></div>
+            </details>
             <!-- Model selector — visible before session starts -->
             <div class="gesprache-model-row" style="margin-bottom:0.75rem">
               <label class="gesprache-model-label">Modell</label>
@@ -126,7 +129,7 @@
           <div id="session-cards-list"></div>
 
           <details class="nach-sitzung-details" id="transcript-details">
-            <summary class="session-brief-summary">✏️ Nach der Sitzung</summary>
+            <summary class="session-brief-summary">Transkript einfügen ▾</summary>
             <div class="nach-sitzung-body">
               <div id="transcript-input-wrap">
                 <!-- Voice recording controls -->
@@ -377,6 +380,10 @@ document.body.classList.add('parch-mode');
     if (cardsList) cardsList.innerHTML = '';
     savedSessions = [];
     sessionRound = 0;
+    const promptDetails = document.getElementById('prompt-details');
+    if (promptDetails) { promptDetails.style.display = 'none'; promptDetails.open = false; }
+    const transcriptDetails = document.getElementById('transcript-details');
+    if (transcriptDetails) { transcriptDetails.style.display = ''; transcriptDetails.removeAttribute('open'); }
     if (detail) detail.scrollTop = 0;
     if (window.innerWidth <= 768) {
       requestAnimationFrame(() => {
@@ -450,7 +457,7 @@ document.body.classList.add('parch-mode');
           selectedSceneKey = 'warm_up_' + i;
           const ptEl = document.getElementById('prompt-text');
           ptEl.textContent = variant;
-          ptEl.style.display = '';
+          document.getElementById('prompt-details').style.display = '';
           document.getElementById('prompt-delivery').style.display = '';
           fetchAndStorePrompt(p.slug, 'warm_up_' + i);
         });
@@ -467,7 +474,7 @@ document.body.classList.add('parch-mode');
           selectedSceneKey = key;
           const ptEl = document.getElementById('prompt-text');
           ptEl.textContent = prompts[key];
-          ptEl.style.display = '';
+          document.getElementById('prompt-details').style.display = '';
           document.getElementById('prompt-delivery').style.display = '';
           fetchAndStorePrompt(p.slug, key);
         });
@@ -619,6 +626,8 @@ document.body.classList.add('parch-mode');
       toast.textContent = 'Manuell kopieren — Text oben markieren und kopieren';
       toast.style.display = 'block';
       setTimeout(() => { toast.style.display = 'none'; }, 3000);
+      const pd = document.getElementById('prompt-details');
+      if (pd) { pd.style.display = ''; pd.open = true; }
       document.getElementById('prompt-text').focus();
     }
   });
@@ -812,9 +821,21 @@ document.body.classList.add('parch-mode');
     card.innerHTML =
       `<div class="session-saved-meta">✓ ${session.personaName} · Runde ${session.round} · ${session.turns} Züge · ${dur}</div>` +
       `<div class="session-saved-actions">` +
+        `<button class="btn-session-card-transcript">Transkript ▾</button>` +
         `<button class="btn-session-card-delete" title="Sitzung löschen">✕</button>` +
         `<button class="btn-session-card-analyse">Analysieren →</button>` +
+      `</div>` +
+      `<div class="session-card-transcript-wrap" style="display:none">` +
+        `<pre class="session-card-transcript-text">${session.transcript}</pre>` +
       `</div>`;
+
+    card.querySelector('.btn-session-card-transcript').addEventListener('click', () => {
+      const wrap = card.querySelector('.session-card-transcript-wrap');
+      const btn  = card.querySelector('.btn-session-card-transcript');
+      const open = wrap.style.display !== 'none';
+      wrap.style.display = open ? 'none' : '';
+      btn.textContent = open ? 'Transkript ▾' : 'Transkript ▲';
+    });
 
     card.querySelector('.btn-session-card-delete').addEventListener('click', () => {
       if (confirm('Diese Sitzung löschen?')) {
@@ -862,12 +883,23 @@ document.body.classList.add('parch-mode');
       const data = await doSubmit(1);
       session.feedbackData = data.feedback;
 
-      // Collapse card to summary row with anzeigen link
+      // Collapse card to summary row with anzeigen + transkript links
       card.innerHTML =
         `<div class="session-saved-meta session-saved-analysiert">` +
           `✓ Analysiert — ${session.personaName} · ${formatDuration(session.durationMs)}` +
-          ` <button class="btn-session-card-anzeigen">anzeigen</button>` +
+          ` <button class="btn-session-card-anzeigen">Feedback</button>` +
+          ` <button class="btn-session-card-anzeigen btn-session-card-transcript-post">Transkript ▾</button>` +
+        `</div>` +
+        `<div class="session-card-transcript-wrap" style="display:none">` +
+          `<pre class="session-card-transcript-text">${session.transcript}</pre>` +
         `</div>`;
+      card.querySelector('.btn-session-card-transcript-post').addEventListener('click', () => {
+        const wrap = card.querySelector('.session-card-transcript-wrap');
+        const btn  = card.querySelector('.btn-session-card-transcript-post');
+        const open = wrap.style.display !== 'none';
+        wrap.style.display = open ? 'none' : '';
+        btn.textContent = open ? 'Transkript ▾' : 'Transkript ▲';
+      });
       card.querySelector('.btn-session-card-anzeigen').addEventListener('click', () => {
         renderFeedback(session.feedbackData);
         requestAnimationFrame(() => {
@@ -1040,6 +1072,10 @@ document.body.classList.add('parch-mode');
     startSessionBtn.style.display = '';
     startSessionBtn.disabled = false;
     document.getElementById('persona-detail').classList.remove('session-active');
+
+    // Hide paste panel — session card is the transcript for Path B
+    const transcriptDetailsEl = document.getElementById('transcript-details');
+    if (transcriptDetailsEl) transcriptDetailsEl.style.display = 'none';
 
     if (sessionTranscript.length > 0) {
       sessionRound++;
