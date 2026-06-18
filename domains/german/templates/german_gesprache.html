@@ -419,7 +419,7 @@ document.body.classList.add('parch-mode');
 
   // ── Persona selection ──────────────────────────────────────────────────────
 
-  function selectPersona(idx) {
+  function selectPersona(idx, { scroll = true } = {}) {
     const p = personas[idx];
     if (!p) return;
     // Exit session or analysis state when switching persona
@@ -487,7 +487,7 @@ document.body.classList.add('parch-mode');
     }
 
     // On mobile the detail panel stacks below the list — scroll it into view
-    if (window.innerWidth <= 768) {
+    if (scroll && window.innerWidth <= 768) {
       requestAnimationFrame(() => {
         document.getElementById('persona-detail')
           .scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1705,7 +1705,7 @@ document.body.classList.add('parch-mode');
 
   // ── Init ──────────────────────────────────────────────────────────────────
 
-  if (personas.length > 0) selectPersona(0);
+  if (personas.length > 0) selectPersona(0, { scroll: false });
 
   // Restore last tab: URL param → sessionStorage → default KI-Personas
   const _urlTab = new URLSearchParams(window.location.search).get('tab');
