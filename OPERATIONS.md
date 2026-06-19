@@ -93,7 +93,7 @@ Complete map of every process running in production. Update this table whenever 
 | AI observations | Hourly 6 AM–6 PM (idempotent) | `com.vanstedum.curator-intelligence` | `run_intelligence_cron.sh` | EC2 cron (Phase 2) |
 | Priority feed | Hourly 6 AM–6 PM (idempotent) | `com.vanstedum.curator-priority-feed` | `run_priority_feed_cron.sh` | EC2 cron (Phase 2) |
 | Lesen refresh | Hourly | `com.vanstedum.lesen-refresh` | `run_lesen_refresh.sh` | EC2 cron (Phase 2) |
-| Private repo sync | Nightly 02:00 | `com.user.private-sync` | `scripts/sync_private_repo.sh` | Stay local |
+| Private repo sync | Nightly 02:00 | `com.user.private-sync` | `scripts/sync_private_repo.sh` | Stay local — see [Private Repository](#private-repository-mini-moi-private) |
 
 ### Telegram bots
 
@@ -728,6 +728,57 @@ launchctl kickstart -k gui/$(id -u)/com.vanstedum.cloudflared
 OpenClaw is the planning and documentation agent. It runs as a persistent gateway process and connects to `minimoi_agent_bot` for Telegram commands. It manages files in this repo (memory files, specs, issue drafts) but does not write implementation code.
 
 Logs: `~/Library/Logs/openclaw/gateway.log`
+
+---
+
+## Private Repository (`mini-moi-private`)
+
+**Repo:** `github.com/robertvanstedum/mini-moi-private` (private)
+**Local clone:** `~/Projects/mini-moi-private`
+**Purpose:** Sensitive and personal data layer for mini-moi. Keeps private data out of the public `personal-ai-agents` repo.
+
+### Data privacy policy
+
+**Public repo (`personal-ai-agents`)** — code only. No personal data, no memory files, no learning history, no agent context that contains private information. Safe to be public.
+
+**Private repo (`mini-moi-private`)** — everything that should not be on public GitHub:
+- Agent memory files (`cos_memory.md`, `ops_memory.md`, `devagent_memory.md`)
+- Guild config with personal context (`cos_context.json`, `cos_agenda.json`)
+- Curator daily output and personal signal data (`curator_signals.json`, `curator_latest.*`, `curator_radar.json`)
+- German learning sessions, Anki cards, lessons, progress
+- `_working/archive/` — archived planning docs
+
+### Sync mechanism
+
+A nightly launchd job copies changed files from `personal-ai-agents` to the local `mini-moi-private` clone and pushes to GitHub.
+
+| Item | Detail |
+|------|--------|
+| Script | `scripts/sync_private_repo.sh` |
+| Plist | `~/Library/LaunchAgents/com.user.private-sync.plist` |
+| Schedule | Nightly at 02:00 local (≈ 07:00 UTC) |
+| Mechanism | rsync for directories, diff-then-copy for files; commits only if something changed |
+| Log | `logs/private_sync_stdout.log`, `logs/private_sync_stderr.log` |
+
+The script pulls from `mini-moi-private` before writing (safe for manual runs). It does **not** sync back the other way — `personal-ai-agents` is always the source of truth for code.
+
+### Manual sync
+
+```bash
+# Dry run — see what would change without committing
+./scripts/sync_private_repo.sh --dry-run
+
+# Live sync
+./scripts/sync_private_repo.sh
+```
+
+### If the private repo clone is missing
+
+```bash
+cd ~/Projects && git clone git@github.com:robertvanstedum/mini-moi-private.git
+```
+
+The launchd job will fail silently (exit 1) until the clone exists.
 
 ---
 
