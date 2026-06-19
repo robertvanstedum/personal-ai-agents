@@ -20,44 +20,50 @@
     .guild-nav-brand { height: 44px; display: flex; align-items: center; padding: 0 1.5rem; font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); letter-spacing: 0.08em; }
     .guild-nav-brand a { color: #C68A5E; text-decoration: none; }
     .guild-nav-brand a:hover { color: #ffffff; }
-    .guild-nav-brand a.nav-active { color: #ffffff; font-weight: 700; }
     .nav-sep { color: rgba(255,255,255,0.2); margin: 0 12px; }
     .guild-subnav { height: 36px; display: flex; align-items: center; padding: 0 1.5rem; border-top: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.15); }
     .subnav-link { font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); text-transform: uppercase; letter-spacing: 0.08em; color: rgba(198,138,94,0.7); text-decoration: none; padding: 0 12px; height: 36px; display: flex; align-items: center; border-bottom: 2px solid transparent; }
     .subnav-link:hover { color: #C68A5E; }
     .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; font-weight: 700; }
+    .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
 
-    .page-header { padding: 24px 32px 16px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
-    .page-title { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 400; }
+    .page-header { padding: 20px 32px 12px; display: flex; align-items: baseline; gap: 14px; }
+    .page-title { font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 400; }
     .page-meta { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); }
 
-    .docs-body { max-width: 860px; margin: 0 auto; padding: 0 32px 48px; }
+    .docs-body { max-width: 960px; margin: 0 auto; padding: 0 32px 48px; display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px; }
+    .docs-body .dr-section { grid-column: 1 / -1; }
 
-    .docs-section { margin-bottom: 40px; }
-    .docs-section-header {
+    /* section */
+    .docs-section { margin-bottom: 28px; }
+    .section-head {
       font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
       letter-spacing: 0.12em; color: var(--text-dim);
-      padding-bottom: 8px; margin-bottom: 4px;
+      padding-bottom: 6px; margin-bottom: 2px;
       border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: baseline;
     }
+    .section-count { font-size: 9px; color: var(--text-dim); opacity: 0.7; }
 
-    .doc-entry {
-      display: flex; align-items: baseline; gap: 12px;
-      padding: 12px 0;
-      border-bottom: 1px solid rgba(221,214,200,0.5);
+    /* compact doc row */
+    .doc-row {
+      display: flex; align-items: baseline; justify-content: space-between;
+      padding: 5px 6px;
+      border-radius: 3px;
       text-decoration: none; color: inherit;
+      border-bottom: 1px solid rgba(221,214,200,0.35);
+      gap: 8px;
     }
-    .doc-entry:hover { background: var(--accent-dim); margin: 0 -12px; padding-left: 12px; padding-right: 12px; border-radius: 4px; }
-    .doc-entry:last-child { border-bottom: none; }
-    .doc-main { flex: 1; min-width: 0; }
-    .doc-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
-    .doc-entry:hover .doc-title { color: var(--accent); }
-    .doc-subtitle { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .doc-filename { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); margin-top: 2px; }
-    .doc-date { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; }
+    .doc-row:hover { background: var(--accent-dim); }
+    .doc-row:last-child { border-bottom: none; }
+    .doc-name { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+    .doc-row:hover .doc-name { color: var(--accent); }
+    .doc-file { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-dim); white-space: nowrap; }
+    .doc-date { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; }
 
+    /* decision records block — full width */
     .dr-block {
-      padding: 16px;
+      padding: 14px 16px;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 6px;
@@ -67,8 +73,7 @@
     .dr-label { font-size: 13px; color: var(--text-muted); }
     .dr-label strong { color: var(--text); display: block; margin-bottom: 2px; }
     .dr-link {
-      margin-left: auto;
-      font-family: 'DM Mono', monospace; font-size: 11px;
+      margin-left: auto; font-family: 'DM Mono', monospace; font-size: 11px;
       color: var(--accent); text-decoration: none;
       border: 1px solid var(--border); border-radius: 4px; padding: 6px 12px;
     }
@@ -83,10 +88,13 @@
     <a href="/guild/build/queue">BUILD</a>
   </div>
   <div class="guild-subnav">
-    <a href="/guild/build/queue"  class="subnav-link">Queue</a>
-    <a href="/guild/build"        class="subnav-link">Build Log</a>
+    <a href="/guild/build/queue"   class="subnav-link">Queue</a>
+    <span class="subnav-dot">&nbsp;·&nbsp;</span>
+    <a href="/guild/build"         class="subnav-link">Build Log</a>
+    <span class="subnav-dot">&nbsp;·&nbsp;</span>
     <a href="/guild/build/roadmap" class="subnav-link">Roadmap</a>
-    <a href="/guild/docs"         class="subnav-link subnav-active">Docs</a>
+    <span class="subnav-dot">&nbsp;·&nbsp;</span>
+    <a href="/guild/docs"          class="subnav-link subnav-active">Docs</a>
   </div>
 </nav>
 
@@ -97,26 +105,25 @@
 
 <div class="docs-body">
 
-  {% for group in ['Reference', 'Process', 'Domain docs', 'Other'] %}
+  {% for group in ['Core', 'Curator', 'German', 'Guild', 'Infrastructure', 'Process', 'Portfolio', 'Releases'] %}
     {% if entries.get(group) %}
     <div class="docs-section">
-      <div class="docs-section-header">{{ group }}</div>
+      <div class="section-head">
+        <span>{{ group }}</span>
+        <span class="section-count">{{ entries[group] | length }}</span>
+      </div>
       {% for doc in entries[group] %}
-      <a href="/guild/docs/{{ doc.filename }}" class="doc-entry">
-        <div class="doc-main">
-          <div class="doc-title">{{ doc.title }}</div>
-          {% if doc.subtitle %}<div class="doc-subtitle">{{ doc.subtitle }}</div>{% endif %}
-          <div class="doc-filename">docs/{{ doc.filename }}</div>
-        </div>
-        {% if doc.date %}<div class="doc-date">{{ doc.date }}</div>{% endif %}
+      <a href="/guild/docs/{{ doc.filename }}" class="doc-row">
+        <span class="doc-name">{{ doc.title }}</span>
+        <span class="doc-date">{{ doc.date or '' }}</span>
       </a>
       {% endfor %}
     </div>
     {% endif %}
   {% endfor %}
 
-  <div class="docs-section">
-    <div class="docs-section-header">Decision Records</div>
+  <div class="docs-section dr-section">
+    <div class="section-head"><span>Decision Records</span><span class="section-count">{{ dr_count }}</span></div>
     <div class="dr-block">
       <div class="dr-count">{{ dr_count }}</div>
       <div class="dr-label">

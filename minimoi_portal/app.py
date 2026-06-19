@@ -1492,17 +1492,36 @@ def _docs_read_meta(path: Path) -> dict:
                      if l.strip() and not l.startswith("#")), "")
     return {"title": title, "subtitle": subtitle}
 
+_DOCS_CORE = {
+    "ROADMAP.md", "SERVICES.md", "WORKSPACE-SETUP.md",
+    "LLM_REGISTRY.md", "GERMAN.md", "GUILD.md", "DB_SCHEMA.md",
+}
+
 def _docs_group_files(files):
-    groups = {"Reference": [], "Process": [], "Domain docs": [], "Other": []}
+    order = ["Core", "Curator", "German", "Guild", "Infrastructure", "Process", "Portfolio", "Releases"]
+    groups = {k: [] for k in order}
     for f in files:
         n = f.name
-        if any(n.startswith(p) for p in ("DECISION_RECORD", "DESIGN_SESSION", "HANDOFF")):
+        parent = f.parent.name
+        if n in _DOCS_CORE:
+            groups["Core"].append(f)
+        elif parent == "releases" or "_RELEASE" in n:
+            groups["Releases"].append(f)
+        elif parent in ("portfolio", "test-reports") or n.startswith(("CASE_STUDY", "CASE-STUDY", "AI_TOOLS", "CURATOR_ENHANCEMENT", "phase3c")):
+            groups["Portfolio"].append(f)
+        elif n.startswith(("GERMAN", "GESPRACHE", "LANGUAGE_CASE")):
+            groups["German"].append(f)
+        elif n.startswith(("GUILD", "COS_", "OPS_")):
+            groups["Guild"].append(f)
+        elif n.startswith(("CURATOR", "curator", "BUILD_WS", "PLAN_WS", "PLAN_Cost", "FEATURE_", "INTELLIGENCE_", "DESIGN_SESSION_INTEL", "NEXT_PHASE")):
+            groups["Curator"].append(f)
+        elif n.startswith(("DECISION_RECORD", "DESIGN_SESSION_PROMPT", "HANDOFF", "DESIGN_UI", "OPENCLAW")):
             groups["Process"].append(f)
-        elif any(s in n for s in ("_RELEASE", "PRODUCT_DESCRIPTION")) or f.parent.name == "releases":
-            groups["Domain docs"].append(f)
+        elif n.startswith(("AWS_", "CODE_", "LEARNING_", "PLAN_")) or parent in ("poc", "design"):
+            groups["Infrastructure"].append(f)
         else:
-            groups["Reference"].append(f)
-    return groups
+            groups["Infrastructure"].append(f)
+    return {k: v for k, v in groups.items() if v}
 
 def _dr_parse_frontmatter(path: Path) -> dict:
     try:
@@ -1529,8 +1548,14 @@ def _dr_parse_frontmatter(path: Path) -> dict:
 @_require_owner
 def guild_docs():
     try:
+        _skip = _DR_DIR.resolve()
         files = sorted(
-            [f for f in _DOCS_DIR.iterdir() if f.is_file() and f.suffix == ".md"],
+            [
+                f for f in _DOCS_DIR.rglob("*.md")
+                if f.is_file()
+                and not str(f.resolve()).startswith(str(_skip))
+                and f.name != "README.md"
+            ],
             key=lambda f: f.name
         )
     except Exception:
@@ -1541,11 +1566,11 @@ def guild_docs():
         entries[group] = []
         for f in gfiles:
             meta = _docs_read_meta(f)
+            rel = str(f.relative_to(_DOCS_DIR))
             entries[group].append({
-                "filename": f.name,
+                "filename": rel,
                 "title": meta["title"],
-                "subtitle": meta["subtitle"],
-                "date": _docs_git_date(f"docs/{f.name}"),
+                "date": _docs_git_date(f"docs/{rel}"),
             })
     dr_count = len([f for f in _DR_DIR.iterdir()
                     if f.is_file() and f.suffix == ".md" and f.name != "README.md"]) \
