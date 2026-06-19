@@ -1465,6 +1465,141 @@ def new_build_item():
     return redirect(url_for('guild_build'))
 
 
+# ── Guild Docs ────────────────────────────────────────────────────────────────
+
+_DOCS_DIR = Path(__file__).parent.parent / "docs"
+_DR_DIR   = _DOCS_DIR / "decision-records"
+
+def _docs_git_date(rel_path: str) -> str | None:
+    try:
+        r = subprocess.run(
+            ["git", "log", "-1", "--format=%ci", rel_path],
+            capture_output=True, text=True,
+            cwd=str(Path(__file__).parent.parent)
+        )
+        return r.stdout.strip()[:10] if r.stdout.strip() else None
+    except Exception:
+        return None
+
+def _docs_read_meta(path: Path) -> dict:
+    """Return {title, subtitle} from the first two lines of a markdown file."""
+    try:
+        lines = path.read_text().splitlines()
+    except Exception:
+        return {"title": path.stem, "subtitle": ""}
+    title = next((l.lstrip("# ").strip() for l in lines if l.startswith("# ")), path.stem)
+    subtitle = next((l.lstrip("*").rstrip("*").strip() for l in lines[1:6]
+                     if l.strip() and not l.startswith("#")), "")
+    return {"title": title, "subtitle": subtitle}
+
+def _docs_group_files(files):
+    groups = {"Reference": [], "Process": [], "Domain docs": [], "Other": []}
+    for f in files:
+        n = f.name
+        if any(n.startswith(p) for p in ("DECISION_RECORD", "DESIGN_SESSION", "HANDOFF")):
+            groups["Process"].append(f)
+        elif any(s in n for s in ("_RELEASE", "PRODUCT_DESCRIPTION")) or f.parent.name == "releases":
+            groups["Domain docs"].append(f)
+        else:
+            groups["Reference"].append(f)
+    return groups
+
+def _dr_parse_frontmatter(path: Path) -> dict:
+    try:
+        text = path.read_text()
+    except Exception:
+        return {}
+    if not text.startswith("---"):
+        return {}
+    end = text.find("---", 3)
+    if end == -1:
+        return {}
+    fm = {}
+    for line in text[3:end].splitlines():
+        if ":" in line:
+            k, _, v = line.partition(":")
+            fm[k.strip()] = v.strip()
+    title = next((l.lstrip("# ").strip() for l in text[end+3:].splitlines()
+                  if l.startswith("# ")), path.stem)
+    fm["title"] = title
+    return fm
+
+
+@app.route("/guild/docs")
+@_require_owner
+def guild_docs():
+    try:
+        files = sorted(
+            [f for f in _DOCS_DIR.iterdir() if f.is_file() and f.suffix == ".md"],
+            key=lambda f: f.name
+        )
+    except Exception:
+        files = []
+    groups = _docs_group_files(files)
+    entries = {}
+    for group, gfiles in groups.items():
+        entries[group] = []
+        for f in gfiles:
+            meta = _docs_read_meta(f)
+            entries[group].append({
+                "filename": f.name,
+                "title": meta["title"],
+                "subtitle": meta["subtitle"],
+                "date": _docs_git_date(f"docs/{f.name}"),
+            })
+    dr_count = len([f for f in _DR_DIR.iterdir()
+                    if f.is_file() and f.suffix == ".md" and f.name != "README.md"]) \
+               if _DR_DIR.exists() else 0
+    return render_template("guild/docs_list.html", entries=entries,
+                           dr_count=dr_count, user=_current_user())
+
+
+@app.route("/guild/docs/decisions")
+@_require_owner
+def guild_docs_decisions():
+    drs = []
+    if _DR_DIR.exists():
+        for f in sorted(_DR_DIR.iterdir(), reverse=True):
+            if not f.is_file() or f.suffix != ".md" or f.name == "README.md":
+                continue
+            fm = _dr_parse_frontmatter(f)
+            date = f.name[3:13] if f.name.startswith("dr_") and len(f.name) > 13 else None
+            drs.append({
+                "filename": f"decision-records/{f.name}",
+                "title": fm.get("title", f.stem),
+                "subtitle": fm.get("subtitle", ""),
+                "date": date,
+                "domain": fm.get("domain", ""),
+                "status": fm.get("status", "active"),
+                "dr_type": fm.get("dr-type", "design"),
+                "lora_candidate": fm.get("lora-candidate", "no") == "yes",
+            })
+    return render_template("guild/docs_decisions.html", records=drs, user=_current_user())
+
+
+@app.route("/guild/docs/<path:filename>")
+@_require_owner
+def guild_docs_reader(filename):
+    import markdown as _md
+    # Path traversal guard: resolved path must be inside docs/
+    try:
+        target = (_DOCS_DIR / filename).resolve()
+        if not str(target).startswith(str(_DOCS_DIR.resolve())):
+            return "Not found", 404
+        if not target.exists() or target.suffix != ".md":
+            return "Not found", 404
+    except Exception:
+        return "Not found", 404
+
+    raw = target.read_text()
+    content = _md.markdown(raw, extensions=["fenced_code", "tables"])
+    date = _docs_git_date(f"docs/{filename}")
+    gh_url = f"https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/{filename}"
+    return render_template("guild/docs_reader.html", content=content,
+                           filename=filename, date=date, gh_url=gh_url,
+                           user=_current_user())
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():

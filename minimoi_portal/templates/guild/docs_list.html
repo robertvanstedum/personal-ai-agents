@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Docs — Guild</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/guild.css">
+  <style>
+    :root {
+      --bg: #f5f0e8; --surface: #faf7f2; --surface2: #f0ebe0;
+      --border: #ddd6c8; --text: #2a2418; --text-muted: #6b5f4e;
+      --text-dim: #9e9080; --accent: #8b5e2a; --accent-dim: rgba(139,94,42,0.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+    nav.guild-nav { position: sticky; top: 0; z-index: 100; background: #2a1f14; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .guild-nav-brand { height: 44px; display: flex; align-items: center; padding: 0 1.5rem; font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); letter-spacing: 0.08em; }
+    .guild-nav-brand a { color: #C68A5E; text-decoration: none; }
+    .guild-nav-brand a:hover { color: #ffffff; }
+    .guild-nav-brand a.nav-active { color: #ffffff; font-weight: 700; }
+    .nav-sep { color: rgba(255,255,255,0.2); margin: 0 12px; }
+    .guild-subnav { height: 36px; display: flex; align-items: center; padding: 0 1.5rem; border-top: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.15); }
+    .subnav-link { font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); text-transform: uppercase; letter-spacing: 0.08em; color: rgba(198,138,94,0.7); text-decoration: none; padding: 0 12px; height: 36px; display: flex; align-items: center; border-bottom: 2px solid transparent; }
+    .subnav-link:hover { color: #C68A5E; }
+    .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; font-weight: 700; }
+
+    .page-header { padding: 24px 32px 16px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+    .page-title { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 400; }
+    .page-meta { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); }
+
+    .docs-body { max-width: 860px; margin: 0 auto; padding: 0 32px 48px; }
+
+    .docs-section { margin-bottom: 40px; }
+    .docs-section-header {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.12em; color: var(--text-dim);
+      padding-bottom: 8px; margin-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .doc-entry {
+      display: flex; align-items: baseline; gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(221,214,200,0.5);
+      text-decoration: none; color: inherit;
+    }
+    .doc-entry:hover { background: var(--accent-dim); margin: 0 -12px; padding-left: 12px; padding-right: 12px; border-radius: 4px; }
+    .doc-entry:last-child { border-bottom: none; }
+    .doc-main { flex: 1; min-width: 0; }
+    .doc-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+    .doc-entry:hover .doc-title { color: var(--accent); }
+    .doc-subtitle { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .doc-filename { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+    .doc-date { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; }
+
+    .dr-block {
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .dr-count { font-family: 'Playfair Display', serif; font-size: 2rem; color: var(--accent); line-height: 1; }
+    .dr-label { font-size: 13px; color: var(--text-muted); }
+    .dr-label strong { color: var(--text); display: block; margin-bottom: 2px; }
+    .dr-link {
+      margin-left: auto;
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--accent); text-decoration: none;
+      border: 1px solid var(--border); border-radius: 4px; padding: 6px 12px;
+    }
+    .dr-link:hover { background: var(--accent-dim); }
+  </style>
+</head>
+<body>
+<nav class="guild-nav">
+  <div class="guild-nav-brand">
+    <a href="/guild">GUILD</a>
+    <span class="nav-sep">·</span>
+    <a href="/guild/build/queue">BUILD</a>
+  </div>
+  <div class="guild-subnav">
+    <a href="/guild/build/queue"  class="subnav-link">Queue</a>
+    <a href="/guild/build"        class="subnav-link">Build Log</a>
+    <a href="/guild/build/roadmap" class="subnav-link">Roadmap</a>
+    <a href="/guild/docs"         class="subnav-link subnav-active">Docs</a>
+  </div>
+</nav>
+
+<div class="page-header">
+  <h1 class="page-title">Docs</h1>
+  <span class="page-meta">docs/ · {{ entries.values() | sum(start=[]) | length }} documents</span>
+</div>
+
+<div class="docs-body">
+
+  {% for group in ['Reference', 'Process', 'Domain docs', 'Other'] %}
+    {% if entries.get(group) %}
+    <div class="docs-section">
+      <div class="docs-section-header">{{ group }}</div>
+      {% for doc in entries[group] %}
+      <a href="/guild/docs/{{ doc.filename }}" class="doc-entry">
+        <div class="doc-main">
+          <div class="doc-title">{{ doc.title }}</div>
+          {% if doc.subtitle %}<div class="doc-subtitle">{{ doc.subtitle }}</div>{% endif %}
+          <div class="doc-filename">docs/{{ doc.filename }}</div>
+        </div>
+        {% if doc.date %}<div class="doc-date">{{ doc.date }}</div>{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endfor %}
+
+  <div class="docs-section">
+    <div class="docs-section-header">Decision Records</div>
+    <div class="dr-block">
+      <div class="dr-count">{{ dr_count }}</div>
+      <div class="dr-label">
+        <strong>Decision records committed</strong>
+        docs/decision-records/ · LoRA training candidates
+      </div>
+      <a href="/guild/docs/decisions" class="dr-link">View all →</a>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

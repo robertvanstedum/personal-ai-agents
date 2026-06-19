@@ -240,11 +240,13 @@
   </div>
   <div class="guild-subnav">
     <a href="/guild" class="subnav-back">← Guild</a>
-    <a href="/guild/build" class="subnav-link subnav-active">Build Log</a>
-    <span class="subnav-dot">&nbsp;·&nbsp;</span>
     <a href="/guild/build/queue" class="subnav-link">Queue</a>
     <span class="subnav-dot">&nbsp;·&nbsp;</span>
+    <a href="/guild/build" class="subnav-link subnav-active">Build Log</a>
+    <span class="subnav-dot">&nbsp;·&nbsp;</span>
     <a href="/guild/build/roadmap" class="subnav-link">Roadmap</a>
+    <span class="subnav-dot">&nbsp;·&nbsp;</span>
+    <a href="/guild/docs" class="subnav-link">Docs</a>
   </div>
 </nav>
 
@@ -343,7 +345,10 @@
           <div style="font-size:11px;color:#8b2020;margin-top:3px;">⚠ {{ item.blocked_reason }}</div>
           {% endif %}
           {% if item.status == 'incomplete' %}
-          <div style="font-size:11px;color:#8b5a00;margin-top:3px;">⚠ {{ item.incomplete_reason or 'incomplete spec' }}</div>
+          <div style="margin-top:5px;display:flex;align-items:flex-start;gap:6px;">
+            <button class="check-btn" onclick="runCheck({{ item.id }}, this)" style="font-size:10px;padding:2px 7px;border:1px solid #c8a060;border-radius:3px;background:rgba(139,90,0,0.07);color:#8b5a00;cursor:pointer;white-space:nowrap;">why incomplete?</button>
+            <div id="check-result-{{ item.id }}" style="font-size:10px;color:#8b5a00;line-height:1.5;"></div>
+          </div>
           {% endif %}
         </td>
         <td>
@@ -423,6 +428,27 @@ function toggleHistRow(id) {
   const showing = r.style.display === 'table-row';
   r.style.display = showing ? 'none' : 'table-row';
   if (!showing) loadLogHistory(id);
+}
+function runCheck(id, btn) {
+  const out = document.getElementById('check-result-' + id);
+  btn.disabled = true;
+  btn.textContent = 'checking…';
+  fetch('/guild/build/items/' + id + '/check')
+    .then(r => r.json())
+    .then(data => {
+      if (data.error && !data.failures) {
+        out.textContent = '⚠ ' + data.error;
+      } else if (data.failures && data.failures.length) {
+        out.innerHTML = data.failures.map(f => '• ' + f).join('<br>');
+        if (data.stale) out.innerHTML += '<br><em style="color:var(--text-dim)">File now passes — refresh status to update.</em>';
+      } else {
+        out.innerHTML = '✓ File passes checks now' + (data.stale ? ' — status is stale, flip to spec_ready' : '');
+        out.style.color = 'var(--text-dim)';
+      }
+      btn.textContent = 're-check';
+      btn.disabled = false;
+    })
+    .catch(() => { out.textContent = 'unavailable'; btn.textContent = 're-check'; btn.disabled = false; });
 }
 function loadLogHistory(id) {
   const el = document.getElementById('lhist-' + id);

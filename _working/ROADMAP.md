@@ -39,13 +39,19 @@
 | · Phase 2 · LoRA training | Phase 2 | target | |
 | · Phase 3 · local-first | Phase 3 | target | |
 | **AWS Migration** | | | AWS_MIGRATION_PLAN.md |
-| · Phase 0 · Containerization | Phase 0 | in_progress | |
+| · Phase 0 · Containerization | Phase 0 | spec_ready | |
 | · Phase 1 · AWS Foundation | Phase 1 | target | |
 | · Phase 2 · Cloud deployment | Phase 2 | target | |
 | · Phase 3 · CI/CD pipeline | Phase 3 | target | |
 | · Phase 4 · Data layer (RDS + S3) | Phase 4 | target | |
 | · Phase 5 · GPU instance (local LLM) | Phase 5 | target | |
-| · Phase 6 · Hardening | Phase 6 | target | |
+| · Phase 6 · Hardening + Monitoring | Phase 6 | target | |
+| **Code Quality Review** | | | CODE_REVIEW_PLAN.md |
+| · Phase 0 · Hardcoded paths + secrets | parallel to AWS Phase 0 | spec_ready | spec_code_review_phase0_2026-06-19.md |
+| · Phase 1-2 · Error handling + auth | parallel to AWS Phase 1-2 | target | |
+| · Phase 3-4 · Performance + dead code | parallel to AWS Phase 3-4 | target | |
+| **Monitoring Stack** | | | spec_monitoring_stack_2026-06-18.md |
+| · Sentry + Prometheus + Grafana + CloudWatch | AWS Phase 6 | spec_ready | spec_monitoring_stack_2026-06-18.md |
 
 ### Discussion — not yet agreed
 
@@ -82,6 +88,7 @@
 | Career focus editor | v1 | queued | spec_guild_career_focus_editor |
 | Roadmap view maturity | v1 | done | this spec |
 | Decisions view | v1 | target | dr_decision_record_practice_mvp |
+| Docs browser | v1 | done | spec_guild_docs_view_2026-06-19.md |
 
 ### Discussion — not yet agreed
 

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Decision Records — Guild</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/guild.css">
+  <style>
+    :root {
+      --bg: #f5f0e8; --surface: #faf7f2; --surface2: #f0ebe0;
+      --border: #ddd6c8; --text: #2a2418; --text-muted: #6b5f4e;
+      --text-dim: #9e9080; --accent: #8b5e2a; --accent-dim: rgba(139,94,42,0.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+    nav.guild-nav { position: sticky; top: 0; z-index: 100; background: #2a1f14; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .guild-nav-brand { height: 44px; display: flex; align-items: center; padding: 0 1.5rem; font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); letter-spacing: 0.08em; }
+    .guild-nav-brand a { color: #C68A5E; text-decoration: none; }
+    .guild-nav-brand a:hover { color: #fff; }
+    .nav-sep { color: rgba(255,255,255,0.2); margin: 0 12px; }
+    .guild-subnav { height: 36px; display: flex; align-items: center; padding: 0 1.5rem; border-top: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.15); gap: 4px; }
+    .subnav-link { font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); text-transform: uppercase; letter-spacing: 0.08em; color: rgba(198,138,94,0.7); text-decoration: none; padding: 0 12px; height: 36px; display: flex; align-items: center; border-bottom: 2px solid transparent; }
+    .subnav-link:hover { color: #C68A5E; }
+    .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; font-weight: 700; }
+
+    .page-header { padding: 24px 32px 16px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+    .page-title { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 400; }
+    .page-meta { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); }
+
+    .dr-body { max-width: 960px; margin: 0 auto; padding: 0 32px 48px; }
+
+    /* filter bar */
+    .filter-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+    .filter-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; }
+    .filter-pill { font-family: 'DM Mono', monospace; font-size: 11px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; cursor: pointer; color: var(--text-muted); transition: all 0.15s; }
+    .filter-pill:hover { border-color: var(--accent); color: var(--accent); }
+    .filter-pill.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+    /* DR table */
+    .dr-table { width: 100%; border-collapse: collapse; }
+    .dr-table thead th {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-dim);
+      padding: 8px 12px; border-bottom: 1px solid var(--border);
+      text-align: left; white-space: nowrap;
+    }
+    .dr-row { cursor: pointer; }
+    .dr-row:hover td { background: var(--accent-dim); }
+    .dr-row td { padding: 12px; border-bottom: 1px solid rgba(221,214,200,0.5); vertical-align: middle; }
+    .dr-row:last-child td { border-bottom: none; }
+
+    .dr-date { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+    .dr-title { font-size: 14px; font-weight: 600; color: var(--text); }
+    .dr-row:hover .dr-title { color: var(--accent); }
+    .dr-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .dr-domain { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+
+    .badge { display: inline-block; font-family: 'DM Mono', monospace; font-size: 10px; border-radius: 4px; padding: 2px 7px; white-space: nowrap; }
+    .badge-active    { background: rgba(34,100,34,0.08); color: #2a5a2a; border: 1px solid rgba(34,100,34,0.2); }
+    .badge-cancelled { background: rgba(150,60,60,0.08); color: #6a2a2a; border: 1px solid rgba(150,60,60,0.2); }
+    .badge-superseded { background: rgba(100,80,30,0.08); color: #5a4a1a; border: 1px solid rgba(100,80,30,0.2); }
+    .badge-lora      { background: rgba(139,94,42,0.1); color: var(--accent); border: 1px solid rgba(139,94,42,0.25); }
+
+    .empty { padding: 40px; text-align: center; color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 12px; }
+  </style>
+</head>
+<body>
+<nav class="guild-nav">
+  <div class="guild-nav-brand">
+    <a href="/guild">GUILD</a>
+    <span class="nav-sep">·</span>
+    <a href="/guild/build/queue">BUILD</a>
+  </div>
+  <div class="guild-subnav">
+    <a href="/guild/build/queue"   class="subnav-link">Queue</a>
+    <a href="/guild/build"         class="subnav-link">Build Log</a>
+    <a href="/guild/build/roadmap" class="subnav-link">Roadmap</a>
+    <a href="/guild/docs"          class="subnav-link subnav-active">Docs</a>
+  </div>
+</nav>
+
+<div class="page-header">
+  <h1 class="page-title">Decision Records</h1>
+  <span class="page-meta">{{ records | length }} records{% if records %} · most recent {{ records[0].date }}{% endif %}</span>
+</div>
+
+<div class="dr-body">
+
+  <div class="filter-bar">
+    <span class="filter-label">Filter:</span>
+    <button class="filter-pill active" data-filter="all" onclick="setFilter('all', this)">All</button>
+    <button class="filter-pill" data-filter="german" onclick="setFilter('german', this)">German</button>
+    <button class="filter-pill" data-filter="platform" onclick="setFilter('platform', this)">Platform</button>
+    <button class="filter-pill" data-filter="guild" onclick="setFilter('guild', this)">Guild</button>
+    <button class="filter-pill" data-filter="active" onclick="setFilter('active', this)">Active</button>
+    <button class="filter-pill" data-filter="lora" onclick="setFilter('lora', this)">LoRA</button>
+  </div>
+
+  <table class="dr-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Decision</th>
+        <th>Domain</th>
+        <th>Status</th>
+        <th>LoRA</th>
+      </tr>
+    </thead>
+    <tbody id="dr-tbody">
+      {% for r in records %}
+      <tr class="dr-row"
+          data-domain="{{ r.domain | lower }}"
+          data-status="{{ r.status | lower }}"
+          data-lora="{{ 'yes' if r.lora_candidate else 'no' }}"
+          onclick="window.location='/guild/docs/decision-records/{{ r.filename }}'">
+        <td class="dr-date">{{ r.date }}</td>
+        <td>
+          <div class="dr-title">{{ r.title }}</div>
+          {% if r.subtitle %}<div class="dr-subtitle">{{ r.subtitle }}</div>{% endif %}
+        </td>
+        <td class="dr-domain">{{ r.domain }}</td>
+        <td>
+          {% if r.status == 'active' %}
+            <span class="badge badge-active">active</span>
+          {% elif r.status == 'cancelled' %}
+            <span class="badge badge-cancelled">cancelled</span>
+          {% elif r.status == 'superseded' %}
+            <span class="badge badge-superseded">superseded</span>
+          {% else %}
+            <span class="badge">{{ r.status }}</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if r.lora_candidate %}
+            <span class="badge badge-lora">LoRA</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty">No decision records found in docs/decision-records/</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+</div>
+
+<script>
+function setFilter(f, btn) {
+  document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.dr-row').forEach(row => {
+    const domain = row.dataset.domain || '';
+    const status = row.dataset.status || '';
+    const lora   = row.dataset.lora || '';
+    let show = false;
+    if (f === 'all')      show = true;
+    else if (f === 'german')   show = domain.includes('german');
+    else if (f === 'platform') show = domain.includes('platform');
+    else if (f === 'guild')    show = domain.includes('guild');
+    else if (f === 'active')   show = status === 'active';
+    else if (f === 'lora')     show = lora === 'yes';
+    row.style.display = show ? '' : 'none';
+  });
+}
+</script>
+</body>
+</html>

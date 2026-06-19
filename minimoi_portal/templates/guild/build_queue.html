@@ -79,7 +79,7 @@
     /* ── Board ── */
     .board {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 0;
       margin: 0 24px 40px;
     }
@@ -246,8 +246,11 @@
            target="_blank" class="card-tag tag-gh">#{{ item.github_issue | replace('#','') }}</a>
       {% endif %}
     </div>
-    {% if status == 'incomplete' and item.incomplete_reason %}
-    <div style="font-size:10px;color:#8b5a00;margin-top:5px;line-height:1.4;">{{ item.incomplete_reason }}</div>
+    {% if status == 'incomplete' %}
+    <div style="margin-top:5px;display:flex;align-items:flex-start;gap:6px;">
+      <button class="check-btn" onclick="runCheck({{ item_id }}, this)" style="font-size:10px;padding:2px 7px;border:1px solid #c8a060;border-radius:3px;background:rgba(139,90,0,0.07);color:#8b5a00;cursor:pointer;white-space:nowrap;">why incomplete?</button>
+      <div id="check-result-{{ item_id }}" style="font-size:10px;color:#8b5a00;line-height:1.5;"></div>
+    </div>
     {% endif %}
     {% if item.spec_file %}
     <div style="margin-top:5px;">
@@ -321,15 +324,18 @@
   </div>
   <div class="guild-subnav">
     <a href="/guild" class="subnav-back">← Guild</a>
-    <a href="/guild/build" class="subnav-link">Build Log</a>
-    <span class="subnav-dot">&nbsp;·&nbsp;</span>
     <a href="/guild/build/queue" class="subnav-link subnav-active">Queue</a>
     <span class="subnav-dot">&nbsp;·&nbsp;</span>
+    <a href="/guild/build" class="subnav-link">Build Log</a>
+    <span class="subnav-dot">&nbsp;·&nbsp;</span>
     <a href="/guild/build/roadmap" class="subnav-link">Roadmap</a>
+    <span class="subnav-dot">&nbsp;·&nbsp;</span>
+    <a href="/guild/docs" class="subnav-link">Docs</a>
   </div>
 </nav>
 
-{% set spec_ready_items = items | selectattr('status', 'in', ['spec_ready', 'incomplete']) | list %}
+{% set spec_ready_items = items | selectattr('status', 'equalto', 'spec_ready') | list %}
+{% set incomplete_items = items | selectattr('status', 'equalto', 'incomplete') | list %}
 {% set in_build_items   = items | selectattr('status', 'equalto', 'in_build') | list %}
 {% set blocked_items    = items | selectattr('status', 'equalto', 'blocked') | list %}
 {% set done_items       = items | selectattr('status', 'equalto', 'done') | list %}
@@ -352,6 +358,19 @@
     </div>
     {% if spec_ready_items %}
       {% for item in spec_ready_items %}{{ board_card(item) }}{% endfor %}
+    {% else %}
+      <div class="col-empty">—</div>
+    {% endif %}
+  </div>
+
+  {# ── Incomplete ── #}
+  <div class="board-col">
+    <div class="col-header" style="color:#8b5e20;">
+      Incomplete
+      <span class="col-count">{{ incomplete_items | length }}</span>
+    </div>
+    {% if incomplete_items %}
+      {% for item in incomplete_items %}{{ board_card(item) }}{% endfor %}
     {% else %}
       <div class="col-empty">—</div>
     {% endif %}
@@ -399,6 +418,27 @@
 </div>
 
 <script>
+function runCheck(id, btn) {
+  const out = document.getElementById('check-result-' + id);
+  btn.disabled = true;
+  btn.textContent = 'checking…';
+  fetch('/guild/build/items/' + id + '/check')
+    .then(r => r.json())
+    .then(data => {
+      if (data.error && !data.failures) {
+        out.textContent = '⚠ ' + data.error;
+      } else if (data.failures && data.failures.length) {
+        out.innerHTML = data.failures.map(f => '• ' + f).join('<br>');
+        if (data.stale) out.innerHTML += '<br><em style="color:var(--text-dim)">File now passes — flip status to spec_ready.</em>';
+      } else {
+        out.innerHTML = '✓ File passes checks now' + (data.stale ? ' — flip status to spec_ready' : '');
+        out.style.color = 'var(--text-dim)';
+      }
+      btn.textContent = 're-check';
+      btn.disabled = false;
+    })
+    .catch(() => { out.textContent = 'unavailable'; btn.textContent = 're-check'; btn.disabled = false; });
+}
 function queueStatus(select, id) {
   const val = select.value;
   const saveBtn = document.getElementById('bsave-' + id);
