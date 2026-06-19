@@ -12,8 +12,9 @@
 
 **1. Avoid the Mac Mini capital cost.**
 The original plan was to migrate from MacBook to a dedicated Mac Mini
-for always-on production. A Mac Mini is $600-800 upfront, requires
-physical setup, and locks mini-moi into Apple hardware. AWS achieves
+for always-on production. A Mac Mini with enough RAM to run local
+models costs ~$2,000 upfront, requires physical setup, and locks
+mini-moi into Apple hardware. AWS achieves
 the same goal — always-on production, no tunnel dependency — for
 $5-10/month in the first year on free tier, then ~$36/month after.
 No capital expenditure, no hardware to manage, no single point of
