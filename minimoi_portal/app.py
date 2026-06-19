@@ -1469,6 +1469,7 @@ def new_build_item():
 
 _DOCS_DIR = Path(__file__).parent.parent / "docs"
 _DR_DIR   = _DOCS_DIR / "decision-records"
+_REPO_DIR = Path(__file__).parent.parent
 
 def _docs_git_date(rel_path: str) -> str | None:
     try:
@@ -1562,8 +1563,19 @@ def guild_docs():
         files = []
     groups = _docs_group_files(files)
     entries = {}
+
+    # Prepend repo README to Core
+    readme = _REPO_DIR / "README.md"
+    readme_meta = _docs_read_meta(readme) if readme.exists() else {"title": "Project README"}
+    entries["Core"] = [{
+        "filename": "_readme",
+        "title": readme_meta["title"] or "Project README",
+        "date": _docs_git_date("README.md"),
+    }]
+
     for group, gfiles in groups.items():
-        entries[group] = []
+        if group not in entries:
+            entries[group] = []
         for f in gfiles:
             meta = _docs_read_meta(f)
             rel = str(f.relative_to(_DOCS_DIR))
@@ -1600,6 +1612,22 @@ def guild_docs_decisions():
                 "lora_candidate": fm.get("lora-candidate", "no") == "yes",
             })
     return render_template("guild/docs_decisions.html", records=drs, user=_current_user())
+
+
+@app.route("/guild/docs/_readme")
+@_require_owner
+def guild_docs_readme():
+    import markdown as _md
+    target = _REPO_DIR / "README.md"
+    if not target.exists():
+        return "Not found", 404
+    raw = target.read_text()
+    content = _md.markdown(raw, extensions=["fenced_code", "tables"])
+    date = _docs_git_date("README.md")
+    gh_url = "https://github.com/robertvanstedum/personal-ai-agents/blob/main/README.md"
+    return render_template("guild/docs_reader.html", content=content,
+                           filename="README.md", date=date, gh_url=gh_url,
+                           user=_current_user())
 
 
 @app.route("/guild/docs/<path:filename>")

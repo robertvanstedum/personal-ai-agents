@@ -12,14 +12,16 @@
       --bg: #f5f0e8; --surface: #faf7f2; --surface2: #f0ebe0;
       --border: #ddd6c8; --text: #2a2418; --text-muted: #6b5f4e;
       --text-dim: #9e9080; --accent: #8b5e2a; --accent-dim: rgba(139,94,42,0.08);
+      --nav-h: 80px; /* guild nav 44 + subnav 36 */
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+    body { font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
 
+    /* ── Guild nav ── */
     nav.guild-nav { position: sticky; top: 0; z-index: 100; background: #2a1f14; border-bottom: 1px solid rgba(255,255,255,0.08); }
     .guild-nav-brand { height: 44px; display: flex; align-items: center; padding: 0 1.5rem; font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); letter-spacing: 0.08em; }
     .guild-nav-brand a { color: #C68A5E; text-decoration: none; }
-    .guild-nav-brand a:hover { color: #ffffff; }
+    .guild-nav-brand a:hover { color: #fff; }
     .nav-sep { color: rgba(255,255,255,0.2); margin: 0 12px; }
     .guild-subnav { height: 36px; display: flex; align-items: center; padding: 0 1.5rem; border-top: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.15); }
     .subnav-link { font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); text-transform: uppercase; letter-spacing: 0.08em; color: rgba(198,138,94,0.7); text-decoration: none; padding: 0 12px; height: 36px; display: flex; align-items: center; border-bottom: 2px solid transparent; }
@@ -27,46 +29,60 @@
     .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; font-weight: 700; }
     .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
 
-    .page-header { padding: 20px 32px 12px; display: flex; align-items: baseline; gap: 14px; }
-    .page-title { font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 400; }
-    .page-meta { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); }
-
-    .docs-body { max-width: 960px; margin: 0 auto; padding: 0 32px 48px; display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px; }
-    .docs-body .dr-section { grid-column: 1 / -1; }
-
-    /* section */
-    .docs-section { margin-bottom: 28px; }
-    .section-head {
-      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
-      letter-spacing: 0.12em; color: var(--text-dim);
-      padding-bottom: 6px; margin-bottom: 2px;
-      border-bottom: 1px solid var(--border);
-      display: flex; justify-content: space-between; align-items: baseline;
+    /* ── Section pill bar ── */
+    .pill-bar {
+      position: sticky; top: var(--nav-h); z-index: 90;
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      padding: 10px 32px;
+      display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
     }
-    .section-count { font-size: 9px; color: var(--text-dim); opacity: 0.7; }
+    .pill {
+      font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--text-muted);
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 4px 11px;
+      cursor: pointer; text-decoration: none;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+      white-space: nowrap;
+    }
+    .pill:hover { color: var(--accent); border-color: var(--accent); }
+    .pill.active {
+      background: var(--accent); color: #fff; border-color: var(--accent);
+    }
+    .pill-count { font-size: 9px; opacity: 0.7; margin-left: 3px; }
 
-    /* compact doc row */
+    /* ── Page layout ── */
+    .page-wrap { max-width: 960px; margin: 0 auto; padding: 28px 32px 64px; }
+
+    /* ── Section ── */
+    .docs-section { margin-bottom: 40px; scroll-margin-top: calc(var(--nav-h) + 52px); }
+    .section-head {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: 4px; padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-title { font-family: 'Playfair Display', serif; font-size: 1.05rem; font-weight: 400; color: var(--text); }
+    .section-count { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); }
+
+    /* ── Two-column doc grid ── */
+    .doc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+
+    /* ── Compact doc row ── */
     .doc-row {
       display: flex; align-items: baseline; justify-content: space-between;
-      padding: 5px 6px;
-      border-radius: 3px;
+      padding: 5px 6px; gap: 8px;
+      border-radius: 3px; border-bottom: 1px solid rgba(221,214,200,0.4);
       text-decoration: none; color: inherit;
-      border-bottom: 1px solid rgba(221,214,200,0.35);
-      gap: 8px;
     }
     .doc-row:hover { background: var(--accent-dim); }
-    .doc-row:last-child { border-bottom: none; }
     .doc-name { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
     .doc-row:hover .doc-name { color: var(--accent); }
-    .doc-file { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-dim); white-space: nowrap; }
     .doc-date { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; }
 
-    /* decision records block — full width */
+    /* ── Decision Records block ── */
     .dr-block {
-      padding: 14px 16px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
+      padding: 14px 18px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 6px;
       display: flex; align-items: center; gap: 16px;
     }
     .dr-count { font-family: 'Playfair Display', serif; font-size: 2rem; color: var(--accent); line-height: 1; }
@@ -81,6 +97,7 @@
   </style>
 </head>
 <body>
+
 <nav class="guild-nav">
   <div class="guild-nav-brand">
     <a href="/guild">GUILD</a>
@@ -98,36 +115,55 @@
   </div>
 </nav>
 
-<div class="page-header">
-  <h1 class="page-title">Docs</h1>
-  <span class="page-meta">docs/ · {{ entries.values() | sum(start=[]) | length }} documents</span>
+<!-- sticky pill bar -->
+<div class="pill-bar" id="pill-bar">
+  {% for group in ['Core', 'Curator', 'German', 'Guild', 'Infrastructure', 'Process', 'Portfolio', 'Releases', 'Decision Records'] %}
+    {% set slug = group | lower | replace(' ', '-') %}
+    {% if group == 'Decision Records' or entries.get(group) %}
+    <a href="#section-{{ slug }}" class="pill" data-section="{{ slug }}">
+      {{ group }}
+      {% if group == 'Decision Records' %}
+        <span class="pill-count">{{ dr_count }}</span>
+      {% elif entries.get(group) %}
+        <span class="pill-count">{{ entries[group] | length }}</span>
+      {% endif %}
+    </a>
+    {% endif %}
+  {% endfor %}
 </div>
 
-<div class="docs-body">
+<div class="page-wrap">
 
   {% for group in ['Core', 'Curator', 'German', 'Guild', 'Infrastructure', 'Process', 'Portfolio', 'Releases'] %}
     {% if entries.get(group) %}
-    <div class="docs-section">
+    {% set slug = group | lower | replace(' ', '-') %}
+    <div class="docs-section" id="section-{{ slug }}">
       <div class="section-head">
-        <span>{{ group }}</span>
-        <span class="section-count">{{ entries[group] | length }}</span>
+        <span class="section-title">{{ group }}</span>
+        <span class="section-count">{{ entries[group] | length }} docs</span>
       </div>
-      {% for doc in entries[group] %}
-      <a href="/guild/docs/{{ doc.filename }}" class="doc-row">
-        <span class="doc-name">{{ doc.title }}</span>
-        <span class="doc-date">{{ doc.date or '' }}</span>
-      </a>
-      {% endfor %}
+      <div class="doc-grid">
+        {% for doc in entries[group] %}
+        <a href="/guild/docs/{{ doc.filename }}" class="doc-row">
+          <span class="doc-name">{{ doc.title }}</span>
+          <span class="doc-date">{{ doc.date or '' }}</span>
+        </a>
+        {% endfor %}
+      </div>
     </div>
     {% endif %}
   {% endfor %}
 
-  <div class="docs-section dr-section">
-    <div class="section-head"><span>Decision Records</span><span class="section-count">{{ dr_count }}</span></div>
+  <!-- Decision Records -->
+  <div class="docs-section" id="section-decision-records">
+    <div class="section-head">
+      <span class="section-title">Decision Records</span>
+      <span class="section-count">{{ dr_count }} records</span>
+    </div>
     <div class="dr-block">
       <div class="dr-count">{{ dr_count }}</div>
       <div class="dr-label">
-        <strong>Decision records committed</strong>
+        <strong>Architecture decisions committed</strong>
         docs/decision-records/ · LoRA training candidates
       </div>
       <a href="/guild/docs/decisions" class="dr-link">View all →</a>
@@ -135,5 +171,37 @@
   </div>
 
 </div>
+
+<script>
+// Highlight active pill based on scroll position
+const sections = document.querySelectorAll('.docs-section[id]');
+const pills    = document.querySelectorAll('.pill[data-section]');
+
+function setActive(id) {
+  pills.forEach(p => p.classList.toggle('active', p.dataset.section === id));
+}
+
+// Smooth scroll on pill click
+pills.forEach(pill => {
+  pill.addEventListener('click', e => {
+    e.preventDefault();
+    const target = document.getElementById('section-' + pill.dataset.section);
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setActive(pill.dataset.section);
+  });
+});
+
+// IntersectionObserver: activate pill when section enters view
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) setActive(entry.target.id.replace('section-', ''));
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+
+sections.forEach(s => obs.observe(s));
+
+// Set first pill active on load
+if (pills.length) pills[0].classList.add('active');
+</script>
 </body>
 </html>
