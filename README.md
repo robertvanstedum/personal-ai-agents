@@ -249,6 +249,7 @@ capture design reasoning now so the local LLM training pipeline has signal when 
 - [`docs/DESIGN_SESSION_PROMPT.md`](docs/DESIGN_SESSION_PROMPT.md) — structured design conversations across Claude, Grok, and local LLM; produces Decision Records on command
 - [`docs/GESPRACHE_FORWARD_SPEC.md`](docs/GESPRACHE_FORWARD_SPEC.md) — mobile-first voice practice vision, current build state, and next tier items; the domain where LoRA signal accumulates first
 - [`docs/COS_PAGE_ROADMAP.md`](docs/COS_PAGE_ROADMAP.md) — voice-first CoS interaction page, design session pending
+- [`docs/AWS_MIGRATION_PLAN.md`](docs/AWS_MIGRATION_PLAN.md) — containerization, cloud deployment, CI/CD, GPU instance for local LLM. Replaces Mac Mini purchase.
 
 ---
 

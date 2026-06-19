@@ -34,10 +34,18 @@
 |------|-------|--------|--------|
 | Decision Records practice | Phase 0 | done | DECISION_RECORD_PRACTICE.md |
 | **Learning System** | | | LEARNING_SYSTEM_ROADMAP.md |
-| · Phase 0 · Foundation | Phase 0 | in_progress | |
+| · Phase 0 · Foundation | Phase 0 | in_progress — no build task | |
 | · Phase 1 · RAG layer | Phase 1 | target | |
 | · Phase 2 · LoRA training | Phase 2 | target | |
 | · Phase 3 · local-first | Phase 3 | target | |
+| **AWS Migration** | | | AWS_MIGRATION_PLAN.md |
+| · Phase 0 · Containerization | Phase 0 | in_progress | |
+| · Phase 1 · AWS Foundation | Phase 1 | target | |
+| · Phase 2 · Cloud deployment | Phase 2 | target | |
+| · Phase 3 · CI/CD pipeline | Phase 3 | target | |
+| · Phase 4 · Data layer (RDS + S3) | Phase 4 | target | |
+| · Phase 5 · GPU instance (local LLM) | Phase 5 | target | |
+| · Phase 6 · Hardening | Phase 6 | target | |
 
 ### Discussion — not yet agreed
 
@@ -52,7 +60,7 @@
 
 | Item | Phase | Status | Source |
 |------|-------|--------|--------|
-| v1.2 · Mac Mini migration | v1.2 | target | (session 2026-04) |
+| v1.2 · Mac Mini migration | — | deferred | Replaced by AWS Migration |
 | v1.3 · Neo4j intelligence layer | v1.3 | target | (session 2026-04) |
 
 ### Discussion — not yet agreed
@@ -72,7 +80,7 @@
 | Guest access + CoS nudge | v1 | queued | spec_cos_guest_access |
 | Security architecture split | v1 | queued | spec_security_architecture |
 | Career focus editor | v1 | queued | spec_guild_career_focus_editor |
-| Roadmap view maturity | v1 | in_progress | this spec |
+| Roadmap view maturity | v1 | done | this spec |
 | Decisions view | v1 | target | dr_decision_record_practice_mvp |
 
 ### Discussion — not yet agreed
