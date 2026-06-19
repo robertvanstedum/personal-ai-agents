@@ -47,6 +47,10 @@ from german_domain import (
 BASE_DIR  = Path(__file__).parent           # domains/german/
 REPO_ROOT = BASE_DIR.parent.parent          # repo root
 
+import sys as _sys
+_sys.path.insert(0, str(REPO_ROOT))
+from get_secret import get_secret
+
 # ── Tutor / Whereby config ────────────────────────────────────────────────────
 # Guest URL — safe to show in UI and share with conversation partner
 WHEREBY_ROOM_URL  = os.environ.get("WHEREBY_ROOM_URL", "https://whereby.com/roberts-german")
@@ -65,12 +69,18 @@ CORS(app)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400  # cache static files for 1 day
 
 # ── Persistent Flask secret key (needed for session during OAuth flow) ────────
-_secret_key_file = REPO_ROOT / ".flask_secret"
-if _secret_key_file.exists():
-    app.secret_key = _secret_key_file.read_text().strip()
+# FLASK_SECRET env var takes precedence (set in Docker / AWS). Falls back to
+# .flask_secret file on local Mac so existing sessions survive restarts.
+_flask_secret_env = os.environ.get("FLASK_SECRET")
+if _flask_secret_env:
+    app.secret_key = _flask_secret_env
 else:
-    app.secret_key = secrets.token_hex(32)
-    _secret_key_file.write_text(app.secret_key)
+    _secret_key_file = REPO_ROOT / ".flask_secret"
+    if _secret_key_file.exists():
+        app.secret_key = _secret_key_file.read_text().strip()
+    else:
+        app.secret_key = secrets.token_hex(32)
+        _secret_key_file.write_text(app.secret_key)
 
 # ── Google Drive OAuth config ─────────────────────────────────────────────────
 GOOGLE_SCOPES        = ["https://www.googleapis.com/auth/drive.readonly"]
@@ -364,9 +374,9 @@ def api_transcribe():
         return jsonify({"error": "No audio file"}), 400
     audio_file = request.files["audio"]
     try:
-        import keyring as _kr, time as _t
+        import time as _t
         from openai import OpenAI as _OAI
-        api_key = _kr.get_password("openai", "api_key")
+        api_key = get_secret("OPENAI_API_KEY", "openai", "api_key")
         if not api_key:
             return jsonify({"error": "OpenAI API key not configured"}), 500
         client = _OAI(api_key=api_key)
@@ -464,10 +474,9 @@ def gesprache_speak():
     if voice not in ("alloy", "echo", "fable", "nova", "onyx", "shimmer"):
         voice = "nova"
     try:
-        import keyring as _kr
         from openai import OpenAI as _OAI
         from flask import Response as _Resp
-        api_key = _kr.get_password("openai", "api_key")
+        api_key = get_secret("OPENAI_API_KEY", "openai", "api_key")
         if not api_key:
             return jsonify({"error": "OpenAI API key not configured"}), 500
         client = _OAI(api_key=api_key, timeout=12.0)
@@ -545,7 +554,6 @@ def api_send_to_telegram():
     """Assemble the full Grok Voice system prompt and send it to Robert's
     Telegram chat via the bot. On mobile, Robert can copy the message and
     paste it directly into Grok Voice — no clipboard transfer needed."""
-    import keyring
     import requests as _requests
 
     data = request.json or {}
@@ -575,7 +583,7 @@ def api_send_to_telegram():
     # so it has no message handler that could misinterpret the system prompt as a command.
     # minimoi_cmd_bot (polling_bot_token) is deliberately excluded: its message handler
     # would receive the prompt and attempt to match it against German session triggers.
-    bot_token = keyring.get_password("telegram", "bot_token")
+    bot_token = get_secret("TELEGRAM_BOT_TOKEN", "telegram", "bot_token")
     if not bot_token:
         return jsonify({"ok": False, "error": "bot token not configured"}), 500
 
@@ -678,9 +686,8 @@ def tutor_brief(token):
 # ── Google Drive OAuth ───────────────────────────────────────────────────────
 
 def _google_client_config():
-    import keyring
-    client_id     = keyring.get_password("google_oauth", "client_id")
-    client_secret = keyring.get_password("google_oauth", "client_secret")
+    client_id     = get_secret("GOOGLE_CLIENT_ID", "google_oauth", "client_id")
+    client_secret = get_secret("GOOGLE_CLIENT_SECRET", "google_oauth", "client_secret")
     if not client_id or not client_secret:
         return None
     return {
@@ -696,13 +703,12 @@ def _google_client_config():
 
 def _get_google_credentials():
     """Return valid Credentials or None if not authorised."""
-    import keyring
     from google.oauth2.credentials import Credentials
     from google.auth.transport.requests import Request as GRequest
 
-    client_id     = keyring.get_password("google_oauth", "client_id")
-    client_secret = keyring.get_password("google_oauth", "client_secret")
-    refresh_token = keyring.get_password("google_oauth", "refresh_token")
+    client_id     = get_secret("GOOGLE_CLIENT_ID", "google_oauth", "client_id")
+    client_secret = get_secret("GOOGLE_CLIENT_SECRET", "google_oauth", "client_secret")
+    refresh_token = get_secret("GOOGLE_REFRESH_TOKEN", "google_oauth", "refresh_token")
 
     if not all([client_id, client_secret, refresh_token]):
         return None
@@ -721,9 +727,8 @@ def _get_google_credentials():
 
 @app.route("/api/google/status")
 def api_google_status():
-    import keyring
-    client_id     = keyring.get_password("google_oauth", "client_id")
-    refresh_token = keyring.get_password("google_oauth", "refresh_token")
+    client_id     = get_secret("GOOGLE_CLIENT_ID", "google_oauth", "client_id")
+    refresh_token = get_secret("GOOGLE_REFRESH_TOKEN", "google_oauth", "refresh_token")
     return jsonify({
         "configured": bool(client_id),
         "authed":     bool(refresh_token),
@@ -749,7 +754,6 @@ def api_google_auth():
 
 @app.route("/api/google/callback")
 def api_google_callback():
-    import keyring
     from google_auth_oauthlib.flow import Flow
 
     cfg = _google_client_config()
@@ -760,7 +764,12 @@ def api_google_callback():
     )
     flow.fetch_token(authorization_response=request.url)
     creds = flow.credentials
-    keyring.set_password("google_oauth", "refresh_token", creds.refresh_token)
+    # Persist refresh token to keyring on Mac dev; silently skip on EC2 (no keyring).
+    try:
+        import keyring as _kr
+        _kr.set_password("google_oauth", "refresh_token", creds.refresh_token)
+    except Exception:
+        pass
     return redirect("/gesprache?tab=konversation&google_auth=ok")
 
 

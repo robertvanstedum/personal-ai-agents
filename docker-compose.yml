@@ -23,6 +23,45 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql
 
+  curator:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.curator
+    container_name: minimoi-curator
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8766:8766"
+    volumes:
+      - ./curator_signals.json:/app/curator_signals.json
+      - ./curator_latest.json:/app/curator_latest.json
+      - ./curator_radar.json:/app/curator_radar.json
+
+  german:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.german
+    container_name: minimoi-german
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8767:8767"
+    volumes:
+      - ./domains/german/data:/app/domains/german/data
+
+  portal:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.portal
+    container_name: minimoi-portal
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "5001:5001"
+    depends_on:
+      - curator
+      - german
+
 volumes:
   neo4j-data:
   postgres-data:

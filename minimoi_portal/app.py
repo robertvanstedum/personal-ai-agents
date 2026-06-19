@@ -20,6 +20,8 @@ import requests as _requests
 # Ensure repo root is on sys.path so `minimoi_portal` resolves as a package
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from get_secret import get_secret
+
 from flask import (
     Flask,
     Response,
@@ -232,8 +234,7 @@ def register():
 def _notify_telegram_new_request(display_name: str, email: str) -> None:
     """Fire a Telegram message to Robert when a new guest requests access."""
     try:
-        import keyring
-        token   = keyring.get_password("telegram", "bot_token")
+        token   = get_secret("TELEGRAM_BOT_TOKEN", "telegram", "bot_token")
         chat_id = 8379221702
         text = (
             f"🔔 <b>New guest access request</b>\n\n"
@@ -509,8 +510,7 @@ def admin_guests_approve(token):
 def _notify_telegram_approved(guest: dict) -> None:
     """Fire a Telegram reminder to Robert when he approves a guest."""
     try:
-        import keyring
-        token   = keyring.get_password("telegram", "bot_token")
+        token   = get_secret("TELEGRAM_BOT_TOKEN", "telegram", "bot_token")
         chat_id = 8379221702
         name    = guest.get("display_name", "Guest")
         email   = guest.get("email", "(no email)")
@@ -531,7 +531,6 @@ def _notify_telegram_approved(guest: dict) -> None:
 def _send_approval_email(guest: dict) -> None:
     """Send an approval email to the guest from robert.vanstedum@gmail.com."""
     import smtplib
-    import keyring
     from email.mime.text import MIMEText
 
     to_email = guest.get("email", "")
@@ -541,7 +540,7 @@ def _send_approval_email(guest: dict) -> None:
     name = guest.get("display_name", "there")
 
     try:
-        app_password = keyring.get_password("gmail", "app_password")
+        app_password = get_secret("GMAIL_APP_PASSWORD", "gmail", "app_password")
         if not app_password:
             print("⚠️  Gmail app password not found in Keychain")
             return

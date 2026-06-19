@@ -5,6 +5,7 @@ __pycache__/
 
 # Credentials (NEVER COMMIT!)
 .env
+.flask_secret
 credentials.json
 secrets.json
 

@@ -14,10 +14,10 @@ Usage:
 
 import argparse
 import json
-import keyring
 import logging
 import requests
 import sys
+from get_secret import get_secret
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -125,9 +125,9 @@ def brave_search(query: str, count: int = 20) -> list:
     Each result has: title, url, description, page_age.
     Returns [] on any error (caller decides whether to abort or skip).
     """
-    api_key = keyring.get_password('brave_search', 'api_key')
+    api_key = get_secret('BRAVE_SEARCH_API_KEY', 'brave_search', 'api_key')
     if not api_key:
-        log.error('Brave API key not found in keychain (brave_search / api_key)')
+        log.error('Brave API key not configured (set BRAVE_SEARCH_API_KEY or add to keyring)')
         return []
     try:
         resp = requests.get(

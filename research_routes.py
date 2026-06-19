@@ -21,6 +21,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from flask import Blueprint, jsonify, request, redirect
+from get_secret import get_secret
 
 # ── Blueprint ─────────────────────────────────────────────────────────────────
 
@@ -2726,7 +2727,6 @@ def api_teammate_read(leaning_id):
     """
     try:
         from agent.leanings import get_leaning, build_teammate_prompt, store_teammate_read
-        import keyring
         import anthropic as _anthropic
 
         leaning = get_leaning(leaning_id)
@@ -2748,9 +2748,9 @@ def api_teammate_read(leaning_id):
 
         system_prompt, user_prompt = build_teammate_prompt(leaning, thread_summaries)
 
-        api_key = keyring.get_password("anthropic", "api_key")
+        api_key = get_secret("ANTHROPIC_API_KEY", "anthropic", "api_key")
         if not api_key:
-            return jsonify({"ok": False, "error": "Anthropic API key not found in keyring"}), 500
+            return jsonify({"ok": False, "error": "Anthropic API key not configured"}), 500
 
         client = _anthropic.Anthropic(api_key=api_key)
         msg = client.messages.create(

@@ -22,6 +22,10 @@ from pathlib import Path
 
 _BASE_DIR   = Path(__file__).parent          # domains/german/
 _REPO_ROOT  = _BASE_DIR.parent.parent        # repo root
+
+import sys as _sys
+_sys.path.insert(0, str(_REPO_ROOT))
+from get_secret import get_secret as _get_secret
 GERMAN_BASE = _BASE_DIR                      # domains/german/ (scripts run here)
 GERMAN_DIR  = _BASE_DIR / "data"             # domains/german/data/ (runtime data)
 VENV_PYTHON = _REPO_ROOT / "venv" / "bin" / "python3"
@@ -481,11 +485,10 @@ def _drill_completion_message(state: dict, reveal_line: str) -> str:
 
 def _call_llm(prompt: str, max_tokens: int = 300) -> str | None:
     """Call LLM providers in order, return text response or None if all fail."""
-    import keyring as _keyring
     for provider in _LLM_PROVIDERS:
         try:
             if provider["type"] == "xai":
-                api_key = _keyring.get_password("xai", "api_key")
+                api_key = _get_secret("XAI_API_KEY", "xai", "api_key")
                 if not api_key:
                     continue
                 from openai import OpenAI as _OpenAI
@@ -497,7 +500,7 @@ def _call_llm(prompt: str, max_tokens: int = 300) -> str | None:
                 )
                 return resp.choices[0].message.content.strip()
             elif provider["type"] == "anthropic":
-                api_key = _keyring.get_password("anthropic", "api_key")
+                api_key = _get_secret("ANTHROPIC_API_KEY", "anthropic", "api_key")
                 if not api_key:
                     continue
                 import anthropic as _anthropic
@@ -935,8 +938,7 @@ def _get_deepl_client():
         return _deepl_client
     try:
         import deepl as _deepl
-        import keyring as _kr
-        api_key = _kr.get_password("deepl", "api_key")
+        api_key = _get_secret("DEEPL_API_KEY", "deepl", "api_key")
         if not api_key:
             return None
         _deepl_client = _deepl.Translator(api_key)
@@ -1758,7 +1760,6 @@ def _next_session_filename(date_str: str) -> str:
 
 def analyse_session(transcript: str, persona_name: str, scene: str) -> dict:
     """Analyse a pasted Grok Voice transcript. Returns {session_id, feedback}."""
-    import keyring as _keyring
     import anthropic as _anthropic
 
     ts = datetime.datetime.now()
@@ -1780,7 +1781,7 @@ def analyse_session(transcript: str, persona_name: str, scene: str) -> dict:
     feedback = {"overall_summary": "", "errors": [], "strengths": [], "next_focus": ""}
     raw_text = None
     try:
-        api_key = _keyring.get_password("anthropic", "api_key")
+        api_key = _get_secret("ANTHROPIC_API_KEY", "anthropic", "api_key")
         if api_key:
             client = _anthropic.Anthropic(api_key=api_key)
             resp = client.messages.create(
