@@ -619,13 +619,14 @@ def score_color(score):
     return '#9e9080'
 
 
+_DEFAULT_DB_URL = "postgresql://minimoi:simple123@localhost:5432/personal_agents"
+
+
 def _guild_db_query(sql, params=None):
     """Run a SELECT against the personal_agents DB. Returns list of dicts."""
     import psycopg2, psycopg2.extras
-    conn = psycopg2.connect(
-        "postgresql://minimoi:simple123@localhost:5432/personal_agents",
-        cursor_factory=psycopg2.extras.RealDictCursor
-    )
+    db_url = os.environ.get("DATABASE_URL", _DEFAULT_DB_URL)
+    conn = psycopg2.connect(db_url, cursor_factory=psycopg2.extras.RealDictCursor)
     with conn.cursor() as cur:
         cur.execute(sql, params or [])
         rows = list(cur.fetchall())
@@ -636,9 +637,8 @@ def _guild_db_query(sql, params=None):
 def _guild_db_execute(sql, params=None):
     """Run an INSERT/UPDATE/DELETE against the personal_agents DB."""
     import psycopg2
-    conn = psycopg2.connect(
-        "postgresql://minimoi:simple123@localhost:5432/personal_agents"
-    )
+    db_url = os.environ.get("DATABASE_URL", _DEFAULT_DB_URL)
+    conn = psycopg2.connect(db_url)
     with conn.cursor() as cur:
         cur.execute(sql, params or [])
     conn.commit()
