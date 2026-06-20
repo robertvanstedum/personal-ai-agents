@@ -812,7 +812,7 @@ def api_google_latest_transcript():
 
 def main():
     port = int(os.environ.get("PORT", 8767))
-    app.run(host="localhost", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=False)
 
 
 if __name__ == "__main__":

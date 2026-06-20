@@ -1,0 +1,65 @@
+# Production docker-compose — EC2 deployment
+# Uses ECR images; data files must exist under /opt/minimoi/data/ on the host.
+# Run: docker-compose -f docker-compose.prod.yml up -d
+# Update images: scripts/deploy.sh
+
+services:
+  postgres:
+    image: postgres:latest
+    container_name: postgres-ai-agents
+    restart: unless-stopped
+    environment:
+      - POSTGRES_PASSWORD=simple123
+      - POSTGRES_DB=personal_agents
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  curator:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/curator:latest
+    container_name: minimoi-curator
+    restart: unless-stopped
+    env_file: /opt/minimoi/.env
+    environment:
+      - FLASK_ENV=production
+      - PORT=8766
+    volumes:
+      - /opt/minimoi/data/curator_signals.json:/app/curator_signals.json
+      - /opt/minimoi/data/curator_latest.json:/app/curator_latest.json
+      - /opt/minimoi/data/curator_radar.json:/app/curator_radar.json
+    ports:
+      - "127.0.0.1:8766:8766"
+    depends_on:
+      - postgres
+
+  german:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/mein-deutsch:latest
+    container_name: minimoi-german
+    restart: unless-stopped
+    env_file: /opt/minimoi/.env
+    environment:
+      - FLASK_ENV=production
+      - PORT=8767
+    volumes:
+      - /opt/minimoi/data/german:/app/domains/german/data
+    ports:
+      - "127.0.0.1:8767:8767"
+
+  portal:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:latest
+    container_name: minimoi-portal
+    restart: unless-stopped
+    env_file: /opt/minimoi/.env
+    environment:
+      - FLASK_ENV=production
+      - PORT=5001
+    ports:
+      - "127.0.0.1:5001:5001"
+    depends_on:
+      - curator
+      - german
+      - postgres
+
+volumes:
+  postgres-data:

@@ -1657,7 +1657,7 @@ def guild_docs_reader(filename):
 def main():
     port = _cfg.PORT
     debug = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
-    app.run(host="localhost", port=port, debug=debug, threaded=True)
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
 
 
 if __name__ == "__main__":
