@@ -235,7 +235,7 @@ def _inject_banner(soup: BeautifulSoup, captured_at: str) -> None:
 
     banner_html = f"""<div class="preview-banner">
       <span class="preview-banner-text">Preview snapshot — <span class="preview-date">Captured {date_label}</span>. Data is real but frozen.</span>
-      <a href="https://app.minimoi.ai/register" class="preview-request-link">Request live access →</a>
+      <a href="https://minimoi.ai/register" class="preview-request-link">Request live access →</a>
     </div>"""
     banner = BeautifulSoup(banner_html, "html.parser")
 
@@ -405,7 +405,7 @@ ARCHIVE_GATE_HTML = """<main>
 <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:55vh;text-align:center;padding:3rem 2rem;">
   <div style="font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:400;color:#3d2e1e;margin-bottom:1rem;">Archive</div>
   <p style="color:rgba(61,46,30,0.6);max-width:380px;line-height:1.65;margin-bottom:2rem;font-size:0.95rem;">Your personal reading history is not available in preview. Request live access to see it.</p>
-  <a href="https://app.minimoi.ai/register" style="color:#C68A5E;border:1px solid rgba(198,138,94,0.5);padding:8px 22px;border-radius:4px;text-decoration:none;font-size:0.875rem;">Request live access →</a>
+  <a href="https://minimoi.ai/register" style="color:#C68A5E;border:1px solid rgba(198,138,94,0.5);padding:8px 22px;border-radius:4px;text-decoration:none;font-size:0.875rem;">Request live access →</a>
 </div>
 </main>"""
 
