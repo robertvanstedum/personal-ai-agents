@@ -51,16 +51,18 @@ def _send_telegram(text: str):
     if not is_production():
         _log_file("telegram_suppressed_standby", f"standby — not sent: {text[:80]}")
         return
-    if not _TELEGRAM_AVAILABLE:
-        _log_file("telegram_unavailable", f"telegram_bot import failed — message not sent: {text[:80]}")
-        return
     try:
-        token   = _tg_token()
-        chat_id = _tg_chat_id() or os.environ.get("TELEGRAM_CHAT_ID")
+        from utils.telegram import get_system_token, get_chat_id as _get_chat_id
+        token   = get_system_token()
+        chat_id = _get_chat_id() or os.environ.get("TELEGRAM_CHAT_ID")
         if not token or not chat_id:
             _log_file("telegram_missing_creds", "bot_token or TELEGRAM_CHAT_ID not found")
             return
-        _tg_send(token, chat_id, text)
+        requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+            timeout=10,
+        )
     except Exception as e:
         _log_file("telegram_error", str(e))
 

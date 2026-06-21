@@ -239,8 +239,9 @@ def _run_build_discipline_check() -> dict:
             log.info("build_discipline_check: standby — Telegram suppressed")
         else:
             try:
-                token   = keyring.get_password("telegram", "bot_token")
-                chat_id = os.environ.get("TELEGRAM_CHAT_ID", "8379221702")
+                from utils.telegram import get_system_token, get_chat_id as _get_chat_id
+                token   = get_system_token()
+                chat_id = _get_chat_id() or os.environ.get("TELEGRAM_CHAT_ID", "8379221702")
                 if token:
                     requests.post(
                         f"https://api.telegram.org/bot{token}/sendMessage",
@@ -305,8 +306,9 @@ def _run_guest_nudge_check() -> dict:
         log.info("guest_nudge_check: standby — Telegram suppressed")
     else:
         try:
-            token   = keyring.get_password("telegram", "bot_token")
-            chat_id = os.environ.get("TELEGRAM_CHAT_ID", "8379221702")
+            from utils.telegram import get_system_token, get_chat_id as _get_chat_id
+            token   = get_system_token()
+            chat_id = _get_chat_id() or os.environ.get("TELEGRAM_CHAT_ID", "8379221702")
             if token:
                 requests.post(
                     f"https://api.telegram.org/bot{token}/sendMessage",
@@ -800,9 +802,10 @@ def _handle_tg_text(text: str, token: str, chat_id: str):
 
 
 def _telegram_poll_loop():
-    """Long-poll rvsopenbot for incoming messages. Runs in background thread."""
-    token = keyring.get_password("telegram", "bot_token")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    """Long-poll system bot for incoming messages. Runs in background thread."""
+    from utils.telegram import get_system_token, get_chat_id as _get_chat_id
+    token = get_system_token()
+    chat_id = _get_chat_id() or os.environ.get("TELEGRAM_CHAT_ID")
 
     if not token:
         _log_file("telegram_poll", "rvsopenbot token not found — polling disabled")

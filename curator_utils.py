@@ -433,17 +433,13 @@ def analyze_id_formats(ids: Set[str]) -> Dict[str, int]:
 
 def get_telegram_token() -> str:
     """
-    Get Telegram bot token from (in priority order):
-    1. macOS Keychain (via keyring)
-    2. Environment variable TELEGRAM_BOT_TOKEN
-
+    Get Telegram system bot token. Role-aware via utils.telegram:
+    env var → macOS Keychain → AWS SSM (/minimoi/{production|test}/).
     Returns empty string if not found.
     """
     try:
-        import keyring
-        token = keyring.get_password("telegram", "bot_token")
-        if token:
-            return token
+        from utils.telegram import get_system_token
+        return get_system_token()
     except Exception:
         pass
     return os.environ.get('TELEGRAM_BOT_TOKEN', '')
