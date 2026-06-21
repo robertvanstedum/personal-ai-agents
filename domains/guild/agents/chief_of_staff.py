@@ -964,6 +964,8 @@ def receive_event():
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    if str(BASE_DIR) not in sys.path:
+        sys.path.insert(0, str(BASE_DIR))
     from utils.role import role_label, is_production
     _role = role_label()
     print(f"[chief_of_staff] Starting as {_role} — "
