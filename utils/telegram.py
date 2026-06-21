@@ -41,14 +41,15 @@ def _get_token(ssm_key: str, keyring_service: str, keyring_account: str, env_var
         return ''
 
 
+def _is_standby() -> bool:
+    return os.environ.get('MINIMOI_ROLE', 'production') != 'production'
+
+
 def get_system_token() -> str:
-    """Token for minimoi_system_bot — briefings, alerts, !ops commands."""
-    return _get_token(
-        ssm_key='telegram_system_bot_token',
-        keyring_service='telegram',
-        keyring_account='bot_token',
-        env_var='TELEGRAM_SYSTEM_BOT_TOKEN',
-    )
+    """Token for minimoi_system_bot (production) or minimoi_system_test_bot (standby)."""
+    if _is_standby():
+        return _get_token('telegram_system_bot_token', 'telegram', 'system_test_bot_token', 'TELEGRAM_SYSTEM_BOT_TOKEN')
+    return _get_token('telegram_system_bot_token', 'telegram', 'bot_token', 'TELEGRAM_SYSTEM_BOT_TOKEN')
 
 
 def get_agent_token() -> str:
@@ -62,13 +63,10 @@ def get_agent_token() -> str:
 
 
 def get_cos_token() -> str:
-    """Token for minimoi_cos_bot — Chief of Staff conversational interface."""
-    return _get_token(
-        ssm_key='telegram_cos_bot_token',
-        keyring_service='telegram',
-        keyring_account='cos_bot_token',
-        env_var='TELEGRAM_COS_BOT_TOKEN',
-    )
+    """Token for minimoi_cos_bot (production) or minimoi_cos_test_bot (standby)."""
+    if _is_standby():
+        return _get_token('telegram_cos_bot_token', 'telegram', 'cos_test_bot_token', 'TELEGRAM_COS_BOT_TOKEN')
+    return _get_token('telegram_cos_bot_token', 'telegram', 'cos_bot_token', 'TELEGRAM_COS_BOT_TOKEN')
 
 
 def get_chat_id() -> str:
