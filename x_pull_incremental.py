@@ -364,6 +364,12 @@ def pull(dry_run: bool = False, limit: int | None = None) -> None:
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def main():
+    from utils.role import is_production, role_label
+    role = role_label()
+    if not is_production():
+        print(f"[x_pull_incremental] STANDBY — suppressed (MINIMOI_ROLE={role})")
+        return
+
     parser = argparse.ArgumentParser(
         description='Incremental X bookmark pull — Phase 3C.7'
     )

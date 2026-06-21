@@ -70,6 +70,7 @@ import hashlib
 from dotenv import load_dotenv
 from curator_config import ACTIVE_DOMAIN
 from curator_utils import get_telegram_token, send_telegram_alert
+from utils.role import is_production as _is_production
 
 # Curator user data directory — same convention as curator_server.py and curator_feedback.py.
 # Override with CURATOR_DATA_DIR env var on EC2.
@@ -696,8 +697,8 @@ To enable automatic fallback (for cron jobs):
         
         print(error_report)
         
-        # Send Telegram alert for critical errors
-        if telegram_alert:
+        # Send Telegram alert for critical errors (production only)
+        if telegram_alert and _is_production():
             send_telegram_alert(telegram_alert)
         
         if fallback_on_error:
@@ -3311,6 +3312,14 @@ def main():
     import sys
     import subprocess
     from signal_store import get_session_id, log_article_scored, log_priority_match
+    from utils.role import is_production, role_label
+
+    role = role_label()
+    print(f"[curator_rss_v2] Starting as {role}")
+
+    if not is_production():
+        print(f"[curator_rss_v2] STANDBY — scheduled run suppressed (MINIMOI_ROLE={role})")
+        return
 
     # Parse command line args first (dry_run needed before session init)
     send_telegram = "--telegram" in sys.argv

@@ -46,7 +46,11 @@ except ImportError:
     _TELEGRAM_AVAILABLE = False
 
 def _send_telegram(text: str):
-    """Fire-and-forget Telegram send. Only for Tier 4."""
+    """Fire-and-forget Telegram send. Only for Tier 4. Suppressed on standby."""
+    from utils.role import is_production
+    if not is_production():
+        _log_file("telegram_suppressed_standby", f"standby — not sent: {text[:80]}")
+        return
     if not _TELEGRAM_AVAILABLE:
         _log_file("telegram_unavailable", f"telegram_bot import failed — message not sent: {text[:80]}")
         return
@@ -480,6 +484,10 @@ def main():
         level=logging.INFO,
         format="%(asctime)s [operations] %(levelname)s %(message)s"
     )
+
+    from utils.role import role_label
+    _role = role_label()
+    print(f"[operations] Starting as {_role}")
 
     print(f"""
 ⚙️  Operations Agent starting on port {PORT}...

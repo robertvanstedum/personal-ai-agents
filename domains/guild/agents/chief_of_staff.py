@@ -234,17 +234,21 @@ def _run_build_discipline_check() -> dict:
             + "\n".join(f"  • {t}" for t in flagged)
             + "\nReview at /guild/build/queue"
         )
-        try:
-            token   = keyring.get_password("telegram", "bot_token")
-            chat_id = os.environ.get("TELEGRAM_CHAT_ID", "8379221702")
-            if token:
-                requests.post(
-                    f"https://api.telegram.org/bot{token}/sendMessage",
-                    json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"},
-                    timeout=5,
-                )
-        except Exception:
-            pass
+        from utils.role import is_production
+        if not is_production():
+            log.info("build_discipline_check: standby — Telegram suppressed")
+        else:
+            try:
+                token   = keyring.get_password("telegram", "bot_token")
+                chat_id = os.environ.get("TELEGRAM_CHAT_ID", "8379221702")
+                if token:
+                    requests.post(
+                        f"https://api.telegram.org/bot{token}/sendMessage",
+                        json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"},
+                        timeout=5,
+                    )
+            except Exception:
+                pass
 
     log.info("build_discipline_check: %d item(s) flagged stale", len(flagged))
     return {"flagged": flagged, "threshold_days": threshold_days}
@@ -296,17 +300,21 @@ def _run_guest_nudge_check() -> dict:
         f"{body}\n"
         f"Review at /guild"
     )
-    try:
-        token   = keyring.get_password("telegram", "bot_token")
-        chat_id = os.environ.get("TELEGRAM_CHAT_ID", "8379221702")
-        if token:
-            requests.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"},
-                timeout=5,
-            )
-    except Exception:
-        pass
+    from utils.role import is_production
+    if not is_production():
+        log.info("guest_nudge_check: standby — Telegram suppressed")
+    else:
+        try:
+            token   = keyring.get_password("telegram", "bot_token")
+            chat_id = os.environ.get("TELEGRAM_CHAT_ID", "8379221702")
+            if token:
+                requests.post(
+                    f"https://api.telegram.org/bot{token}/sendMessage",
+                    json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"},
+                    timeout=5,
+                )
+        except Exception:
+            pass
 
     log.info("guest_nudge_check: %d request(s) nudged", count)
     return {"nudged": count}
@@ -956,6 +964,11 @@ def receive_event():
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    from utils.role import role_label, is_production
+    _role = role_label()
+    print(f"[chief_of_staff] Starting as {_role} — "
+          f"{'all loops + Telegram active' if is_production() else 'Telegram suppressed on standby'}")
+
     PORT = int(os.environ.get("PORT", 8769))
 
     print(f"""
