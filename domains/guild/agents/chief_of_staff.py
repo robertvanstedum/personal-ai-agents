@@ -497,9 +497,11 @@ def _dispatch_tool(name: str, args: dict) -> dict:
 # ── LLM chat loop ─────────────────────────────────────────────────────────────
 
 def _get_xai_client() -> OpenAI:
-    api_key = keyring.get_password("xai", "api_key")
-    if not api_key:
-        raise ValueError("xAI API key not found in keyring (xai / api_key)")
+    from get_secret import get_secret
+    try:
+        api_key = get_secret("XAI_API_KEY", "xai", "api_key")
+    except Exception as e:
+        raise ValueError(f"xAI API key not found: {e}")
     return OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
 
 
@@ -992,16 +994,20 @@ def main():
         print("   DB: unavailable — queue_recommendation will use file fallback")
 
     # 2. Verify xAI key exists
-    api_key = keyring.get_password("xai", "api_key")
-    if api_key:
+    try:
+        from get_secret import get_secret
+        get_secret("XAI_API_KEY", "xai", "api_key")
         print("   xAI: key found ✅")
-    else:
-        print("   ⚠️  xAI API key not found in keyring — chat will fail")
+    except Exception:
+        print("   ⚠️  xAI API key not found — chat will fail")
 
-    # 3. Start Telegram polling thread
-    t = threading.Thread(target=_telegram_poll_loop, daemon=True, name="tg-poll")
-    t.start()
-    print("   Thread started: tg-poll (rvsopenbot)")
+    # 3. Start Telegram polling thread (skipped when cos-bot container handles polling)
+    if os.environ.get("DISABLE_TELEGRAM_POLL"):
+        print("   Telegram poll: disabled (DISABLE_TELEGRAM_POLL set — cos-bot handles polling)")
+    else:
+        t = threading.Thread(target=_telegram_poll_loop, daemon=True, name="tg-poll")
+        t.start()
+        print("   Thread started: tg-poll")
 
     # 4. Import loops (deferred so CoS starts even if a loop has an import error)
     # Ensure repo root is on sys.path — needed when running under launchd where

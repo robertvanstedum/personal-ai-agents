@@ -1,0 +1,11 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY docker/requirements.telegram.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY utils/ utils/
+COPY telegram_cos_bot.py .
+
+CMD ["python", "telegram_cos_bot.py"]

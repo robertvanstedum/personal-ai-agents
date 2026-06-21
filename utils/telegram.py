@@ -52,12 +52,22 @@ def get_system_token() -> str:
 
 
 def get_agent_token() -> str:
-    """Token for minimoi_agent_bot — CoS + OpenClaw conversational."""
+    """Token for minimoi_agent_bot — OpenClaw gateway (Mac only)."""
     return _get_token(
         ssm_key='telegram_agent_bot_token',
         keyring_service='telegram',
         keyring_account='agent_bot_token',
         env_var='TELEGRAM_AGENT_BOT_TOKEN',
+    )
+
+
+def get_cos_token() -> str:
+    """Token for minimoi_cos_bot — Chief of Staff conversational interface."""
+    return _get_token(
+        ssm_key='telegram_cos_bot_token',
+        keyring_service='telegram',
+        keyring_account='cos_bot_token',
+        env_var='TELEGRAM_COS_BOT_TOKEN',
     )
 
 

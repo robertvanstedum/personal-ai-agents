@@ -38,13 +38,25 @@ case "$TARGET" in
   portal)
     build_and_push portal minimoi/portal docker/Dockerfile.portal
     ;;
+  telegram)
+    build_and_push telegram minimoi/telegram-bot docker/Dockerfile.telegram
+    ;;
+  cos-agent)
+    build_and_push cos-agent minimoi/cos-agent docker/Dockerfile.cos-agent
+    ;;
+  cos-bot)
+    build_and_push cos-bot minimoi/cos-bot docker/Dockerfile.cos-bot
+    ;;
   all)
     build_and_push curator minimoi/curator docker/Dockerfile.curator
     build_and_push german minimoi/mein-deutsch docker/Dockerfile.german
     build_and_push portal minimoi/portal docker/Dockerfile.portal
+    build_and_push telegram minimoi/telegram-bot docker/Dockerfile.telegram
+    build_and_push cos-agent minimoi/cos-agent docker/Dockerfile.cos-agent
+    build_and_push cos-bot minimoi/cos-bot docker/Dockerfile.cos-bot
     ;;
   *)
-    echo "Usage: $0 [curator|german|portal|all]"
+    echo "Usage: $0 [curator|german|portal|telegram|cos-agent|cos-bot|all]"
     exit 1
     ;;
 esac
