@@ -81,8 +81,8 @@ Robert creates these in BotFather (5 minutes):
 
 | Test bot | Mirrors | Purpose |
 |---------|---------|---------|
-| `minimoi_agent_bot_test` | minimoi_agent_bot | Test conversational flows |
-| `minimoi_system_bot_test` | minimoi_system_bot | Test briefings, alerts, commands |
+| `minimoi_agent_test_bot` | minimoi_agent_bot | Test conversational flows |
+| `minimoi_system_test_bot` | minimoi_system_bot | Test briefings, alerts, commands |
 
 Same chat ID as production. Bot name in header distinguishes which
 instance sent the message.
@@ -179,8 +179,8 @@ Two paths, matching two roles:
 
 **Test** (`/minimoi/test/`):
 ```
-/minimoi/test/telegram_agent_bot_token          ← minimoi_agent_bot_test
-/minimoi/test/telegram_system_bot_token         ← minimoi_system_bot_test
+/minimoi/test/telegram_agent_bot_token          ← minimoi_agent_test_bot
+/minimoi/test/telegram_system_bot_token         ← minimoi_system_test_bot
 /minimoi/test/telegram_chat_id                  ← Robert's chat ID (same)
 ```
 
@@ -284,7 +284,7 @@ MINIMOI_ROLE=standby → test bots, scheduled jobs suppressed
 
 ## Test Bots
 
-minimoi_agent_bot_test, minimoi_system_bot_test
+minimoi_agent_test_bot, minimoi_system_test_bot
 Created in BotFather. Same developer receives both.
 Standby instance always uses test bots.
 
@@ -317,7 +317,7 @@ Estimated rollback: 1-2h.
 ## Robert Actions (before Claude Code builds)
 
 1. Create two test bots in BotFather:
-   `minimoi_agent_bot_test`, `minimoi_system_bot_test`
+   `minimoi_agent_test_bot`, `minimoi_system_test_bot`
 2. Add SSM parameters under `/minimoi/test/` (2 tokens + chat_id)
 3. Rename/consolidate existing production SSM parameters to new
    two-bot naming convention under `/minimoi/production/`
