@@ -114,6 +114,7 @@ _working/trash/
 !_working/plan_*.md.pdf
 # Living roadmap doc — versioned source of truth, commit it
 !_working/ROADMAP.md
+!_working/NEAR_TERM_PLAN*.md
 # Approach docs — filed by dev agent, permanent record, commit them
 !_working/approach_*.md
 # Design docs — architecture/design artifacts, permanent record, commit them
