@@ -1171,7 +1171,10 @@ def guild_build_spec(filename):
     import re
     if not re.match(r'^[\w\-\.]+\.md$', filename):
         return "Not found", 404
-    spec_path = Path(__file__).parent.parent / "_working" / filename
+    repo_root = Path(__file__).parent.parent
+    spec_path = repo_root / "docs" / "specs" / filename
+    if not spec_path.exists():
+        spec_path = repo_root / "_working" / filename
     if not spec_path.exists():
         return render_template("guild/spec_detail.html",
                                content="<p><em>Spec file not found.</em></p>",
@@ -1190,7 +1193,10 @@ def guild_build_spec_raw(filename):
     import re
     if not re.match(r'^[\w\-\.]+\.md$', filename):
         return "Not found", 404
-    spec_path = Path(__file__).parent.parent / "_working" / filename
+    repo_root = Path(__file__).parent.parent
+    spec_path = repo_root / "docs" / "specs" / filename
+    if not spec_path.exists():
+        spec_path = repo_root / "_working" / filename
     if not spec_path.exists():
         return "Not found", 404
     raw = spec_path.read_text()

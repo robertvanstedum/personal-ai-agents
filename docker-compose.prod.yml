@@ -28,7 +28,7 @@ services:
       - /opt/minimoi/data/curator_signals.json:/app/curator_signals.json
       - /opt/minimoi/data/curator_latest.json:/app/curator_latest.json
       - /opt/minimoi/data/curator_radar.json:/app/curator_radar.json
-      - /opt/minimoi/data/openclaw:/root/.openclaw/workspace
+      - /opt/minimoi/data/curator:/app/data/curator
     ports:
       - "127.0.0.1:8766:8766"
     depends_on:

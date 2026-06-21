@@ -153,3 +153,4 @@ _NewDomains/guild/new-ventures/job-search/**
 !_working/german-redesign/
 !_working/german-redesign/*.pdf
 domains/guild/data/linkedin_connections.csv
+data/curator/

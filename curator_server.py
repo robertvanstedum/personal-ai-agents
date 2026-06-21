@@ -20,6 +20,14 @@ import re
 import html as _html
 
 BASE_DIR = Path(__file__).parent
+
+# Curator user data directory — preferences, history, priorities.
+# Defaults to data/curator/ within the repo so data lives under version control
+# boundaries (but is gitignored as personal data).
+# Override with CURATOR_DATA_DIR env var on EC2 or any non-default layout.
+_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(BASE_DIR / "data" / "curator")))
+_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
 app = Flask(__name__,
             template_folder=str(BASE_DIR / 'templates'),
             static_folder=str(BASE_DIR / 'static'),
@@ -271,7 +279,7 @@ def api_library():
     articles = {}  # keyed by article_id to deduplicate
 
     # ── 1. Load liked + saved from curator_preferences.json ──────────────────
-    workspace = Path.home() / '.openclaw' / 'workspace'
+    workspace = _DATA_DIR
     prefs_path = workspace / 'curator_preferences.json'
     if prefs_path.exists():
         prefs = json.loads(prefs_path.read_text())
@@ -451,7 +459,7 @@ def _api_add_priority_legacy():
         return jsonify({'success': False, 'message': 'At least one keyword is required'}), 400
     
     # Load existing priorities
-    workspace = Path.home() / '.openclaw' / 'workspace'
+    workspace = _DATA_DIR
     priorities_file = workspace / 'priorities.json'
     
     if priorities_file.exists():
@@ -517,7 +525,7 @@ def _api_add_priority_legacy():
 @app.route('/api/priorities', methods=['GET'])
 def api_list_priorities():
     """List all priorities from priorities.json with computed expiry fields."""
-    workspace = Path.home() / '.openclaw' / 'workspace'
+    workspace = _DATA_DIR
     priorities_file = workspace / 'priorities.json'
 
     if not priorities_file.exists():
@@ -575,7 +583,7 @@ def api_list_priorities():
 @app.route('/api/priority/<string:priority_id>', methods=['DELETE'])
 def api_delete_priority(priority_id):
     """Delete a priority by ID."""
-    workspace = Path.home() / '.openclaw' / 'workspace'
+    workspace = _DATA_DIR
     priorities_file = workspace / 'priorities.json'
 
     if not priorities_file.exists():
@@ -607,7 +615,7 @@ def api_edit_priority(priority_id):
     boost (float), active (bool), expires_days (int — sets expiry from now).
     """
     data = request.get_json()
-    workspace = Path.home() / '.openclaw' / 'workspace'
+    workspace = _DATA_DIR
     priorities_file = workspace / 'priorities.json'
 
     if not priorities_file.exists():
@@ -653,7 +661,7 @@ def api_edit_priority(priority_id):
 @app.route('/api/priority/<string:priority_id>/feed', methods=['GET'])
 def api_priority_feed(priority_id):
     """Return the feed array for a specific priority."""
-    workspace = Path.home() / '.openclaw' / 'workspace'
+    workspace = _DATA_DIR
     priorities_file = workspace / 'priorities.json'
 
     if not priorities_file.exists():
@@ -683,7 +691,7 @@ def api_priority_refresh(priority_id):
     import curator_priority_feed as cpf
     from datetime import timezone
 
-    workspace = Path.home() / '.openclaw' / 'workspace'
+    workspace = _DATA_DIR
     priorities_file = workspace / 'priorities.json'
 
     if not priorities_file.exists():
@@ -748,7 +756,7 @@ def api_priority_feed_save():
     if not (url and title and source):
         return jsonify({'success': False, 'message': 'Missing url, title, or source'}), 400
 
-    prefs_path = Path.home() / '.openclaw' / 'workspace' / 'curator_preferences.json'
+    prefs_path = _DATA_DIR / 'curator_preferences.json'
     if prefs_path.exists():
         prefs = json.loads(prefs_path.read_text())
     else:
@@ -809,7 +817,7 @@ def api_priority_feed_feedback():
     # Map action → storage key
     storage_key = {'like': 'liked', 'dislike': 'disliked', 'save': 'saved'}[action]
 
-    prefs_path = Path.home() / '.openclaw' / 'workspace' / 'curator_preferences.json'
+    prefs_path = _DATA_DIR / 'curator_preferences.json'
     if prefs_path.exists():
         prefs = json.loads(prefs_path.read_text())
     else:
@@ -877,7 +885,7 @@ def api_check_url():
 @app.route('/api/intelligence/latest', methods=['GET'])
 def api_intelligence_latest():
     """Serve intelligence observations for a given date (defaults to today) + responses."""
-    workspace = Path.home() / '.openclaw' / 'workspace'
+    workspace = _DATA_DIR
 
     date_param = request.args.get('date', '').strip()
     if date_param:
@@ -1082,7 +1090,7 @@ def _archive_dives():
 
 def _archive_observations():
     """Daily intelligence observation dates from ~/.openclaw/workspace/."""
-    workspace = Path.home() / '.openclaw' / 'workspace'
+    workspace = _DATA_DIR
     entries = []
     try:
         for f in sorted(workspace.glob('intelligence_*.json'), reverse=True):
@@ -1401,7 +1409,7 @@ def record_feedback(action, rank, reason):
 
 def record_feedback_with_article(action, rank, article_data):
     """Call curator_feedback.py in workspace with full article metadata (new POST endpoint)"""
-    workspace = Path.home() / '.openclaw' / 'workspace'
+    workspace = _DATA_DIR
     feedback_script = workspace / 'curator_feedback.py'
     
     if not feedback_script.exists():
