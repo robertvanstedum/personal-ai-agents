@@ -1059,14 +1059,16 @@ def _archive_scans():
     scans_dir = BASE_DIR / 'interests' / '2026' / 'scans'
     scans = []
     try:
-        for md in sorted(scans_dir.glob('*.md'), reverse=True):
+        raw = []
+        for md in scans_dir.glob('*.md'):
             m = _scan_md_meta(md)
-            scans.append({
+            raw.append({
                 'date':   m['date'],
                 'title':  m['title'],
                 'source': m['source'],
                 'url':    f'/research/scan/{m["hash_id"]}',
             })
+        scans = sorted(raw, key=lambda s: s['date'], reverse=True)
     except Exception:
         pass
     return scans
@@ -1132,14 +1134,16 @@ def _scans_dives_data():
     # ── Scans from interests/2026/scans/*.md ─────────────────────────────────
     scans_dir = BASE_DIR / 'interests' / '2026' / 'scans'
     try:
-        for md in sorted(scans_dir.glob('*.md'), reverse=True):
+        raw_scans = []
+        for md in scans_dir.glob('*.md'):
             m = _scan_md_meta(md)
-            scans.append({
+            raw_scans.append({
                 'href':   f'/research/scan/{m["hash_id"]}',
                 'date':   m['date'],
                 'source': m['source'],
                 'title':  m['title'],
             })
+        scans = sorted(raw_scans, key=lambda s: s['date'], reverse=True)
     except Exception:
         pass
 
