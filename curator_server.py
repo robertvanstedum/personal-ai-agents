@@ -1409,8 +1409,7 @@ def record_feedback(action, rank, reason):
 
 def record_feedback_with_article(action, rank, article_data):
     """Call curator_feedback.py in workspace with full article metadata (new POST endpoint)"""
-    workspace = _DATA_DIR
-    feedback_script = workspace / 'curator_feedback.py'
+    feedback_script = BASE_DIR / 'curator_feedback.py'
     
     if not feedback_script.exists():
         return {'success': False, 'message': f'curator_feedback.py not found at {feedback_script}'}
