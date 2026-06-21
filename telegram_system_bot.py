@@ -24,6 +24,11 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+_IN_DOCKER = os.path.exists('/.dockerenv')
+_CURATOR_URL = "http://curator:8766" if _IN_DOCKER else "http://localhost:8766"
+_GERMAN_URL  = "http://german:8767"  if _IN_DOCKER else "http://localhost:8767"
+_PORTAL_URL  = "http://portal:5001"  if _IN_DOCKER else "http://localhost:5001"
+
 
 def _get_token() -> str:
     from utils.telegram import get_system_token
@@ -56,9 +61,9 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lines = [f"<b>Status</b> — {_identity()}"]
-    lines.append(_check_service("curator", "http://curator:8766/"))
-    lines.append(_check_service("german", "http://german:8767/"))
-    lines.append(_check_service("portal", "http://portal:5001/"))
+    lines.append(_check_service("curator", _CURATOR_URL + "/"))
+    lines.append(_check_service("german", _GERMAN_URL + "/"))
+    lines.append(_check_service("portal", _PORTAL_URL + "/"))
     await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
@@ -67,9 +72,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text.lower().startswith("!ops"):
         lines = [f"<b>Ops</b> — {_identity()}"]
-        lines.append(_check_service("curator", "http://curator:8766/"))
-        lines.append(_check_service("german", "http://german:8767/"))
-        lines.append(_check_service("portal", "http://portal:5001/"))
+        lines.append(_check_service("curator", _CURATOR_URL + "/"))
+        lines.append(_check_service("german", _GERMAN_URL + "/"))
+        lines.append(_check_service("portal", _PORTAL_URL + "/"))
         await update.message.reply_text("\n".join(lines), parse_mode="HTML")
         return
 
