@@ -818,10 +818,23 @@ document.body.classList.add('parch-mode');
     card.className = 'session-saved-card';
     card.dataset.sessionId = session.id;
     const dur = formatDuration(session.durationMs);
+
+    // T2-C: scene summary line (no LLM — from session state only)
+    const sceneLine = session.scene
+      ? `<div class="session-saved-scene">${session.scene}</div>`
+      : '';
+
+    // T2-A: Teilen button — only if native share is available (iOS Safari)
+    const teilenBtn = navigator.share
+      ? `<button class="btn-session-card-teilen btn-ghost btn-sm">Teilen</button>`
+      : '';
+
     card.innerHTML =
       `<div class="session-saved-meta">✓ ${session.personaName} · Runde ${session.round} · ${session.turns} Züge · ${dur}</div>` +
+      sceneLine +
       `<div class="session-saved-actions">` +
         `<button class="btn-session-card-transcript">Transkript ▾</button>` +
+        teilenBtn +
         `<button class="btn-session-card-delete" title="Sitzung löschen">✕</button>` +
         `<button class="btn-session-card-analyse">Analysieren →</button>` +
       `</div>` +
@@ -836,6 +849,19 @@ document.body.classList.add('parch-mode');
       wrap.style.display = open ? 'none' : '';
       btn.textContent = open ? 'Transkript ▾' : 'Transkript ▲';
     });
+
+    if (navigator.share) {
+      card.querySelector('.btn-session-card-teilen').addEventListener('click', async () => {
+        try {
+          await navigator.share({
+            title: 'Gespräch mit ' + session.personaName,
+            text: session.transcript,
+          });
+        } catch (e) {
+          if (e.name !== 'AbortError') console.warn('Share failed:', e);
+        }
+      });
+    }
 
     card.querySelector('.btn-session-card-delete').addEventListener('click', () => {
       if (confirm('Diese Sitzung löschen?')) {

@@ -242,7 +242,7 @@ textarea::placeholder {
     left: 0;
     right: 0;
     height: auto;
-    padding: 0;
+    padding: 0 0 env(safe-area-inset-bottom);
     overflow-x: auto;
     border-top: 1px solid var(--border);
     border-bottom: none;
@@ -275,7 +275,7 @@ textarea::placeholder {
   .nav-links a.active::after { display: none; }
 
   .page {
-    padding-bottom: 5rem;
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
   }
 }
 
@@ -4267,6 +4267,14 @@ body.archiv-mode .page {
   color: var(--md-text-secondary);
   flex: 1;
   min-width: 0;
+}
+
+.session-saved-scene {
+  font-size: 0.78rem;
+  color: var(--md-text-muted);
+  width: 100%;
+  margin-top: -0.1rem;
+  text-transform: capitalize;
 }
 
 .session-saved-analysiert {
