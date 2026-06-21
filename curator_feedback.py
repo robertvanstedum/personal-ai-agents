@@ -32,8 +32,7 @@ CURATOR_OUTPUT = Path(__file__).parent / "curator_output.txt"
 PREFERENCES_FILE = Path.home() / ".openclaw" / "workspace" / "curator_preferences.json"
 
 def get_anthropic_api_key():
-    """Get Anthropic API key from keychain, env, or .env file"""
-    # Try keychain first (most secure)
+    """Get Anthropic API key from keychain, env, or SSM"""
     try:
         import keyring
         api_key = keyring.get_password("anthropic", "api_key")
@@ -41,12 +40,17 @@ def get_anthropic_api_key():
             return api_key
     except Exception:
         pass
-    
-    # Try environment variable
+
     api_key = os.getenv('ANTHROPIC_API_KEY')
     if api_key:
         return api_key
-    
+
+    try:
+        from get_secret import get_secret
+        return get_secret("ANTHROPIC_API_KEY")
+    except Exception:
+        pass
+
     return None
 
 def load_preferences():
