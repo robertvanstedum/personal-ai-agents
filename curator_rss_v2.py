@@ -71,6 +71,11 @@ from dotenv import load_dotenv
 from curator_config import ACTIVE_DOMAIN
 from curator_utils import get_telegram_token, send_telegram_alert
 
+# Curator user data directory — same convention as curator_server.py and curator_feedback.py.
+# Override with CURATOR_DATA_DIR env var on EC2.
+_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator")))
+_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
 # ---------------------------------------------------------------------------
 # Cost logger — persists per-run API costs for cost_report.py
 # ---------------------------------------------------------------------------
@@ -1189,7 +1194,7 @@ def load_user_profile(min_weight: int = 2) -> str:
     """
     from pathlib import Path
 
-    prefs_path = Path.home() / '.openclaw' / 'workspace' / 'curator_preferences.json'
+    prefs_path = _DATA_DIR / 'curator_preferences.json'
 
     try:
         with open(prefs_path) as f:
@@ -1328,7 +1333,7 @@ def load_priorities():
     from datetime import datetime
     import json
     
-    priorities_file = Path.home() / ".openclaw" / "workspace" / "priorities.json"
+    priorities_file = _DATA_DIR / "priorities.json"
     
     if not priorities_file.exists():
         return []
@@ -1861,7 +1866,7 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
     # Load serendipity reserve setting
     serendipity_reserve = 0.20  # Default
     try:
-        prefs_path = Path.home() / '.openclaw' / 'workspace' / 'curator_preferences.json'
+        prefs_path = _DATA_DIR / 'curator_preferences.json'
         with open(prefs_path) as f:
             prefs = json.load(f)
             serendipity_reserve = prefs.get('curation_settings', {}).get('serendipity_reserve', 0.20)

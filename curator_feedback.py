@@ -28,8 +28,11 @@ load_dotenv()
 
 # File paths
 CURATOR_OUTPUT = Path(__file__).parent / "curator_output.txt"
-# Canonical preferences location — shared with curator_rss_v2.py (scoring) and OpenClaw
-PREFERENCES_FILE = Path.home() / ".openclaw" / "workspace" / "curator_preferences.json"
+# Canonical preferences location — shared with curator_server.py and curator_rss_v2.py.
+# Defaults to data/curator/ in the repo; override with CURATOR_DATA_DIR env var on EC2.
+_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator")))
+_DATA_DIR.mkdir(parents=True, exist_ok=True)
+PREFERENCES_FILE = _DATA_DIR / "curator_preferences.json"
 
 def get_anthropic_api_key():
     """Get Anthropic API key from keychain, env, or SSM"""
