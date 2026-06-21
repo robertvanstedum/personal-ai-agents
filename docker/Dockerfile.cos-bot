@@ -2,10 +2,12 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY docker/requirements.telegram.txt requirements.txt
+COPY docker/requirements.cos-agent.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY get_secret.py .
 COPY utils/ utils/
+COPY domains/guild/ domains/guild/
 COPY telegram_cos_bot.py .
 
 CMD ["python", "telegram_cos_bot.py"]

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build Docker images and push to ECR. Run on Mac (dev machine).
 # Requires: AWS CLI configured with minimoi-deploy credentials (aws configure)
-# Usage: ./scripts/push_to_ecr.sh [curator|german|portal|all]
+# Usage: ./scripts/push_to_ecr.sh [curator|german|portal|system-bot|cos-bot|all]
 set -euo pipefail
 
 ACCOUNT_ID="332704997792"
@@ -38,11 +38,8 @@ case "$TARGET" in
   portal)
     build_and_push portal minimoi/portal docker/Dockerfile.portal
     ;;
-  telegram)
-    build_and_push telegram minimoi/telegram-bot docker/Dockerfile.telegram
-    ;;
-  cos-agent)
-    build_and_push cos-agent minimoi/cos-agent docker/Dockerfile.cos-agent
+  system-bot)
+    build_and_push system-bot minimoi/system-bot docker/Dockerfile.telegram
     ;;
   cos-bot)
     build_and_push cos-bot minimoi/cos-bot docker/Dockerfile.cos-bot
@@ -51,12 +48,11 @@ case "$TARGET" in
     build_and_push curator minimoi/curator docker/Dockerfile.curator
     build_and_push german minimoi/mein-deutsch docker/Dockerfile.german
     build_and_push portal minimoi/portal docker/Dockerfile.portal
-    build_and_push telegram minimoi/telegram-bot docker/Dockerfile.telegram
-    build_and_push cos-agent minimoi/cos-agent docker/Dockerfile.cos-agent
+    build_and_push system-bot minimoi/system-bot docker/Dockerfile.telegram
     build_and_push cos-bot minimoi/cos-bot docker/Dockerfile.cos-bot
     ;;
   *)
-    echo "Usage: $0 [curator|german|portal|telegram|cos-agent|cos-bot|all]"
+    echo "Usage: $0 [curator|german|portal|system-bot|cos-bot|all]"
     exit 1
     ;;
 esac

@@ -63,9 +63,9 @@ services:
       - german
       - postgres
 
-  telegram-bot:
-    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/telegram-bot:latest
-    container_name: minimoi-telegram-bot
+  system-bot:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/system-bot:latest
+    container_name: minimoi-system-bot
     restart: unless-stopped
     env_file: /opt/minimoi/.env
     environment:
@@ -74,23 +74,6 @@ services:
       - curator
       - portal
 
-  cos-agent:
-    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-agent:latest
-    container_name: minimoi-cos-agent
-    restart: unless-stopped
-    env_file: /opt/minimoi/.env
-    environment:
-      - MINIMOI_ROLE=production
-      - PORT=8769
-      - DISABLE_TELEGRAM_POLL=1
-    volumes:
-      - /opt/minimoi/data/guild/memory/cos_memory.md:/app/data/guild/memory/cos_memory.md
-      - /opt/minimoi/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json
-    ports:
-      - "127.0.0.1:8769:8769"
-    depends_on:
-      - postgres
-
   cos-bot:
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-bot:latest
     container_name: minimoi-cos-bot
@@ -98,9 +81,12 @@ services:
     env_file: /opt/minimoi/.env
     environment:
       - MINIMOI_ROLE=production
-      - COS_AGENT_URL=http://cos-agent:8769
+      - DISABLE_TELEGRAM_POLL=1
+    volumes:
+      - /opt/minimoi/data/guild/memory/cos_memory.md:/app/data/guild/memory/cos_memory.md
+      - /opt/minimoi/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json
     depends_on:
-      - cos-agent
+      - postgres
 
 volumes:
   postgres-data:
