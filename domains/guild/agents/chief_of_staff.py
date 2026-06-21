@@ -707,6 +707,22 @@ def _handle_tg_text(text: str, token: str, chat_id: str):
 
     # ── !dev command ──────────────────────────────────────────────────────────
     if lower.startswith("!dev"):
+        dev_query = text[4:].strip().lower()
+        if dev_query in ("push-private", "push"):
+            try:
+                import subprocess as _sp
+                sync_script = BASE_DIR / "scripts" / "sync_private_repo.sh"
+                result = _sp.run(
+                    ["bash", str(sync_script)],
+                    capture_output=True, text=True, timeout=60, cwd=str(BASE_DIR)
+                )
+                if result.returncode == 0:
+                    _tg_send(token, chat_id, "📦 Private repo synced.")
+                else:
+                    _tg_send(token, chat_id, f"❌ Sync failed:\n{result.stderr[:200]}")
+            except Exception as e:
+                _tg_send(token, chat_id, f"❌ Sync error: {e}")
+            return
         try:
             d = requests.get("http://localhost:8770/status", timeout=5).json()
             events    = d.get("events_processed", 0)
