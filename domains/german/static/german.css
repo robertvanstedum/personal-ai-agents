@@ -2522,7 +2522,10 @@ body.reading-mode nav {
   .persona-list {
     border-right: none;
     border-bottom: 1px solid var(--md-parch-deep);
-    max-height: 220px;
+    /* Mobile: show the full persona list and let the page scroll naturally,
+       instead of a short nested touch-scroll box that strands later personas. */
+    max-height: none;
+    overflow-y: visible;
   }
   .persona-detail { max-height: none; }
 

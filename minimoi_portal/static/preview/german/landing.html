@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+
+<html lang="de"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Mein Deutsch</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="/preview/assets/german.css?v=2" rel="stylesheet"/>
+
+<script id="preview-fetch-intercept">
+(function() {
+  var _orig = window.fetch;
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
+      return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    return _orig.apply(this, arguments);
+  };
+})();
+</script>
+<style id="preview-banner-style">
+.preview-banner {
+  position: sticky; top: 0; z-index: 9999;
+  background: #2A1F14; color: #F5F0E8;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 11px; letter-spacing: 0.04em;
+  padding: 7px 20px;
+  border-bottom: 1px solid rgba(198,138,94,0.3);
+  display: flex; align-items: center; gap: 8px;
+}
+.preview-banner .preview-date { color: rgba(245,240,232,0.7); }
+.preview-request-link {
+  color: #C68A5E; text-decoration: none; margin-left: auto;
+  border: 1px solid rgba(198,138,94,0.4); padding: 2px 10px; border-radius: 3px;
+}
+.preview-request-link:hover { background: rgba(198,138,94,0.1); }
+</style>
+<style id="landing-hero-fix">
+/* The shared CSS draws the hero via a position:fixed body::before. On iOS Safari
+   that fixed layer doesn't composite until a touch/scroll repaint — the "flash on
+   touch, otherwise hidden" symptom. Disable the fixed pseudo-elements and rely
+   solely on the in-flow <img> hero, forced onto its own GPU layer so it paints
+   immediately and can't be hidden behind the fixed layer. */
+body.landing-mode::before,
+body.landing-mode::after { display: none !important; }
+body.landing-mode { background: #14110b !important; }
+.landing-hero { position: relative !important; z-index: 1 !important; }
+.landing-hero > img {
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+</style>
+</head>
+<body class="landing-mode"><div class="preview-banner">
+<span>Preview snapshot — </span>
+<span class="preview-date">Captured June 2026</span>
+<span>. Data is real but frozen.</span>
+<a class="preview-request-link" href="/contact">Request live access →</a>
+</div>
+<style id="portal-offset-css">
+body { padding-top: 38px !important; }
+@media (min-width: 769px) { nav { top: 38px !important; } }
+</style>
+<div id="portal-nav-bar" style="
+  position:fixed;top:0;left:0;right:0;z-index:999999;
+  height:38px;background:#12122a;color:#e8e8e8;
+  display:flex;align-items:center;padding:0 16px;gap:0;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:13px;border-bottom:1px solid rgba(255,255,255,0.12);
+  box-shadow:0 1px 8px rgba(0,0,0,0.4);
+">
+<a href="/preview/" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
+<span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
+<a href="/preview/curator/briefing.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;">Curator</a>
+<a href="/preview/german/landing.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;color:#ffffff;font-weight:600;">German</a>
+<a href="/preview/guild/briefing.html" style="color:#C68A5E;text-decoration:none;">Guild</a>
+<span style="color:rgba(255,255,255,0.45);margin-left:auto;margin-right:12px;">Robert</span>
+<a data-admin-blocked="true" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;; cursor: pointer;">Sign out</a>
+</div>
+<nav>
+<a class="logo" href="/preview/german/landing.html">Mein Deutsch</a>
+<ul class="nav-links">
+<li><a href="/preview/german/lesen.html" title="Read">Lesen</a></li>
+<li><a href="/preview/german/gesprache.html" title="Conversations">Gespräche</a></li>
+<li><a href="/preview/german/schreiben.html" title="Write">Schreiben</a></li>
+<li><a href="/preview/german/worter.html" title="Words / Phrasebook">Wörter</a></li>
+<li><a href="/preview/german/archiv.html" title="Archive">Archiv</a></li>
+<li><a data-admin-blocked="true" style="cursor: pointer;" title="Admin">Admin</a></li>
+</ul>
+</nav>
+<main class="page">
+<div class="landing-hero" style="background-image:linear-gradient(rgba(20,14,10,0.32),rgba(20,14,10,0.48)),url('/preview/assets/bg-primary.jpg?v=3');background-size:cover;background-position:center;background-repeat:no-repeat;">
+<h1 class="landing-title">Mein Deutsch</h1>
+<p class="landing-subtitle">Dein persönlicher Sprachraum</p>
+<ul class="landing-nav">
+<li><a href="/preview/german/lesen.html">Lesen</a></li>
+<li><a href="/preview/german/gesprache.html">Gespräche</a></li>
+<li><a href="/preview/german/schreiben.html">Schreiben</a></li>
+<li><a href="/preview/german/worter.html">Wörter</a></li>
+</ul>
+</div>
+</main>
+</body></html>

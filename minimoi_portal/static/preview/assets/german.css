@@ -62,7 +62,7 @@ body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background-image: url('/app/german/static/bg-primary.jpg');
+  background-image: url('/preview/assets/bg-primary.jpg');
   background-size: cover;
   background-position: center;
   opacity: 0;
