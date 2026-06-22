@@ -50,7 +50,7 @@ SIGNALS_FILE         = PROJECT_DIR / 'curator_signals.json'
 URL_CACHE_FILE       = PROJECT_DIR / 'curator_url_cache.json'
 DOMAIN_REGISTRY_FILE = PROJECT_DIR / 'curator_domain_registry.json'
 MEDIA_DIR            = PROJECT_DIR / 'curator_media'
-PREFS_FILE           = Path.home() / '.openclaw' / 'workspace' / 'curator_preferences.json'
+PREFS_FILE           = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator"))) / "curator_preferences.json"
 
 # ── Domains to skip for article enrichment (tweet self-links, media hosts) ───
 SKIP_DOMAINS = {

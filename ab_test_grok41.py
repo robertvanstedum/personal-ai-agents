@@ -60,7 +60,7 @@ def load_recent_articles(limit=20):
 
 def load_user_profile():
     """Load user profile from curator preferences"""
-    prefs_file = Path.home() / '.openclaw' / 'workspace' / 'curator_preferences.json'
+    prefs_file = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator"))) / "curator_preferences.json"
     
     if not prefs_file.exists():
         return ""

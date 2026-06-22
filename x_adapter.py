@@ -50,6 +50,7 @@ Usage:
 """
 
 import json
+import os
 import re
 import sys
 import time
@@ -64,7 +65,7 @@ from x_oauth2_authorize import get_valid_token
 from curator_config import ACTIVE_DOMAIN, KNOWN_FOLDERS as _CONFIG_FOLDERS
 
 # ── Paths ──────────────────────────────────────────────────────────────────
-PREFS_PATH = Path.home() / '.openclaw' / 'workspace' / 'curator_preferences.json'
+PREFS_PATH = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator"))) / "curator_preferences.json"
 CACHE_PATH = Path(__file__).parent / 'x_adapter_cache.json'
 
 # ── Twitter API base ────────────────────────────────────────────────────────

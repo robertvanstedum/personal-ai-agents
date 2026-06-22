@@ -13,11 +13,12 @@ Usage:
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 from datetime import datetime, timezone
 
-PREFS_PATH = Path.home() / '.openclaw' / 'workspace' / 'curator_preferences.json'
+PREFS_PATH = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator"))) / "curator_preferences.json"
 
 
 def load_prefs():
