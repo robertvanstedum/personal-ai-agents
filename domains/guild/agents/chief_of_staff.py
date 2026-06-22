@@ -14,6 +14,7 @@ Telegram polling thread handles !cos / !chief / !ops on rvsopenbot.
 import json
 import logging
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -322,6 +323,183 @@ def _run_guest_nudge_check() -> dict:
     return {"nudged": count}
 
 
+# ── EC2 Health Monitor (loop_h) ───────────────────────────────────────────────
+
+_EXPECTED_CONTAINERS = [
+    "postgres-ai-agents",
+    "minimoi-curator",
+    "minimoi-german",
+    "minimoi-portal",
+    "minimoi-system-bot",
+    "minimoi-cos-bot",
+]
+
+_HEALTH_ENDPOINTS = [
+    ("curator", "http://localhost:8766/health"),
+    ("german",  "http://localhost:8767/health"),
+    ("portal",  "http://localhost:5001/health"),
+]
+
+_ec2_alert_cooldown: dict = {}
+_COOLDOWN_SECONDS = 3600  # 1 hour between repeat alerts for same condition
+
+
+def _ec2_alert(token: str, chat_id: str, key: str, message: str):
+    """Send alert only if not sent for this key within the cooldown window."""
+    now = datetime.now(timezone.utc)
+    last = _ec2_alert_cooldown.get(key)
+    if last and (now - last).total_seconds() < _COOLDOWN_SECONDS:
+        return
+    _ec2_alert_cooldown[key] = now
+    _tg_send(token, chat_id, message)
+
+
+def _get_instance_id() -> str:
+    try:
+        r = requests.get("http://169.254.169.254/latest/meta-data/instance-id", timeout=2)
+        return r.text.strip()
+    except Exception:
+        return ""
+
+
+def _check_ec2_health() -> dict:
+    """
+    Loop H — EC2 health check every 30 minutes. Production only.
+    Detects problems and alerts Robert. Does not fix anything.
+    Two-layer: subprocess (docker ps, df, free, curl) + boto3 CloudWatch (CPU).
+    """
+    from utils.role import is_production
+    if not is_production():
+        return {"skipped": "standby node"}
+
+    try:
+        from utils.telegram import get_system_token, get_chat_id as _gc
+        token   = get_system_token()
+        chat_id = _gc()
+    except Exception as e:
+        log.error("EC2 health: could not get telegram credentials: %s", e)
+        return {"error": str(e)}
+
+    if not token or not chat_id:
+        return {"error": "missing token or chat_id"}
+
+    issues = []
+
+    # ── 1. Container check ────────────────────────────────────────────────────
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "--format", "{{.Names}}"],
+            capture_output=True, text=True, timeout=15
+        )
+        running = set(result.stdout.strip().splitlines())
+        for name in _EXPECTED_CONTAINERS:
+            if name not in running:
+                svc = name.replace("minimoi-", "")
+                _ec2_alert(token, chat_id, f"container_{name}",
+                    f"⚠️ <b>EC2 Health Alert</b>\n"
+                    f"Container <code>{name}</code> is not running.\n\n"
+                    f"Diagnose: <code>docker logs {name} --tail 50</code>\n"
+                    f"Restart:  <code>cd /opt/minimoi &amp;&amp; docker-compose -f docker-compose.prod.yml up -d --force-recreate {svc}</code>"
+                )
+                issues.append(f"container_down:{name}")
+    except Exception as e:
+        log.error("EC2 health: docker ps failed: %s", e)
+
+    # ── 2. Disk check ─────────────────────────────────────────────────────────
+    try:
+        result = subprocess.run(["df", "-h", "/"], capture_output=True, text=True, timeout=10)
+        lines = result.stdout.strip().splitlines()
+        if len(lines) >= 2:
+            parts = lines[1].split()
+            pct = int(parts[4].rstrip("%")) if len(parts) >= 5 else 0
+            if pct >= 80:
+                _ec2_alert(token, chat_id, "disk_high",
+                    f"⚠️ <b>EC2 Health Alert</b>\n"
+                    f"Disk usage: <b>{pct}%</b> (threshold: 80%)\n"
+                    f"Used: {parts[2]} of {parts[1]}\n\n"
+                    f"Free space: <code>docker system prune -af</code>"
+                )
+                issues.append(f"disk:{pct}%")
+    except Exception as e:
+        log.error("EC2 health: df failed: %s", e)
+
+    # ── 3. Memory check ───────────────────────────────────────────────────────
+    try:
+        result = subprocess.run(["free", "-m"], capture_output=True, text=True, timeout=10)
+        lines = result.stdout.strip().splitlines()
+        if len(lines) >= 2:
+            parts = lines[1].split()
+            total = int(parts[1])
+            used  = int(parts[2])
+            pct   = int(used / total * 100) if total > 0 else 0
+            if pct >= 85:
+                avail = parts[6] if len(parts) >= 7 else "?"
+                _ec2_alert(token, chat_id, "memory_high",
+                    f"⚠️ <b>EC2 Health Alert</b>\n"
+                    f"Memory usage: <b>{pct}%</b> (threshold: 85%)\n"
+                    f"Used: {used}MB / {total}MB — Available: {avail}MB\n\n"
+                    f"Check consumers: <code>docker stats --no-stream</code>"
+                )
+                issues.append(f"memory:{pct}%")
+    except Exception as e:
+        log.error("EC2 health: free failed: %s", e)
+
+    # ── 4. /health endpoint check ─────────────────────────────────────────────
+    for name, url in _HEALTH_ENDPOINTS:
+        try:
+            r = requests.get(url, timeout=5)
+            if r.status_code != 200:
+                _ec2_alert(token, chat_id, f"health_{name}",
+                    f"⚠️ <b>EC2 Health Alert</b>\n"
+                    f"<b>{name}</b> /health returned {r.status_code}\n\n"
+                    f"Diagnose: <code>docker logs minimoi-{name} --tail 50</code>\n"
+                    f"Restart:  <code>cd /opt/minimoi &amp;&amp; docker-compose -f docker-compose.prod.yml up -d --force-recreate {name}</code>"
+                )
+                issues.append(f"health_{name}:{r.status_code}")
+        except Exception as e:
+            _ec2_alert(token, chat_id, f"health_{name}",
+                f"⚠️ <b>EC2 Health Alert</b>\n"
+                f"<b>{name}</b> /health unreachable\n\n"
+                f"Diagnose: <code>docker logs minimoi-{name} --tail 50</code>\n"
+                f"Restart:  <code>cd /opt/minimoi &amp;&amp; docker-compose -f docker-compose.prod.yml up -d --force-recreate {name}</code>"
+            )
+            issues.append(f"health_{name}:unreachable")
+
+    # ── 5. CloudWatch CPU (best-effort, non-blocking) ─────────────────────────
+    try:
+        import boto3
+        from datetime import timedelta
+        cw  = boto3.client("cloudwatch", region_name="us-east-1")
+        end = datetime.now(timezone.utc)
+        iid = _get_instance_id()
+        if iid:
+            resp = cw.get_metric_statistics(
+                Namespace="AWS/EC2",
+                MetricName="CPUUtilization",
+                Dimensions=[{"Name": "InstanceId", "Value": iid}],
+                StartTime=end - timedelta(minutes=10),
+                EndTime=end,
+                Period=300,
+                Statistics=["Average"],
+            )
+            pts = resp.get("Datapoints", [])
+            if pts:
+                cpu = max(d["Average"] for d in pts)
+                if cpu >= 90:
+                    _ec2_alert(token, chat_id, "cpu_high",
+                        f"⚠️ <b>EC2 Health Alert</b>\n"
+                        f"CPU: <b>{cpu:.1f}%</b> 10-min avg (threshold: 90%)\n\n"
+                        f"Check: <code>docker stats --no-stream</code>"
+                    )
+                    issues.append(f"cpu:{cpu:.0f}%")
+    except Exception as e:
+        log.debug("EC2 health: CloudWatch CPU skipped: %s", e)
+
+    status = "ok" if not issues else f"issues: {', '.join(issues)}"
+    log.info("EC2 health check complete: %s", status)
+    return {"status": status, "issues": issues}
+
+
 def _build_system_prompt() -> str:
     try:
         raw_context = json.loads(COS_CONTEXT_FILE.read_text())
@@ -606,6 +784,7 @@ _loop_state: dict[str, dict] = {
     "loop_d": {"name": "novelty_watch",          "last_run": None, "last_result": None, "error": None},
     "loop_f": {"name": "build_discipline_check", "last_run": None, "last_result": None, "error": None},
     "loop_g": {"name": "guest_nudge_check",      "last_run": None, "last_result": None, "error": None},
+    "loop_h": {"name": "ec2_health_check",       "last_run": None, "last_result": None, "error": None},
 }
 _loop_lock = threading.Lock()
 
@@ -1038,6 +1217,11 @@ def main():
         lambda: _run_loop("loop_g", _run_guest_nudge_check),
         "interval", hours=1, id="loop_g", misfire_grace_time=300
     )
+    # Loop H — EC2 health check every 30 min (is_production() guard inside)
+    scheduler.add_job(
+        lambda: _run_loop("loop_h", _check_ec2_health),
+        "interval", minutes=30, id="loop_h", misfire_grace_time=300
+    )
 
     if loops_ok:
         # Loop A — twice daily
@@ -1060,9 +1244,9 @@ def main():
             lambda: _run_loop("loop_d", run_novelty_watch),
             "cron", day="1,15", hour=8, id="loop_d", misfire_grace_time=600
         )
-        print("   Scheduler: loop_a(6+18h) loop_b(Sun 9h) loop_c(Sun 10h) loop_d(1st+15th 8h) loop_f(daily 7:30) loop_g(hourly) ✅")
+        print("   Scheduler: loop_a(6+18h) loop_b(Sun 9h) loop_c(Sun 10h) loop_d(1st+15th 8h) loop_f(daily 7:30) loop_g(hourly) loop_h(30min) ✅")
     else:
-        print("   Scheduler: loop_f(daily 7:30) loop_g(hourly) ✅ — loop_a/b/c/d disabled (import error)")
+        print("   Scheduler: loop_f(daily 7:30) loop_g(hourly) loop_h(30min) ✅ — loop_a/b/c/d disabled (import error)")
 
     scheduler.start()
 
