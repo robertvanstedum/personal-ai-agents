@@ -13,10 +13,10 @@ if [ "$ROLE" != "production" ]; then
   exit 0
 fi
 
-# ── Time gate: only run between 11:00 and 17:00 UTC (6AM–12PM CDT) ───────────
+# ── Time gate: only run between 12:00 and 20:00 UTC (7AM–3PM CDT) ────────────
 HOUR=$(date -u +%H)
-if [ "$HOUR" -lt 11 ] || [ "$HOUR" -ge 17 ]; then
-  echo "$LOG_PREFIX Outside 11:00–17:00 UTC window (hour=$HOUR UTC) — skipping"
+if [ "$HOUR" -lt 12 ] || [ "$HOUR" -ge 20 ]; then
+  echo "$LOG_PREFIX Outside 12:00–20:00 UTC window (hour=$HOUR UTC) — skipping"
   exit 0
 fi
 
