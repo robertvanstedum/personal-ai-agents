@@ -202,8 +202,22 @@
 <script id="preview-fetch-intercept">
 (function() {
   var _orig = window.fetch;
+  // Endpoints allowed to pass through to the real server
+  var PASSTHROUGH = ['/app/german/api/translate'];
   window.fetch = function(url, opts) {
     var u = typeof url === 'string' ? url : (url && url.url) || '';
+    // Lesen category API — serve pre-captured data if available
+    if (u.indexOf('/api/lesen-category') !== -1) {
+      var cat = '';
+      try { cat = new URL(u, location.origin).searchParams.get('category') || ''; } catch(e) {}
+      var data = window._previewLesenData || {};
+      var articles = data[cat] || [];
+      return Promise.resolve(new Response(JSON.stringify({articles: articles}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    // Allow translate through — works for authenticated users, fails silently otherwise
+    for (var i = 0; i < PASSTHROUGH.length; i++) {
+      if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
+    }
     if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
       return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
     }
@@ -241,7 +255,7 @@
 <span class="nav-sep">|</span>
 <a href="/preview/curator/briefing.html">Curator</a>
 <span class="nav-sep">|</span>
-<a href="/preview/german/lesen.html">German</a>
+<a href="/preview/german/landing.html">German</a>
 <span class="nav-sep">|</span>
 <a class="nav-active" href="/preview/guild/briefing.html">Guild</a>
 </div>
@@ -266,13 +280,13 @@
 <div class="brief-row">
 <span class="brief-label">Disk</span>
 <span class="brief-value">
-<span class="pill pill-warn">89.1%</span>  above 85% threshold
+<span class="pill pill-warn">89.2%</span>  above 85% threshold
         
       </span>
 </div>
 <div class="brief-row">
 <span class="brief-label">Loop A</span>
-<span class="brief-value">Career scout · <strong>in 19h</strong></span>
+<span class="brief-value">Career scout · <strong>in 18h</strong></span>
 </div>
 <div class="brief-row">
 <span class="brief-label">Loops B–D</span>
@@ -387,7 +401,7 @@
 <span class="loop-name">Loop A</span>
 <span class="loop-schedule">Career scout · Daily 06:00 + 18:00 CT</span>
 <span class="loop-next">
-          in 19h
+          in 18h
           
         </span>
 </div>

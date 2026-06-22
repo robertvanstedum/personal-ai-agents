@@ -218,8 +218,22 @@
 <script id="preview-fetch-intercept">
 (function() {
   var _orig = window.fetch;
+  // Endpoints allowed to pass through to the real server
+  var PASSTHROUGH = ['/app/german/api/translate'];
   window.fetch = function(url, opts) {
     var u = typeof url === 'string' ? url : (url && url.url) || '';
+    // Lesen category API — serve pre-captured data if available
+    if (u.indexOf('/api/lesen-category') !== -1) {
+      var cat = '';
+      try { cat = new URL(u, location.origin).searchParams.get('category') || ''; } catch(e) {}
+      var data = window._previewLesenData || {};
+      var articles = data[cat] || [];
+      return Promise.resolve(new Response(JSON.stringify({articles: articles}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    // Allow translate through — works for authenticated users, fails silently otherwise
+    for (var i = 0; i < PASSTHROUGH.length; i++) {
+      if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
+    }
     if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
       return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
     }
@@ -263,7 +277,7 @@
 <a href="/preview/" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
 <span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
 <a href="/preview/curator/briefing.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;color:#ffffff;font-weight:600;">Curator</a>
-<a href="/preview/german/lesen.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;">German</a>
+<a href="/preview/german/landing.html" style="color:#C68A5E;text-decoration:none;margin-right:14px;">German</a>
 <a href="/preview/guild/briefing.html" style="color:#C68A5E;text-decoration:none;">Guild</a>
 <span style="color:rgba(255,255,255,0.45);margin-left:auto;margin-right:12px;">Robert</span>
 <a data-admin-blocked="true" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;; cursor: pointer;">Sign out</a>

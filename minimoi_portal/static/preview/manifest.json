@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-06-15T15:17:53+00:00",
+  "captured_at": "2026-06-15T16:00:19+00:00",
   "pages": [
     {
       "domain": null,
@@ -54,7 +54,7 @@
       "domain": "german",
       "name": "lesen",
       "label": "Mein Deutsch \u2014 Lesen",
-      "live_path": "/app/german",
+      "live_path": "/app/german/lesen",
       "preview_path": "/preview/german/lesen.html"
     },
     {
@@ -68,7 +68,7 @@
       "domain": "german",
       "name": "worter",
       "label": "Mein Deutsch \u2014 W\u00f6rter",
-      "live_path": "/app/german/worter",
+      "live_path": "/app/german/woerter",
       "preview_path": "/preview/german/worter.html"
     },
     {

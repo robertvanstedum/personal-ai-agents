@@ -229,8 +229,22 @@
 <script id="preview-fetch-intercept">
 (function() {
   var _orig = window.fetch;
+  // Endpoints allowed to pass through to the real server
+  var PASSTHROUGH = ['/app/german/api/translate'];
   window.fetch = function(url, opts) {
     var u = typeof url === 'string' ? url : (url && url.url) || '';
+    // Lesen category API — serve pre-captured data if available
+    if (u.indexOf('/api/lesen-category') !== -1) {
+      var cat = '';
+      try { cat = new URL(u, location.origin).searchParams.get('category') || ''; } catch(e) {}
+      var data = window._previewLesenData || {};
+      var articles = data[cat] || [];
+      return Promise.resolve(new Response(JSON.stringify({articles: articles}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+    // Allow translate through — works for authenticated users, fails silently otherwise
+    for (var i = 0; i < PASSTHROUGH.length; i++) {
+      if (u.indexOf(PASSTHROUGH[i]) !== -1) return _orig.apply(this, arguments);
+    }
     if (u.startsWith('/app/') || u.startsWith('/api/') || u.startsWith('/research/')) {
       return Promise.resolve(new Response('[]', {status: 200, headers: {'Content-Type': 'application/json'}}));
     }
@@ -268,7 +282,7 @@
 <span class="nav-sep">|</span>
 <a href="/preview/curator/briefing.html">Curator</a>
 <span class="nav-sep">|</span>
-<a href="/preview/german/lesen.html">German</a>
+<a href="/preview/german/landing.html">German</a>
 <span class="nav-sep">|</span>
 <a class="nav-active" href="/preview/guild/briefing.html">Guild</a>
 </div>
@@ -283,7 +297,7 @@
 </nav>
 <div class="page-header">
 <h1 class="page-title">Build Log</h1>
-<span class="page-meta">19 specs</span>
+<span class="page-meta">23 specs</span>
 <div class="header-actions">
 <button class="new-spec-toggle" data-preview-disabled="true" disabled="disabled" onclick="toggleNewSpec()">+ New spec</button>
 <a class="gh-link" href="https://github.com/robertvanstedum/personal-ai-agents/issues" rel="noopener" target="_blank">View GitHub Issues →</a>
@@ -348,6 +362,250 @@
 <td class="title-cell">
 <div class="title-main">
             
+              Guest Access Requests: Notification + Daily Briefing
+            
+          </div>
+<div class="title-summary">Spec for guest access requests with DB, Telegram notifications, and daily briefings.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_cos_guest_access_2026-06-14.md ↗</a></div>
+<div style="font-size:11px;color:#8b5a00;margin-top:3px;">⚠ incomplete spec</div>
+</td>
+<td>
+<span class="status-badge s-incomplete">
+            incomplete
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            today
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-26">
+<td colspan="4">
+<form action="/guild/build/items/26/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guest Access Requests: Notification + Daily Briefing"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for guest access requests with DB, Telegram notifications, and daily briefings."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-26">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-26" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Guest Access Requests: Notification + Daily Briefing
+            
+          </div>
+<div class="title-summary">Spec for guest access requests with DB, registration route, and Telegram notifications.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_cos_guest_access_2026-06-14.md ↗</a></div>
+<div style="font-size:11px;color:#8b5a00;margin-top:3px;">⚠ incomplete spec</div>
+</td>
+<td>
+<span class="status-badge s-incomplete">
+            incomplete
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            today
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-25">
+<td colspan="4">
+<form action="/guild/build/items/25/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Guest Access Requests: Notification + Daily Briefing"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for guest access requests with DB, registration route, and Telegram notifications."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-25">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-25" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Security Architecture: Separate Public Site from Live Portal
+            
+          </div>
+<div class="title-summary">Security architecture spec for subdomain separation of public site and portal.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_security_architecture_2026-06-14.md ↗</a></div>
+<div style="font-size:11px;color:#8b5a00;margin-top:3px;">⚠ incomplete spec</div>
+</td>
+<td>
+<span class="status-badge s-incomplete">
+            incomplete
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            today
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-24">
+<td colspan="4">
+<form action="/guild/build/items/24/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Security Architecture: Separate Public Site from Live Portal"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Security architecture spec for subdomain separation of public site and portal."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-24">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-24" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
+              Security Architecture: Separate Public Site from Live Portal
+            
+          </div>
+<div class="title-summary">Spec for subdomain separation of public site from live portal.</div>
+<div class="title-file"><a data-admin-blocked="true" onmouseout="this.style.textDecoration='none'" onmouseover="this.style.textDecoration='underline'" rel="noopener" style="color:inherit;text-decoration:none;; cursor: pointer;" target="_blank">spec_security_architecture_2026-06-14.md ↗</a></div>
+<div style="font-size:11px;color:#8b5a00;margin-top:3px;">⚠ incomplete spec</div>
+</td>
+<td>
+<span class="status-badge s-incomplete">
+            incomplete
+          </span>
+</td>
+<td class="age-cell">
+          
+            
+            
+            today
+          
+        </td>
+<td>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+<span style="color:var(--text-dim)">—</span>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
+</div>
+</td>
+</tr>
+<tr class="edit-row" id="edit-row-23">
+<td colspan="4">
+<form action="/guild/build/items/23/edit" data-preview-disabled="true" method="POST" onsubmit="return false;">
+<div class="edit-inner">
+<div>
+<label>Title</label>
+<input data-preview-disabled="true" disabled="disabled" name="spec_title" placeholder="Title" value="Security Architecture: Separate Public Site from Live Portal"/>
+</div>
+<div>
+<label>Summary</label>
+<input data-preview-disabled="true" disabled="disabled" name="summary" placeholder="One line" value="Spec for subdomain separation of public site from live portal."/>
+</div>
+<div>
+<label>GitHub issue</label>
+<input data-preview-disabled="true" disabled="disabled" name="github_issue" placeholder="#41" value=""/>
+</div>
+<div style="padding-bottom:1px;">
+<button class="edit-save" data-preview-disabled="true" disabled="disabled" type="submit">Save</button>
+</div>
+</div>
+</form>
+</td>
+</tr>
+<tr class="edit-row" id="hist-row-23">
+<td colspan="4">
+<div class="hist-section">
+<div id="lhist-23" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">loading…</div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="title-cell">
+<div class="title-main">
+            
               minimoi.ai Preview Layer + Mein Deutsch Animation
             
           </div>
@@ -369,8 +627,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(22)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(22)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -430,8 +688,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(21)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(21)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -490,8 +748,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(20)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(20)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -550,8 +808,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(19)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(19)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -610,8 +868,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(18)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(18)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -670,8 +928,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(17)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(17)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -730,8 +988,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(10)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(10)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -790,8 +1048,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(16)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(16)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -850,8 +1108,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(15)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(15)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -910,8 +1168,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(14)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(14)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -970,8 +1228,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(13)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(13)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -1030,8 +1288,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(12)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(12)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -1090,8 +1348,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(11)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(11)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -1150,8 +1408,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(9)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(9)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -1210,8 +1468,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(8)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(8)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -1270,8 +1528,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(7)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(7)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -1324,14 +1582,14 @@
           
             
             
-            2d
+            3d
           
         </td>
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(4)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(4)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -1390,8 +1648,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(1)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(1)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
@@ -1450,8 +1708,8 @@
 <td>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 <span style="color:var(--text-dim)">—</span>
-<a class="edit-link" onclick="toggleEditRow(2)">edit</a>
-<a class="edit-link" onclick="toggleHistRow(2)">hist</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">edit</a>
+<a class="edit-link" data-admin-blocked="true" style="cursor: pointer;">hist</a>
 </div>
 </td>
 </tr>
