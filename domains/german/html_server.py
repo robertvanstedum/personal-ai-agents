@@ -808,6 +808,10 @@ def api_google_latest_transcript():
     return jsonify({"ok": True, "text": text, "file_name": file_name})
 
 
+@app.route("/health")
+def health():
+    return {"status": "ok", "service": "german"}
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():

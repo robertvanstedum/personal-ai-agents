@@ -1345,6 +1345,10 @@ def serve_archive(filename):
     archive_dir = BASE_DIR / 'curator_archive'
     return send_from_directory(archive_dir, filename)
 
+@app.route('/health')
+def health():
+    return {'status': 'ok', 'service': 'curator'}
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Research Intelligence — Blueprint

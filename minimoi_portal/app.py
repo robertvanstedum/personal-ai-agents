@@ -1658,6 +1658,10 @@ def guild_docs_reader(filename):
                            user=_current_user())
 
 
+@app.route("/health")
+def health():
+    return {"status": "ok", "service": "portal"}
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
