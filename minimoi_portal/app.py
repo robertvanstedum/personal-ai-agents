@@ -1169,13 +1169,17 @@ def guild_build_spec(filename):
     import markdown as _md
     from pathlib import Path
     import re
-    if not re.match(r'^[\w\-\.]+\.md$', filename):
+    # Allow plain filenames or one level of subdirectory (e.g. docs/CODE_REVIEW_PLAN.md)
+    if not re.match(r'^([\w\-]+/)?[\w\-\.]+\.md$', filename):
         return "Not found", 404
     repo_root = Path(__file__).parent.parent
-    spec_path = repo_root / "docs" / "specs" / filename
-    if not spec_path.exists():
-        spec_path = repo_root / "_working" / filename
-    if not spec_path.exists():
+    candidates = [
+        repo_root / "docs" / "specs" / filename,
+        repo_root / "_working" / filename,
+        repo_root / filename,          # handles docs/CODE_REVIEW_PLAN.md stored as-is
+    ]
+    spec_path = next((p for p in candidates if p.exists()), None)
+    if not spec_path:
         return render_template("guild/spec_detail.html",
                                content="<p><em>Spec file not found.</em></p>",
                                filename=filename, user=_current_user())
@@ -1191,13 +1195,16 @@ def guild_build_spec_raw(filename):
     from pathlib import Path
     from flask import Response
     import re
-    if not re.match(r'^[\w\-\.]+\.md$', filename):
+    if not re.match(r'^([\w\-]+/)?[\w\-\.]+\.md$', filename):
         return "Not found", 404
     repo_root = Path(__file__).parent.parent
-    spec_path = repo_root / "docs" / "specs" / filename
-    if not spec_path.exists():
-        spec_path = repo_root / "_working" / filename
-    if not spec_path.exists():
+    candidates = [
+        repo_root / "docs" / "specs" / filename,
+        repo_root / "_working" / filename,
+        repo_root / filename,
+    ]
+    spec_path = next((p for p in candidates if p.exists()), None)
+    if not spec_path:
         return "Not found", 404
     raw = spec_path.read_text()
     return Response(
