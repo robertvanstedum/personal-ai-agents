@@ -11,3 +11,4 @@ openai
 tavily-python
 watchdog
 python-dotenv
+python-telegram-bot==21.9

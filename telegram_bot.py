@@ -589,7 +589,8 @@ def handle_voice_message(message, token):
 
 def run_send_mode():
     """Called by cron/launchd: just send the briefing and exit"""
-    token = get_polling_token()
+    from utils.telegram import get_system_token
+    token = get_system_token()
     chat_id = get_chat_id()
 
     if not token or not chat_id:

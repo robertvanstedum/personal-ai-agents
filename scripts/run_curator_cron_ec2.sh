@@ -43,10 +43,13 @@ echo "$LOG_PREFIX Pulling X bookmarks..."
 docker exec minimoi-curator python x_pull_incremental.py 2>&1 || \
   echo "$LOG_PREFIX x_pull_incremental.py failed — continuing with existing signals"
 
-# ── Run curator pipeline + send Telegram briefing ────────────────────────────
+# ── Run curator pipeline, then send briefing with inline buttons ──────────────
 echo "$LOG_PREFIX Running RSS curation (grok-4.3)..."
 docker exec minimoi-curator python curator_rss_v2.py \
-  --model=grok-4.3 --fallback --temperature=0.7 --telegram
+  --model=grok-4.3 --fallback --temperature=0.7
+
+echo "$LOG_PREFIX Sending Telegram briefing (system bot)..."
+docker exec -e TELEGRAM_CHAT_ID=8379221702 minimoi-curator python telegram_bot.py --send
 
 STATUS=$?
 

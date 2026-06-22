@@ -36,7 +36,11 @@ echo "🔖 Pulling new X bookmarks..."
 python x_pull_incremental.py 2>&1 || echo "⚠️  x_pull_incremental.py failed — continuing with existing signals"
 
 # Generate briefing
-python curator_rss_v2.py --model=grok-4.3 --fallback --temperature=0.7 --telegram
+python curator_rss_v2.py --model=grok-4.3 --fallback --temperature=0.7
+
+# Send briefing with inline buttons via system bot (role-aware token)
+export TELEGRAM_CHAT_ID="8379221702"
+python telegram_bot.py --send
 
 if [ $? -eq 0 ]; then
     # Stamp briefing_date so idempotency check works regardless of article dates
