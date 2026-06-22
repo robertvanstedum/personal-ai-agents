@@ -3,8 +3,11 @@
 x_oauth2_authorize.py - OAuth 2.0 PKCE authorization for X bookmarks.
 
 Run this once to authorize. Stores access_token, refresh_token, and
-expiry in keychain. Future runs of x_adapter.py will auto-refresh
-without needing the browser again.
+expiry in a JSON file on the curator data volume (safe in Docker).
+client_id and client_secret come from SSM/env (never rotate, no file needed).
+
+Token file: $CURATOR_DATA_DIR/x_oauth2_tokens.json
+  (default: data/curator/x_oauth2_tokens.json in repo)
 
 Usage:
     python x_oauth2_authorize.py          # Full browser auth (run once)
@@ -14,39 +17,115 @@ Usage:
 
 import base64
 import hashlib
+import json
 import os
 import secrets
 import sys
 import time
-import keyring
 import requests
+from pathlib import Path
 from urllib.parse import urlencode, urlparse, parse_qs
 
 
+_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator")))
+_TOKEN_FILE = _DATA_DIR / "x_oauth2_tokens.json"
+
+
+def _get_credentials() -> tuple[str, str]:
+    """Return (client_id, client_secret). Lookup: env → keyring → SSM."""
+    client_id = os.environ.get("X_CLIENT_ID")
+    client_secret = os.environ.get("X_CLIENT_SECRET")
+    if client_id and client_secret:
+        return client_id, client_secret
+
+    # Try keyring (Mac dev environment)
+    try:
+        import keyring as _kr
+        client_id = client_id or _kr.get_password('x_oauth2', 'client_id')
+        client_secret = client_secret or _kr.get_password('x_oauth2', 'client_secret')
+        if client_id and client_secret:
+            return client_id, client_secret
+    except Exception:
+        pass
+
+    # Try SSM (EC2 production)
+    try:
+        import boto3
+        prefix = os.environ.get("SSM_PREFIX", "/minimoi/production/")
+        ssm = boto3.client('ssm', region_name='us-east-1')
+        client_id = ssm.get_parameter(Name=f"{prefix}x_client_id", WithDecryption=True)['Parameter']['Value']
+        client_secret = ssm.get_parameter(Name=f"{prefix}x_client_secret", WithDecryption=True)['Parameter']['Value']
+        return client_id, client_secret
+    except Exception:
+        pass
+
+    return "", ""
+
+
+def _load_token_file() -> dict:
+    """Load rotating tokens from JSON file on the data volume.
+    Falls back to keyring on first run (Mac migration path)."""
+    try:
+        return json.loads(_TOKEN_FILE.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
+    # Migration: read from keyring and write to file so future runs use the file
+    try:
+        import keyring as _kr
+        access  = _kr.get_password('x_oauth2', 'access_token')
+        refresh = _kr.get_password('x_oauth2', 'refresh_token')
+        expires = _kr.get_password('x_oauth2', 'expires_at')
+        if access:
+            data = {k: v for k, v in {
+                'access_token': access, 'refresh_token': refresh, 'expires_at': expires
+            }.items() if v}
+            _DATA_DIR.mkdir(parents=True, exist_ok=True)
+            _TOKEN_FILE.write_text(json.dumps(data, indent=2))
+            print(f"Migrated tokens from keyring → {_TOKEN_FILE}")
+            return data
+    except Exception:
+        pass
+    return {}
+
+
+def _save_token_file(data: dict):
+    """Persist rotating tokens to JSON file, merging with existing data."""
+    existing = _load_token_file()
+    existing.update(data)
+    _DATA_DIR.mkdir(parents=True, exist_ok=True)
+    _TOKEN_FILE.write_text(json.dumps(existing, indent=2))
+
+
 def get_stored_tokens() -> dict:
-    """Load all stored OAuth 2.0 tokens from keychain."""
+    """Load all OAuth 2.0 tokens. client_id/secret from env/keyring/SSM; rotating tokens from file."""
+    client_id, client_secret = _get_credentials()
+    file_data = _load_token_file()
     return {
-        'client_id':     keyring.get_password('x_oauth2', 'client_id'),
-        'client_secret': keyring.get_password('x_oauth2', 'client_secret'),
-        'access_token':  keyring.get_password('x_oauth2', 'access_token'),
-        'refresh_token': keyring.get_password('x_oauth2', 'refresh_token'),
-        'expires_at':    keyring.get_password('x_oauth2', 'expires_at'),
+        'client_id':     client_id,
+        'client_secret': client_secret,
+        'access_token':  file_data.get('access_token'),
+        'refresh_token': file_data.get('refresh_token'),
+        'expires_at':    file_data.get('expires_at'),
     }
 
 
 def store_tokens(access_token: str, refresh_token: str | None, expires_in: int | None):
-    """Persist tokens and expiry to keychain."""
-    keyring.set_password('x_oauth2', 'access_token', access_token)
+    """Persist rotating tokens to the data volume file (not keyring)."""
+    data = {}
+    if access_token:
+        data['access_token'] = access_token
     if refresh_token:
-        keyring.set_password('x_oauth2', 'refresh_token', refresh_token)
+        data['refresh_token'] = refresh_token
     if expires_in:
-        expires_at = str(int(time.time()) + expires_in)
-        keyring.set_password('x_oauth2', 'expires_at', expires_at)
+        data['expires_at'] = str(int(time.time()) + expires_in)
+    _save_token_file(data)
+
     print(f"  access_token:  {access_token[:12]}... ✅")
     if refresh_token:
         print(f"  refresh_token: {refresh_token[:12]}... ✅")
     if expires_in:
         print(f"  expires_in:    {expires_in // 3600}h {(expires_in % 3600) // 60}m")
+    print(f"  token file:    {_TOKEN_FILE}")
 
 
 def refresh_access_token(tokens: dict) -> str:
@@ -120,26 +199,21 @@ def full_auth_flow():
     Run the full browser-based OAuth 2.0 PKCE flow using raw requests.
     Avoids Tweepy's OAuth2UserHandler to prevent MismatchingStateError.
     """
-    tokens = get_stored_tokens()
-    client_id     = tokens.get('client_id')
-    client_secret = tokens.get('client_secret')
+    client_id, client_secret = _get_credentials()
     redirect_uri  = "http://localhost:3000/callback"
 
     if not client_id or not client_secret:
-        print("ERROR: OAuth 2.0 credentials not found in keychain.")
-        print("Run store_x_oauth2.py first.")
+        print("ERROR: OAuth 2.0 credentials not found.")
+        print("Set X_CLIENT_ID / X_CLIENT_SECRET env vars, or store in keyring / SSM.")
         return
 
     # ── PKCE: generate code_verifier + code_challenge ──────────────────────
-    # code_verifier: 43-128 random URL-safe chars
     code_verifier  = secrets.token_urlsafe(64)
-    # code_challenge: BASE64URL(SHA256(code_verifier)), no padding
     digest         = hashlib.sha256(code_verifier.encode()).digest()
     code_challenge = base64.urlsafe_b64encode(digest).rstrip(b'=').decode()
-    state          = secrets.token_urlsafe(16)   # CSRF guard — we verify it ourselves
+    state          = secrets.token_urlsafe(16)
 
     # ── Build authorization URL ─────────────────────────────────────────────
-    # offline.access scope is required to receive a refresh_token
     params = {
         'response_type':         'code',
         'client_id':             client_id,
@@ -200,7 +274,7 @@ def full_auth_flow():
         print(f"❌ No access_token in response: {data}")
         return
 
-    print("\nStoring tokens in keychain:")
+    print("\nStoring tokens in token file:")
     store_tokens(access_token, refresh_token, expires_in)
 
     if not refresh_token:
@@ -219,6 +293,7 @@ def show_status():
     expires_at = tokens.get('expires_at')
 
     print("\n--- OAuth 2.0 Token Status ---")
+    print(f"  token file:    {_TOKEN_FILE} ({'exists' if _TOKEN_FILE.exists() else 'MISSING'})")
     print(f"  access_token:  {'✅ stored' if access else '❌ missing'}")
     print(f"  refresh_token: {'✅ stored' if refresh else '❌ missing (re-auth needed)'}")
     if expires_at:
@@ -238,7 +313,7 @@ def main():
     elif '--refresh' in sys.argv:
         tokens = get_stored_tokens()
         try:
-            new_token = refresh_access_token(tokens)
+            refresh_access_token(tokens)
             print(f"\n✅ Token refreshed successfully.")
         except RuntimeError as e:
             print(f"❌ {e}")

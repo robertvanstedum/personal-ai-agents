@@ -11,6 +11,7 @@ Usage:
 """
 
 import json
+import os
 import sys
 import time
 import keyring
@@ -18,12 +19,13 @@ import tweepy
 from datetime import datetime, timezone
 from pathlib import Path
 
-PREFS_PATH   = Path.home() / '.openclaw' / 'workspace' / 'curator_preferences.json'
+PREFS_PATH   = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator"))) / "curator_preferences.json"
 DRY_RUN      = '--import' not in sys.argv
 
 
 def get_client():
-    oauth2_token = keyring.get_password('x_oauth2', 'access_token')
+    from x_oauth2_authorize import get_valid_token
+    oauth2_token = get_valid_token()
     if not oauth2_token:
         raise RuntimeError("No OAuth 2.0 access token. Run x_oauth2_authorize.py first.")
     return tweepy.Client(bearer_token=oauth2_token)
