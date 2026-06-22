@@ -78,9 +78,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("\n".join(lines), parse_mode="HTML")
         return
 
-    await update.message.reply_text(
-        f"minimoi system bot on {_identity()}\nCommands: /status  !ops"
-    )
+    # Everything else is German-domain routing — drills, sessions, phrasebook,
+    # natural-language and !german commands. Delegated verbatim to the shared
+    # handler so behaviour matches the legacy minimoi_cmd_bot exactly.
+    from telegram_bot import handle_text_message
+    await handle_text_message(update, context)
 
 
 def main():
@@ -99,7 +101,11 @@ def main():
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("status", cmd_status))
+    # Combined text handler: !ops first, then German routing.
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    # German voice notes, .txt transcript uploads, and drill-state restore.
+    from telegram_bot import register_german_handlers
+    register_german_handlers(app, include_text=False)
 
     log.info("Polling...")
     app.run_polling(drop_pending_updates=True)

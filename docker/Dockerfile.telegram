@@ -5,7 +5,12 @@ WORKDIR /app
 COPY docker/requirements.telegram.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY utils/ utils/
-COPY telegram_system_bot.py .
+# Fat image: the system bot now serves the German domain. telegram_bot.py imports
+# german_domain at module load, and the session/transcript commands shell out to
+# scripts under domains/german/. Copy the whole repo so every import and subprocess
+# target resolves — same pattern as Dockerfile.german. Runtime data is volume-mounted.
+COPY . .
+
+ENV MINIMOI_ROLE=production
 
 CMD ["python", "telegram_system_bot.py"]

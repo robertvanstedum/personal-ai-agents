@@ -2103,6 +2103,27 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await _handle_german_transcript(update, text)
 
 
+def register_german_handlers(app, include_text: bool = True) -> None:
+    """Register the German-domain message handlers on a python-telegram-bot Application.
+
+    Shared by run_bot_mode() (legacy minimoi_cmd_bot on the Mac) and by
+    telegram_system_bot.py (minimoi_system_bot on AWS) so both bots expose
+    identical German behaviour: natural-language + !german commands, voice
+    practice, phrasebook capture/practice, drills, sessions, and the transcript
+    pipeline.
+
+    include_text=False lets a caller install its own TEXT handler — the system
+    bot intercepts !ops first, then delegates the remainder to handle_text_message.
+    Restores persisted drill state so an in-progress drill survives a restart.
+    """
+    if include_text:
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+    app.add_handler(MessageHandler(filters.VOICE, handle_voice_polling))
+    app.add_handler(MessageHandler(filters.Document.TXT, handle_document))
+    _load_drill_state()
+    _load_drill_list_state()
+
+
 def run_bot_mode():
     """Run persistent bot for button callbacks and commands"""
     token = get_polling_token()
@@ -2144,9 +2165,7 @@ def run_bot_mode():
     app.add_handler(CommandHandler("run", cmd_run))
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("briefing", cmd_briefing))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
-    app.add_handler(MessageHandler(filters.VOICE, handle_voice_polling))
-    app.add_handler(MessageHandler(filters.Document.TXT, handle_document))
+    register_german_handlers(app)
 
     async def error_handler(update, context):
         """Suppress noisy network errors — log one line instead of full traceback."""
@@ -2158,8 +2177,6 @@ def run_bot_mode():
 
     app.add_error_handler(error_handler)
 
-    _load_drill_state()
-    _load_drill_list_state()
     print("✅ Listening for callbacks and commands...")
     app.run_polling()
 

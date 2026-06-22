@@ -75,13 +75,18 @@ Required schema:
 # ── Step 1: Read & call Claude ────────────────────────────────────────────────
 
 def _get_anthropic_client():
+    # Resolve the key via get_secret: env → macOS keyring (Mac) → AWS SSM
+    # (container). The old keyring-only path failed in the system-bot container,
+    # which has no keychain, so transcript analysis silently broke in production.
+    api_key = ""
     try:
-        import keyring
-        api_key = keyring.get_password("anthropic", "api_key") or os.getenv("ANTHROPIC_API_KEY")
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+        from get_secret import get_secret
+        api_key = get_secret("ANTHROPIC_API_KEY", "anthropic", "api_key") or ""
     except Exception:
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        api_key = os.getenv("ANTHROPIC_API_KEY") or ""
     if not api_key:
-        raise RuntimeError("Anthropic API key not found in keychain or ANTHROPIC_API_KEY env var.")
+        raise RuntimeError("Anthropic API key not found (env / keychain / SSM).")
     from anthropic import Anthropic
     return Anthropic(api_key=api_key)
 

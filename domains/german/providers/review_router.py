@@ -6,10 +6,10 @@ Review functions return { feedback: {...}, model: str }.
 Chat functions return the AI response string.
 """
 import json
-import keyring
 from pathlib import Path
 
 from german_domain import _REVIEW_SYSTEM_PROMPT, _parse_transcript_turns
+from get_secret import get_secret
 
 # Persona prompt .txt files — same path as german_domain._PROMPTS_DIR
 _PROMPTS_DIR = Path(__file__).parent.parent / "data" / "config" / "prompts"
@@ -17,6 +17,17 @@ _PROMPTS_DIR = Path(__file__).parent.parent / "data" / "config" / "prompts"
 
 class ProviderError(Exception):
     pass
+
+
+def _provider_key(env_name: str, service: str) -> str:
+    """Resolve an API key via get_secret: env → macOS keyring (Mac) → AWS SSM
+    (container). Returns '' if unavailable so callers raise a clean ProviderError.
+    The old keyring-only lookups failed in the mein-deutsch container, breaking
+    the web KI-Sitzung chat and transcript analysis in production."""
+    try:
+        return get_secret(env_name, service, "api_key") or ""
+    except Exception:
+        return ""
 
 
 def run_review(transcript: str, persona: str, scene: str, model: str) -> dict:
@@ -69,7 +80,7 @@ def _parse_feedback(raw: str) -> dict:
 
 def _review_grok(transcript: str, persona: str, scene: str) -> dict:
     from openai import OpenAI
-    api_key = keyring.get_password("xai", "api_key")
+    api_key = _provider_key("XAI_API_KEY", "xai")
     if not api_key:
         raise ProviderError("xAI API key not found in keyring")
     client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
@@ -91,7 +102,7 @@ def _review_grok(transcript: str, persona: str, scene: str) -> dict:
 
 def _review_openai(transcript: str, persona: str, scene: str) -> dict:
     from openai import OpenAI
-    api_key = keyring.get_password("openai", "api_key")
+    api_key = _provider_key("OPENAI_API_KEY", "openai")
     if not api_key:
         raise ProviderError("OpenAI API key not found in keyring")
     client = OpenAI(api_key=api_key)
@@ -117,7 +128,7 @@ def _review_gemini(transcript: str, persona: str, scene: str) -> dict:
 
 def _review_claude(transcript: str, persona: str, scene: str) -> dict:
     import anthropic
-    api_key = keyring.get_password("anthropic", "api_key")
+    api_key = _provider_key("ANTHROPIC_API_KEY", "anthropic")
     if not api_key:
         raise ProviderError("Anthropic API key not found in keyring")
     client = anthropic.Anthropic(api_key=api_key)
@@ -203,7 +214,7 @@ def _build_chat_messages(history: list) -> list:
 
 def _chat_grok(system_prompt: str, history: list, user_turn: str) -> str:
     from openai import OpenAI
-    api_key = keyring.get_password("xai", "api_key")
+    api_key = _provider_key("XAI_API_KEY", "xai")
     if not api_key:
         raise ProviderError("xAI API key not found in keyring")
     client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
@@ -218,7 +229,7 @@ def _chat_grok(system_prompt: str, history: list, user_turn: str) -> str:
 
 def _chat_openai(system_prompt: str, history: list, user_turn: str) -> str:
     from openai import OpenAI
-    api_key = keyring.get_password("openai", "api_key")
+    api_key = _provider_key("OPENAI_API_KEY", "openai")
     if not api_key:
         raise ProviderError("OpenAI API key not found in keyring")
     client = OpenAI(api_key=api_key)
@@ -233,7 +244,7 @@ def _chat_openai(system_prompt: str, history: list, user_turn: str) -> str:
 
 def _chat_claude_chat(system_prompt: str, history: list, user_turn: str) -> str:
     import anthropic
-    api_key = keyring.get_password("anthropic", "api_key")
+    api_key = _provider_key("ANTHROPIC_API_KEY", "anthropic")
     if not api_key:
         raise ProviderError("Anthropic API key not found in keyring")
     client = anthropic.Anthropic(api_key=api_key)

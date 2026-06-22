@@ -28,7 +28,11 @@ _sys.path.insert(0, str(_REPO_ROOT))
 from get_secret import get_secret as _get_secret
 GERMAN_BASE = _BASE_DIR                      # domains/german/ (scripts run here)
 GERMAN_DIR  = _BASE_DIR / "data"             # domains/german/data/ (runtime data)
-VENV_PYTHON = _REPO_ROOT / "venv" / "bin" / "python3"
+# Subprocess interpreter. On the Mac the repo ships a venv/; in the AWS
+# containers there is no venv/, so fall back to the running interpreter
+# (the fat system-bot image installs every dependency the scripts need).
+_VENV_PYTHON = _REPO_ROOT / "venv" / "bin" / "python3"
+VENV_PYTHON = _VENV_PYTHON if _VENV_PYTHON.exists() else Path(_sys.executable)
 ROBERT_CHAT_ID = 8379221702
 DEFAULT_USER = os.environ.get("GERMAN_USER", "robert")
 

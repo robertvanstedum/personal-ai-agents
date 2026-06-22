@@ -125,9 +125,16 @@ def brave_search(query: str, count: int = 20) -> list:
     Each result has: title, url, description, page_age.
     Returns [] on any error (caller decides whether to abort or skip).
     """
-    api_key = get_secret('BRAVE_SEARCH_API_KEY', 'brave_search', 'api_key')
+    # SSM param is /minimoi/production/brave_api_key on EC2; keyring brave_search/api_key on Mac.
+    # get_secret raises if nothing resolves, but this function's contract is to return []
+    # so web-search enrichment degrades gracefully instead of aborting the whole briefing.
+    try:
+        api_key = get_secret('BRAVE_API_KEY', 'brave_search', 'api_key')
+    except Exception as e:
+        log.error(f'Brave API key not configured ({e}) — skipping web search')
+        return []
     if not api_key:
-        log.error('Brave API key not configured (set BRAVE_SEARCH_API_KEY or add to keyring)')
+        log.error('Brave API key not configured (set BRAVE_API_KEY or add to keyring)')
         return []
     try:
         resp = requests.get(

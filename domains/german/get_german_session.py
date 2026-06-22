@@ -17,6 +17,11 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Make repo-root modules (utils/, get_secret) importable when run as a script.
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 try:
     import keyring
     import requests
@@ -26,13 +31,26 @@ except ImportError:
 
 
 def _send_telegram(text: str) -> None:
-    if keyring is None or requests is None:
-        print("⚠️  keyring/requests not available — cannot send to Telegram.", file=sys.stderr)
+    if requests is None:
+        print("⚠️  requests not available — cannot send to Telegram.", file=sys.stderr)
         sys.exit(1)
-    token = keyring.get_password("telegram", "polling_bot_token")
-    chat_id = keyring.get_password("telegram", "chat_id")
+    token = ""
+    chat_id = ""
+    # Preferred: role-aware system-bot token (SSM on EC2, keyring on Mac).
+    # This is the same resolution the polling bot uses, so sends land on
+    # minimoi_system_bot in production and minimoi_system_test_bot on standby.
+    try:
+        from utils.telegram import get_system_token, get_chat_id
+        token = get_system_token()
+        chat_id = get_chat_id()
+    except Exception:
+        pass
+    # Legacy fallback: macOS Keychain (old minimoi_cmd_bot delivery path).
+    if (not token or not chat_id) and keyring is not None:
+        token = token or keyring.get_password("telegram", "polling_bot_token")
+        chat_id = chat_id or keyring.get_password("telegram", "chat_id")
     if not token or not chat_id:
-        print("⚠️  Telegram credentials not found in Keychain (telegram/polling_bot_token, telegram/chat_id).", file=sys.stderr)
+        print("⚠️  Telegram credentials not found (utils.telegram or Keychain).", file=sys.stderr)
         sys.exit(1)
     resp = requests.post(
         f"https://api.telegram.org/bot{token}/sendMessage",
@@ -47,8 +65,8 @@ def _send_telegram(text: str) -> None:
 def _get_anthropic_client():
     try:
         import anthropic
-        import keyring as kr
-        api_key = kr.get_password("anthropic", "api_key") or ""
+        from get_secret import get_secret
+        api_key = get_secret("ANTHROPIC_API_KEY", "anthropic", "api_key") or ""
         return anthropic.Anthropic(api_key=api_key)
     except Exception as e:
         raise RuntimeError(f"Cannot create Anthropic client: {e}")
