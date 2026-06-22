@@ -49,7 +49,7 @@ def get_system_token() -> str:
     """Token for minimoi_system_bot (production) or minimoi_system_test_bot (standby)."""
     if _is_standby():
         return _get_token('telegram_system_bot_token', 'telegram', 'system_test_bot_token', 'TELEGRAM_SYSTEM_BOT_TOKEN')
-    return _get_token('telegram_system_bot_token', 'telegram', 'bot_token', 'TELEGRAM_SYSTEM_BOT_TOKEN')
+    return _get_token('telegram_system_bot_token', 'telegram', 'system_bot_token', 'TELEGRAM_SYSTEM_BOT_TOKEN')
 
 
 def get_agent_token() -> str:
