@@ -128,7 +128,7 @@
           <!-- Session cards — auto-saved on Beenden from KI-Sitzung -->
           <div id="session-cards-list"></div>
 
-          <details class="nach-sitzung-details" id="transcript-details">
+          <details class="nach-sitzung-details" id="transcript-details" open>
             <summary class="session-brief-summary">Transkript einfügen ▾</summary>
             <div class="nach-sitzung-body">
               <div id="transcript-input-wrap">
@@ -766,13 +766,20 @@ document.body.classList.add('parch-mode');
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, voice }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        const listenEl = document.getElementById('session-listen-status');
+        if (listenEl) { listenEl.textContent = '⚠ Ton nicht verfügbar (API-Schlüssel fehlt)'; listenEl.style.display = ''; }
+        return;
+      }
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
       _currentAudio = new Audio(url);
       _currentAudio.onended = () => URL.revokeObjectURL(url);
       _currentAudio.play();
-    } catch (e) { /* TTS failure is non-fatal */ }
+    } catch (e) {
+      const listenEl = document.getElementById('session-listen-status');
+      if (listenEl) { listenEl.textContent = '⚠ Ton-Fehler: ' + e.message; listenEl.style.display = ''; }
+    }
   }
 
   function stopSpeaking() {
@@ -1106,9 +1113,7 @@ document.body.classList.add('parch-mode');
     startSessionBtn.disabled = false;
     document.getElementById('persona-detail').classList.remove('session-active');
 
-    // Hide paste panel — session card is the transcript for Path B
-    const transcriptDetailsEl = document.getElementById('transcript-details');
-    if (transcriptDetailsEl) transcriptDetailsEl.style.display = 'none';
+    // Keep paste panel visible — user may want to analyse via external Grok session after
 
     if (sessionTranscript.length > 0) {
       sessionRound++;
@@ -1285,6 +1290,11 @@ document.body.classList.add('parch-mode');
         try {
           blob = await captureOneTurn();
         } catch (e) {
+          if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+            setListenStatus('⚠ Mikrofon-Zugriff verweigert — Einstellungen prüfen', 'listening-error');
+            loopRunning = false;
+            return;
+          }
           await new Promise(r => setTimeout(r, 500));
           continue;
         }
@@ -1314,7 +1324,10 @@ document.body.classList.add('parch-mode');
               await waitForTTSEnd();
             }
           }
-        } catch (e) { /* non-fatal, loop continues */ }
+        } catch (e) {
+          setListenStatus('⚠ Transkription fehlgeschlagen — API-Schlüssel prüfen', 'listening-error');
+          await new Promise(r => setTimeout(r, 3000));
+        }
         turnInFlight = false;
 
         // Brief gap before next turn
