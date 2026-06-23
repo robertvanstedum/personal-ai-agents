@@ -1,0 +1,538 @@
+[
+  {
+    "id": 88,
+    "spec_title": "mini-moi Code Quality Review Plan",
+    "spec_file": "CODE_REVIEW_PLAN.md",
+    "status": "spec_ready",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 94,
+    "spec_title": "Telegram Architecture: Swappable Environments + Two-Bot Model",
+    "spec_file": "spec_telegram_architecture_v2_2026-06-20.md",
+    "status": "spec_ready",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 87,
+    "spec_title": "Code Review Phase 0: Hardcoded Paths + Secrets",
+    "spec_file": "spec_code_review_phase0_2026-06-19.md",
+    "status": "spec_ready",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 85,
+    "spec_title": "Gespräche: Server-Push Analysis via WebSocket",
+    "spec_file": "spec_gesprache_websocket_analysis_2026-06-18.md",
+    "status": "spec_ready",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 84,
+    "spec_title": "mini-moi Monitoring Stack (Part 2)",
+    "spec_file": "spec_monitoring_stack_2026-06-18.md",
+    "status": "spec_ready",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 81,
+    "spec_title": "Gespräche: Deferred Analysis (v2)",
+    "spec_file": "spec_gesprache_deferred_analysis_2026-06-18 (1).md",
+    "status": "design",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 79,
+    "spec_title": "Gespräche: Deferred Analysis",
+    "spec_file": "spec_gesprache_deferred_analysis_2026-06-18.md",
+    "status": "design",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 82,
+    "spec_title": "Gespräche: KI-Sitzung Mobile Tuning",
+    "spec_file": "spec_gesprache_kisitzung_mobile_2026-06-18.md",
+    "status": "design",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 83,
+    "spec_title": "Gespräche Mobile: Scroll Fix + Button Hierarchy",
+    "spec_file": "spec_gesprache_mobile_scroll_fix_2026-06-18.md",
+    "status": "design",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 100,
+    "spec_title": "Operations Monitoring: Mac + EC2 Division of Labor",
+    "spec_file": "spec_operations_monitoring_v2_2026-06-22.md",
+    "status": "design",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 98,
+    "spec_title": "DNS flip: minimoi.ai → EC2, dev.minimoi.ai → Mac",
+    "spec_file": "NEAR_TERM_PLAN.md",
+    "status": "design",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 1,
+    "spec_title": "CoS Build Discipline",
+    "spec_file": "build_spec_build_discipline_2026-06-12.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 21,
+    "spec_title": "minimoi.ai Preview Layer + Mein Deutsch Animation",
+    "spec_file": "build_spec_preview_layer_2026-06-14.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 86,
+    "spec_title": "AWS Migration Phase 0 — Containerization",
+    "spec_file": "AWS_MIGRATION_PLAN.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 55,
+    "spec_title": "mini-moi Design Session Prompt",
+    "spec_file": "docs_DESIGN_SESSION_PROMPT_2026-06-16.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 53,
+    "spec_title": "Gespräche Vision & Mobile Roadmap",
+    "spec_file": "docs_GESPRACHE_ROADMAP_2026-06-16.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 51,
+    "spec_title": "mini-moi Learning System Roadmap",
+    "spec_file": "docs_LEARNING_SYSTEM_ROADMAP_2026-06-16.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 59,
+    "spec_title": "Decision Record Practice & LoRA Capability MVP",
+    "spec_file": "dr_decision_record_practice_mvp_2026-06-17.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 54,
+    "spec_title": "New Documents + First Build Steps",
+    "spec_file": "handoff_documents_and_build_steps_2026-06-16.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 57,
+    "spec_title": "Decision Record MVP + LoRA Capability Initiative",
+    "spec_file": "handoff_dr_lora_mvp_2026-06-17.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 4,
+    "spec_title": "Morning Build: CoS Soul + Career Entry + Gap-Check",
+    "spec_file": "handoff_morning_build_2026-06-12.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 43,
+    "spec_title": "Guest Access: Notification + Daily Briefing",
+    "spec_file": "spec_cos_guest_access_2026-06-14.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 11,
+    "spec_title": "Design/Dev Classifier Fix",
+    "spec_file": "spec_devagent_classifier_fix_2026-06-12.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 35,
+    "spec_title": "Gespräche: All Current Improvements",
+    "spec_file": "spec_gesprache_consolidated_2026-06-15.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 37,
+    "spec_title": "Gespräche: Start Session / End Session",
+    "spec_file": "spec_gesprache_ki_session_2026-06-15 copy.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 33,
+    "spec_title": "Gespräche: Start Session / End Session (Single Window)",
+    "spec_file": "spec_gesprache_ki_session_2026-06-15.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 76,
+    "spec_title": "Gespräche: Prompt kopieren button",
+    "spec_file": "spec_gesprache_prompt_kopieren_2026-06-18.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 38,
+    "spec_title": "Gespräche Test-Run Follow-Up",
+    "spec_file": "spec_gesprache_testrun_followup_2026-06-15.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 49,
+    "spec_title": "Gespräche Transcript Paste Panel",
+    "spec_file": "spec_gesprache_transcript_paste_panel_2026-06-16.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 31,
+    "spec_title": "Gespräche Voice Input + Provider-Agnostic Review",
+    "spec_file": "spec_gesprache_voice_input_2026-06-14.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 56,
+    "spec_title": "Guild Milestone & Goals Editor",
+    "spec_file": "spec_guild_career_focus_editor_2026-06-16.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 10,
+    "spec_title": "Guild Daily Briefing",
+    "spec_file": "spec_guild_daily_briefing_2026-06-12.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 89,
+    "spec_title": "Guild Docs View",
+    "spec_file": "spec_guild_docs_view_2026-06-19.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 17,
+    "spec_title": "Guild Landing Copy: What's Running",
+    "spec_file": "spec_guild_landing_copy_2026-06-13.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 8,
+    "spec_title": "Guild Navigation Restructure",
+    "spec_file": "spec_guild_nav_restructure_2026-06-12.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 64,
+    "spec_title": "Guild Roadmap Layout & Typography Fix",
+    "spec_file": "spec_guild_roadmap_layout_fix_2026-06-17.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 60,
+    "spec_title": "Guild Roadmap View Maturity",
+    "spec_file": "spec_guild_roadmap_maturity_2026-06-17.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 62,
+    "spec_title": "Guild Roadmap Visual Hierarchy",
+    "spec_file": "spec_guild_roadmap_visual_hierarchy_2026-06-17.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 16,
+    "spec_title": "Guild Nav Contrast + Dashboard Subtitle",
+    "spec_file": "spec_guild_small_followups_2026-06-13.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 14,
+    "spec_title": "Guild Type Scale Revision",
+    "spec_file": "spec_guild_type_scale_revision_2026-06-13.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 12,
+    "spec_title": "Guild Typography Hierarchy",
+    "spec_file": "spec_guild_typography_hierarchy_2026-06-13.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 19,
+    "spec_title": "Guild v0.9 GitHub Release",
+    "spec_file": "spec_guild_v09_release_2026-06-13.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 42,
+    "spec_title": "Housekeeping: Repo Sync Audit",
+    "spec_file": "spec_housekeeping_2026-06-12.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 13,
+    "spec_title": "Surface Incomplete Reason + Document Link",
+    "spec_file": "spec_incomplete_reason_visibility_2026-06-13.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 18,
+    "spec_title": "Landing Copy Round 2",
+    "spec_file": "spec_landing_copy_round2_2026-06-13.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 20,
+    "spec_title": "minimoi.ai Always-On Landing Page",
+    "spec_file": "spec_landing_page_uptime_2026-06-13.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": "Superseded by spec_security_architecture_2026-06-14.md"
+  },
+  {
+    "id": 52,
+    "spec_title": "Commit Learning System Foundation Documents",
+    "spec_file": "spec_learning_system_foundation_2026-06-16.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 27,
+    "spec_title": "Lesen Preview: Translate Hover via MyMemory",
+    "spec_file": "spec_lesen_translate_hover_2026-06-14.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 45,
+    "spec_title": "Mein Deutsch v1.1 Landing Blurb",
+    "spec_file": "spec_mein_deutsch_blurb_release_update_2026-06-15.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 41,
+    "spec_title": "Mein Deutsch v1.1: GitHub Release",
+    "spec_file": "spec_mein_deutsch_v11_release_2026-06-15.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 47,
+    "spec_title": "Mobile Experience Audit & Improvement",
+    "spec_file": "spec_mobile_audit_improvement_2026-06-16.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 65,
+    "spec_title": "Remove 'How this works' from Roadmap",
+    "spec_file": "spec_roadmap_remove_how_this_works_2026-06-17.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 24,
+    "spec_title": "Security Architecture: Separate Public Site from Portal",
+    "spec_file": "spec_security_architecture_2026-06-14.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 15,
+    "spec_title": "Spec Detail View: Nav Fix + Download/Print",
+    "spec_file": "spec_spec_detail_view_fix_2026-06-13.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 2,
+    "spec_title": "Lesen Writing Drill",
+    "spec_file": null,
+    "status": "done",
+    "github_issue": "#41",
+    "blocked_reason": null
+  },
+  {
+    "id": 72,
+    "spec_title": "CoS Interaction Page",
+    "spec_file": "COS_PAGE_ROADMAP.md",
+    "status": "deferred",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 70,
+    "spec_title": "CoS Interaction Page (v2)",
+    "spec_file": "docs_COS_PAGE_ROADMAP_2026-06-17.md",
+    "status": "deferred",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 68,
+    "spec_title": "Gespräche Forward Spec",
+    "spec_file": "docs_GESPRACHE_FORWARD_SPEC_2026-06-17.md",
+    "status": "deferred",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 71,
+    "spec_title": "Gespräche Forward Spec (v2)",
+    "spec_file": "GESPRACHE_FORWARD_SPEC.md",
+    "status": "deferred",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 66,
+    "spec_title": "Queue Fix + CoS GitHub Sanity Check",
+    "spec_file": "handoff_queue_fix_cos_2026-06-17.md",
+    "status": "deferred",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 67,
+    "spec_title": "Register Three Items",
+    "spec_file": "handoff_register_three_items_2026-06-17.md",
+    "status": "deferred",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 46,
+    "spec_title": "Domain Product Descriptions Writing Session",
+    "spec_file": "plan_domain_product_descriptions_writing_session_2026-06-16.md",
+    "status": "deferred",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 7,
+    "spec_title": "Career Two-Page Redesign",
+    "spec_file": "spec_career_two_page_2026-06-11.md",
+    "status": "deferred",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 91,
+    "spec_title": "Telegram Architecture: Primary/Secondary + Bot Lane",
+    "spec_file": "spec_telegram_architecture_2026-06-20.md",
+    "status": "deferred",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 93,
+    "spec_title": "Telegram Architecture v2 (superseded)",
+    "spec_file": "spec_telegram_architecture_v2_2026-06-20.md",
+    "status": "deferred",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 69,
+    "spec_title": "Local LLM Interaction Guide",
+    "spec_file": "task_openclaw_local_llm_guide_2026-06-17.md",
+    "status": "deferred",
+    "github_issue": null,
+    "blocked_reason": null
+  },
+  {
+    "id": 90,
+    "spec_title": "Guild Docs View (superseded)",
+    "spec_file": "spec_guild_docs_view_2026-06-19.md",
+    "status": "deferred",
+    "github_issue": null,
+    "blocked_reason": null
+  }
+]

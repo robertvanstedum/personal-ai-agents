@@ -621,6 +621,24 @@ def score_color(score):
 
 _DEFAULT_DB_URL = "postgresql://minimoi:simple123@localhost:5432/personal_agents"
 
+# File-first build queue — source of truth for UI; DB is analytics/archive only
+_BQ_PATH = Path(__file__).parent.parent / "data" / "guild" / "build_queue.json"
+
+
+def _load_build_queue() -> list:
+    """Load build items from JSON. Returns [] with a warning if file is missing."""
+    try:
+        return json.loads(_BQ_PATH.read_text())
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("build_queue.json missing or invalid: %s", e)
+        return []
+
+
+def _save_build_queue(items: list):
+    """Write build items back to JSON."""
+    _BQ_PATH.write_text(json.dumps(items, indent=2, ensure_ascii=False))
+
 
 def _guild_db_query(sql, params=None):
     """Run a SELECT against the personal_agents DB. Returns list of dicts."""
@@ -1097,29 +1115,11 @@ def guild_career_focus_save():
 @_require_owner
 def guild_build():
     status_filter = request.args.get('status', 'all')
-    outer_where = "WHERE dl.status = %s" if status_filter != 'all' else ""
-    params = [status_filter] if status_filter != 'all' else []
-    query = f"""
-        SELECT dl.*,
-               t.reason AS incomplete_reason
-        FROM (
-            SELECT DISTINCT ON (COALESCE(spec_file, file_path))
-                   *
-            FROM guild.design_log
-            ORDER BY COALESCE(spec_file, file_path), last_transition_at DESC NULLS LAST, id DESC
-        ) dl
-        LEFT JOIN LATERAL (
-            SELECT reason FROM guild.design_log_transitions
-            WHERE design_log_id = dl.id AND to_status IN ('incomplete', 'design')
-            ORDER BY created_at DESC LIMIT 1
-        ) t ON true
-        {outer_where}
-        ORDER BY dl.last_transition_at DESC NULLS LAST
-    """
-    try:
-        items = _guild_db_query(query, params or None)
-    except Exception:
-        items = []
+    items = _load_build_queue()
+    if status_filter != 'all':
+        items = [i for i in items if i.get('status') == status_filter]
+    # Sort: most recently transitioned first (items without timestamp go last)
+    items.sort(key=lambda i: i.get('last_transition_at') or '', reverse=True)
     return render_template("guild/build_log.html", items=items,
                            status_filter=status_filter, user=_current_user())
 
@@ -1127,38 +1127,20 @@ def guild_build():
 @app.route("/guild/build/queue")
 @_require_owner
 def guild_build_queue():
-    sql = """
-        SELECT dl.*,
-               t.reason AS incomplete_reason
-        FROM (
-            SELECT DISTINCT ON (COALESCE(spec_file, file_path))
-                   *
-            FROM guild.design_log
-            ORDER BY COALESCE(spec_file, file_path), last_transition_at DESC NULLS LAST, id DESC
-        ) dl
-        LEFT JOIN LATERAL (
-            SELECT reason FROM guild.design_log_transitions
-            WHERE design_log_id = dl.id AND to_status IN ('incomplete', 'design')
-            ORDER BY created_at DESC LIMIT 1
-        ) t ON true
-        WHERE dl.status IN ('spec_ready','in_build','blocked','incomplete')
-           OR (dl.status = 'done'
-               AND dl.last_transition_at > NOW() - INTERVAL '3 days')
-        ORDER BY
-          CASE dl.status
-            WHEN 'blocked'    THEN 1
-            WHEN 'in_build'   THEN 2
-            WHEN 'spec_ready' THEN 3
-            WHEN 'incomplete' THEN 4
-            WHEN 'done'       THEN 5
-            ELSE 6
-          END,
-          dl.last_transition_at DESC NULLS LAST
-    """
-    try:
-        items = _guild_db_query(sql)
-    except Exception:
-        items = []
+    _STATUS_RANK = {"blocked": 1, "in_build": 2, "spec_ready": 3,
+                    "incomplete": 4, "done": 5}
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+
+    all_items = _load_build_queue()
+    items = [
+        i for i in all_items
+        if i.get('status') in ('spec_ready', 'in_build', 'blocked', 'incomplete')
+        or (i.get('status') == 'done' and (i.get('last_transition_at') or '') >= cutoff)
+    ]
+    items.sort(key=lambda i: (
+        _STATUS_RANK.get(i.get('status', ''), 9),
+        -(hash(i.get('last_transition_at') or ''))  # stable secondary sort
+    ))
     return render_template("guild/build_queue.html", items=items,
                            user=_current_user())
 
@@ -1169,14 +1151,13 @@ def guild_build_spec(filename):
     import markdown as _md
     from pathlib import Path
     import re
-    # Allow plain filenames or one level of subdirectory (e.g. docs/CODE_REVIEW_PLAN.md)
-    if not re.match(r'^([\w\-]+/)?[\w\-\.]+\.md$', filename):
+    if not re.match(r'^[\w\-\. ()]+\.md$', filename):
         return "Not found", 404
     repo_root = Path(__file__).parent.parent
     candidates = [
         repo_root / "docs" / "specs" / filename,
+        repo_root / "docs" / filename,
         repo_root / "_working" / filename,
-        repo_root / filename,          # handles docs/CODE_REVIEW_PLAN.md stored as-is
     ]
     spec_path = next((p for p in candidates if p.exists()), None)
     if not spec_path:
@@ -1195,13 +1176,13 @@ def guild_build_spec_raw(filename):
     from pathlib import Path
     from flask import Response
     import re
-    if not re.match(r'^([\w\-]+/)?[\w\-\.]+\.md$', filename):
+    if not re.match(r'^[\w\-\. ()]+\.md$', filename):
         return "Not found", 404
     repo_root = Path(__file__).parent.parent
     candidates = [
         repo_root / "docs" / "specs" / filename,
+        repo_root / "docs" / filename,
         repo_root / "_working" / filename,
-        repo_root / filename,
     ]
     spec_path = next((p for p in candidates if p.exists()), None)
     if not spec_path:
@@ -1219,17 +1200,22 @@ def guild_build_spec_raw(filename):
 def guild_build_check(item_id):
     """Re-run completeness check on a spec file and return current failures as JSON."""
     from pathlib import Path
-    rows = _guild_db_query(
-        "SELECT spec_file, status FROM guild.design_log WHERE id = %s", (item_id,)
-    )
-    if not rows:
+    items = _load_build_queue()
+    item = next((i for i in items if i.get('id') == item_id), None)
+    if not item:
         return jsonify({"error": "not found"}), 404
-    spec_file = rows[0].get("spec_file")
+    spec_file = item.get("spec_file")
     if not spec_file:
         return jsonify({"error": "no spec file attached to this entry"}), 400
-    spec_path = Path(__file__).parent.parent / "_working" / spec_file
-    if not spec_path.exists():
-        return jsonify({"error": f"{spec_file} not found in _working/", "failures": [f"file missing: {spec_file}"]})
+    repo_root = Path(__file__).parent.parent
+    candidates = [
+        repo_root / "docs" / "specs" / spec_file,
+        repo_root / "docs" / spec_file,
+        repo_root / "_working" / spec_file,
+    ]
+    spec_path = next((p for p in candidates if p.exists()), None)
+    if not spec_path:
+        return jsonify({"error": f"{spec_file} not found", "failures": [f"file missing: {spec_file}"]})
     content = spec_path.read_text()
     _lower = content.lower()
     failures = []
@@ -1238,12 +1224,12 @@ def guild_build_check(item_id):
     if "## commit" not in _lower:
         failures.append("missing ## Commit section")
     current_status = "spec_ready" if not failures else "incomplete"
-    db_status = rows[0].get("status")
+    json_status = item.get("status")
     return jsonify({
         "spec_file": spec_file,
         "current_status": current_status,
-        "db_status": db_status,
-        "stale": db_status != current_status,
+        "db_status": json_status,
+        "stale": json_status != current_status,
         "failures": failures,
     })
 
@@ -1357,44 +1343,38 @@ def update_build_status(item_id):
     if new_status not in valid:
         return redirect(url_for('guild_build_queue'))
 
-    try:
-        rows = _guild_db_query(
-            "SELECT status FROM guild.design_log WHERE id = %s", (item_id,)
-        )
-        current = rows[0]['status'] if rows else None
+    # ── 1. Update JSON (source of truth) ──────────────────────────────────────
+    items = _load_build_queue()
+    item = next((i for i in items if i.get('id') == item_id), None)
+    current_status = item.get('status') if item else None
+    if item:
+        item['status'] = new_status
+        item['last_transition_at'] = datetime.now(timezone.utc).isoformat()
+        item['blocked_reason'] = (note if new_status == 'blocked' else None)
+        _save_build_queue(items)
 
-        _guild_db_execute(
-            "UPDATE guild.design_log SET status=%s, last_transition_at=NOW(), "
-            "blocked_reason=%s WHERE id=%s",
-            (new_status, note if new_status == 'blocked' else None, item_id)
-        )
-        if current is not None:
+    # ── 2. DB audit log (write-only, non-blocking) ────────────────────────────
+    try:
+        if current_status is not None:
             _guild_db_execute(
                 "INSERT INTO guild.design_log_transitions "
                 "(design_log_id, from_status, to_status, triggered_by, reason) "
                 "VALUES (%s,%s,%s,'robert',%s)",
-                (item_id, current, new_status, note)
+                (item_id, current_status, new_status, note)
             )
-
-        # On done/deferred, ask Design/Dev to move the file out of _working/.
-        # Non-blocking and non-fatal — if the agent is down or file is already gone, ignore.
-        if new_status in ('done', 'deferred'):
-            spec_rows = _guild_db_query(
-                "SELECT spec_file FROM guild.design_log WHERE id = %s", (item_id,)
-            )
-            spec_file = spec_rows[0]['spec_file'] if spec_rows else None
-            if spec_file:
-                try:
-                    _requests.post(
-                        'http://localhost:8770/archive-spec',
-                        json={'spec_file': spec_file},
-                        timeout=2,
-                    )
-                except Exception:
-                    pass
-
     except Exception:
         pass
+
+    # ── 3. On done/deferred, ask dev_agent to archive the spec file ───────────
+    if new_status in ('done', 'deferred') and item and item.get('spec_file'):
+        try:
+            _requests.post(
+                'http://localhost:8770/archive-spec',
+                json={'spec_file': item['spec_file']},
+                timeout=2,
+            )
+        except Exception:
+            pass
 
     return redirect(request.referrer or url_for('guild_build'))
 
@@ -1406,14 +1386,16 @@ def edit_build_item(item_id):
     spec_title   = request.form.get('spec_title',   '').strip() or None
     summary      = request.form.get('summary',      '').strip() or None
     github_issue = request.form.get('github_issue', '').strip() or None
-    try:
-        _guild_db_execute(
-            "UPDATE guild.design_log SET spec_title=%s, summary=%s, github_issue=%s "
-            "WHERE id=%s",
-            (spec_title, summary, github_issue, item_id)
-        )
-    except Exception:
-        pass
+    items = _load_build_queue()
+    item = next((i for i in items if i.get('id') == item_id), None)
+    if item:
+        if spec_title is not None:
+            item['spec_title'] = spec_title
+        if summary is not None:
+            item['summary'] = summary
+        if github_issue is not None:
+            item['github_issue'] = github_issue
+        _save_build_queue(items)
     return redirect(request.referrer or url_for('guild_build'))
 
 
