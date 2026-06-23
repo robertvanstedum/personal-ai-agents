@@ -1,0 +1,91 @@
+{
+  "session_id": "session_2026-06-16_001",
+  "date": "2026-06-16",
+  "persona": "Frau Berger",
+  "scenario": "bakery order",
+  "duration_estimate_min": 4,
+  "source": "ki_sitzung",
+  "raw_transcript": [
+    {
+      "speaker": "Frau Berger",
+      "text": "Grüß Gott! Schön, dass du in meine Bäckerei gekommen bist. Was kann ich dir heute Gutes anbieten? Hast du vielleicht Lust auf frisches Brot oder ein paar köstliche Gebäckstücke?"
+    },
+    {
+      "speaker": "Sie",
+      "text": "Ich hätte gern ein Roggenbrot."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Ein Roggenbrot, sehr gut! Möchtest du noch etwas dazu, vielleicht ein paar Semmeln oder ein Stück Kuchen? Heute haben wir auch einen leckeren Apfelstrudel."
+    },
+    {
+      "speaker": "Sie",
+      "text": "Ich nehme ein Apfelstrudel und verlängerte vor hier."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Ich verstehe, du möchtest ein Stück Apfelstrudel und ein Roggenbrot. Es heißt aber \"verlängern\" — du kannst sagen: \"Ich möchte ein Stück Apfelstrudel und ein Roggenbrot zum Verlängern.\" Möchtest du noch etwas zu trinken dazu? Wir haben frischen Kaffee oder einen schönen Apfelsaft."
+    },
+    {
+      "speaker": "Sie",
+      "text": "Ich möchte einen verlängerten."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Ein verlängerten, sehr gut! Das macht dann ein Roggenbrot, ein Stück Apfelstrudel und einen verlängerten. Möchtest du noch etwas dazu, oder ist das alles für dich?"
+    },
+    {
+      "speaker": "Sie",
+      "text": "Das ist alles."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Perfekt! Das macht dann insgesamt 7 Euro, bitte. Hier ist dein Roggenbrot, der Apfelstrudel und der verlängerte. Viel Freude damit! Wenn du noch etwas brauchst, sag einfach Bescheid."
+    },
+    {
+      "speaker": "Sie",
+      "text": "Stimmt. Vielen Dank. Bis später."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Sehr gerne! Bis später und einen schönen Tag noch! Komm bald wieder!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert's session was generally successful, with clear communication and understanding of the bakery order scenario. The main takeaway is the need to refine some vocabulary and grammatical structures, particularly with the use of 'verlängerten'.",
+    "errors": [
+      {
+        "type": "vocabulary",
+        "original": "Ich nehme ein Apfelstrudel und verlängerte vor hier.",
+        "correction": "Ich nehme ein Apfelstrudel und einen Verlängerten hier.",
+        "explanation": "The word 'verlängerte' was used incorrectly; 'Verlängerter' is the correct term for the coffee drink.",
+        "context": "Ich nehme ein Apfelstrudel und verlängerte vor hier."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Ich möchte einen verlängerten.",
+        "correction": "Ich möchte einen Verlängerten.",
+        "explanation": "The term 'verlängerten' should be capitalized as it is a noun referring to a type of coffee.",
+        "context": "Ich möchte einen verlängerten."
+      }
+    ],
+    "strengths": [
+      "Robert correctly used polite requests with 'Ich hätte gern' and 'Ich nehme'.",
+      "He successfully navigated a real-world scenario in a bakery context."
+    ],
+    "next_focus": "Focus on the correct use and capitalization of nouns in German, particularly when referring to specific items like 'Verlängerter'.",
+    "topics": [
+      "bakery order",
+      "food and drink"
+    ],
+    "vocabulary": [
+      "Roggenbrot",
+      "Apfelstrudel",
+      "Verlängerter",
+      "Semmeln"
+    ]
+  },
+  "model": "openai",
+  "anki_generated": false,
+  "next_lesson_generated": false
+}

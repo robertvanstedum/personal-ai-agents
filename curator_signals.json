@@ -14797,5 +14797,33 @@
       "text_analysis": null
     },
     "folder": null
+  },
+  {
+    "tweet_id": "2065477182798057606",
+    "source": "X/@davidasinclair",
+    "url": "https://x.com/davidasinclair/status/2065477182798057606",
+    "action": "save",
+    "fetched_at": "2026-06-13T09:56:43",
+    "metadata": {
+      "tweet_text": "NEW PREPRINT: Scientists may have found direct evidence that aging is driven by the loss of cellular information, not just the accumulation of damage \n\nFor decades we've focused on what aging cells accumulate. This paper focuses on what they lose: Information.\n\nUsing a new https://t.co/6A8UiJIFW1",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
+  },
+  {
+    "tweet_id": "2066928635706314874",
+    "source": "X/@WallStreetApes",
+    "url": "https://x.com/WallStreetApes/status/2066928635706314874",
+    "action": "save",
+    "fetched_at": "2026-06-17T11:43:19",
+    "metadata": {
+      "tweet_text": "The city of Oakland, California only has a population of 440,000 but passed a $4 billion dollar budget for themselves over 2 years\n\nFor reference Phoenix, Arizona has 1.65 million people and their budget is $2.3 billion\n\nBut don\u2019t worry they say they need the money for things https://t.co/Y5cGr2kOYS",
+      "linked_content": null,
+      "media": [],
+      "text_analysis": null
+    },
+    "folder": null
   }
 ]

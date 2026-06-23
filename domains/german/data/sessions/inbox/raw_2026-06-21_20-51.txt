@@ -1,0 +1,11 @@
+---SESSION---
+Date: 2026-06-22
+Persona: Maria
+Scenario: Viennese Kaffeehaus ordering
+Duration: 5
+Mode: voiceMaria: Hallo, ich bin Maria. Wie kann ich dir helfen?
+Robert: Ich möchte ein Kaffee.
+Maria: Hier, dein Kaffee. Frisch gebrüht und dampfend heiß. Trink ihn in Ruhe.
+Robert: Danke.
+Maria: Bitte schön. Lass ihn dir schmecken.
+---END---

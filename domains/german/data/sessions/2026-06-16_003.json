@@ -1,0 +1,262 @@
+{
+  "session_id": "2026-06-16_003",
+  "date": "2026-06-16",
+  "persona": "Maria",
+  "scenario": "Paying the bill at the café",
+  "duration_estimate_min": 18,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Servus! Möchtest du noch etwas, oder soll ich dir schon die Rechnung bringen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte ein Kaffee bestellen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Einen Kaffee? Sag mir doch, was du möchtest - vielleicht einen Melange oder einen Kleinen Braunen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich hätte gern einen kleinen Braunen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Einen Kleinen Braunen kommt sofort. Willst du dazu noch was zum Essen, oder reicht dir der Kaffee?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Empfehlen Sie mir etwas?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Klar, probier doch ein Stück Gugelhupf, der ist bei uns frisch gebacken. Passt super zum Kaffee."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Gugelhupf."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Super, ein Kleiner Brauner und ein Stück Gugelhupf - kommt gleich!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ist von Wien, nichts?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ja, unser Gugelhupf ist typisch wienerisch! Du meintest wahrscheinlich „Ist das nicht typisch für Wien?“ oder?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Typisch wienerisch. Aber was ist ein Gugelhupf?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ein Gugelhupf ist ein fluffiger Napfkuchen mit Rosinen drin, total klassisch hier in Wien. Der wird dir schmecken, versprochen!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich habe nicht gegessen. Heute probiere ich ein Google, Gugelhupf."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ganz genau, Gugelhupf - wird dir gefallen! Ich bring dir gleich einen schönen Teller davon."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke sehr."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Bitte schön! Lass es dir schmecken."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Der Gugelhupf hat gut geschmeckt."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Freut mich, dass er dir geschmeckt hat! Möchtest du noch einen Kaffee dazu oder soll ich dir die Rechnung bringen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, ich zahle, bitte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Macht zusammen zehn Euro siebzig."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Hier ist meine Karte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Danke, ich hol schnell das Gerät."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Alles gut?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ja, alles bestens! Deine Karte funktioniert. Möchtest du noch einen Verlängerter zum Mitnehmen oder soll ich dir gleich die Quittung geben?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein, ich brauche kein, keine Quittung."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Alles klar, keine Quittung. Danke vielmals und einen schönen Tag noch!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Tschüss."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Tschüss, pass auf dich auf!"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert managed a complete café interaction in German, successfully ordering, tasting, and paying — a solid functional achievement. His vocabulary is growing but several gender errors and a register inconsistency (switching to formal 'Sie' mid-conversation) indicate areas needing focused practice. His self-correction on 'Quittung' was a positive sign of developing awareness.",
+    "errors": [
+      {
+        "type": "gender",
+        "original": "Ich möchte ein Kaffee bestellen.",
+        "correction": "Ich möchte einen Kaffee bestellen.",
+        "explanation": "'Kaffee' is masculine (der Kaffee), so it requires the accusative masculine article 'einen', not 'ein'.",
+        "context": "Ich möchte ein Kaffee bestellen."
+      },
+      {
+        "type": "register",
+        "original": "Empfehlen Sie mir etwas?",
+        "correction": "Kannst du mir was empfehlen? / Empfiehlst du mir etwas?",
+        "explanation": "Robert had been using 'du' with Maria throughout, so switching to the formal 'Sie' form is inconsistent; he should maintain the informal register established in the conversation.",
+        "context": "Empfehlen Sie mir etwas?"
+      },
+      {
+        "type": "vocabulary",
+        "original": "Ist von Wien, nichts?",
+        "correction": "Das ist doch typisch für Wien, oder? / Kommt das aus Wien, oder?",
+        "explanation": "The phrase is not grammatically formed in German; the tag question 'nichts?' is not used this way — 'oder?' or 'nicht wahr?' are the correct equivalents, and a subject ('das') is missing.",
+        "context": "Ist von Wien, nichts?"
+      },
+      {
+        "type": "missing_article",
+        "original": "Ich habe nicht gegessen. Heute probiere ich ein Google, Gugelhupf.",
+        "correction": "Ich habe heute noch nichts gegessen. Heute probiere ich einen Gugelhupf.",
+        "explanation": "'Gugelhupf' is masculine (der Gugelhupf), so the accusative article 'einen' is required, not 'ein'.",
+        "context": "Ich habe nicht gegessen. Heute probiere ich ein Google, Gugelhupf."
+      },
+      {
+        "type": "missing_article",
+        "original": "Nein, ich brauche kein, keine Quittung.",
+        "correction": "Nein, ich brauche keine Quittung.",
+        "explanation": "'Quittung' is feminine (die Quittung), so the correct negative article is 'keine'; Robert self-corrected to the right form, which is positive, but the initial 'kein' was an error.",
+        "context": "Nein, ich brauche kein, keine Quittung."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 2,
+      "word_order": 0,
+      "missing_article": 2,
+      "verb_conjugation": 0,
+      "vocabulary": 1,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Kleiner Brauner",
+        "english": "a small espresso with a little cream (Viennese café term)",
+        "note": "used correctly after being prompted",
+        "tags": [
+          "vienna",
+          "café",
+          "anki"
+        ]
+      },
+      {
+        "german": "Gugelhupf",
+        "english": "a fluffy ring cake with raisins, classic Viennese pastry",
+        "note": "new this session; had trouble recalling it mid-sentence",
+        "tags": [
+          "food",
+          "vienna",
+          "anki"
+        ]
+      },
+      {
+        "german": "Ich hätte gern ...",
+        "english": "I would like ...",
+        "note": "used correctly; polite and natural register",
+        "tags": [
+          "ordering",
+          "polite",
+          "anki"
+        ]
+      },
+      {
+        "german": "Ich zahle, bitte.",
+        "english": "I'd like to pay, please.",
+        "note": "used correctly; natural and idiomatic for settling the bill",
+        "tags": [
+          "café",
+          "paying"
+        ]
+      },
+      {
+        "german": "Quittung",
+        "english": "receipt",
+        "note": "needs practice — initially wrong gender (kein → keine), self-corrected",
+        "tags": [
+          "anki",
+          "gender",
+          "café"
+        ]
+      },
+      {
+        "german": "Verlängerter",
+        "english": "a lengthened espresso with hot water (Viennese term)",
+        "note": "introduced by Maria; new this session",
+        "tags": [
+          "vienna",
+          "café",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Completed a full transactional conversation from ordering to payment without breaking down.",
+      "Used 'Ich hätte gern' correctly — a polite and natural construction for ordering.",
+      "Self-corrected 'kein' to 'keine' for 'Quittung' in real time, showing developing grammatical awareness.",
+      "Responded appropriately to new Viennese vocabulary (Kleiner Brauner, Gugelhupf) and attempted to use it.",
+      "Maintained conversation flow despite pronunciation difficulty with 'Gugelhupf'."
+    ],
+    "next_focus": "Masculine accusative articles: practice 'einen' vs 'ein' with common masculine café and food nouns (der Kaffee → einen Kaffee, der Gugelhupf → einen Gugelhupf, der Kuchen → einen Kuchen) using short ordering drills."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "scaffold_delivered": [
+    "Ich möchte lieber einen Tee.",
+    "Meine Frau hätte gerne den Apfelstrudel.",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_used": [
+    "Ich möchte lieber einen Tee."
+  ],
+  "scaffold_avoided": [
+    "Meine Frau hätte gerne den Apfelstrudel.",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_deployment_rate": "1/3 scaffold phrases used"
+}

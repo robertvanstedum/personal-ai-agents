@@ -1,0 +1,229 @@
+{
+  "session_id": "session_2026-06-18_002",
+  "date": "2026-06-18",
+  "persona": "Maria",
+  "scenario": "cafe bill",
+  "duration_estimate_min": 7,
+  "source": "ki_sitzung",
+  "raw_transcript": [
+    {
+      "speaker": "Transcript",
+      "text": "---SESSION---"
+    },
+    {
+      "speaker": "Date",
+      "text": "2026-06-18"
+    },
+    {
+      "speaker": "Persona",
+      "text": "Maria"
+    },
+    {
+      "speaker": "Scenario",
+      "text": "You've finished your coffee. Get Maria's attention and ask for the bill. She'll tell you the total — pay and leave a tip."
+    },
+    {
+      "speaker": "Duration",
+      "text": "14"
+    },
+    {
+      "speaker": "Mode",
+      "text": "voice"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Servus! Zahlen, bittschön?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Zahlen? I-ich habe nicht."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Zahlen, bittschön? Das macht dann 8 Euro 60."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich habe nicht ein Kaffee. Ich möchte ein Kaffee trinken."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Entschuldigung, ich hab dich falsch verstanden! Du willst also noch einen Kaffee? Was möchtest du trinken — vielleicht eine Melange oder einen Verlängerten?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, ich habe jetzt kein Kaffee getrunken. Ich, ich möchte einen Verlängerter, bitte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Alles klar, ein Verlängerter kommt gleich!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ähm, und empfehlen Sie etwas zu essen?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ja, der Gugelhupf is heut ganz frisch. Magst du ein Stück davon?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein, Kugelhopf mach ich nicht, aber haben Sie andere Dinge?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Klar, wir haben auch noch Apfelstrudel oder Sachertorte. Was möchtest du?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Sacher Torte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Super, eine Sachertorte und ein Verlängerter für dich. Kommt sofort!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ganz, ganz Viennese, ne? Nicht?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ja, genau, das ist typisch wienerisch!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Hm."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Genieß den Verlängerten und die Sachertorte. Lass dir's schmecken!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ausgezeichnet. Schmeckt sehr gut."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Freut mich sehr, dass es dir schmeckt!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Jetzt zahle ich."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Das macht dann 12 Euro 70."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Okay, hier ist meine Karte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Danke! Hier ist deine Karte und die Rechnung. Der Rest ist für dich, oder?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Was bedeutet der Rest is for me?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ah, entschuldige — der Rest is für dich heißt, du lässt ein Trinkgeld, oder?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Yeah, yes, tip, trinkgeld."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Genau, Trinkgeld! Sag einfach, wie viel du geben möchtest."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Zehn Prozent."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Sehr nett, danke schön! Zehn Prozent is perfekt."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Dankeschön. Ich habe mir gut gefallen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Danke, das freut mich sehr! Es hat dir also gefallen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ja, ich habe. Und, äh, morgen ich komme wieder."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Das freut mich! Dann bis morgen — ich freu mich schon!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Tschüss, bis morgen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Servus! Bis morgen, ich freu mich! ---END---"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "The session started with confusion as Robert misunderstood the initial request for the bill and instead ordered coffee and cake. He practiced ordering, paying, and tipping in a cafe setting but made several grammar and word-order mistakes while mixing English. Main takeaway: Robert engaged well in the role-play but needs work on sentence structure and avoiding English interference.",
+    "errors": [
+      {
+        "type": "word_order",
+        "original": "morgen ich komme wieder",
+        "correction": "morgen komme ich wieder",
+        "explanation": "German main clauses require verb-second word order.",
+        "context": "Ja, ich habe. Und, äh, morgen ich komme wieder."
+      },
+      {
+        "type": "gender",
+        "original": "einen Verlängerter",
+        "correction": "einen Verlängerten",
+        "explanation": "The noun 'Verlängerter' is masculine and requires the correct adjective ending.",
+        "context": "Ich möchte einen Verlängerter, bitte."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Ich habe mir gut gefallen",
+        "correction": "Es hat mir gut gefallen",
+        "explanation": "The phrase uses the wrong reflexive construction and subject.",
+        "context": "Dankeschön. Ich habe mir gut gefallen."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Kugelhopf mach ich nicht",
+        "correction": "Gugelhupf mag ich nicht",
+        "explanation": "Wrong verb and spelling; 'mag' is the natural choice for likes/dislikes.",
+        "context": "Nein, Kugelhopf mach ich nicht, aber haben Sie andere Dinge?"
+      }
+    ],
+    "strengths": [
+      "Successfully completed the payment and tipping sequence in German",
+      "Used polite phrases like 'bitte' and 'Dankeschön'",
+      "Attempted to ask for recommendations and negotiate the order"
+    ],
+    "next_focus": "Word order in main clauses (verb-second position) and correct use of 'gefallen'",
+    "topics": [
+      "cafe ordering",
+      "coffee and cake",
+      "paying the bill",
+      "tipping"
+    ],
+    "vocabulary": [
+      "Verlängerter",
+      "Sachertorte",
+      "Trinkgeld",
+      "wienerisch",
+      "Gugelhupf"
+    ]
+  },
+  "model": "grok",
+  "anki_generated": false,
+  "next_lesson_generated": false
+}

@@ -1,0 +1,125 @@
+{
+  "session_id": "2026-06-22_001",
+  "date": "2026-06-22",
+  "persona": "Maria",
+  "scenario": "Viennese Kaffeehaus ordering",
+  "duration_estimate_min": 5,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Hallo, ich bin Maria. Wie kann ich dir helfen?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte ein Kaffee."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Hier, dein Kaffee. Frisch gebrüht und dampfend heiß. Trink ihn in Ruhe."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Bitte schön. Lass ihn dir schmecken."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert's session was very brief, covering only a basic ordering exchange in a Viennese café scenario. He demonstrated a simple but functional request, though he made one article gender error. The session would benefit from more extended practice with café vocabulary and polite register phrases typical of Viennese culture.",
+    "errors": [
+      {
+        "type": "gender",
+        "original": "ein Kaffee",
+        "correction": "einen Kaffee",
+        "explanation": "'Kaffee' is masculine (der Kaffee), so the accusative indefinite article must be 'einen', not 'ein'.",
+        "context": "Ich möchte ein Kaffee."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 1,
+      "word_order": 0,
+      "missing_article": 0,
+      "verb_conjugation": 0,
+      "vocabulary": 0,
+      "register": 0
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "Ich möchte",
+        "english": "I would like",
+        "note": "used correctly",
+        "tags": [
+          "polite_request",
+          "modal",
+          "A1"
+        ]
+      },
+      {
+        "german": "frisch gebrüht",
+        "english": "freshly brewed",
+        "note": "new this session",
+        "tags": [
+          "café",
+          "adjective",
+          "B1"
+        ]
+      },
+      {
+        "german": "dampfend heiß",
+        "english": "steaming hot",
+        "note": "new this session",
+        "tags": [
+          "café",
+          "adjective",
+          "B1"
+        ]
+      },
+      {
+        "german": "Lass ihn dir schmecken",
+        "english": "Enjoy it (lit. let it taste good to you)",
+        "note": "new this session — common Austrian/German café farewell phrase",
+        "tags": [
+          "register",
+          "fixed_phrase",
+          "B2",
+          "anki"
+        ]
+      },
+      {
+        "german": "Bitte schön",
+        "english": "You're welcome / Here you go",
+        "note": "used correctly by Maria — passive exposure for Robert",
+        "tags": [
+          "politeness",
+          "A1"
+        ]
+      }
+    ],
+    "strengths": [
+      "Used 'Ich möchte' correctly as a polite way to order, which is more appropriate than 'Ich will' in a café context",
+      "Responded naturally with 'Danke', showing appropriate conversational turn-taking"
+    ],
+    "next_focus": "Practice masculine accusative articles (einen, den) through café ordering drills, and learn 2-3 polite Viennese café phrases such as 'Ich hätte gerne...' and 'Zahlen bitte'."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "scaffold_delivered": [
+    "Ich hätte gerne einen kleinen Brauner, bitte.",
+    "Was empfehlen Sie heute?",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_used": [],
+  "scaffold_avoided": [
+    "Ich hätte gerne einen kleinen Brauner, bitte.",
+    "Was empfehlen Sie heute?",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_deployment_rate": "0/3 scaffold phrases used"
+}

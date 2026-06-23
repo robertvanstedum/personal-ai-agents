@@ -1,6 +1,6 @@
 {
-  "total_sessions": 68,
-  "total_minutes": 659,
+  "total_sessions": 71,
+  "total_minutes": 694,
   "personas_practiced": [
     "Frau Berger",
     "Frau Berger",
@@ -70,7 +70,10 @@
     "Herr Fischer",
     "Maria",
     "Maria",
-    "Frau Berger"
+    "Frau Berger",
+    "Frau Berger",
+    "Maria",
+    "Maria"
   ],
   "scenarios_covered": [
     "bakery_order",
@@ -139,18 +142,21 @@
     "Hotel receptionist near Ringstraße",
     "Viennese café waitress",
     "Viennese café",
-    "Bakery Order near Naschmarkt"
+    "Bakery Order near Naschmarkt",
+    "Bakery morning order near Naschmarkt",
+    "Paying the bill at the café",
+    "Viennese Kaffeehaus ordering"
   ],
   "cumulative_error_counts": {
-    "gender": 57,
+    "gender": 62,
     "word_order": 52,
-    "missing_article": 62,
-    "verb_conjugation": 43,
-    "vocabulary": 101,
-    "register": 28,
+    "missing_article": 65,
+    "verb_conjugation": 44,
+    "vocabulary": 107,
+    "register": 30,
     "accusative": 1
   },
-  "anki_cards_generated": 274,
+  "anki_cards_generated": 286,
   "vocabulary_seen": [
     "Brötchen / Semmerl",
     "Mohnkuchen",
@@ -425,7 +431,19 @@
     "freilich",
     "eingepackt",
     "Grüß Gott",
-    "Danke sehr"
+    "Danke sehr",
+    "die Semmel (pl. Semmeln)",
+    "der Roggenlaib",
+    "ein Stück davon",
+    "Gleichfalls",
+    "Grüß Gott / Auf Wiederschauen / Pfiati",
+    "das Viertel",
+    "Ich hätte gern ...",
+    "Ich zahle, bitte.",
+    "Quittung",
+    "frisch gebrüht",
+    "dampfend heiß",
+    "Lass ihn dir schmecken"
   ],
   "strengths_noted": [
     "Robert successfully navigated a full transactional conversation from greeting to payment without breaking down",
@@ -691,10 +709,22 @@
     "Used the polite Konjunktiv II form 'Ich hätte gern' correctly, showing good register awareness for formal transactions.",
     "Self-corrected mid-sentence ('Ich möchte einen Roggenbrot. Ha-ha, haben Sie Roggenbrot?'), demonstrating real-time awareness of his own speech.",
     "Maintained a polite, appropriate register throughout the entire interaction without slipping into overly casual language.",
-    "Responded naturally and concisely to Frau Berger's question about whole or half loaf, keeping the conversation flowing."
+    "Responded naturally and concisely to Frau Berger's question about whole or half loaf, keeping the conversation flowing.",
+    "Maintained German throughout most of the interaction despite vocabulary gaps and only slipped into English once.",
+    "Used polite modal constructions correctly and consistently: 'Ich möchte...', 'Ein bisschen Zucker, bitte'.",
+    "Recovered from the 'Verlängerter' confusion and self-corrected to produce the right word on the third attempt.",
+    "Produced a natural, culturally appropriate closing: 'Gleichfalls, bis später'.",
+    "Used 'Ein Stück davon, bitte' fluently and naturally when negotiating the bread portion.",
+    "Completed a full transactional conversation from ordering to payment without breaking down.",
+    "Used 'Ich hätte gern' correctly — a polite and natural construction for ordering.",
+    "Self-corrected 'kein' to 'keine' for 'Quittung' in real time, showing developing grammatical awareness.",
+    "Responded appropriately to new Viennese vocabulary (Kleiner Brauner, Gugelhupf) and attempted to use it.",
+    "Maintained conversation flow despite pronunciation difficulty with 'Gugelhupf'.",
+    "Used 'Ich möchte' correctly as a polite way to order, which is more appropriate than 'Ich will' in a café context",
+    "Responded naturally with 'Danke', showing appropriate conversational turn-taking"
   ],
-  "last_updated": "2026-06-03T15:51:23.003465+00:00",
-  "voice_sessions": 43,
+  "last_updated": "2026-06-22T01:52:08.392999+00:00",
+  "voice_sessions": 46,
   "writing_sessions": 13,
   "carry_forward_phrases": [
     "Was empfehlen Sie uns? — manual_addition 2026-05-01",
@@ -705,14 +735,14 @@
   ],
   "scaffold_rotation_index": {
     "Herr Fischer": 4,
-    "Maria": 0,
+    "Maria": 2,
     "Dr. Huber": 0,
     "Georg": 0
   },
   "last_repeat": true,
   "last_scaffold_delivered": [
-    "Ich möchte lieber einen Tee.",
-    "Meine Frau hätte gerne den Apfelstrudel.",
+    "Ich hätte gerne einen kleinen Brauner, bitte.",
+    "Was empfehlen Sie heute?",
     "Einen Moment bitte — ich überlege kurz."
   ]
 }

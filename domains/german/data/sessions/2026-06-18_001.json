@@ -1,0 +1,108 @@
+{
+  "session_id": "session_2026-06-18_001",
+  "date": "2026-06-18",
+  "persona": "Maria",
+  "scenario": "cafe bill",
+  "duration_estimate_min": 2,
+  "source": "ki_sitzung",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Griaß di! Schön, dass du Platz genommen hast. Was kann ich dir bringen – eine Melange vielleicht?"
+    },
+    {
+      "speaker": "Sie",
+      "text": "Ich möchte einen verlängerten."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Einen Verlängerter, gern! Kommt sofort, der ist frisch. Brauchst du noch was dazu?"
+    },
+    {
+      "speaker": "Sie",
+      "text": "Empfehlen Sie etwas zu essen?"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Zu einem Verlängerter passt ein Stück Gugelhupf super! Möchtest du das probieren? Sag schnell Bescheid, der Laden ist voll."
+    },
+    {
+      "speaker": "Sie",
+      "text": "Ja, stimmt, ein Google-Hopf."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Einen Gugelhupf, klar! Kommt gleich dazu. Willst du danach die Rechnung?"
+    },
+    {
+      "speaker": "Sie",
+      "text": "exhala bitte"
+    },
+    {
+      "speaker": "Maria",
+      "text": "Zahlen? Klar, der Verlängerter und der Gugelhupf machen 8 Euro. Bar oder mit Karte? Trinkgeld kannst du einfach drauflegen."
+    },
+    {
+      "speaker": "Sie",
+      "text": "Ich zahle mit Karte und trinke Geld auch."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Mit Karte und Trinkgeld, super! Vielen Dank, schönen Tag noch!"
+    },
+    {
+      "speaker": "Sie",
+      "text": "Schönen Tag, bis später."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Bis dann! Komm bald wieder, gell?"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert handled a cafe ordering and payment scenario reasonably well in a voice session, showing basic comprehension and polite responses but struggling with specific Austrian vocabulary items due to mishearing or pronunciation. The interaction flowed naturally with Maria providing corrections in context. Main takeaway is solid participation but need for targeted vocab practice on food and payment terms.",
+    "errors": [
+      {
+        "type": "vocabulary",
+        "original": "ein Google-Hopf",
+        "correction": "einen Gugelhupf",
+        "explanation": "Misheard the cake name as 'Google-Hopf' instead of the correct Austrian pastry 'Gugelhupf'.",
+        "context": "Ja, stimmt, ein Google-Hopf."
+      },
+      {
+        "type": "vocabulary",
+        "original": "exhala bitte",
+        "correction": "Zahlen bitte",
+        "explanation": "Voice recognition error or mispronunciation for the request to pay the bill.",
+        "context": "exhala bitte"
+      },
+      {
+        "type": "vocabulary",
+        "original": "trinke Geld auch",
+        "correction": "Trinkgeld auch",
+        "explanation": "Incorrectly split 'Trinkgeld' (tip) into two words with wrong verb 'trinke'.",
+        "context": "Ich zahle mit Karte und trinke Geld auch."
+      }
+    ],
+    "strengths": [
+      "Used polite and appropriate phrases for ordering and paying",
+      "Responded naturally to suggestions about food and payment methods",
+      "Maintained the conversation flow despite vocabulary slips"
+    ],
+    "next_focus": "Austrian German vocabulary for coffee drinks, pastries and tipping",
+    "topics": [
+      "cafe ordering",
+      "coffee and cake",
+      "paying the bill"
+    ],
+    "vocabulary": [
+      "Verlängerter",
+      "Gugelhupf",
+      "Trinkgeld",
+      "Zahlen"
+    ]
+  },
+  "model": "grok",
+  "anki_generated": false,
+  "next_lesson_generated": false
+}

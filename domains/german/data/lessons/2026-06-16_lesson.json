@@ -1,0 +1,20 @@
+{
+  "lesson_date": "2026-06-16",
+  "lesson_number": 72,
+  "persona": "Herr Fischer",
+  "persona_role": "Hotel Receptionist",
+  "scenario": "hotel_checkin",
+  "warm_up": "Review top error from last session: vocabulary.",
+  "focus": "Masculine accusative articles: practice 'einen' vs 'ein' with common masculine café and food nouns (der Kaffee → einen Kaffee, der Gugelhupf → einen Gugelhupf, der Kuchen → einen Kuchen) using short ordering drills.",
+  "speaking_prompt": "You arrive at your hotel near the Ringstraße after a long flight. Herr Fischer greets you at the front desk. Check in, ask about the WiFi, and confirm your checkout date.",
+  "vocabulary_targets": [
+    "Kleiner Brauner",
+    "Gugelhupf",
+    "Ich hätte gern ...",
+    "Ich zahle, bitte.",
+    "Quittung"
+  ],
+  "carry_forward_errors": [
+    "Das ist doch typisch für Wien, oder? / Kommt das aus Wien, oder? (was: Ist von Wien, nichts?) — session 2026-06-16"
+  ]
+}

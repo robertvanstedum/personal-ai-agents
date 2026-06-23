@@ -40,32 +40,23 @@ This principle is built into Block A and carries forward permanently.
 
 ---
 
-## Current state (verified 2026-06-21)
+## Current state (verified 2026-06-21 — Block A complete)
 
 | Node | URL | Role today | State |
 |------|-----|-----------|-------|
-| EC2 | app.mini-moi.ai | Production target — not yet primary | Portal + Curator + German + Guild load. Postgres migrated. No cron. No Telegram. |
-| Mac | minimoi.ai via tunnel | Source of truth — active production | All data, all cron, all Telegram bots. |
+| EC2 | minimoi.ai | Production | All services running. Cron active. system-bot + cos-bot containers live. |
+| Mac | dev.minimoi.ai | Standby | All services running. MINIMOI_ROLE=standby. Test bots registered (system_test_bot validated; cos_test_bot flood-wait resolving). |
 
-**Done:**
-- ✅ Nginx Docker networking fix deployed (German/Curator 404s resolved)
-- ✅ PostgreSQL migrated Mac → EC2 (Guild Queue/Build Log showing data)
-- ✅ cos_context.json committed to repo
-- ✅ DR committed to docs/decision-records/drafts/
-- ✅ Telegram spec v2 registered (design log id 94, spec_ready)
+**Block A — COMPLETE as of 2026-06-21:**
+- ✅ A1: MINIMOI_ROLE system — utils/telegram.py role-aware token helpers
+- ✅ A2: Cron on EC2 — scripts/setup_ec2_cron.sh deployed
+- ✅ A3: Telegram SSM token helpers — SSM params set on EC2
+- ✅ A5: DNS flip — minimoi.ai → EC2 Elastic IP, dev.minimoi.ai → Mac tunnel, mini-moi.ai → 301 redirect
+- ✅ A6: Two-bot containers — minimoi/system-bot + minimoi/cos-bot on ECR, running on EC2
 
-**Still missing on EC2:**
-- ❌ MINIMOI_ROLE not in .env.ec2 — first A1 action
-- ❌ No cron — EC2 briefing data frozen from pg_restore
-- ❌ No Telegram bot container
-- ❌ DNS not on correct domains yet
-
-**Most operationally significant gap:** Mac cron still active, EC2
-has none. EC2 briefing data is static. A2 fixes this.
-
-**DR stale note:** dr_aws_migration_day1_2026-06-20.md says
-"PostgreSQL migration not yet run" — stale, completed same session.
-OpenClaw to add correction note.
+**Validation still pending:**
+- ⏳ minimoi_cos_test_bot: Telegram flood-wait (~15h) from rapid restarts during A6 setup. Auto-resolves.
+- German commands in system_bot: deferred to Block B (per Robert, 2026-06-21)
 
 ---
 

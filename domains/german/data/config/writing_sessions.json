@@ -48,6 +48,56 @@
       ],
       "timestamp": "2026-05-22T21:34:13.392386",
       "context_title": "Beschreib deinen Morgen auf Deutsch."
+    },
+    {
+      "id": "ws_20260616_140937",
+      "mode": "tagebuch",
+      "text_original": "Ich schriebe auf den Handy.  Erstmal",
+      "text_corrected": "Ich schreibe auf dem Handy. Erstmal",
+      "notes": [
+        "Conjugation: 'schriebe' → 'schreibe' (correct present tense)",
+        "Case: 'den' → 'dem' (dative after 'auf' for location)",
+        "Gender: 'Handy' is neuter, requires 'dem'"
+      ],
+      "timestamp": "2026-06-16T14:09:37.392412",
+      "context_title": "Was war heute interessant oder überraschend?"
+    },
+    {
+      "id": "ws_20260616_141358",
+      "mode": "tagebuch",
+      "text_original": "Ich schriebe auf dem Handy. Zweiten mal.",
+      "text_corrected": "Ich schreibe auf dem Handy. Zum zweiten Mal.",
+      "notes": [
+        "Verb conjugation: schriebe → schreibe (present tense).",
+        "Adjective ending: Zweiten → Zweites (neuter gender of Mal).",
+        "Capitalization: mal → Mal (noun).",
+        "Added 'zum' for idiomatic phrase 'zum zweiten Mal'."
+      ],
+      "timestamp": "2026-06-16T14:13:58.609126",
+      "context_title": "Was hast du heute auf Deutsch gelesen oder gehört?"
+    },
+    {
+      "id": "ws_20260617_205430",
+      "mode": "tagebuch",
+      "text_original": "Heute suche ich neue Arbeit.  Oder, ich bin auf der Suche einer neuen Stelle.",
+      "text_corrected": "Heute suche ich eine neue Arbeit. Oder ich bin auf der Suche nach einer neuen Stelle.",
+      "notes": [
+        "Added indefinite article 'eine' (feminine noun 'Arbeit' requires article)",
+        "Changed 'Suche einer' to 'Suche nach einer' (fixed phrase requires preposition 'nach' + dative case)"
+      ],
+      "timestamp": "2026-06-17T20:54:30.221456",
+      "context_title": "Was hast du heute in Wien gesehen?"
+    },
+    {
+      "id": "ws_20260621_091253",
+      "mode": "tagebuch",
+      "text_original": "Wie sagt mann, \"I'm here testing minimoi from AWS\", auf Deutsch?",
+      "text_corrected": "Wie sagt man „I'm here testing minimoi from AWS“ auf Deutsch?",
+      "notes": [
+        "'mann' corrected to 'man' (indefinite pronoun spelling/vocabulary)"
+      ],
+      "timestamp": "2026-06-21T09:12:53.796750",
+      "context_title": "Beschreib ein Gespräch, das du heute geführt hast."
     }
   ]
 }

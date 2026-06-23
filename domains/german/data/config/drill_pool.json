@@ -970,6 +970,11 @@
         "persona": "Maria",
         "promoted_date": "2026-05-12",
         "source": "openclaw-mobile"
+      },
+      {
+        "phrase": "Meine Frau hätte gerne den Apfelstrudel.",
+        "persona": "Frau Berger",
+        "promoted_date": "2026-06-16"
       }
     ],
     "approved": []

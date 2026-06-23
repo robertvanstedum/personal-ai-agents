@@ -9,6 +9,36 @@
       "corrected": "Ich finde das sehr interessant.",
       "rewritten": "Das finde ich wirklich interessant.",
       "saved": true
+    },
+    {
+      "note_id": "9f395ab4-fca0-4525-b962-86bebb6c0d68",
+      "article_id": "art_20260617_orf_01",
+      "article_title": "Stadt sperrt Hotel mit schweren Mängeln",
+      "date": "2026-06-17",
+      "original": "Das Gebäude wurde behördlich im Haus",
+      "corrected": "Das Gebäude wurde behördlich wegen schwerer Mängel gesperrt.",
+      "rewritten": "Das Gebäude wurde behördlich im Haus",
+      "saved": true
+    },
+    {
+      "note_id": "7c1a2066-9ee2-4d02-a1df-6899d2ab6b41",
+      "article_id": "art_20260618_vie_01",
+      "article_title": "Als sie die Lieferadresse sah, konnte sie es kaum glauben",
+      "date": "2026-06-18",
+      "original": "Eigentlich unfassbar!  Ich muss mir diese Phrase merken.  Ich habe \"unfassbar\" nicht gewusst.",
+      "corrected": "Eigentlich unfassbar! Ich muss mir diese Phrase merken. Ich habe \"unfassbar\" nicht gewusst.",
+      "rewritten": "Eigentlich unfassbar!  Ich muss mir diese Phrase merken.  Ich habe \"unfassbar\" nicht gewusst.",
+      "saved": true
+    },
+    {
+      "note_id": "65a1e9a2-68f6-4e1a-9402-57fa9c2e673c",
+      "article_id": "art_20260618_vie_01",
+      "article_title": "Als sie die Lieferadresse sah, konnte sie es kaum glauben",
+      "date": "2026-06-18",
+      "original": "Heute habe ich, \"Eigentlich unfassbar\" gelernt, was \"really unbeliviable\" auf Englisch bedeutet.",
+      "corrected": "Heute habe ich „Eigentlich unfassbar“ gelernt, was „really unbelievable“ auf Englisch bedeutet.",
+      "rewritten": "Heute habe ich „Eigentlich unfassbar“ gelernt, was „really unbelievable“ auf Englisch bedeutet.",
+      "saved": true
     }
   ]
 }

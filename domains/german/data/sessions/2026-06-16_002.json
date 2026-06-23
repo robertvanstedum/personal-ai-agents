@@ -1,0 +1,316 @@
+{
+  "session_id": "2026-06-16_002",
+  "date": "2026-06-16",
+  "persona": "Frau Berger",
+  "scenario": "Bakery morning order near Naschmarkt",
+  "duration_estimate_min": 12,
+  "mode": "voice",
+  "source": "manual",
+  "raw_transcript": [
+    {
+      "speaker": "Frau Berger",
+      "text": "Grüß Gott! Na, wie geht’s Ihnen denn heut früh? Schön, dass Sie wieder da sind. Schauen S’, was darf’s denn sein? Wir haben heut ganz frische Semmeln und einen wunderbaren Nusskuchen."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Semmeln ist Roggenbrot, oh."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Guten Morgen! Grüß Gott, schön dass Sie da sind! Semmeln sind unsere frischen Brötchen - die sind aus Weißmehl, ganz fluffig. Falls Sie Roggenbrot möchten, haben wir auch einen schönen Roggenlaib da. Was hätten S’ denn gerne?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte ein Roggen, Roggenbrot. Roggenlaib ist ein Brötchen von, von Roggenbrot, oder?"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Guten Morgen! Grüß Gott! Nein, ein Roggenlaib ist ein ganzes großes Brot aus Roggen, kein kleines Brötchen. Ein Brötchen nennt man bei uns Semmel. Möchten Sie ein ganzes Roggenbrot kaufen oder nur ein Stück davon?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ein Stück davon, bitte."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Gerne! Wie groß soll das Stück sein? So ein halbes Kilo vielleicht, oder möchten S’ ein kleineres Stück?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ein kleineres Stück. Es ist so, äh, für mich."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Etwa so ein Viertel vom Laib? Das wär so um die dreihundert Gramm. Passt das für Sie?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Stimmt, das passt."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Sehr gut! Dann schneid ich Ihnen ein schönes Stück ab. Möchten S’ noch was dazu? Vielleicht eine frische Semmel oder ein Stück Kuchen für den Kaffee?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich nehme ein Für Langerton."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Sie meinen einen Fladenbrot oder einen Kaisersemmel? Oder haben S’ vielleicht den Gugelhupf gemeint?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Nein, ich"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Nein, ich meine den Kaisersemmel, bitte."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ich möchte ein ein Kaffee trinken."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Gerne! Wollen Sie den Kaffee zum Mitnehmen oder möchten Sie sich hier einen Moment hinsetzen und in Ruhe trinken?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Haben Sie Frühlingerton?"
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Frühlingsrolle meinen Sie? Nein, die haben wir nicht - das ist eher was Chinesisches. Aber wir haben heute ganz frischen Apfelstrudel oder Topfenstrudel. Möchten Sie den probieren?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Äh, nein, ich möchte einen Verlängerter."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Ach so, einen Verlängerten! Freilich, den mach ich Ihnen gern. Ein bisschen Milch dazu oder ganz klassisch mit nur mehr Wasser verlängert?"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Ein bisschen Zucker, bitte."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Gerne, etwas Zucker kommt rein. So, bitte sehr - Ihr Verlängerter und das Stück Roggenbrot. Macht zusammen 4 Euro 80."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Here’s my carta."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Gerne, danke. Ihre Karte bitte - so, und hier ist Ihr Bon. Passt alles? Und der Verlängerte ist gleich fertig, einen kleinen Moment noch."
+    },
+    {
+      "speaker": "Robert",
+      "text": "Danke."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Bitte schön! Gern geschehen. Genießen Sie Ihren Kaffee und das Brot. Auf Wiederschauen und einen schönen Tag noch!"
+    },
+    {
+      "speaker": "Robert",
+      "text": "Gleichfalls, bis später."
+    },
+    {
+      "speaker": "Frau Berger",
+      "text": "Danke! Bis später und pfiati! -END-"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "Robert successfully completed a bakery transaction in Austrian German, managing to communicate his needs despite some significant vocabulary gaps and one English slip. He recovered well from misunderstandings (e.g., eventually producing 'Verlängerter' correctly after two failed attempts) and used polite, appropriate register throughout. The main challenge is vocabulary precision, particularly for food and drink items.",
+    "errors": [
+      {
+        "type": "vocabulary",
+        "original": "Semmeln ist Roggenbrot",
+        "correction": "Semmeln sind Brötchen (aus Weißmehl)",
+        "explanation": "Robert incorrectly equated 'Semmeln' with 'Roggenbrot'; they are entirely different baked goods — Semmeln are white-flour rolls, not rye bread.",
+        "context": "Semmeln ist Roggenbrot, oh."
+      },
+      {
+        "type": "verb_conjugation",
+        "original": "Semmeln ist",
+        "correction": "Semmeln sind",
+        "explanation": "'Semmeln' is plural, so the verb must be 'sind', not 'ist'.",
+        "context": "Semmeln ist Roggenbrot, oh."
+      },
+      {
+        "type": "missing_article",
+        "original": "Ich möchte ein Roggen, Roggenbrot",
+        "correction": "Ich möchte ein Stück Roggenbrot / einen Roggenlaib",
+        "explanation": "'Roggenbrot' is a neuter noun and needs the correct article and quantity expression; 'ein Roggen' alone is incomplete and unidiomatic.",
+        "context": "Ich möchte ein Roggen, Roggenbrot."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Roggenlaib ist ein Brötchen von, von Roggenbrot, oder?",
+        "correction": "Ein Roggenlaib ist ein ganzes Brot aus Roggen, oder?",
+        "explanation": "'Von' is used here instead of the correct preposition 'aus' (made of/from), and the definition of Roggenlaib was confused with Brötchen.",
+        "context": "Roggenlaib ist ein Brötchen von, von Roggenbrot, oder?"
+      },
+      {
+        "type": "vocabulary",
+        "original": "Es ist so, äh, für mich",
+        "correction": "Es ist nur für mich (allein) / Ich bin allein",
+        "explanation": "The phrase is understandable but incomplete and unnatural; a native speaker would say 'Es ist nur für mich' or 'Ich bin alleine' to explain the portion size.",
+        "context": "Ein kleineres Stück. Es ist so, äh, für mich."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Ich nehme ein Für Langerton",
+        "correction": "Ich nehme einen Verlängerten",
+        "explanation": "'Verlängerter' (Viennese-style long black coffee with water) was mispronounced and garbled beyond recognition; the correct form is 'einen Verlängerten' (masculine accusative).",
+        "context": "Ich nehme ein Für Langerton."
+      },
+      {
+        "type": "gender",
+        "original": "Ich möchte ein ein Kaffee trinken",
+        "correction": "Ich möchte einen Kaffee trinken",
+        "explanation": "'Kaffee' is masculine (der Kaffee), so the accusative article is 'einen', not 'ein'.",
+        "context": "Ich möchte ein ein Kaffee trinken."
+      },
+      {
+        "type": "vocabulary",
+        "original": "Haben Sie Frühlingerton?",
+        "correction": "Haben Sie einen Verlängerten?",
+        "explanation": "Robert appears to have confused 'Verlängerter' with 'Frühlingston/Frühlingsrolle'; this is an entirely wrong word and caused confusion.",
+        "context": "Haben Sie Frühlingerton?"
+      },
+      {
+        "type": "gender",
+        "original": "ich möchte einen Verlängerter",
+        "correction": "Ich möchte einen Verlängerten",
+        "explanation": "After the accusative article 'einen', adjectives take the weak declension ending '-en': 'Verlängerten', not 'Verlängerter'.",
+        "context": "Äh, nein, ich möchte einen Verlängerter."
+      },
+      {
+        "type": "register",
+        "original": "Here's my carta",
+        "correction": "Hier ist meine Karte / Bitte sehr",
+        "explanation": "Robert switched entirely to English (with a Spanish/Italian word 'carta') when paying; in a German-language interaction this should stay in German.",
+        "context": "Here's my carta."
+      }
+    ],
+    "error_type_counts": {
+      "gender": 2,
+      "word_order": 0,
+      "missing_article": 1,
+      "verb_conjugation": 1,
+      "vocabulary": 5,
+      "register": 1
+    },
+    "vocabulary_highlights": [
+      {
+        "german": "die Semmel (pl. Semmeln)",
+        "english": "bread roll (Austrian term for Brötchen)",
+        "note": "needs practice — confused with Roggenbrot",
+        "tags": [
+          "Austrian German",
+          "bakery",
+          "anki"
+        ]
+      },
+      {
+        "german": "der Roggenlaib",
+        "english": "whole rye loaf",
+        "note": "new this session — distinct from a slice or a roll",
+        "tags": [
+          "bakery",
+          "anki"
+        ]
+      },
+      {
+        "german": "ein Stück davon",
+        "english": "a piece/slice of it",
+        "note": "used correctly — good natural response",
+        "tags": [
+          "shopping",
+          "quantities"
+        ]
+      },
+      {
+        "german": "der Verlängerte",
+        "english": "Viennese long black coffee (espresso diluted with hot water)",
+        "note": "needs practice — garbled twice before producing correctly; remember: einen Verlängerten (masc. acc.)",
+        "tags": [
+          "Austrian German",
+          "café",
+          "anki",
+          "coffee"
+        ]
+      },
+      {
+        "german": "zum Mitnehmen",
+        "english": "to take away / to go",
+        "note": "introduced by Frau Berger — useful phrase to learn actively",
+        "tags": [
+          "café",
+          "shopping",
+          "anki"
+        ]
+      },
+      {
+        "german": "Gleichfalls",
+        "english": "likewise / same to you",
+        "note": "used correctly — natural and polite closing",
+        "tags": [
+          "greetings",
+          "register"
+        ]
+      },
+      {
+        "german": "Grüß Gott / Auf Wiederschauen / Pfiati",
+        "english": "Hello (Austrian) / Goodbye (Austrian formal) / Bye (Austrian informal)",
+        "note": "encountered this session — passive recognition; Grüß Gott should be used actively",
+        "tags": [
+          "Austrian German",
+          "greetings",
+          "anki"
+        ]
+      },
+      {
+        "german": "das Viertel",
+        "english": "a quarter",
+        "note": "used passively (Frau Berger) — useful for quantities at the market",
+        "tags": [
+          "quantities",
+          "Naschmarkt",
+          "anki"
+        ]
+      }
+    ],
+    "strengths": [
+      "Maintained German throughout most of the interaction despite vocabulary gaps and only slipped into English once.",
+      "Used polite modal constructions correctly and consistently: 'Ich möchte...', 'Ein bisschen Zucker, bitte'.",
+      "Recovered from the 'Verlängerter' confusion and self-corrected to produce the right word on the third attempt.",
+      "Produced a natural, culturally appropriate closing: 'Gleichfalls, bis später'.",
+      "Used 'Ein Stück davon, bitte' fluently and naturally when negotiating the bread portion."
+    ],
+    "next_focus": "Masculine accusative articles and adjective endings: practice the pattern 'einen + adjective(-en) + noun' (e.g., 'einen Verlängerten', 'einen frischen Kaffee', 'einen großen Roggenlaib') through targeted drilling, as Robert consistently used 'ein' or the nominative adjective form where accusative was required."
+  },
+  "anki_generated": true,
+  "next_lesson_generated": true,
+  "drill_mode": false,
+  "drill_session": 0,
+  "drill_total": 0,
+  "scaffold_delivered": [
+    "Ich möchte lieber einen Tee.",
+    "Meine Frau hätte gerne den Apfelstrudel.",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_used": [
+    "Ich möchte lieber einen Tee."
+  ],
+  "scaffold_avoided": [
+    "Meine Frau hätte gerne den Apfelstrudel.",
+    "Einen Moment bitte — ich überlege kurz."
+  ],
+  "scaffold_deployment_rate": "1/3 scaffold phrases used"
+}

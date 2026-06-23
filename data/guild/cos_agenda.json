@@ -6,5 +6,778 @@
     "loop_name": "design_dev",
     "status": "pending",
     "created_at": "2026-06-10T01:19:05.675329+00:00"
+  },
+  {
+    "domain": "german",
+    "description": "Best AI Language Learning Apps & Tools in 2026 (incorporate) \u2014 The resource lists general multi-language AI tools while Mein Deutsch is a German-only app centered on personalized drills, phrasebook, Gespr\u00e4che, and progress tracking.. Rec: Include Mein Deutsch in the 2026 list as the leading specialized German coaching option with conversation-focused AI features.",
+    "confidence": 0.7,
+    "loop_name": "cos_german_watch",
+    "status": "pending",
+    "url": "https://aiteacheasy.com/ai-language-learning-apps-tools",
+    "created_at": "2026-06-13T03:35:40.260327+00:00"
+  },
+  {
+    "domain": "german",
+    "description": "Language Learning With AI Tools: Complete Guide for 2026 (complement) \u2014 The resource is a general 2026 trend guide on AI language tools, while Mein Deutsch is a focused German app with drills, phrasebook, Gespr\u00e4che, and tracking.. Rec: Reference the guide's AI conversation and feedback tips to strengthen Mein Deutsch's feature positioning.",
+    "confidence": 0.7,
+    "loop_name": "cos_german_watch",
+    "status": "pending",
+    "url": "https://migaku.com/blog/language-fun/language-learning-with-ai-tools",
+    "created_at": "2026-06-13T03:36:02.327509+00:00"
+  },
+  {
+    "domain": "german",
+    "description": "What's the best AI language learning app in 2026? - LanguaTalk (complement) \u2014 Mein Deutsch delivers a specialized German-only experience with drills, phrasebook, Gespr\u00e4che and tracking, whereas the LanguaTalk article surveys general-purpose AI tools across languages.. Rec: Use the article's critique of generic chatbots to sharpen Mein Deutsch's positioning as the purpose-built German alternative.",
+    "confidence": 0.7,
+    "loop_name": "cos_german_watch",
+    "status": "pending",
+    "url": "https://languatalk.com/blog/whats-the-best-ai-for-language-learning",
+    "created_at": "2026-06-13T03:36:37.842426+00:00"
+  },
+  {
+    "domain": "german",
+    "description": "The Chicago German Language Meetup Group (complement) \u2014 The Meetup provides in-person group conversation and cultural exchange with real people, whereas Mein Deutsch delivers solitary AI-driven drills, phrasebooks, and progress tracking.. Rec: Mein Deutsch users in Chicago should attend the Meetup to practice live speaking skills developed in the app.",
+    "confidence": 0.7,
+    "loop_name": "cos_german_watch",
+    "status": "pending",
+    "url": "https://www.meetup.com/chicago-german-language",
+    "created_at": "2026-06-13T03:36:44.913484+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: global-ai-governance-regional-models \u2014 Directly covers emerging AI governance models across EU, UK, Asia, Middle East and Australia, matching listed AI governance and MENA interests. | Source: Navigating AI governance across the globe: regional approaches and frontline insights - Bird & Bird (https://www.twobirds.com/en/capabilities/artificial-intelligence/ai-legal-services/navigating-ai-governance-across-the-globe)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.twobirds.com/en/capabilities/artificial-intelligence/ai-legal-services/navigating-ai-governance-across-the-globe",
+    "suggested_thread": "global-ai-governance-regional-models",
+    "created_at": "2026-06-13T03:37:03.063973+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: canada-mobile-ai-governance \u2014 Directly relevant to AI governance and telecom AI as Canada\u2019s rules extend the EU Act\u2019s reach into mobile-device oversight, signaling broader regulatory momentum. | Source: Canada\u2019s Emerging AI Regulations Are Sending a Clear Signal:\u00a0Mobile AI Governance Can No Longer Be Ignored (https://www.lookout.com/blog/mobile-ai-governance-can-no-longer-be-ignored)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.lookout.com/blog/mobile-ai-governance-can-no-longer-be-ignored",
+    "suggested_thread": "canada-mobile-ai-governance",
+    "created_at": "2026-06-13T03:37:08.950760+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: ai-governance-geopolitics-eu \u2014 Directly matches the AI governance interest with a geopolitics and policy angle. | Source: AI Governance (https://www.globalgovernance.eu/aigg)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.globalgovernance.eu/aigg",
+    "suggested_thread": "ai-governance-geopolitics-eu",
+    "created_at": "2026-06-13T03:37:14.588303+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: ai-governance-frontier-cset \u2014 Directly analyzes U.S. AI governance proposals and their underlying assumptions, matching the AI governance interest exactly. | Source: AI Governance at the Frontier | Center for Security and Emerging Technology (https://cset.georgetown.edu/publication/ai-governance-at-the-frontier)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://cset.georgetown.edu/publication/ai-governance-at-the-frontier",
+    "suggested_thread": "ai-governance-frontier-cset",
+    "created_at": "2026-06-13T03:37:19.068381+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: ai-telecom-networks-bain \u2014 Directly addresses telecom AI applications in networks, automation, and customer experience, matching one of the user's explicit monitoring areas. | Source: AI in Telecommunications | Bain & Company (https://www.bain.com/insights/ai-in-telecommunications)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.bain.com/insights/ai-in-telecommunications",
+    "suggested_thread": "ai-telecom-networks-bain",
+    "created_at": "2026-06-13T03:37:24.768851+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: telcoai-telecom-infra-project \u2014 Direct overlap with the telecom AI focus area, as the project specifically targets AI-driven automation and intelligence in telecom networks. | Source: TelcoAI - Telecom Infra Project (https://www.telecominfraproject.com/telcoai)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.telecominfraproject.com/telcoai",
+    "suggested_thread": "telcoai-telecom-infra-project",
+    "created_at": "2026-06-13T03:37:29.666737+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: ericsson-telecom-ai-networks \u2014 Directly matches the telecom AI focus area by covering both AI-driven network operations and the network requirements for scaling AI applications. | Source: Telecom AI - Networks for AI and AI for networks - Ericsson (https://www.ericsson.com/en/ai)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.ericsson.com/en/ai",
+    "suggested_thread": "ericsson-telecom-ai-networks",
+    "created_at": "2026-06-13T03:37:35.533509+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: ai-in-telecom-ibm-survey \u2014 Directly matches the telecom AI interest area with fresh IBM survey data on operator adoption and use cases. | Source: AI in Telecommunications | IBM (https://www.ibm.com/think/topics/ai-in-telecommunications)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.ibm.com/think/topics/ai-in-telecommunications",
+    "suggested_thread": "ai-in-telecom-ibm-survey",
+    "created_at": "2026-06-13T03:37:40.453989+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: mena-geopolitical-realignment-china \u2014 Directly covers MENA geopolitical realignment with China, matching monitored MENA geopolitics and global macro/USD hegemony interests. | Source: Evolving Geopolitics in the Middle East - Highlights & \"MENA: Geopolitical Re-Alignment?\" (https://www.securityincontext.com/posts/evolving-geopolitics-in-the-middle-east-highlights-mena-paper)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.securityincontext.com/posts/evolving-geopolitics-in-the-middle-east-highlights-mena-paper",
+    "suggested_thread": "mena-geopolitical-realignment-china",
+    "created_at": "2026-06-13T03:37:48.623820+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: mena-energy-geopolitics-reconstruction \u2014 Direct overlap with MENA geopolitics and global macro trends via energy power dynamics and post-conflict recovery. | Source: Energy Geopolitics and Post-Conflict Reconstruction in MENA (https://www.youtube.com/watch?v=gIH2xyPN1pA)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.youtube.com/watch?v=gIH2xyPN1pA",
+    "suggested_thread": "mena-energy-geopolitics-reconstruction",
+    "created_at": "2026-06-13T03:37:53.064204+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: mena-geopolitical-risk-spillovers \u2014 The paper directly addresses MENA geopolitical risk spillovers and network interconnectedness, aligning with two of the tracked domains (MENA geopolitics + global macro trends). | Source: Full article: Geopolitical risk spillovers and interconnectedness (https://www.tandfonline.com/doi/full/10.1080/10242694.2025.2505471)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.tandfonline.com/doi/full/10.1080/10242694.2025.2505471",
+    "suggested_thread": "mena-geopolitical-risk-spillovers",
+    "created_at": "2026-06-13T03:37:57.756800+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: mena-geopolitical-monitor \u2014 Direct match to the user's explicit MENA geopolitics interest, providing ongoing risk analysis that intersects with global macro trends. | Source: MENA Region News & Risk Analysis - Geopolitical Monitor (https://www.geopoliticalmonitor.com/tag/mena-region)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.geopoliticalmonitor.com/tag/mena-region",
+    "suggested_thread": "mena-geopolitical-monitor",
+    "created_at": "2026-06-13T03:38:02.845188+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: usd-hegemony-challenges-future \u2014 Directly addresses USD hegemony and global macro trends, both explicitly listed monitoring areas. | Source: The Hegemony of the US Dollar: History, Challenges, and the Future of \u2013 HSA Tutoring (https://tutoring.hsa.net/blogs/students-published-works/the-hegemony-of-the-us-dollar-history-challenges-and-the-future-of-the-global-economy)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://tutoring.hsa.net/blogs/students-published-works/the-hegemony-of-the-us-dollar-history-challenges-and-the-future-of-the-global-economy",
+    "suggested_thread": "usd-hegemony-challenges-future",
+    "created_at": "2026-06-13T03:38:12.068618+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: dollar-hegemony-us-deficits-reserve-status \u2014 Directly addresses USD hegemony and its role sustaining US deficits, which matches one of the explicitly monitored topics plus global macro trends. | Source: Dollar Hegemony: America\u2019s Unnamed Empire (https://stanfordreview.org/dollar-hegemony-americas-unnamed-empire)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://stanfordreview.org/dollar-hegemony-americas-unnamed-empire",
+    "suggested_thread": "dollar-hegemony-us-deficits-reserve-status",
+    "created_at": "2026-06-13T03:38:16.989209+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: usd-hegemony-transition-stablecoins \u2014 Directly examines the ongoing transition of USD hegemony amid stablecoins and digital assets, matching two of the user's explicit monitoring areas. | Source: Matrix on Point: The U.S. Dollar Hegemony in Transition - Social Science Matrix (https://live-ssmatrix.pantheon.berkeley.edu/research-article/dollar-hegemony)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://live-ssmatrix.pantheon.berkeley.edu/research-article/dollar-hegemony",
+    "suggested_thread": "usd-hegemony-transition-stablecoins",
+    "created_at": "2026-06-13T03:38:18.487027+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: future-dollar-hegemony-cfr \u2014 Direct match to explicitly listed USD hegemony interest plus global macro trends, from a high-signal CFR source. | Source: The Future of Dollar Hegemony | Council on Foreign Relations (https://www.cfr.org/articles/future-dollar-hegemony)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.cfr.org/articles/future-dollar-hegemony",
+    "suggested_thread": "future-dollar-hegemony-cfr",
+    "created_at": "2026-06-13T03:38:22.998267+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: agentic-ai-platforms-2026-slack \u2014 Direct match to the explicitly monitored topic of agentic AI platforms, covering 2026 tools and autonomous workflows. | Source: Best Agentic AI Platforms: Guide and Tools for 2026 - Slack (https://slack.com/blog/productivity/best-agentic-ai-platforms-for-2026-what-they-are-and-how-to-choose-one)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://slack.com/blog/productivity/best-agentic-ai-platforms-for-2026-what-they-are-and-how-to-choose-one",
+    "suggested_thread": "agentic-ai-platforms-2026-slack",
+    "created_at": "2026-06-13T03:38:29.093974+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: agentic-ai-platforms-2026-enterprise-guide \u2014 Direct match to the explicitly monitored 'agentic AI platforms' interest, offering enterprise-focused market intelligence on an emerging category. | Source: 7 best agentic AI platforms in 2026 | Enterprise market guide (https://www.kore.ai/blog/7-best-agentic-ai-platforms)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.kore.ai/blog/7-best-agentic-ai-platforms",
+    "suggested_thread": "agentic-ai-platforms-2026-enterprise-guide",
+    "created_at": "2026-06-13T03:38:33.144063+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: agentic-ai-platforms-2026-buyers-guide \u2014 Direct match to the explicitly monitored 'agentic AI platforms' interest area, providing vendor landscape and use-case insights. | Source: Agentic AI Platforms: 2026 Buyer's Guide & Vendor Comparison (https://www.automationanywhere.com/rpa/agentic-ai-platforms)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.automationanywhere.com/rpa/agentic-ai-platforms",
+    "suggested_thread": "agentic-ai-platforms-2026-buyers-guide",
+    "created_at": "2026-06-13T03:38:37.881553+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: agentic-ai-ibm-explainer \u2014 Directly covers agentic AI definitions and importance, aligning with an explicitly monitored interest area. | Source: What is Agentic AI? - IBM (https://www.ibm.com/think/topics/agentic-ai)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.ibm.com/think/topics/agentic-ai",
+    "suggested_thread": "agentic-ai-ibm-explainer",
+    "created_at": "2026-06-13T03:38:42.823074+00:00"
+  },
+  {
+    "domain": "mini_moi",
+    "description": "Personal AI (threat): Emphasizes carrier-native memory tokens and edge infrastructure rather than local-first autonomous agents with specialized modules like daily briefings or language coaching. | Rec: Track their edge deployment model for potential hybrid local-edge extensions.",
+    "confidence": 0.8,
+    "loop_name": "cos_novelty_watch",
+    "status": "pending",
+    "url": "https://www.personal.ai",
+    "assessment": "threat",
+    "created_at": "2026-06-13T03:39:11.507253+00:00"
+  },
+  {
+    "domain": "mini_moi",
+    "description": "Thoth (threat): Pure open-source local-first assistant focused on architecture transparency versus mini-moi's curated feature set and model-agnostic agent guild. | Rec: Review its open-source codebase for reusable patterns in local agent orchestration.",
+    "confidence": 0.8,
+    "loop_name": "cos_novelty_watch",
+    "status": "pending",
+    "url": "https://www.reddit.com/r/LocalLLM/comments/1t1o4e6/thoth_open_source_localfirst_ai_assistant",
+    "assessment": "threat",
+    "created_at": "2026-06-13T03:39:12.949906+00:00"
+  },
+  {
+    "domain": "mini_moi",
+    "description": "Nextcloud Assistant (complement): Tightly integrated into a collaboration platform for document and chat tasks rather than standalone personal intelligence and autonomous agent swarms. | Rec: Explore Nextcloud plugin opportunities to reach users needing file-centric workflows.",
+    "confidence": 0.5,
+    "loop_name": "cos_novelty_watch",
+    "status": "pending",
+    "url": "https://nextcloud.com/assistant",
+    "assessment": "complement",
+    "created_at": "2026-06-13T03:39:14.340506+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-16T19:59:30.677362+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T02:34:29.920733+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T02:34:30.297075+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T02:40:54.436276+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T02:48:20.167950+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T12:25:57.817732+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T13:21:26.304182+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T13:50:47.421487+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T13:51:27.455471+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T14:02:25.689700+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T14:21:55.061639+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T14:28:53.760292+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T14:50:49.119288+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T15:03:23.814114+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T15:18:49.358332+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T15:18:49.858817+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T15:18:50.723928+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T15:19:39.338602+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-17T15:19:42.296176+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-18T14:35:06.871258+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-18T14:35:07.272922+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-18T18:50:06.218629+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-18T18:50:07.517408+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-18T18:50:16.436281+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-18T20:57:42.835191+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-19T04:23:15.911557+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-19T04:23:17.226165+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-19T13:40:17.708171+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-19T13:59:29.700615+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-21T02:34:05.813388+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-21T03:45:24.143405+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[doc_created] spec_telegram_architecture_v2_2026-06-20.md: Spec for Telegram architecture with swappable environments and two-bot model.",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-21T03:45:27.636672+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-21T03:51:27.173274+00:00"
+  },
+  {
+    "domain": "german",
+    "description": "Language Learning With AI Tools: Complete Guide for 2026 (complement) \u2014 The resource is a broad 2026 guide on general AI language tools while Mein Deutsch is a focused German app with drills, phrasebook, conversations, and tracking.. Rec: Link the guide in-app as supplementary reading to reinforce Mein Deutsch's AI features and user strategies.",
+    "confidence": 0.7,
+    "loop_name": "cos_german_watch",
+    "status": "pending",
+    "url": "https://migaku.com/blog/language-fun/language-learning-with-ai-tools",
+    "created_at": "2026-06-21T14:00:19.971873+00:00"
+  },
+  {
+    "domain": "german",
+    "description": "The Chicago German Language Meetup Group (complement) \u2014 The Meetup provides in-person group conversation in Chicago while Mein Deutsch delivers personalized AI drills, phrasebook, and progress tracking.. Rec: Mein Deutsch users should join local Meetups like this for supplementary real-world speaking practice.",
+    "confidence": 0.7,
+    "loop_name": "cos_german_watch",
+    "status": "pending",
+    "url": "https://germanconnections.org/listing/the-chicago-german-language-meetup-group",
+    "created_at": "2026-06-21T14:00:45.992680+00:00"
+  },
+  {
+    "domain": "german",
+    "description": "The Chicago German Language Meetup Group (complement) \u2014 The Meetup provides in-person group conversation and cultural exchange while Mein Deutsch delivers solitary AI-driven drills and tracking.. Rec: Mein Deutsch users should attend the Meetup to practice live speaking skills that complement the app's digital exercises.",
+    "confidence": 0.7,
+    "loop_name": "cos_german_watch",
+    "status": "pending",
+    "url": "https://www.meetup.com/chicago-german-language",
+    "created_at": "2026-06-21T14:00:49.449282+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: africa-ai-governance-approaches \u2014 Directly covers emerging AI governance models in Africa, which aligns with the explicit AI governance interest and intersects with global macro/regulatory trends. | Source: Emerging AI governance approaches - Thomson Reuters Foundation (https://www.trust.org/toolkit/ai-governance-for-africa-part-1/5-emerging-ai-governance-approaches)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.trust.org/toolkit/ai-governance-for-africa-part-1/5-emerging-ai-governance-approaches",
+    "suggested_thread": "africa-ai-governance-approaches",
+    "created_at": "2026-06-21T15:00:05.413261+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: cset-ai-governance-principles \u2014 Directly relevant to AI governance monitoring as a CSET report outlining regulatory principles for tracking AI risks and maintaining policy agility. | Source: Enabling Principles for AI Governance | Center for Security and Emerging Technology (https://cset.georgetown.edu/publication/enabling-principles-for-ai-governance)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://cset.georgetown.edu/publication/enabling-principles-for-ai-governance",
+    "suggested_thread": "cset-ai-governance-principles",
+    "created_at": "2026-06-21T15:00:08.329259+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: cset-enabling-principles-ai-governance \u2014 Directly addresses AI governance principles from CSET, aligning with the user's explicit monitoring of AI policy and governance developments. | Source: Enabling Principles for AI Governance - Digital Government Hub (https://digitalgovernmenthub.org/library/enabling-principles-for-ai-governance)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://digitalgovernmenthub.org/library/enabling-principles-for-ai-governance",
+    "suggested_thread": "cset-enabling-principles-ai-governance",
+    "created_at": "2026-06-21T15:00:11.129346+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: ai-governance-ibm-explainer \u2014 Directly matches the user's explicit AI governance monitoring focus as a foundational IBM explainer. | Source: What is AI Governance? | IBM (https://www.ibm.com/think/topics/ai-governance)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.ibm.com/think/topics/ai-governance",
+    "suggested_thread": "ai-governance-ibm-explainer",
+    "created_at": "2026-06-21T15:00:16.140314+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: ai-telecom-bain-report \u2014 Direct match to the telecom AI focus area, covering operational and commercial AI use cases from a major consulting source. | Source: AI in Telecommunications | Bain & Company (https://www.bain.com/insights/ai-in-telecommunications)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.bain.com/insights/ai-in-telecommunications",
+    "suggested_thread": "ai-telecom-bain-report",
+    "created_at": "2026-06-21T15:00:20.720512+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: ericsson-telecom-ai-networks \u2014 Direct match to the telecom AI focus area, covering both AI-optimized networks and AI-driven network operations from a major vendor. | Source: Telecom AI - Networks for AI and AI for networks - Ericsson (https://www.ericsson.com/en/ai)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.ericsson.com/en/ai",
+    "suggested_thread": "ericsson-telecom-ai-networks",
+    "created_at": "2026-06-21T15:00:23.725909+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: ai-in-telecom-ibm \u2014 Directly matches the telecom AI interest area with fresh IBM survey data on industry adoption and profitability impacts. | Source: AI in Telecommunications | IBM (https://www.ibm.com/think/topics/ai-in-telecommunications)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.ibm.com/think/topics/ai-in-telecommunications",
+    "suggested_thread": "ai-in-telecom-ibm",
+    "created_at": "2026-06-21T15:00:26.356289+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: telcoai-project \u2014 Direct match to telecom AI focus with operator-driven AI deployment in networks, edge/cloud infrastructure. | Source: Telecom Infra Project | TelcoAI (https://www.telecominfraproject.com/telcoai)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.telecominfraproject.com/telcoai",
+    "suggested_thread": "telcoai-project",
+    "created_at": "2026-06-21T15:00:29.656169+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: mena-geopolitical-realignment-china \u2014 Directly addresses MENA geopolitical realignment involving China, Gulf states, Iran and Turkey, which matches one of the explicitly monitored domains and could intersect with global macro or USD-hegemony shifts. | Source: Evolving Geopolitics in the Middle East - Highlights & \"MENA: Geopolitical Re-Alignment?\" (https://www.securityincontext.com/posts/evolving-geopolitics-in-the-middle-east-highlights-mena-paper)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.securityincontext.com/posts/evolving-geopolitics-in-the-middle-east-highlights-mena-paper",
+    "suggested_thread": "mena-geopolitical-realignment-china",
+    "created_at": "2026-06-21T15:00:33.729085+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: mena-geopolitical-risk-spillovers \u2014 The paper directly addresses geopolitical risk spillovers and network interconnectedness in MENA, aligning with the user's explicit MENA geopolitics and global macro interests. | Source: Full article: Geopolitical risk spillovers and interconnectedness (https://www.tandfonline.com/doi/full/10.1080/10242694.2025.2505471)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.tandfonline.com/doi/full/10.1080/10242694.2025.2505471",
+    "suggested_thread": "mena-geopolitical-risk-spillovers",
+    "created_at": "2026-06-21T15:00:36.575777+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: mena-geopolitics-conflict-change \u2014 Directly covers MENA geopolitics and regional instability, which matches one of the user's explicit monitoring areas and intersects with global macro trends. | Source: Conflict and Change in the MENA Region: Geopolitics and ... - ISPI (https://www.ispionline.it/en/publication/conflict-and-change-in-the-mena-region-geopolitics-and-geoeconomics-191090)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.ispionline.it/en/publication/conflict-and-change-in-the-mena-region-geopolitics-and-geoeconomics-191090",
+    "suggested_thread": "mena-geopolitics-conflict-change",
+    "created_at": "2026-06-21T15:00:38.230793+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: mena-geopolitics-risk-analysis \u2014 Direct overlap with listed MENA geopolitics interest plus emerging conflict-risk angle on critical infrastructure. | Source: MENA Region News & Risk Analysis (https://www.geopoliticalmonitor.com/tag/mena-region)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.geopoliticalmonitor.com/tag/mena-region",
+    "suggested_thread": "mena-geopolitics-risk-analysis",
+    "created_at": "2026-06-21T15:00:41.509003+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: usd-hegemony-challenges-future \u2014 Direct overlap with explicitly listed USD hegemony and global macro monitoring areas, covering de-dollarization risks and systemic implications. | Source: The Hegemony of the US Dollar: History, Challenges, and the Future of \u2013 HSA Tutoring (https://tutoring.hsa.net/blogs/students-published-works/the-hegemony-of-the-us-dollar-history-challenges-and-the-future-of-the-global-economy)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://tutoring.hsa.net/blogs/students-published-works/the-hegemony-of-the-us-dollar-history-challenges-and-the-future-of-the-global-economy",
+    "suggested_thread": "usd-hegemony-challenges-future",
+    "created_at": "2026-06-21T15:00:45.983992+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: dollar-hegemony-americas-empire \u2014 Directly covers USD hegemony and its macro implications, a topic the user already tracks alongside global macro trends. | Source: Dollar Hegemony: America\u2019s Unnamed Empire (https://stanfordreview.org/dollar-hegemony-americas-unnamed-empire)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://stanfordreview.org/dollar-hegemony-americas-unnamed-empire",
+    "suggested_thread": "dollar-hegemony-americas-empire",
+    "created_at": "2026-06-21T15:00:49.015243+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: future-of-dollar-hegemony-cfr \u2014 Direct match to the explicitly monitored USD hegemony topic plus strong overlap with global macro trends. | Source: The Future of Dollar Hegemony | Council on Foreign Relations (https://www.cfr.org/articles/future-dollar-hegemony)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.cfr.org/articles/future-dollar-hegemony",
+    "suggested_thread": "future-of-dollar-hegemony-cfr",
+    "created_at": "2026-06-21T15:00:52.101975+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: usd-dominance-loosening \u2014 Directly addresses USD hegemony and global macro trends already on the monitoring list. | Source: U.S. dollar dominance may be loosening in a changing world (https://ls.berkeley.edu/news/us-dollar-dominance-may-be-loosening-changing-world)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://ls.berkeley.edu/news/us-dollar-dominance-may-be-loosening-changing-world",
+    "suggested_thread": "usd-dominance-loosening",
+    "created_at": "2026-06-21T15:00:54.841458+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: agentic-ai-platforms-2026-truefoundry \u2014 Directly covers agentic AI platforms, an explicit monitoring category, with 2026 forward-looking analysis. | Source: Best Agentic AI Platforms in 2026 - Truefoundry (https://www.truefoundry.com/blog/agentic-ai-platforms)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.truefoundry.com/blog/agentic-ai-platforms",
+    "suggested_thread": "agentic-ai-platforms-2026-truefoundry",
+    "created_at": "2026-06-21T15:00:58.994134+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: agentic-ai-platforms-2026-slack \u2014 Direct match to the explicitly monitored 'agentic AI platforms' topic, covering 2026 tools and enterprise workflows. | Source: Best Agentic AI Platforms: Guide and Tools for 2026 - Slack (https://slack.com/blog/productivity/best-agentic-ai-platforms-for-2026-what-they-are-and-how-to-choose-one)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://slack.com/blog/productivity/best-agentic-ai-platforms-for-2026-what-they-are-and-how-to-choose-one",
+    "suggested_thread": "agentic-ai-platforms-2026-slack",
+    "created_at": "2026-06-21T15:01:01.815514+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: agentic-ai-definitions-differentiators \u2014 Directly addresses core definitions and differentiators of agentic AI, matching an explicit monitoring category. | Source: What is agentic AI? Definition and differentiators - Google Cloud (https://cloud.google.com/discover/what-is-agentic-ai)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://cloud.google.com/discover/what-is-agentic-ai",
+    "suggested_thread": "agentic-ai-definitions-differentiators",
+    "created_at": "2026-06-21T15:01:05.086539+00:00"
+  },
+  {
+    "domain": "curator",
+    "description": "Suggested thread: agentic-ai-platforms-2026-enterprise \u2014 Directly covers agentic AI platforms, one of the explicitly monitored topics, with enterprise and governance angles. | Source: 7 best agentic AI platforms in 2026 | Enterprise market guide (https://www.kore.ai/blog/7-best-agentic-ai-platforms)",
+    "confidence": 0.75,
+    "loop_name": "cos_curator_watch",
+    "status": "pending",
+    "url": "https://www.kore.ai/blog/7-best-agentic-ai-platforms",
+    "suggested_thread": "agentic-ai-platforms-2026-enterprise",
+    "created_at": "2026-06-21T15:01:08.003570+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-22T13:56:56.073133+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-22T21:35:55.612372+00:00"
   }
 ]

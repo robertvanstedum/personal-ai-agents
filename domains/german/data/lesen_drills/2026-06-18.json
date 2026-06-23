@@ -1,0 +1,28 @@
+[
+  {
+    "id": "72702425-dbf6-4fbb-92b6-2671707e24d6",
+    "date": "2026-06-18",
+    "article_id": "art_20260618_vie_01",
+    "article_title": "Als sie die Lieferadresse sah, konnte sie es kaum glauben",
+    "user": "robert",
+    "direction": "de_in",
+    "original": "Eigentlich unfassbar!  Ich muss mir diese Phrase merken.  Ich habe \"unfassbar\" nicht gewusst.",
+    "corrected": "Eigentlich unfassbar! Ich muss mir diese Phrase merken. Ich habe \"unfassbar\" nicht gewusst.",
+    "translation": "Actually unbelievable! I have to remember this phrase. I didn't know 'unfassbar'.",
+    "retyped": "Eigentlich unfassbar!  Ich muss mir diese Phrase merken.  Ich habe \"unfassbar\" nicht gewusst.",
+    "retyped_correct": false
+  },
+  {
+    "id": "494bfcf7-e26b-4789-894c-3d0ed89151e8",
+    "date": "2026-06-18",
+    "article_id": "art_20260618_vie_01",
+    "article_title": "Als sie die Lieferadresse sah, konnte sie es kaum glauben",
+    "user": "robert",
+    "direction": "de_in",
+    "original": "Heute habe ich, \"Eigentlich unfassbar\" gelernt, was \"really unbeliviable\" auf Englisch bedeutet.",
+    "corrected": "Heute habe ich „Eigentlich unfassbar“ gelernt, was „really unbelievable“ auf Englisch bedeutet.",
+    "translation": "Today I learned 'Actually unbelievable', which means 'really unbelievable' in English.",
+    "retyped": "Heute habe ich „Eigentlich unfassbar“ gelernt, was „really unbelievable“ auf Englisch bedeutet.",
+    "retyped_correct": true
+  }
+]
