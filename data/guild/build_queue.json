@@ -613,11 +613,101 @@
   },
   {
     "id": 102,
-    "spec_title": "Automated CI/CD Pipeline",
-    "spec_file": "spec_cicd_pipeline_2026-06-20.md",
-    "status": "design",
+    "spec_title": "CI/CD Pipeline + Regression Tests",
+    "spec_file": "spec_cicd_pipeline_2026-06-24.md",
+    "status": "spec_ready",
     "last_transition_at": "2026-06-24T00:00:00Z",
     "blocked_reason": null,
-    "notes": "Plan doc exists. Spec in progress. Robert decision: build this."
+    "notes": "Phase 2 gate. Block E. All subsequent Phase 2 specs depend on this."
+  },
+  {
+    "id": 103,
+    "spec_title": "Auth + Multi-User Account System",
+    "spec_file": "spec_1_auth_multiuser_2026-06-24.md",
+    "status": "spec_ready",
+    "last_transition_at": "2026-06-24T00:00:00Z",
+    "blocked_reason": "Gates on #102 done",
+    "notes": "Phase 2 Spec 1. Do not start until Block E DoD complete."
+  },
+  {
+    "id": 104,
+    "spec_title": "Portuguese Domain Shell",
+    "spec_file": "spec_2_portuguese_domain_shell_2026-06-24.md",
+    "status": "spec_ready",
+    "last_transition_at": "2026-06-24T00:00:00Z",
+    "blocked_reason": "Gates on #103 done",
+    "notes": "Phase 2 Spec 2. Robert confirms color palette before CSS applied."
+  },
+  {
+    "id": 105,
+    "spec_title": "Portuguese Initial Personas (3)",
+    "spec_file": null,
+    "status": "design",
+    "last_transition_at": "2026-06-24T00:00:00Z",
+    "blocked_reason": "Needs content session",
+    "notes": "Phase 2 Spec 3."
+  },
+  {
+    "id": 106,
+    "spec_title": "Portuguese User Persona Creation",
+    "spec_file": null,
+    "status": "design",
+    "last_transition_at": "2026-06-24T00:00:00Z",
+    "blocked_reason": "Gates on #105 in use",
+    "notes": "Phase 2 Spec 4."
+  },
+  {
+    "id": 107,
+    "spec_title": "Leitura Reading Lists",
+    "spec_file": null,
+    "status": "design",
+    "last_transition_at": "2026-06-24T00:00:00Z",
+    "blocked_reason": "Needs content decisions",
+    "notes": "Phase 2 Spec 5."
+  },
+  {
+    "id": 108,
+    "spec_title": "Feedback Analysis + Admin Dashboard",
+    "spec_file": null,
+    "status": "design",
+    "last_transition_at": "2026-06-24T00:00:00Z",
+    "blocked_reason": "Gates on #104 live",
+    "notes": "Phase 2 Spec 6."
+  },
+  {
+    "id": 109,
+    "spec_title": "Prometheus + Grafana Dashboards",
+    "spec_file": "spec_monitoring_prometheus_grafana_2026-06-22.md",
+    "status": "spec_ready",
+    "last_transition_at": "2026-06-24T00:00:00Z",
+    "blocked_reason": "Build before daughters invited in",
+    "notes": "Phase 2 Spec 7. Existing spec promoted into Phase 2."
+  },
+  {
+    "id": 110,
+    "spec_title": "Escrita + Palavras",
+    "spec_file": null,
+    "status": "design",
+    "last_transition_at": "2026-06-24T00:00:00Z",
+    "blocked_reason": "Gates on #105 in use",
+    "notes": "Phase 2 Spec 8."
+  },
+  {
+    "id": 111,
+    "spec_title": "Conversas Full Voice Flow",
+    "spec_file": null,
+    "status": "design",
+    "last_transition_at": "2026-06-24T00:00:00Z",
+    "blocked_reason": "2 weeks usage data needed",
+    "notes": "Phase 2 Spec 9."
+  },
+  {
+    "id": 112,
+    "spec_title": "German Design Backport",
+    "spec_file": null,
+    "status": "design",
+    "last_transition_at": "2026-06-24T00:00:00Z",
+    "blocked_reason": "Gates on Portuguese stable",
+    "notes": "Phase 2 Spec 10."
   }
 ]
