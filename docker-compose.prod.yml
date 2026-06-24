@@ -92,11 +92,11 @@ services:
       - /opt/minimoi/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json
     depends_on:
       - postgres
-      - cos-agent
+      - cos-scheduler
 
-  cos-agent:
-    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-agent:latest
-    container_name: minimoi-cos-agent
+  cos-scheduler:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:latest
+    container_name: minimoi-cos-scheduler
     restart: unless-stopped
     env_file: /opt/minimoi/.env
     environment:
