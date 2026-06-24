@@ -561,9 +561,9 @@
     "id": 7,
     "spec_title": "Career Two-Page Redesign",
     "spec_file": "spec_career_two_page_2026-06-11.md",
-    "status": "spec_ready",
+    "status": "deferred",
     "github_issue": null,
-    "blocked_reason": null,
+    "blocked_reason": "Robert decision 2026-06-24 \u2014 job search focus shifted, defer until further notice",
     "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
