@@ -3,10 +3,10 @@
     "id": 88,
     "spec_title": "mini-moi Code Quality Review Plan",
     "spec_file": "CODE_REVIEW_PLAN.md",
-    "status": "deferred",
+    "status": "cancelled",
     "github_issue": null,
-    "blocked_reason": "Planning document, not a build item \u2014 reference only",
-    "last_transition_at": "2026-06-24T02:50:21.360193Z"
+    "blocked_reason": "Reference doc \u2014 already in docs/CODE_REVIEW_PLAN.md",
+    "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
     "id": 94,
@@ -30,10 +30,10 @@
     "id": 85,
     "spec_title": "Gespr\u00e4che: Server-Push Analysis via WebSocket",
     "spec_file": "spec_gesprache_websocket_analysis_2026-06-18.md",
-    "status": "deferred",
+    "status": "cancelled",
     "github_issue": null,
-    "blocked_reason": "Analysis only \u2014 WebSocket investigation; current HTTP polling approach retained",
-    "last_transition_at": "2026-06-24T02:50:21.360193Z"
+    "blocked_reason": "Investigation complete \u2014 decision captured in DR; HTTP polling retained",
+    "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
     "id": 84,
@@ -507,19 +507,19 @@
     "id": 70,
     "spec_title": "CoS Interaction Page (v2)",
     "spec_file": "docs_COS_PAGE_ROADMAP_2026-06-17.md",
-    "status": "deferred",
+    "status": "cancelled",
     "github_issue": null,
-    "blocked_reason": null,
-    "last_transition_at": "2026-06-18T04:22:50Z"
+    "blocked_reason": "Superseded by COS_PAGE_ROADMAP.md (#72)",
+    "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
     "id": 68,
     "spec_title": "Gespr\u00e4che Forward Spec",
     "spec_file": "docs_GESPRACHE_FORWARD_SPEC_2026-06-17.md",
-    "status": "deferred",
+    "status": "cancelled",
     "github_issue": null,
-    "blocked_reason": null,
-    "last_transition_at": "2026-06-18T04:22:50Z"
+    "blocked_reason": "Superseded by GESPRACHE_FORWARD_SPEC.md (#71)",
+    "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
     "id": 71,
@@ -534,55 +534,55 @@
     "id": 66,
     "spec_title": "Queue Fix + CoS GitHub Sanity Check",
     "spec_file": "handoff_queue_fix_cos_2026-06-17.md",
-    "status": "deferred",
+    "status": "cancelled",
     "github_issue": null,
-    "blocked_reason": null,
-    "last_transition_at": "2026-06-17T15:03:23Z"
+    "blocked_reason": "One-time handoff, already executed",
+    "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
     "id": 67,
     "spec_title": "Register Three Items",
     "spec_file": "handoff_register_three_items_2026-06-17.md",
-    "status": "deferred",
+    "status": "cancelled",
     "github_issue": null,
-    "blocked_reason": null,
-    "last_transition_at": "2026-06-18T04:22:50Z"
+    "blocked_reason": "One-time handoff, already executed",
+    "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
     "id": 46,
     "spec_title": "Domain Product Descriptions Writing Session",
     "spec_file": "plan_domain_product_descriptions_writing_session_2026-06-16.md",
-    "status": "deferred",
+    "status": "cancelled",
     "github_issue": null,
-    "blocked_reason": null,
-    "last_transition_at": "2026-06-16T16:29:33Z"
+    "blocked_reason": "Planning doc, work completed",
+    "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
     "id": 7,
     "spec_title": "Career Two-Page Redesign",
     "spec_file": "spec_career_two_page_2026-06-11.md",
-    "status": "deferred",
+    "status": "spec_ready",
     "github_issue": null,
     "blocked_reason": null,
-    "last_transition_at": "2026-06-12T16:40:04Z"
+    "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
     "id": 91,
     "spec_title": "Telegram Architecture: Primary/Secondary + Bot Lane",
     "spec_file": "spec_telegram_architecture_2026-06-20.md",
-    "status": "deferred",
+    "status": "cancelled",
     "github_issue": null,
-    "blocked_reason": null,
-    "last_transition_at": "2026-06-21T04:04:20Z"
+    "blocked_reason": "Superseded by v2 (spec_telegram_architecture_v2)",
+    "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
     "id": 93,
     "spec_title": "Telegram Architecture v2 (superseded)",
     "spec_file": "spec_telegram_architecture_v2_2026-06-20.md",
-    "status": "deferred",
+    "status": "cancelled",
     "github_issue": null,
-    "blocked_reason": null,
-    "last_transition_at": "2026-06-21T04:04:20Z"
+    "blocked_reason": "Duplicate \u2014 see #94 (done)",
+    "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
     "id": 69,
@@ -597,9 +597,18 @@
     "id": 90,
     "spec_title": "Guild Docs View (superseded)",
     "spec_file": "spec_guild_docs_view_2026-06-19.md",
+    "status": "cancelled",
+    "github_issue": null,
+    "blocked_reason": "Duplicate \u2014 see #89 (done)",
+    "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
+  },
+  {
+    "id": 101,
+    "spec_title": "Prometheus + Grafana Metrics Stack",
+    "spec_file": "spec_monitoring_prometheus_grafana_2026-06-22.md",
     "status": "deferred",
     "github_issue": null,
-    "blocked_reason": null,
-    "last_transition_at": null
+    "blocked_reason": "Build after Operations Monitoring v2 + Sentry (#100)",
+    "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   }
 ]
