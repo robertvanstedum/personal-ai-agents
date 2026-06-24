@@ -50,6 +50,7 @@ CORS(app)
 from datetime import timezone as _tz
 import re as _re
 app.jinja_env.globals['now'] = lambda: datetime.now(_tz.utc)
+app.jinja_env.globals['parse_dt'] = lambda s: datetime.fromisoformat(s.replace('Z', '+00:00')) if s else None
 
 def _clean_spec_title(spec_file: str) -> str:
     """Convert a spec filename to a human-readable title.

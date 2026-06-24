@@ -358,7 +358,7 @@
         </td>
         <td class="age-cell">
           {% if item.last_transition_at %}
-            {% set age_sec = (now() - item.last_transition_at).total_seconds() if item.last_transition_at else 0 %}
+            {% set age_sec = (now() - parse_dt(item.last_transition_at)).total_seconds() if item.last_transition_at else 0 %}
             {% set age_d = (age_sec / 86400) | int %}
             {% if age_d == 0 %}today{% elif age_d == 1 %}1d{% else %}{{ age_d }}d{% endif %}
           {% else %}—{% endif %}
