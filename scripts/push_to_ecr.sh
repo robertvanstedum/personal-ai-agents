@@ -44,12 +44,16 @@ case "$TARGET" in
   cos-bot)
     build_and_push cos-bot minimoi/cos-bot docker/Dockerfile.cos-bot
     ;;
+  cos-agent)
+    build_and_push cos-agent minimoi/cos-agent docker/Dockerfile.cos-agent
+    ;;
   all)
     build_and_push curator minimoi/curator docker/Dockerfile.curator
     build_and_push german minimoi/mein-deutsch docker/Dockerfile.german
     build_and_push portal minimoi/portal docker/Dockerfile.portal
     build_and_push system-bot minimoi/system-bot docker/Dockerfile.telegram
     build_and_push cos-bot minimoi/cos-bot docker/Dockerfile.cos-bot
+    build_and_push cos-agent minimoi/cos-agent docker/Dockerfile.cos-agent
     ;;
   *)
     echo "Usage: $0 [curator|german|portal|system-bot|cos-bot|all]"
