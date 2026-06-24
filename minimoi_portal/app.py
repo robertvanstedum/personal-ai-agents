@@ -1262,12 +1262,12 @@ def guild_build_roadmap():
     import markdown as _md
     import subprocess
     import re as _re
-    roadmap_path = Path(__file__).parent.parent / "_working/ROADMAP.md"
+    roadmap_path = Path(__file__).parent.parent / "docs/ROADMAP.md"
 
     # Git last-modified date
     try:
         result = subprocess.run(
-            ["git", "log", "-1", "--format=%ci", "_working/ROADMAP.md"],
+            ["git", "log", "-1", "--format=%ci", "docs/ROADMAP.md"],
             capture_output=True, text=True,
             cwd=str(Path(__file__).parent.parent)
         )

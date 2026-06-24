@@ -1,94 +1,107 @@
-# Roadmap & Backlog
-*mini-moi · living document — append freely*
-
-This is the working list of future build ideas, roadmap items, and loose
-ends. **Not spec-track** — no Definition of Done or Commit sections, so
-Design/Dev's filter ignores this file entirely (per
-`docs/HANDOFF_PROCESS.md`). Add a line whenever something comes to mind.
-
-When an item is ready to build: write it up as a proper spec in `_working/`
-(with DoD + Commit), then remove or check it off here.
+# mini-moi Roadmap
+*Living document — versioned in GitHub*
 
 ---
 
-## Verify first
+## German
 
-- **Career — what's actually live?** `spec_career_two_page_2026-06-11.md`
-  (separate Positions table + filtered Active Pipeline board, collapsed
-  cards) appears unbuilt, but the close_reason/priority/closed_at schema
-  works on the existing single-board Kanban (NVIDIA test confirmed). Open
-  `/guild/career` and `/guild/career/active` — if the single board is good
-  enough for daily use, mark the two-page spec `deferred`. If it's cramped
-  at real volume, it's a real build item.
+### Agreed targets
 
-- **Curator — Archive nav + UI consistency.** `spec_archive_navigation_2026-06-10.md`
-  and `spec_curator_ui_consistency_2026-06-10.md` were written last session
-  and may have been archived as "done" without being built (the Archive
-  page issue was re-raised with a new screenshot this session). Check
-  `/curator/archive` and Daily for the "show more" / "↑ top · show less"
-  patterns — if missing, pull specs back from `_working/archive/`.
+| Item | Phase | Status | Source |
+|------|-------|--------|--------|
+| **Gespräche mobile** | | | GESPRACHE_FORWARD_SPEC.md |
+| · Mobile fixes | Phase 0 | queued | |
+| · Automatic transcript handoff | Phase 1 | target | |
+| · Voice command routing | Phase 2 | target | |
+| · PWA wrapper | post-mobile | target | |
+| · LoRA German error adapter | Phase 2 | target | LEARNING_SYSTEM_ROADMAP.md |
+| · Persona aus echtem Gespräch | Phase 3 | target | |
+| · Cross-session error detection | Phase 4 | target | |
 
----
+### Discussion — not yet agreed
 
-## Next — high value, ready to spec
-
-- **Loop B/C/D first-run validation.** B/C/D (German watch, Curator scout,
-  novelty watch) fire for the first time **Sunday 6/15**. No spec exists
-  for "Robert reviews the first batch, judges quality, confirms go-live or
-  recalibrates." Write before Sunday. Reference: `handoff_guild_phase4`
-  (archive).
-
-- **Guild Daily Briefing** (`/guild` homepage). Fully designed in
-  `docs/GUILD.md` — four sections (Systems/Career/Build/Ahead), mockup
-  built, Telegram timing resolved (7:00/7:30/8:30). Build discipline's data
-  layer (`design_log`, `pipeline.items`) now exists specifically to feed
-  this. Biggest "designed, data's ready, no page" gap.
+- Swipe between German tabs (E7)
+- Persona card preview on tap (E5)
+- Schreiben history rows clickable
 
 ---
 
-## Batch — small items
+## Platform
 
-- `NAMING_CONVENTIONS.md` audit (read-only, Claude Code)
-- Career "what I'm targeting" panel — read-only `cos_context.json` display
-- Private repo sync expansion — `sync_private_repo.sh` +
-  `devagent_config.json` private paths (curator signals/sources/radar,
-  German session/anki/progress data)
-- `/start-build` + `/complete-build` discipline — dev_agent has `/start-build`
-  but no `/complete-build` endpoint; Claude Code never calls either in practice.
-  Add `/complete-build` to dev_agent, update `docs/HANDOFF_PROCESS.md` to
-  require both calls as bookends of every build session. Closes the gap where
-  specs stay `incomplete` or `in_build` forever after a build ships.
-- Manual spec entry from `/guild/build` — hold until auto-archive test shows
-  whether classification misses are common enough to need it
-- Build Clarity round 2 — edit `spec_title`/`summary`/`github_issue` from
-  UI, transition-history view on cards
+### Agreed targets
 
----
+| Item | Phase | Status | Source |
+|------|-------|--------|--------|
+| Decision Records practice | Phase 0 | done | DECISION_RECORD_PRACTICE.md |
+| **Learning System** | | | LEARNING_SYSTEM_ROADMAP.md |
+| · Phase 0 · Foundation | Phase 0 | in_progress — no build task | |
+| · Phase 1 · RAG layer | Phase 1 | target | |
+| · Phase 2 · LoRA training | Phase 2 | target | |
+| · Phase 3 · local-first | Phase 3 | target | |
+| **AWS Migration** | | | AWS_MIGRATION_PLAN.md |
+| · Phase 0 · Containerization | Phase 0 | spec_ready | |
+| · Phase 1 · AWS Foundation | Phase 1 | target | |
+| · Phase 2 · Cloud deployment | Phase 2 | target | |
+| · Phase 3 · CI/CD pipeline | Phase 3 | target | |
+| · Phase 4 · Data layer (RDS + S3) | Phase 4 | target | |
+| · Phase 5 · GPU instance (local LLM) | Phase 5 | target | |
+| · Phase 6 · Hardening + Monitoring | Phase 6 | target | |
+| **Code Quality Review** | | | CODE_REVIEW_PLAN.md |
+| · Phase 0 · Hardcoded paths + secrets | parallel to AWS Phase 0 | spec_ready | spec_code_review_phase0_2026-06-19.md |
+| · Phase 1-2 · Error handling + auth | parallel to AWS Phase 1-2 | target | |
+| · Phase 3-4 · Performance + dead code | parallel to AWS Phase 3-4 | target | |
+| **Monitoring Stack** | | | spec_monitoring_stack_2026-06-18.md |
+| · Sentry + Prometheus + Grafana + CloudWatch | AWS Phase 6 | spec_ready | spec_monitoring_stack_2026-06-18.md |
 
-## Later — correctly sequenced, don't pull forward
+### Discussion — not yet agreed
 
-- Challenger Phase 3 (German), Phase 4 (Career) — after current sprint, per
-  `docs/GUILD.md` roadmap. A file existing in archive doesn't mean overdue.
-- Mein Deutsch v1.1 — Gespräche toggle (KI-Personas/Konversation pill),
-  Lesen writing drill (GitHub #41) — post Aug 1
-- Neo4j Phase 5 — trigger: 20+ tagged sources
-- DB password hardening (GitHub #42) — post-Guild build window
-- Design/Dev Level 2 — routing, doc lifecycle management
-- CoS principal profile + composite character — bookshelved per
-  `docs/design/GUILD_CoS_Identity_Founding_2026-06-11.md`
-
----
-
-## Platform / Portfolio
-
-- Full README update — reflect German v1.0, Curator v1.2, Guild all live
-- Portfolio translation doc — mini-moi domains → org pattern mapping
-  (table drafted in six-week-focus session, ready to write up)
-- minimoi.ai landing — remaining "What's running" entries (Curator, Guild
-  blurbs still need the em-dash/tightening pass "What this is" got)
+- Model merging / adapter routing
+- On-device inference for voice
 
 ---
 
-*Roadmap & Backlog · Guild · 2026-06-12*
-*`docs/GUILD.md`'s "Roadmap" section should point here rather than
-duplicate — single source of truth.*
+## Curator
+
+### Agreed targets
+
+| Item | Phase | Status | Source |
+|------|-------|--------|--------|
+| v1.2 · Mac Mini migration | — | deferred | Replaced by AWS Migration |
+| v1.3 · Neo4j intelligence layer | v1.3 | target | (session 2026-04) |
+
+### Discussion — not yet agreed
+
+- Non-Anglophone source expansion
+- Automated briefing delivery
+
+---
+
+## Guild
+
+### Agreed targets
+
+| Item | Phase | Status | Source |
+|------|-------|--------|--------|
+| CoS interaction page | v1 | target | COS_PAGE_ROADMAP.md |
+| Guest access + CoS nudge | v1 | queued | spec_cos_guest_access |
+| Security architecture split | v1 | queued | spec_security_architecture |
+| Career focus editor | v1 | queued | spec_guild_career_focus_editor |
+| Roadmap view maturity | v1 | done | this spec |
+| Decisions view | v1 | target | dr_decision_record_practice_mvp |
+| Docs browser | v1 | done | spec_guild_docs_view_2026-06-19.md |
+
+### Discussion — not yet agreed
+
+- Guest auto-creation on grant
+- Auto-match guest email to career pipeline
+
+---
+
+## Done (recent)
+
+| Item | Shipped | Notes |
+|------|---------|-------|
+| Decision Record practice | 2026-06-17 | c0dbf35 |
+| Mobile audit fixes (11) | 2026-06-16 | All German pages rendering |
+| Mein Deutsch v1.1 | 2026-06-16 | mein-deutsch-v1.1 tag |
+| Guild v0.9 | 2026-06-13 | |

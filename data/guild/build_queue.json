@@ -610,5 +610,14 @@
     "github_issue": null,
     "blocked_reason": "Build after Operations Monitoring v2 + Sentry (#100)",
     "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
+  },
+  {
+    "id": 102,
+    "spec_title": "Automated CI/CD Pipeline",
+    "spec_file": "spec_cicd_pipeline_2026-06-20.md",
+    "status": "design",
+    "last_transition_at": "2026-06-24T00:00:00Z",
+    "blocked_reason": null,
+    "notes": "Plan doc exists. Spec in progress. Robert decision: build this."
   }
 ]
