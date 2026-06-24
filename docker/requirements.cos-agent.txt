@@ -7,3 +7,4 @@ requests==2.32.5
 psycopg2-binary>=2.9.0
 python-dotenv
 keyring
+feedparser>=6.0.0
