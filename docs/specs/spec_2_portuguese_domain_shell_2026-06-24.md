@@ -128,7 +128,7 @@ domains/portuguese/
   data/                 — reading lists, progress (Spec 9)
 ```
 
-Port: 8768 (next after German 8767)
+Port: 8770 (8768 = Operations agent, 8769 = cos-scheduler)
 
 ---
 

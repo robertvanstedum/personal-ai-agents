@@ -836,6 +836,11 @@ def api_google_latest_transcript():
 def health():
     return {"status": "ok", "service": "german"}
 
+
+@app.route("/api/personas")
+def api_personas():
+    return jsonify(get_personas())
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():

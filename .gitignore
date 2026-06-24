@@ -3,6 +3,10 @@ __pycache__/
 *.pyc
 .DS_Store
 
+# CI test output (generated, not committed)
+reports/*.xml
+reports/*.html
+
 # Credentials (NEVER COMMIT!)
 .env
 .flask_secret

@@ -231,6 +231,10 @@ system_bot handles `/approve_[id]` and `/reject_[id]` commands:
 - approve → creates account_creation_token → sends email
 - reject → updates status → optionally sends rejection email
 
+**Scope note:** This requires adding a command handler to `telegram/system_bot/` (EC2
+container `minimoi-system-bot`). That container must be rebuilt and deployed as part
+of this spec. Include it in the Spec 1 commit sequence.
+
 ---
 
 ## Portal routes (new)

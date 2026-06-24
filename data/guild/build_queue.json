@@ -615,8 +615,8 @@
     "id": 102,
     "spec_title": "CI/CD Pipeline + Regression Tests",
     "spec_file": "spec_cicd_pipeline_2026-06-24.md",
-    "status": "spec_ready",
-    "last_transition_at": "2026-06-24T00:00:00Z",
+    "status": "in_build",
+    "last_transition_at": "2026-06-24T10:00:00Z",
     "blocked_reason": null,
     "notes": "Phase 2 gate. Block E. All subsequent Phase 2 specs depend on this."
   },

@@ -214,14 +214,14 @@ test:
       with:
         python-version: '3.11'
     - name: Install dependencies
-      run: pip install -r requirements.txt pytest pytest-html
+      run: pip install -r requirements.test.txt
     - name: Run regression tests
-      run: pytest tests/ -v --html=reports/test-report.html
+      run: pytest tests/ -v --junit-xml=reports/junit.xml
     - name: Upload test report
       uses: actions/upload-artifact@v4
       with:
         name: test-report
-        path: reports/test-report.html
+        path: reports/junit.xml
       if: always()
     - name: File defects for failures
       if: failure()
@@ -231,9 +231,8 @@ test:
         BRANCH: ${{ github.ref_name }}
       run: |
         pip install requests -q
-        # Parse pytest output and file issues for each failure
         python3 scripts/file_defect.py \
-          --report reports/test-report.html \
+          --junit reports/junit.xml \
           --sha $SHA \
           --branch $BRANCH
 ```
@@ -264,20 +263,21 @@ build-push:
       run: |
         SHA=${{ steps.tag.outputs.sha }}
         REGISTRY=332704997792.dkr.ecr.us-east-1.amazonaws.com
-        # Claude Code confirms exact context dirs from Dockerfiles
+        # All Dockerfiles are in docker/ directory; build context is repo root
         declare -A IMAGES=(
-          ["portal"]="minimoi_portal"
-          ["curator"]="domains/curator"
-          ["mein-deutsch"]="domains/german"
-          ["system-bot"]="telegram/system_bot"
-          ["cos-bot"]="telegram/cos_bot"
+          ["portal"]="docker/Dockerfile.portal"
+          ["curator"]="docker/Dockerfile.curator"
+          ["mein-deutsch"]="docker/Dockerfile.german"
+          ["system-bot"]="docker/Dockerfile.telegram"
+          ["cos-bot"]="docker/Dockerfile.cos-bot"
         )
         for name in "${!IMAGES[@]}"; do
-          context="${IMAGES[$name]}"
+          dockerfile="${IMAGES[$name]}"
           docker build \
+            -f $dockerfile \
             -t $REGISTRY/minimoi/$name:$SHA \
             -t $REGISTRY/minimoi/$name:latest \
-            ./$context
+            .
           docker push $REGISTRY/minimoi/$name:$SHA
           docker push $REGISTRY/minimoi/$name:latest
         done
@@ -411,8 +411,9 @@ previous SHA. No SSH needed.
 
 ## Definition of Done
 
+- [ ] requirements.test.txt created at repo root
 - [ ] 12 regression tests written and passing locally
-- [ ] /health on all three Flask apps
+- [ ] /health on all three Flask apps (already present — verified)
 - [ ] .github/workflows/deploy.yml committed
 - [ ] All 5 GitHub Secrets configured
 - [ ] minimoi-deploy IAM has ssm:SendCommand

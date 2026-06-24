@@ -1,0 +1,153 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (SHA or latest)'
+        default: 'latest'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        run: pip install -r requirements.test.txt
+
+      - name: Run regression tests
+        run: pytest tests/ -v --junit-xml=reports/junit.xml --ignore=tests/smoke
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: reports/junit.xml
+        if: always()
+
+      - name: File GitHub issues for failures
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          pip install requests -q
+          python3 scripts/file_defect.py \
+            --junit reports/junit.xml \
+            --sha $SHA \
+            --branch $BRANCH
+
+  build-push:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tag.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: tag
+        run: echo "sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push all images
+        run: |
+          SHA=${{ steps.tag.outputs.sha }}
+          REGISTRY=332704997792.dkr.ecr.us-east-1.amazonaws.com
+          declare -A IMAGES=(
+            ["portal"]="docker/Dockerfile.portal"
+            ["curator"]="docker/Dockerfile.curator"
+            ["mein-deutsch"]="docker/Dockerfile.german"
+            ["system-bot"]="docker/Dockerfile.telegram"
+            ["cos-bot"]="docker/Dockerfile.cos-bot"
+          )
+          for name in "${!IMAGES[@]}"; do
+            dockerfile="${IMAGES[$name]}"
+            echo "Building minimoi/$name from $dockerfile"
+            docker build \
+              -f $dockerfile \
+              -t $REGISTRY/minimoi/$name:$SHA \
+              -t $REGISTRY/minimoi/$name:latest \
+              .
+            docker push $REGISTRY/minimoi/$name:$SHA
+            docker push $REGISTRY/minimoi/$name:latest
+          done
+
+  deploy:
+    needs: build-push
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Push docker-compose.prod.yml to EC2
+        run: |
+          COMPOSE=$(base64 -w 0 docker-compose.prod.yml)
+          aws ssm send-command \
+            --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
+            --document-name "AWS-RunShellScript" \
+            --parameters "commands=[\"echo $COMPOSE | base64 -d > /opt/minimoi/docker-compose.prod.yml\"]" \
+            --output text
+
+      - name: Deploy on EC2
+        run: |
+          aws ssm send-command \
+            --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=[
+              "cd /opt/minimoi",
+              "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 332704997792.dkr.ecr.us-east-1.amazonaws.com",
+              "docker compose -f docker-compose.prod.yml pull",
+              "docker compose -f docker-compose.prod.yml up -d",
+              "sleep 30",
+              "curl -sf http://localhost:5001/health || exit 1",
+              "curl -sf http://localhost:8766/health || exit 1",
+              "curl -sf http://localhost:8767/health || exit 1"
+            ]' \
+            --output text
+
+  notify:
+    needs: [test, build-push, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Send Telegram notification
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          pip install requests -q
+          python3 scripts/notify_deploy.py \
+            --deploy-status "${{ needs.deploy.result }}" \
+            --test-status "${{ needs.test.result }}" \
+            --sha "${{ github.sha }}" \
+            --branch "${{ github.ref_name }}"
