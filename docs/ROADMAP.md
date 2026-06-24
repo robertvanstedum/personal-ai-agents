@@ -1,107 +1,154 @@
 # mini-moi Roadmap
 *Living document — versioned in GitHub*
+*As of: June 2026*
+*Next review: August 2026 or at major milestone*
 
 ---
 
-## German
+## Where we are
 
-### Agreed targets
+mini-moi is a personal AI agent platform in daily production on AWS
+since June 2026. Three domains live: Curator (intelligence briefing),
+Mein Deutsch (German coaching), Guild (agent coordination). Two-node
+architecture: EC2 primary, Mac standby, DNS-switchable.
 
-| Item | Phase | Status | Source |
-|------|-------|--------|--------|
-| **Gespräche mobile** | | | GESPRACHE_FORWARD_SPEC.md |
-| · Mobile fixes | Phase 0 | queued | |
-| · Automatic transcript handoff | Phase 1 | target | |
-| · Voice command routing | Phase 2 | target | |
-| · PWA wrapper | post-mobile | target | |
-| · LoRA German error adapter | Phase 2 | target | LEARNING_SYSTEM_ROADMAP.md |
-| · Persona aus echtem Gespräch | Phase 3 | target | |
-| · Cross-session error detection | Phase 4 | target | |
-
-### Discussion — not yet agreed
-
-- Swipe between German tabs (E7)
-- Persona card preview on tap (E5)
-- Schreiben history rows clickable
+The core infrastructure is stable. The work ahead is about making
+the system more maintainable, more capable, and genuinely useful
+as a long-term personal platform — not just something that runs,
+but something that gets better over time.
 
 ---
 
-## Platform
+## Committed — doing this, matter of when
 
-### Agreed targets
+### DevOps Pipeline
+Replace the current manual deploy process with a CI/CD pipeline.
+Push to main, tests run, images build, EC2 updates. Routine deploys
+require no manual steps. Emergency access via Instance Connect stays
+for diagnosis — just not for normal operation.
 
-| Item | Phase | Status | Source |
-|------|-------|--------|--------|
-| Decision Records practice | Phase 0 | done | DECISION_RECORD_PRACTICE.md |
-| **Learning System** | | | LEARNING_SYSTEM_ROADMAP.md |
-| · Phase 0 · Foundation | Phase 0 | in_progress — no build task | |
-| · Phase 1 · RAG layer | Phase 1 | target | |
-| · Phase 2 · LoRA training | Phase 2 | target | |
-| · Phase 3 · local-first | Phase 3 | target | |
-| **AWS Migration** | | | AWS_MIGRATION_PLAN.md |
-| · Phase 0 · Containerization | Phase 0 | spec_ready | |
-| · Phase 1 · AWS Foundation | Phase 1 | target | |
-| · Phase 2 · Cloud deployment | Phase 2 | target | |
-| · Phase 3 · CI/CD pipeline | Phase 3 | target | |
-| · Phase 4 · Data layer (RDS + S3) | Phase 4 | target | |
-| · Phase 5 · GPU instance (local LLM) | Phase 5 | target | |
-| · Phase 6 · Hardening + Monitoring | Phase 6 | target | |
-| **Code Quality Review** | | | CODE_REVIEW_PLAN.md |
-| · Phase 0 · Hardcoded paths + secrets | parallel to AWS Phase 0 | spec_ready | spec_code_review_phase0_2026-06-19.md |
-| · Phase 1-2 · Error handling + auth | parallel to AWS Phase 1-2 | target | |
-| · Phase 3-4 · Performance + dead code | parallel to AWS Phase 3-4 | target | |
-| **Monitoring Stack** | | | spec_monitoring_stack_2026-06-18.md |
-| · Sentry + Prometheus + Grafana + CloudWatch | AWS Phase 6 | spec_ready | spec_monitoring_stack_2026-06-18.md |
+Target: this week.
+Spec: docs/PHASE3_CICD_PLAN.md
 
-### Discussion — not yet agreed
+### German — Portuguese as second language
+Mein Deutsch proved the pattern works. Portuguese is the natural
+next language — I'm fluent, have real use for it, and the
+infrastructure (personas, reading lists, analysis pipeline) is
+already built. Adding Portuguese is mostly configuration and
+content, not new architecture.
 
-- Model merging / adapter routing
-- On-device inference for voice
+Target: after German mobile batch is stable.
+Gate: design session to confirm approach → docs/design/
 
----
+### CoS — structured build methodology
+CoS responds to commands well but doesn't yet have a consistent
+way to track what it's working on, surface priorities, or close
+loops. The CoS page design session will address this — the goal
+is a cleaner operational loop so CoS becomes a more effective
+coordination partner, not just a command responder.
 
-## Curator
+Target: next month.
+Gate: design session first → docs/design/cos_page_[date].md
 
-### Agreed targets
+### Career focus active through August
+Job search is the near-term forcing function. Career Two-Page
+Redesign (#7) is spec_ready. The Guild career pipeline needs to
+surface the right things at the right time through August 3.
 
-| Item | Phase | Status | Source |
-|------|-------|--------|--------|
-| v1.2 · Mac Mini migration | — | deferred | Replaced by AWS Migration |
-| v1.3 · Neo4j intelligence layer | v1.3 | target | (session 2026-04) |
-
-### Discussion — not yet agreed
-
-- Non-Anglophone source expansion
-- Automated briefing delivery
+Target: before Aug 3.
+Spec: docs/specs/spec_career_two_page_2026-06-11.md
 
 ---
 
-## Guild
+## Directional — clear intent, timeline not locked
 
-### Agreed targets
+### Operations — toward bounded agent autonomy
+Phase 1 (detection + alerts) is live. Phase 2 adds approval
+workflows so CoS can propose fixes and I approve via Telegram.
+Phase 3 adds bounded auto-execution for lowest-risk actions.
+Each phase requires demonstrated reliability from the previous.
 
-| Item | Phase | Status | Source |
-|------|-------|--------|--------|
-| CoS interaction page | v1 | target | COS_PAGE_ROADMAP.md |
-| Guest access + CoS nudge | v1 | queued | spec_cos_guest_access |
-| Security architecture split | v1 | queued | spec_security_architecture |
-| Career focus editor | v1 | queued | spec_guild_career_focus_editor |
-| Roadmap view maturity | v1 | done | this spec |
-| Decisions view | v1 | target | dr_decision_record_practice_mvp |
-| Docs browser | v1 | done | spec_guild_docs_view_2026-06-19.md |
+This is months of work, not weeks. The reason it matters: reducing
+the operational load on me while keeping meaningful oversight in
+place. Right now every incident requires manual action. That should
+change gradually, as the patterns become clear.
 
-### Discussion — not yet agreed
+Reference: docs/OPERATIONS_ROADMAP.md
 
-- Guest auto-creation on grant
-- Auto-match guest email to career pipeline
+### Learning System — local LLM that knows the project
+Decision Records are the foundation. The direction is a local model
+that understands the codebase, the decisions, and the intent — so
+I don't have to re-explain context every session. RAG layer first,
+then LoRA adapters for domain-specific patterns.
+
+The reason it matters: the system should get smarter about itself
+over time, not just accumulate more features.
+
+Reference: docs/LEARNING_SYSTEM_ROADMAP.md
+
+### Gespräche — closing the real conversation loop
+Phase 1 is voice sessions with AI personas. The next phase is
+automatic transcript handoff so a real conversation (with a human)
+feeds the same analysis pipeline as a KI-Sitzung. The pattern is
+already designed. The gate is 2 weeks of stable daily use on EC2
+to understand what actually needs fixing first.
+
+Gate: 2 weeks stable daily use on EC2.
+
+### Curator — Neo4j intelligence layer
+The briefing pipeline scores articles but doesn't yet build a
+knowledge graph of sources, entities, and relationships. Neo4j
+is provisioned and waiting.
+
+Gate: 20+ tagged sources in Postgres.
+
+### Prometheus + Grafana metrics
+Sentry is wired (needs DSN). Metrics dashboards are the next
+monitoring layer — request rates, analysis job durations, cron
+timing. Two Docker containers added to the EC2 stack.
+
+Spec: docs/specs/spec_monitoring_prometheus_grafana_2026-06-22.md
 
 ---
 
-## Done (recent)
+## Exploratory — worth tracking, not committed
+
+- **On-device inference for voice** — Gespräche voice quality
+  depends on hosted models today. A local model fast enough for
+  real-time conversation would change the privacy and latency story.
+  Hardware (Mac Mini 48GB) is the prerequisite.
+
+- **Portuguese and German sources in Curator** — adding sources
+  in both languages to the briefing pipeline. Natural extension
+  once the Portuguese language domain is live.
+
+- **Agent-to-agent coordination** — CoS, OpenClaw, and the system
+  bot currently operate in defined lanes. More fluid coordination
+  between agents is a longer-term architectural direction.
+
+- **Model merging / adapter routing** — as LoRA adapters accumulate,
+  routing between them dynamically becomes interesting. Not near-term.
+
+---
+
+## Done — June 2026
 
 | Item | Shipped | Notes |
 |------|---------|-------|
-| Decision Record practice | 2026-06-17 | c0dbf35 |
+| AWS Block A — two-node hardening | 2026-06-21 | Role system, cron, DNS, bots |
+| Operations monitoring Phase 1 | 2026-06-24 | CoS health checks, system_bot alerts |
+| Telegram 3-bot → 2-bot | 2026-06-21 | system_bot + cos_bot on EC2 |
+| DNS flip | 2026-06-21 | minimoi.ai → EC2, dev.minimoi.ai → Mac |
+| Postgres migration Mac → EC2 | 2026-06-21 | All schemas migrated |
+| Spec triage | 2026-06-24 | 10 cancelled, queue cleaned |
+| Decision Record practice | 2026-06-17 | Foundation established |
 | Mobile audit fixes (11) | 2026-06-16 | All German pages rendering |
 | Mein Deutsch v1.1 | 2026-06-16 | mein-deutsch-v1.1 tag |
 | Guild v0.9 | 2026-06-13 | |
+
+---
+
+*Roadmap · mini-moi · June 2026*
+*Near-term sprint: docs/NEAR_TERM_PLAN.md*
+*Build queue: design_log.json*
+*Active design: docs/design/*
