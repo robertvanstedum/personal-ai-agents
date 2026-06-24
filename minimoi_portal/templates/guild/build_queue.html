@@ -223,7 +223,7 @@
 {% else %}
   {% set title = item.file_path | clean_spec_title or '(untitled)' %}
 {% endif %}
-{% set age_days = ((now() - item.last_transition_at).total_seconds() / 86400) | int if item.last_transition_at else 0 %}
+{% set age_days = ((now() - parse_dt(item.last_transition_at)).total_seconds() / 86400) | int if item.last_transition_at else 0 %}
 {% set age_str  = 'today' if age_days == 0 else (age_days|string + 'd') %}
 {% set summary = item.summary or '' %}
 
