@@ -32,7 +32,30 @@ app = Flask(__name__,
             template_folder=str(BASE_DIR / 'templates'),
             static_folder=str(BASE_DIR / 'static'),
             static_url_path='/static')
-CORS(app)  # Enable CORS for all routes
+CORS(app)
+
+
+def _init_sentry():
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.flask import FlaskIntegration
+        dsn = os.environ.get('SENTRY_DSN')
+        if not dsn:
+            try:
+                sys.path.insert(0, str(BASE_DIR))
+                from get_secret import get_secret
+                dsn = get_secret('SENTRY_DSN')
+            except Exception:
+                return
+        sentry_sdk.init(
+            dsn=dsn,
+            integrations=[FlaskIntegration()],
+            traces_sample_rate=0.1,
+            environment=os.environ.get('FLASK_ENV', 'production'),
+        )
+    except ImportError:
+        pass
+_init_sentry()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -68,6 +68,30 @@ app = Flask(
 CORS(app)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400  # cache static files for 1 day
 
+
+def _init_sentry():
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.flask import FlaskIntegration
+        dsn = os.environ.get('SENTRY_DSN')
+        if not dsn:
+            try:
+                import sys
+                sys.path.insert(0, str(BASE_DIR.parent.parent))
+                from get_secret import get_secret
+                dsn = get_secret('SENTRY_DSN')
+            except Exception:
+                return
+        sentry_sdk.init(
+            dsn=dsn,
+            integrations=[FlaskIntegration()],
+            traces_sample_rate=0.1,
+            environment=os.environ.get('FLASK_ENV', 'production'),
+        )
+    except ImportError:
+        pass
+_init_sentry()
+
 # ── Persistent Flask secret key (needed for session during OAuth flow) ────────
 # FLASK_SECRET env var takes precedence (set in Docker / AWS). Falls back to
 # .flask_secret file on local Mac so existing sessions survive restarts.

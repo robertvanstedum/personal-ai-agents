@@ -2,7 +2,100 @@
 
 **Project:** Mini-moi — Personal AI Briefing Agent
 **Purpose:** Day-to-day operations, health checks, troubleshooting
-**Last Updated:** 2026-06-19
+**Last Updated:** 2026-06-24
+
+---
+
+## Two-Node Architecture
+
+Mini-moi runs across two nodes. Each has a distinct role.
+
+| Node | Role | URL | Docker |
+|------|------|-----|--------|
+| EC2 (t3.small, us-east-1) | **Production** — live traffic, all bots, cron jobs | minimoi.ai | `docker-compose.prod.yml` |
+| Mac (local) | **Standby** — dev, OpenClaw, private repo sync | dev.minimoi.ai | `docker-compose.yml` (Colima) |
+
+**EC2 is production.** All Telegram alerts, daily briefings, and app traffic run there. Mac services are secondary and can be stopped without user impact.
+
+**Alert routing:** All production alerts → `minimoi_system_bot` (system bot token). OpenClaw monitors independently and may send separate alerts.
+
+---
+
+## EC2 Production
+
+### Containers (7 running)
+
+| Container | Port | Purpose |
+|-----------|------|---------|
+| `postgres-ai-agents` | 5432 | PostgreSQL (`personal_agents` DB) |
+| `minimoi-curator` | 8766 | Curator Flask service |
+| `minimoi-german` | 8767 | German domain Flask service |
+| `minimoi-portal` | 5001 | Portal / reverse proxy |
+| `minimoi-system-bot` | — | Polling bot (German drills, Curator) |
+| `minimoi-cos-bot` | — | CoS chat bot (`!cos`, `!ops`) |
+| `minimoi-cos-agent` | 8769 | Chief of Staff agent |
+
+### EC2 health check (automated — CoS every 30 min)
+
+CoS runs `check_ec2_health()` every 30 minutes on EC2 only. Checks:
+- All containers running (docker ps)
+- Disk < 80% (df -h cross-checked with CloudWatch EBS)
+- Memory < 85% (free -m)
+- `/health` endpoints return 200 on all three Flask apps
+
+Alerts fire via `minimoi_system_bot`. CoS detects and escalates — **Robert decides the action.**
+
+### Manual EC2 health check
+
+Access via AWS EC2 Instance Connect (no SSH key needed — browser terminal from AWS console).
+
+```bash
+# Container status
+sudo docker ps --format "table {{.Names}}\t{{.Status}}"
+
+# Disk
+df -h /
+
+# Memory
+free -m
+
+# Health endpoints
+curl -s http://localhost:8766/health
+curl -s http://localhost:8767/health
+curl -s http://localhost:5001/health
+
+# App logs (if something is wrong)
+sudo docker logs minimoi-portal --tail 30
+sudo docker logs minimoi-curator --tail 30
+sudo docker logs minimoi-german --tail 30
+```
+
+### Restart containers on EC2
+
+```bash
+cd /opt/minimoi
+
+# Restart one container
+sudo docker-compose -f docker-compose.prod.yml up -d --force-recreate portal
+sudo docker-compose -f docker-compose.prod.yml up -d --force-recreate curator
+sudo docker-compose -f docker-compose.prod.yml up -d --force-recreate german
+
+# Restart all
+sudo docker-compose -f docker-compose.prod.yml up -d --force-recreate
+
+# Pull latest images (after a deploy)
+aws ecr get-login-password --region us-east-1 | sudo docker login --username AWS --password-stdin 332704997792.dkr.ecr.us-east-1.amazonaws.com
+sudo docker-compose -f docker-compose.prod.yml pull
+sudo docker-compose -f docker-compose.prod.yml up -d --force-recreate
+```
+
+### Deploy new code to EC2
+
+From Mac:
+```bash
+./scripts/push_to_ecr.sh portal    # or curator / german / system-bot / cos-bot
+```
+Then on EC2 (Instance Connect): pull and force-recreate the updated service.
 
 ---
 
@@ -97,11 +190,12 @@ Complete map of every process running in production. Update this table whenever 
 
 ### Telegram bots
 
-| Bot | Token Keyring Key | Mode | launchd Label | Role |
-|-----|------------------|------|---------------|------|
-| minimoi_cmd_bot | `telegram` / `polling_bot_token` | Polling | `com.user.telegram-feedback-bot` | German drills, Curator feedback (Like/Dislike/Save) |
-| rvsopenbot | `telegram` / `bot_token` | Polling | `com.user.cos` (handled inside CoS) | Outbound briefings + `!ops` / `!cos` commands |
-| minimoi_agent_bot | separate keyring entry | — | `ai.openclaw.gateway` | OpenClaw gateway only |
+| Bot | Token Keyring Key | Runs on | Role |
+|-----|------------------|---------|------|
+| minimoi_system_bot | `telegram` / `system_bot_token` | EC2 (`minimoi-system-bot`) | German drills, Curator feedback, production alerts |
+| minimoi_cos_bot | `telegram` / `cos_bot_token` | EC2 (`minimoi-cos-bot`) | `!ops` + `!cos`/`!chief` commands |
+| minimoi_agent_bot | separate keyring entry | Mac (`ai.openclaw.gateway`) | OpenClaw gateway only |
+| ~~minimoi_cmd_bot~~ | `polling_bot_token` | **Disabled on Mac** | Retired — replaced by minimoi_system_bot on EC2 |
 
 ### Boot-time helpers (load-and-exit)
 
@@ -115,6 +209,7 @@ Complete map of every process running in production. Update this table whenever 
 
 | Label / File | Status | Reason |
 |-------------|--------|--------|
+| `com.user.telegram-feedback-bot.plist.disabled` | Disabled 2026-06-24 | Replaced by minimoi-system-bot container on EC2 |
 | `com.vanstedum.telegram-webhook.plist.disabled` | Disabled | Pre-dates polling mode; retained as reference |
 | `homebrew.mxcl.colima.plist` | Unloaded | Conflicts with custom plist; PATH issue. Do not re-enable. |
 

@@ -46,6 +46,27 @@ app = Flask(
 )
 CORS(app)
 
+# Sentry — init only if DSN is configured; silent no-op otherwise
+def _init_sentry():
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.flask import FlaskIntegration
+        dsn = os.environ.get('SENTRY_DSN')
+        if not dsn:
+            try:
+                dsn = get_secret('SENTRY_DSN')
+            except Exception:
+                return
+        sentry_sdk.init(
+            dsn=dsn,
+            integrations=[FlaskIntegration()],
+            traces_sample_rate=0.1,
+            environment=os.environ.get('FLASK_ENV', 'production'),
+        )
+    except ImportError:
+        pass
+_init_sentry()
+
 # Jinja2 globals — timezone-aware so it subtracts cleanly from psycopg2 timestamps
 from datetime import timezone as _tz
 import re as _re
