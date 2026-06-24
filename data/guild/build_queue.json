@@ -84,10 +84,10 @@
     "id": 100,
     "spec_title": "Operations Monitoring v2 + Sentry Error Tracking",
     "spec_file": "spec_operations_monitoring_v2_2026-06-22.md",
-    "status": "in_build",
+    "status": "done",
     "github_issue": null,
     "blocked_reason": null,
-    "last_transition_at": "2026-06-24T04:21:43.761957+00:00"
+    "last_transition_at": "2026-06-24T04:35:39.058795+00:00"
   },
   {
     "id": 98,
