@@ -4407,7 +4407,9 @@ body.archiv-mode .page {
   }
 
   /* Text input row: 16px to prevent iOS auto-zoom */
-  .session-input-field {
+  .session-input-field,
+  .tutor-input,
+  .notebook-textarea {
     font-size: 16px;
   }
   .session-input-row {

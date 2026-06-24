@@ -741,7 +741,8 @@ document.body.classList.add('parch-mode');
 
   // ── TTS: speak persona responses via OpenAI TTS ──────────────────────────
   let sessionMuted    = false;
-  let _currentAudio   = null;  // track playing Audio so we can stop it
+  let _gestureAudio   = null;  // Audio element created inside gesture context — reused for TTS to survive iOS autoplay gate
+  let _currentObjUrl  = null;  // active object URL so we can revoke it on stop
 
   function _personaVoice(p) {
     // Pick OpenAI TTS voice by persona gender.
@@ -772,10 +773,19 @@ document.body.classList.add('parch-mode');
         return;
       }
       const blob = await res.blob();
+      if (_currentObjUrl) { URL.revokeObjectURL(_currentObjUrl); _currentObjUrl = null; }
       const url  = URL.createObjectURL(blob);
-      _currentAudio = new Audio(url);
-      _currentAudio.onended = () => URL.revokeObjectURL(url);
-      _currentAudio.play();
+      _currentObjUrl = url;
+      if (_gestureAudio) {
+        _gestureAudio.src = url;
+        _gestureAudio.onended = () => { URL.revokeObjectURL(url); _currentObjUrl = null; };
+        _gestureAudio.play().catch(() => {});
+      } else {
+        // Fallback for non-iOS or if gesture element not created
+        const a = new Audio(url);
+        a.onended = () => { URL.revokeObjectURL(url); _currentObjUrl = null; };
+        a.play().catch(() => {});
+      }
     } catch (e) {
       const listenEl = document.getElementById('session-listen-status');
       if (listenEl) { listenEl.textContent = '⚠ Ton-Fehler: ' + e.message; listenEl.style.display = ''; }
@@ -783,11 +793,11 @@ document.body.classList.add('parch-mode');
   }
 
   function stopSpeaking() {
-    if (_currentAudio) {
-      _currentAudio.pause();
-      _currentAudio.currentTime = 0;
-      _currentAudio = null;
+    if (_gestureAudio && !_gestureAudio.paused) {
+      _gestureAudio.pause();
+      _gestureAudio.currentTime = 0;
     }
+    if (_currentObjUrl) { URL.revokeObjectURL(_currentObjUrl); _currentObjUrl = null; }
   }
 
   // Mute toggle
@@ -1065,11 +1075,13 @@ document.body.classList.add('parch-mode');
       src.start(0);
     } catch (_) {}
 
-    // Unlock HTMLAudioElement for iOS — Audio() needs its own gesture unlock.
-    // Fire-and-forget (no await) so a slow/failing decode can't stall the handler.
+    // Unlock HTMLAudioElement for iOS and keep the element alive for TTS reuse.
+    // iOS only allows audio.play() inside a gesture context — by reusing this element
+    // in speakPersona() we avoid the autoplay block that fires after the async fetch.
     try {
       const _sil = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
-      _sil.play().catch(() => {});
+      await _sil.play().catch(() => {});
+      _gestureAudio = _sil;  // reuse this unlocked element for all TTS in this session
     } catch (_) {}
 
     sessionActive = true;
@@ -1339,11 +1351,11 @@ document.body.classList.add('parch-mode');
       setListenStatus('');
     }
 
-    // Wait until _currentAudio finishes playing (or 8s max)
+    // Wait until TTS finishes playing (or 8s max)
     function waitForTTSEnd() {
       return new Promise(resolve => {
-        if (!_currentAudio) { resolve(); return; }
-        const audio = _currentAudio;
+        const audio = _gestureAudio;
+        if (!audio || audio.paused) { resolve(); return; }
         const done = () => resolve();
         audio.addEventListener('ended', done, { once: true });
         audio.addEventListener('pause', done, { once: true });
