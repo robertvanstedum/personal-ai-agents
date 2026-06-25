@@ -66,6 +66,18 @@
       <div class="tile-arrow">→</div>
     </a>
 
+    {% if has_portuguese %}
+    <!-- Português tile -->
+    <a href="/app/portuguese" class="tile tile-portuguese">
+      <div class="tile-icon">🇧🇷</div>
+      <div class="tile-content">
+        <h2 class="tile-title">Português</h2>
+        <p class="tile-desc">Leitura · Conversas · Escrita · Palavras</p>
+      </div>
+      <div class="tile-arrow">→</div>
+    </a>
+    {% endif %}
+
     {% if user.tier == 'owner' %}
     <!-- Guild tile — owner only -->
     <a href="/guild" class="tile tile-guild">

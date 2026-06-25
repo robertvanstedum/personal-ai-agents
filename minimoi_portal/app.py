@@ -386,7 +386,12 @@ def _notify_telegram_new_request(display_name: str, email: str, domain: str = "p
 @_require_login
 def dashboard():
     user = _current_user()
-    return render_template("dashboard.html", user=user)
+    auth_id = user.get("auth_id")
+    has_portuguese = (
+        user.get("tier") == "owner"
+        or (auth_id is not None and _dauth.has_domain_access(auth_id, "portuguese"))
+    )
+    return render_template("dashboard.html", user=user, has_portuguese=has_portuguese)
 
 
 # ── Curator proxy (owner + family only; guests get deep dive HTML only) ───────
