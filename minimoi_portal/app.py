@@ -397,6 +397,8 @@ def dashboard():
 def curator_root():
     user = _current_user()
     if user["tier"] == "guest":
+        if user.get("auth_id"):
+            return render_template("access_denied.html", user=user), 403
         return redirect(url_for("guest_briefing"))
     return _proxy.proxy_to(_cfg.CURATOR_BACKEND, "/", "/app/curator", user=user)
 
@@ -406,6 +408,8 @@ def curator_root():
 def curator_proxy(path):
     user = _current_user()
     if user["tier"] == "guest":
+        if user.get("auth_id"):
+            return render_template("access_denied.html", user=user), 403
         # Allow static assets and deep dive HTML — guests need these to render pages
         if path.startswith(("interests/", "static/")):
             return _proxy.proxy_to(_cfg.CURATOR_BACKEND, path, "/app/curator", user=user)
@@ -477,6 +481,8 @@ def curator_static_passthrough(filename):
 @_require_login
 def german_root():
     user = _current_user()
+    if user.get("auth_id"):
+        return render_template("access_denied.html", user=user), 403
     return _proxy.proxy_to(_cfg.GERMAN_BACKEND, "/", "/app/german", user=user)
 
 
@@ -484,6 +490,8 @@ def german_root():
 @_require_login
 def german_proxy(path):
     user = _current_user()
+    if user.get("auth_id"):
+        return render_template("access_denied.html", user=user), 403
     if user["tier"] == "guest":
         # Block owner-only sections — show a friendly restricted page
         _GERMAN_OWNER_ONLY = {
@@ -500,8 +508,10 @@ def german_proxy(path):
 @app.route("/guest/briefing")
 @_require_login
 def guest_briefing():
-    """Daily briefing for guest users — with interaction buttons."""
+    """Daily briefing for legacy guest users (non-domain-auth) only."""
     user = _current_user()
+    if user.get("auth_id"):
+        return render_template("access_denied.html", user=user), 403
 
     latest_file = REPO_DIR / "curator_latest.json"
     articles = []
@@ -544,6 +554,8 @@ def guest_briefing():
 def guest_feedback():
     """Like, dislike, or save an article. Returns updated state."""
     user = _current_user()
+    if user.get("auth_id"):
+        return jsonify({"error": "Forbidden"}), 403
     body = request.get_json(silent=True) or {}
     hash_id = body.get("hash_id", "").strip()
     action  = body.get("action", "").strip()
@@ -560,6 +572,8 @@ def guest_feedback():
 def guest_comment():
     """Add a comment on an article."""
     user = _current_user()
+    if user.get("auth_id"):
+        return jsonify({"error": "Forbidden"}), 403
     body = request.get_json(silent=True) or {}
     hash_id = body.get("hash_id", "").strip()
     text    = body.get("text", "").strip()
@@ -581,6 +595,8 @@ def guest_deep_dive():
     Returns {success, html_path} on completion.
     """
     user = _current_user()
+    if user.get("auth_id"):
+        return jsonify({"error": "Forbidden"}), 403
     body = request.get_json(silent=True) or {}
     hash_id = body.get("hash_id", "").strip()
     title   = body.get("title", "").strip()
@@ -723,9 +739,9 @@ def _send_login_link_email(email: str, name: str, token: str) -> bool:
         )
         return True
     except Exception as e:
-        print(f"⚠️  SES login link email failed: {e}")
+        print(f"⚠️  SES login link email failed: {e}", flush=True)
         if not is_production():
-            print(f"🔗 DEV login link: {link}")
+            print(f"🔗 DEV login link: {link}", flush=True)
         return False
 
 
