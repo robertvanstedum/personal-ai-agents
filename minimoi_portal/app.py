@@ -699,10 +699,11 @@ Robert
 
 def _send_login_link_email(email: str, name: str, token: str) -> bool:
     """Send one-time login link via AWS SES. Returns True on success."""
+    from utils.role import is_production
+    link = f"https://minimoi.ai/login/{token}"
     try:
         import boto3
         ses = boto3.client("ses", region_name="us-east-1")
-        link = f"https://minimoi.ai/login/{token}"
         ses.send_email(
             Source="noreply@minimoi.ai",
             Destination={"ToAddresses": [email]},
@@ -723,6 +724,8 @@ def _send_login_link_email(email: str, name: str, token: str) -> bool:
         return True
     except Exception as e:
         print(f"⚠️  SES login link email failed: {e}")
+        if not is_production():
+            print(f"🔗 DEV login link: {link}")
         return False
 
 
