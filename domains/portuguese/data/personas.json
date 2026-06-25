@@ -1,0 +1,114 @@
+[
+  {
+    "name": "Maria",
+    "emoji": "🥐",
+    "role": "Padaria Attendant",
+    "description": "Friendly and efficient. Works behind the counter at a traditional neighborhood padaria. Chatty but practical — good for short service exchanges with natural Brazilian expressions.",
+    "scenarios": [
+      "padaria_order",
+      "padaria_chat"
+    ],
+    "speaking_prompts": {
+      "padaria_order": "You walk into a traditional neighborhood padaria in the morning. Maria greets you from behind the counter. Order a coffee and something to eat — use pãozinho, cafezinho, pão na chapa, or misto quente. She may ask how you want it.",
+      "padaria_chat": "You're a regular now. Maria recognizes you and wants to chat while she makes your order. Talk about the neighborhood, what's fresh today, or what's going on outside."
+    },
+    "style": "casual, warm, uses diminutives and everyday expressions",
+    "register": "informal_voce",
+    "difficulty": "beginner-friendly",
+    "prompt_file": "maria_padaria.txt",
+    "warm_up_variants": [
+      "Order a cafezinho and a pão na chapa.",
+      "Ask Maria what she recommends today, then order.",
+      "Order a misto quente and ask how much it costs.",
+      "Ask if there's still pão de queijo left, then order two."
+    ],
+    "labels": {
+      "padaria_order": "Um cafezinho, por favor.",
+      "padaria_chat": "O que tem de novo?"
+    }
+  },
+  {
+    "name": "Carlos",
+    "emoji": "🚗",
+    "role": "Uber Driver",
+    "description": "Polite, down-to-earth, speaks simple and clear Portuguese. Assumes the passenger may not speak much Portuguese. Wants to practice English a little but keeps pulling back to Portuguese — natural motivation to keep the conversation going.",
+    "scenarios": [
+      "airport_ride",
+      "city_chat"
+    ],
+    "speaking_prompts": {
+      "airport_ride": "You just got in Carlos's car at the airport. He confirms your destination and asks about your trip. Talk about where you're from, how long you're staying, and what you want to see. Keep it simple.",
+      "city_chat": "You're stuck in traffic. Carlos wants to talk — about Rio, the neighborhood you're passing through, or life in the city. Ask questions about what you see out the window."
+    },
+    "style": "simple, clear, short sentences, patient",
+    "register": "informal_voce",
+    "difficulty": "beginner-friendly",
+    "prompt_file": "carlos_uber.txt",
+    "warm_up_variants": [
+      "Confirm the destination and ask how long the ride will take.",
+      "Ask Carlos what neighborhood you're passing through.",
+      "Tell Carlos it's your first time in Rio and ask what he recommends.",
+      "Ask Carlos how long he's been driving and whether he likes it."
+    ],
+    "labels": {
+      "airport_ride": "É para o hotel, sim.",
+      "city_chat": "O que é esse bairro?"
+    }
+  },
+  {
+    "name": "Lucas",
+    "emoji": "🍕",
+    "role": "Amigo de Amigo",
+    "description": "Friendly Brazilian in his early 30s. Meeting you for the first time at a pizzeria through a mutual friend. Polite and slightly reserved at first — warms up as the conversation builds. Good for social introductions and small talk.",
+    "scenarios": [
+      "pizzaria_intro",
+      "pizzaria_conversa"
+    ],
+    "speaking_prompts": {
+      "pizzaria_intro": "You arrive at the pizzeria and meet Lucas for the first time. Your mutual friend introduced you. Greet him, introduce yourself, ask about the friend, and sit down together. Keep it natural.",
+      "pizzaria_conversa": "You've been talking for a while and things are more relaxed. Lucas asks about your life, where you're from, and what you think of Brazil. Open up and ask him questions back."
+    },
+    "style": "simple, natural, slightly reserved then warm",
+    "register": "informal_voce",
+    "difficulty": "beginner-intermediate",
+    "prompt_file": "lucas_pizzaria.txt",
+    "warm_up_variants": [
+      "Introduce yourself and ask how Lucas knows the mutual friend.",
+      "Ask Lucas what he does for work and where he lives in Rio.",
+      "Ask Lucas what's good to order here — you've never been to this pizzeria.",
+      "Tell Lucas something about yourself and ask him one question back."
+    ],
+    "labels": {
+      "pizzaria_intro": "Prazer em te conhecer!",
+      "pizzaria_conversa": "Conta mais sobre você."
+    }
+  },
+  {
+    "name": "Juliana",
+    "emoji": "🏖️",
+    "role": "Barraca Attendant",
+    "description": "Outgoing, slightly persuasive, relaxed. Works at a beach barraca renting chairs and umbrellas. Sets everything up in the sand and takes your drink and snack order. Warm beach energy with simple vocabulary.",
+    "scenarios": [
+      "barraca_setup",
+      "barraca_order"
+    ],
+    "speaking_prompts": {
+      "barraca_setup": "You arrive at the beach and Juliana spots you immediately. She offers to set up a chair and umbrella. Negotiate, agree on a spot, and let her get everything ready.",
+      "barraca_order": "You're settled in your chair. Juliana comes back to take your drink order. Ask about what's available — água de coco is likely — and order something. She may suggest a snack too."
+    },
+    "style": "friendly, outgoing, simple, relaxed beach energy",
+    "register": "informal_voce",
+    "difficulty": "beginner-friendly",
+    "prompt_file": "juliana_barraca.txt",
+    "warm_up_variants": [
+      "Ask Juliana the price for a chair and umbrella, then agree.",
+      "Ask her to set up closer to the water, then order an água de coco.",
+      "Ask what snacks she has and order something light.",
+      "Ask how long you can stay with one rental and whether you can pay later."
+    ],
+    "labels": {
+      "barraca_setup": "Quanto custa a cadeira?",
+      "barraca_order": "Uma água de coco, por favor."
+    }
+  }
+]
