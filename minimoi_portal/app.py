@@ -123,6 +123,7 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 from minimoi_portal import auth as _auth          # noqa: E402
 from minimoi_portal import proxy as _proxy        # noqa: E402
 from minimoi_portal import guest_data as _gdata   # noqa: E402
+from minimoi_portal import domain_auth as _dauth  # noqa: E402
 
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
@@ -151,6 +152,30 @@ def _require_owner(f):
             return redirect(url_for("login", next=request.path, notice="owner_required"))
         return f(*args, **kwargs)
     return decorated
+
+
+def requires_domain(domain: str):
+    """Decorator: requires login + access to the named domain.
+    Owners bypass the domain check. Domain users must have a row in auth.domain_access."""
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            user = _current_user()
+            if not user:
+                return redirect(url_for("login", next=request.path))
+            if user.get("tier") == "owner":
+                return f(*args, **kwargs)
+            auth_id = user.get("auth_id")
+            if not auth_id:
+                return render_template("access_denied.html", user=user), 403
+            try:
+                if not _dauth.has_domain_access(auth_id, domain):
+                    return render_template("access_denied.html", user=user), 403
+            except Exception:
+                return render_template("access_denied.html", user=user), 403
+            return f(*args, **kwargs)
+        return decorated
+    return decorator
 
 
 # ── Public routes ─────────────────────────────────────────────────────────────
@@ -222,6 +247,85 @@ def logout():
     return redirect(url_for("landing"))
 
 
+@app.route("/login/<token>")
+def login_by_token(token):
+    """One-time login link for domain users (daughters). Token is 48h, single-use."""
+    if _current_user():
+        return redirect(url_for("dashboard"))
+    try:
+        user = _dauth.consume_login_token(token)
+    except Exception:
+        user = None
+    if not user:
+        return render_template("login.html",
+                               error="This link has expired or has already been used. "
+                                     "Contact Robert to get a new one."), 400
+    session.permanent = True
+    session["user"] = {
+        "username": user["email"],
+        "display_name": user["name"],
+        "tier": "guest",
+        "auth_id": user["id"],
+    }
+    return redirect(url_for("profile_password"))
+
+
+@app.route("/request-access", methods=["GET", "POST"])
+def request_access():
+    """Domain-specific access request form (hidden domain field)."""
+    if _current_user():
+        return redirect(url_for("dashboard"))
+
+    domain = request.args.get("domain", "portuguese")
+    error = None
+
+    if request.method == "POST":
+        display_name = request.form.get("display_name", "").strip()
+        email        = request.form.get("email", "").strip().lower()
+        reason       = request.form.get("reason", "").strip()
+        domain       = request.form.get("domain", "portuguese")
+
+        if not display_name:
+            error = "Please enter your name."
+        elif not email or "@" not in email:
+            error = "Please enter a valid email address."
+        else:
+            _log_guest_request(display_name, email, reason, domain=domain)
+            _notify_telegram_new_request(display_name, email, domain=domain)
+            return render_template("request_access.html", submitted=True, domain=domain)
+
+    return render_template("request_access.html", error=error, domain=domain)
+
+
+@app.route("/profile/password", methods=["GET", "POST"])
+@_require_login
+def profile_password():
+    """Set or change password after first login via token."""
+    user = _current_user()
+    auth_id = user.get("auth_id")
+    if not auth_id:
+        return redirect(url_for("dashboard"))
+
+    error = None
+    success = False
+
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        confirm  = request.form.get("confirm", "")
+        if len(password) < 8:
+            error = "Password must be at least 8 characters."
+        elif password != confirm:
+            error = "Passwords do not match."
+        else:
+            try:
+                _dauth.set_password(auth_id, password)
+                success = True
+            except Exception:
+                error = "Could not save password — please try again."
+
+    return render_template("profile_password.html", user=user, error=error, success=success)
+
+
 @app.route("/register", methods=["GET", "POST"])
 def register():
     """
@@ -253,17 +357,18 @@ def register():
     return render_template("register.html", error=error)
 
 
-def _notify_telegram_new_request(display_name: str, email: str) -> None:
+def _notify_telegram_new_request(display_name: str, email: str, domain: str = "portuguese") -> None:
     """Fire a Telegram message to Robert when a new guest requests access."""
     try:
         token   = get_secret("TELEGRAM_BOT_TOKEN", "telegram", "bot_token")
         chat_id = 8379221702
         text = (
-            f"🔔 <b>New guest access request</b>\n\n"
+            f"🔔 <b>Access Request</b>\n\n"
             f"<b>Name:</b> {display_name}\n"
-            f"<b>Email:</b> {email}\n\n"
-            f"Approve or reject at:\n"
-            f"https://minimoi.ai/admin/guests"
+            f"<b>Email:</b> {email}\n"
+            f"<b>Domain:</b> {domain.title()}\n\n"
+            f"Approve at:\n"
+            f"https://minimoi.ai/guild"
         )
         _requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
@@ -592,6 +697,35 @@ Robert
         print(f"⚠️  Approval email failed: {e}")
 
 
+def _send_login_link_email(email: str, name: str, token: str) -> bool:
+    """Send one-time login link via AWS SES. Returns True on success."""
+    try:
+        import boto3
+        ses = boto3.client("ses", region_name="us-east-1")
+        link = f"https://minimoi.ai/login/{token}"
+        ses.send_email(
+            Source="noreply@minimoi.ai",
+            Destination={"ToAddresses": [email]},
+            Message={
+                "Subject": {"Data": "Your mini-moi access is ready"},
+                "Body": {
+                    "Text": {"Data": (
+                        f"Hi {name},\n\n"
+                        f"Your access has been approved.\n\n"
+                        f"Click here to log in (link expires in 48 hours):\n"
+                        f"{link}\n\n"
+                        f"You'll be able to set your password after logging in.\n\n"
+                        f"mini-moi"
+                    )}
+                },
+            },
+        )
+        return True
+    except Exception as e:
+        print(f"⚠️  SES login link email failed: {e}")
+        return False
+
+
 @app.route("/admin/guests/reject/<token>", methods=["POST"])
 @_require_owner
 def admin_guests_reject(token):
@@ -697,13 +831,13 @@ def _career_deadline(career_focus: dict) -> str:
         return raw
 
 
-def _log_guest_request(name: str, email: str, reason: str) -> None:
+def _log_guest_request(name: str, email: str, reason: str, domain: str = "portuguese") -> None:
     """Log a guest access request to guild.guest_requests. Silent on failure."""
     try:
         _guild_db_execute(
-            "INSERT INTO guild.guest_requests (name, email, reason) VALUES (%s, %s, %s)"
+            "INSERT INTO guild.guest_requests (name, email, reason, domain) VALUES (%s, %s, %s, %s)"
             " ON CONFLICT (email) DO NOTHING",
-            [name, email, reason or ""]
+            [name, email, reason or "", domain]
         )
     except Exception:
         pass
@@ -713,7 +847,7 @@ def _get_guest_requests() -> list:
     """Return guest requests sorted: pending first, then actioned, newest first."""
     try:
         return _guild_db_query(
-            "SELECT id, name, reason, requested_at, status, actioned_at"
+            "SELECT id, name, email, reason, domain, requested_at, status, actioned_at"
             " FROM guild.guest_requests"
             " ORDER BY CASE status WHEN 'requested' THEN 0 ELSE 1 END,"
             " requested_at DESC"
@@ -883,8 +1017,27 @@ def guild_landing():
 @_require_owner
 def update_guest_request_status(req_id):
     status = request.form.get("status")
-    if status in ("granted", "rejected"):
-        _update_guest_request_status(req_id, status)
+    if status not in ("granted", "rejected"):
+        return redirect(url_for("guild_landing"))
+
+    if status == "granted":
+        rows = _guild_db_query(
+            "SELECT name, email, domain FROM guild.guest_requests WHERE id=%s", [req_id]
+        )
+        if rows:
+            req = rows[0]
+            try:
+                user_id = _dauth.create_user(req["email"], req["name"])
+                _dauth.grant_domain_access(user_id, req.get("domain") or "portuguese")
+                token = _dauth.create_login_token(user_id)
+                ok = _send_login_link_email(req["email"], req["name"], token)
+                if not ok:
+                    _update_guest_request_status(req_id, "approved_pending_email")
+                    return redirect(url_for("guild_landing"))
+            except Exception as e:
+                print(f"⚠️  Auth provisioning failed for request {req_id}: {e}")
+
+    _update_guest_request_status(req_id, status)
     return redirect(url_for("guild_landing"))
 
 
@@ -1667,6 +1820,25 @@ def guild_docs_reader(filename):
     return render_template("guild/docs_reader.html", content=content,
                            filename=filename, date=date, gh_url=gh_url,
                            user=_current_user())
+
+
+@app.route("/app/portuguese")
+@app.route("/app/portuguese/")
+@requires_domain("portuguese")
+def portuguese_root():
+    """Portuguese domain — placeholder until Spec 2 ships."""
+    return render_template("portuguese_placeholder.html", user=_current_user())
+
+
+@app.route("/guild/users")
+@_require_owner
+def guild_users():
+    """Admin: list all domain users with access."""
+    try:
+        users = _dauth.list_users_with_access()
+    except Exception:
+        users = []
+    return render_template("guild/users.html", users=users, user=_current_user())
 
 
 @app.route("/health")

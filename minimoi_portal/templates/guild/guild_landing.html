@@ -409,6 +409,7 @@
     {% for req in guest_requests %}
     <div class="guest-row">
       <span class="guest-name">{{ req.name }}</span>
+      <span class="guest-reason">{{ req.domain or 'portuguese' }}</span>
       <span class="guest-reason">{{ req.reason or '—' }}</span>
       <span class="guest-time">{{ req.requested_at.strftime('%-d %b') if req.requested_at else '—' }}</span>
       {% if req.status == 'requested' %}

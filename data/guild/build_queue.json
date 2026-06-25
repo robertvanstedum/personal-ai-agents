@@ -624,10 +624,10 @@
     "id": 103,
     "spec_title": "Auth + Multi-User Account System",
     "spec_file": "spec_1_auth_multiuser_2026-06-24.md",
-    "status": "spec_ready",
-    "last_transition_at": "2026-06-24T00:00:00Z",
-    "blocked_reason": "Gates on #102 done",
-    "notes": "Phase 2 Spec 1. Do not start until Block E DoD complete."
+    "status": "in_build",
+    "last_transition_at": "2026-06-24T14:00:00Z",
+    "blocked_reason": null,
+    "notes": "Phase 2 Spec 1. Flask-Login skipped — using existing session pattern. SES email for login link."
   },
   {
     "id": 104,

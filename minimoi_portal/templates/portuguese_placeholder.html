@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Português — mini-moi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/portal.css">
+</head>
+<body class="login">
+
+<nav class="portal-nav">
+  <a href="/" class="portal-nav-brand">mini-moi</a>
+  {% if user %}
+  <span class="portal-nav-user">{{ user.display_name }}</span>
+  &nbsp;·&nbsp;
+  <a href="/logout" class="portal-nav-link">Sign out</a>
+  {% endif %}
+</nav>
+
+<main class="login-main">
+  <div class="login-card">
+    <h1 class="login-title">Português</h1>
+    <p>Your access is confirmed. The Portuguese learning domain is coming soon.</p>
+    <p class="login-footer"><a href="/profile/password">Set your password →</a></p>
+  </div>
+</main>
+
+</body>
+</html>

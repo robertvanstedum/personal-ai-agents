@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Request access — mini-moi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/portal.css">
+</head>
+<body class="login">
+
+<nav class="portal-nav">
+  <a href="/" class="portal-nav-brand">mini-moi</a>
+</nav>
+
+<main class="login-main">
+  <div class="login-card">
+
+    {% if submitted %}
+
+      <h1 class="login-title">Request sent</h1>
+      <div class="pending-confirm">
+        <p>Your request has been received. You'll get an email with a login link once approved — usually within a day.</p>
+        <p class="pending-note">No need to create a password yet. The email will include everything you need to get started.</p>
+      </div>
+      <p class="login-footer"><a href="/">← Back to mini-moi</a></p>
+
+    {% else %}
+
+      <h1 class="login-title">Request access</h1>
+      <p class="login-subtitle">Enter your name and email. You'll receive a login link once approved.</p>
+
+      {% if error %}
+        <div class="login-error">{{ error }}</div>
+      {% endif %}
+
+      <form method="POST" action="/request-access">
+        <input type="hidden" name="domain" value="{{ domain }}">
+        <div class="form-group">
+          <label for="display_name">Your name</label>
+          <input type="text" id="display_name" name="display_name"
+                 placeholder="e.g. Ana Silva"
+                 autocomplete="name" autofocus required>
+        </div>
+        <div class="form-group">
+          <label for="email">Email address</label>
+          <input type="email" id="email" name="email"
+                 placeholder="ana@example.com"
+                 autocomplete="email" required>
+        </div>
+        <div class="form-group">
+          <label for="reason">Why do you want access? <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+          <input type="text" id="reason" name="reason"
+                 placeholder="e.g. I want to learn Portuguese">
+        </div>
+        <button type="submit" class="btn-primary btn-full">Request access →</button>
+      </form>
+
+      <p class="login-footer">
+        Already have an account? <a href="/login">Sign in</a>
+      </p>
+
+    {% endif %}
+
+  </div>
+</main>
+
+</body>
+</html>

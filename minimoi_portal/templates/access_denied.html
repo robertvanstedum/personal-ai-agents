@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Access denied — mini-moi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/portal.css">
+</head>
+<body class="login">
+
+<nav class="portal-nav">
+  <a href="/" class="portal-nav-brand">mini-moi</a>
+  {% if user %}
+  <span class="portal-nav-user">{{ user.display_name }}</span>
+  {% endif %}
+</nav>
+
+<main class="login-main">
+  <div class="login-card">
+    <h1 class="login-title">Access denied</h1>
+    <p>You don't have access to this area. If you think this is a mistake, contact Robert.</p>
+    <p class="login-footer"><a href="/">← Back to mini-moi</a></p>
+  </div>
+</main>
+
+</body>
+</html>
