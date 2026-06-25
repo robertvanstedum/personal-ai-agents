@@ -641,11 +641,11 @@
   {
     "id": 105,
     "spec_title": "Portuguese Initial Personas (3)",
-    "spec_file": null,
-    "status": "design",
-    "last_transition_at": "2026-06-24T00:00:00Z",
-    "blocked_reason": "Needs content session",
-    "notes": "Phase 2 Spec 3."
+    "spec_file": "docs/design/portuguese_personas_2026-06-25.md",
+    "status": "done",
+    "last_transition_at": "2026-06-25T00:00:00Z",
+    "blocked_reason": null,
+    "notes": "4 personas shipped: maria_padaria, carlos_uber, lucas_pizzaria, juliana_barraca. System prompts + personas.json. Design doc in docs/design/. Next design session: intermediate/advanced personas with wife."
   },
   {
     "id": 106,
