@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>{% block title %}Português{% endblock %} — meu português</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/portuguese.css?v=1">
+  {% block head %}{% endblock %}
+</head>
+<body class="{{ active }}-mode">
+
+<nav>
+  <a href="/" class="logo">meu português</a>
+  <ul class="nav-links">
+    <li><a href="/leitura"   {% if active=='leitura' %}class="active"{% endif %} title="Leitura">Leitura</a></li>
+    <li><a href="/conversas" {% if active=='conversas' %}class="active"{% endif %} title="Conversas">Conversas</a></li>
+    <li><a href="/escrita"   {% if active=='escrita' %}class="active"{% endif %} title="Escrita">Escrita</a></li>
+    <li><a href="/palavras"  {% if active=='palavras' %}class="active"{% endif %} title="Palavras">Palavras</a></li>
+    <li><a href="/arquivo"   {% if active=='arquivo' %}class="active"{% endif %} title="Arquivo">Arquivo</a></li>
+    <li><a href="/admin"     {% if active=='admin' %}class="active"{% endif %} title="Admin">Admin</a></li>
+  </ul>
+</nav>
+
+{% block page_strip %}{% endblock %}
+
+<main class="page">
+  {% block content %}{% endblock %}
+</main>
+
+{% block page_footer %}{% endblock %}
+
+{% if show_toggle %}
+<div class="palette-toggle" id="paletteToggle">
+  <span class="palette-label">Palette</span>
+  <button class="pal-btn" data-pal="1" title="Ocean Deep + Rio Amber">1</button>
+  <button class="pal-btn" data-pal="2" title="Botanical Green + Terracotta">2</button>
+  <button class="pal-btn" data-pal="3" title="Navy + Burnt Amber">3</button>
+</div>
+{% endif %}
+
+<script>
+(function() {
+  var saved = document.cookie.match(/pt_palette=(\d)/);
+  var active = saved ? saved[1] : '2';
+  document.body.setAttribute('data-palette', active);
+
+  document.querySelectorAll('.pal-btn').forEach(function(btn) {
+    if (btn.dataset.pal === active) btn.classList.add('active');
+    btn.addEventListener('click', function() {
+      var p = this.dataset.pal;
+      document.body.setAttribute('data-palette', p);
+      document.cookie = 'pt_palette=' + p + ';path=/;max-age=2592000';
+      document.querySelectorAll('.pal-btn').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.pal === p);
+      });
+    });
+  });
+})();
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

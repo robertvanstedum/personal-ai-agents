@@ -40,6 +40,29 @@ content, not new architecture.
 Target: after German mobile batch is stable.
 Gate: design session to confirm approach → docs/design/
 
+### German — multi-user readiness
+German currently assumes a single user (Robert). The auth
+infrastructure already supports multiple users — `auth.domain_access`
+can grant German access the same way it grants Portuguese. But the
+content and data layer isn't ready:
+
+1. Base personas (2-3) suitable for new learners — the current
+   Vienna personas are Robert-specific and not appropriate for a
+   general learner starting from scratch
+2. Per-user session data separation — sessions, progress, and
+   personas need to be tied to `auth.users.id`, not a single
+   global store
+3. User persona creation — same pattern as Portuguese Spec 4
+4. Starter reading list — separate from Robert's curated Lesen config
+
+This is a design session before any spec. The Portuguese multi-user
+patterns (per-user DB rows keyed on user ID, domain_access grant)
+carry over directly. The content (personas, reading lists) needs
+fresh design for a general learner.
+
+Gate: Portuguese Spec 2 stable.
+Status: design needed — roll into Portuguese Spec 3 planning session.
+
 ### CoS — structured build methodology
 CoS responds to commands well but doesn't yet have a consistent
 way to track what it's working on, surface priorities, or close

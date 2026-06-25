@@ -1,0 +1,614 @@
+/* Português — base styles
+   Spec: docs/specs/spec_2_portuguese_domain_shell_2026-06-24.md
+   Palette: Deep Botanical Green + Warm Terracotta (Option 2, default) */
+
+/* ── Default palette — Option 2 (active unless overridden by cookie) ── */
+:root {
+  --pt-dark:           #1B3A2A;
+  --pt-accent:         #C4603A;
+  --pt-accent-hover:   #A84E2A;
+  --pt-parch:          #F7F2E8;
+  --pt-parch-mid:      #EDE8DE;
+  --pt-parch-deep:     #DFD8CE;
+  --pt-text-primary:   #1B2E1F;
+  --pt-text-secondary: #5C7A4A;
+  --pt-text-muted:     #8A9A80;
+  --pt-strip-dark:     #0F2018;
+
+  --pt-surface:     rgba(27, 58, 42, 0.92);
+  --pt-surface-2:   rgba(247, 242, 232, 0.10);
+  --pt-border:      rgba(196, 96, 58, 0.25);
+
+  --text:       rgba(247, 242, 232, 0.92);
+  --text-muted: rgba(247, 242, 232, 0.6);
+  --text-dim:   rgba(247, 242, 232, 0.35);
+
+  --font-head: Georgia, serif;
+  --font-body: system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  --radius: 12px;
+  --gap:    1.5rem;
+}
+
+/* ── Option 1 — Ocean Deep + Rio Amber ── */
+body[data-palette="1"] {
+  --pt-dark:           #0A2A3A;
+  --pt-accent:         #E8A020;
+  --pt-accent-hover:   #C47A10;
+  --pt-parch:          #F7F2E8;
+  --pt-parch-mid:      #EDE8DE;
+  --pt-parch-deep:     #DFD8CE;
+  --pt-text-primary:   #0A1E2A;
+  --pt-text-secondary: #4A6A7A;
+  --pt-text-muted:     #7A9AAA;
+  --pt-strip-dark:     #04161F;
+
+  --pt-surface:  rgba(10, 42, 58, 0.92);
+  --pt-border:   rgba(232, 160, 32, 0.25);
+}
+
+/* ── Option 2 — Deep Botanical Green + Terracotta (default) ── */
+body[data-palette="2"] {
+  --pt-dark:           #1B3A2A;
+  --pt-accent:         #C4603A;
+  --pt-accent-hover:   #A84E2A;
+  --pt-parch:          #F7F2E8;
+  --pt-parch-mid:      #EDE8DE;
+  --pt-parch-deep:     #DFD8CE;
+  --pt-text-primary:   #1B2E1F;
+  --pt-text-secondary: #5C7A4A;
+  --pt-text-muted:     #8A9A80;
+  --pt-strip-dark:     #0F2018;
+
+  --pt-surface:  rgba(27, 58, 42, 0.92);
+  --pt-border:   rgba(196, 96, 58, 0.25);
+}
+
+/* ── Option 3 — Deep Navy + Burnt Amber ── */
+body[data-palette="3"] {
+  --pt-dark:           #1A1E3A;
+  --pt-accent:         #C4782A;
+  --pt-accent-hover:   #A86020;
+  --pt-parch:          #F5F2EA;
+  --pt-parch-mid:      #ECEAE0;
+  --pt-parch-deep:     #DEDBD0;
+  --pt-text-primary:   #1A1E30;
+  --pt-text-secondary: #4A5A7A;
+  --pt-text-muted:     #7A8AAA;
+  --pt-strip-dark:     #0E1020;
+
+  --pt-surface:  rgba(26, 30, 58, 0.92);
+  --pt-border:   rgba(196, 120, 42, 0.25);
+}
+
+/* ── Reset ────────────────────────────────────────────────── */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; height: 100%; }
+
+body {
+  position: relative;
+  background-color: var(--pt-dark);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-weight: 400;
+  line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Background photo — landing page only, activated by body.landing-mode
+   Drop bg-primary.jpg into static/ (Rio photo, dark enough at 0.45 opacity) */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url('/static/bg-primary.jpg');
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  z-index: -1;
+  transition: opacity 0.2s;
+}
+
+body.landing-mode::before {
+  opacity: 0.45;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 180px;
+  background: linear-gradient(to bottom, rgba(15, 32, 24, 0.3), transparent);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* ── Base typography ──────────────────────────────────────── */
+
+a { color: var(--pt-accent); text-decoration: none; }
+a:hover { color: var(--text); }
+
+h1, h2, h3, h4 {
+  font-family: var(--font-head);
+  line-height: 1.25;
+  color: var(--text);
+}
+
+h1 { font-size: 3.2rem; font-weight: 700; }
+h2 { font-size: 1.5rem;  font-weight: 400; }
+h3 { font-size: 1.15rem; font-weight: 400; }
+
+code, pre, .mono {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+}
+
+.muted { color: var(--text-muted); }
+.dim   { color: var(--text-dim); }
+
+/* ── Navigation ───────────────────────────────────────────── */
+
+nav {
+  height: 68px;
+  background: rgba(27, 58, 42, 0.97);
+  background: color-mix(in srgb, var(--pt-dark) 97%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--pt-accent);
+  box-shadow: 0 2px 24px rgba(0, 0, 0, 0.45);
+  padding: 0 2rem;
+  display: flex;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.logo {
+  font-family: var(--font-head);
+  font-size: 1.65rem;
+  font-weight: 600;
+  font-style: italic;
+  color: var(--pt-accent);
+  margin-right: 3rem;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.logo:hover { color: var(--pt-parch); }
+
+.nav-links {
+  display: flex;
+  gap: 2.2rem;
+  list-style: none;
+}
+
+.nav-links a {
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 1.05rem;
+  font-weight: 500;
+  padding: 8px 0;
+  position: relative;
+  transition: color 0.15s;
+  white-space: nowrap;
+}
+
+.nav-links a:hover { color: var(--text); }
+
+.nav-links a.active {
+  color: #fff;
+}
+
+.nav-links a.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--pt-accent);
+}
+
+.nav-links a.disabled {
+  color: var(--text-dim);
+  pointer-events: none;
+  cursor: default;
+}
+
+/* ── Page layout ──────────────────────────────────────────── */
+
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 4rem 2rem 6rem;
+  width: 100%;
+  flex: 1;
+}
+
+/* ── Content typography ───────────────────────────────────── */
+
+.subtitle {
+  font-size: 1.2rem;
+  color: var(--text-muted);
+  max-width: 620px;
+  line-height: 1.55;
+  margin-top: 0.8rem;
+}
+
+.hint {
+  margin-top: 2rem;
+  color: var(--text-dim);
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+/* ── Inputs ───────────────────────────────────────────────── */
+
+input[type="text"],
+input[type="search"],
+textarea {
+  width: 100%;
+  background: rgba(247, 242, 232, 0.12);
+  border: 1px solid rgba(196, 96, 58, 0.45);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  padding: 1rem 1.4rem;
+  border-radius: var(--radius);
+}
+
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--pt-accent);
+  background: rgba(247, 242, 232, 0.20);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-dim);
+}
+
+/* ── Mobile nav ───────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  nav {
+    position: fixed;
+    bottom: 0;
+    top: auto;
+    left: 0;
+    right: 0;
+    height: auto;
+    padding: 0 0 env(safe-area-inset-bottom);
+    overflow-x: auto;
+    border-top: 1px solid var(--pt-border);
+    border-bottom: none;
+    justify-content: space-around;
+  }
+
+  .logo { display: none; }
+
+  .nav-links {
+    width: 100%;
+    justify-content: space-around;
+    gap: 0;
+    padding: 0;
+  }
+
+  .nav-links li { flex: 1; }
+
+  .nav-links a {
+    display: flex;
+    justify-content: center;
+    padding: 0.75rem 0.5rem 0.6rem;
+    font-size: 0.75rem;
+    border-top: 2px solid transparent;
+  }
+
+  .nav-links a.active {
+    border-top-color: var(--pt-accent);
+  }
+
+  .nav-links a.active::after { display: none; }
+
+  .page {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* ── Landing page ─────────────────────────────────────────── */
+
+body.landing-mode {
+  background-color: var(--pt-dark);
+  color: var(--text);
+}
+
+.landing-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 68px);
+  text-align: center;
+  padding: 2rem;
+}
+
+.landing-title {
+  font-family: Georgia, serif;
+  font-size: clamp(36px, 6vw, 52px);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--pt-accent);
+  line-height: 1.15;
+  margin-bottom: 0.75rem;
+}
+
+.landing-subtitle {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--pt-accent);
+  text-shadow: 1px 1px 3px rgba(0,0,0,0.6);
+  margin-bottom: 3rem;
+}
+
+.landing-nav {
+  display: flex;
+  gap: 2.5rem;
+  list-style: none;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.landing-nav a {
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+
+.landing-nav a:hover {
+  color: var(--pt-accent);
+}
+
+/* ── Tab hero (full-width photo below nav) ────────────────── */
+
+.tab-hero {
+  width: 100%;
+  height: 300px;
+  position: relative;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-color: var(--pt-strip-dark);
+  display: flex;
+  align-items: flex-end;
+  padding: 0 2.5rem 2rem;
+  box-sizing: border-box;
+}
+
+.tab-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    rgba(60, 47, 47, 0.3),
+    rgba(60, 47, 47, 0.65)
+  );
+}
+
+.tab-hero-content {
+  position: relative;
+  z-index: 1;
+}
+
+.tab-hero-content h1 {
+  font-family: Georgia, serif;
+  font-size: 3rem;
+  color: var(--pt-parch);
+  margin: 0 0 0.25rem 0;
+  line-height: 1;
+}
+
+.tab-hero-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: rgba(247, 242, 232, 0.6);
+  text-transform: uppercase;
+}
+
+.tab-description {
+  font-size: 1.05rem;
+  color: var(--pt-text-secondary);
+  margin: 1.75rem 0 1.5rem 0;
+  line-height: 1.5;
+}
+
+/* Hero with <img> tag — used on Leitura (mirrors Lesen) */
+.hero-wrap {
+  position: relative;
+  width: 100%;
+  height: 24vh;
+  min-height: 160px;
+  overflow: hidden;
+  background: var(--pt-strip-dark);
+}
+
+.hero-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 16, 8, 0.28);
+}
+
+/* ── Parchment working pages ──────────────────────────────── */
+
+body.parch-mode {
+  background-color: var(--pt-parch-mid);
+  color: var(--pt-text-primary);
+}
+
+body.parch-mode input[type="text"],
+body.parch-mode input[type="search"],
+body.parch-mode textarea,
+body.parch-mode select {
+  background: var(--pt-parch-mid);
+  border: 1px solid var(--pt-parch-deep);
+  color: var(--pt-text-primary);
+}
+
+body.parch-mode input:focus,
+body.parch-mode textarea:focus,
+body.parch-mode select:focus {
+  background: var(--pt-parch-mid);
+  border-color: var(--pt-accent);
+  outline: none;
+}
+
+body.parch-mode input::placeholder,
+body.parch-mode textarea::placeholder {
+  color: var(--pt-text-muted);
+}
+
+body.parch-mode::after { display: none; }
+
+body.parch-mode nav {
+  background: var(--pt-dark);
+  border-bottom-color: var(--pt-accent);
+}
+
+body.parch-mode .nav-links a { color: rgba(255,255,255,0.45); }
+body.parch-mode .nav-links a:hover { color: #fff; }
+body.parch-mode .nav-links a.active { color: #fff; }
+
+body.parch-mode .page { color: var(--pt-text-primary); }
+body.parch-mode .subtitle { color: var(--pt-text-secondary); }
+body.parch-mode .hint { color: var(--pt-text-muted); }
+
+body.parch-mode h1,
+body.parch-mode h2,
+body.parch-mode h3 { color: var(--pt-text-primary); }
+
+/* ── Stub / coming-soon pages ─────────────────────────────── */
+
+.stub-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding-top: 3rem;
+}
+
+.stub-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pt-accent);
+  border: 1px solid rgba(196, 96, 58, 0.4);
+  border-radius: 4px;
+  padding: 3px 8px;
+  margin-bottom: 1.25rem;
+}
+
+.stub-message {
+  font-size: 1.05rem;
+  color: var(--text-muted);
+  max-width: 480px;
+  line-height: 1.6;
+}
+
+/* ── Admin page ───────────────────────────────────────────── */
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2.5rem;
+}
+
+.admin-card {
+  background: rgba(27, 58, 42, 0.55);
+  border: 1px solid var(--pt-border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  backdrop-filter: blur(8px);
+}
+
+.admin-card h3 {
+  font-size: 1rem;
+  color: var(--pt-accent);
+  margin-bottom: 0.5rem;
+}
+
+.admin-card p {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+/* ── Palette toggle widget (design tool — owner/admin only) ── */
+
+.palette-toggle {
+  position: fixed;
+  bottom: 80px;
+  right: 16px;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0,0,0,0.7);
+  border-radius: 20px;
+  padding: 6px 10px;
+}
+
+.palette-label {
+  color: #fff;
+  font-size: 11px;
+  opacity: 0.7;
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+}
+
+.pal-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.pal-btn:hover {
+  border-color: rgba(255,255,255,0.6);
+  background: rgba(255,255,255,0.25);
+}
+
+.pal-btn.active {
+  border-color: #fff;
+  background: rgba(255,255,255,0.35);
+}
+
+@media (max-width: 768px) {
+  .palette-toggle {
+    bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+}

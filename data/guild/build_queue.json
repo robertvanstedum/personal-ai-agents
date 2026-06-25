@@ -623,20 +623,20 @@
   {
     "id": 103,
     "spec_title": "Auth + Multi-User Account System",
-    "spec_file": "spec_1_auth_multiuser_2026-06-24.md",
+    "spec_file": "spec_1_auth_final_2026-06-25.md",
     "status": "done",
     "last_transition_at": "2026-06-24T15:00:00Z",
     "blocked_reason": null,
-    "notes": "Phase 2 Spec 1. Shipped: domain_auth.py, migration 002, /login/<token>, requires_domain(), SES email, 11 tests. Flask-Login skipped — existing session pattern."
+    "notes": "Phase 2 Spec 1. Shipped: domain_auth.py, migration 002, /login/<token>, requires_domain(), SES email, 11 tests. Flask-Login skipped — existing session pattern. Final spec: spec_1_auth_final_2026-06-25.md"
   },
   {
     "id": 104,
     "spec_title": "Portuguese Domain Shell",
     "spec_file": "spec_2_portuguese_domain_shell_2026-06-24.md",
-    "status": "spec_ready",
-    "last_transition_at": "2026-06-24T00:00:00Z",
-    "blocked_reason": "Gates on #103 done",
-    "notes": "Phase 2 Spec 2. Robert confirms color palette before CSS applied."
+    "status": "done",
+    "last_transition_at": "2026-06-25T00:00:00Z",
+    "blocked_reason": null,
+    "notes": "Shipped: domains/portuguese/ Flask shell (port 8770), 6 tabs + admin, --pt-* CSS tokens, 3 palette blocks + toggle, portal proxy routes, launchd plist. Running under launchd. Photos folder ready: domains/portuguese/static/photos/ — Robert to drop Rio photos."
   },
   {
     "id": 105,

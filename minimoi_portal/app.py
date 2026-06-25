@@ -1845,8 +1845,18 @@ def guild_docs_reader(filename):
 @app.route("/app/portuguese/")
 @requires_domain("portuguese")
 def portuguese_root():
-    """Portuguese domain — placeholder until Spec 2 ships."""
-    return render_template("portuguese_placeholder.html", user=_current_user())
+    return _proxy.proxy_to(_cfg.PORTUGUESE_BACKEND, "/", "/app/portuguese",
+                           user=_current_user())
+
+
+@app.route("/app/portuguese/<path:path>", methods=["GET", "POST"])
+@requires_domain("portuguese")
+def portuguese_proxy(path):
+    user = _current_user()
+    if path.startswith("admin") and user.get("tier") != "owner":
+        return render_template("access_denied.html", user=user), 403
+    return _proxy.proxy_to(_cfg.PORTUGUESE_BACKEND, path, "/app/portuguese",
+                           user=user)
 
 
 @app.route("/guild/users")

@@ -90,19 +90,20 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
     """
     display_name = user.get("display_name", user.get("username", "")) if user else ""
 
-    curator_active = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/curator" else ""
-    german_active  = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/german"  else ""
-    guild_active   = "color:#ffffff;font-weight:600;" if portal_prefix == "/guild"        else ""
+    curator_active    = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/curator"    else ""
+    german_active     = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/german"     else ""
+    portuguese_active = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/portuguese" else ""
+    guild_active      = "color:#ffffff;font-weight:600;" if portal_prefix == "/guild"          else ""
 
     # Per-backend layout offset so backend sticky elements don't hide under our nav.
     # Curator body is display:flex (row) — padding-top pushes the flex row down.
-    # German body is block — padding-top pushes block content down.
+    # German/Portuguese body is block — padding-top pushes block content down.
     if portal_prefix == "/app/curator":
         offset_css = (
             "body{padding-top:38px!important;}"
             "nav.curator-subnav{top:38px!important;}"
         )
-    elif portal_prefix == "/app/german":
+    elif portal_prefix in ("/app/german", "/app/portuguese"):
         offset_css = (
             "body{padding-top:38px!important;}"
             "@media (min-width:769px){nav{top:38px!important;}}"
@@ -122,9 +123,10 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
 ">
   <a href="/dashboard" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
   <span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
-  <a href="/app/curator" style="color:#C68A5E;text-decoration:none;margin-right:14px;{curator_active}">Curator</a>
-  <a href="/app/german"  style="color:#C68A5E;text-decoration:none;margin-right:14px;{german_active}">German</a>
-  <a href="/guild"       style="color:#C68A5E;text-decoration:none;{guild_active}">Guild</a>
+  <a href="/app/curator"    style="color:#C68A5E;text-decoration:none;margin-right:14px;{curator_active}">Curator</a>
+  <a href="/app/german"     style="color:#C68A5E;text-decoration:none;margin-right:14px;{german_active}">German</a>
+  <a href="/app/portuguese" style="color:#C68A5E;text-decoration:none;margin-right:14px;{portuguese_active}">Português</a>
+  <a href="/guild"          style="color:#C68A5E;text-decoration:none;{guild_active}">Guild</a>
   <span style="color:rgba(255,255,255,0.45);margin-left:auto;margin-right:12px;">{display_name}</span>
   <a href="/logout" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;">Sign out</a>
 </div>
