@@ -116,6 +116,17 @@ jobs:
             --parameters "commands=[\"echo $COMPOSE | base64 -d > /opt/minimoi/docker-compose.prod.yml\"]" \
             --output text
 
+      - name: Sync build_queue.json to EC2 host
+        run: |
+          aws ssm send-command \
+            --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=[
+              "mkdir -p /opt/minimoi/data/guild",
+              "curl -sf https://raw.githubusercontent.com/robertvanstedum/personal-ai-agents/main/data/guild/build_queue.json -o /opt/minimoi/data/guild/build_queue.json"
+            ]' \
+            --output text
+
       - name: Deploy on EC2
         run: |
           aws ssm send-command \
