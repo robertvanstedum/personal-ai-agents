@@ -624,10 +624,10 @@
     "id": 103,
     "spec_title": "Auth + Multi-User Account System",
     "spec_file": "spec_1_auth_multiuser_2026-06-24.md",
-    "status": "in_build",
-    "last_transition_at": "2026-06-24T14:00:00Z",
+    "status": "done",
+    "last_transition_at": "2026-06-24T15:00:00Z",
     "blocked_reason": null,
-    "notes": "Phase 2 Spec 1. Flask-Login skipped — using existing session pattern. SES email for login link."
+    "notes": "Phase 2 Spec 1. Shipped: domain_auth.py, migration 002, /login/<token>, requires_domain(), SES email, 11 tests. Flask-Login skipped — existing session pattern."
   },
   {
     "id": 104,
