@@ -105,6 +105,7 @@ services:
       - MINIMOI_ROLE=production
       - TELEGRAM_CHAT_ID=8379221702
       - PORT=8769
+      - DISABLE_TELEGRAM_POLL=1
     volumes:
       - /opt/minimoi/data/guild/memory/cos_memory.md:/app/data/guild/memory/cos_memory.md
       - /opt/minimoi/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json

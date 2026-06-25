@@ -8,7 +8,8 @@ Flask service on port 8769:
   /status — agent state
   /health — liveness probe
 
-Telegram polling thread handles !cos / !chief / !ops on rvsopenbot.
+Telegram polling is handled by telegram_cos_bot.py (minimoi_cos_bot).
+DISABLE_TELEGRAM_POLL=1 must be set when cos-scheduler runs alongside cos-bot.
 """
 
 import json
@@ -240,8 +241,8 @@ def _run_build_discipline_check() -> dict:
             log.info("build_discipline_check: standby — Telegram suppressed")
         else:
             try:
-                from utils.telegram import get_system_token, get_chat_id as _get_chat_id
-                token   = get_system_token()
+                from utils.telegram import get_cos_token, get_chat_id as _get_chat_id
+                token   = get_cos_token()
                 chat_id = _get_chat_id() or os.environ.get("TELEGRAM_CHAT_ID", "8379221702")
                 if token:
                     requests.post(
@@ -307,8 +308,8 @@ def _run_guest_nudge_check() -> dict:
         log.info("guest_nudge_check: standby — Telegram suppressed")
     else:
         try:
-            from utils.telegram import get_system_token, get_chat_id as _get_chat_id
-            token   = get_system_token()
+            from utils.telegram import get_cos_token, get_chat_id as _get_chat_id
+            token   = get_cos_token()
             chat_id = _get_chat_id() or os.environ.get("TELEGRAM_CHAT_ID", "8379221702")
             if token:
                 requests.post(
@@ -373,8 +374,8 @@ def _check_ec2_health() -> dict:
         return {"skipped": "standby node"}
 
     try:
-        from utils.telegram import get_system_token, get_chat_id as _gc
-        token   = get_system_token()
+        from utils.telegram import get_cos_token, get_chat_id as _gc
+        token   = get_cos_token()
         chat_id = _gc()
     except Exception as e:
         log.error("EC2 health: could not get telegram credentials: %s", e)
