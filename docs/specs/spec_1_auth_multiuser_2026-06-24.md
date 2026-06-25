@@ -1,83 +1,80 @@
 # Spec 1 — Auth + Multi-User Account System
 *Created: 2026-06-24 — Claude.ai*
+*Updated: 2026-06-24 — simplified per Grok review*
 *Status: spec_ready*
-*Part of: Portuguese Domain + Multi-User Platform*
-*Gates: all other Portuguese domain specs*
+*Gates on: Block E complete (CI/CD + regression tests green)*
 
 ---
 
 ## Goal
 
-Replace the current single-user Google OAuth setup with a proper
-multi-user account system. Request Access → Robert approves →
-user creates account with email + password → standard forgot/reset
-flow. Robert controls who gets in.
+Multi-user accounts for Portuguese domain launch. Three daughters
+get access. Robert approves via the existing CoS/Telegram flow.
+Simple, working, not over-engineered for three users.
 
 ---
 
-## Current state
+## What already exists (don't rebuild)
 
-One user (Robert) authenticated via Google OAuth. No account
-creation, no password management, no user roles. Works for a
-single operator, not for multiple users.
+`guild.guest_requests` table and the CoS approval flow are already
+live. Robert gets a Telegram ping when someone requests access,
+can approve or reject inline. Spec 1 extends this — it does not
+replace it.
+
+Changes to existing flow:
+- Add `domain` column to `guild.guest_requests`
+- Wire approval action to account creation instead of just logging
 
 ---
 
-## New auth model
-
-### Roles
-
-| Role | Who | Can do |
-|------|-----|--------|
-| admin | Robert (+ wife if added) | All domains, all user management, feedback review, persona moderation |
-| user | Daughters (approved) | Assigned domains only, own session history, create personas within limits |
-
-### Flow
+## Simplified auth flow
 
 ```
-1. User lands on preview page
-2. Clicks "Request Access" for Portuguese domain
-3. Fills simple form: name, email, why they want access
-4. Robert gets Telegram notification via system_bot:
-   "New access request: [name] ([email]) — Portuguese domain"
-   With inline /approve_[id] and /reject_[id] commands
-5. Robert approves
-6. User gets email with account creation link (expires 48h)
-7. User sets password (min 8 chars, standard strength rules)
-8. User logs in with email + password
-9. Access to approved domains only
+User lands on preview → clicks "Request Access" (Portuguese domain)
+    ↓
+Form: name, email, reason, domain (hidden field)
+    ↓
+Logged to guild.guest_requests (existing table + domain column)
+    ↓
+Robert gets Telegram notification via system_bot (existing flow):
+  "🔔 Access Request
+   Name: Sofia van Stedum
+   Email: sofia@example.com
+   Domain: Portuguese
+   /approve_42  /reject_42"
+    ↓
+Robert clicks /approve_42
+    ↓
+System creates account + emails one-time login link
+    ↓
+User clicks link → logged in → lands on Portuguese domain
+    ↓
+User sets password from profile page (one step, not a separate flow)
 ```
 
-### Forgot password flow
-
-```
-Login page → "Forgot password?" link
-    ↓
-Enter email address
-    ↓
-If account exists: reset link sent (expires 1h)
-If no account: same response (don't reveal account existence)
-    ↓
-User clicks link → sets new password
-    ↓
-Redirected to login
-```
+No magic link token management complexity. No separate account
+creation flow. Approve → account exists → email sent → done.
 
 ---
 
 ## Database schema
 
-New tables in `auth.*` schema:
+**Modify existing table (migration):**
+```sql
+ALTER TABLE guild.guest_requests
+ADD COLUMN domain VARCHAR(50) DEFAULT 'portuguese';
+```
 
+**New tables (auth only):**
 ```sql
 CREATE SCHEMA auth;
 
 CREATE TABLE auth.users (
     id              SERIAL PRIMARY KEY,
     email           VARCHAR(255) UNIQUE NOT NULL,
-    password_hash   VARCHAR(255) NOT NULL,
+    password_hash   VARCHAR(255),          -- nullable until user sets it
     name            VARCHAR(255) NOT NULL,
-    role            VARCHAR(50) DEFAULT 'user',
+    role            VARCHAR(50) DEFAULT 'user',  -- 'user' or 'admin'
     created_at      TIMESTAMP DEFAULT NOW(),
     last_login      TIMESTAMP,
     is_active       BOOLEAN DEFAULT TRUE
@@ -86,83 +83,55 @@ CREATE TABLE auth.users (
 CREATE TABLE auth.domain_access (
     id          SERIAL PRIMARY KEY,
     user_id     INTEGER REFERENCES auth.users(id),
-    domain      VARCHAR(50) NOT NULL,  -- 'german', 'portuguese', 'curator'
+    domain      VARCHAR(50) NOT NULL,
     granted_at  TIMESTAMP DEFAULT NOW(),
     granted_by  INTEGER REFERENCES auth.users(id),
     UNIQUE(user_id, domain)
 );
 
-CREATE TABLE auth.access_requests (
-    id              SERIAL PRIMARY KEY,
-    name            VARCHAR(255) NOT NULL,
-    email           VARCHAR(255) NOT NULL,
-    domain          VARCHAR(50) NOT NULL,
-    reason          TEXT,
-    requested_at    TIMESTAMP DEFAULT NOW(),
-    status          VARCHAR(50) DEFAULT 'pending',
-    actioned_at     TIMESTAMP,
-    actioned_by     INTEGER REFERENCES auth.users(id)
-);
-
-CREATE TABLE auth.password_reset_tokens (
+CREATE TABLE auth.login_tokens (
     id          SERIAL PRIMARY KEY,
     user_id     INTEGER REFERENCES auth.users(id),
     token       VARCHAR(255) UNIQUE NOT NULL,
     created_at  TIMESTAMP DEFAULT NOW(),
-    expires_at  TIMESTAMP NOT NULL,
-    used        BOOLEAN DEFAULT FALSE
-);
-
-CREATE TABLE auth.account_creation_tokens (
-    id          SERIAL PRIMARY KEY,
-    email       VARCHAR(255) NOT NULL,
-    domain      VARCHAR(50) NOT NULL,
-    token       VARCHAR(255) UNIQUE NOT NULL,
-    created_at  TIMESTAMP DEFAULT NOW(),
-    expires_at  TIMESTAMP NOT NULL,
+    expires_at  TIMESTAMP NOT NULL,        -- 48h
     used        BOOLEAN DEFAULT FALSE
 );
 ```
+
+Three tables. No audit log table, no password reset tokens, no
+account creation tokens — these can be added when real usage
+reveals they're needed.
 
 ---
 
 ## Password handling
 
-Use `bcrypt` for password hashing. Never store plaintext.
-
 ```python
 from flask_bcrypt import Bcrypt
 bcrypt = Bcrypt(app)
 
-# Hash on creation
+# Set on first login via token link
 password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
-
-# Verify on login
 bcrypt.check_password_hash(user.password_hash, password)
 ```
 
-Add `flask-bcrypt` to portal requirements.txt.
+User sets their own password after first login. No temporary
+passwords sent via email (security antipattern).
 
 ---
 
 ## Session management
 
-Use Flask-Login. Session stored server-side (existing session
-config). Add `login_required` decorator to all protected routes.
+Flask-Login. Standard session cookie: HttpOnly, Secure, SameSite=Lax.
 
 ```python
 from flask_login import LoginManager, login_required, current_user
-
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
-
-@login_manager.user_loader
-def load_user(user_id):
-    return auth.users.get(user_id)
 ```
 
-Domain access check decorator:
-
+Domain access decorator:
 ```python
 def requires_domain(domain):
     def decorator(f):
@@ -175,133 +144,134 @@ def requires_domain(domain):
             return f(*args, **kwargs)
         return decorated
     return decorator
-
-# Usage
-@app.route('/portuguese/leitura')
-@requires_domain('portuguese')
-def leitura():
-    ...
 ```
 
 ---
 
-## Email delivery
+## Email delivery (AWS SES)
 
-Use AWS SES (consistent with existing AWS infrastructure).
+One email type: one-time login link on approval.
 
 ```python
 import boto3
-
 ses = boto3.client('ses', region_name='us-east-1')
 
-def send_account_creation_email(email, name, token):
-    link = f"https://minimoi.ai/create-account/{token}"
+def send_login_link(email, name, token):
+    link = f"https://minimoi.ai/login/{token}"
     ses.send_email(
         Source='noreply@minimoi.ai',
         Destination={'ToAddresses': [email]},
         Message={
             'Subject': {'Data': 'Your mini-moi access is ready'},
             'Body': {
-                'Text': {'Data': f"Hi {name},\n\nYour access has been approved.\n\nCreate your account here (link expires in 48 hours):\n{link}\n\nmini-moi"}
+                'Text': {'Data': (
+                    f"Hi {name},\n\n"
+                    f"Your access has been approved.\n\n"
+                    f"Click here to log in (link expires in 48 hours):\n"
+                    f"{link}\n\n"
+                    f"You'll be able to set your password after logging in.\n\n"
+                    f"mini-moi"
+                )}
             }
         }
     )
 ```
 
-Add SES sending permission to EC2 IAM role.
-Verify `noreply@minimoi.ai` in SES (or use Robert's email as sender).
+**Robert action:** verify minimoi.ai domain in AWS SES before
+Spec 1 deploys.
 
 ---
 
-## Telegram approval flow
+## Telegram approval (extend existing system_bot)
 
-When a request comes in, system_bot sends:
+Extend existing `/approve_[id]` handler in system_bot to:
+1. Create auth.users record
+2. Grant domain access in auth.domain_access
+3. Generate login token (48h expiry)
+4. Send login link email via SES
+5. Update guild.guest_requests status to 'granted'
 
-```
-🔔 Access Request
-Name: Sofia van Stedum
-Email: sofia@example.com
-Domain: Portuguese
-Reason: My dad said I could try it
-
-/approve_42  /reject_42
-```
-
-system_bot handles `/approve_[id]` and `/reject_[id]` commands:
-- approve → creates account_creation_token → sends email
-- reject → updates status → optionally sends rejection email
-
-**Scope note:** This requires adding a command handler to `telegram/system_bot/` (EC2
-container `minimoi-system-bot`). That container must be rebuilt and deployed as part
-of this spec. Include it in the Spec 1 commit sequence.
+This is an extension of the existing handler, not a new one.
 
 ---
 
-## Portal routes (new)
+## Routes (new)
 
 ```
-GET  /login                    Login page
-POST /login                    Authenticate
-GET  /logout                   Clear session
-GET  /request-access           Access request form
-POST /request-access           Submit request
-GET  /create-account/<token>   Account creation page
-POST /create-account/<token>   Set password + create account
-GET  /forgot-password          Forgot password form
-POST /forgot-password          Send reset email
-GET  /reset-password/<token>   Reset password page
-POST /reset-password/<token>   Set new password
+GET/POST  /request-access          Request form (domain as hidden field)
+GET       /login/<token>           One-time login link → sets session
+GET/POST  /login                   Email + password login (returning users)
+GET       /logout                  Clear session
+GET/POST  /profile/password        Set/change password (after first login)
+GET       /guild/users             Admin: user list with domain access
+GET       /guild/access-requests   Admin: pending requests (existing page, add domain column)
 ```
 
 ---
 
-## Robert admin routes (Guild UI)
+## Migration — Robert's existing account
 
-```
-GET  /guild/users              User list with domain access
-GET  /guild/access-requests    Pending requests
-POST /guild/approve/<id>       Approve request (also available via Telegram)
-POST /guild/reject/<id>        Reject request
-```
+Robert keeps Google OAuth. New users use email + token login
+initially, then email + password for return visits.
+
+Robert admin account: role='admin' set directly in database.
+Wife admin account: same, if Robert decides yes.
 
 ---
 
-## Migration — existing Robert account
+## What's deferred (add when real usage shows it's needed)
 
-Robert currently uses Google OAuth. After this build:
-- Robert gets an admin account created directly (no request flow)
-- Google OAuth stays active for Robert only (don't break existing login)
-- New users use email/password only
-- Long-term: Robert can switch to email/password too
+- Full password reset flow (forgot password email)
+- Rate limiting on auth endpoints
+- Audit log table
+- Comprehensive token management
+- Email templates with HTML formatting
+
+For three daughters, none of these are needed on day one.
+
+---
+
+## Test coverage
+
+**Auth flow tests (Tier 2 — added in this commit):**
+- Unauthenticated request to protected route → redirect to login
+- One-time login token: valid → creates session, marks token used
+- One-time login token: expired → rejected
+- One-time login token: already used → rejected
+- User with Portuguese access → 200 on /portuguese/
+- User without Portuguese access → 403 on /portuguese/
+- User without Portuguese access → cannot reach /german/ either
+- Admin user → can reach /guild/users
+- Non-admin user → cannot reach /guild/users
 
 ---
 
 ## Definition of Done
 
-- [ ] auth.* schema created and migrated
-- [ ] Login page (email + password) working
-- [ ] Robert's existing Google OAuth login still works
-- [ ] Request Access form on preview page (per domain)
-- [ ] Robert gets Telegram notification on new request
-- [ ] /approve and /reject commands work in system_bot
-- [ ] Account creation email sent on approval (AWS SES)
-- [ ] Account creation flow working (token link → set password)
-- [ ] Forgot password flow working (email → reset link → new password)
-- [ ] Flask-Login session management working
-- [ ] requires_domain() decorator protecting domain routes
-- [ ] Admin user list in Guild UI showing all users + access
-- [ ] Pending access requests visible in Guild UI
-- [ ] Robert admin account created directly (no request flow)
-- [ ] Test: daughter creates account, logs in, sees Portuguese only
-- [ ] Test: daughter cannot access German domain
-- [ ] Test: Robert can see daughter's access in Guild UI
+- [ ] `domain` column added to guild.guest_requests
+- [ ] auth.* schema (3 tables) created and migrated
+- [ ] Request Access form on preview page (domain as hidden field)
+- [ ] Existing Telegram approval flow extended to create account + send email
+- [ ] One-time login link flow working end to end
+- [ ] Email sends via AWS SES (minimoi.ai domain verified)
+- [ ] User can set password after first login (/profile/password)
+- [ ] Email + password login works for returning users
+- [ ] Robert keeps Google OAuth login
+- [ ] requires_domain() protecting all domain routes
+- [ ] Guild UI: user list shows users + domain access
+- [ ] Guild UI: access requests show domain column
+- [ ] Robert admin account set directly
+- [ ] All Tier 2 auth tests passing in CI
 
 ## Commit message
 
-`Auth: multi-user account system — request/approve flow, email/password
-login, forgot/reset, domain access control, AWS SES email delivery`
+`Auth: multi-user accounts — extend guest_requests with domain,
+one-time login link on approval, Flask-Login, bcrypt, domain
+access control, AWS SES email`
 
 ---
 
 *Spec 1 · Portuguese Domain series · 2026-06-24 · Claude.ai*
+*Simplified from original — leverages existing guest_requests flow*
+*Gates on: Block E Definition of Done complete*
 *Next: Spec 2 — Portuguese domain shell*
