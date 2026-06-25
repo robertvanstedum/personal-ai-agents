@@ -38,8 +38,8 @@ Logged to guild.guest_requests (existing table + domain column)
     ↓
 Robert gets Telegram notification via system_bot (existing flow):
   "🔔 Access Request
-   Name: Sofia van Stedum
-   Email: sofia@example.com
+   Name: Ana Silva
+   Email: ana@example.com
    Domain: Portuguese
    /approve_42  /reject_42"
     ↓
@@ -62,7 +62,11 @@ creation flow. Approve → account exists → email sent → done.
 **Modify existing table (migration):**
 ```sql
 ALTER TABLE guild.guest_requests
-ADD COLUMN domain VARCHAR(50) DEFAULT 'portuguese';
+ADD COLUMN domain VARCHAR(50) DEFAULT 'portuguese',
+ADD CONSTRAINT guest_requests_status_check
+  CHECK (status IN (
+    'pending', 'granted', 'rejected', 'approved_pending_email'
+  ));
 ```
 
 **New tables (auth only):**
@@ -187,9 +191,10 @@ Spec 1 deploys.
 Extend existing `/approve_[id]` handler in system_bot to:
 1. Create auth.users record
 2. Grant domain access in auth.domain_access
-3. Generate login token (48h expiry)
+3. Generate login token (48h expiry, `secrets.token_urlsafe(32)`)
 4. Send login link email via SES
 5. Update guild.guest_requests status to 'granted'
+6. On SES failure: set status to 'approved_pending_email', alert Robert via Telegram
 
 This is an extension of the existing handler, not a new one.
 
@@ -219,6 +224,18 @@ Wife admin account: same, if Robert decides yes.
 
 ---
 
+## Security considerations
+
+- **Token entropy:** All tokens generated with `secrets.token_urlsafe(32)` — cryptographically secure, not predictable
+- **Token expiry:** Login tokens expire in 48 hours, single-use only
+- **Session cookies:** HttpOnly, Secure, SameSite=Lax — set on all sessions
+- **PII scope:** Limited to name + email for initial users — no additional personal data collected
+- **Rate limiting:** Deferred for three-user initial rollout. Add before any public-facing launch. Endpoints to rate-limit: `/login`, `/request-access`, `/login/<token>`
+- **Email delivery failure:** If SES send fails after approval, log the error, leave the request in `approved_pending_email` status, alert Robert via Telegram. Token remains valid — Robert can retry the email send from Guild UI.
+- **requires_domain() coverage:** Decorator must be applied to every route under the Portuguese domain without exception. Claude Code to audit all routes on completion.
+
+---
+
 ## What's deferred (add when real usage shows it's needed)
 
 - Full password reset flow (forgot password email)
@@ -243,6 +260,8 @@ For three daughters, none of these are needed on day one.
 - User without Portuguese access → cannot reach /german/ either
 - Admin user → can reach /guild/users
 - Non-admin user → cannot reach /guild/users
+- Same login token used from two different browsers → second use rejected
+- All Portuguese domain routes protected by requires_domain() → spot-check minimum 3 routes
 
 ---
 
