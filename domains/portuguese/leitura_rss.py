@@ -185,6 +185,8 @@ def run_pipeline() -> int:
                 articles = fetch_web(source, config["max_articles_per_source"])
             else:
                 articles = fetch_feed(source, config["max_articles_per_source"])
+            if not articles:
+                log.warning(f"{source['name']}: 0 articles — check selector or feed")
             new = store_articles(articles, source, config["max_age_days"], conn)
             log.info(f"  → {new} new stored")
             total_new += new
