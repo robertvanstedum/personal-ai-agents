@@ -48,6 +48,19 @@ services:
     ports:
       - "127.0.0.1:8767:8767"
 
+  portuguese:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portuguese:latest
+    container_name: minimoi-portuguese
+    restart: unless-stopped
+    env_file: /opt/minimoi/.env
+    environment:
+      - FLASK_ENV=production
+      - PORT=8770
+    ports:
+      - "127.0.0.1:8770:8770"
+    depends_on:
+      - postgres
+
   portal:
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:latest
     container_name: minimoi-portal
@@ -63,6 +76,7 @@ services:
     depends_on:
       - curator
       - german
+      - portuguese
       - postgres
 
   system-bot:

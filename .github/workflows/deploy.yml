@@ -78,6 +78,7 @@ jobs:
             ["portal"]="docker/Dockerfile.portal"
             ["curator"]="docker/Dockerfile.curator"
             ["mein-deutsch"]="docker/Dockerfile.german"
+            ["portuguese"]="docker/Dockerfile.portuguese"
             ["system-bot"]="docker/Dockerfile.telegram"
             ["cos-bot"]="docker/Dockerfile.cos-bot"
           )
@@ -131,7 +132,8 @@ jobs:
               "sleep 30",
               "curl -sf http://localhost:5001/health || exit 1",
               "curl -sf http://localhost:8766/health || exit 1",
-              "curl -sf http://localhost:8767/health || exit 1"
+              "curl -sf http://localhost:8767/health || exit 1",
+              "curl -sf http://localhost:8770/health || exit 1"
             ]' \
             --output text
 
