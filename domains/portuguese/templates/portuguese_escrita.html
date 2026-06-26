@@ -1,22 +1,270 @@
 {% extends "portuguese_base.html" %}
 {% block title %}Escrita{% endblock %}
 
-{% block page_strip %}
-<div class="tab-hero" style="background-image:url('/static/photos/rio_sunset_01.jpg')">
-  <div class="tab-hero-content">
-    <span class="tab-hero-label">[RIO DE JANEIRO]</span>
-    <h1>Escrita</h1>
-    <p class="tab-description">Diário e exercícios de escrita com correção</p>
+{% block content %}
+<div class="tab-layout-split">
+  <div class="tab-content">
+    <div class="tab-split-header">
+      <div class="tab-hero-label">[ESCRIVANINHA]</div>
+      <h1>Escrita</h1>
+      <p class="tab-description">Escreva em português — diário, contexto e vocabulário.</p>
+    </div>
+
+<div class="mode-toggle">
+  <button class="mode-btn active" data-mode="diario" title="Escrita livre de diário">Diário</button>
+  <button class="mode-btn" data-mode="contexto" title="Escrever em contexto de artigo">Em Contexto</button>
+  <button class="mode-btn" data-mode="vocabulario" title="Registrar vocabulário manualmente">Vocabulário</button>
+</div>
+
+<!-- ── Em Contexto ──────────────────────────────────────────────── -->
+<div class="mode-pane hidden" id="pane-contexto">
+  <div class="kontext-source" id="kontext-source" style="display:none">
+    <span class="kontext-label">Da Leitura:</span>
+    <span id="kontext-title"></span>
+    <p id="kontext-summary"></p>
+  </div>
+  <textarea class="notebook-textarea" id="kontext-input" rows="6"
+    placeholder="Escreva aqui em português — sobre o artigo ou um tema livre…"></textarea>
+  <div class="pane-actions">
+    <div class="pane-actions-left">
+      <button class="btn-voice" id="voice-kontext" title="Entrada de voz">🎤</button>
+    </div>
+    <button class="btn-primary" id="kontext-submit" title="Solicitar correção de gramática">Corrigir</button>
+  </div>
+  <span class="write-status" id="kontext-status"></span>
+  <div class="correction-display" id="kontext-correction" style="display:none">
+    <div class="correction-section">
+      <div class="correction-label">Original</div>
+      <div class="correction-original" id="kontext-original"></div>
+    </div>
+    <div class="correction-section">
+      <div class="correction-label">Corrigido</div>
+      <div class="correction-corrected" id="kontext-corrected"></div>
+    </div>
+    <ul class="correction-notes" id="kontext-notes"></ul>
+    <div class="correction-actions">
+      <button class="btn-primary" id="kontext-save" title="Salvar entrada corrigida">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Vocabulário ───────────────────────────────────────────────── -->
+<div class="mode-pane hidden" id="pane-vocabulario">
+  <div class="mode-explainer">
+    <p>Registre palavras e frases manualmente — de uma conversa, livro ou vídeo.
+    Entradas salvas aparecem em
+    <a href="/palavras" title="Ir para Palavras">Palavras</a>.</p>
+  </div>
+  <div class="woerter-form">
+    <input type="text" id="vocab-portuguese" placeholder="Palavra / frase em português">
+    <input type="text" id="vocab-english" placeholder="Significado em inglês">
+    <input type="text" id="vocab-context" placeholder="Frase de exemplo (opcional)">
+    <button class="btn-primary" id="vocab-save" title="Adicionar às Palavras">Salvar em Palavras</button>
+    <span class="write-status" id="vocab-status"></span>
+  </div>
+</div>
+
+<!-- ── Diário ────────────────────────────────────────────────────── -->
+<div class="mode-pane" id="pane-diario">
+  <div class="tagebuch-prompt-row">
+    <p class="tagebuch-prompt" id="diario-prompt"></p>
+    <button class="btn-ghost" id="diario-next-prompt" title="Outro prompt de escrita">↻ Outro</button>
+  </div>
+  <textarea class="notebook-textarea" id="diario-input" rows="6"
+    placeholder="Escreva aqui…"></textarea>
+  <div class="pane-actions">
+    <div class="pane-actions-left">
+      <button class="btn-voice" id="voice-diario" title="Entrada de voz">🎤</button>
+      <label class="toggle-label">
+        <input type="checkbox" id="diario-corrigir-check">
+        Corrigir ao salvar
+      </label>
+    </div>
+    <button class="btn-primary" id="diario-save" title="Salvar entrada do diário">Salvar</button>
+  </div>
+  <span class="write-status" id="diario-status"></span>
+  <div class="correction-display" id="diario-correction" style="display:none">
+    <div class="correction-section">
+      <div class="correction-label">Original</div>
+      <div class="correction-original" id="diario-original"></div>
+    </div>
+    <div class="correction-section">
+      <div class="correction-label">Corrigido</div>
+      <div class="correction-corrected" id="diario-corrected"></div>
+    </div>
+    <ul class="correction-notes" id="diario-notes"></ul>
+  </div>
+
+  {% if writing_sessions %}
+  <div class="session-history">
+    <h3>Histórico recente</h3>
+    {% for s in writing_sessions %}
+    <div class="session-entry">
+      <span class="session-date">{{ s.timestamp[:10] }}</span>
+      <span class="session-mode-badge">{{ s.mode }}</span>
+      <span class="session-preview">{{ s.text_original[:60] }}…</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+  </div><!-- .tab-content -->
+  <div class="tab-panel-photo">
+    <img src="/static/photos/rio_escrita_01.jpg" alt="Rio de Janeiro"
+         style="object-position: center 50%"
+         onerror="this.style.display='none'">
   </div>
 </div>
 {% endblock %}
 
-{% block content %}
-<div class="stub-section">
-  <span class="stub-badge">em breve · julho 2026</span>
-  <p class="stub-message">
-    Escreva em português e receba correções com explicações —
-    diário, redação livre ou prompts guiados.
-  </p>
-</div>
+{% block scripts %}
+<script>
+document.body.classList.add('parch-mode');
+(function () {
+  'use strict';
+
+  const PROMPTS = [
+    'O que você fez hoje que te deu energia?',
+    'Descreva o seu bairro favorito do Rio.',
+    'O que você gostaria de aprender este mês?',
+    'Escreva sobre uma comida brasileira que você adora.',
+    'Como foi a sua semana? O que foi difícil?',
+    'Descreva uma pessoa interessante que você conheceu.',
+    'O que você está lendo ou assistindo agora?',
+    'Escreva sobre um lugar no Rio que quer visitar.',
+    'Qual é o seu plano para o próximo fim de semana?',
+    'O que você gostaria de falar melhor em português?',
+  ];
+  let promptIdx = Math.floor(Math.random() * PROMPTS.length);
+
+  function loadPrompt() {
+    const el = document.getElementById('diario-prompt');
+    if (el) el.textContent = PROMPTS[promptIdx % PROMPTS.length];
+  }
+
+  document.getElementById('diario-next-prompt').addEventListener('click', () => {
+    promptIdx = (promptIdx + 1) % PROMPTS.length;
+    loadPrompt();
+  });
+
+  loadPrompt();
+
+  async function postJSON(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+
+  // ── Mode tabs ─────────────────────────────────────────────────
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.mode-pane').forEach(p => p.classList.add('hidden'));
+      const pane = document.getElementById('pane-' + btn.dataset.mode);
+      if (pane) pane.classList.remove('hidden');
+    });
+  });
+
+  // ── Em Contexto ───────────────────────────────────────────────
+  document.getElementById('kontext-submit').addEventListener('click', async () => {
+    const text = document.getElementById('kontext-input').value.trim();
+    if (!text) return;
+    const status = document.getElementById('kontext-status');
+    const btn = document.getElementById('kontext-submit');
+    btn.disabled = true; status.textContent = 'Corrigindo…';
+    try {
+      const data = await postJSON('/api/pt/escrita/correct', { text, mode: 'contexto' });
+      document.getElementById('kontext-original').textContent  = text;
+      document.getElementById('kontext-corrected').textContent = data.corrected || text;
+      const notes = document.getElementById('kontext-notes');
+      notes.innerHTML = '';
+      (data.notes || []).forEach(n => {
+        const li = document.createElement('li'); li.textContent = n;
+        notes.appendChild(li);
+      });
+      document.getElementById('kontext-correction').style.display = 'block';
+      status.textContent = '';
+    } catch { status.textContent = 'Erro ao corrigir.'; }
+    btn.disabled = false;
+  });
+
+  document.getElementById('kontext-save').addEventListener('click', async () => {
+    const text = document.getElementById('kontext-input').value.trim();
+    if (!text) return;
+    await postJSON('/api/pt/escrita/save', { text, mode: 'contexto' });
+    document.getElementById('kontext-status').textContent = '✓ Salvo';
+    setTimeout(() => { document.getElementById('kontext-status').textContent = ''; }, 3000);
+  });
+
+  // ── Diário ────────────────────────────────────────────────────
+  document.getElementById('diario-save').addEventListener('click', async () => {
+    const text = document.getElementById('diario-input').value.trim();
+    if (!text) return;
+    const doCorrect = document.getElementById('diario-corrigir-check').checked;
+    const status = document.getElementById('diario-status');
+    const btn = document.getElementById('diario-save');
+    btn.disabled = true; status.textContent = doCorrect ? 'Corrigindo e salvando…' : 'Salvando…';
+    try {
+      const data = await postJSON('/api/pt/escrita/save', { text, mode: 'diario', correct: doCorrect });
+      if (doCorrect && data.corrected) {
+        document.getElementById('diario-original').textContent  = text;
+        document.getElementById('diario-corrected').textContent = data.corrected;
+        const notes = document.getElementById('diario-notes');
+        notes.innerHTML = '';
+        (data.notes || []).forEach(n => {
+          const li = document.createElement('li'); li.textContent = n;
+          notes.appendChild(li);
+        });
+        document.getElementById('diario-correction').style.display = 'block';
+      }
+      status.textContent = '✓ Salvo';
+      setTimeout(() => { status.textContent = ''; }, 3000);
+    } catch { status.textContent = 'Erro ao salvar.'; }
+    btn.disabled = false;
+  });
+
+  // ── Vocabulário ───────────────────────────────────────────────
+  document.getElementById('vocab-save').addEventListener('click', async () => {
+    const pt  = document.getElementById('vocab-portuguese').value.trim();
+    const en  = document.getElementById('vocab-english').value.trim();
+    const ctx = document.getElementById('vocab-context').value.trim();
+    if (!pt || !en) { document.getElementById('vocab-status').textContent = 'Preencha português e inglês.'; return; }
+    const status = document.getElementById('vocab-status');
+    try {
+      await postJSON('/api/pt/save-phrase', { portuguese: pt, english: en, context_sentence: ctx });
+      status.textContent = '✓ Salvo em Palavras';
+      document.getElementById('vocab-portuguese').value = '';
+      document.getElementById('vocab-english').value = '';
+      document.getElementById('vocab-context').value = '';
+      setTimeout(() => { status.textContent = ''; }, 3000);
+    } catch { status.textContent = 'Erro ao salvar.'; }
+  });
+
+  // ── Voice helpers ─────────────────────────────────────────────
+  function addVoice(btnId, textareaId, lang) {
+    const btn = document.getElementById(btnId);
+    const ta  = document.getElementById(textareaId);
+    if (!btn || !ta) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { btn.style.display = 'none'; return; }
+    let rec = null;
+    btn.addEventListener('click', () => {
+      if (rec) { rec.stop(); rec = null; btn.textContent = '🎤'; return; }
+      rec = new SR(); rec.lang = lang; rec.interimResults = false;
+      rec.onresult = e => { ta.value += (ta.value ? ' ' : '') + e.results[0][0].transcript; };
+      rec.onend = () => { rec = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
+      rec.onerror = () => { rec = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
+      rec.onstart = () => { btn.textContent = '⏹'; btn.classList.add('listening'); };
+      rec.start();
+    });
+  }
+  addVoice('voice-kontext', 'kontext-input', 'pt-BR');
+  addVoice('voice-diario', 'diario-input', 'pt-BR');
+})();
+</script>
 {% endblock %}

@@ -1,22 +1,97 @@
 {% extends "portuguese_base.html" %}
 {% block title %}Arquivo{% endblock %}
 
-{% block page_strip %}
-<div class="tab-hero" style="background-image:url('/static/photos/rio_vista_01.jpg')">
-  <div class="tab-hero-content">
-    <span class="tab-hero-label">[RIO DE JANEIRO]</span>
-    <h1>Arquivo</h1>
-    <p class="tab-description">Histórico de sessões e progresso</p>
+{% block content %}
+<div class="tab-layout-split">
+  <div class="tab-content">
+
+    <div class="archiv-header">
+      <h2 class="archiv-title">Arquivo</h2>
+      <p class="archiv-description">Histórico de conversas, escrita e leituras.</p>
+    </div>
+
+    <div class="archiv-tabs">
+      <button class="archiv-tab active" data-section="conversas">Conversas</button>
+      <button class="archiv-tab" data-section="escrita">Escrita</button>
+      <button class="archiv-tab" data-section="leitura">Leitura</button>
+    </div>
+
+    <!-- Conversas section -->
+    <div class="archiv-section" id="section-conversas">
+      <div class="archiv-section-label">Conversas</div>
+      {% if conversas_sessions %}
+        {% for s in conversas_sessions %}
+        <div class="archiv-row">
+          <span class="archiv-date">{{ s.date }}</span>
+          <span class="archiv-persona">{{ s.persona }}</span>
+          <span class="archiv-scene">{{ s.scenario }}</span>
+          <span class="archiv-source archiv-source-{{ s.source }}">{{ s.source }}</span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="archiv-empty">Nenhuma conversa ainda. Inicie uma sessão em <a href="/conversas">Conversas</a>.</p>
+      {% endif %}
+    </div>
+
+    <!-- Escrita section -->
+    <div class="archiv-section hidden" id="section-escrita">
+      <div class="archiv-section-label">Escrita</div>
+      {% if writing_sessions %}
+        {% for s in writing_sessions %}
+        <div class="archiv-row">
+          <span class="archiv-date">{{ s.timestamp[:10] }}</span>
+          <span class="archiv-mode-badge">{{ s.mode }}</span>
+          <span class="archiv-preview">{{ s.text_original[:60] }}…</span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="archiv-empty">Nenhum texto ainda. Escreva algo em <a href="/escrita">Escrita</a>.</p>
+      {% endif %}
+    </div>
+
+    <!-- Leitura section -->
+    <div class="archiv-section hidden" id="section-leitura">
+      <div class="archiv-section-label">Leitura — Notas</div>
+      {% if leitura_notes %}
+        {% for n in leitura_notes %}
+        <div class="archiv-row archiv-row-notizen">
+          <div class="archiv-notizen-meta">
+            <span class="archiv-date">{{ n.date }}</span>
+            <span class="archiv-notizen-title">{{ n.article_title }}</span>
+          </div>
+          <div class="archiv-notizen-original">{{ n.original }}</div>
+          {% if n.corrected and n.corrected != n.original %}
+          <div class="archiv-notizen-corrected">→ {{ n.corrected }}</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="archiv-empty">Nenhuma nota ainda. Escreva notas em <a href="/leitura">Leitura</a>.</p>
+      {% endif %}
+    </div>
+
+  </div>
+  <div class="tab-panel-photo">
+    <img src="/static/photos/rio_arquivo_01.jpg" alt="Rio de Janeiro"
+         style="object-position: center 50%"
+         onerror="this.style.display='none'">
   </div>
 </div>
 {% endblock %}
 
-{% block content %}
-<div class="stub-section">
-  <span class="stub-badge">em breve · julho 2026</span>
-  <p class="stub-message">
-    Histórico de conversas, textos escritos e artigos lidos —
-    com análise de progresso ao longo do tempo.
-  </p>
-</div>
+{% block scripts %}
+<script>
+document.body.classList.add('parch-mode');
+(function () {
+  document.querySelectorAll('.archiv-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.archiv-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      document.querySelectorAll('.archiv-section').forEach(s => s.classList.add('hidden'));
+      const target = document.getElementById('section-' + tab.dataset.section);
+      if (target) target.classList.remove('hidden');
+    });
+  });
+})();
+</script>
 {% endblock %}

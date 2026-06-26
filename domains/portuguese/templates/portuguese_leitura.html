@@ -1,25 +1,626 @@
 {% extends "portuguese_base.html" %}
 {% block title %}Leitura{% endblock %}
 
-{% block page_strip %}
-<div class="hero-wrap">
+{% block content %}
+
+<!-- ── Browse state ───────────────────────────────────────────── -->
+<div id="browse-state">
   <img class="hero-img" src="/static/photos/rio_beach_01.jpg"
+       alt="Rio de Janeiro"
        style="object-position: 50% 40%"
        onerror="this.style.display='none'">
-  <div class="hero-overlay"></div>
+  <div class="browse-hero-content">
+    <h1>Leitura</h1>
+    <span class="subtitle">Notícias do Rio — cotidiano, cultura, política.</span>
+  </div>
+</div>
+
+<!-- ── Parchment content area ─────────────────────────────────── -->
+<div id="lesen-content-area" class="no-selection">
+
+  <div class="day-toggle" id="day-toggle" style="display:none">
+    <button class="day-btn active" data-day="hoje">Hoje</button>
+    <button class="day-btn" data-day="ontem">Ontem</button>
+  </div>
+
+  <div id="lesen-stale-notice" class="lesen-stale-notice" style="display:none"></div>
+
+  <!-- Category cards -->
+  <div class="lesen-cat-row">
+
+    <div class="lesen-cat-card" data-category="cotidiano"
+         style="background-image:url('/static/photos/rio_cotidiano_01.jpg');
+                background-color:#b5a898;background-position:center 50%;">
+      <div class="cat-card-overlay"></div>
+      <div class="cat-card-content">
+        <span class="cat-emoji">☕</span>
+        <span class="cat-name">Cotidiano</span>
+        <span class="cat-sub">Dia a dia · Esporte · Entretenimento</span>
+      </div>
+    </div>
+
+    <div class="lesen-cat-card" data-category="cultura"
+         style="background-image:url('/static/photos/rio_cultura_01.jpg');
+                background-color:#9aaab5;background-position:center 40%;">
+      <div class="cat-card-overlay"></div>
+      <div class="cat-card-content">
+        <span class="cat-emoji">🎭</span>
+        <span class="cat-name">Cultura</span>
+        <span class="cat-sub">Música · Arte · Cinema</span>
+      </div>
+    </div>
+
+    <div class="lesen-cat-card" data-category="noticias"
+         style="background-image:url('/static/photos/rio_noticias_01.jpg');
+                background-color:#a5a5a5;background-position:center 30%;">
+      <div class="cat-card-overlay"></div>
+      <div class="cat-card-content">
+        <span class="cat-emoji">📰</span>
+        <span class="cat-name">Notícias</span>
+        <span class="cat-sub">Brasil · Economia · Mundo</span>
+      </div>
+    </div>
+
+    <div class="lesen-cat-card" data-category="rio"
+         style="background-image:url('/static/photos/rio_cidade_01.jpg');
+                background-color:#8aab9a;background-position:center 50%;">
+      <div class="cat-card-overlay"></div>
+      <div class="cat-card-content">
+        <span class="cat-emoji">🌊</span>
+        <span class="cat-name">Rio</span>
+        <span class="cat-sub">Cidade · Bairros · Praias</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="lesen-article-list"></div>
+
+  <div class="strip-empty" id="lesen-empty-state" style="display:none">
+    <span class="strip-empty-text">Nenhum artigo carregado.</span>
+    <button class="strip-action-btn" id="btn-artikel-laden"
+            title="Atualizar feed de artigos">Artigos ↻</button>
+  </div>
+
+</div>
+
+<!-- ── Reading state ──────────────────────────────────────────── -->
+<div id="reading-state" class="lesen-state-hidden">
+  <div class="wien-banner">
+    <span class="wien-banner-label">[IPANEMA]</span>
+  </div>
+  <div class="article-bar">
+    <button class="article-bar-btn" id="btn-back-liste" title="Voltar à lista">← Lista</button>
+    <div class="article-bar-center">
+      <button class="article-bar-btn" id="btn-art-prev" title="Artigo anterior">‹</button>
+      <span class="article-bar-counter" id="art-counter">1 / 1</span>
+      <button class="article-bar-btn" id="btn-art-next" title="Próximo artigo">›</button>
+    </div>
+  </div>
+  <div class="reading-body">
+    <div class="reading-article-col">
+      <div class="reading-article-scroll">
+        <h2 class="reading-headline" id="reading-headline"></h2>
+        <div class="reading-byline-row">
+          <span class="reading-byline" id="reading-byline"></span>
+          <a class="reading-art-open" id="btn-art-open" href="#"
+             target="_blank" rel="noopener">↗ Abrir artigo</a>
+        </div>
+        <div class="reading-text selectable-text" id="reading-text"></div>
+        <div class="reading-notizen" id="reading-notizen">
+          <div class="sidebar-panel-title">Notas</div>
+          <div class="input-with-voice">
+            <textarea class="notizen-input" id="notizen-original" rows="4"
+              placeholder="Escrever uma nota…"></textarea>
+            <button class="btn-voice" id="voice-notizen"
+                    title="Entrada de voz">🎤</button>
+          </div>
+          <div class="notizen-actions">
+            <button class="notizen-btn" id="btn-notizen-correct"
+                    title="Solicitar correção de gramática">Corrigir</button>
+            <button class="notizen-btn notizen-btn-save" id="btn-notizen-save"
+                    title="Salvar nota">Salvar</button>
+            <span class="notizen-status" id="notizen-status"></span>
+          </div>
+          <div class="notizen-correction" id="notizen-correction" style="display:none">
+            <div class="notizen-correction-label" id="notizen-corrected-label">Correção:</div>
+            <div class="notizen-corrected-row">
+              <div class="notizen-correction-text" id="notizen-correction-text"></div>
+              <button class="notizen-accept-btn" id="btn-notizen-accept" title="Copiar correção">← Aceitar</button>
+            </div>
+            <div class="notizen-translation-row" id="notizen-translation-row" style="display:none">
+              <div class="notizen-correction-label notizen-translation-label" id="notizen-translation-label">Em inglês:</div>
+              <div class="notizen-correction-text notizen-translation-text" id="notizen-translation-text"></div>
+            </div>
+            <ul class="notizen-notes-list" id="notizen-notes-list"></ul>
+          </div>
+        </div>
+      </div>
+      <div class="reading-footer">
+        <button class="reading-footer-btn" id="btn-mehr"
+                title="Expandir texto completo">＋ Mais</button>
+        <button class="reading-footer-btn" id="btn-weniger"
+                title="Recolher texto">－ Menos</button>
+        <button class="reading-footer-btn" id="btn-merken"
+                title="Salvar artigo">🔖 Salvar</button>
+        <button class="reading-footer-btn" id="btn-vorlesen"
+                title="Ler artigo em voz alta">🔊 Ouvir</button>
+      </div>
+    </div>
+    <aside class="reading-sidebar">
+      <div class="sidebar-panel sidebar-panel-woerter">
+        <div class="sidebar-panel-title">Palavras</div>
+        <ul class="woerter-list" id="woerter-list">
+          <li class="woerter-empty-hint">Marque palavras para salvar.</li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- ── Word capture popover ───────────────────────────────────── -->
+<div class="word-popover" id="word-popover" style="display:none">
+  <div class="popover-phrase" id="popover-phrase"></div>
+  <div class="popover-translation" id="popover-translation">Tradução…</div>
+  <div class="popover-timing" id="popover-timing"></div>
+  <div class="popover-actions">
+    <button class="btn-save-phrase" id="btn-save-phrase"
+            title="Salvar palavra em Palavras">＋ Em Palavras</button>
+    <button class="btn-close-popover" id="btn-close-popover" title="Fechar">✕</button>
+  </div>
 </div>
 {% endblock %}
 
-{% block content %}
-<div class="tab-hero-content" style="padding-top:0;">
-  <span class="tab-hero-label">[RIO DE JANEIRO]</span>
-  <h1>Leitura</h1>
-</div>
-<div class="stub-section">
-  <span class="stub-badge">em breve · julho 2026</span>
-  <p class="stub-message">
-    Artigos em português selecionados para o seu nível —
-    com tradução, notas e revisão de escrita integradas.
-  </p>
-</div>
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+
+  let categoryArticles = [];
+  let filteredArticles = [];
+  let currentIdx      = 0;
+  let currentCategory = null;
+  let currentDay      = 'hoje';
+  let heuteDate       = null;
+  let gesternDate     = null;
+  let textTruncated   = true;
+  let currentTranslation = '';
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  async function postJSON(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+
+  function enterBrowse() {
+    document.body.classList.remove('reading-mode', 'parch-mode');
+    document.body.classList.add('browse-mode');
+    document.getElementById('browse-state').classList.remove('lesen-state-hidden');
+    document.getElementById('lesen-content-area').classList.remove('lesen-state-hidden');
+    document.getElementById('reading-state').classList.add('lesen-state-hidden');
+  }
+
+  function enterReading(articleId) {
+    const idx = filteredArticles.findIndex(a => a.id === articleId);
+    if (idx === -1) return;
+    currentIdx = idx;
+    document.body.classList.remove('browse-mode', 'parch-mode');
+    document.body.classList.add('reading-mode');
+    document.getElementById('browse-state').classList.add('lesen-state-hidden');
+    document.getElementById('lesen-content-area').classList.add('lesen-state-hidden');
+    document.getElementById('reading-state').classList.remove('lesen-state-hidden');
+    populateArticle(currentIdx);
+    history.pushState({ lesenMode: 'reading', articleId }, '');
+  }
+
+  window.addEventListener('popstate', () => {
+    if (document.body.classList.contains('reading-mode')) enterBrowse();
+  });
+
+  async function selectCategory(cat) {
+    currentCategory = cat;
+    document.getElementById('lesen-content-area').classList.remove('no-selection');
+    document.querySelectorAll('.lesen-cat-card').forEach(b => {
+      b.classList.toggle('active', b.dataset.category === cat);
+    });
+    const list = document.getElementById('lesen-article-list');
+    list.innerHTML = '<div class="lesen-loading">Carregando…</div>';
+    document.getElementById('lesen-empty-state').style.display = 'none';
+    try {
+      const res = await fetch(`/api/pt/leitura-category?category=${encodeURIComponent(cat)}`);
+      const data = await res.json();
+      categoryArticles = data.articles || [];
+    } catch {
+      categoryArticles = [];
+    }
+    const allDates = [...new Set(categoryArticles.map(a => a.date_fetched))].sort().reverse();
+    heuteDate   = allDates[0] || null;
+    gesternDate = allDates[1] || null;
+    const dayToggle = document.getElementById('day-toggle');
+    dayToggle.style.display = gesternDate ? '' : 'none';
+    applyDayFilter(currentDay);
+    const staleNotice = document.getElementById('lesen-stale-notice');
+    if (staleNotice && heuteDate) {
+      const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+      if (heuteDate < yesterday) {
+        const days = Math.round((Date.now() - new Date(heuteDate)) / 864e5);
+        staleNotice.textContent = `Última atualização há ${days} dia${days === 1 ? '' : 's'} — toque em ↻ para atualizar`;
+        staleNotice.style.display = '';
+      } else {
+        staleNotice.style.display = 'none';
+      }
+    } else if (staleNotice) {
+      staleNotice.style.display = 'none';
+    }
+  }
+
+  function applyDayFilter(day) {
+    currentDay = day;
+    document.querySelectorAll('.day-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.day === day);
+    });
+    const filterDate = day === 'hoje' ? heuteDate : gesternDate;
+    filteredArticles = filterDate
+      ? categoryArticles.filter(a => a.date_fetched === filterDate)
+      : categoryArticles;
+    renderArticles(filteredArticles);
+  }
+
+  function renderArticles(list) {
+    const container  = document.getElementById('lesen-article-list');
+    const emptyState = document.getElementById('lesen-empty-state');
+    container.innerHTML = '';
+    if (list.length === 0) { emptyState.style.display = ''; return; }
+    emptyState.style.display = 'none';
+    list.forEach(art => {
+      const row = document.createElement('div');
+      row.className = 'lesen-article-row';
+      row.dataset.id = art.id;
+      row.innerHTML =
+        `<span class="lesen-source-tag">${escapeHtml(art.source)}</span>` +
+        `<span class="lesen-dot">·</span>` +
+        `<span class="lesen-headline">${escapeHtml(art.title)}</span>`;
+      row.addEventListener('click', () => enterReading(art.id));
+      let _hoverTimer = null;
+      row.addEventListener('mouseenter', () => {
+        _hoverTimer = setTimeout(() => {
+          currentPhrase = art.title; currentTranslation = '';
+          popPhrase.textContent = art.title;
+          popTrans.textContent = 'Tradução…'; popTiming.textContent = '';
+          btnSave.disabled = true; btnSave.textContent = '＋ Em Palavras';
+          showPopover(row.getBoundingClientRect());
+          fetchTranslation(art.title);
+        }, 1500);
+      });
+      row.addEventListener('mouseleave', () => clearTimeout(_hoverTimer));
+      container.appendChild(row);
+    });
+  }
+
+  function populateArticle(idx) {
+    const art = filteredArticles[idx];
+    if (!art) return;
+    document.getElementById('reading-headline').textContent = art.title || '';
+    document.getElementById('reading-byline').textContent =
+      [art.source, art.date_fetched].filter(Boolean).join(' · ');
+    document.getElementById('reading-text').textContent = art.summary || '';
+    document.getElementById('art-counter').textContent = `${idx + 1} / ${filteredArticles.length}`;
+    const openLink = document.getElementById('btn-art-open');
+    openLink.href = art.url || '#';
+    textTruncated = true; applyTruncation();
+    const btnM = document.getElementById('btn-merken');
+    btnM.textContent = '🔖 Salvar'; btnM.disabled = false;
+    document.getElementById('woerter-list').innerHTML =
+      '<li class="woerter-empty-hint">Marque palavras para salvar.</li>';
+  }
+
+  function applyTruncation() {
+    document.getElementById('reading-text').classList.toggle('text-truncated', textTruncated);
+  }
+
+  document.querySelectorAll('.lesen-cat-card').forEach(btn => {
+    btn.addEventListener('click', () => selectCategory(btn.dataset.category));
+  });
+  document.querySelectorAll('.day-btn').forEach(btn => {
+    btn.addEventListener('click', () => applyDayFilter(btn.dataset.day));
+  });
+
+  document.getElementById('btn-back-liste').addEventListener('click', enterBrowse);
+  document.getElementById('btn-art-prev').addEventListener('click', () => {
+    if (currentIdx > 0) enterReading(filteredArticles[currentIdx - 1].id);
+  });
+  document.getElementById('btn-art-next').addEventListener('click', () => {
+    if (currentIdx < filteredArticles.length - 1) enterReading(filteredArticles[currentIdx + 1].id);
+  });
+  document.getElementById('btn-mehr').addEventListener('click', () => {
+    textTruncated = false; applyTruncation();
+  });
+  document.getElementById('btn-weniger').addEventListener('click', () => {
+    textTruncated = true; applyTruncation();
+    const scroll = document.querySelector('.reading-article-scroll');
+    if (scroll) scroll.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+  document.getElementById('btn-merken').addEventListener('click', async function () {
+    const art = filteredArticles[currentIdx];
+    if (!art) return;
+    await postJSON('/api/pt/leitura-action', { article_id: art.id, action: 'pin' });
+    this.textContent = '🔖 Salvo'; this.disabled = true;
+  });
+
+  const btnLaden = document.getElementById('btn-artikel-laden');
+  if (btnLaden) {
+    btnLaden.addEventListener('click', async () => {
+      btnLaden.textContent = 'Carregando…'; btnLaden.disabled = true;
+      try {
+        await postJSON('/api/pt/leitura-refresh', {});
+        if (currentCategory) selectCategory(currentCategory);
+        else { btnLaden.textContent = 'Artigos ↻'; btnLaden.disabled = false; }
+      } catch {
+        btnLaden.textContent = 'Erro — tentar novamente'; btnLaden.disabled = false;
+      }
+    });
+  }
+
+  // ── Word capture ───────────────────────────────────────────────
+  const popover   = document.getElementById('word-popover');
+  const popPhrase = document.getElementById('popover-phrase');
+  const popTrans  = document.getElementById('popover-translation');
+  const popTiming = document.getElementById('popover-timing');
+  const btnSave   = document.getElementById('btn-save-phrase');
+  const btnClose  = document.getElementById('btn-close-popover');
+  const translationCache = new Map();
+  let currentPhrase = '';
+
+  const readingTextEl = document.getElementById('reading-text');
+  let selectionTimer = null;
+  document.addEventListener('mouseup', () => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !readingTextEl) return;
+    try {
+      const range = sel.getRangeAt(0);
+      if (!readingTextEl.contains(range.commonAncestorContainer)) return;
+    } catch { return; }
+    clearTimeout(selectionTimer);
+    selectionTimer = setTimeout(handleSelection, 300);
+  });
+  document.addEventListener('mousedown', e => {
+    if (!popover.contains(e.target)) hidePopover();
+  });
+  btnClose.addEventListener('click', hidePopover);
+
+  let _popDrag = null;
+  popover.addEventListener('mousedown', e => {
+    if (e.target.closest('button, a')) return;
+    e.preventDefault();
+    _popDrag = {
+      startX: e.clientX, startY: e.clientY,
+      origTop: parseInt(popover.style.top, 10) || 0,
+      origLeft: parseInt(popover.style.left, 10) || 0,
+    };
+    popover.style.cursor = 'grabbing';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!_popDrag) return;
+    popover.style.top  = Math.max(4, _popDrag.origTop  + (e.clientY - _popDrag.startY)) + 'px';
+    popover.style.left = Math.max(4, _popDrag.origLeft + (e.clientX - _popDrag.startX)) + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (_popDrag) { _popDrag = null; popover.style.cursor = ''; }
+  });
+
+  function handleSelection() {
+    const sel = window.getSelection();
+    const phrase = sel ? sel.toString().trim() : '';
+    if (!phrase || phrase.length < 2 || phrase.length > 300) return;
+    currentPhrase = phrase; currentTranslation = '';
+    const rect = sel.getRangeAt(0).getBoundingClientRect();
+    popPhrase.textContent = phrase;
+    popTrans.textContent = 'Tradução…'; popTiming.textContent = '';
+    btnSave.disabled = true; btnSave.textContent = '＋ Em Palavras';
+    showPopover(rect);
+    fetchTranslation(phrase);
+  }
+
+  let _translateAbort = null;
+  async function fetchTranslation(phrase) {
+    if (_translateAbort) { _translateAbort.abort(); _translateAbort = null; }
+    const key = phrase.toLowerCase().trim();
+    if (translationCache.has(key)) {
+      currentTranslation = translationCache.get(key);
+      popTrans.textContent = currentTranslation || '(sem tradução)';
+      popTiming.textContent = 'cache';
+      btnSave.disabled = !currentTranslation;
+      return;
+    }
+    const controller = new AbortController();
+    _translateAbort = controller;
+    const t0 = performance.now();
+    try {
+      const res = await fetch('/api/pt/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phrase }),
+        signal: controller.signal,
+      });
+      const data = await res.json();
+      _translateAbort = null;
+      currentTranslation = data.translation || '';
+      translationCache.set(key, currentTranslation);
+      popTrans.textContent = currentTranslation || '(sem tradução)';
+      btnSave.disabled = !currentTranslation;
+      const ms = Math.round(performance.now() - t0);
+      popTiming.textContent = `${ms}ms`;
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      popTrans.textContent = '(erro)';
+    }
+  }
+
+  function showPopover(rect) {
+    popover.style.display = 'block';
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top  = spaceBelow >= 120 ? rect.bottom + 8 : Math.max(8, rect.top - 8 - 120);
+    const left = Math.min(Math.max(8, rect.left), window.innerWidth - 290);
+    popover.style.top = top + 'px'; popover.style.left = left + 'px';
+  }
+  function hidePopover() {
+    popover.style.display = 'none';
+    currentPhrase = ''; currentTranslation = '';
+  }
+
+  btnSave.addEventListener('click', async () => {
+    if (!currentPhrase || !currentTranslation) return;
+    const art = filteredArticles[currentIdx];
+    const contextEl = document.getElementById('reading-text');
+    const contextSentence = contextEl ? contextEl.textContent.slice(0, 200) : '';
+    btnSave.textContent = 'Salvando…'; btnSave.disabled = true;
+    try {
+      await postJSON('/api/pt/save-phrase', {
+        portuguese: currentPhrase, english: currentTranslation,
+        context_sentence: contextSentence,
+        article_title: art ? art.title : '',
+      });
+      const list = document.getElementById('woerter-list');
+      const empty = list.querySelector('.woerter-empty-hint');
+      if (empty) empty.remove();
+      const li = document.createElement('li');
+      li.className = 'woerter-item';
+      li.textContent = `${currentPhrase} — ${currentTranslation}`;
+      list.prepend(li);
+      btnSave.textContent = '✓ Salvo';
+      setTimeout(hidePopover, 700);
+    } catch {
+      btnSave.textContent = 'Erro'; btnSave.disabled = false;
+    }
+  });
+
+  // ── Notas flow ──────────────────────────────────────────────────
+  const btnNotizenCorrect = document.getElementById('btn-notizen-correct');
+  const btnNotizenSave    = document.getElementById('btn-notizen-save');
+  const btnNotizenAccept  = document.getElementById('btn-notizen-accept');
+  const notizenStatus     = document.getElementById('notizen-status');
+  const notizenCorrection = document.getElementById('notizen-correction');
+  const notizenCorrText   = document.getElementById('notizen-correction-text');
+  const notizenTransRow   = document.getElementById('notizen-translation-row');
+  const notizenTransText  = document.getElementById('notizen-translation-text');
+  const notizenTransLabel = document.getElementById('notizen-translation-label');
+  const notizenNotesList  = document.getElementById('notizen-notes-list');
+  const notizenTextarea   = document.getElementById('notizen-original');
+  let notizenCorrected = '', notizenTranslation = '', notizenOrigSnapshot = '';
+
+  if (btnNotizenCorrect) {
+    btnNotizenCorrect.addEventListener('click', async () => {
+      const text = notizenTextarea ? notizenTextarea.value.trim() : '';
+      if (!text) return;
+      const art = filteredArticles[currentIdx];
+      notizenOrigSnapshot = text;
+      btnNotizenCorrect.disabled = true;
+      notizenStatus.textContent = 'Corrigindo…';
+      try {
+        const data = await postJSON('/api/pt/leitura/correct', {
+          text, article_title: art ? art.title : '',
+          article_summary: art ? (art.summary || '') : '',
+        });
+        notizenCorrected   = data.corrected   || text;
+        notizenTranslation = data.translation || '';
+        document.getElementById('notizen-corrected-label').textContent = 'Correção:';
+        notizenCorrText.textContent = notizenCorrected;
+        if (notizenTranslation) {
+          notizenTransLabel.textContent = 'Em inglês:';
+          notizenTransText.textContent  = notizenTranslation;
+          notizenTransRow.style.display = 'block';
+        } else {
+          notizenTransRow.style.display = 'none';
+        }
+        notizenNotesList.innerHTML = '';
+        (data.notes || []).forEach(n => {
+          const li = document.createElement('li'); li.textContent = n;
+          notizenNotesList.appendChild(li);
+        });
+        notizenCorrection.style.display = 'block';
+        notizenStatus.textContent = '';
+      } catch { notizenStatus.textContent = 'Erro'; }
+      btnNotizenCorrect.disabled = false;
+    });
+  }
+
+  if (btnNotizenAccept) {
+    btnNotizenAccept.addEventListener('click', () => {
+      if (notizenCorrected && notizenTextarea) {
+        notizenTextarea.value = notizenCorrected; notizenTextarea.focus();
+      }
+    });
+  }
+
+  if (btnNotizenSave) {
+    btnNotizenSave.addEventListener('click', async () => {
+      const final = notizenTextarea ? notizenTextarea.value.trim() : '';
+      const art   = filteredArticles[currentIdx];
+      btnNotizenSave.disabled = true; btnNotizenSave.textContent = 'Salvando…';
+      try {
+        await postJSON('/api/pt/note-save', {
+          article_id: art ? art.id : '',
+          article_title: art ? art.title : '',
+          original: notizenOrigSnapshot || final,
+          corrected: notizenCorrected,
+          rewritten: final,
+        });
+        btnNotizenSave.textContent = '✓ Salvo';
+        setTimeout(() => {
+          if (notizenTextarea) notizenTextarea.value = '';
+          notizenCorrection.style.display = 'none';
+          notizenTransRow.style.display = 'none';
+          notizenNotesList.innerHTML = '';
+          notizenCorrected = ''; notizenTranslation = ''; notizenOrigSnapshot = '';
+          btnNotizenSave.textContent = 'Salvar'; btnNotizenSave.disabled = false;
+          notizenStatus.textContent = 'Nota salva — visível em Arquivo → Leitura';
+          notizenStatus.className = 'notizen-status notizen-status--saved';
+          setTimeout(() => { notizenStatus.textContent = ''; notizenStatus.className = 'notizen-status'; }, 5000);
+        }, 1200);
+      } catch { btnNotizenSave.textContent = 'Erro'; btnNotizenSave.disabled = false; }
+    });
+  }
+
+  // ── Voice on Notas ─────────────────────────────────────────────
+  (function () {
+    const btn = document.getElementById('voice-notizen');
+    const textarea = document.getElementById('notizen-original');
+    if (!btn || !textarea) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { btn.style.display = 'none'; return; }
+    let recognition = null;
+    btn.addEventListener('click', () => {
+      if (recognition) { recognition.stop(); recognition = null; btn.textContent = '🎤'; return; }
+      recognition = new SR();
+      recognition.lang = 'pt-BR'; recognition.interimResults = false;
+      recognition.onresult = e => {
+        textarea.value += (textarea.value ? ' ' : '') + e.results[0][0].transcript;
+      };
+      recognition.onend = () => { recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
+      recognition.onerror = () => { recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
+      recognition.onstart = () => { btn.textContent = '⏹'; btn.classList.add('listening'); };
+      recognition.start();
+    });
+  })();
+
+  document.getElementById('btn-vorlesen').addEventListener('click', () => {
+    const text = document.getElementById('reading-text').textContent.trim();
+    if (!text || !window.speechSynthesis) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'pt-BR'; u.rate = 0.9;
+    window.speechSynthesis.speak(u);
+  });
+
+  enterBrowse();
+})();
+</script>
 {% endblock %}

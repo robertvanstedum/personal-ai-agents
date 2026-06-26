@@ -206,19 +206,23 @@ def conversas():
 @app.route("/escrita")
 def escrita():
     return render_template("portuguese_escrita.html", active="escrita",
-                           show_toggle=True)
+                           show_toggle=True, writing_sessions=[])
 
 
 @app.route("/palavras")
 def palavras():
     return render_template("portuguese_palavras.html", active="palavras",
-                           show_toggle=True)
+                           show_toggle=True, entries=[], drill_pool=[])
 
 
 @app.route("/arquivo")
 def arquivo():
+    sessions = _get_sessions(_request_user_id(), limit=10)
     return render_template("portuguese_arquivo.html", active="arquivo",
-                           show_toggle=True)
+                           show_toggle=True,
+                           conversas_sessions=sessions,
+                           writing_sessions=[],
+                           leitura_notes=[])
 
 
 @app.route("/admin")
@@ -230,6 +234,60 @@ def admin():
 @app.route("/health")
 def health():
     return jsonify({"status": "ok", "service": "portuguese"})
+
+
+# ── API: Leitura stubs ───────────────────────────────────────────────────────
+
+@app.route("/api/pt/leitura-category")
+def api_pt_leitura_category():
+    return jsonify({"articles": [], "category": request.args.get("category", "")})
+
+
+@app.route("/api/pt/leitura-action", methods=["POST"])
+def api_pt_leitura_action():
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pt/leitura-refresh", methods=["POST"])
+def api_pt_leitura_refresh():
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pt/translate", methods=["POST"])
+def api_pt_translate():
+    return jsonify({"translation": "", "timing": {}})
+
+
+@app.route("/api/pt/save-phrase", methods=["POST"])
+def api_pt_save_phrase():
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pt/note-save", methods=["POST"])
+def api_pt_note_save():
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pt/leitura/correct", methods=["POST"])
+def api_pt_leitura_correct():
+    body = request.get_json(force=True)
+    return jsonify({"corrected": body.get("text", ""), "translation": "", "notes": []})
+
+
+@app.route("/api/pt/escrita/correct", methods=["POST"])
+def api_pt_escrita_correct():
+    body = request.get_json(force=True)
+    return jsonify({"corrected": body.get("text", ""), "notes": []})
+
+
+@app.route("/api/pt/escrita/save", methods=["POST"])
+def api_pt_escrita_save():
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pt/palavras-status", methods=["POST"])
+def api_pt_palavras_status():
+    return jsonify({"ok": True})
 
 
 # ── API: Transcribe ───────────────────────────────────────────────────────────

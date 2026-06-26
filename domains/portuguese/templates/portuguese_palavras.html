@@ -1,22 +1,244 @@
 {% extends "portuguese_base.html" %}
 {% block title %}Palavras{% endblock %}
 
-{% block page_strip %}
-<div class="tab-hero" style="background-image:url('/static/photos/rio_jardim_01.jpg')">
-  <div class="tab-hero-content">
-    <span class="tab-hero-label">[RIO DE JANEIRO]</span>
-    <h1>Palavras</h1>
-    <p class="tab-description">Vocabulário e frases guardadas das leituras</p>
+{% block content %}
+<div class="tab-layout-split">
+  <div class="tab-content">
+    <div class="tab-split-header">
+      <div class="tab-hero-label">[CADERNO]</div>
+      <h1>Palavras</h1>
+    </div>
+    <p class="tab-description">Vocabulário salvo — da Leitura, das Conversas e da Escrita.</p>
+
+<!-- ── Subnav ────────────────────────────────────────────────────── -->
+<div class="ueben-subnav">
+  <button class="ueben-subnav-btn active" data-section="vocabulario">Vocabulário</button>
+  <button class="ueben-subnav-btn" data-section="treino">
+    Treino{% if drill_pool %} <span class="pool-badge">{{ drill_pool|length }}</span>{% endif %}
+  </button>
+</div>
+
+<!-- ── Vocabulário section ──────────────────────────────────────── -->
+<div class="woerter-section" id="section-vocabulario">
+
+<div class="woerter-filter-bar">
+  <label class="filter-label">
+    <span>Origem</span>
+    <select class="filter-select" id="filter-quelle">
+      <option value="">Todas</option>
+      <option value="leitura">Leitura</option>
+      <option value="conversas">Conversas</option>
+      <option value="manual">Manual</option>
+    </select>
+  </label>
+  <label class="filter-label">
+    <span>Status</span>
+    <select class="filter-select" id="filter-status">
+      <option value="">Todos</option>
+      <option value="library">Biblioteca</option>
+      <option value="practice">Praticando</option>
+      <option value="mastered">Aprendido</option>
+    </select>
+  </label>
+  <span class="filter-count" id="filter-count"></span>
+  <button class="btn-filter-reset" id="btn-reset-filters">Mostrar tudo</button>
+</div>
+
+<div class="woerter-table-wrap">
+  {% if entries %}
+  <table class="woerter-table" id="woerter-table">
+    <thead>
+      <tr>
+        <th>Português</th>
+        <th>Inglês</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="woerter-tbody">
+      {% for entry in entries %}
+      <tr class="woerter-row"
+          data-id="{{ entry.id }}"
+          data-source="{{ entry.source or '' }}"
+          data-status="{{ entry.status or 'library' }}">
+        <td class="w-german">{{ entry.portuguese }}</td>
+        <td class="w-english">{{ entry.english }}</td>
+        <td class="w-expand-col">
+          <button class="btn-expand" title="Ver detalhes">Detalhes</button>
+        </td>
+      </tr>
+      <tr class="woerter-detail" id="detail-{{ entry.id }}" style="display:none">
+        <td colspan="3">
+          <div class="detail-inner">
+            <div class="expand-meta">
+              <span class="expand-meta-item">
+                <span class="expand-meta-label">Origem:</span>{{ entry.source or '—' }}
+              </span>
+              <span class="expand-meta-item">
+                <span class="expand-meta-label">Data:</span>{{ entry.added or '' }}
+              </span>
+              <span class="expand-meta-item">
+                <span class="expand-meta-label">Status:</span>
+                {% if entry.status == 'practice' %}Praticando
+                {% elif entry.status == 'mastered' %}Aprendido
+                {% else %}Biblioteca{% endif %}
+              </span>
+            </div>
+            {% if entry.source_sentence %}
+            <div class="detail-context">"{{ entry.source_sentence }}"</div>
+            {% endif %}
+            <div class="detail-actions">
+              {% if entry.status == 'library' %}
+              <button class="btn-ghost btn-promote" data-id="{{ entry.id }}" data-next="practice">
+                Mover → Treino
+              </button>
+              {% elif entry.status == 'practice' %}
+              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="library">
+                ← Biblioteca
+              </button>
+              <button class="btn-ghost btn-promote" data-id="{{ entry.id }}" data-next="mastered">
+                ✓ Marcar como aprendido
+              </button>
+              {% elif entry.status == 'mastered' %}
+              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="practice">
+                ← Praticar novamente
+              </button>
+              {% endif %}
+            </div>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="empty-filter-state" id="empty-filter-state" style="display:none">
+    Nenhuma palavra nesta categoria.
+    <a href="/leitura">Ir para Leitura →</a> para salvar novas palavras.
+  </div>
+  {% else %}
+  <div class="woerter-empty">
+    <p>Nenhuma palavra salva ainda.</p>
+    <p class="hint">Marque palavras na Leitura para vê-las aqui.</p>
+  </div>
+  {% endif %}
+</div>
+
+</div><!-- #section-vocabulario -->
+
+<!-- ── Treino section ─────────────────────────────────────────────── -->
+<div class="woerter-section" id="section-treino" style="display:none">
+  {% if drill_pool %}
+  <div class="drill-stats">
+    <span id="drill-progress">0 de {{ drill_pool|length }} praticado</span>
+    <button class="btn-ghost btn-sm" id="drill-restart">Reiniciar</button>
+  </div>
+  <div class="drill-card" id="drill-card">
+    <div class="drill-prompt" id="drill-prompt"></div>
+    <div class="drill-input-wrap">
+      <textarea class="practice-input" id="drill-input" placeholder="Sua resposta…" rows="2"></textarea>
+      <button class="btn-primary btn-sm" id="btn-pruefen">Verificar</button>
+    </div>
+    <div class="practice-correction" id="drill-correction" style="display:none">
+      <div class="result-label" id="drill-result-label"></div>
+      <div class="result-value" id="drill-result-value"></div>
+    </div>
+    <button class="btn-ghost btn-sm" id="btn-drill-next" style="margin-top:0.75rem">Próxima →</button>
+  </div>
+  {% else %}
+  <div class="woerter-empty">
+    <p>Nenhuma palavra no treino.</p>
+    <p class="hint">Mova palavras da biblioteca para o treino para começar.</p>
+  </div>
+  {% endif %}
+</div>
+
+  </div><!-- .tab-content -->
+  <div class="tab-panel-photo">
+    <img src="/static/photos/rio_palavras_01.jpg" alt="Rio de Janeiro"
+         style="object-position: center 50%"
+         onerror="this.style.display='none'">
   </div>
 </div>
 {% endblock %}
 
-{% block content %}
-<div class="stub-section">
-  <span class="stub-badge">em breve · julho 2026</span>
-  <p class="stub-message">
-    Palavras e expressões salvas durante a leitura —
-    com contexto, tradução e prática de revisão.
-  </p>
-</div>
+{% block scripts %}
+<script>
+document.body.classList.add('parch-mode');
+(function () {
+  'use strict';
+
+  async function postJSON(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+
+  document.querySelectorAll('.ueben-subnav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.ueben-subnav-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.woerter-section').forEach(s => s.style.display = 'none');
+      const sec = document.getElementById('section-' + btn.dataset.section);
+      if (sec) sec.style.display = '';
+    });
+  });
+
+  const tbody       = document.getElementById('woerter-tbody');
+  const filterCount = document.getElementById('filter-count');
+  const emptyFilter = document.getElementById('empty-filter-state');
+
+  function applyFilters() {
+    const quelle = document.getElementById('filter-quelle').value;
+    const status = document.getElementById('filter-status').value;
+    const rows = tbody ? Array.from(tbody.querySelectorAll('tr.woerter-row')) : [];
+    let visible = 0;
+    rows.forEach(row => {
+      const detailRow = document.getElementById('detail-' + row.dataset.id);
+      const show = (!quelle || row.dataset.source === quelle) &&
+                   (!status || row.dataset.status === status);
+      row.style.display = show ? '' : 'none';
+      if (detailRow) detailRow.style.display = 'none';
+      if (show) visible++;
+    });
+    if (filterCount) filterCount.textContent = rows.length ? `${visible} de ${rows.length}` : '';
+    if (emptyFilter) emptyFilter.style.display = (rows.length && visible === 0) ? '' : 'none';
+  }
+
+  document.getElementById('filter-quelle').addEventListener('change', applyFilters);
+  document.getElementById('filter-status').addEventListener('change', applyFilters);
+  document.getElementById('btn-reset-filters').addEventListener('click', () => {
+    document.getElementById('filter-quelle').value = '';
+    document.getElementById('filter-status').value = '';
+    applyFilters();
+  });
+  applyFilters();
+
+  if (tbody) {
+    tbody.addEventListener('click', e => {
+      const expandBtn = e.target.closest('.btn-expand');
+      if (!expandBtn) return;
+      const row = expandBtn.closest('tr.woerter-row');
+      if (!row) return;
+      const detailRow = document.getElementById('detail-' + row.dataset.id);
+      if (!detailRow) return;
+      const isOpen = detailRow.style.display !== 'none';
+      detailRow.style.display = isOpen ? 'none' : '';
+      expandBtn.textContent = isOpen ? 'Detalhes' : 'Fechar';
+    });
+
+    tbody.addEventListener('click', async e => {
+      const btn = e.target.closest('.btn-promote, .btn-demote');
+      if (!btn) return;
+      try {
+        await postJSON('/api/pt/palavras-status', { id: btn.dataset.id, status: btn.dataset.next });
+        const row = tbody.querySelector(`tr[data-id="${btn.dataset.id}"]`);
+        if (row) row.dataset.status = btn.dataset.next;
+        btn.textContent = '✓'; btn.disabled = true;
+      } catch { btn.textContent = 'Erro'; }
+    });
+  }
+})();
+</script>
 {% endblock %}
