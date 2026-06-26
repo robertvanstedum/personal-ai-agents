@@ -1,22 +1,1330 @@
 {% extends "portuguese_base.html" %}
 {% block title %}Conversas{% endblock %}
 
-{% block page_strip %}
-<div class="tab-hero" style="background-image:url('/static/photos/rio_centro_01.jpg')">
-  <div class="tab-hero-content">
-    <span class="tab-hero-label">[RIO DE JANEIRO]</span>
-    <h1>Conversas</h1>
-    <p class="tab-description">Prática de conversação com personas de IA</p>
+{% block content %}
+<div class="tab-layout-split">
+  <div class="tab-content">
+    <div class="tab-split-header">
+      <div class="tab-hero-label">[RIO DE JANEIRO]</div>
+      <h1>Conversas</h1>
+      <p class="tab-description" id="conversas-subtitle">Escolha uma persona e inicie uma conversa.</p>
+    </div>
+
+    <!-- ── Mode toggle ─────────────────────────────────────────────────────── -->
+    <div class="gesprache-toggle" role="tablist">
+      <button class="gesprache-toggle-btn active" id="btn-tab-personas" role="tab">Com KI-Persona</button>
+    </div>
+
+    <!-- ── KI-Personas pane ────────────────────────────────────────────────── -->
+    <div id="pane-ki-personas">
+
+      <div class="ueben-layout">
+
+        <!-- Left: persona list -->
+        <div class="persona-list" id="persona-list">
+          {% for p in personas %}
+          <div class="persona-list-item" data-idx="{{ loop.index0 }}" data-name="{{ p.name }}"
+               data-slug="{{ p.slug }}">
+            <div class="persona-avatar">{{ p.emoji or p.name[0] }}</div>
+            <div class="persona-info">
+              <div class="persona-name">{{ p.name }}</div>
+              <div class="persona-role">{{ p.role }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- Right: detail + prompt -->
+        <div class="persona-detail" id="persona-detail">
+          <div class="detail-persona-header">
+            <span class="detail-avatar" id="detail-avatar"></span>
+            <div>
+              <div class="detail-name" id="detail-name"></div>
+              <div class="detail-role" id="detail-role"></div>
+            </div>
+          </div>
+          <p class="detail-description" id="detail-description"></p>
+
+          <div class="scene-list" id="scene-list"></div>
+
+          <div class="prompt-delivery" id="prompt-delivery">
+            <details id="prompt-details" class="prompt-details-block" style="display:none">
+              <summary class="prompt-details-summary">Ver prompt</summary>
+              <div class="prompt-text" id="prompt-text" contenteditable="true"></div>
+            </details>
+            <!-- Model selector -->
+            <div class="gesprache-model-row" style="margin-bottom:0.75rem">
+              <label class="gesprache-model-label">Modelo</label>
+              <select id="conversas-model" class="gesprache-model-select">
+                <option value="claude" selected>Claude</option>
+                <option value="grok">Grok</option>
+                <option value="openai">OpenAI</option>
+              </select>
+            </div>
+            <div class="prompt-actions">
+              <button class="btn-session-start" id="start-session-btn"
+                      title="Inicia a sessão de IA diretamente no navegador">
+                ▶ Iniciar sessão
+              </button>
+              <button class="btn-delivery" id="btn-copy"
+                      title="Copiar prompt para a área de transferência">
+                📋 Copiar prompt
+              </button>
+              <button class="btn-delivery" id="btn-download"
+                      title="Salvar prompt como arquivo de texto">
+                💾 Como .txt
+              </button>
+            </div>
+            <div class="prompt-toast" id="prompt-toast" style="display:none"></div>
+          </div>
+
+          <!-- ── KI-Sessão session panel ──────────────────────────────────── -->
+          <div id="session-panel" class="session-panel" style="display:none">
+            <div class="session-status-bar">
+              <span class="session-status-indicator">🟢 Sessão ativa</span>
+              <span class="session-status-meta">
+                · <span id="session-persona-label"></span>
+                · <span id="session-model-label"></span>
+              </span>
+              <button id="session-pause-btn" class="btn-session-pause" title="Pausar conversa">⏸ Pausar</button>
+              <button id="session-mute-btn" class="btn-session-mute" title="Silenciar">🔊</button>
+              <button id="end-session-btn" class="btn-session-end">■ Encerrar</button>
+            </div>
+            <div class="session-listen-status" id="session-listen-status" style="display:none"></div>
+            <div id="session-chat-log" class="session-chat-log"></div>
+            <div class="session-mode-row" id="session-mode-row">
+              <button id="session-tippen-btn" class="btn-session-mode">Digitar</button>
+            </div>
+            <div class="session-input-row" id="session-input-row" style="display:none">
+              <input type="text" id="session-input" class="session-input-field"
+                     placeholder="Digite e pressione Enter…">
+              <button id="session-send-btn" class="btn-session-send">→ Enviar</button>
+              <button id="session-sprechen-btn" class="btn-session-mode btn-session-sprechen">← Falar</button>
+            </div>
+          </div>
+
+          <details class="session-brief-details" id="session-brief-panel" style="display:none">
+            <summary class="session-brief-summary">🎯 Preparação de hoje</summary>
+            <pre class="session-brief-text" id="session-brief-text"></pre>
+          </details>
+
+          <!-- Session cards — auto-saved on Encerrar from KI-Sessão -->
+          <div id="session-cards-list"></div>
+
+          <details class="nach-sitzung-details" id="transcript-details" open>
+            <summary class="session-brief-summary">Colar transcrição ▾</summary>
+            <div class="nach-sitzung-body">
+              <div id="transcript-input-wrap">
+                <!-- Voice recording controls -->
+                <div class="gesprache-voice-row" id="gesprache-voice-row">
+                  <button id="gesprache-record-btn" class="btn-record">● Gravar</button>
+                  <button id="gesprache-stop-btn" class="btn-stop" style="display:none">■ Parar</button>
+                  <span id="gesprache-timer" class="gesprache-timer">00:00</span>
+                  <span id="gesprache-record-status" class="gesprache-record-status"></span>
+                </div>
+                <textarea class="notebook-textarea nach-sitzung-textarea" id="transcript-input" rows="6"
+                  placeholder="Colar transcrição aqui ou encerrar sessão…"
+                  inputmode="text" autocapitalize="off"
+                  style="font-size:16px;min-height:160px"></textarea>
+                <div id="paste-status" class="paste-status"></div>
+                <div class="paste-actions-row">
+                  <button class="btn-ghost btn-sm" id="btn-clipboard">📋 Da área de transferência</button>
+                  <button class="paste-clear-btn" id="btn-paste-clear">Limpar</button>
+                </div>
+                <div class="gesprache-source-row">
+                  <span class="gesprache-source-label">Fonte</span>
+                  <button class="gesprache-source-pill active" data-source="ki_sessao">KI-Sessão</button>
+                  <button class="gesprache-source-pill" data-source="mobile">📱 Celular</button>
+                  <button class="gesprache-source-pill" data-source="desktop">💻 Desktop</button>
+                </div>
+                <div class="gesprache-submit-row">
+                  <button class="btn-primary btn-analysieren-full" id="btn-analisar" title="Analisar a conversa" disabled>Analisar →</button>
+                  <span class="gesprache-status" id="analyse-status"></span>
+                </div>
+                <div class="analysieren-helper" id="analysieren-helper">Cole a transcrição para analisar</div>
+              </div>
+              <div id="transcript-analysiert-row" class="transcript-analysiert-row" style="display:none">
+                <span class="transcript-analysiert-label">✓ analisado</span>
+                <button class="btn-ghost btn-sm" id="btn-transcript-editar">editar</button>
+                <button class="btn-ghost btn-sm" id="btn-nova-sessao">Nova sessão →</button>
+              </div>
+            </div>
+          </details>
+
+          <!-- Feedback — rendered inside panel after analysis -->
+          <div id="gesprache-feedback-wrap" style="display:none">
+            <hr class="gesprache-divider">
+            <div class="gesprache-section-label">Feedback</div>
+            <div class="gesprache-feedback">
+              <div class="feedback-summary" id="feedback-summary"></div>
+              <details class="feedback-block" id="feedback-errors-block" style="display:none" open>
+                <summary class="feedback-block-label">Erros</summary>
+                <ul class="feedback-errors-list" id="feedback-errors-list"></ul>
+              </details>
+              <details class="feedback-block" id="feedback-strengths-block" style="display:none">
+                <summary class="feedback-block-label">Pontos fortes</summary>
+                <ul class="feedback-strengths-list" id="feedback-strengths-list"></ul>
+              </details>
+              <details class="feedback-block" id="feedback-focus-block" style="display:none" open>
+                <summary class="feedback-block-label">Para a próxima vez</summary>
+                <p class="feedback-next-focus" id="feedback-next-focus"></p>
+              </details>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- .ueben-layout -->
+
+      <!-- Recent sessions -->
+      <div id="ultimas-sessoes-section" style="{{ 'display:none' if not sessions else '' }}">
+      <hr class="gesprache-divider">
+      <div class="gesprache-section-label">Últimas sessões</div>
+      <div class="gesprache-sessions-list" id="ultimas-sessoes-list">
+        {% for s in sessions %}
+        <div class="gesprache-session-row">
+          <span class="gesprache-session-date">{{ s.date }}</span>
+          <span class="gesprache-session-persona">{{ s.persona }}</span>
+          <span class="gesprache-session-scene">{{ s.scenario }}</span>
+          <span class="gesprache-session-source">{{ {'ki_sessao':'KI-Sessão','mobile':'Celular','desktop':'Desktop'}.get(s.source, s.source) }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      </div>
+
+    </div><!-- #pane-ki-personas -->
+
+  </div><!-- .tab-content -->
+  <div class="tab-panel-photo">
+    <img src="/static/photos/rio_beach_01.jpg" alt="Rio de Janeiro" style="object-position: center 40%"
+         onerror="this.style.display='none'">
   </div>
-</div>
+</div><!-- .tab-layout-split -->
 {% endblock %}
 
-{% block content %}
-<div class="stub-section">
-  <span class="stub-badge">em breve · julho 2026</span>
-  <p class="stub-message">
-    Sessões de conversa com personas brasileiras —
-    análise automática depois de cada sessão.
-  </p>
-</div>
+{% block scripts %}
+<script>
+document.body.classList.add('parch-mode');
+(function () {
+  'use strict';
+
+  const personas = {{ personas | tojson }};
+  let selectedIdx = 0;
+  let selectedSceneKey = null;
+  let currentFullPrompt = null;
+
+  // ── KI-Sessão state ─────────────────────────────────────────────────────────
+  let sessionActive     = false;
+  let sessionHistory    = [];
+  let sessionTranscript = [];
+
+  // ── Persona selection ────────────────────────────────────────────────────────
+
+  function resetNachDerSitzung() {
+    document.getElementById('transcript-input').value = '';
+    document.getElementById('analyse-status').textContent = '';
+    const btn = document.getElementById('btn-analisar');
+    btn.textContent = 'Analisar →';
+    setPasteStatus('', '');
+    updateAnalisarState();
+    document.getElementById('transcript-input-wrap').style.display = '';
+    document.getElementById('transcript-analysiert-row').style.display = 'none';
+    document.getElementById('feedback-summary').textContent = '';
+    document.getElementById('feedback-errors-block').style.display = 'none';
+    document.getElementById('feedback-strengths-block').style.display = 'none';
+    document.getElementById('feedback-focus-block').style.display = 'none';
+    document.getElementById('gesprache-feedback-wrap').style.display = 'none';
+    const nd = document.getElementById('transcript-details');
+    if (nd) nd.removeAttribute('open');
+  }
+
+  function resetToRestingState() {
+    if (sessionActive) {
+      sessionActive = false;
+      if (window._sessionListenStop) window._sessionListenStop();
+      stopSpeaking();
+    }
+    const sessionPanel = document.getElementById('session-panel');
+    const startBtn = document.getElementById('start-session-btn');
+    if (sessionPanel) sessionPanel.style.display = 'none';
+    if (startBtn) { startBtn.style.display = ''; startBtn.disabled = false; }
+    document.getElementById('persona-detail').classList.remove('session-active');
+    resetNachDerSitzung();
+    const cardsList = document.getElementById('session-cards-list');
+    if (cardsList) cardsList.innerHTML = '';
+    savedSessions = [];
+    sessionRound = 0;
+    const pd = document.getElementById('prompt-details');
+    if (pd) { pd.style.display = 'none'; pd.open = false; }
+    const td = document.getElementById('transcript-details');
+    if (td) { td.style.display = ''; td.removeAttribute('open'); }
+    const detail = document.getElementById('persona-detail');
+    if (detail) detail.scrollTop = 0;
+    if (window.innerWidth <= 768) {
+      requestAnimationFrame(() => {
+        document.getElementById('persona-detail')
+          .scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  }
+
+  function selectPersona(idx, { scroll = true } = {}) {
+    const p = personas[idx];
+    if (!p) return;
+    const detail = document.getElementById('persona-detail');
+    if (sessionActive || (detail && detail.classList.contains('session-active'))) {
+      resetToRestingState();
+    }
+    if (detail) detail.scrollTop = 0;
+    selectedIdx = idx;
+    selectedSceneKey = null;
+    currentFullPrompt = null;
+    document.getElementById('session-brief-panel').style.display = 'none';
+    resetNachDerSitzung();
+
+    document.querySelectorAll('.persona-list-item').forEach(el => el.classList.remove('active'));
+    document.querySelector(`.persona-list-item[data-idx="${idx}"]`).classList.add('active');
+
+    document.getElementById('detail-avatar').textContent = p.emoji || p.name[0];
+    document.getElementById('detail-name').textContent = p.name;
+    document.getElementById('detail-role').textContent = p.role;
+    document.getElementById('detail-description').textContent = p.description || '';
+
+    const sceneList = document.getElementById('scene-list');
+    sceneList.innerHTML = '';
+
+    const prompts = p.speaking_prompts || {};
+    const keys = Object.keys(prompts);
+
+    if (keys.length === 0 && p.warm_up_variants) {
+      p.warm_up_variants.forEach((variant, i) => {
+        const btn = makeSceneBtn('warm_up_' + i, variant.slice(0, 40) + (variant.length > 40 ? '…' : ''));
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          selectedSceneKey = 'warm_up_' + i;
+          document.getElementById('prompt-text').textContent = variant;
+          document.getElementById('prompt-details').style.display = '';
+          document.getElementById('prompt-delivery').style.display = '';
+          fetchAndStorePrompt(p.slug, 'warm_up_' + i);
+        });
+        sceneList.appendChild(btn);
+      });
+      sceneList.firstChild && sceneList.firstChild.click();
+    } else if (keys.length > 0) {
+      keys.forEach(key => {
+        const label = (p.labels && p.labels[key]) ? p.labels[key] : key.replace(/_/g, ' ');
+        const btn = makeSceneBtn(key, label);
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          selectedSceneKey = key;
+          document.getElementById('prompt-text').textContent = prompts[key];
+          document.getElementById('prompt-details').style.display = '';
+          document.getElementById('prompt-delivery').style.display = '';
+          fetchAndStorePrompt(p.slug, key);
+        });
+        sceneList.appendChild(btn);
+      });
+      sceneList.firstChild.click();
+    } else {
+      sceneList.innerHTML = '<p class="hint">Nenhuma cena configurada.</p>';
+      document.getElementById('prompt-delivery').style.display = 'none';
+    }
+
+    if (scroll && window.innerWidth <= 768) {
+      requestAnimationFrame(() => {
+        document.getElementById('persona-detail')
+          .scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  }
+
+  function makeSceneBtn(key, label) {
+    const btn = document.createElement('button');
+    btn.className = 'scene-btn';
+    btn.dataset.key = key;
+    btn.textContent = label;
+    return btn;
+  }
+
+  document.querySelectorAll('.persona-list-item').forEach(item => {
+    item.addEventListener('click', () => selectPersona(parseInt(item.dataset.idx, 10)));
+  });
+
+  // ── Prompt delivery ──────────────────────────────────────────────────────────
+
+  async function fetchAndStorePrompt(personaSlug, sceneKey) {
+    currentFullPrompt = null;
+    document.getElementById('session-brief-panel').style.display = 'none';
+    try {
+      const res = await fetch(`/api/pt/persona-prompt?persona=${encodeURIComponent(personaSlug)}&scene=${encodeURIComponent(sceneKey)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      currentFullPrompt = data.prompt;
+      document.getElementById('prompt-text').textContent = data.prompt;
+      const briefEl = document.getElementById('session-brief-text');
+      briefEl.textContent = data.session_brief || '';
+      document.getElementById('session-brief-panel').style.display = data.session_brief ? '' : 'none';
+    } catch (e) {
+      console.warn('persona-prompt fetch failed', e);
+    }
+  }
+
+  function getFullPrompt() {
+    return document.getElementById('prompt-text').textContent.trim() || currentFullPrompt;
+  }
+
+  document.getElementById('btn-copy').addEventListener('click', () => {
+    const toast = document.getElementById('prompt-toast');
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(getFullPrompt()).then(() => {
+        toast.textContent = 'Copiado ✓';
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; }, 1500);
+      }).catch(() => {
+        toast.textContent = 'Copie manualmente — selecione o texto acima';
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; }, 3000);
+      });
+    }
+  });
+
+  document.getElementById('btn-download').addEventListener('click', () => {
+    const p = personas[selectedIdx];
+    const filename = `${p.name}_${selectedSceneKey || 'cena'}_prompt.txt`
+      .toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_.]/g, '');
+    const blob = new Blob([getFullPrompt()], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // ── Voice recording (paste panel) ───────────────────────────────────────────
+
+  (function() {
+    let mediaRecorder = null;
+    let audioChunks   = [];
+    let recordingTimer = null;
+    let secondsElapsed = 0;
+
+    const recordBtn    = document.getElementById('gesprache-record-btn');
+    const stopBtn      = document.getElementById('gesprache-stop-btn');
+    const timerEl      = document.getElementById('gesprache-timer');
+    const recStatus    = document.getElementById('gesprache-record-status');
+    const transcriptEl = document.getElementById('transcript-input');
+
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      recordBtn.style.display = 'none';
+      return;
+    }
+
+    recordBtn.addEventListener('click', async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunks = [];
+        secondsElapsed = 0;
+        timerEl.textContent = '00:00';
+
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+        mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+
+        mediaRecorder.onstop = async () => {
+          clearInterval(recordingTimer);
+          stream.getTracks().forEach(t => t.stop());
+          stopBtn.style.display = 'none';
+          recordBtn.disabled = false;
+          recordBtn.classList.remove('recording');
+          recordBtn.textContent = '● Gravar';
+          recStatus.textContent = 'Transcrevendo…';
+
+          const mimeUsed = mediaRecorder.mimeType || 'audio/webm';
+          const blob = new Blob(audioChunks, { type: mimeUsed });
+          const formData = new FormData();
+          formData.append('audio', blob, 'sessao.webm');
+
+          try {
+            const res  = await fetch('/api/pt/transcribe', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.transcript) {
+              transcriptEl.value = data.transcript;
+              recStatus.textContent = 'Transcrição pronta — revise e analise.';
+            } else {
+              recStatus.textContent = '⚠ Transcrição falhou — cole manualmente.';
+            }
+          } catch (err) {
+            recStatus.textContent = '⚠ Erro de conexão — cole manualmente.';
+          }
+          updateAnalisarState();
+        };
+
+        mediaRecorder.start(1000);
+        recordBtn.disabled = true;
+        recordBtn.classList.add('recording');
+        recordBtn.textContent = '● Gravando';
+        stopBtn.style.display = 'inline-block';
+        recStatus.textContent = 'Gravando…';
+
+        recordingTimer = setInterval(() => {
+          secondsElapsed++;
+          const mm = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
+          const ss = String(secondsElapsed % 60).padStart(2, '0');
+          timerEl.textContent = `${mm}:${ss}`;
+        }, 1000);
+
+      } catch (err) {
+        recStatus.textContent = 'Acesso ao microfone negado.';
+      }
+    });
+
+    stopBtn.addEventListener('click', () => {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    });
+  })();
+
+  // ── TTS (speak persona responses) ────────────────────────────────────────────
+
+  let sessionMuted   = false;
+  let _gestureAudio  = null;
+  let _currentObjUrl = null;
+
+  function _personaVoice(p) {
+    if (!p) return 'nova';
+    const n = (p.name || '').toLowerCase();
+    if (n === 'carlos' || n === 'lucas') return 'onyx';
+    return 'nova';
+  }
+
+  async function speakPersona(text, p) {
+    if (sessionMuted || !text) return;
+    stopSpeaking();
+    try {
+      const voice = _personaVoice(p || personas[selectedIdx]);
+      const res = await fetch('/api/pt/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice }),
+      });
+      if (!res.ok) {
+        const listenEl = document.getElementById('session-listen-status');
+        if (listenEl) { listenEl.textContent = '⚠ Áudio não disponível (chave de API ausente)'; listenEl.style.display = ''; }
+        return;
+      }
+      const blob = await res.blob();
+      if (_currentObjUrl) { URL.revokeObjectURL(_currentObjUrl); _currentObjUrl = null; }
+      const url = URL.createObjectURL(blob);
+      _currentObjUrl = url;
+      if (_gestureAudio) {
+        _gestureAudio.src = url;
+        _gestureAudio.onended = () => { URL.revokeObjectURL(url); _currentObjUrl = null; };
+        _gestureAudio.play().catch(() => {});
+      } else {
+        const a = new Audio(url);
+        a.onended = () => { URL.revokeObjectURL(url); _currentObjUrl = null; };
+        a.play().catch(() => {});
+      }
+    } catch (e) {
+      const listenEl = document.getElementById('session-listen-status');
+      if (listenEl) { listenEl.textContent = '⚠ Erro de áudio: ' + e.message; listenEl.style.display = ''; }
+    }
+  }
+
+  function stopSpeaking() {
+    if (_gestureAudio && !_gestureAudio.paused) {
+      _gestureAudio.pause();
+      _gestureAudio.currentTime = 0;
+    }
+    if (_currentObjUrl) { URL.revokeObjectURL(_currentObjUrl); _currentObjUrl = null; }
+  }
+
+  const muteBtnEl = document.getElementById('session-mute-btn');
+  if (muteBtnEl) {
+    muteBtnEl.addEventListener('click', () => {
+      sessionMuted = !sessionMuted;
+      if (sessionMuted) {
+        stopSpeaking();
+        muteBtnEl.textContent = '🔇';
+        muteBtnEl.title = 'Ativar som';
+      } else {
+        muteBtnEl.textContent = '🔊';
+        muteBtnEl.title = 'Silenciar';
+      }
+    });
+  }
+
+  // ── KI-Sessão session logic ───────────────────────────────────────────────────
+
+  const startSessionBtn = document.getElementById('start-session-btn');
+  const endSessionBtn   = document.getElementById('end-session-btn');
+  const sessionPanel    = document.getElementById('session-panel');
+  const sessionSendBtn  = document.getElementById('session-send-btn');
+  const sessionInputEl  = document.getElementById('session-input');
+  let   sessionTurns    = 0;
+  let   sessionRound    = 0;
+  let   sessionStartTime = null;
+  let   savedSessions   = [];
+
+  function updateTurnCounter() {
+    const el = document.getElementById('session-persona-label');
+    if (el) el.textContent = personas[selectedIdx]?.name + (sessionTurns ? '  ·  ' + sessionTurns + ' turnos' : '');
+  }
+
+  function formatDuration(ms) {
+    const s = Math.round(ms / 1000);
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+  }
+
+  function renderSessionCard(session) {
+    const container = document.getElementById('session-cards-list');
+    if (!container) return;
+    const card = document.createElement('div');
+    card.className = 'session-saved-card';
+    card.dataset.sessionId = session.id;
+    const dur = formatDuration(session.durationMs);
+    const sceneLine = session.scene ? `<div class="session-saved-scene">${session.scene}</div>` : '';
+    const teilenBtn = navigator.share
+      ? `<button class="btn-session-card-teilen btn-ghost btn-sm">Compartilhar</button>` : '';
+
+    card.innerHTML =
+      `<div class="session-saved-meta">✓ ${session.personaName} · Rodada ${session.round} · ${session.turns} turnos · ${dur}</div>` +
+      sceneLine +
+      `<div class="session-saved-actions">` +
+        `<button class="btn-session-card-transcript">Transcrição ▾</button>` +
+        teilenBtn +
+        `<button class="btn-session-card-delete" title="Excluir sessão">✕</button>` +
+        `<button class="btn-session-card-analyse">Analisar →</button>` +
+      `</div>` +
+      `<div class="session-card-transcript-wrap" style="display:none">` +
+        `<pre class="session-card-transcript-text">${session.transcript}</pre>` +
+      `</div>`;
+
+    card.querySelector('.btn-session-card-transcript').addEventListener('click', () => {
+      const wrap = card.querySelector('.session-card-transcript-wrap');
+      const btn  = card.querySelector('.btn-session-card-transcript');
+      const open = wrap.style.display !== 'none';
+      wrap.style.display = open ? 'none' : '';
+      btn.textContent = open ? 'Transcrição ▾' : 'Transcrição ▲';
+    });
+
+    if (navigator.share) {
+      card.querySelector('.btn-session-card-teilen').addEventListener('click', async () => {
+        try {
+          await navigator.share({
+            title: 'Conversa com ' + session.personaName,
+            text: session.transcript,
+          });
+        } catch (e) {
+          if (e.name !== 'AbortError') console.warn('Share failed:', e);
+        }
+      });
+    }
+
+    card.querySelector('.btn-session-card-delete').addEventListener('click', () => {
+      if (confirm('Excluir esta sessão?')) {
+        savedSessions = savedSessions.filter(s => s.id !== session.id);
+        card.remove();
+      }
+    });
+
+    card.querySelector('.btn-session-card-analyse').addEventListener('click', async () => {
+      await analyseSession(session, card);
+    });
+
+    container.prepend(card);
+  }
+
+  async function analyseSession(session, card) {
+    const analyseBtn = card.querySelector('.btn-session-card-analyse');
+    analyseBtn.disabled = true;
+    analyseBtn.textContent = 'Analisando…';
+
+    const doSubmit = async (attempt) => {
+      const res = await fetch('/api/pt/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript: session.transcript,
+          persona_name: session.personaName,
+          scene: session.scene,
+          model: session.model,
+          source: 'ki_sessao',
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        if (attempt < 2 && res.status >= 500) {
+          await new Promise(r => setTimeout(r, 1500));
+          return doSubmit(attempt + 1);
+        }
+        throw new Error(data.error || 'Erro');
+      }
+      return data;
+    };
+
+    try {
+      const data = await doSubmit(1);
+      session.feedbackData = data.feedback;
+
+      card.innerHTML =
+        `<div class="session-saved-meta session-saved-analysiert">` +
+          `✓ Analisado — ${session.personaName} · ${formatDuration(session.durationMs)}` +
+          ` <button class="btn-session-card-anzeigen">Feedback</button>` +
+          ` <button class="btn-session-card-anzeigen btn-session-card-transcript-post">Transcrição ▾</button>` +
+        `</div>` +
+        `<div class="session-card-transcript-wrap" style="display:none">` +
+          `<pre class="session-card-transcript-text">${session.transcript}</pre>` +
+        `</div>`;
+      card.querySelector('.btn-session-card-transcript-post').addEventListener('click', () => {
+        const wrap = card.querySelector('.session-card-transcript-wrap');
+        const btn  = card.querySelector('.btn-session-card-transcript-post');
+        const open = wrap.style.display !== 'none';
+        wrap.style.display = open ? 'none' : '';
+        btn.textContent = open ? 'Transcrição ▾' : 'Transcrição ▲';
+      });
+      card.querySelector('.btn-session-card-anzeigen').addEventListener('click', () => {
+        renderFeedback(session.feedbackData);
+        requestAnimationFrame(() => {
+          const panel = document.getElementById('persona-detail');
+          const wrap  = document.getElementById('gesprache-feedback-wrap');
+          if (panel && wrap) {
+            const panelRect = panel.getBoundingClientRect();
+            const wrapRect  = wrap.getBoundingClientRect();
+            panel.scrollBy({ top: wrapRect.top - panelRect.top, behavior: 'smooth' });
+          }
+        });
+      });
+
+      // Add to Últimas sessões
+      const sessionList = document.getElementById('ultimas-sessoes-list');
+      if (sessionList) {
+        const today = new Date().toISOString().slice(0, 10);
+        const row = document.createElement('div');
+        row.className = 'gesprache-session-row';
+        row.innerHTML = `<span class="gesprache-session-date">${today}</span>` +
+          `<span class="gesprache-session-persona">${session.personaName}</span>` +
+          `<span class="gesprache-session-scene">${session.scene}</span>` +
+          `<span class="gesprache-session-source">KI-Sessão</span>`;
+        sessionList.prepend(row);
+        document.getElementById('ultimas-sessoes-section').style.display = '';
+      }
+
+      renderFeedback(data.feedback);
+      requestAnimationFrame(() => {
+        const panel = document.getElementById('persona-detail');
+        const wrap  = document.getElementById('gesprache-feedback-wrap');
+        if (panel && wrap) {
+          const panelRect = panel.getBoundingClientRect();
+          const wrapRect  = wrap.getBoundingClientRect();
+          panel.scrollBy({ top: wrapRect.top - panelRect.top, behavior: 'smooth' });
+        }
+      });
+    } catch (e) {
+      analyseBtn.disabled = false;
+      analyseBtn.textContent = 'Analisar →';
+      renderFeedbackError(e.message || 'Erro na análise.');
+    }
+  }
+
+  function appendChatMessage(speaker, text, isPersona) {
+    const log = document.getElementById('session-chat-log');
+    if (!log) return;
+    const div = document.createElement('div');
+    div.className = 'chat-message ' + (isPersona ? 'chat-persona' : 'chat-user');
+    const label = document.createElement('span');
+    label.className = 'chat-speaker';
+    label.textContent = speaker + ': ';
+    div.appendChild(label);
+    div.appendChild(document.createTextNode(text));
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+    return div;
+  }
+
+  async function sendTurn(userText) {
+    const p = personas[selectedIdx];
+    if (!p) return;
+    const persona     = p.slug;
+    const personaName = p.name;
+    const scene       = selectedSceneKey || '';
+    const model       = document.getElementById('conversas-model').value;
+
+    if (userText) {
+      sessionHistory.push({ role: 'user', content: userText });
+      sessionTranscript.push('Você: ' + userText);
+      appendChatMessage('Você', userText, false);
+      sessionTurns++;
+      updateTurnCounter();
+    }
+
+    sessionSendBtn.disabled = true;
+    const _modelLbl  = document.getElementById('session-model-label');
+    const _modelOrig = _modelLbl ? _modelLbl.textContent : '';
+    if (_modelLbl) _modelLbl.textContent = 'pensando…';
+    const thinkingEl = appendChatMessage(personaName, '…', true);
+    if (thinkingEl) thinkingEl.classList.add('chat-thinking');
+    let ai_ms = 0, tts_ms = 0;
+    try {
+      const t0_ai = Date.now();
+      const res = await fetch('/api/pt/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ history: sessionHistory, persona, scene, model, user_turn: userText }),
+      });
+      const data = await res.json();
+      ai_ms = Date.now() - t0_ai;
+      const reply = (data.response || '').trim();
+
+      if (thinkingEl) thinkingEl.remove();
+      if (reply) {
+        sessionHistory.push({ role: 'assistant', content: reply });
+        sessionTranscript.push(personaName + ': ' + reply);
+        appendChatMessage(personaName, reply, true);
+        const t0_tts = Date.now();
+        await speakPersona(reply);
+        tts_ms = Date.now() - t0_tts;
+      }
+    } catch (err) {
+      if (thinkingEl) thinkingEl.remove();
+    } finally {
+      if (_modelLbl) _modelLbl.textContent = _modelOrig;
+      sessionSendBtn.disabled = false;
+    }
+    return { ai_ms, tts_ms };
+  }
+
+  startSessionBtn.addEventListener('click', async () => {
+    const p = personas[selectedIdx];
+    if (!p || !selectedSceneKey) {
+      alert('Primeiro selecione uma persona e uma cena.');
+      return;
+    }
+
+    // Unlock browser autoplay (iOS)
+    try {
+      const _ac = new (window.AudioContext || window.webkitAudioContext)();
+      await _ac.resume();
+      const buf = _ac.createBuffer(1, 1, 22050);
+      const src = _ac.createBufferSource();
+      src.buffer = buf;
+      src.connect(_ac.destination);
+      src.start(0);
+    } catch (_) {}
+
+    try {
+      const _sil = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+      await _sil.play().catch(() => {});
+      _gestureAudio = _sil;
+    } catch (_) {}
+
+    sessionActive = true;
+    sessionHistory = [];
+    sessionTranscript = [];
+    sessionTurns = 0;
+    sessionStartTime = Date.now();
+    const chatLog = document.getElementById('session-chat-log');
+    if (chatLog) chatLog.innerHTML = '';
+    document.getElementById('session-input-row').style.display = 'none';
+    document.getElementById('session-mode-row').style.display = '';
+
+    document.getElementById('session-persona-label').textContent = p.name;
+    document.getElementById('session-model-label').textContent =
+      document.getElementById('conversas-model').value;
+
+    sessionPanel.style.display = '';
+    startSessionBtn.style.display = 'none';
+    startSessionBtn.disabled = true;
+    document.getElementById('persona-detail').classList.add('session-active');
+
+    try {
+      const _utter = new SpeechSynthesisUtterance('A sessão começa.');
+      _utter.lang = 'pt-BR';
+      _utter.rate = 1.05;
+      speechSynthesis.speak(_utter);
+    } catch (_) {}
+
+    await sendTurn('');
+    if (window._sessionListenStart) window._sessionListenStart();
+  });
+
+  endSessionBtn.addEventListener('click', () => {
+    sessionActive = false;
+    if (window._sessionListenStop) window._sessionListenStop();
+    stopSpeaking();
+    sessionPanel.style.display = 'none';
+    startSessionBtn.style.display = '';
+    startSessionBtn.disabled = false;
+    document.getElementById('persona-detail').classList.remove('session-active');
+
+    if (sessionTranscript.length > 0) {
+      sessionRound++;
+      const p = personas[selectedIdx];
+      const session = {
+        id:          Date.now(),
+        round:       sessionRound,
+        personaName: p ? p.name : '',
+        scene:       selectedSceneKey ? selectedSceneKey.replace(/_/g, ' ') : '',
+        turns:       sessionTurns,
+        durationMs:  sessionStartTime ? Date.now() - sessionStartTime : 0,
+        transcript:  sessionTranscript.join('\n'),
+        model:       document.getElementById('conversas-model')?.value || 'claude',
+        feedbackData: null,
+      };
+      savedSessions.push(session);
+      renderSessionCard(session);
+    }
+  });
+
+  sessionSendBtn.addEventListener('click', async () => {
+    const text = sessionInputEl.value.trim();
+    if (!text || !sessionActive) return;
+    sessionInputEl.value = '';
+    await sendTurn(text);
+  });
+
+  sessionInputEl.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const text = sessionInputEl.value.trim();
+      if (text && sessionActive) {
+        sessionInputEl.value = '';
+        await sendTurn(text);
+      }
+    }
+  });
+
+  document.getElementById('session-tippen-btn').addEventListener('click', () => {
+    document.getElementById('session-input-row').style.display = '';
+    document.getElementById('session-mode-row').style.display = 'none';
+    if (window._sessionListenStop) window._sessionListenStop();
+    sessionInputEl.focus();
+  });
+
+  document.getElementById('session-sprechen-btn').addEventListener('click', () => {
+    document.getElementById('session-input-row').style.display = 'none';
+    document.getElementById('session-mode-row').style.display = '';
+    sessionInputEl.value = '';
+    if (window._sessionListenForceStart) window._sessionListenForceStart();
+    else if (window._sessionListenStart) window._sessionListenStart();
+  });
+
+  // ── Continuous listening loop with VAD ────────────────────────────────────
+
+  (function () {
+    if (!navigator.mediaDevices || !window.MediaRecorder) return;
+
+    const listenStatusEl = document.getElementById('session-listen-status');
+    const pauseBtn       = document.getElementById('session-pause-btn');
+
+    let loopRunning  = false;
+    let loopGen      = 0;
+    let paused       = false;
+    let turnInFlight = false;
+
+    function setListenStatus(text, cls) {
+      if (!listenStatusEl) return;
+      listenStatusEl.textContent = text;
+      listenStatusEl.className = 'session-listen-status ' + (cls || '');
+      listenStatusEl.style.display = text ? '' : 'none';
+    }
+
+    async function captureOneTurn() {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg;codecs=opus']
+        .find(t => MediaRecorder.isTypeSupported(t)) || '';
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+      const chunks   = [];
+      recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+
+      const audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+      await audioCtx.resume().catch(() => {});
+      const analyser  = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      audioCtx.createMediaStreamSource(stream).connect(analyser);
+      const pcmData = new Float32Array(analyser.fftSize);
+
+      const SPEECH_RMS  = 0.018;
+      const SILENCE_RMS = 0.012;
+      const SPEECH_MIN  = 300;
+      const SILENCE_MS  = 2000;
+
+      return new Promise(resolve => {
+        let speechStart = null;
+        let silenceFrom = null;
+        let recording   = false;
+        let done        = false;
+
+        function finish(blob) {
+          if (done) return;
+          done = true;
+          clearInterval(vad);
+          recorder.onstop = null;
+          if (recorder.state !== 'inactive') recorder.stop();
+          audioCtx.close();
+          stream.getTracks().forEach(t => t.stop());
+          resolve(blob);
+        }
+
+        recorder.start(100);
+
+        const vad = setInterval(() => {
+          if (!loopRunning || paused || !sessionActive) { finish(null); return; }
+
+          analyser.getFloatTimeDomainData(pcmData);
+          let sum = 0;
+          for (let i = 0; i < pcmData.length; i++) sum += pcmData[i] * pcmData[i];
+          const rms = Math.sqrt(sum / pcmData.length);
+
+          if (rms >= SPEECH_RMS) {
+            if (!speechStart) speechStart = Date.now();
+            silenceFrom = null;
+            if (!recording && Date.now() - speechStart >= SPEECH_MIN) {
+              recording = true;
+              setListenStatus('● Falando…', 'listening-speaking');
+            }
+          } else {
+            speechStart = null;
+            if (recording) {
+              if (!silenceFrom) silenceFrom = Date.now();
+              else if (Date.now() - silenceFrom >= SILENCE_MS) {
+                recorder.requestData();
+                setTimeout(() => {
+                  const actualMime = recorder.mimeType || mimeType || 'audio/webm';
+                  const blob = new Blob(chunks, { type: actualMime });
+                  finish(blob);
+                }, 100);
+              }
+            }
+          }
+        }, 80);
+
+        recorder.addEventListener('stop', () => finish(null), { once: true });
+      });
+    }
+
+    async function startLoop() {
+      const myGen = ++loopGen;
+      loopRunning = true;
+      paused      = false;
+
+      while (loopRunning && sessionActive && loopGen === myGen) {
+        if (paused) {
+          setListenStatus('⏸ Pausado');
+          await new Promise(r => setTimeout(r, 200));
+          continue;
+        }
+        if (turnInFlight) {
+          await new Promise(r => setTimeout(r, 200));
+          continue;
+        }
+
+        setListenStatus('Ouvindo…', 'listening-idle');
+
+        let blob;
+        try {
+          blob = await captureOneTurn();
+        } catch (e) {
+          if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+            setListenStatus('⚠ Acesso ao microfone negado — verifique as configurações', 'listening-error');
+            loopRunning = false;
+            return;
+          }
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        }
+
+        if (!blob || !sessionActive || paused) continue;
+
+        turnInFlight = true;
+        const t_turn_start = Date.now();
+        setListenStatus('Transcrevendo…', 'listening-processing');
+        try {
+          const formData = new FormData();
+          const ext = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm';
+          formData.append('audio', blob, `turno.${ext}`);
+          const t0_transcribe = Date.now();
+          const res  = await fetch('/api/pt/transcribe', { method: 'POST', body: formData });
+          const data = await res.json();
+          const transcribe_ms = Date.now() - t0_transcribe;
+          if (data.transcript) {
+            const text = data.transcript.trim();
+            if (text && sessionActive) {
+              setListenStatus('pensando…', 'listening-processing');
+              const { ai_ms, tts_ms } = await sendTurn(text);
+              const total_ms = Date.now() - t_turn_start;
+              console.log(`[turno] transcribe:${transcribe_ms}ms  ai:${ai_ms}ms  tts:${tts_ms}ms  total:${total_ms}ms`);
+              await waitForTTSEnd();
+            }
+          }
+        } catch (e) {
+          setListenStatus('⚠ Transcrição falhou — verifique a chave de API', 'listening-error');
+          await new Promise(r => setTimeout(r, 3000));
+        }
+        turnInFlight = false;
+
+        if (loopRunning && !paused && sessionActive) {
+          await new Promise(r => setTimeout(r, 400));
+        }
+      }
+
+      setListenStatus('');
+    }
+
+    function waitForTTSEnd() {
+      return new Promise(resolve => {
+        const audio = _gestureAudio;
+        if (!audio || audio.paused) { resolve(); return; }
+        const done = () => resolve();
+        audio.addEventListener('ended', done, { once: true });
+        audio.addEventListener('pause', done, { once: true });
+        setTimeout(resolve, 8000);
+      });
+    }
+
+    if (pauseBtn) {
+      pauseBtn.addEventListener('click', () => {
+        paused = !paused;
+        if (paused) {
+          pauseBtn.textContent = '▶ Continuar';
+          pauseBtn.title = 'Continuar ouvindo';
+          setListenStatus('⏸ Pausado');
+        } else {
+          pauseBtn.textContent = '⏸ Pausar';
+          pauseBtn.title = 'Pausar conversa';
+        }
+      });
+    }
+
+    window._sessionListenStart      = () => { if (!loopRunning) startLoop(); };
+    window._sessionListenForceStart = () => { loopGen++; loopRunning = false; startLoop(); };
+    window._sessionListenStop       = () => { loopGen++; loopRunning = false; paused = false; };
+  })();
+
+  // ── Source pill selection ────────────────────────────────────────────────────
+  document.querySelectorAll('.gesprache-source-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.gesprache-source-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+    });
+  });
+
+  function getSelectedSource() {
+    const active = document.querySelector('.gesprache-source-pill.active');
+    return active ? active.dataset.source : 'ki_sessao';
+  }
+
+  // ── Transcript analysis (paste panel) ────────────────────────────────────────
+
+  document.getElementById('btn-analisar').addEventListener('click', async () => {
+    const transcript = document.getElementById('transcript-input').value.trim();
+    if (!transcript) return;
+    const status = document.getElementById('analyse-status');
+    const btn = document.getElementById('btn-analisar');
+    const p = personas[selectedIdx];
+    const personaName = p ? p.name : '';
+    const scene = selectedSceneKey ? selectedSceneKey.replace(/_/g, ' ') : '';
+    const model = document.getElementById('conversas-model')?.value || 'claude';
+
+    btn.disabled = true;
+    btn.textContent = 'Analisando…';
+    status.textContent = '';
+
+    const doSubmit = async (attempt) => {
+      const res = await fetch('/api/pt/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript, persona_name: personaName, scene, model, source: getSelectedSource() }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        if (attempt < 2 && res.status >= 500) {
+          status.textContent = `${model} falhou — tentando novamente…`;
+          await new Promise(r => setTimeout(r, 1500));
+          return doSubmit(attempt + 1);
+        }
+        throw new Error(data.error || 'Erro');
+      }
+      return data;
+    };
+
+    try {
+      const data = await doSubmit(1);
+
+      renderFeedback(data.feedback);
+      document.getElementById('transcript-input-wrap').style.display = 'none';
+      document.getElementById('transcript-analysiert-row').style.display = '';
+      btn.textContent = 'Analisar →';
+      btn.disabled = false;
+
+      // Prepend to Últimas sessões
+      const sessionList = document.getElementById('ultimas-sessoes-list');
+      if (sessionList) {
+        const today = new Date().toISOString().slice(0, 10);
+        const src = getSelectedSource();
+        const srcLabel = {'ki_sessao':'KI-Sessão','mobile':'Celular','desktop':'Desktop'}[src] || src;
+        const row = document.createElement('div');
+        row.className = 'gesprache-session-row';
+        row.innerHTML = `<span class="gesprache-session-date">${today}</span>`
+          + `<span class="gesprache-session-persona">${personaName}</span>`
+          + `<span class="gesprache-session-scene">${scene}</span>`
+          + `<span class="gesprache-session-source">${srcLabel}</span>`;
+        sessionList.prepend(row);
+        document.getElementById('ultimas-sessoes-section').style.display = '';
+      }
+
+      requestAnimationFrame(() => {
+        const panel = document.getElementById('persona-detail');
+        const wrap  = document.getElementById('gesprache-feedback-wrap');
+        const panelRect = panel.getBoundingClientRect();
+        const wrapRect  = wrap.getBoundingClientRect();
+        panel.scrollBy({ top: wrapRect.top - panelRect.top, behavior: 'smooth' });
+      });
+    } catch (e) {
+      renderFeedbackError(e.message || 'Erro na análise.');
+      btn.textContent = 'Analisar →';
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('btn-transcript-editar').addEventListener('click', () => {
+    document.getElementById('transcript-input-wrap').style.display = '';
+    document.getElementById('transcript-analysiert-row').style.display = 'none';
+  });
+
+  document.getElementById('btn-nova-sessao').addEventListener('click', () => {
+    resetToRestingState();
+  });
+
+  // ── Paste panel ──────────────────────────────────────────────────────────────
+
+  function setPasteStatus(text, variant) {
+    const el = document.getElementById('paste-status');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'paste-status' + (variant ? ' paste-status--' + variant : '');
+  }
+
+  function updateAnalisarState() {
+    const ta = document.getElementById('transcript-input');
+    const btn = document.getElementById('btn-analisar');
+    const helper = document.getElementById('analysieren-helper');
+    if (!ta || !btn) return;
+    const hasContent = ta.value.trim().length > 0;
+    btn.disabled = !hasContent;
+    if (helper) helper.style.display = hasContent ? 'none' : '';
+  }
+
+  document.getElementById('transcript-input').addEventListener('input', updateAnalisarState);
+
+  (function initClipboardBtn() {
+    const btn = document.getElementById('btn-clipboard');
+    if (!btn) return;
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      btn.style.display = 'none';
+      return;
+    }
+    btn.addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        const ta = document.getElementById('transcript-input');
+        ta.value = text;
+        updateAnalisarState();
+        ta.focus();
+        ta.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        setPasteStatus('Colado ✓', 'ok');
+        setTimeout(() => setPasteStatus('', ''), 2000);
+      } catch (_) {
+        setPasteStatus('Cole manualmente', 'warn');
+        document.getElementById('transcript-input').focus();
+      }
+    });
+  })();
+
+  document.getElementById('btn-paste-clear').addEventListener('click', () => {
+    const ta = document.getElementById('transcript-input');
+    ta.value = '';
+    setPasteStatus('', '');
+    updateAnalisarState();
+  });
+
+  // ── Feedback rendering ───────────────────────────────────────────────────────
+
+  function renderFeedback(fb) {
+    document.getElementById('feedback-summary').textContent = fb.overall_summary || '';
+
+    const errorsBlock = document.getElementById('feedback-errors-block');
+    const errorsList = document.getElementById('feedback-errors-list');
+    errorsList.innerHTML = '';
+    if (fb.errors && fb.errors.length) {
+      fb.errors.forEach(e => {
+        const li = document.createElement('li');
+        li.textContent = `${e.original} → ${e.correction}: ${e.explanation}`;
+        errorsList.appendChild(li);
+      });
+      errorsBlock.style.display = '';
+    } else {
+      errorsBlock.style.display = 'none';
+    }
+
+    const strengthsBlock = document.getElementById('feedback-strengths-block');
+    const strengthsList = document.getElementById('feedback-strengths-list');
+    strengthsList.innerHTML = '';
+    if (fb.strengths && fb.strengths.length) {
+      fb.strengths.forEach(s => {
+        const li = document.createElement('li');
+        li.textContent = s;
+        strengthsList.appendChild(li);
+      });
+      strengthsBlock.style.display = '';
+    } else {
+      strengthsBlock.style.display = 'none';
+    }
+
+    const focusBlock = document.getElementById('feedback-focus-block');
+    if (fb.next_focus) {
+      document.getElementById('feedback-next-focus').textContent = fb.next_focus;
+      focusBlock.style.display = '';
+    } else {
+      focusBlock.style.display = 'none';
+    }
+
+    document.getElementById('gesprache-feedback-wrap').style.display = '';
+  }
+
+  function renderFeedbackError(msg) {
+    document.getElementById('feedback-summary').textContent = '⚠ ' + msg;
+    document.getElementById('feedback-errors-block').style.display = 'none';
+    document.getElementById('feedback-strengths-block').style.display = 'none';
+    document.getElementById('feedback-focus-block').style.display = 'none';
+    document.getElementById('gesprache-feedback-wrap').style.display = '';
+  }
+
+  // ── Refresh sessions on tab focus ────────────────────────────────────────────
+  const SOURCE_LABELS = {'ki_sessao':'KI-Sessão','mobile':'Celular','desktop':'Desktop'};
+  document.addEventListener('visibilitychange', async () => {
+    if (document.hidden) return;
+    try {
+      const res = await fetch('/api/pt/sessions?limit=5');
+      const sessions = await res.json();
+      if (!sessions.length) return;
+      const list = document.getElementById('ultimas-sessoes-list');
+      if (!list) return;
+      list.innerHTML = sessions.map(s => `
+        <div class="gesprache-session-row">
+          <span class="gesprache-session-date">${s.date}</span>
+          <span class="gesprache-session-persona">${s.persona || ''}</span>
+          <span class="gesprache-session-scene">${s.scenario || ''}</span>
+          <span class="gesprache-session-source">${SOURCE_LABELS[s.source] || s.source}</span>
+        </div>`).join('');
+      document.getElementById('ultimas-sessoes-section').style.display = '';
+    } catch (_) {}
+  });
+
+  // ── Init ─────────────────────────────────────────────────────────────────────
+  if (personas.length > 0) selectPersona(0, { scroll: false });
+
+})();
+</script>
 {% endblock %}
