@@ -2186,6 +2186,17 @@ body.reading-mode nav { background: #1B2E1F; border-bottom-color: var(--parch-ac
 
 .session-errors { font-size: 0.8rem; color: var(--pt-accent); white-space: nowrap; flex-shrink: 0; }
 
+/* ── Status badges ───────────────────────────────────────── */
+
+.status-badge {
+  display: inline-block; padding: 0.15rem 0.5rem; border-radius: 10px;
+  font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;
+}
+.status-badge.biblioteca { background: var(--pt-parch-deep); color: var(--pt-text-muted); }
+.status-badge.praticando { background: rgba(90,160,90,0.18); color: #3a7a3a; }
+.status-badge.pronto-para-testar { background-color: var(--pt-accent); color: #fff; opacity: 0.85; }
+.status-badge.aprendido { background: rgba(40,130,80,0.22); color: #1f6e40; }
+
 /* ── Anki export button ──────────────────────────────────── */
 
 .woerter-export-all {
@@ -2281,3 +2292,39 @@ body.reading-mode nav { background: #1B2E1F; border-bottom-color: var(--parch-ac
 }
 .btn-voice:hover { border-color: var(--pt-accent); color: var(--pt-accent); }
 .btn-voice.recording { border-color: #c87878; color: #c87878; }
+
+/* ── Round management (Conversas) ────────────────────────── */
+
+.round-ready-dot { color: var(--pt-accent); font-size: 0.6rem; margin-left: 0.3rem; vertical-align: middle; }
+.round-counter { font-size: 0.72rem; color: var(--pt-text-muted); margin-left: 0.4rem; }
+.persona-progress { margin-top: 0.2rem; }
+.round-label { font-size: 0.72rem; color: var(--pt-text-secondary); }
+
+.persona-ready-banner {
+  margin-top: 0.35rem; padding: 0.3rem 0.5rem;
+  background: rgba(196,96,58,0.1); border-left: 2px solid var(--pt-accent);
+  border-radius: 0 4px 4px 0; font-size: 0.78rem; color: var(--pt-accent);
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+}
+.btn-advance {
+  background: var(--pt-accent); color: #fff; border: none; border-radius: 4px;
+  padding: 0.2rem 0.6rem; font-size: 0.75rem; cursor: pointer; white-space: nowrap;
+}
+.btn-advance:hover { opacity: 0.85; }
+
+.round-modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+.round-modal-content {
+  background: var(--pt-parch); border-radius: 12px; padding: 1.5rem 2rem;
+  max-width: 380px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+.round-modal-title {
+  font-size: 1.1rem; font-weight: 700; color: var(--pt-text-primary);
+  margin-bottom: 0.6rem;
+}
+.round-modal-body {
+  font-size: 0.9rem; color: var(--pt-text-secondary); margin-bottom: 1.25rem; line-height: 1.5;
+}
+.round-modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }

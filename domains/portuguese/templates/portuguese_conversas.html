@@ -23,12 +23,38 @@
         <!-- Left: persona list -->
         <div class="persona-list" id="persona-list">
           {% for p in personas %}
+          {% set prog = persona_progress.get(p.slug, {}) %}
+          {% set p_round = prog.get('round', 1) %}
+          {% set p_sessions = prog.get('sessions_in_round', 0) %}
+          {% set p_ready = prog.get('ready', false) %}
           <div class="persona-list-item" data-idx="{{ loop.index0 }}" data-name="{{ p.name }}"
-               data-slug="{{ p.slug }}">
+               data-slug="{{ p.slug }}"
+               data-ready="{{ 'true' if p_ready else 'false' }}"
+               data-round="{{ p_round }}"
+               data-sessions="{{ p_sessions }}">
             <div class="persona-avatar">{{ p.emoji or p.name[0] }}</div>
             <div class="persona-info">
-              <div class="persona-name">{{ p.name }}</div>
-              <div class="persona-role">{{ p.role }}</div>
+              <div class="persona-name">
+                {{ p.name }}
+                {% if p_ready %}<span class="round-ready-dot" title="Pronta para avançar">●</span>{% endif %}
+              </div>
+              <div class="persona-role">
+                {{ p.role }}
+                {% if p_sessions > 0 %}
+                <span class="round-counter">Ronda {{ p_round }}/{{ sessions_per_round }}</span>
+                {% endif %}
+              </div>
+              {% if p_sessions > 0 %}
+              <div class="persona-progress">
+                <span class="round-label">{{ p_sessions }}/{{ sessions_per_round }} sessões</span>
+              </div>
+              {% endif %}
+              {% if p_ready %}
+              <div class="persona-ready-banner">
+                ✓ Pronta para avançar
+                <button class="btn-advance" onclick="showAdvanceModal('{{ p.slug }}', {{ p_round }}, {{ p_sessions }})">Avançar →</button>
+              </div>
+              {% endif %}
             </div>
           </div>
           {% endfor %}
@@ -200,6 +226,18 @@
       </div>
 
     </div><!-- #pane-ki-personas -->
+
+    <!-- Advance modal -->
+    <div id="advance-modal" class="round-modal" style="display:none" role="dialog" aria-modal="true">
+      <div class="round-modal-content">
+        <div class="round-modal-title" id="advance-modal-title"></div>
+        <div class="round-modal-body" id="advance-modal-body"></div>
+        <div class="round-modal-actions">
+          <button class="btn-primary btn-sm" id="btn-advance-confirm">Confirmar avanço</button>
+          <button class="btn-ghost btn-sm" id="btn-advance-cancel">Cancelar</button>
+        </div>
+      </div>
+    </div>
 
   </div><!-- .tab-content -->
   <div class="tab-panel-photo">
@@ -1380,5 +1418,46 @@ document.body.classList.add('parch-mode');
   if (personas.length > 0) selectPersona(0, { scroll: false });
 
 })();
+
+// ── Round management ──────────────────────────────────────────────────────────
+
+let _pendingAdvanceSlug = null;
+
+function showAdvanceModal(slug, round, sessions) {
+  _pendingAdvanceSlug = slug;
+  const name = document.querySelector(`.persona-list-item[data-slug="${slug}"] .persona-name`)?.childNodes[0]?.textContent?.trim() || slug;
+  document.getElementById('advance-modal-title').textContent = `Avançar com ${name}?`;
+  document.getElementById('advance-modal-body').textContent =
+    `Você completou ${sessions} sessões nesta ronda. Avançar significa cenas mais desafiadoras e menos orientação.`;
+  document.getElementById('advance-modal').style.display = 'flex';
+}
+
+document.getElementById('btn-advance-confirm').addEventListener('click', async () => {
+  if (!_pendingAdvanceSlug) return;
+  document.getElementById('advance-modal').style.display = 'none';
+  try {
+    await fetch('/api/pt/persona-advance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ persona_slug: _pendingAdvanceSlug }),
+    });
+    window.location.reload();
+  } catch (e) {
+    console.error('Advance failed', e);
+  }
+  _pendingAdvanceSlug = null;
+});
+
+document.getElementById('btn-advance-cancel').addEventListener('click', () => {
+  document.getElementById('advance-modal').style.display = 'none';
+  _pendingAdvanceSlug = null;
+});
+
+document.getElementById('advance-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) {
+    document.getElementById('advance-modal').style.display = 'none';
+    _pendingAdvanceSlug = null;
+  }
+});
 </script>
 {% endblock %}

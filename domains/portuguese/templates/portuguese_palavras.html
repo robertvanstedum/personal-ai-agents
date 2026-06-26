@@ -35,9 +35,10 @@
     <span>Status</span>
     <select class="filter-select" id="filter-status">
       <option value="">Todos</option>
-      <option value="library">Biblioteca</option>
-      <option value="practice">Praticando</option>
-      <option value="mastered">Aprendido</option>
+      <option value="biblioteca">Biblioteca</option>
+      <option value="praticando">Praticando</option>
+      <option value="pronto_para_testar">Pronto para testar</option>
+      <option value="aprendido">Aprendido</option>
     </select>
   </label>
   <span class="filter-count" id="filter-count"></span>
@@ -81,9 +82,12 @@
               </span>
               <span class="expand-meta-item">
                 <span class="expand-meta-label">Status:</span>
-                {% if entry.status == 'practice' %}Praticando
-                {% elif entry.status == 'mastered' %}Aprendido
-                {% else %}Biblioteca{% endif %}
+                <span class="status-badge {{ entry.status | replace('_', '-') }}">
+                  {% if entry.status == 'praticando' %}Praticando
+                  {% elif entry.status == 'pronto_para_testar' %}Pronto para testar
+                  {% elif entry.status == 'aprendido' %}Aprendido
+                  {% else %}Biblioteca{% endif %}
+                </span>
               </span>
             </div>
             {% if entry.source_sentence %}
@@ -121,20 +125,27 @@
             </div>
 
             <div class="detail-actions">
-              {% if entry.status == 'library' %}
-              <button class="btn-ghost btn-promote" data-id="{{ entry.id }}" data-next="practice">
+              {% if entry.status == 'biblioteca' or entry.status == 'library' %}
+              <button class="btn-ghost btn-promote" data-id="{{ entry.id }}" data-next="praticando">
                 Mover → Treino
               </button>
-              {% elif entry.status == 'practice' %}
-              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="library">
+              {% elif entry.status == 'praticando' or entry.status == 'practice' %}
+              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="biblioteca">
                 ← Biblioteca
               </button>
-              <button class="btn-ghost btn-promote" data-id="{{ entry.id }}" data-next="mastered">
-                ✓ Marcar como aprendido
+              <button class="btn-ghost btn-promote" data-id="{{ entry.id }}" data-next="pronto_para_testar">
+                Pronto para testar →
               </button>
-              {% elif entry.status == 'mastered' %}
-              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="practice">
-                ← Praticar novamente
+              {% elif entry.status == 'pronto_para_testar' %}
+              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="praticando">
+                ← Praticando
+              </button>
+              <button class="btn-ghost btn-promote" data-id="{{ entry.id }}" data-next="aprendido">
+                ✓ Aprendido →
+              </button>
+              {% elif entry.status == 'aprendido' or entry.status == 'mastered' %}
+              <button class="btn-ghost btn-demote" data-id="{{ entry.id }}" data-next="pronto_para_testar">
+                ← Pronto para testar
               </button>
               {% endif %}
               <a class="btn-ghost" href="/api/pt/anki-export?status={{ entry.status }}" download
@@ -498,11 +509,19 @@ document.body.classList.add('parch-mode');
 
     async function recordResult(result) {
       const phrase = drill.queue[drill.pos];
-      await fetch('/api/pt/drill-result', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phrase_id: phrase.id, result }),
-      });
+      await postJSON('/api/pt/drill-result', { phrase_id: phrase.id, result });
+
+      // pronto_para_testar drill interactions (spec: correct→ask, wrong→auto-demote)
+      if (phrase.status === 'pronto_para_testar') {
+        if (result === 'correct') {
+          if (confirm('Marcar como aprendido?')) {
+            await postJSON('/api/pt/palavras-status', { id: phrase.id, status: 'aprendido' });
+          }
+        } else if (result === 'wrong') {
+          await postJSON('/api/pt/palavras-status', { id: phrase.id, status: 'praticando' });
+        }
+      }
+
       if (result !== 'skip') drill.practiced++;
       drill.pos++;
       updateProgress();

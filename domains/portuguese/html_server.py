@@ -6,6 +6,8 @@ Spec 3: Conversas — voice sessions, port of Mein Deutsch Gespräche.
 Run: PORT=8770 venv/bin/python3 html_server.py
 """
 
+SESSIONS_PER_ROUND = 5
+
 import json
 import os
 import secrets
@@ -67,6 +69,29 @@ def _ensure_writing_sessions_notes():
 
 
 _ensure_writing_sessions_notes()
+
+
+def _ensure_persona_progress_table():
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS portuguese.persona_progress (
+                    id               SERIAL PRIMARY KEY,
+                    user_id          INTEGER REFERENCES auth.users(id) ON DELETE CASCADE,
+                    persona_slug     VARCHAR(100) NOT NULL,
+                    current_round    INTEGER DEFAULT 1,
+                    sessions_in_round INTEGER DEFAULT 0,
+                    sessions_total   INTEGER DEFAULT 0,
+                    last_session_at  TIMESTAMP,
+                    UNIQUE(user_id, persona_slug)
+                )
+            """)
+    except Exception as e:
+        print(f"[portuguese] migration persona_progress: {e}", flush=True)
+
+
+_ensure_persona_progress_table()
 
 _flask_secret_env = os.environ.get("FLASK_SECRET")
 if _flask_secret_env:
@@ -340,7 +365,7 @@ def _get_vocabulary(user_id, source=None, status=None, limit=100) -> list:
             {
                 "id": r[0], "portuguese": r[1], "english": r[2],
                 "source": r[3], "source_sentence": r[4],
-                "status": r[5] or "library",
+                "status": r[5] or "biblioteca",
                 "added": str(r[6])[:10] if r[6] else "",
             }
             for r in rows
@@ -417,6 +442,52 @@ def _get_leitura_notes(user_id, limit=20) -> list:
         return []
 
 
+def _get_persona_progress(user_id) -> dict:
+    """Returns {persona_slug: {round, sessions_in_round, sessions_total, ready}}"""
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            if user_id is not None:
+                cur.execute(
+                    "SELECT persona_slug, current_round, sessions_in_round, sessions_total"
+                    " FROM portuguese.persona_progress WHERE user_id = %s",
+                    (user_id,),
+                )
+            else:
+                return {}
+            rows = cur.fetchall()
+        return {
+            r[0]: {
+                "round": r[1],
+                "sessions_in_round": r[2],
+                "sessions_total": r[3],
+                "ready": r[2] >= SESSIONS_PER_ROUND,
+            }
+            for r in rows
+        }
+    except Exception as e:
+        print(f"[portuguese] persona_progress fetch error: {e}", flush=True)
+        return {}
+
+
+def _update_persona_progress(user_id, persona_slug: str):
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO portuguese.persona_progress
+                   (user_id, persona_slug, current_round, sessions_in_round, sessions_total, last_session_at)
+                   VALUES (%s, %s, 1, 1, 1, NOW())
+                   ON CONFLICT (user_id, persona_slug) DO UPDATE SET
+                     sessions_in_round = portuguese.persona_progress.sessions_in_round + 1,
+                     sessions_total    = portuguese.persona_progress.sessions_total + 1,
+                     last_session_at   = NOW()""",
+                (user_id, persona_slug),
+            )
+    except Exception as e:
+        print(f"[portuguese] persona_progress update error: {e}", flush=True)
+
+
 # ── Page routes ───────────────────────────────────────────────────────────────
 
 @app.route("/")
@@ -433,16 +504,20 @@ def leitura():
 
 @app.route("/conversas")
 def conversas():
+    user_id = _request_user_id()
     personas = _load_personas()
     for p in personas:
         p["slug"] = _name_to_slug(p["name"])
-    sessions = _get_sessions(_request_user_id(), limit=5)
+    sessions = _get_sessions(user_id, limit=5)
+    persona_progress = _get_persona_progress(user_id)
     return render_template(
         "portuguese_conversas.html",
         active="conversas",
         show_toggle=True,
         personas=personas,
         sessions=sessions,
+        persona_progress=persona_progress,
+        sessions_per_round=SESSIONS_PER_ROUND,
     )
 
 
@@ -458,7 +533,10 @@ def escrita():
 def palavras():
     user_id = _request_user_id()
     entries = _get_vocabulary(user_id, limit=100)
-    drill_pool = _get_vocabulary(user_id, status="practice", limit=50)
+    drill_pool = (
+        _get_vocabulary(user_id, status="praticando", limit=50)
+        + _get_vocabulary(user_id, status="pronto_para_testar", limit=50)
+    )
     return render_template("portuguese_palavras.html", active="palavras",
                            show_toggle=True, entries=entries, drill_pool=drill_pool)
 
@@ -650,9 +728,9 @@ def api_pt_palavras_status():
     user_id = _request_user_id()
     if not word_id or not status:
         return jsonify({"ok": False, "error": "id and status required"}), 400
-    valid = {"library", "practice", "mastered"}
+    valid = {"biblioteca", "praticando", "pronto_para_testar", "aprendido"}
     if status not in valid:
-        return jsonify({"ok": False, "error": f"status must be one of {valid}"}), 400
+        return jsonify({"ok": False, "error": "invalid status"}), 400
     try:
         conn = _db_conn()
         with conn, conn.cursor() as cur:
@@ -722,8 +800,9 @@ def api_pt_review():
         import datetime as _dt
         date_str = _dt.datetime.now().strftime("%Y-%m-%d")
         duration_min = max(1, len(transcript) // 300)
+        uid = _request_user_id()
         _save_session(
-            user_id=_request_user_id(),
+            user_id=uid,
             date_str=date_str,
             persona=persona_name,
             scenario=scene,
@@ -733,6 +812,8 @@ def api_pt_review():
             model=model,
             duration_min=duration_min,
         )
+        if uid and persona_name:
+            _update_persona_progress(uid, _name_to_slug(persona_name))
 
         return jsonify({"ok": True, **result})
     except Exception as e:
@@ -982,6 +1063,38 @@ def api_pt_send_prompt_telegram():
         timeout=10,
     )
     return jsonify({"ok": resp.ok})
+
+
+# ── API: Persona round management ────────────────────────────────────────────
+
+@app.route("/api/pt/persona-progress")
+def api_pt_persona_progress():
+    user_id = _request_user_id()
+    progress = _get_persona_progress(user_id)
+    return jsonify(progress)
+
+
+@app.route("/api/pt/persona-advance", methods=["POST"])
+def api_pt_persona_advance():
+    data = request.get_json(force=True)
+    user_id = _request_user_id()
+    persona_slug = (data.get("persona_slug") or "").strip()
+    if not persona_slug:
+        return jsonify({"ok": False, "error": "persona_slug required"}), 400
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                """UPDATE portuguese.persona_progress
+                   SET current_round = current_round + 1,
+                       sessions_in_round = 0
+                   WHERE user_id = %s AND persona_slug = %s""",
+                (user_id, persona_slug),
+            )
+        return jsonify({"ok": True})
+    except Exception as e:
+        print(f"[portuguese] persona-advance error: {e}", flush=True)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
