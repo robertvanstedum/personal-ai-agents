@@ -173,7 +173,7 @@
 
 {% block scripts %}
 <script>
-document.body.classList.add('leitura-mode');
+document.body.classList.add('parch-mode');
 (function () {
   'use strict';
 
@@ -300,7 +300,7 @@ document.body.classList.add('leitura-mode');
           btnSave.disabled = true; btnSave.textContent = '＋ Em Palavras';
           showPopover(row.getBoundingClientRect());
           fetchTranslation(art.title);
-        }, 1500);
+        }, 400);
       });
       row.addEventListener('mouseleave', () => clearTimeout(_hoverTimer));
       container.appendChild(row);

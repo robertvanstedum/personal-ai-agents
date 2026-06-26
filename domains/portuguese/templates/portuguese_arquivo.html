@@ -42,6 +42,7 @@
           <span class="archiv-date">{{ s.timestamp[:10] }}</span>
           <span class="archiv-mode-badge">{{ s.mode }}</span>
           <span class="archiv-preview">{{ s.text_original[:60] }}…</span>
+          {% if s.notes %}<span class="archiv-hints">{{ s.notes|length }} {% if s.notes|length == 1 %}Dica{% else %}Dicas{% endif %}</span>{% endif %}
         </div>
         {% endfor %}
       {% else %}

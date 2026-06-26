@@ -16,6 +16,37 @@
   <button class="mode-btn" data-mode="vocabulario" title="Registrar vocabulário manualmente">Vocabulário</button>
 </div>
 
+<!-- ── Diário ────────────────────────────────────────────────────── -->
+<div class="mode-pane" id="pane-diario">
+  <div class="tagebuch-prompt-row">
+    <p class="tagebuch-prompt" id="diario-prompt"></p>
+    <button class="btn-ghost" id="diario-next-prompt" title="Outro prompt de escrita">↻ Outro</button>
+  </div>
+  <textarea class="notebook-textarea" id="diario-input" rows="6"
+    placeholder="Escreva aqui…"></textarea>
+  <div class="pane-actions">
+    <div class="pane-actions-left">
+      <button class="btn-voice" id="voice-diario" title="Entrada de voz">🎤</button>
+      <label class="toggle-label">
+        <input type="checkbox" id="diario-correct" checked>
+        Solicitar correção
+      </label>
+    </div>
+    <button class="btn-primary" id="diario-korrigieren" title="Verificar gramática ou salvar">Corrigir</button>
+  </div>
+  <span class="write-status" id="diario-status"></span>
+  <div class="correction-display" id="diario-correction" style="display:none">
+    <div class="correction-section">
+      <div class="correction-label">Corrigido <small class="translate-hint">clique uma palavra para traduzir</small></div>
+      <div class="correction-corrected" id="diario-corrected"></div>
+    </div>
+    <ul class="correction-notes" id="diario-notes"></ul>
+    <div class="correction-actions">
+      <button class="btn-primary" id="diario-submit" title="Salvar entrada corrigida">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Em Contexto ──────────────────────────────────────────────── -->
 <div class="mode-pane hidden" id="pane-contexto">
   <div class="kontext-source" id="kontext-source" style="display:none">
@@ -64,52 +95,20 @@
   </div>
 </div>
 
-<!-- ── Diário ────────────────────────────────────────────────────── -->
-<div class="mode-pane" id="pane-diario">
-  <div class="tagebuch-prompt-row">
-    <p class="tagebuch-prompt" id="diario-prompt"></p>
-    <button class="btn-ghost" id="diario-next-prompt" title="Outro prompt de escrita">↻ Outro</button>
+<!-- ── Session history (global) ─────────────────────────────────── -->
+{% if writing_sessions %}
+<section class="session-history">
+  <h3>Histórico</h3>
+  {% for entry in writing_sessions %}
+  <div class="session-entry" data-mode="{{ entry.mode }}">
+    <span class="session-mode-badge">{{ entry.mode }}</span>
+    <span class="session-date">{{ entry.timestamp[:10] }}</span>
+    <span class="session-preview">{{ entry.text_original[:80] }}{% if entry.text_original|length > 80 %}…{% endif %}</span>
+    {% if entry.notes %}<span class="session-errors">{{ entry.notes|length }} {% if entry.notes|length == 1 %}Dica{% else %}Dicas{% endif %}</span>{% endif %}
   </div>
-  <textarea class="notebook-textarea" id="diario-input" rows="6"
-    placeholder="Escreva aqui…"></textarea>
-  <div class="pane-actions">
-    <div class="pane-actions-left">
-      <button class="btn-voice" id="voice-diario" title="Entrada de voz">🎤</button>
-    </div>
-    <div style="display:flex;gap:0.5rem;align-items:center">
-      <button class="btn-ghost" id="diario-corrigir" title="Verificar gramática">Corrigir</button>
-      <button class="btn-primary" id="diario-save" title="Salvar entrada do diário">Salvar</button>
-    </div>
-  </div>
-  <span class="write-status" id="diario-status"></span>
-  <div class="correction-display" id="diario-correction" style="display:none">
-    <div class="correction-section">
-      <div class="correction-label">Original</div>
-      <div class="correction-original" id="diario-original"></div>
-    </div>
-    <div class="correction-section">
-      <div class="correction-label">Corrigido <small class="translate-hint">clique uma palavra para traduzir</small></div>
-      <div class="correction-corrected" id="diario-corrected"></div>
-    </div>
-    <ul class="correction-notes" id="diario-notes"></ul>
-    <div class="correction-actions">
-      <button class="btn-primary" id="diario-save-corrected">Salvar entrada</button>
-    </div>
-  </div>
-
-  {% if writing_sessions %}
-  <div class="session-history">
-    <h3>Histórico recente</h3>
-    {% for s in writing_sessions %}
-    <div class="session-entry">
-      <span class="session-date">{{ s.timestamp[:10] }}</span>
-      <span class="session-mode-badge">{{ s.mode }}</span>
-      <span class="session-preview">{{ s.text_original[:60] }}…</span>
-    </div>
-    {% endfor %}
-  </div>
-  {% endif %}
-</div>
+  {% endfor %}
+</section>
+{% endif %}
 
   </div><!-- .tab-content -->
   <div class="tab-panel-photo">
@@ -118,11 +117,29 @@
          onerror="this.style.display='none'">
   </div>
 </div>
+
+<div id="save-toast" style="
+  position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(12px);
+  background:#1B3A2A; color:#F7F2E8; font-family:'DM Mono',monospace; font-size:12px;
+  padding:8px 20px; border-radius:20px; opacity:0; pointer-events:none;
+  transition:opacity 0.2s, transform 0.2s; z-index:9999; white-space:nowrap;
+">Salvo ✓</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 document.body.classList.add('parch-mode');
+
+function showSaveToast() {
+  const t = document.getElementById('save-toast');
+  t.style.opacity = '1';
+  t.style.transform = 'translateX(-50%) translateY(0)';
+  setTimeout(() => {
+    t.style.opacity = '0';
+    t.style.transform = 'translateX(-50%) translateY(12px)';
+  }, 1500);
+}
+
 (function () {
   'use strict';
 
@@ -207,24 +224,74 @@ document.body.classList.add('parch-mode');
     }).join('');
   }
 
-  // ── History append ────────────────────────────────────────────
-  function prependHistory(mode, text) {
-    const today = new Date().toISOString().slice(0, 10);
-    let hist = document.querySelector('#pane-diario .session-history');
-    if (!hist) {
-      hist = document.createElement('div');
-      hist.className = 'session-history';
-      hist.innerHTML = '<h3>Histórico recente</h3>';
-      document.getElementById('pane-diario').appendChild(hist);
+  // ── Diário: single-button/checkbox flow ───────────────────────
+  const diarioCorrectBox    = document.getElementById('diario-correct');
+  const diarioKorrigierenBtn = document.getElementById('diario-korrigieren');
+
+  function syncDiarioBtn() {
+    diarioKorrigierenBtn.textContent = diarioCorrectBox.checked ? 'Corrigir' : 'Salvar';
+  }
+  diarioCorrectBox.addEventListener('change', syncDiarioBtn);
+  syncDiarioBtn();
+
+  diarioKorrigierenBtn.addEventListener('click', async () => {
+    const text = document.getElementById('diario-input').value.trim();
+    if (!text) return;
+    const status = document.getElementById('diario-status');
+
+    if (!diarioCorrectBox.checked) {
+      await saveDiarioEntry(text, '', []);
+      return;
     }
-    const entry = document.createElement('div');
-    entry.className = 'session-entry';
-    entry.innerHTML =
-      `<span class="session-date">${today}</span>` +
-      `<span class="session-mode-badge">${mode}</span>` +
-      `<span class="session-preview">${text.slice(0, 60)}${text.length > 60 ? '…' : ''}</span>`;
-    const h3 = hist.querySelector('h3');
-    hist.insertBefore(entry, h3 ? h3.nextSibling : null);
+
+    diarioKorrigierenBtn.disabled = true;
+    status.textContent = 'Corrigindo…';
+    try {
+      const data = await postJSON('/api/pt/escrita/correct', { text });
+      const corrected = data.corrected || '';
+      const notes     = data.notes || [];
+
+      renderCorrected(document.getElementById('diario-corrected'), corrected || text);
+      const notesList = document.getElementById('diario-notes');
+      notesList.innerHTML = '';
+      notes.forEach(n => {
+        const li = document.createElement('li'); li.textContent = n; notesList.appendChild(li);
+      });
+      document.getElementById('diario-correction').style.display = 'block';
+      document.getElementById('diario-correction').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+      const submitBtn = document.getElementById('diario-submit');
+      submitBtn.dataset.original  = text;
+      submitBtn.dataset.corrected = corrected;
+      submitBtn.dataset.notes     = JSON.stringify(notes);
+      status.textContent = '';
+    } catch {
+      status.textContent = 'Erro ao corrigir.';
+    }
+    diarioKorrigierenBtn.disabled = false;
+  });
+
+  document.getElementById('diario-submit').addEventListener('click', async () => {
+    const btn = document.getElementById('diario-submit');
+    await saveDiarioEntry(
+      btn.dataset.original  || '',
+      btn.dataset.corrected || '',
+      JSON.parse(btn.dataset.notes || '[]')
+    );
+  });
+
+  async function saveDiarioEntry(text, corrected, notes) {
+    const status = document.getElementById('diario-status');
+    try {
+      await postJSON('/api/pt/escrita/save', {
+        text, corrected_text: corrected, notes, mode: 'diario',
+      });
+      showSaveToast();
+      document.getElementById('diario-input').value = '';
+      setTimeout(() => { window.location.reload(); }, 1500);
+    } catch {
+      status.textContent = 'Erro ao salvar.';
+    }
   }
 
   // ── Em Contexto ───────────────────────────────────────────────
@@ -232,7 +299,7 @@ document.body.classList.add('parch-mode');
     const text = document.getElementById('kontext-input').value.trim();
     if (!text) return;
     const status = document.getElementById('kontext-status');
-    const btn = document.getElementById('kontext-submit');
+    const btn    = document.getElementById('kontext-submit');
     btn.disabled = true; status.textContent = 'Corrigindo…';
     try {
       const data = await postJSON('/api/pt/escrita/correct', { text, mode: 'contexto' });
@@ -245,77 +312,29 @@ document.body.classList.add('parch-mode');
       });
       document.getElementById('kontext-correction').style.display = 'block';
       document.getElementById('kontext-correction').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+      const saveBtn = document.getElementById('kontext-save');
+      saveBtn.dataset.original  = text;
+      saveBtn.dataset.corrected = data.corrected || '';
+      saveBtn.dataset.notes     = JSON.stringify(data.notes || []);
       status.textContent = '';
     } catch { status.textContent = 'Erro ao corrigir.'; }
     btn.disabled = false;
   });
 
   document.getElementById('kontext-save').addEventListener('click', async () => {
-    const text = document.getElementById('kontext-input').value.trim();
-    if (!text) return;
     const btn = document.getElementById('kontext-save');
-    const status = document.getElementById('kontext-status');
-    btn.disabled = true; status.textContent = 'Salvando…';
     try {
-      await postJSON('/api/pt/escrita/save', { text, mode: 'contexto' });
-      status.textContent = '✓ Salvo';
-      setTimeout(() => { status.textContent = ''; }, 3000);
-    } catch { status.textContent = 'Erro ao salvar.'; }
-    btn.disabled = false;
-  });
-
-  // ── Diário: Corrigir ──────────────────────────────────────────
-  document.getElementById('diario-corrigir').addEventListener('click', async () => {
-    const text = document.getElementById('diario-input').value.trim();
-    if (!text) return;
-    const status = document.getElementById('diario-status');
-    const btn = document.getElementById('diario-corrigir');
-    btn.disabled = true; status.textContent = 'Corrigindo…';
-    try {
-      const data = await postJSON('/api/pt/escrita/correct', { text });
-      document.getElementById('diario-original').textContent = text;
-      renderCorrected(document.getElementById('diario-corrected'), data.corrected || text);
-      const notes = document.getElementById('diario-notes');
-      notes.innerHTML = '';
-      (data.notes || []).forEach(n => {
-        const li = document.createElement('li'); li.textContent = n; notes.appendChild(li);
+      await postJSON('/api/pt/escrita/save', {
+        text:           btn.dataset.original  || '',
+        corrected_text: btn.dataset.corrected || '',
+        notes:          JSON.parse(btn.dataset.notes || '[]'),
+        mode:           'contexto',
       });
-      document.getElementById('diario-correction').style.display = 'block';
-      document.getElementById('diario-correction').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      status.textContent = '';
-    } catch { status.textContent = 'Erro ao corrigir.'; }
-    btn.disabled = false;
-  });
-
-  // ── Diário: Salvar (without correction) ──────────────────────
-  document.getElementById('diario-save').addEventListener('click', async () => {
-    const text = document.getElementById('diario-input').value.trim();
-    if (!text) return;
-    const status = document.getElementById('diario-status');
-    const btn = document.getElementById('diario-save');
-    btn.disabled = true; status.textContent = 'Salvando…';
-    try {
-      await postJSON('/api/pt/escrita/save', { text, mode: 'diario' });
-      status.textContent = '✓ Salvo';
-      prependHistory('diário', text);
-      setTimeout(() => { status.textContent = ''; }, 3000);
-    } catch { status.textContent = 'Erro ao salvar.'; }
-    btn.disabled = false;
-  });
-
-  // ── Diário: Salvar corrected entry ────────────────────────────
-  document.getElementById('diario-save-corrected').addEventListener('click', async () => {
-    const original = document.getElementById('diario-original').textContent.trim();
-    const corrected = document.getElementById('diario-corrected').textContent.trim();
-    if (!original) return;
-    const btn = document.getElementById('diario-save-corrected');
-    btn.disabled = true; btn.textContent = 'Salvando…';
-    try {
-      await postJSON('/api/pt/escrita/save', { text: original, corrected_text: corrected, mode: 'diario' });
-      btn.textContent = '✓ Salvo';
-      prependHistory('diário', original);
-      setTimeout(() => { btn.textContent = 'Salvar entrada'; btn.disabled = false; }, 2500);
-    } catch { btn.textContent = 'Erro'; btn.disabled = false; }
+      showSaveToast();
+      btn.disabled = true;
+      setTimeout(() => { window.location.reload(); }, 1500);
+    } catch {}
   });
 
   // ── Vocabulário ───────────────────────────────────────────────

@@ -70,6 +70,10 @@
                       title="Copiar prompt para a área de transferência">
                 📋 Copiar prompt
               </button>
+              <button class="btn-delivery" id="btn-telegram"
+                      title="Enviar prompt para Telegram">
+                ✈ Telegram
+              </button>
               <button class="btn-delivery" id="btn-download"
                       title="Salvar prompt como arquivo de texto">
                 💾 Como .txt
@@ -390,6 +394,27 @@ document.body.classList.add('parch-mode');
         toast.style.display = 'block';
         setTimeout(() => { toast.style.display = 'none'; }, 3000);
       });
+    }
+  });
+
+  document.getElementById('btn-telegram').addEventListener('click', async () => {
+    const toast = document.getElementById('prompt-toast');
+    const prompt = getFullPrompt();
+    if (!prompt) return;
+    try {
+      const res = await fetch('/api/pt/send-prompt-telegram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await res.json();
+      toast.textContent = data.ok ? '✈ Enviado ✓' : '⚠ Erro ao enviar';
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 2000);
+    } catch (e) {
+      toast.textContent = '⚠ Erro de rede';
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 2000);
     }
   });
 

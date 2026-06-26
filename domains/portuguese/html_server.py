@@ -53,6 +53,21 @@ def _init_sentry():
 
 _init_sentry()
 
+
+def _ensure_writing_sessions_notes():
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                "ALTER TABLE portuguese.writing_sessions"
+                " ADD COLUMN IF NOT EXISTS notes JSONB DEFAULT '[]'"
+            )
+    except Exception as e:
+        print(f"[portuguese] migration notes column: {e}", flush=True)
+
+
+_ensure_writing_sessions_notes()
+
 _flask_secret_env = os.environ.get("FLASK_SECRET")
 if _flask_secret_env:
     app.secret_key = _flask_secret_env
@@ -341,14 +356,16 @@ def _get_writing_sessions(user_id, limit=10) -> list:
         with conn, conn.cursor() as cur:
             if user_id is not None:
                 cur.execute(
-                    "SELECT id, mode, original_text, corrected_text, created_at"
+                    "SELECT id, mode, original_text, corrected_text, created_at,"
+                    " COALESCE(notes, '[]'::jsonb)"
                     " FROM portuguese.writing_sessions"
                     " WHERE user_id = %s ORDER BY created_at DESC LIMIT %s",
                     (user_id, limit),
                 )
             else:
                 cur.execute(
-                    "SELECT id, mode, original_text, corrected_text, created_at"
+                    "SELECT id, mode, original_text, corrected_text, created_at,"
+                    " COALESCE(notes, '[]'::jsonb)"
                     " FROM portuguese.writing_sessions"
                     " ORDER BY created_at DESC LIMIT %s",
                     (limit,),
@@ -359,6 +376,7 @@ def _get_writing_sessions(user_id, limit=10) -> list:
                 "id": r[0], "mode": r[1] or "diario",
                 "text_original": r[2] or "", "text_corrected": r[3] or "",
                 "timestamp": str(r[4]) if r[4] else "",
+                "notes": r[5] if isinstance(r[5], list) else [],
             }
             for r in rows
         ]
@@ -440,8 +458,9 @@ def escrita():
 def palavras():
     user_id = _request_user_id()
     entries = _get_vocabulary(user_id, limit=100)
+    drill_pool = _get_vocabulary(user_id, status="practice", limit=50)
     return render_template("portuguese_palavras.html", active="palavras",
-                           show_toggle=True, entries=entries, drill_pool=[])
+                           show_toggle=True, entries=entries, drill_pool=drill_pool)
 
 
 @app.route("/arquivo")
@@ -601,28 +620,23 @@ def api_pt_escrita_save():
     body     = request.get_json(force=True)
     text     = (body.get("text") or "").strip()
     mode     = (body.get("mode") or "diario").strip()
-    do_correct = body.get("correct", False)
     user_id  = _request_user_id()
     if not text:
         return jsonify({"ok": False, "error": "text required"}), 400
 
     corrected_text = (body.get("corrected_text") or None)
-    notes = []
-    if not corrected_text and do_correct:
-        result = _run_correction(text)
-        corrected_text = result["corrected"]
-        notes = result["notes"]
+    notes = body.get("notes") or []
 
     try:
         conn = _db_conn()
         with conn, conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO portuguese.writing_sessions"
-                " (user_id, mode, original_text, corrected_text)"
-                " VALUES (%s, %s, %s, %s)",
-                (user_id, mode, text, corrected_text),
+                " (user_id, mode, original_text, corrected_text, notes)"
+                " VALUES (%s, %s, %s, %s, %s)",
+                (user_id, mode, text, corrected_text, json.dumps(notes)),
             )
-        return jsonify({"ok": True, "corrected": corrected_text or text, "notes": notes})
+        return jsonify({"ok": True})
     except Exception as e:
         print(f"[portuguese] escrita save error: {e}", flush=True)
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -913,6 +927,61 @@ def api_pt_send_telegram():
     if resp.ok:
         return jsonify({"ok": True})
     return jsonify({"ok": False, "error": resp.text}), 502
+
+
+# ── API: Anki export ─────────────────────────────────────────────────────────
+
+@app.route("/api/pt/anki-export")
+def api_pt_anki_export():
+    user_id = _request_user_id()
+    status = request.args.get("status") or None
+    entries = _get_vocabulary(user_id, status=status, limit=10000)
+    lines = ["Português\tInglês\tContexto"]
+    for e in entries:
+        pt  = e.get("portuguese", "").replace("\t", " ")
+        en  = e.get("english", "").replace("\t", " ")
+        ctx = (e.get("source_sentence") or "").replace("\t", " ")[:200]
+        lines.append(f"{pt}\t{en}\t{ctx}")
+    from flask import Response as _Resp
+    return _Resp(
+        "\n".join(lines),
+        mimetype="text/tab-separated-values",
+        headers={"Content-Disposition": "attachment; filename=meu-portugues-anki.tsv"},
+    )
+
+
+# ── API: Drill result ─────────────────────────────────────────────────────────
+
+@app.route("/api/pt/drill-result", methods=["POST"])
+def api_pt_drill_result():
+    body = request.get_json(force=True)
+    phrase_id = body.get("phrase_id", "")
+    result = body.get("result", "")
+    if not phrase_id or result not in ("correct", "wrong", "skip"):
+        return jsonify({"ok": False, "error": "invalid params"}), 400
+    return jsonify({"ok": True})
+
+
+# ── API: Send persona prompt to Telegram ──────────────────────────────────────
+
+@app.route("/api/pt/send-prompt-telegram", methods=["POST"])
+def api_pt_send_prompt_telegram():
+    import requests as _req
+    body = request.get_json(force=True)
+    prompt = (body.get("prompt") or "").strip()
+    if not prompt:
+        return jsonify({"ok": False, "error": "prompt required"}), 400
+    try:
+        bot_token = get_secret("TELEGRAM_BOT_TOKEN", "telegram", "bot_token")
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    msg = f"📝 *Prompt PT*\n\n{prompt[:3500]}"
+    resp = _req.post(
+        f"https://api.telegram.org/bot{bot_token}/sendMessage",
+        json={"chat_id": _ROBERT_CHAT_ID, "text": msg, "parse_mode": "Markdown"},
+        timeout=10,
+    )
+    return jsonify({"ok": resp.ok})
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

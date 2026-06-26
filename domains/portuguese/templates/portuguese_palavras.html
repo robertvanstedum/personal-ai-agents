@@ -42,6 +42,8 @@
   </label>
   <span class="filter-count" id="filter-count"></span>
   <button class="btn-filter-reset" id="btn-reset-filters">Mostrar tudo</button>
+  <a class="btn-ghost woerter-export-all" href="/api/pt/anki-export" download
+     title="Exportar vocabulário para Anki">Anki Export — Todos</a>
 </div>
 
 <div class="woerter-table-wrap">
@@ -66,7 +68,8 @@
           <button class="btn-expand" title="Ver detalhes">Detalhes</button>
         </td>
       </tr>
-      <tr class="woerter-detail" id="detail-{{ entry.id }}" style="display:none">
+      <tr class="woerter-detail" id="detail-{{ entry.id }}" style="display:none"
+          data-portuguese="{{ entry.portuguese }}" data-english="{{ entry.english }}">
         <td colspan="3">
           <div class="detail-inner">
             <div class="expand-meta">
@@ -86,6 +89,37 @@
             {% if entry.source_sentence %}
             <div class="detail-context">"{{ entry.source_sentence }}"</div>
             {% endif %}
+
+            <!-- Inline practice -->
+            <div class="expand-practice">
+              <div class="expand-label">PRATICAR</div>
+              <div class="direction-toggle-inline">
+                <button class="dir-btn active" data-dir="pt-en" title="Português para Inglês">🇧🇷 → 🇺🇸</button>
+                <button class="dir-btn" data-dir="en-pt" title="Inglês para Português">🇺🇸 → 🇧🇷</button>
+              </div>
+              <div class="practice-prompt">
+                <span class="practice-prompt-text">{{ entry.portuguese }}</span>
+                <button class="btn-voice-out btn-speak-practice"
+                        data-text="{{ entry.portuguese }}" title="Ouvir pronuncia">🔊</button>
+              </div>
+              <div class="practice-input-wrap">
+                <textarea class="practice-input" placeholder="Sua resposta…" rows="2"></textarea>
+                <div style="display:flex;gap:0.5rem;margin-top:0.4rem">
+                  <button class="btn-voice-mic btn-voice-practice"
+                          data-direction="pt-en" title="Falar sua resposta">🎤</button>
+                  <button class="btn-delivery btn-pruefen-practice"
+                          data-id="{{ entry.id }}" title="Verificar resposta">Verificar</button>
+                </div>
+              </div>
+              <div class="practice-correction" style="display:none">
+                <div class="correction-attempt result-label"></div>
+                <div class="correction-answer result-value"></div>
+                <div class="correction-notes-block" style="display:none">
+                  <ul class="drill-notes correction-notes-list"></ul>
+                </div>
+              </div>
+            </div>
+
             <div class="detail-actions">
               {% if entry.status == 'library' %}
               <button class="btn-ghost btn-promote" data-id="{{ entry.id }}" data-next="practice">
@@ -103,6 +137,8 @@
                 ← Praticar novamente
               </button>
               {% endif %}
+              <a class="btn-ghost" href="/api/pt/anki-export?status={{ entry.status }}" download
+                 title="Exportar para Anki">Anki Export</a>
             </div>
           </div>
         </td>
@@ -127,21 +163,60 @@
 <!-- ── Treino section ─────────────────────────────────────────────── -->
 <div class="woerter-section" id="section-treino" style="display:none">
   {% if drill_pool %}
+  <div class="direction-toggle" id="direction-toggle">
+    <button class="dir-btn active" data-dir="pt-en" id="dir-pt-en" title="Português para Inglês">
+      🇧🇷 → 🇺🇸 Português para Inglês
+    </button>
+    <button class="dir-btn" data-dir="en-pt" id="dir-en-pt" title="Inglês para Português">
+      🇺🇸 → 🇧🇷 Inglês para Português
+    </button>
+  </div>
+
   <div class="drill-stats">
     <span id="drill-progress">0 de {{ drill_pool|length }} praticado</span>
     <button class="btn-ghost btn-sm" id="drill-restart">Reiniciar</button>
   </div>
+
   <div class="drill-card" id="drill-card">
     <div class="drill-prompt" id="drill-prompt"></div>
-    <div class="drill-input-wrap">
-      <textarea class="practice-input" id="drill-input" placeholder="Sua resposta…" rows="2"></textarea>
-      <button class="btn-primary btn-sm" id="btn-pruefen">Verificar</button>
+    <button class="btn-voice-out" id="btn-speak-prompt" title="Ouvir pronuncia">🔊 Ouvir</button>
+
+    <div class="drill-input-area" id="drill-input-area">
+      <textarea id="drill-input" placeholder="Sua resposta aqui…" rows="3"></textarea>
+      <div class="drill-input-row">
+        <button class="btn-voice-mic" id="voice-drill" title="Entrada de voz">🎤</button>
+        <button class="btn-delivery" id="btn-pruefen" title="Verificar resposta">Verificar</button>
+      </div>
     </div>
-    <div class="practice-correction" id="drill-correction" style="display:none">
-      <div class="result-label" id="drill-result-label"></div>
-      <div class="result-value" id="drill-result-value"></div>
+
+    <div class="drill-result-block" id="drill-result-block" style="display:none">
+      <div class="result-row">
+        <span class="result-label">Sua resposta</span>
+        <span class="result-value" id="drill-attempt-text"></span>
+      </div>
+      <div class="result-row">
+        <span class="result-label" id="drill-answer-label">Solução</span>
+        <span class="result-value" id="drill-answer-text"></span>
+      </div>
+      <div id="drill-corrected-block" style="display:none">
+        <div class="result-row">
+          <span class="result-label">Corrigido</span>
+          <span class="result-value" id="drill-corrected-text"></span>
+        </div>
+        <ul class="drill-notes" id="drill-notes-list"></ul>
+      </div>
     </div>
-    <button class="btn-ghost btn-sm" id="btn-drill-next" style="margin-top:0.75rem">Próxima →</button>
+
+    <div class="drill-assess" id="drill-assess" style="display:none">
+      <button class="btn-richtig" id="drill-correct" title="Marcar correto">✓ Certo</button>
+      <button class="btn-falsch"  id="drill-wrong"  title="Marcar errado">✗ Errado</button>
+      <button class="btn-skip"    id="drill-skip"   title="Pular">→ Pular</button>
+    </div>
+  </div>
+
+  <div class="drill-done" id="drill-done" style="display:none">
+    <p>Rodada concluída.</p>
+    <button class="btn-ghost" id="drill-done-restart">Reiniciar</button>
   </div>
   {% else %}
   <div class="woerter-empty">
@@ -166,6 +241,8 @@ document.body.classList.add('parch-mode');
 (function () {
   'use strict';
 
+  const drillPool = {{ drill_pool | tojson }};
+
   async function postJSON(url, body) {
     const res = await fetch(url, {
       method: 'POST',
@@ -175,6 +252,7 @@ document.body.classList.add('parch-mode');
     return res.json();
   }
 
+  // ── Subnav ───────────────────────────────────────────────────
   document.querySelectorAll('.ueben-subnav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.ueben-subnav-btn').forEach(b => b.classList.remove('active'));
@@ -185,6 +263,7 @@ document.body.classList.add('parch-mode');
     });
   });
 
+  // ── Filters ──────────────────────────────────────────────────
   const tbody       = document.getElementById('woerter-tbody');
   const filterCount = document.getElementById('filter-count');
   const emptyFilter = document.getElementById('empty-filter-state');
@@ -215,6 +294,7 @@ document.body.classList.add('parch-mode');
   });
   applyFilters();
 
+  // ── Row expand/collapse ──────────────────────────────────────
   if (tbody) {
     tbody.addEventListener('click', e => {
       const expandBtn = e.target.closest('.btn-expand');
@@ -226,19 +306,261 @@ document.body.classList.add('parch-mode');
       const isOpen = detailRow.style.display !== 'none';
       detailRow.style.display = isOpen ? 'none' : '';
       expandBtn.textContent = isOpen ? 'Detalhes' : 'Fechar';
-    });
-
-    tbody.addEventListener('click', async e => {
-      const btn = e.target.closest('.btn-promote, .btn-demote');
-      if (!btn) return;
-      try {
-        await postJSON('/api/pt/palavras-status', { id: btn.dataset.id, status: btn.dataset.next });
-        const row = tbody.querySelector(`tr[data-id="${btn.dataset.id}"]`);
-        if (row) row.dataset.status = btn.dataset.next;
-        btn.textContent = '✓'; btn.disabled = true;
-      } catch { btn.textContent = 'Erro'; }
+      if (!isOpen) {
+        setTimeout(() => detailRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+      }
     });
   }
+
+  // ── Status promote/demote (reload) ───────────────────────────
+  document.querySelectorAll('.btn-promote, .btn-demote').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const resp = await postJSON('/api/pt/palavras-status', {
+        id: btn.dataset.id, status: btn.dataset.next,
+      });
+      if (resp.ok) window.location.reload();
+    });
+  });
+
+  // ── Inline practice: direction toggle ────────────────────────
+  document.querySelectorAll('.direction-toggle-inline').forEach(toggle => {
+    const detail = toggle.closest('.woerter-detail');
+    toggle.querySelectorAll('.dir-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        toggle.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const dir      = btn.dataset.dir;
+        const practice = toggle.closest('.expand-practice');
+        const promptEl = practice.querySelector('.practice-prompt-text');
+        promptEl.textContent = dir === 'pt-en' ? detail.dataset.portuguese : detail.dataset.english;
+        const speakBtn = practice.querySelector('.btn-speak-practice');
+        if (speakBtn) speakBtn.dataset.text = promptEl.textContent;
+        const micBtn = practice.querySelector('.btn-voice-practice');
+        if (micBtn) micBtn.dataset.direction = dir;
+        const corr = practice.querySelector('.practice-correction');
+        if (corr) corr.style.display = 'none';
+        const input = practice.querySelector('.practice-input');
+        if (input) input.value = '';
+      });
+    });
+  });
+
+  // ── Inline practice: speak ───────────────────────────────────
+  document.querySelectorAll('.btn-speak-practice').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const text = btn.dataset.text;
+      if (!text || !window.speechSynthesis) return;
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'pt-BR'; u.rate = 0.9;
+      window.speechSynthesis.speak(u);
+    });
+  });
+
+  // ── Inline practice: voice mic ───────────────────────────────
+  document.querySelectorAll('.btn-voice-practice').forEach(btn => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { btn.style.display = 'none'; return; }
+    let recognition = null;
+    btn.addEventListener('click', () => {
+      if (recognition) { recognition.stop(); recognition = null; btn.textContent = '🎤'; return; }
+      const input = btn.closest('.expand-practice').querySelector('.practice-input');
+      recognition = new SR();
+      recognition.lang = btn.dataset.direction === 'pt-en' ? 'en-US' : 'pt-BR';
+      recognition.interimResults = false;
+      recognition.onresult = e => { input.value = e.results[0][0].transcript; };
+      recognition.onend = () => { recognition = null; btn.textContent = '🎤'; };
+      recognition.start();
+      btn.textContent = '⏹';
+    });
+  });
+
+  // ── Inline practice: Verificar ───────────────────────────────
+  document.querySelectorAll('.btn-pruefen-practice').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const practice  = btn.closest('.expand-practice');
+      const detail    = btn.closest('.woerter-detail');
+      const activeDir = practice.querySelector('.dir-btn.active').dataset.dir;
+      const input     = practice.querySelector('.practice-input').value.trim();
+      const corr      = practice.querySelector('.practice-correction');
+      if (!input) return;
+
+      corr.style.display = 'block';
+      corr.querySelector('.correction-attempt').textContent = 'Sua resposta: ' + input;
+      corr.querySelector('.correction-notes-block').style.display = 'none';
+
+      if (activeDir === 'pt-en') {
+        corr.querySelector('.correction-answer').textContent = 'Solução: ' + detail.dataset.english;
+      } else {
+        corr.querySelector('.correction-answer').textContent = 'Verificando…';
+        const promptText = practice.querySelector('.practice-prompt-text').textContent;
+        try {
+          const data = await postJSON('/api/pt/escrita/correct', { text: input, context: promptText });
+          corr.querySelector('.correction-answer').textContent =
+            'Correção: ' + (data.corrected || detail.dataset.portuguese);
+          const notes = data.notes || [];
+          if (notes.length) {
+            corr.querySelector('.correction-notes-list').innerHTML =
+              notes.map(n => `<li>${n}</li>`).join('');
+            corr.querySelector('.correction-notes-block').style.display = 'block';
+          }
+        } catch {
+          corr.querySelector('.correction-answer').textContent = 'Solução: ' + detail.dataset.portuguese;
+        }
+      }
+    });
+  });
+
+  // ── Drill-Pool state machine ─────────────────────────────────
+  if (drillPool.length > 0) {
+    const drill = {
+      queue:     [...drillPool],
+      pos:       0,
+      practiced: 0,
+      direction: sessionStorage.getItem('ptDrillDirection') || 'pt-en',
+    };
+
+    function setDirection(dir) {
+      drill.direction = dir;
+      sessionStorage.setItem('ptDrillDirection', dir);
+      document.querySelectorAll('#direction-toggle .dir-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.dir === dir);
+      });
+      showPhrase(drill.pos);
+    }
+
+    document.querySelectorAll('#direction-toggle .dir-btn').forEach(b => {
+      b.addEventListener('click', () => setDirection(b.dataset.dir));
+    });
+    setDirection(drill.direction);
+
+    function updateProgress() {
+      document.getElementById('drill-progress').textContent =
+        `${drill.practiced} de ${drill.queue.length} praticado`;
+    }
+
+    function showPhrase(idx) {
+      if (idx >= drill.queue.length) {
+        document.getElementById('drill-card').style.display = 'none';
+        document.getElementById('drill-done').style.display = 'block';
+        return;
+      }
+      const phrase = drill.queue[idx];
+      document.getElementById('drill-prompt').textContent =
+        drill.direction === 'pt-en' ? phrase.portuguese : phrase.english;
+      document.getElementById('drill-input').value = '';
+      document.getElementById('drill-result-block').style.display = 'none';
+      document.getElementById('drill-corrected-block').style.display = 'none';
+      document.getElementById('drill-assess').style.display = 'none';
+      document.getElementById('drill-input-area').style.display = '';
+      document.getElementById('btn-pruefen').disabled = false;
+      document.getElementById('drill-card').style.display = '';
+      document.getElementById('drill-done').style.display = 'none';
+    }
+
+    async function submitAttempt() {
+      const phrase  = drill.queue[drill.pos];
+      const attempt = document.getElementById('drill-input').value.trim();
+      if (!attempt) return;
+
+      document.getElementById('btn-pruefen').disabled = true;
+      document.getElementById('drill-attempt-text').textContent = attempt;
+
+      if (drill.direction === 'pt-en') {
+        document.getElementById('drill-answer-label').textContent = 'Solução';
+        document.getElementById('drill-answer-text').textContent = phrase.english;
+        document.getElementById('drill-corrected-block').style.display = 'none';
+        document.getElementById('drill-result-block').style.display = 'block';
+        document.getElementById('drill-assess').style.display = 'flex';
+      } else {
+        document.getElementById('drill-answer-label').textContent = 'Correção';
+        document.getElementById('drill-answer-text').textContent = 'Verificando…';
+        document.getElementById('drill-result-block').style.display = 'block';
+        try {
+          const data = await postJSON('/api/pt/escrita/correct', {
+            text: attempt,
+            context: `Tradução esperada para: ${phrase.english}`,
+          });
+          document.getElementById('drill-answer-text').textContent =
+            data.corrected || phrase.portuguese;
+          const notes = data.notes || [];
+          if (notes.length) {
+            document.getElementById('drill-corrected-text').textContent = phrase.portuguese;
+            document.getElementById('drill-notes-list').innerHTML =
+              notes.map(n => `<li>${n}</li>`).join('');
+            document.getElementById('drill-corrected-block').style.display = 'block';
+          }
+        } catch {
+          document.getElementById('drill-answer-text').textContent = phrase.portuguese;
+        }
+        document.getElementById('drill-assess').style.display = 'flex';
+      }
+    }
+
+    async function recordResult(result) {
+      const phrase = drill.queue[drill.pos];
+      await fetch('/api/pt/drill-result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phrase_id: phrase.id, result }),
+      });
+      if (result !== 'skip') drill.practiced++;
+      drill.pos++;
+      updateProgress();
+      showPhrase(drill.pos);
+    }
+
+    document.getElementById('btn-speak-prompt').addEventListener('click', () => {
+      const phrase = drill.queue[drill.pos];
+      if (!phrase || !window.speechSynthesis) return;
+      const text = drill.direction === 'pt-en' ? phrase.portuguese : phrase.english;
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = drill.direction === 'pt-en' ? 'pt-BR' : 'en-US';
+      u.rate = 0.9;
+      window.speechSynthesis.speak(u);
+    });
+
+    const voiceDrillBtn = document.getElementById('voice-drill');
+    if (voiceDrillBtn && (window.SpeechRecognition || window.webkitSpeechRecognition)) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      let recognition = null;
+      voiceDrillBtn.addEventListener('click', () => {
+        if (recognition) {
+          recognition.stop(); recognition = null;
+          voiceDrillBtn.textContent = '🎤'; return;
+        }
+        recognition = new SR();
+        recognition.lang = drill.direction === 'pt-en' ? 'en-US' : 'pt-BR';
+        recognition.interimResults = false;
+        recognition.onresult = e => {
+          document.getElementById('drill-input').value = e.results[0][0].transcript;
+        };
+        recognition.onend = () => { recognition = null; voiceDrillBtn.textContent = '🎤'; };
+        recognition.start();
+        voiceDrillBtn.textContent = '⏹';
+      });
+    } else if (voiceDrillBtn) {
+      voiceDrillBtn.style.display = 'none';
+    }
+
+    document.getElementById('btn-pruefen').addEventListener('click', submitAttempt);
+    document.getElementById('drill-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitAttempt();
+    });
+
+    document.getElementById('drill-correct').addEventListener('click', () => recordResult('correct'));
+    document.getElementById('drill-wrong').addEventListener('click',   () => recordResult('wrong'));
+    document.getElementById('drill-skip').addEventListener('click',    () => recordResult('skip'));
+
+    function restart() {
+      drill.pos = 0; drill.practiced = 0; drill.queue = [...drillPool];
+      updateProgress(); showPhrase(0);
+    }
+    document.getElementById('drill-restart').addEventListener('click', restart);
+    document.getElementById('drill-done-restart').addEventListener('click', restart);
+
+    updateProgress(); showPhrase(0);
+  }
+
 })();
 </script>
 {% endblock %}

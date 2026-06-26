@@ -2112,6 +2112,89 @@ body.reading-mode nav { background: #1B2E1F; border-bottom-color: var(--parch-ac
 .result-label { font-family: var(--font-mono); font-size: 0.7rem; color: var(--pt-text-muted); text-transform: uppercase; margin-bottom: 0.25rem; }
 .result-value { font-size: 1rem; color: var(--pt-text-primary); }
 
+/* ── Drill — full state machine ──────────────────────────── */
+
+.direction-toggle {
+  display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap;
+}
+.dir-btn {
+  padding: 0.4rem 0.9rem; border: 1px solid var(--pt-parch-deep);
+  border-radius: 20px; background: transparent; color: var(--pt-text-secondary);
+  font-family: var(--font-body); font-size: 0.85rem; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.dir-btn:hover { border-color: var(--pt-accent); color: var(--pt-text-primary); }
+.dir-btn.active { background: var(--pt-accent); border-color: var(--pt-accent); color: var(--pt-parch); }
+
+.drill-card {
+  background: var(--pt-parch-mid); border: 1px solid var(--pt-parch-deep);
+  border-radius: 8px; padding: 1.5rem; max-width: 680px;
+}
+.drill-input-area { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+.drill-input-area textarea {
+  width: 100%; background: var(--pt-parch); border: 1px solid var(--pt-parch-deep);
+  border-radius: 6px; color: var(--pt-text-primary); font-family: var(--font-body);
+  font-size: 1rem; padding: 0.65rem 0.9rem; resize: vertical; box-sizing: border-box;
+}
+.drill-input-area textarea:focus { outline: none; border-color: var(--pt-accent); }
+.drill-input-row { display: flex; gap: 0.5rem; align-items: flex-start; }
+
+.btn-voice-out {
+  background: transparent; border: 1px solid var(--pt-parch-deep);
+  border-radius: 20px; color: var(--pt-text-secondary);
+  font-size: 0.82rem; padding: 0.25rem 0.7rem; cursor: pointer; margin-bottom: 0.75rem;
+}
+.btn-voice-out:hover { border-color: var(--pt-accent); color: var(--pt-accent); }
+
+.btn-voice-mic {
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 1px solid var(--pt-parch-deep); background: transparent;
+  font-size: 1rem; cursor: pointer; flex-shrink: 0; transition: background 0.15s;
+}
+.btn-voice-mic.listening { background: var(--pt-accent); border-color: var(--pt-accent); }
+
+.drill-result-block { border-top: 1px solid var(--pt-parch-deep); margin-top: 1rem; padding-top: 1rem; }
+.result-row { margin-bottom: 0.75rem; }
+
+.drill-notes {
+  margin: 0.25rem 0 0 0; padding-left: 1.1rem;
+  font-size: 0.85rem; color: var(--pt-text-secondary); line-height: 1.6;
+}
+
+.drill-assess { display: flex; gap: 0.6rem; margin-top: 1.25rem; flex-wrap: wrap; }
+.btn-richtig { background: #4a7c4e; color: white; border: none; padding: 0.5rem 1.1rem; border-radius: 6px; cursor: pointer; font-family: var(--font-body); font-size: 0.9rem; }
+.btn-falsch  { background: #8b3a3a; color: white; border: none; padding: 0.5rem 1.1rem; border-radius: 6px; cursor: pointer; font-family: var(--font-body); font-size: 0.9rem; }
+.btn-skip    { background: transparent; color: var(--pt-text-muted); border: 1px solid var(--pt-parch-deep); padding: 0.5rem 1.1rem; border-radius: 6px; cursor: pointer; font-family: var(--font-body); font-size: 0.9rem; }
+
+.drill-done { padding: 2rem 0; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; color: var(--pt-text-secondary); }
+
+/* ── Inline practice in word detail ─────────────────────── */
+
+.expand-practice { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--pt-parch-deep); }
+.expand-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--pt-text-muted); margin-bottom: 0.6rem; }
+.direction-toggle-inline { display: flex; gap: 0.4rem; margin-bottom: 0.75rem; }
+.practice-prompt { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.practice-prompt-text { font-family: Georgia, serif; font-size: 1.05rem; color: var(--pt-text-primary); }
+.practice-input-wrap { display: flex; gap: 0.4rem; align-items: flex-start; margin-bottom: 0.5rem; }
+.practice-input { flex: 1; background: var(--pt-parch); border: 1px solid var(--pt-parch-deep); border-radius: 6px; color: var(--pt-text-primary); font-family: var(--font-body); font-size: 0.9rem; padding: 0.5rem 0.75rem; resize: vertical; min-height: 60px; }
+.practice-input:focus { outline: none; border-color: var(--pt-accent); }
+.practice-correction { margin-top: 0.5rem; padding: 0.75rem 1rem; background: var(--pt-parch); border: 1px solid var(--pt-parch-deep); border-radius: 6px; font-size: 0.88rem; line-height: 1.6; }
+.correction-notes-block { margin-top: 0.5rem; }
+.correction-notes-list { padding-left: 1.1rem; font-size: 0.85rem; color: var(--pt-text-secondary); }
+
+/* ── Session history hints count ─────────────────────────── */
+
+.session-errors { font-size: 0.8rem; color: var(--pt-accent); white-space: nowrap; flex-shrink: 0; }
+
+/* ── Anki export button ──────────────────────────────────── */
+
+.woerter-export-all {
+  padding: 0.3rem 0.8rem; font-size: 0.82rem; text-decoration: none;
+  color: var(--pt-text-muted); border: 1px solid var(--pt-parch-deep);
+  border-radius: 6px; transition: all 0.15s;
+}
+.woerter-export-all:hover { border-color: var(--pt-accent); color: var(--pt-accent); }
+
 /* ── Arquivo ─────────────────────────────────────────────── */
 
 .archiv-header { margin-bottom: 1.5rem; }
@@ -2145,6 +2228,9 @@ body.reading-mode nav { background: #1B2E1F; border-bottom-color: var(--parch-ac
 .archiv-persona { font-size: 0.88rem; color: var(--pt-text-primary); font-weight: 500; }
 .archiv-scene { font-size: 0.85rem; color: var(--pt-text-secondary); flex: 1; }
 .archiv-source { font-family: var(--font-mono); font-size: 0.68rem; color: var(--pt-accent); text-transform: uppercase; }
+.archiv-hints { font-size: 0.75rem; color: var(--pt-accent); white-space: nowrap; flex-shrink: 0; }
+.archiv-mode-badge { font-family: var(--font-mono); font-size: 0.68rem; background: rgba(196,96,58,0.1); border: 1px solid var(--pt-parch-deep); border-radius: 4px; color: var(--pt-accent); padding: 0.1rem 0.4rem; white-space: nowrap; }
+.archiv-preview { font-size: 0.88rem; color: var(--pt-text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archiv-mode-badge {
   font-family: var(--font-mono); font-size: 0.68rem; background: rgba(196,96,58,0.1);
   border: 1px solid var(--pt-parch-deep); border-radius: 4px; color: var(--pt-accent);
