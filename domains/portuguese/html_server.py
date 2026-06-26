@@ -606,9 +606,9 @@ def api_pt_escrita_save():
     if not text:
         return jsonify({"ok": False, "error": "text required"}), 400
 
-    corrected_text = None
+    corrected_text = (body.get("corrected_text") or None)
     notes = []
-    if do_correct:
+    if not corrected_text and do_correct:
         result = _run_correction(text)
         corrected_text = result["corrected"]
         notes = result["notes"]

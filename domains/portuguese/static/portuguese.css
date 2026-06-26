@@ -1945,6 +1945,26 @@ body.reading-mode nav { background: #1B2E1F; border-bottom-color: var(--parch-ac
 .correction-notes li::before { content: '›'; position: absolute; left: 0; color: var(--pt-accent); }
 .correction-actions { padding: 0.75rem 1.4rem 1rem; }
 
+.translate-hint {
+  font-weight: normal; text-transform: none; letter-spacing: 0;
+  font-size: 0.72rem; color: var(--pt-text-muted); margin-left: 0.5rem;
+}
+
+.word-token {
+  cursor: pointer; border-radius: 2px;
+  transition: background 0.12s;
+}
+.word-token:hover { background: rgba(196, 96, 58, 0.14); }
+
+.translate-tip-bubble {
+  display: none; position: absolute; z-index: 9999;
+  background: var(--pt-dark); color: #fff;
+  font-size: 0.82rem; line-height: 1.4;
+  padding: 0.3rem 0.65rem; border-radius: 6px;
+  pointer-events: none; max-width: 220px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.28);
+}
+
 /* ── Notebook textarea ───────────────────────────────────── */
 
 .notebook-textarea {

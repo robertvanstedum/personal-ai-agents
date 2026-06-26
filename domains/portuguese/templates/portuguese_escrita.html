@@ -38,7 +38,7 @@
       <div class="correction-original" id="kontext-original"></div>
     </div>
     <div class="correction-section">
-      <div class="correction-label">Corrigido</div>
+      <div class="correction-label">Corrigido <small class="translate-hint">clique uma palavra para traduzir</small></div>
       <div class="correction-corrected" id="kontext-corrected"></div>
     </div>
     <ul class="correction-notes" id="kontext-notes"></ul>
@@ -75,12 +75,11 @@
   <div class="pane-actions">
     <div class="pane-actions-left">
       <button class="btn-voice" id="voice-diario" title="Entrada de voz">🎤</button>
-      <label class="toggle-label">
-        <input type="checkbox" id="diario-corrigir-check">
-        Corrigir ao salvar
-      </label>
     </div>
-    <button class="btn-primary" id="diario-save" title="Salvar entrada do diário">Salvar</button>
+    <div style="display:flex;gap:0.5rem;align-items:center">
+      <button class="btn-ghost" id="diario-corrigir" title="Verificar gramática">Corrigir</button>
+      <button class="btn-primary" id="diario-save" title="Salvar entrada do diário">Salvar</button>
+    </div>
   </div>
   <span class="write-status" id="diario-status"></span>
   <div class="correction-display" id="diario-correction" style="display:none">
@@ -89,10 +88,13 @@
       <div class="correction-original" id="diario-original"></div>
     </div>
     <div class="correction-section">
-      <div class="correction-label">Corrigido</div>
+      <div class="correction-label">Corrigido <small class="translate-hint">clique uma palavra para traduzir</small></div>
       <div class="correction-corrected" id="diario-corrected"></div>
     </div>
     <ul class="correction-notes" id="diario-notes"></ul>
+    <div class="correction-actions">
+      <button class="btn-primary" id="diario-save-corrected">Salvar entrada</button>
+    </div>
   </div>
 
   {% if writing_sessions %}
@@ -142,12 +144,10 @@ document.body.classList.add('parch-mode');
     const el = document.getElementById('diario-prompt');
     if (el) el.textContent = PROMPTS[promptIdx % PROMPTS.length];
   }
-
   document.getElementById('diario-next-prompt').addEventListener('click', () => {
     promptIdx = (promptIdx + 1) % PROMPTS.length;
     loadPrompt();
   });
-
   loadPrompt();
 
   async function postJSON(url, body) {
@@ -170,6 +170,63 @@ document.body.classList.add('parch-mode');
     });
   });
 
+  // ── Word-click translation tooltip ───────────────────────────
+  const tip = document.createElement('div');
+  tip.className = 'translate-tip-bubble';
+  document.body.appendChild(tip);
+  let _tipTimer = null;
+
+  function showTip(el, text) {
+    clearTimeout(_tipTimer);
+    const rect = el.getBoundingClientRect();
+    tip.textContent = text;
+    tip.style.display = 'block';
+    tip.style.left = Math.min(rect.left, window.innerWidth - 220) + 'px';
+    tip.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+    _tipTimer = setTimeout(() => { tip.style.display = 'none'; }, 5000);
+  }
+  function hideTip() { clearTimeout(_tipTimer); tip.style.display = 'none'; }
+
+  document.addEventListener('click', async (e) => {
+    const tok = e.target.closest('.word-token');
+    if (!tok) { hideTip(); return; }
+    const word = tok.dataset.word;
+    if (!word || word.length < 2) return;
+    showTip(tok, '…');
+    try {
+      const data = await postJSON('/api/pt/translate', { phrase: word });
+      showTip(tok, data.translation || '—');
+    } catch { showTip(tok, '—'); }
+  });
+
+  function renderCorrected(el, text) {
+    el.innerHTML = text.split(/(\s+)/).map(tok => {
+      if (/^\s+$/.test(tok)) return tok;
+      const word = tok.replace(/[.,!?;:"""'''«»()\-]/g, '').trim();
+      return word ? `<span class="word-token" data-word="${word}">${tok}</span>` : tok;
+    }).join('');
+  }
+
+  // ── History append ────────────────────────────────────────────
+  function prependHistory(mode, text) {
+    const today = new Date().toISOString().slice(0, 10);
+    let hist = document.querySelector('#pane-diario .session-history');
+    if (!hist) {
+      hist = document.createElement('div');
+      hist.className = 'session-history';
+      hist.innerHTML = '<h3>Histórico recente</h3>';
+      document.getElementById('pane-diario').appendChild(hist);
+    }
+    const entry = document.createElement('div');
+    entry.className = 'session-entry';
+    entry.innerHTML =
+      `<span class="session-date">${today}</span>` +
+      `<span class="session-mode-badge">${mode}</span>` +
+      `<span class="session-preview">${text.slice(0, 60)}${text.length > 60 ? '…' : ''}</span>`;
+    const h3 = hist.querySelector('h3');
+    hist.insertBefore(entry, h3 ? h3.nextSibling : null);
+  }
+
   // ── Em Contexto ───────────────────────────────────────────────
   document.getElementById('kontext-submit').addEventListener('click', async () => {
     const text = document.getElementById('kontext-input').value.trim();
@@ -179,15 +236,15 @@ document.body.classList.add('parch-mode');
     btn.disabled = true; status.textContent = 'Corrigindo…';
     try {
       const data = await postJSON('/api/pt/escrita/correct', { text, mode: 'contexto' });
-      document.getElementById('kontext-original').textContent  = text;
-      document.getElementById('kontext-corrected').textContent = data.corrected || text;
+      document.getElementById('kontext-original').textContent = text;
+      renderCorrected(document.getElementById('kontext-corrected'), data.corrected || text);
       const notes = document.getElementById('kontext-notes');
       notes.innerHTML = '';
       (data.notes || []).forEach(n => {
-        const li = document.createElement('li'); li.textContent = n;
-        notes.appendChild(li);
+        const li = document.createElement('li'); li.textContent = n; notes.appendChild(li);
       });
       document.getElementById('kontext-correction').style.display = 'block';
+      document.getElementById('kontext-correction').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       status.textContent = '';
     } catch { status.textContent = 'Erro ao corrigir.'; }
     btn.disabled = false;
@@ -196,36 +253,69 @@ document.body.classList.add('parch-mode');
   document.getElementById('kontext-save').addEventListener('click', async () => {
     const text = document.getElementById('kontext-input').value.trim();
     if (!text) return;
-    await postJSON('/api/pt/escrita/save', { text, mode: 'contexto' });
-    document.getElementById('kontext-status').textContent = '✓ Salvo';
-    setTimeout(() => { document.getElementById('kontext-status').textContent = ''; }, 3000);
-  });
-
-  // ── Diário ────────────────────────────────────────────────────
-  document.getElementById('diario-save').addEventListener('click', async () => {
-    const text = document.getElementById('diario-input').value.trim();
-    if (!text) return;
-    const doCorrect = document.getElementById('diario-corrigir-check').checked;
-    const status = document.getElementById('diario-status');
-    const btn = document.getElementById('diario-save');
-    btn.disabled = true; status.textContent = doCorrect ? 'Corrigindo e salvando…' : 'Salvando…';
+    const btn = document.getElementById('kontext-save');
+    const status = document.getElementById('kontext-status');
+    btn.disabled = true; status.textContent = 'Salvando…';
     try {
-      const data = await postJSON('/api/pt/escrita/save', { text, mode: 'diario', correct: doCorrect });
-      if (doCorrect && data.corrected) {
-        document.getElementById('diario-original').textContent  = text;
-        document.getElementById('diario-corrected').textContent = data.corrected;
-        const notes = document.getElementById('diario-notes');
-        notes.innerHTML = '';
-        (data.notes || []).forEach(n => {
-          const li = document.createElement('li'); li.textContent = n;
-          notes.appendChild(li);
-        });
-        document.getElementById('diario-correction').style.display = 'block';
-      }
+      await postJSON('/api/pt/escrita/save', { text, mode: 'contexto' });
       status.textContent = '✓ Salvo';
       setTimeout(() => { status.textContent = ''; }, 3000);
     } catch { status.textContent = 'Erro ao salvar.'; }
     btn.disabled = false;
+  });
+
+  // ── Diário: Corrigir ──────────────────────────────────────────
+  document.getElementById('diario-corrigir').addEventListener('click', async () => {
+    const text = document.getElementById('diario-input').value.trim();
+    if (!text) return;
+    const status = document.getElementById('diario-status');
+    const btn = document.getElementById('diario-corrigir');
+    btn.disabled = true; status.textContent = 'Corrigindo…';
+    try {
+      const data = await postJSON('/api/pt/escrita/correct', { text });
+      document.getElementById('diario-original').textContent = text;
+      renderCorrected(document.getElementById('diario-corrected'), data.corrected || text);
+      const notes = document.getElementById('diario-notes');
+      notes.innerHTML = '';
+      (data.notes || []).forEach(n => {
+        const li = document.createElement('li'); li.textContent = n; notes.appendChild(li);
+      });
+      document.getElementById('diario-correction').style.display = 'block';
+      document.getElementById('diario-correction').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      status.textContent = '';
+    } catch { status.textContent = 'Erro ao corrigir.'; }
+    btn.disabled = false;
+  });
+
+  // ── Diário: Salvar (without correction) ──────────────────────
+  document.getElementById('diario-save').addEventListener('click', async () => {
+    const text = document.getElementById('diario-input').value.trim();
+    if (!text) return;
+    const status = document.getElementById('diario-status');
+    const btn = document.getElementById('diario-save');
+    btn.disabled = true; status.textContent = 'Salvando…';
+    try {
+      await postJSON('/api/pt/escrita/save', { text, mode: 'diario' });
+      status.textContent = '✓ Salvo';
+      prependHistory('diário', text);
+      setTimeout(() => { status.textContent = ''; }, 3000);
+    } catch { status.textContent = 'Erro ao salvar.'; }
+    btn.disabled = false;
+  });
+
+  // ── Diário: Salvar corrected entry ────────────────────────────
+  document.getElementById('diario-save-corrected').addEventListener('click', async () => {
+    const original = document.getElementById('diario-original').textContent.trim();
+    const corrected = document.getElementById('diario-corrected').textContent.trim();
+    if (!original) return;
+    const btn = document.getElementById('diario-save-corrected');
+    btn.disabled = true; btn.textContent = 'Salvando…';
+    try {
+      await postJSON('/api/pt/escrita/save', { text: original, corrected_text: corrected, mode: 'diario' });
+      btn.textContent = '✓ Salvo';
+      prependHistory('diário', original);
+      setTimeout(() => { btn.textContent = 'Salvar entrada'; btn.disabled = false; }, 2500);
+    } catch { btn.textContent = 'Erro'; btn.disabled = false; }
   });
 
   // ── Vocabulário ───────────────────────────────────────────────
