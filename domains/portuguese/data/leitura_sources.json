@@ -50,6 +50,13 @@
       "active": true
     },
     {
+      "name": "CNN Brasil",
+      "url": "https://www.cnnbrasil.com.br/feed/",
+      "category": "noticias",
+      "level": "intermediario",
+      "active": true
+    },
+    {
       "name": "Folha de São Paulo",
       "url": "https://feeds.folha.uol.com.br/emcimadahora/rss091.xml",
       "category": "noticias",
@@ -57,7 +64,7 @@
       "active": true
     }
   ],
-  "max_articles_per_source": 5,
+  "max_articles_per_source": 3,
   "max_age_days": 7,
   "retention_days": 30
 }
