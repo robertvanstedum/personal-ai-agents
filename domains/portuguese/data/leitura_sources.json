@@ -15,6 +15,14 @@
       "active": true
     },
     {
+      "name": "O Dia",
+      "url": "https://odia.ig.com.br/ultimas-noticias",
+      "type": "web",
+      "category": "cotidiano",
+      "level": "iniciante",
+      "active": true
+    },
+    {
       "name": "Veja Rio",
       "url": "https://vejario.abril.com.br/feed/",
       "category": "rio",

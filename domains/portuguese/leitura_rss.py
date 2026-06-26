@@ -82,6 +82,43 @@ def fetch_feed(source: dict, max_articles: int) -> list[dict]:
         return []
 
 
+def fetch_web(source: dict, max_articles: int) -> list[dict]:
+    from bs4 import BeautifulSoup
+    try:
+        resp = requests.get(
+            source["url"],
+            headers={"User-Agent": _USER_AGENT},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.content, "html.parser")
+        articles = []
+        for el in soup.select("article.teaser[data-matia]"):
+            if len(articles) >= max_articles:
+                break
+            a = el.find("a", href=True)
+            if not a:
+                continue
+            href = a["href"]
+            if not href.startswith("http"):
+                href = "https://odia.ig.com.br" + href
+            title = a.get_text(strip=True) or el.get_text(strip=True)
+            title = title[:200].strip()
+            if len(title) < 10:
+                continue
+            articles.append({
+                "url": href,
+                "title": title,
+                "excerpt": "",
+                "published_at": None,
+            })
+        log.info(f"  {source['name']}: {len(articles)} articles scraped")
+        return articles
+    except Exception as e:
+        log.error(f"Web scrape failed for {source['name']}: {e}")
+        return []
+
+
 def store_articles(
     articles: list[dict],
     source: dict,
@@ -143,7 +180,11 @@ def run_pipeline() -> int:
             if not source.get("active", True):
                 continue
             log.info(f"Fetching {source['name']} ({source['category']})…")
-            articles = fetch_feed(source, config["max_articles_per_source"])
+            src_type = source.get("type", "rss")
+            if src_type == "web":
+                articles = fetch_web(source, config["max_articles_per_source"])
+            else:
+                articles = fetch_feed(source, config["max_articles_per_source"])
             new = store_articles(articles, source, config["max_age_days"], conn)
             log.info(f"  → {new} new stored")
             total_new += new
