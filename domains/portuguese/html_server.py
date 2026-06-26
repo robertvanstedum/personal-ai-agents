@@ -92,8 +92,13 @@ def _persona_voice(persona: dict) -> str:
 
 def _db_conn():
     import psycopg2
-    db_url = os.environ.get("DATABASE_URL") or get_secret("DATABASE_URL") or \
-        "postgresql://postgres:simple123@localhost:5432/personal_agents"
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        try:
+            db_url = get_secret("DATABASE_URL")
+        except Exception:
+            db_url = None
+    db_url = db_url or "postgresql://postgres:simple123@localhost:5432/personal_agents"
     return psycopg2.connect(db_url)
 
 
@@ -174,6 +179,226 @@ def _request_user_id() -> int | None:
     return None
 
 
+# ── Translation ───────────────────────────────────────────────────────────────
+
+_deepl_client: object | None = None
+
+
+def _get_deepl_client():
+    global _deepl_client
+    if _deepl_client is not None:
+        return _deepl_client
+    try:
+        import deepl as _deepl
+        api_key = get_secret("DEEPL_API_KEY", "deepl", "api_key")
+        if not api_key:
+            return None
+        _deepl_client = _deepl.Translator(api_key)
+        return _deepl_client
+    except Exception:
+        return None
+
+
+def _translate_phrase(text: str) -> tuple[str, str]:
+    """Returns (translation, source). Source: 'cache', 'deepl', or 'claude'."""
+    key = text.lower().strip()
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT english FROM portuguese.translation_cache WHERE portuguese = %s", (key,)
+            )
+            row = cur.fetchone()
+        if row:
+            return row[0], "cache"
+    except Exception:
+        pass
+
+    translation = ""
+    source = ""
+    try:
+        translator = _get_deepl_client()
+        if translator:
+            result = translator.translate_text(text, source_lang="PT", target_lang="EN-US")
+            translation = result.text
+            source = "deepl"
+    except Exception:
+        global _deepl_client
+        _deepl_client = None
+
+    if not translation:
+        try:
+            import anthropic
+            api_key = get_secret("ANTHROPIC_API_KEY", "anthropic", "api_key")
+            if api_key:
+                client = anthropic.Anthropic(api_key=api_key)
+                resp = client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=100,
+                    system="Translate the Portuguese word or phrase to English. Return only the translation, nothing else.",
+                    messages=[{"role": "user", "content": text}],
+                )
+                translation = resp.content[0].text.strip()
+                source = "claude"
+        except Exception:
+            pass
+
+    if translation:
+        try:
+            conn = _db_conn()
+            with conn, conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO portuguese.translation_cache (portuguese, english)"
+                    " VALUES (%s, %s) ON CONFLICT (portuguese) DO NOTHING",
+                    (key, translation),
+                )
+        except Exception:
+            pass
+
+    return translation, source
+
+
+# ── Grammar correction ────────────────────────────────────────────────────────
+
+_CORRECTION_SYSTEM = """Você é um professor de português brasileiro.
+Corrija o texto do estudante e retorne SOMENTE um JSON válido:
+{"corrected": "texto corrigido", "translation": "English translation", "notes": ["nota curta 1", "nota curta 2"]}
+Máximo 3 notas. Seja específico e encorajador. Notes em português."""
+
+
+def _run_correction(text: str) -> dict:
+    try:
+        import anthropic
+        api_key = get_secret("ANTHROPIC_API_KEY", "anthropic", "api_key")
+        if not api_key:
+            return {"corrected": text, "translation": "", "notes": []}
+        client = anthropic.Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=600,
+            system=_CORRECTION_SYSTEM,
+            messages=[{"role": "user", "content": text}],
+        )
+        raw = resp.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        parsed = json.loads(raw.strip())
+        return {
+            "corrected":    parsed.get("corrected", text),
+            "translation":  parsed.get("translation", ""),
+            "notes":        parsed.get("notes", []),
+        }
+    except Exception as e:
+        print(f"[portuguese] correction error: {e}", flush=True)
+        return {"corrected": text, "translation": "", "notes": []}
+
+
+# ── Vocabulary helpers ────────────────────────────────────────────────────────
+
+def _get_vocabulary(user_id, source=None, status=None, limit=100) -> list:
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            clauses = []
+            params: list = []
+            if user_id is not None:
+                clauses.append("user_id = %s")
+                params.append(user_id)
+            if source:
+                clauses.append("source = %s")
+                params.append(source)
+            if status:
+                clauses.append("status = %s")
+                params.append(status)
+            where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+            params.append(limit)
+            cur.execute(
+                f"SELECT id, portuguese, english, source, source_sentence, status, added_at"
+                f" FROM portuguese.vocabulary {where}"
+                f" ORDER BY added_at DESC LIMIT %s",
+                params,
+            )
+            rows = cur.fetchall()
+        return [
+            {
+                "id": r[0], "portuguese": r[1], "english": r[2],
+                "source": r[3], "source_sentence": r[4],
+                "status": r[5] or "library",
+                "added": str(r[6])[:10] if r[6] else "",
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        print(f"[portuguese] vocabulary fetch error: {e}", flush=True)
+        return []
+
+
+def _get_writing_sessions(user_id, limit=10) -> list:
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            if user_id is not None:
+                cur.execute(
+                    "SELECT id, mode, original_text, corrected_text, created_at"
+                    " FROM portuguese.writing_sessions"
+                    " WHERE user_id = %s ORDER BY created_at DESC LIMIT %s",
+                    (user_id, limit),
+                )
+            else:
+                cur.execute(
+                    "SELECT id, mode, original_text, corrected_text, created_at"
+                    " FROM portuguese.writing_sessions"
+                    " ORDER BY created_at DESC LIMIT %s",
+                    (limit,),
+                )
+            rows = cur.fetchall()
+        return [
+            {
+                "id": r[0], "mode": r[1] or "diario",
+                "text_original": r[2] or "", "text_corrected": r[3] or "",
+                "timestamp": str(r[4]) if r[4] else "",
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        print(f"[portuguese] writing sessions fetch error: {e}", flush=True)
+        return []
+
+
+def _get_leitura_notes(user_id, limit=20) -> list:
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            if user_id is not None:
+                cur.execute(
+                    "SELECT id, article_title, original, corrected, created_at"
+                    " FROM portuguese.leitura_notes"
+                    " WHERE user_id = %s ORDER BY created_at DESC LIMIT %s",
+                    (user_id, limit),
+                )
+            else:
+                cur.execute(
+                    "SELECT id, article_title, original, corrected, created_at"
+                    " FROM portuguese.leitura_notes"
+                    " ORDER BY created_at DESC LIMIT %s",
+                    (limit,),
+                )
+            rows = cur.fetchall()
+        return [
+            {
+                "id": r[0], "article_title": r[1] or "",
+                "original": r[2] or "", "corrected": r[3] or "",
+                "date": str(r[4])[:10] if r[4] else "",
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        print(f"[portuguese] leitura notes fetch error: {e}", flush=True)
+        return []
+
+
 # ── Page routes ───────────────────────────────────────────────────────────────
 
 @app.route("/")
@@ -205,24 +430,31 @@ def conversas():
 
 @app.route("/escrita")
 def escrita():
+    user_id = _request_user_id()
+    writing_sessions = _get_writing_sessions(user_id, limit=5)
     return render_template("portuguese_escrita.html", active="escrita",
-                           show_toggle=True, writing_sessions=[])
+                           show_toggle=True, writing_sessions=writing_sessions)
 
 
 @app.route("/palavras")
 def palavras():
+    user_id = _request_user_id()
+    entries = _get_vocabulary(user_id, limit=100)
     return render_template("portuguese_palavras.html", active="palavras",
-                           show_toggle=True, entries=[], drill_pool=[])
+                           show_toggle=True, entries=entries, drill_pool=[])
 
 
 @app.route("/arquivo")
 def arquivo():
-    sessions = _get_sessions(_request_user_id(), limit=10)
+    user_id = _request_user_id()
+    conversas_sessions = _get_sessions(user_id, limit=10)
+    writing_sessions = _get_writing_sessions(user_id, limit=10)
+    leitura_notes = _get_leitura_notes(user_id, limit=20)
     return render_template("portuguese_arquivo.html", active="arquivo",
                            show_toggle=True,
-                           conversas_sessions=sessions,
-                           writing_sessions=[],
-                           leitura_notes=[])
+                           conversas_sessions=conversas_sessions,
+                           writing_sessions=writing_sessions,
+                           leitura_notes=leitura_notes)
 
 
 @app.route("/admin")
@@ -240,7 +472,31 @@ def health():
 
 @app.route("/api/pt/leitura-category")
 def api_pt_leitura_category():
-    return jsonify({"articles": [], "category": request.args.get("category", "")})
+    category = request.args.get("category", "").strip()
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, title, source, url, full_text, excerpt, date_fetched"
+                " FROM portuguese.articles"
+                " WHERE category = %s AND is_active = TRUE"
+                " ORDER BY date_fetched DESC, id DESC LIMIT 30",
+                (category,),
+            )
+            rows = cur.fetchall()
+        articles = [
+            {
+                "id": r[0], "title": r[1], "source": r[2] or "",
+                "url": r[3] or "#",
+                "summary": r[4] or r[5] or "",
+                "date_fetched": str(r[6]) if r[6] else "",
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        print(f"[portuguese] leitura-category error: {e}", flush=True)
+        articles = []
+    return jsonify({"articles": articles, "category": category})
 
 
 @app.route("/api/pt/leitura-action", methods=["POST"])
@@ -255,39 +511,151 @@ def api_pt_leitura_refresh():
 
 @app.route("/api/pt/translate", methods=["POST"])
 def api_pt_translate():
-    return jsonify({"translation": "", "timing": {}})
+    import time as _t
+    body = request.get_json(force=True)
+    phrase = (body.get("phrase") or body.get("text") or "").strip()
+    if not phrase:
+        return jsonify({"translation": "", "timing": {}})
+    t0 = _t.time()
+    translation, source = _translate_phrase(phrase)
+    ms = int((_t.time() - t0) * 1000)
+    print(f"[TIMING] pt_translate_ms={ms} source={source}", flush=True)
+    return jsonify({"translation": translation, "timing": {"total_ms": ms, "source": source}})
 
 
 @app.route("/api/pt/save-phrase", methods=["POST"])
 def api_pt_save_phrase():
-    return jsonify({"ok": True})
+    body = request.get_json(force=True)
+    pt   = (body.get("portuguese") or "").strip()
+    en   = (body.get("english") or body.get("translation") or "").strip()
+    ctx  = (body.get("context_sentence") or "").strip()
+    src  = (body.get("source") or "leitura").strip()
+    user_id = _request_user_id()
+    if not pt:
+        return jsonify({"ok": False, "error": "portuguese required"}), 400
+    if not en:
+        en, _ = _translate_phrase(pt)
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO portuguese.vocabulary"
+                " (user_id, portuguese, english, source, source_sentence)"
+                " VALUES (%s, %s, %s, %s, %s)"
+                " ON CONFLICT (user_id, portuguese) DO UPDATE SET english = EXCLUDED.english",
+                (user_id, pt, en or None, src, ctx or None),
+            )
+        return jsonify({"ok": True})
+    except Exception as e:
+        print(f"[portuguese] save-phrase error: {e}", flush=True)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/pt/note-save", methods=["POST"])
 def api_pt_note_save():
-    return jsonify({"ok": True})
+    body = request.get_json(force=True)
+    user_id       = _request_user_id()
+    article_id    = body.get("article_id") or None
+    article_title = (body.get("article_title") or "").strip()
+    original      = (body.get("original") or body.get("rewritten") or "").strip()
+    corrected     = (body.get("corrected") or "").strip()
+    if not original:
+        return jsonify({"ok": False, "error": "original required"}), 400
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO portuguese.leitura_notes"
+                " (user_id, article_id, article_title, original, corrected)"
+                " VALUES (%s, %s, %s, %s, %s)",
+                (user_id, article_id or None, article_title or None, original, corrected or None),
+            )
+        return jsonify({"ok": True})
+    except Exception as e:
+        print(f"[portuguese] note-save error: {e}", flush=True)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/pt/leitura/correct", methods=["POST"])
 def api_pt_leitura_correct():
     body = request.get_json(force=True)
-    return jsonify({"corrected": body.get("text", ""), "translation": "", "notes": []})
+    text = (body.get("text") or "").strip()
+    if not text:
+        return jsonify({"corrected": "", "translation": "", "notes": []})
+    result = _run_correction(text)
+    return jsonify(result)
 
 
 @app.route("/api/pt/escrita/correct", methods=["POST"])
 def api_pt_escrita_correct():
     body = request.get_json(force=True)
-    return jsonify({"corrected": body.get("text", ""), "notes": []})
+    text = (body.get("text") or "").strip()
+    if not text:
+        return jsonify({"corrected": "", "notes": []})
+    result = _run_correction(text)
+    return jsonify({"corrected": result["corrected"], "notes": result["notes"]})
 
 
 @app.route("/api/pt/escrita/save", methods=["POST"])
 def api_pt_escrita_save():
-    return jsonify({"ok": True})
+    body     = request.get_json(force=True)
+    text     = (body.get("text") or "").strip()
+    mode     = (body.get("mode") or "diario").strip()
+    do_correct = body.get("correct", False)
+    user_id  = _request_user_id()
+    if not text:
+        return jsonify({"ok": False, "error": "text required"}), 400
+
+    corrected_text = None
+    notes = []
+    if do_correct:
+        result = _run_correction(text)
+        corrected_text = result["corrected"]
+        notes = result["notes"]
+
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO portuguese.writing_sessions"
+                " (user_id, mode, original_text, corrected_text)"
+                " VALUES (%s, %s, %s, %s)",
+                (user_id, mode, text, corrected_text),
+            )
+        return jsonify({"ok": True, "corrected": corrected_text or text, "notes": notes})
+    except Exception as e:
+        print(f"[portuguese] escrita save error: {e}", flush=True)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/pt/palavras-status", methods=["POST"])
 def api_pt_palavras_status():
-    return jsonify({"ok": True})
+    body    = request.get_json(force=True)
+    word_id = body.get("id")
+    status  = (body.get("status") or "").strip()
+    user_id = _request_user_id()
+    if not word_id or not status:
+        return jsonify({"ok": False, "error": "id and status required"}), 400
+    valid = {"library", "practice", "mastered"}
+    if status not in valid:
+        return jsonify({"ok": False, "error": f"status must be one of {valid}"}), 400
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            if user_id is not None:
+                cur.execute(
+                    "UPDATE portuguese.vocabulary SET status = %s WHERE id = %s AND user_id = %s",
+                    (status, word_id, user_id),
+                )
+            else:
+                cur.execute(
+                    "UPDATE portuguese.vocabulary SET status = %s WHERE id = %s",
+                    (status, word_id),
+                )
+        return jsonify({"ok": True})
+    except Exception as e:
+        print(f"[portuguese] palavras-status error: {e}", flush=True)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ── API: Transcribe ───────────────────────────────────────────────────────────
@@ -448,6 +816,45 @@ def api_pt_persona_prompt():
     full_prompt = "\n\n".join(parts)
 
     return jsonify({"prompt": full_prompt, "session_brief": scene_text})
+
+
+# ── API: Admin — article management ──────────────────────────────────────────
+
+@app.route("/api/pt/admin/article", methods=["POST"])
+def api_pt_admin_article():
+    body      = request.get_json(force=True)
+    url       = (body.get("url") or "").strip()
+    title     = (body.get("title") or "").strip()
+    full_text = (body.get("full_text") or body.get("text") or "").strip()
+    excerpt   = (body.get("excerpt") or full_text[:300] if full_text else "").strip()
+    source    = (body.get("source") or "").strip()
+    category  = (body.get("category") or "").strip()
+    user_id   = _request_user_id()
+    if not url or not title or not category:
+        return jsonify({"ok": False, "error": "url, title, category required"}), 400
+    valid_cats = {"cotidiano", "cultura", "noticias", "rio"}
+    if category not in valid_cats:
+        return jsonify({"ok": False, "error": f"category must be one of {valid_cats}"}), 400
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO portuguese.articles"
+                " (url, title, excerpt, full_text, source, category, added_by)"
+                " VALUES (%s, %s, %s, %s, %s, %s, %s)"
+                " ON CONFLICT (url) DO UPDATE SET"
+                "   title = EXCLUDED.title,"
+                "   full_text = EXCLUDED.full_text,"
+                "   excerpt = EXCLUDED.excerpt,"
+                "   is_active = TRUE"
+                " RETURNING id",
+                (url, title, excerpt or None, full_text or None, source or None, category, user_id),
+            )
+            article_id = cur.fetchone()[0]
+        return jsonify({"ok": True, "id": article_id})
+    except Exception as e:
+        print(f"[portuguese] admin/article error: {e}", flush=True)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ── API: Sessions list ────────────────────────────────────────────────────────

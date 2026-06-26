@@ -15,12 +15,80 @@
     <p>Acesso e permissões — gerenciado pelo portal</p>
   </div>
   <div class="admin-card">
-    <h3>Listas de leitura</h3>
-    <p>Fontes e artigos de leitura — em breve</p>
-  </div>
-  <div class="admin-card">
     <h3>Serviço</h3>
     <p>Porta: 8770 · status: online</p>
   </div>
 </div>
+
+<!-- ── Add Article ─────────────────────────────────────────────────── -->
+<div class="admin-section" style="margin-top:2rem;">
+  <h2 style="font-size:1.1rem;margin-bottom:1rem;">Adicionar artigo à Leitura</h2>
+  <form id="article-form" class="admin-form">
+    <label>
+      <span>Categoria</span>
+      <select id="a-category" required>
+        <option value="">— selecionar —</option>
+        <option value="cotidiano">☕ Cotidiano</option>
+        <option value="cultura">🎭 Cultura</option>
+        <option value="noticias">📰 Notícias</option>
+        <option value="rio">🌊 Rio</option>
+      </select>
+    </label>
+    <label>
+      <span>Fonte</span>
+      <input type="text" id="a-source" placeholder="ex: O Globo">
+    </label>
+    <label>
+      <span>Título</span>
+      <input type="text" id="a-title" required placeholder="Título do artigo">
+    </label>
+    <label>
+      <span>URL</span>
+      <input type="url" id="a-url" required placeholder="https://…">
+    </label>
+    <label>
+      <span>Texto do artigo</span>
+      <textarea id="a-text" rows="8" placeholder="Cole o texto completo do artigo aqui…"></textarea>
+    </label>
+    <button type="submit" class="btn-primary">Adicionar à Leitura</button>
+    <span id="article-status" style="margin-left:1rem;font-size:0.85rem;"></span>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+  document.getElementById('article-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const status = document.getElementById('article-status');
+    const btn = this.querySelector('button[type=submit]');
+    btn.disabled = true; status.textContent = 'Salvando…';
+    try {
+      const res = await fetch('/api/pt/admin/article', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category:  document.getElementById('a-category').value,
+          source:    document.getElementById('a-source').value.trim(),
+          title:     document.getElementById('a-title').value.trim(),
+          url:       document.getElementById('a-url').value.trim(),
+          full_text: document.getElementById('a-text').value.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        status.textContent = `✓ Salvo — ID #${data.id}`;
+        this.reset();
+      } else {
+        status.textContent = `Erro: ${data.error}`;
+      }
+    } catch (err) {
+      status.textContent = 'Erro de rede.';
+    }
+    btn.disabled = false;
+  });
+})();
+</script>
 {% endblock %}
