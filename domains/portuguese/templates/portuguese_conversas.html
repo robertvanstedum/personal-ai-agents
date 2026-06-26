@@ -169,6 +169,10 @@
                 <summary class="feedback-block-label">Para a próxima vez</summary>
                 <p class="feedback-next-focus" id="feedback-next-focus"></p>
               </details>
+              <button id="btn-send-telegram" class="btn-ghost btn-sm" style="margin-top:1rem">
+                📱 Enviar para Telegram
+              </button>
+              <span id="telegram-status" style="font-size:0.8rem;margin-left:0.5rem;opacity:0.7"></span>
             </div>
           </div>
         </div>
@@ -1251,7 +1255,10 @@ document.body.classList.add('parch-mode');
 
   // ── Feedback rendering ───────────────────────────────────────────────────────
 
+  let _lastFeedback = null;
+
   function renderFeedback(fb) {
+    _lastFeedback = fb;
     document.getElementById('feedback-summary').textContent = fb.overall_summary || '';
 
     const errorsBlock = document.getElementById('feedback-errors-block');
@@ -1300,6 +1307,28 @@ document.body.classList.add('parch-mode');
     document.getElementById('feedback-focus-block').style.display = 'none';
     document.getElementById('gesprache-feedback-wrap').style.display = '';
   }
+
+  document.getElementById('btn-send-telegram').addEventListener('click', async () => {
+    if (!_lastFeedback) return;
+    const btn    = document.getElementById('btn-send-telegram');
+    const status = document.getElementById('telegram-status');
+    btn.disabled = true;
+    status.textContent = 'Enviando…';
+    try {
+      const persona = personas[selectedIdx]?.name || '';
+      const scene   = personas[selectedIdx]?.scene || '';
+      const res = await fetch('/api/pt/send-telegram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedback: _lastFeedback, persona, scene }),
+      });
+      const data = await res.json();
+      status.textContent = data.ok ? '✓ Enviado' : '⚠ Erro';
+    } catch (e) {
+      status.textContent = '⚠ Erro de rede';
+    }
+    btn.disabled = false;
+  });
 
   // ── Refresh sessions on tab focus ────────────────────────────────────────────
   const SOURCE_LABELS = {'ki_sessao':'KI-Sessão','mobile':'Celular','desktop':'Desktop'};

@@ -866,6 +866,55 @@ def api_pt_sessions():
     return jsonify(sessions)
 
 
+# ── API: Send session feedback to Telegram ────────────────────────────────────
+
+_ROBERT_CHAT_ID = 8379221702
+
+@app.route("/api/pt/send-telegram", methods=["POST"])
+def api_pt_send_telegram():
+    import requests as _req
+    data = request.get_json(force=True)
+    feedback = data.get("feedback", {})
+    persona  = data.get("persona", "")
+    scene    = data.get("scene", "")
+
+    summary   = feedback.get("overall_summary", "")
+    errors    = feedback.get("errors", [])
+    strengths = feedback.get("strengths", [])
+    next_focus = feedback.get("next_focus", "")
+
+    lines = [f"🇧🇷 Português — {persona}", f"_{scene}_", ""]
+    lines.append(f"*Resumo:* {summary}")
+    if errors:
+        lines.append("\n*Erros:*")
+        for e in errors[:4]:
+            lines.append(f"• {e.get('original','')} → {e.get('correction','')} ({e.get('explanation','')})")
+    if strengths:
+        lines.append("\n*Pontos fortes:*")
+        for s in strengths[:3]:
+            lines.append(f"✓ {s}")
+    if next_focus:
+        lines.append(f"\n*Próxima sessão:* {next_focus}")
+
+    message = "\n".join(lines)
+    if len(message) > 4096:
+        message = message[:4090] + "\n…"
+
+    try:
+        bot_token = get_secret("TELEGRAM_BOT_TOKEN", "telegram", "bot_token")
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+    resp = _req.post(
+        f"https://api.telegram.org/bot{bot_token}/sendMessage",
+        json={"chat_id": _ROBERT_CHAT_ID, "text": message, "parse_mode": "Markdown"},
+        timeout=10,
+    )
+    if resp.ok:
+        return jsonify({"ok": True})
+    return jsonify({"ok": False, "error": resp.text}), 502
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
