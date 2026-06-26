@@ -7,7 +7,7 @@
 <div id="browse-state">
   <img class="hero-img" src="/static/photos/rio_beach_01.jpg"
        alt="Rio de Janeiro"
-       style="object-position: 50% 40%"
+       style="object-position: 50% 5%"
        onerror="this.style.display='none'">
   <div class="browse-hero-content">
     <h1>Leitura</h1>
@@ -173,6 +173,7 @@
 
 {% block scripts %}
 <script>
+document.body.classList.add('leitura-mode');
 (function () {
   'use strict';
 

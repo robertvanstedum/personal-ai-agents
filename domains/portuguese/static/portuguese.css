@@ -107,8 +107,9 @@ body::before {
   position: fixed;
   inset: 0;
   background-image: url('/static/bg-primary.jpg');
-  background-size: cover;
-  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center center;
   opacity: 0;
   z-index: -1;
   transition: opacity 0.2s;
@@ -116,6 +117,17 @@ body::before {
 
 body.landing-mode::before {
   opacity: 0.45;
+}
+
+body.leitura-mode::before {
+  background-image: url('/static/photos/rio_cidade_01.jpg');
+  background-size: cover;
+  background-position: center;
+  opacity: 0.10;
+}
+
+body.leitura-mode #lesen-content-area {
+  background: transparent;
 }
 
 body::after {
@@ -176,7 +188,7 @@ nav {
   font-size: 1.65rem;
   font-weight: 600;
   font-style: italic;
-  color: var(--pt-accent);
+  color: #C68A5E;
   margin-right: 3rem;
   flex-shrink: 0;
   white-space: nowrap;
@@ -346,7 +358,7 @@ body.landing-mode {
   font-size: clamp(36px, 6vw, 52px);
   font-style: italic;
   font-weight: 400;
-  color: var(--pt-accent);
+  color: #C68A5E;
   line-height: 1.15;
   margin-bottom: 0.75rem;
 }
@@ -356,7 +368,7 @@ body.landing-mode {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--pt-accent);
+  color: #C68A5E;
   text-shadow: 1px 1px 3px rgba(0,0,0,0.6);
   margin-bottom: 3rem;
 }
@@ -428,7 +440,7 @@ body.landing-mode {
 
 .tab-description {
   font-size: 1.05rem;
-  color: var(--pt-text-secondary);
+  color: #7A5C3A;
   margin: 1.75rem 0 1.5rem 0;
   line-height: 1.5;
 }
@@ -497,8 +509,8 @@ body.parch-mode .nav-links a:hover { color: #fff; }
 body.parch-mode .nav-links a.active { color: #fff; }
 
 body.parch-mode .page { color: var(--pt-text-primary); }
-body.parch-mode .subtitle { color: var(--pt-text-secondary); }
-body.parch-mode .hint { color: var(--pt-text-muted); }
+body.parch-mode .subtitle { color: #7A5C3A; }
+body.parch-mode .hint { color: #7A5C3A; }
 
 body.parch-mode h1,
 body.parch-mode h2,
@@ -560,6 +572,15 @@ body.parch-mode h3 { color: var(--pt-text-primary); }
   font-size: 0.9rem;
   color: var(--text-muted);
 }
+
+body.parch-mode .admin-card {
+  background: rgba(27, 58, 42, 0.07);
+  border-color: rgba(27, 58, 42, 0.18);
+  backdrop-filter: none;
+}
+body.parch-mode .admin-card h3 { color: #C68A5E; }
+body.parch-mode .admin-card p { color: var(--pt-text-secondary); }
+body.parch-mode .btn-primary { background: var(--pt-dark); }
 
 /* ── Palette toggle widget (design tool — owner/admin only) ── */
 
@@ -688,6 +709,14 @@ body.parch-mode h3 { color: var(--pt-text-primary); }
   margin-top: 0.75rem;
   margin-bottom: 0;
   color: var(--pt-text-secondary);
+}
+
+body.conversas-mode .page,
+body.escrita-mode .page,
+body.palavras-mode .page,
+body.arquivo-mode .page {
+  max-width: none;
+  padding: 0;
 }
 
 .tab-panel-photo {
@@ -2067,7 +2096,7 @@ body.reading-mode nav { background: #1B2E1F; border-bottom-color: var(--parch-ac
 
 .archiv-header { margin-bottom: 1.5rem; }
 .archiv-title { font-size: 1.6rem; font-weight: 700; color: var(--pt-text-primary); margin-bottom: 0.25rem; }
-.archiv-description { font-size: 0.9rem; color: var(--pt-text-muted); }
+.archiv-description { font-size: 0.9rem; color: var(--pt-text-secondary); }
 
 .archiv-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--pt-parch-deep); padding-bottom: 0.75rem; }
 .archiv-tab {
