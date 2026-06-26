@@ -13,6 +13,7 @@
     <!-- ── Mode toggle ─────────────────────────────────────────────────────── -->
     <div class="gesprache-toggle" role="tablist">
       <button class="gesprache-toggle-btn active" id="btn-tab-personas" role="tab">Com KI-Persona</button>
+      <button class="gesprache-toggle-btn" id="btn-tab-pessoa-real" role="tab">Com pessoa real</button>
     </div>
 
     <!-- ── KI-Personas pane ────────────────────────────────────────────────── -->
@@ -226,6 +227,62 @@
       </div>
 
     </div><!-- #pane-ki-personas -->
+
+    <!-- ── Pessoa real pane ───────────────────────────────────────────────── -->
+    <div id="pane-pessoa-real" style="display:none">
+      <div class="konversation-cards">
+
+        <!-- Card 1: Before — Preparação -->
+        <div class="konversation-card">
+          <div class="konversation-card-label">1 · Antes — Preparação</div>
+          <p class="konv-hint">O que você quer praticar hoje? Seu tutor recebe este resumo antes da sessão.</p>
+          <div class="konv-field">
+            <label class="konv-field-label" for="konv-notas-sessao">Foco para hoje</label>
+            <textarea id="konv-notas-sessao" class="tutor-input" rows="4"
+              placeholder="Ex: praticar subjuntivo, vocabulário de viagem, expressar opiniões…"></textarea>
+          </div>
+          <button class="btn-ghost btn-sm" id="btn-gerar-resumo">Criar resumo para o tutor →</button>
+          <span id="konv-resumo-status" class="gesprache-status"></span>
+          <div id="konv-resumo-result" style="display:none; margin-top:12px;">
+            <div id="konv-resumo-preview" class="konv-brief-preview"></div>
+          </div>
+        </div>
+
+        <!-- Card 2: During + After — Conversa -->
+        <div class="konversation-card">
+          <div class="konversation-card-label">2 · Durante — Conversa</div>
+          <p class="konv-hint">Inicie um Google Meet e compartilhe o link com seu tutor.</p>
+          <button class="btn-raum-oeffnen" id="btn-abrir-meet">Iniciar Google Meet →</button>
+          <p class="konv-hint" style="margin-top:10px;">Após a reunião, ative a transcrição no Meet para que ela seja salva automaticamente no Google Drive.</p>
+
+          <details class="nach-sitzung-details" id="pt-konv-transcript-details" style="margin-top:1.25rem">
+            <summary class="session-brief-summary">✏️ Após a conversa</summary>
+            <div class="konv-nachbereitung-body">
+              <div id="pt-konv-transcript-input-wrap">
+                <label class="konv-consent-label" id="pt-consent-label">
+                  <input type="checkbox" id="pt-consent-checkbox">
+                  <span>Participante concordou</span>
+                </label>
+                <div id="pt-transcript-tools" class="konv-transcript-tools konv-transcript-locked">
+                  <div class="konv-field" style="margin-top:0.75rem">
+                    <label class="konv-field-label">Tutor / parceiro de conversa</label>
+                    <input type="text" id="pt-tutor-name" placeholder="Ex: Professora Ana" class="tutor-input" disabled>
+                  </div>
+                  <div class="konv-field">
+                    <label class="konv-field-label">Colar transcrição</label>
+                    <textarea id="pt-tutor-transcript" rows="5" class="tutor-input"
+                      placeholder="Cole a transcrição aqui." disabled></textarea>
+                  </div>
+                  <button class="btn-ghost btn-sm" id="btn-analisar-tutor" disabled>Analisar transcrição →</button>
+                  <div id="pt-tutor-status" class="gesprache-status" style="margin-top:6px;"></div>
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+
+      </div><!-- .konversation-cards -->
+    </div><!-- #pane-pessoa-real -->
 
     <!-- Advance modal -->
     <div id="advance-modal" class="round-modal" style="display:none" role="dialog" aria-modal="true">
@@ -1412,6 +1469,61 @@ document.body.classList.add('parch-mode');
         </div>`).join('');
       document.getElementById('ultimas-sessoes-section').style.display = '';
     } catch (_) {}
+  });
+
+  // ── Tab switching (KI-Persona / Pessoa real) ─────────────────────────────────
+  function switchTab(tab) {
+    const isPersonas = tab === 'personas';
+    document.getElementById('pane-ki-personas').style.display = isPersonas ? '' : 'none';
+    document.getElementById('pane-pessoa-real').style.display = isPersonas ? 'none' : '';
+    document.getElementById('btn-tab-personas').classList.toggle('active', isPersonas);
+    document.getElementById('btn-tab-pessoa-real').classList.toggle('active', !isPersonas);
+  }
+  document.getElementById('btn-tab-personas').addEventListener('click', () => switchTab('personas'));
+  document.getElementById('btn-tab-pessoa-real').addEventListener('click', () => switchTab('pessoareal'));
+
+  // ── Pessoa real pane wiring ───────────────────────────────────────────────────
+  const ptConsent = document.getElementById('pt-consent-checkbox');
+  const ptTools   = document.getElementById('pt-transcript-tools');
+  if (ptConsent && ptTools) {
+    ptConsent.addEventListener('change', () => {
+      const unlocked = ptConsent.checked;
+      ptTools.classList.toggle('konv-transcript-locked', !unlocked);
+      ['pt-tutor-name', 'pt-tutor-transcript', 'btn-analisar-tutor'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = !unlocked;
+      });
+    });
+  }
+
+  const meetBtn = document.getElementById('btn-abrir-meet');
+  if (meetBtn) meetBtn.addEventListener('click', () => window.open('https://meet.google.com/new', '_blank'));
+
+  const gerarBtn = document.getElementById('btn-gerar-resumo');
+  if (gerarBtn) gerarBtn.addEventListener('click', async () => {
+    const notas = document.getElementById('konv-notas-sessao')?.value.trim();
+    if (!notas) return;
+    const status = document.getElementById('konv-resumo-status');
+    const result = document.getElementById('konv-resumo-result');
+    const preview = document.getElementById('konv-resumo-preview');
+    status.textContent = 'Gerando…';
+    try {
+      const res = await fetch('/api/pt/tutor-brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: notas }),
+      });
+      const data = await res.json();
+      if (data.ok && data.brief) {
+        preview.textContent = data.brief;
+        result.style.display = '';
+        status.textContent = '';
+      } else {
+        status.textContent = data.error || 'Erro ao gerar resumo.';
+      }
+    } catch (e) {
+      status.textContent = 'Erro de conexão.';
+    }
   });
 
   // ── Init ─────────────────────────────────────────────────────────────────────

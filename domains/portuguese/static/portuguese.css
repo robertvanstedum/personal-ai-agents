@@ -13,6 +13,7 @@
   --pt-text-primary:   #1B2E1F;
   --pt-text-secondary: #5C7A4A;
   --pt-text-muted:     #8A9A80;
+  --pt-text-heading:   #1A1A1A;
   --pt-strip-dark:     #0F2018;
 
   --pt-surface:     rgba(27, 58, 42, 0.92);
@@ -107,7 +108,7 @@ body::before {
   position: fixed;
   inset: 0;
   background-image: url('/static/bg-primary.jpg');
-  background-size: contain;
+  background-size: cover;
   background-repeat: no-repeat;
   background-position: center center;
   opacity: 0;
@@ -514,6 +515,7 @@ body.parch-mode .hint { color: #7A5C3A; }
 
 body.parch-mode h1,
 body.parch-mode h2,
+body.parch-mode h1, body.parch-mode .tab-title { color: var(--pt-text-heading); }
 body.parch-mode h3 { color: var(--pt-text-primary); }
 
 /* ── Stub / coming-soon pages ─────────────────────────────── */
@@ -2264,8 +2266,9 @@ body.reading-mode nav { background: #1B2E1F; border-bottom-color: var(--parch-ac
   #browse-state { height: 18vh; padding: 1.5rem 1.25rem 0; }
   .browse-hero-content h1 { font-size: 2.4rem; }
   .browse-hero-content .subtitle { font-size: 0.85rem; }
-  .lesen-cat-row { gap: 0.6rem; padding: 0.75rem 0 0.5rem; }
-  .lesen-cat-card { height: 100px; min-width: 0; }
+  .lesen-cat-row { gap: 0.6rem; padding: 0.75rem 0 0.5rem; flex-wrap: wrap; }
+  .lesen-cat-card { height: 100px; min-width: 0; flex: 0 0 calc(50% - 0.3rem); }
+  .landing-nav { gap: 1.25rem; flex-wrap: nowrap; }
   .cat-name { font-size: 0.85rem; }
   .cat-sub  { display: none; }
   #lesen-content-area { padding: 0 1rem 2rem; }

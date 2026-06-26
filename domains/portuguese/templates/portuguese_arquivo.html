@@ -25,7 +25,7 @@
           <span class="archiv-date">{{ s.date }}</span>
           <span class="archiv-persona">{{ s.persona }}</span>
           <span class="archiv-scene">{{ s.scenario }}</span>
-          <span class="archiv-source archiv-source-{{ s.source }}">{{ s.source }}</span>
+          <span class="archiv-source archiv-source-{{ s.source }}">{{ {'ki_sessao':'KI-Sessão','KI_SESSAO':'KI-Sessão','mobile':'Celular','desktop':'Desktop','real_sessao':'Sessão real','REAL_SESSAO':'Sessão real'}.get(s.source, s.source) }}</span>
         </div>
         {% endfor %}
       {% else %}
