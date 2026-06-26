@@ -117,7 +117,7 @@ body::before {
 }
 
 body.landing-mode::before {
-  opacity: 0.45;
+  opacity: 0.30;
 }
 
 body.leitura-mode::before {

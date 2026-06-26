@@ -219,6 +219,10 @@ def _request_user_id() -> int | None:
     return None
 
 
+def _request_user_tier() -> str:
+    return request.headers.get("X-Minimoi-User-Tier", "guest")
+
+
 # ── Translation ───────────────────────────────────────────────────────────────
 
 _deepl_client: object | None = None
@@ -493,13 +497,13 @@ def _update_persona_progress(user_id, persona_slug: str):
 @app.route("/")
 def index():
     return render_template("portuguese_landing.html", active="landing",
-                           show_toggle=True)
+                           show_toggle=(_request_user_tier() in ("owner", "admin")))
 
 
 @app.route("/leitura")
 def leitura():
     return render_template("portuguese_leitura.html", active="leitura",
-                           show_toggle=True)
+                           show_toggle=(_request_user_tier() in ("owner", "admin")))
 
 
 @app.route("/conversas")
@@ -513,7 +517,7 @@ def conversas():
     return render_template(
         "portuguese_conversas.html",
         active="conversas",
-        show_toggle=True,
+        show_toggle=(_request_user_tier() in ("owner", "admin")),
         personas=personas,
         sessions=sessions,
         persona_progress=persona_progress,
@@ -526,7 +530,7 @@ def escrita():
     user_id = _request_user_id()
     writing_sessions = _get_writing_sessions(user_id, limit=5)
     return render_template("portuguese_escrita.html", active="escrita",
-                           show_toggle=True, writing_sessions=writing_sessions)
+                           show_toggle=(_request_user_tier() in ("owner", "admin")), writing_sessions=writing_sessions)
 
 
 @app.route("/palavras")
@@ -538,7 +542,7 @@ def palavras():
         + _get_vocabulary(user_id, status="pronto_para_testar", limit=50)
     )
     return render_template("portuguese_palavras.html", active="palavras",
-                           show_toggle=True, entries=entries, drill_pool=drill_pool)
+                           show_toggle=(_request_user_tier() in ("owner", "admin")), entries=entries, drill_pool=drill_pool)
 
 
 @app.route("/arquivo")
@@ -548,7 +552,7 @@ def arquivo():
     writing_sessions = _get_writing_sessions(user_id, limit=10)
     leitura_notes = _get_leitura_notes(user_id, limit=20)
     return render_template("portuguese_arquivo.html", active="arquivo",
-                           show_toggle=True,
+                           show_toggle=(_request_user_tier() in ("owner", "admin")),
                            conversas_sessions=conversas_sessions,
                            writing_sessions=writing_sessions,
                            leitura_notes=leitura_notes)
@@ -557,7 +561,7 @@ def arquivo():
 @app.route("/admin")
 def admin():
     return render_template("portuguese_admin.html", active="admin",
-                           show_toggle=True)
+                           show_toggle=(_request_user_tier() in ("owner", "admin")))
 
 
 @app.route("/health")
@@ -577,7 +581,7 @@ def api_pt_leitura_category():
                 "SELECT id, title, source, url, full_text, excerpt, date_fetched"
                 " FROM portuguese.articles"
                 " WHERE category = %s AND is_active = TRUE"
-                " ORDER BY date_fetched DESC, id DESC LIMIT 30",
+                " ORDER BY date_fetched DESC, id DESC LIMIT 12",
                 (category,),
             )
             rows = cur.fetchall()
@@ -594,6 +598,52 @@ def api_pt_leitura_category():
         print(f"[portuguese] leitura-category error: {e}", flush=True)
         articles = []
     return jsonify({"articles": articles, "category": category})
+
+
+@app.route("/api/pt/article/<int:article_id>")
+def api_pt_article(article_id):
+    _UA = "Mozilla/5.0 (compatible; RSS Reader Bot)"
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT url, full_text FROM portuguese.articles WHERE id = %s",
+                (article_id,),
+            )
+            row = cur.fetchone()
+        if not row:
+            return jsonify({"ok": False, "error": "not found"}), 404
+        url, full_text = row
+        if full_text:
+            return jsonify({"ok": True, "text": full_text})
+        # Scrape on demand
+        try:
+            from bs4 import BeautifulSoup
+            resp = requests.get(url, timeout=15, headers={"User-Agent": _UA})
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.content, "html.parser")
+            for tag in soup(["nav", "header", "footer", "script", "style", "aside", "iframe"]):
+                tag.decompose()
+            paras = [
+                p.get_text(separator=" ", strip=True)
+                for p in soup.find_all("p")
+                if len(p.get_text(strip=True)) > 40
+            ]
+            text = " ".join(paras)[:3000].strip()
+        except Exception as scrape_err:
+            print(f"[article/{article_id}] scrape failed: {scrape_err}", flush=True)
+            text = ""
+        if text:
+            conn2 = _db_conn()
+            with conn2, conn2.cursor() as cur2:
+                cur2.execute(
+                    "UPDATE portuguese.articles SET full_text = %s WHERE id = %s",
+                    (text, article_id),
+                )
+        return jsonify({"ok": True, "text": text})
+    except Exception as e:
+        print(f"[article/{article_id}] error: {e}", flush=True)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/pt/leitura-action", methods=["POST"])

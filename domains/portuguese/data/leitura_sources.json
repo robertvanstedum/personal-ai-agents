@@ -15,9 +15,8 @@
       "active": true
     },
     {
-      "name": "O Dia",
-      "url": "https://odia.ig.com.br/ultimas-noticias",
-      "type": "web",
+      "name": "Extra",
+      "url": "https://extra.globo.com/rss.xml",
       "category": "cotidiano",
       "level": "iniciante",
       "active": true
@@ -34,6 +33,14 @@
       "url": "https://g1.globo.com/rss/g1/rj/rio-de-janeiro/",
       "category": "rio",
       "level": "intermediario",
+      "active": true
+    },
+    {
+      "name": "O Dia",
+      "url": "https://odia.ig.com.br/ultimas-noticias",
+      "type": "web",
+      "category": "rio",
+      "level": "iniciante",
       "active": true
     },
     {

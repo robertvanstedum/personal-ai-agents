@@ -87,7 +87,7 @@
 <!-- ── Reading state ──────────────────────────────────────────── -->
 <div id="reading-state" class="lesen-state-hidden">
   <div class="wien-banner">
-    <span class="wien-banner-label">[IPANEMA]</span>
+    <span class="wien-banner-label" id="leitura-banner-label">Leitura</span>
   </div>
   <div class="article-bar">
     <button class="article-bar-btn" id="btn-back-liste" title="Voltar à lista">← Lista</button>
@@ -227,8 +227,14 @@ document.body.classList.add('parch-mode');
     if (document.body.classList.contains('reading-mode')) enterBrowse();
   });
 
+  const CATEGORY_LABELS = {
+    cotidiano: 'Cotidiano', rio: 'Rio', cultura: 'Cultura', noticias: 'Notícias'
+  };
+
   async function selectCategory(cat) {
     currentCategory = cat;
+    const bannerLabel = document.getElementById('leitura-banner-label');
+    if (bannerLabel) bannerLabel.textContent = CATEGORY_LABELS[cat] || cat;
     document.getElementById('lesen-content-area').classList.remove('no-selection');
     document.querySelectorAll('.lesen-cat-card').forEach(b => {
       b.classList.toggle('active', b.dataset.category === cat);
@@ -300,28 +306,43 @@ document.body.classList.add('parch-mode');
           btnSave.disabled = true; btnSave.textContent = '＋ Em Palavras';
           showPopover(row.getBoundingClientRect());
           fetchTranslation(art.title);
-        }, 400);
+        }, 2500);
       });
       row.addEventListener('mouseleave', () => clearTimeout(_hoverTimer));
       container.appendChild(row);
     });
   }
 
-  function populateArticle(idx) {
+  async function populateArticle(idx) {
     const art = filteredArticles[idx];
     if (!art) return;
     document.getElementById('reading-headline').textContent = art.title || '';
     document.getElementById('reading-byline').textContent =
       [art.source, art.date_fetched].filter(Boolean).join(' · ');
-    document.getElementById('reading-text').textContent = art.summary || '';
     document.getElementById('art-counter').textContent = `${idx + 1} / ${filteredArticles.length}`;
     const openLink = document.getElementById('btn-art-open');
     openLink.href = art.url || '#';
+    const textEl = document.getElementById('reading-text');
+    textEl.textContent = art.summary || 'Carregando…';
     textTruncated = true; applyTruncation();
     const btnM = document.getElementById('btn-merken');
     btnM.textContent = '🔖 Salvar'; btnM.disabled = false;
     document.getElementById('woerter-list').innerHTML =
       '<li class="woerter-empty-hint">Marque palavras para salvar.</li>';
+    if (!art.summary) {
+      try {
+        const res = await fetch(`/api/pt/article/${art.id}`);
+        const data = await res.json();
+        if (data.ok && data.text) {
+          art.summary = data.text;
+          textEl.textContent = data.text;
+        } else {
+          textEl.textContent = 'Leia o artigo completo na fonte.';
+        }
+      } catch {
+        textEl.textContent = 'Leia o artigo completo na fonte.';
+      }
+    }
   }
 
   function applyTruncation() {

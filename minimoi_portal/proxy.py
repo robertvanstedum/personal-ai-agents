@@ -154,6 +154,8 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
         k: v for k, v in request.headers
         if k.lower() not in _HOP_BY_HOP and k.lower() != "host"
     }
+    if user:
+        fwd_headers["X-Minimoi-User-Tier"] = user.get("tier", "guest")
 
     try:
         resp = requests.request(
