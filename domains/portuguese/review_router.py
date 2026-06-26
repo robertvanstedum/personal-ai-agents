@@ -16,28 +16,28 @@ from get_secret import get_secret
 
 _PERSONAS_DIR = Path(__file__).parent / "personas"
 
-PORTUGUESE_REVIEW_PROMPT = """Você é um professor experiente de português brasileiro.
-Analise esta transcrição de uma conversa em português.
+PORTUGUESE_REVIEW_PROMPT = """You are an experienced Brazilian Portuguese teacher reviewing a conversation transcript.
 
-Retorne SOMENTE um objeto JSON válido com esta estrutura exata:
+IMPORTANT: Analyze ONLY the student's lines (labeled "Robert" or "User"). Do NOT analyze the persona's Portuguese — only the student's.
+
+Return ONLY a valid JSON object with this exact structure:
 {
-  "overall_summary": "resumo geral em 1-2 frases",
+  "overall_summary": "1-2 sentence summary of the student's performance in English",
   "errors": [
-    {"original": "texto com erro", "correction": "forma correta", "explanation": "breve explicação"}
+    {"original": "student's exact text", "correction": "corrected form", "explanation": "brief explanation in English"}
   ],
-  "strengths": ["ponto forte 1", "ponto forte 2"],
-  "next_focus": "uma coisa para praticar na próxima sessão",
-  "topics": ["tópico 1", "tópico 2"],
+  "strengths": ["strength 1 in English", "strength 2 in English"],
+  "next_focus": "one thing for the student to practice next session",
+  "topics": ["topic 1", "topic 2"],
   "vocabulary": []
 }
 
-Foco principal:
-1. Erros gramaticais importantes (não corrija cada imperfeição pequena)
-2. Pontos fortes — o que o estudante fez bem
-3. Uma prioridade clara para a próxima sessão
+Focus:
+1. Important grammar or vocabulary errors in the student's lines (skip very minor issues)
+2. What the student did well
+3. One clear priority for next session
 
-Seja encorajador mas honesto. Use português brasileiro informal nos seus comentários.
-Não inclua explicações em inglês — tudo em português."""
+Be encouraging but honest. Write all feedback in English."""
 
 
 class ProviderError(Exception):
@@ -71,11 +71,11 @@ def _build_user_prompt(transcript: str, persona: str, scene: str) -> str:
     turns = _parse_transcript_turns(transcript)
     date_str = datetime.datetime.now().strftime("%Y-%m-%d")
     lines = [
-        f"Persona: {persona}",
-        f"Cena: {scene}",
-        f"Data: {date_str}",
+        f"Persona (AI role-play partner, do NOT analyze): {persona}",
+        f"Scene: {scene}",
+        f"Date: {date_str}",
         "",
-        "Transcrição:",
+        "Transcript (analyze ONLY the student's lines — Robert or User):",
     ] + [f"{t['speaker']}: {t['text']}" for t in turns]
     return "\n".join(lines)
 
