@@ -618,7 +618,7 @@
     "status": "done",
     "last_transition_at": "2026-06-24T13:00:00Z",
     "blocked_reason": null,
-    "notes": "Phase 2 gate. Block E. Shipped — 13 tests green, pipeline live, first deploy via SSM confirmed."
+    "notes": "Phase 2 gate. Block E. Shipped \u2014 13 tests green, pipeline live, first deploy via SSM confirmed."
   },
   {
     "id": 103,
@@ -627,7 +627,7 @@
     "status": "done",
     "last_transition_at": "2026-06-24T15:00:00Z",
     "blocked_reason": null,
-    "notes": "Phase 2 Spec 1. Shipped: domain_auth.py, migration 002, /login/<token>, requires_domain(), SES email, 11 tests. Flask-Login skipped — existing session pattern. Final spec: spec_1_auth_final_2026-06-25.md"
+    "notes": "Phase 2 Spec 1. Shipped: domain_auth.py, migration 002, /login/<token>, requires_domain(), SES email, 11 tests. Flask-Login skipped \u2014 existing session pattern. Final spec: spec_1_auth_final_2026-06-25.md"
   },
   {
     "id": 104,
@@ -636,7 +636,7 @@
     "status": "done",
     "last_transition_at": "2026-06-25T00:00:00Z",
     "blocked_reason": null,
-    "notes": "Shipped: domains/portuguese/ Flask shell (port 8770), 6 tabs + admin, --pt-* CSS tokens, 3 palette blocks + toggle, portal proxy routes, launchd plist. Running under launchd. Photos folder ready: domains/portuguese/static/photos/ — Robert to drop Rio photos."
+    "notes": "Shipped: domains/portuguese/ Flask shell (port 8770), 6 tabs + admin, --pt-* CSS tokens, 3 palette blocks + toggle, portal proxy routes, launchd plist. Running under launchd. Photos folder ready: domains/portuguese/static/photos/ \u2014 Robert to drop Rio photos."
   },
   {
     "id": 105,
@@ -709,5 +709,14 @@
     "last_transition_at": "2026-06-24T00:00:00Z",
     "blocked_reason": "Gates on Portuguese stable",
     "notes": "Phase 2 Spec 10."
+  },
+  {
+    "id": 113,
+    "spec_title": "Portuguese Domain: Backend Completion",
+    "spec_file": "build_plan_portuguese_completion_2026-06-26.md",
+    "status": "spec_ready",
+    "github_issue": null,
+    "blocked_reason": null,
+    "last_transition_at": "2026-06-26T06:23:57.591001+00:00"
   }
 ]
