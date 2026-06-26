@@ -603,7 +603,13 @@ def api_pt_leitura_action():
 
 @app.route("/api/pt/leitura-refresh", methods=["POST"])
 def api_pt_leitura_refresh():
-    return jsonify({"ok": True})
+    try:
+        import leitura_rss
+        total_new = leitura_rss.run_pipeline()
+        return jsonify({"ok": True, "new": total_new})
+    except Exception as e:
+        print(f"[leitura-refresh] pipeline error: {e}", flush=True)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/pt/translate", methods=["POST"])

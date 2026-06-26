@@ -1,0 +1,63 @@
+{
+  "sources": [
+    {
+      "name": "G1",
+      "url": "https://g1.globo.com/rss/g1/",
+      "category": "cotidiano",
+      "level": "iniciante",
+      "active": true
+    },
+    {
+      "name": "Metrópoles",
+      "url": "https://www.metropoles.com/feed/",
+      "category": "cotidiano",
+      "level": "iniciante",
+      "active": true
+    },
+    {
+      "name": "Veja Rio",
+      "url": "https://vejario.abril.com.br/feed/",
+      "category": "rio",
+      "level": "intermediario",
+      "active": true
+    },
+    {
+      "name": "G1 Rio de Janeiro",
+      "url": "https://g1.globo.com/rss/g1/rj/rio-de-janeiro/",
+      "category": "rio",
+      "level": "intermediario",
+      "active": true
+    },
+    {
+      "name": "Rolling Stone Brasil",
+      "url": "https://rollingstone.uol.com.br/feed/",
+      "category": "cultura",
+      "level": "intermediario",
+      "active": true
+    },
+    {
+      "name": "Folha Ilustrada",
+      "url": "https://feeds.folha.uol.com.br/ilustrada/rss091.xml",
+      "category": "cultura",
+      "level": "intermediario",
+      "active": true
+    },
+    {
+      "name": "Agência Brasil",
+      "url": "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml",
+      "category": "noticias",
+      "level": "intermediario",
+      "active": true
+    },
+    {
+      "name": "Folha de São Paulo",
+      "url": "https://feeds.folha.uol.com.br/emcimadahora/rss091.xml",
+      "category": "noticias",
+      "level": "avancado",
+      "active": true
+    }
+  ],
+  "max_articles_per_source": 5,
+  "max_age_days": 7,
+  "retention_days": 30
+}
