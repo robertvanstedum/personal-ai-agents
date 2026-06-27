@@ -650,25 +650,9 @@ async function addWordManually() {
     const d = await r.json();
     if (!d.ok) throw new Error(d.error || 'save failed');
 
-    const tbody = document.getElementById('woerter-tbody');
-    if (tbody) {
-      const tr = document.createElement('tr');
-      tr.className = 'woerter-row';
-      tr.dataset.source = 'manual'; tr.dataset.status = 'library';
-      const deCell = document.createElement('td'); deCell.className = 'w-german'; deCell.textContent = word;
-      const enCell = document.createElement('td'); enCell.className = 'w-english'; enCell.textContent = translation;
-      const btnCell = document.createElement('td'); btnCell.className = 'w-expand-col';
-      const btn = document.createElement('button');
-      btn.className = 'btn-expand'; btn.textContent = 'Details'; btn.disabled = true;
-      btnCell.appendChild(btn); tr.append(deCell, enCell, btnCell);
-      tbody.prepend(tr);
-      document.getElementById('filter-quelle').dispatchEvent(new Event('change'));
-    } else {
-      setTimeout(() => location.reload(), 1500);
-    }
     wordEl.value = ''; transEl.value = '';
     statusEl.textContent = '✓ Gespeichert';
-    setTimeout(() => { statusEl.textContent = ''; }, 2000);
+    setTimeout(() => location.reload(), 1500);
   } catch {
     statusEl.textContent = 'Fehler beim Speichern. Bitte erneut versuchen.';
     setTimeout(() => { statusEl.textContent = ''; }, 3000);

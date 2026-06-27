@@ -63,14 +63,14 @@ def _ensure_writing_sessions_table():
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS portuguese.writing_sessions (
                     id              SERIAL PRIMARY KEY,
-                    user_id         INTEGER REFERENCES auth.users(id) ON DELETE SET NULL,
+                    user_id         INTEGER,
                     mode            VARCHAR(50),
                     prompt          TEXT,
                     original_text   TEXT NOT NULL,
                     corrected_text  TEXT,
                     feedback        JSONB,
                     notes           JSONB DEFAULT '[]',
-                    article_id      INTEGER REFERENCES portuguese.articles(id) ON DELETE SET NULL,
+                    article_id      INTEGER,
                     created_at      TIMESTAMP DEFAULT NOW()
                 )
             """)
@@ -79,7 +79,7 @@ def _ensure_writing_sessions_table():
                 " ON portuguese.writing_sessions(user_id, created_at DESC)"
             )
     except Exception as e:
-        print(f"[portuguese] migration writing_sessions table: {e}", flush=True)
+        print(f"[portuguese] ensure writing_sessions: {e}", flush=True)
 
 
 _ensure_writing_sessions_table()
