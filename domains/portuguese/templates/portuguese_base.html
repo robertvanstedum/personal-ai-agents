@@ -32,32 +32,11 @@
 
 {% block page_footer %}{% endblock %}
 
-{% if show_toggle %}
-<div class="palette-toggle" id="paletteToggle">
-  <span class="palette-label">Palette</span>
-  <button class="pal-btn" data-pal="1" title="Ocean Deep + Rio Amber">1</button>
-  <button class="pal-btn" data-pal="2" title="Botanical Green + Terracotta">2</button>
-  <button class="pal-btn" data-pal="3" title="Navy + Burnt Amber">3</button>
-</div>
-{% endif %}
-
 <script>
 (function() {
   var saved = document.cookie.match(/pt_palette=(\d)/);
   var active = saved ? saved[1] : '2';
   document.body.setAttribute('data-palette', active);
-
-  document.querySelectorAll('.pal-btn').forEach(function(btn) {
-    if (btn.dataset.pal === active) btn.classList.add('active');
-    btn.addEventListener('click', function() {
-      var p = this.dataset.pal;
-      document.body.setAttribute('data-palette', p);
-      document.cookie = 'pt_palette=' + p + ';path=/;max-age=2592000';
-      document.querySelectorAll('.pal-btn').forEach(function(b) {
-        b.classList.toggle('active', b.dataset.pal === p);
-      });
-    });
-  });
 })();
 </script>
 
