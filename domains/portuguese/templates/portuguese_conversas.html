@@ -962,6 +962,10 @@ document.body.classList.add('parch-mode');
     startSessionBtn.disabled = true;
     document.getElementById('persona-detail').classList.add('session-active');
 
+    // Hide paste panel during voice session — it's for manual paste only
+    const _tdStart = document.getElementById('transcript-details');
+    if (_tdStart) _tdStart.style.display = 'none';
+
     try {
       const _utter = new SpeechSynthesisUtterance('A sessão começa.');
       _utter.lang = 'pt-BR';
@@ -998,6 +1002,16 @@ document.body.classList.add('parch-mode');
       };
       savedSessions.push(session);
       renderSessionCard(session);
+
+      // Auto-populate transcript textarea and reopen paste panel for analysis
+      const taEl = document.getElementById('transcript-input');
+      if (taEl) { taEl.value = sessionTranscript.join('\n'); updateAnalisarState(); }
+      const tdEl = document.getElementById('transcript-details');
+      if (tdEl) { tdEl.style.display = ''; tdEl.setAttribute('open', ''); }
+    } else {
+      // No transcript — just restore paste panel visibility
+      const tdEl = document.getElementById('transcript-details');
+      if (tdEl) tdEl.style.display = '';
     }
   });
 
