@@ -57,13 +57,6 @@
     <a href="/woerter" title="Go to vocabulary library">
         Wörter-Bibliothek</a>.</p>
   </div>
-  <div class="woerter-form">
-    <input type="text" id="woerter-german" placeholder="Deutsches Wort / Phrase">
-    <input type="text" id="woerter-english" placeholder="Englische Bedeutung">
-    <input type="text" id="woerter-context" placeholder="Beispielsatz (optional)">
-    <button class="btn-primary" id="woerter-save" title="Add word to vocabulary library">Zur Bibliothek</button>
-    <span class="write-status" id="woerter-status"></span>
-  </div>
 </div>
 
 <!-- ── Tagebuch ──────────────────────────────────────────────────────────── -->
@@ -116,6 +109,18 @@
     <img src="/static/photos/Vera_cafe_IMG_5211_2.jpg" alt="Café Sperl" style="object-position: right 20%">
   </div>
 </div><!-- .tab-layout-split -->
+
+<!-- ── Word capture popover ──────────────────────────────────────────── -->
+<div class="word-popover" id="word-popover" style="display:none">
+  <div class="popover-phrase" id="popover-phrase"></div>
+  <div class="popover-translation" id="popover-translation">Übersetzung…</div>
+  <div class="popover-timing" id="popover-timing"></div>
+  <div class="popover-actions">
+    <button class="btn-save-phrase" id="btn-save-phrase"
+            title="Save word or phrase to library">＋ In Bibliothek</button>
+    <button class="btn-close-popover" id="btn-close-popover" title="Close">✕</button>
+  </div>
+</div>
 
 <div id="save-toast" style="
   position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(12px);
@@ -245,29 +250,6 @@ function showSaveToast() {
     } catch (e) {}
   });
 
-  // ── Wörter save ─────────────────────────────────────────────────────────────
-  document.getElementById('woerter-save').addEventListener('click', async () => {
-    const german = document.getElementById('woerter-german').value.trim();
-    const english = document.getElementById('woerter-english').value.trim();
-    const context = document.getElementById('woerter-context').value.trim();
-    const status = document.getElementById('woerter-status');
-    if (!german) { status.textContent = 'Bitte ein Wort eingeben.'; return; }
-    try {
-      await fetch('/api/save-phrase', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({german, english, context_sentence: context, article_title: ''}),
-      });
-      status.textContent = '✓ Gespeichert';
-      document.getElementById('woerter-german').value = '';
-      document.getElementById('woerter-english').value = '';
-      document.getElementById('woerter-context').value = '';
-      setTimeout(() => { status.textContent = ''; }, 2000);
-    } catch (e) {
-      status.textContent = 'Fehler beim Speichern.';
-    }
-  });
-
   // ── Tagebuch — step 1: Korrigieren (or direct save if checkbox off) ──────────
   const tagebuchCorrectBox = document.getElementById('tagebuch-correct');
   const tagebuchKorrigierenBtn = document.getElementById('tagebuch-korrigieren');
@@ -379,6 +361,157 @@ function showSaveToast() {
   attachVoiceButton('tagebuch-input', 'voice-tagebuch', 'de-DE');
   attachVoiceButton('kontext-input', 'voice-kontext', 'de-DE');
 
+})();
+
+// ── Word capture on corrected text ────────────────────────────────────────────
+(function () {
+  'use strict';
+  const popover   = document.getElementById('word-popover');
+  const popPhrase = document.getElementById('popover-phrase');
+  const popTrans  = document.getElementById('popover-translation');
+  const popTiming = document.getElementById('popover-timing');
+  const btnSave   = document.getElementById('btn-save-phrase');
+  const btnClose  = document.getElementById('btn-close-popover');
+  const translationCache = new Map();
+  let currentPhrase = '';
+  let currentTranslation = '';
+
+  const correctedEls = [
+    document.getElementById('kontext-corrected'),
+    document.getElementById('tagebuch-corrected'),
+  ];
+
+  let selectionTimer = null;
+  document.addEventListener('mouseup', () => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return;
+    let inCorrected = false;
+    try {
+      const range = sel.getRangeAt(0);
+      inCorrected = correctedEls.some(el => el && el.contains(range.commonAncestorContainer));
+    } catch { return; }
+    if (!inCorrected) return;
+    clearTimeout(selectionTimer);
+    selectionTimer = setTimeout(handleSelection, 300);
+  });
+
+  document.addEventListener('mousedown', e => {
+    if (!popover.contains(e.target)) hidePopover();
+  });
+
+  btnClose.addEventListener('click', hidePopover);
+
+  let _popDrag = null;
+  popover.addEventListener('mousedown', e => {
+    if (e.target.closest('button, a')) return;
+    e.preventDefault();
+    _popDrag = {
+      startX: e.clientX, startY: e.clientY,
+      origTop:  parseInt(popover.style.top,  10) || 0,
+      origLeft: parseInt(popover.style.left, 10) || 0,
+    };
+    popover.style.cursor = 'grabbing';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!_popDrag) return;
+    const top  = _popDrag.origTop  + (e.clientY - _popDrag.startY);
+    const left = _popDrag.origLeft + (e.clientX - _popDrag.startX);
+    popover.style.top  = Math.max(4, top)  + 'px';
+    popover.style.left = Math.max(4, left) + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (_popDrag) { _popDrag = null; popover.style.cursor = ''; }
+  });
+
+  function handleSelection() {
+    const sel = window.getSelection();
+    const phrase = sel ? sel.toString().trim() : '';
+    if (!phrase || phrase.length < 2 || phrase.length > 300) return;
+    currentPhrase = phrase; currentTranslation = '';
+    const rect = sel.getRangeAt(0).getBoundingClientRect();
+    popPhrase.textContent = phrase;
+    popTrans.textContent = 'Übersetzung…'; popTiming.textContent = '';
+    btnSave.disabled = true; btnSave.textContent = '＋ In Bibliothek';
+    showPopover(rect);
+    fetchTranslation(phrase);
+  }
+
+  let _translateAbort = null;
+  async function fetchTranslation(phrase) {
+    if (_translateAbort) { _translateAbort.abort(); _translateAbort = null; }
+    const key = phrase.toLowerCase().trim();
+    if (translationCache.has(key)) {
+      currentTranslation = translationCache.get(key);
+      popTrans.textContent = currentTranslation || '(keine Übersetzung)';
+      popTiming.textContent = 'cache';
+      btnSave.disabled = !currentTranslation;
+      return;
+    }
+    const controller = new AbortController();
+    _translateAbort = controller;
+    const t0 = performance.now();
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phrase }),
+        signal: controller.signal,
+      });
+      const data = await res.json();
+      _translateAbort = null;
+      const roundTrip = Math.round(performance.now() - t0);
+      currentTranslation = data.translation || '';
+      translationCache.set(key, currentTranslation);
+      popTrans.textContent = currentTranslation || '(keine Übersetzung)';
+      btnSave.disabled = !currentTranslation;
+      const t = data.timing || {};
+      const parts = [`${roundTrip}ms`];
+      if (t.deepl_ms) parts.push(`DeepL ${t.deepl_ms}ms`);
+      else if (t.llm_ms) parts.push(`LLM ${t.llm_ms}ms`);
+      if (t.total_ms) parts.push(`server ${t.total_ms}ms`);
+      popTiming.textContent = parts.join(' · ');
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      popTrans.textContent = '(Fehler)';
+      popTiming.textContent = '';
+    }
+  }
+
+  function showPopover(rect) {
+    popover.style.display = 'block';
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top  = spaceBelow >= 120 ? rect.bottom + 8 : Math.max(8, rect.top - 8 - 120);
+    const left = Math.min(Math.max(8, rect.left), window.innerWidth - 290);
+    popover.style.top  = top  + 'px';
+    popover.style.left = left + 'px';
+  }
+
+  function hidePopover() {
+    popover.style.display = 'none';
+    currentPhrase = ''; currentTranslation = '';
+  }
+
+  btnSave.addEventListener('click', async () => {
+    if (!currentPhrase || !currentTranslation) return;
+    btnSave.textContent = 'Speichern…'; btnSave.disabled = true;
+    try {
+      await fetch('/api/save-phrase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          german: currentPhrase,
+          english: currentTranslation,
+          context_sentence: '',
+          article_title: '',
+          source: 'schreiben',
+        }),
+      });
+      btnSave.textContent = '✓ Gespeichert';
+      setTimeout(hidePopover, 700);
+    } catch {
+      btnSave.textContent = 'Fehler'; btnSave.disabled = false;
+    }
+  });
 })();
 </script>
 {% endblock %}

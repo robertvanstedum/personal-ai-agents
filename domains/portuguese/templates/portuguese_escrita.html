@@ -86,13 +86,6 @@
     Entradas salvas aparecem em
     <a href="/palavras" title="Ir para Palavras">Palavras</a>.</p>
   </div>
-  <div class="woerter-form">
-    <input type="text" id="vocab-portuguese" placeholder="Palavra / frase em português">
-    <input type="text" id="vocab-english" placeholder="Significado em inglês">
-    <input type="text" id="vocab-context" placeholder="Frase de exemplo (opcional)">
-    <button class="btn-primary" id="vocab-save" title="Adicionar às Palavras">Salvar em Palavras</button>
-    <span class="write-status" id="vocab-status"></span>
-  </div>
 </div>
 
 <!-- ── Session history (global) ─────────────────────────────────── -->
@@ -115,6 +108,18 @@
     <img src="/static/photos/rio_escrita_01.jpg" alt="Rio de Janeiro"
          style="object-position: center 50%"
          onerror="this.style.display='none'">
+  </div>
+</div>
+
+<!-- ── Word capture popover ───────────────────────────────────── -->
+<div class="word-popover" id="word-popover" style="display:none">
+  <div class="popover-phrase" id="popover-phrase"></div>
+  <div class="popover-translation" id="popover-translation">Tradução…</div>
+  <div class="popover-timing" id="popover-timing"></div>
+  <div class="popover-actions">
+    <button class="btn-save-phrase" id="btn-save-phrase"
+            title="Salvar palavra ou frase em Palavras">＋ Em Palavras</button>
+    <button class="btn-close-popover" id="btn-close-popover" title="Fechar">✕</button>
   </div>
 </div>
 
@@ -342,23 +347,6 @@ function showSaveToast() {
     }
   });
 
-  // ── Vocabulário ───────────────────────────────────────────────
-  document.getElementById('vocab-save').addEventListener('click', async () => {
-    const pt  = document.getElementById('vocab-portuguese').value.trim();
-    const en  = document.getElementById('vocab-english').value.trim();
-    const ctx = document.getElementById('vocab-context').value.trim();
-    if (!pt || !en) { document.getElementById('vocab-status').textContent = 'Preencha português e inglês.'; return; }
-    const status = document.getElementById('vocab-status');
-    try {
-      await postJSON('/api/pt/save-phrase', { portuguese: pt, english: en, context_sentence: ctx });
-      status.textContent = '✓ Salvo em Palavras';
-      document.getElementById('vocab-portuguese').value = '';
-      document.getElementById('vocab-english').value = '';
-      document.getElementById('vocab-context').value = '';
-      setTimeout(() => { status.textContent = ''; }, 3000);
-    } catch { status.textContent = 'Erro ao salvar.'; }
-  });
-
   // ── Voice helpers ─────────────────────────────────────────────
   function addVoice(btnId, textareaId, lang) {
     const btn = document.getElementById(btnId);
@@ -379,6 +367,147 @@ function showSaveToast() {
   }
   addVoice('voice-kontext', 'kontext-input', 'pt-BR');
   addVoice('voice-diario', 'diario-input', 'pt-BR');
+})();
+
+// ── Word capture on corrected text ────────────────────────────────────────────
+(function () {
+  'use strict';
+  const popover   = document.getElementById('word-popover');
+  const popPhrase = document.getElementById('popover-phrase');
+  const popTrans  = document.getElementById('popover-translation');
+  const popTiming = document.getElementById('popover-timing');
+  const btnSave   = document.getElementById('btn-save-phrase');
+  const btnClose  = document.getElementById('btn-close-popover');
+  const translationCache = new Map();
+  let currentPhrase = '';
+  let currentTranslation = '';
+
+  const correctedEls = [
+    document.getElementById('diario-corrected'),
+    document.getElementById('kontext-corrected'),
+  ];
+
+  let selectionTimer = null;
+  document.addEventListener('mouseup', () => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return;
+    let inCorrected = false;
+    try {
+      const range = sel.getRangeAt(0);
+      inCorrected = correctedEls.some(el => el && el.contains(range.commonAncestorContainer));
+    } catch { return; }
+    if (!inCorrected) return;
+    clearTimeout(selectionTimer);
+    selectionTimer = setTimeout(handleSelection, 300);
+  });
+
+  document.addEventListener('mousedown', e => {
+    if (!popover.contains(e.target)) hidePopover();
+  });
+
+  btnClose.addEventListener('click', hidePopover);
+
+  let _popDrag = null;
+  popover.addEventListener('mousedown', e => {
+    if (e.target.closest('button, a')) return;
+    e.preventDefault();
+    _popDrag = {
+      startX: e.clientX, startY: e.clientY,
+      origTop:  parseInt(popover.style.top,  10) || 0,
+      origLeft: parseInt(popover.style.left, 10) || 0,
+    };
+    popover.style.cursor = 'grabbing';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!_popDrag) return;
+    popover.style.top  = Math.max(4, _popDrag.origTop  + (e.clientY - _popDrag.startY)) + 'px';
+    popover.style.left = Math.max(4, _popDrag.origLeft + (e.clientX - _popDrag.startX)) + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (_popDrag) { _popDrag = null; popover.style.cursor = ''; }
+  });
+
+  function handleSelection() {
+    const sel = window.getSelection();
+    const phrase = sel ? sel.toString().trim() : '';
+    if (!phrase || phrase.length < 2 || phrase.length > 300) return;
+    currentPhrase = phrase; currentTranslation = '';
+    const rect = sel.getRangeAt(0).getBoundingClientRect();
+    popPhrase.textContent = phrase;
+    popTrans.textContent = 'Tradução…'; popTiming.textContent = '';
+    btnSave.disabled = true; btnSave.textContent = '＋ Em Palavras';
+    showPopover(rect);
+    fetchTranslation(phrase);
+  }
+
+  let _translateAbort = null;
+  async function fetchTranslation(phrase) {
+    if (_translateAbort) { _translateAbort.abort(); _translateAbort = null; }
+    const key = phrase.toLowerCase().trim();
+    if (translationCache.has(key)) {
+      currentTranslation = translationCache.get(key);
+      popTrans.textContent = currentTranslation || '(sem tradução)';
+      popTiming.textContent = 'cache';
+      btnSave.disabled = !currentTranslation;
+      return;
+    }
+    const controller = new AbortController();
+    _translateAbort = controller;
+    const t0 = performance.now();
+    try {
+      const res = await fetch('/api/pt/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phrase }),
+        signal: controller.signal,
+      });
+      const data = await res.json();
+      _translateAbort = null;
+      currentTranslation = data.translation || '';
+      translationCache.set(key, currentTranslation);
+      popTrans.textContent = currentTranslation || '(sem tradução)';
+      btnSave.disabled = !currentTranslation;
+      const ms = Math.round(performance.now() - t0);
+      popTiming.textContent = `${ms}ms`;
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      popTrans.textContent = '(erro)';
+    }
+  }
+
+  function showPopover(rect) {
+    popover.style.display = 'block';
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top  = spaceBelow >= 120 ? rect.bottom + 8 : Math.max(8, rect.top - 8 - 120);
+    const left = Math.min(Math.max(8, rect.left), window.innerWidth - 290);
+    popover.style.top = top + 'px'; popover.style.left = left + 'px';
+  }
+
+  function hidePopover() {
+    popover.style.display = 'none';
+    currentPhrase = ''; currentTranslation = '';
+  }
+
+  btnSave.addEventListener('click', async () => {
+    if (!currentPhrase || !currentTranslation) return;
+    btnSave.textContent = 'Salvando…'; btnSave.disabled = true;
+    try {
+      await fetch('/api/pt/save-phrase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          portuguese: currentPhrase,
+          english: currentTranslation,
+          context_sentence: '',
+          source: 'escrita',
+        }),
+      });
+      btnSave.textContent = '✓ Salvo';
+      setTimeout(hidePopover, 700);
+    } catch {
+      btnSave.textContent = 'Erro'; btnSave.disabled = false;
+    }
+  });
 })();
 </script>
 {% endblock %}

@@ -260,7 +260,7 @@ def api_save_phrase():
     source = body.get("source", "").strip()
     if not german:
         return jsonify({"ok": False, "error": "german required"}), 400
-    scene = "manual" if source == "manual" else "lesen"
+    scene = source if source in ('manual', 'schreiben') else 'lesen'
     entry = save_lesen_phrase(german, english, context_sentence, article_title, scene=scene)
     return jsonify({"ok": True, "id": entry["id"]})
 
