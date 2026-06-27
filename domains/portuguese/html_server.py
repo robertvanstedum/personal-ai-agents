@@ -56,48 +56,42 @@ def _init_sentry():
 _init_sentry()
 
 
-def _ensure_writing_sessions_table():
+import datetime as _dt
+
+_PT_WRITING_SESSIONS_FILE = BASE_DIR / "data" / "writing_sessions.json"
+
+
+def _pt_save_writing_entry(mode: str, text_original: str,
+                            text_corrected: str = "", notes: list = None) -> dict:
+    data = {"entries": []}
+    if _PT_WRITING_SESSIONS_FILE.exists():
+        try:
+            data = json.loads(_PT_WRITING_SESSIONS_FILE.read_text())
+        except Exception:
+            pass
+    entry = {
+        "id": f"pt_ws_{_dt.datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        "mode": mode,
+        "text_original": text_original,
+        "text_corrected": text_corrected,
+        "notes": notes or [],
+        "timestamp": _dt.datetime.now().isoformat(),
+    }
+    data.setdefault("entries", []).append(entry)
+    data["entries"] = data["entries"][-50:]
+    _PT_WRITING_SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _PT_WRITING_SESSIONS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    return entry
+
+
+def _pt_get_writing_sessions(limit: int = 10) -> list:
+    if not _PT_WRITING_SESSIONS_FILE.exists():
+        return []
     try:
-        conn = _db_conn()
-        with conn, conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS portuguese.writing_sessions (
-                    id              SERIAL PRIMARY KEY,
-                    user_id         INTEGER,
-                    mode            VARCHAR(50),
-                    prompt          TEXT,
-                    original_text   TEXT NOT NULL,
-                    corrected_text  TEXT,
-                    feedback        JSONB,
-                    notes           JSONB DEFAULT '[]',
-                    article_id      INTEGER,
-                    created_at      TIMESTAMP DEFAULT NOW()
-                )
-            """)
-            cur.execute(
-                "CREATE INDEX IF NOT EXISTS idx_pt_writing_user"
-                " ON portuguese.writing_sessions(user_id, created_at DESC)"
-            )
-    except Exception as e:
-        print(f"[portuguese] ensure writing_sessions: {e}", flush=True)
-
-
-_ensure_writing_sessions_table()
-
-
-def _ensure_writing_sessions_notes():
-    try:
-        conn = _db_conn()
-        with conn, conn.cursor() as cur:
-            cur.execute(
-                "ALTER TABLE portuguese.writing_sessions"
-                " ADD COLUMN IF NOT EXISTS notes JSONB DEFAULT '[]'"
-            )
-    except Exception as e:
-        print(f"[portuguese] migration notes column: {e}", flush=True)
-
-
-_ensure_writing_sessions_notes()
+        data = json.loads(_PT_WRITING_SESSIONS_FILE.read_text())
+        return list(reversed(data.get("entries", [])))[:limit]
+    except Exception:
+        return []
 
 
 def _ensure_persona_progress_table():
@@ -408,40 +402,6 @@ def _get_vocabulary(user_id, source=None, status=None, limit=100) -> list:
         return []
 
 
-def _get_writing_sessions(user_id, limit=10) -> list:
-    try:
-        conn = _db_conn()
-        with conn, conn.cursor() as cur:
-            if user_id is not None:
-                cur.execute(
-                    "SELECT id, mode, original_text, corrected_text, created_at,"
-                    " COALESCE(notes, '[]'::jsonb)"
-                    " FROM portuguese.writing_sessions"
-                    " WHERE user_id = %s ORDER BY created_at DESC LIMIT %s",
-                    (user_id, limit),
-                )
-            else:
-                cur.execute(
-                    "SELECT id, mode, original_text, corrected_text, created_at,"
-                    " COALESCE(notes, '[]'::jsonb)"
-                    " FROM portuguese.writing_sessions"
-                    " ORDER BY created_at DESC LIMIT %s",
-                    (limit,),
-                )
-            rows = cur.fetchall()
-        return [
-            {
-                "id": r[0], "mode": r[1] or "diario",
-                "text_original": r[2] or "", "text_corrected": r[3] or "",
-                "timestamp": str(r[4]) if r[4] else "",
-                "notes": r[5] if isinstance(r[5], list) else [],
-            }
-            for r in rows
-        ]
-    except Exception as e:
-        print(f"[portuguese] writing sessions fetch error: {e}", flush=True)
-        return []
-
 
 def _get_leitura_notes(user_id, limit=20) -> list:
     try:
@@ -553,8 +513,7 @@ def conversas():
 
 @app.route("/escrita")
 def escrita():
-    user_id = _request_user_id()
-    writing_sessions = _get_writing_sessions(user_id, limit=5)
+    writing_sessions = _pt_get_writing_sessions(limit=5)
     return render_template("portuguese_escrita.html", active="escrita",
                            writing_sessions=writing_sessions)
 
@@ -575,7 +534,7 @@ def palavras():
 def arquivo():
     user_id = _request_user_id()
     conversas_sessions = _get_sessions(user_id, limit=10)
-    writing_sessions = _get_writing_sessions(user_id, limit=10)
+    writing_sessions = _pt_get_writing_sessions(limit=10)
     leitura_notes = _get_leitura_notes(user_id, limit=20)
     return render_template("portuguese_arquivo.html", active="arquivo",
                            conversas_sessions=conversas_sessions,
@@ -792,27 +751,19 @@ def api_pt_escrita_correct():
 
 @app.route("/api/pt/escrita/save", methods=["POST"])
 def api_pt_escrita_save():
-    _ensure_writing_sessions_table()
-    body     = request.get_json(force=True)
-    text     = (body.get("text") or "").strip()
-    mode     = (body.get("mode") or "diario").strip()
-    user_id  = _request_user_id()
+    body  = request.get_json(force=True)
+    text  = (body.get("text") or "").strip()
+    mode  = (body.get("mode") or "diario").strip()
     if not text:
         return jsonify({"ok": False, "error": "text required"}), 400
-
-    corrected_text = (body.get("corrected_text") or None)
-    notes = body.get("notes") or []
-
     try:
-        conn = _db_conn()
-        with conn, conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO portuguese.writing_sessions"
-                " (user_id, mode, original_text, corrected_text, notes)"
-                " VALUES (%s, %s, %s, %s, %s)",
-                (user_id, mode, text, corrected_text, json.dumps(notes)),
-            )
-        return jsonify({"ok": True})
+        entry = _pt_save_writing_entry(
+            mode=mode,
+            text_original=text,
+            text_corrected=(body.get("corrected_text") or ""),
+            notes=body.get("notes") or [],
+        )
+        return jsonify({"ok": True, "id": entry["id"]})
     except Exception as e:
         print(f"[portuguese] escrita save error: {e}", flush=True)
         return jsonify({"ok": False, "error": str(e)}), 500
