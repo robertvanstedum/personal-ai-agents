@@ -668,6 +668,27 @@ body.parch-mode .btn-primary { background: var(--pt-dark); }
   border-color: var(--pt-accent);
   color: var(--pt-text-primary);
 }
+
+.btn-accept {
+  background: transparent;
+  border: 1px solid var(--pt-accent);
+  border-radius: 8px;
+  color: var(--pt-accent);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  padding: 0.35rem 0.9rem;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-accept:hover {
+  background: var(--pt-accent);
+  color: #fff;
+}
+.btn-accept:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .btn-sm { padding: 0.25rem 0.65rem; font-size: 0.82rem; }
 
 .notebook-textarea {

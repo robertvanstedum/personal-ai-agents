@@ -37,11 +37,12 @@
   <span class="write-status" id="diario-status"></span>
   <div class="correction-display" id="diario-correction" style="display:none">
     <div class="correction-section">
-      <div class="correction-label">Corrigido <small class="translate-hint">clique uma palavra para traduzir</small></div>
-      <div class="correction-corrected" id="diario-corrected"></div>
+      <div class="correction-label">Corrigido <small class="translate-hint">selecione texto para salvar</small></div>
+      <div class="correction-corrected" id="diario-corrected" contenteditable="true" spellcheck="false"></div>
     </div>
     <ul class="correction-notes" id="diario-notes"></ul>
     <div class="correction-actions">
+      <button class="btn-accept" id="diario-accept" title="Aceitar correção na área de texto">↑ Aceitar</button>
       <button class="btn-primary" id="diario-submit" title="Salvar entrada corrigida">Salvar</button>
     </div>
   </div>
@@ -69,11 +70,12 @@
       <div class="correction-original" id="kontext-original"></div>
     </div>
     <div class="correction-section">
-      <div class="correction-label">Corrigido <small class="translate-hint">clique uma palavra para traduzir</small></div>
-      <div class="correction-corrected" id="kontext-corrected"></div>
+      <div class="correction-label">Corrigido <small class="translate-hint">selecione texto para salvar</small></div>
+      <div class="correction-corrected" id="kontext-corrected" contenteditable="true" spellcheck="false"></div>
     </div>
     <ul class="correction-notes" id="kontext-notes"></ul>
     <div class="correction-actions">
+      <button class="btn-accept" id="kontext-accept" title="Aceitar correção na área de texto">↑ Aceitar</button>
       <button class="btn-primary" id="kontext-save" title="Salvar entrada corrigida">Salvar</button>
     </div>
   </div>
@@ -256,7 +258,7 @@ function showSaveToast() {
       const corrected = data.corrected || '';
       const notes     = data.notes || [];
 
-      renderCorrected(document.getElementById('diario-corrected'), corrected || text);
+      document.getElementById('diario-corrected').textContent = corrected || text;
       const notesList = document.getElementById('diario-notes');
       notesList.innerHTML = '';
       notes.forEach(n => {
@@ -278,11 +280,21 @@ function showSaveToast() {
 
   document.getElementById('diario-submit').addEventListener('click', async () => {
     const btn = document.getElementById('diario-submit');
+    const correctedEl = document.getElementById('diario-corrected');
     await saveDiarioEntry(
       btn.dataset.original  || '',
-      btn.dataset.corrected || '',
+      correctedEl.innerText.trim() || btn.dataset.corrected || '',
       JSON.parse(btn.dataset.notes || '[]')
     );
+  });
+
+  document.getElementById('diario-accept').addEventListener('click', () => {
+    const correctedEl = document.getElementById('diario-corrected');
+    document.getElementById('diario-input').value = correctedEl.innerText.trim();
+    const btn = document.getElementById('diario-accept');
+    btn.textContent = '✓ Aceito';
+    btn.disabled = true;
+    setTimeout(() => { btn.textContent = '↑ Aceitar'; btn.disabled = false; }, 2000);
   });
 
   async function saveDiarioEntry(text, corrected, notes) {
@@ -310,7 +322,7 @@ function showSaveToast() {
     try {
       const data = await postJSON('/api/pt/escrita/correct', { text, mode: 'contexto' });
       document.getElementById('kontext-original').textContent = text;
-      renderCorrected(document.getElementById('kontext-corrected'), data.corrected || text);
+      document.getElementById('kontext-corrected').textContent = data.corrected || text;
       const notes = document.getElementById('kontext-notes');
       notes.innerHTML = '';
       (data.notes || []).forEach(n => {
@@ -330,11 +342,12 @@ function showSaveToast() {
 
   document.getElementById('kontext-save').addEventListener('click', async () => {
     const btn    = document.getElementById('kontext-save');
+    const correctedEl = document.getElementById('kontext-corrected');
     const status = document.getElementById('kontext-status');
     try {
       const data = await postJSON('/api/pt/escrita/save', {
         text:           btn.dataset.original  || '',
-        corrected_text: btn.dataset.corrected || '',
+        corrected_text: correctedEl.innerText.trim() || btn.dataset.corrected || '',
         notes:          JSON.parse(btn.dataset.notes || '[]'),
         mode:           'contexto',
       });
@@ -345,6 +358,15 @@ function showSaveToast() {
     } catch {
       status.textContent = 'Erro ao salvar.';
     }
+  });
+
+  document.getElementById('kontext-accept').addEventListener('click', () => {
+    const correctedEl = document.getElementById('kontext-corrected');
+    document.getElementById('kontext-input').value = correctedEl.innerText.trim();
+    const btn = document.getElementById('kontext-accept');
+    btn.textContent = '✓ Aceito';
+    btn.disabled = true;
+    setTimeout(() => { btn.textContent = '↑ Aceitar'; btn.disabled = false; }, 2000);
   });
 
   // ── Voice helpers ─────────────────────────────────────────────
@@ -388,7 +410,7 @@ function showSaveToast() {
   ];
 
   let selectionTimer = null;
-  document.addEventListener('mouseup', () => {
+  function checkSelection() {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed) return;
     let inCorrected = false;
@@ -399,7 +421,9 @@ function showSaveToast() {
     if (!inCorrected) return;
     clearTimeout(selectionTimer);
     selectionTimer = setTimeout(handleSelection, 300);
-  });
+  }
+  document.addEventListener('mouseup', checkSelection);
+  document.addEventListener('touchend', checkSelection);
 
   document.addEventListener('mousedown', e => {
     if (!popover.contains(e.target)) hidePopover();
@@ -430,7 +454,7 @@ function showSaveToast() {
   function handleSelection() {
     const sel = window.getSelection();
     const phrase = sel ? sel.toString().trim() : '';
-    if (!phrase || phrase.length < 2 || phrase.length > 300) return;
+    if (!phrase || phrase.length < 2 || phrase.length > 200) return;
     currentPhrase = phrase; currentTranslation = '';
     const rect = sel.getRangeAt(0).getBoundingClientRect();
     popPhrase.textContent = phrase;

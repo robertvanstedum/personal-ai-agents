@@ -38,11 +38,12 @@
       <div class="correction-original" id="kontext-original"></div>
     </div>
     <div class="correction-section">
-      <div class="correction-label">Korrigiert</div>
-      <div class="correction-corrected" id="kontext-corrected"></div>
+      <div class="correction-label">Korrigiert <small class="translate-hint">Text auswählen um zu speichern</small></div>
+      <div class="correction-corrected" id="kontext-corrected" contenteditable="true" spellcheck="false"></div>
     </div>
     <ul class="correction-notes" id="kontext-notes"></ul>
     <div class="correction-actions">
+      <button class="btn-accept" id="kontext-accept" title="Korrigierten Text in die Textarea übernehmen">↑ Übernehmen</button>
       <button class="btn-primary" id="kontext-save" title="Save corrected entry">Speichern</button>
     </div>
   </div>
@@ -80,11 +81,12 @@
   <span class="write-status" id="tagebuch-status"></span>
   <div class="correction-display" id="tagebuch-correction" style="display:none">
     <div class="correction-section">
-      <div class="correction-label">Korrigiert</div>
-      <div class="correction-corrected" id="tagebuch-corrected"></div>
+      <div class="correction-label">Korrigiert <small class="translate-hint">Text auswählen um zu speichern</small></div>
+      <div class="correction-corrected" id="tagebuch-corrected" contenteditable="true" spellcheck="false"></div>
     </div>
     <ul class="correction-notes" id="tagebuch-notes"></ul>
     <div class="correction-actions">
+      <button class="btn-accept" id="tagebuch-accept" title="Korrigierten Text in die Textarea übernehmen">↑ Übernehmen</button>
       <button class="btn-primary" id="tagebuch-submit" title="Save journal entry">Speichern</button>
     </div>
   </div>
@@ -231,6 +233,7 @@ function showSaveToast() {
   // ── Im Kontext — step 2: Speichern ──────────────────────────────────────────
   document.getElementById('kontext-save').addEventListener('click', async () => {
     const btn = document.getElementById('kontext-save');
+    const correctedEl = document.getElementById('kontext-corrected');
     const contextTitle = document.getElementById('kontext-title').textContent;
     try {
       await fetch('/api/write-save', {
@@ -239,7 +242,7 @@ function showSaveToast() {
         body: JSON.stringify({
           mode: 'kontext',
           text_original: btn.dataset.original || '',
-          text_corrected: btn.dataset.corrected || '',
+          text_corrected: correctedEl.innerText.trim() || btn.dataset.corrected || '',
           notes: JSON.parse(btn.dataset.notes || '[]'),
           context_title: contextTitle,
         }),
@@ -248,6 +251,16 @@ function showSaveToast() {
       btn.disabled = true;
       setTimeout(() => { window.location.reload(); }, 1500);
     } catch (e) {}
+  });
+
+  // ── Im Kontext — accept correction into textarea ─────────────────────────────
+  document.getElementById('kontext-accept').addEventListener('click', () => {
+    const correctedEl = document.getElementById('kontext-corrected');
+    document.getElementById('kontext-input').value = correctedEl.innerText.trim();
+    const btn = document.getElementById('kontext-accept');
+    btn.textContent = '✓ Übernommen';
+    btn.disabled = true;
+    setTimeout(() => { btn.textContent = '↑ Übernehmen'; btn.disabled = false; }, 2000);
   });
 
   // ── Tagebuch — step 1: Korrigieren (or direct save if checkbox off) ──────────
@@ -307,11 +320,22 @@ function showSaveToast() {
   // ── Tagebuch — step 2: Speichern ─────────────────────────────────────────────
   document.getElementById('tagebuch-submit').addEventListener('click', async () => {
     const btn = document.getElementById('tagebuch-submit');
+    const correctedEl = document.getElementById('tagebuch-corrected');
     await saveTagebuchEntry(
       btn.dataset.original || '',
-      btn.dataset.corrected || '',
+      correctedEl.innerText.trim() || btn.dataset.corrected || '',
       JSON.parse(btn.dataset.notes || '[]')
     );
+  });
+
+  // ── Tagebuch — accept correction into textarea ──────────────────────────────
+  document.getElementById('tagebuch-accept').addEventListener('click', () => {
+    const correctedEl = document.getElementById('tagebuch-corrected');
+    document.getElementById('tagebuch-input').value = correctedEl.innerText.trim();
+    const btn = document.getElementById('tagebuch-accept');
+    btn.textContent = '✓ Übernommen';
+    btn.disabled = true;
+    setTimeout(() => { btn.textContent = '↑ Übernehmen'; btn.disabled = false; }, 2000);
   });
 
   async function saveTagebuchEntry(text, corrected, notes) {
@@ -382,7 +406,7 @@ function showSaveToast() {
   ];
 
   let selectionTimer = null;
-  document.addEventListener('mouseup', () => {
+  function checkSelection() {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed) return;
     let inCorrected = false;
@@ -393,7 +417,9 @@ function showSaveToast() {
     if (!inCorrected) return;
     clearTimeout(selectionTimer);
     selectionTimer = setTimeout(handleSelection, 300);
-  });
+  }
+  document.addEventListener('mouseup', checkSelection);
+  document.addEventListener('touchend', checkSelection);
 
   document.addEventListener('mousedown', e => {
     if (!popover.contains(e.target)) hidePopover();
@@ -426,7 +452,7 @@ function showSaveToast() {
   function handleSelection() {
     const sel = window.getSelection();
     const phrase = sel ? sel.toString().trim() : '';
-    if (!phrase || phrase.length < 2 || phrase.length > 300) return;
+    if (!phrase || phrase.length < 2 || phrase.length > 200) return;
     currentPhrase = phrase; currentTranslation = '';
     const rect = sel.getRangeAt(0).getBoundingClientRect();
     popPhrase.textContent = phrase;

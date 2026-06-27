@@ -825,6 +825,26 @@ body.parch-mode .session-preview {
   color: var(--text);
 }
 
+.btn-accept {
+  background: transparent;
+  border: 1px solid var(--md-accent);
+  border-radius: 8px;
+  color: var(--md-accent);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  padding: 0.35rem 0.9rem;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-accept:hover {
+  background: var(--md-accent);
+  color: #fff;
+}
+.btn-accept:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .write-status {
   font-size: 0.875rem;
   color: var(--text-dim);
