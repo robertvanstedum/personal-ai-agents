@@ -46,6 +46,13 @@ app = Flask(
 )
 CORS(app)
 
+@app.after_request
+def _no_cache_html(response):
+    if "text/html" in response.content_type:
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
 # Sentry — init only if DSN is configured; silent no-op otherwise
 def _init_sentry():
     try:
