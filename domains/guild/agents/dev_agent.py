@@ -1,7 +1,7 @@
 """
 Design/Dev Agent — Level 1
 Traffic cop, memory builder, and CoS communications bridge for the mini-moi build process.
-Port 8770. Run under launchd as com.user.devagent.
+Port 8771. Run under launchd as com.user.devagent.
 
 Phase 4 learnings applied:
 - sys.path fix from day one (not as a hotfix)
@@ -708,7 +708,7 @@ def _start_watcher() -> None:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    PORT = int(os.environ.get("PORT", 8770))
+    PORT = int(os.environ.get("PORT", 8771))
     load_config()
 
     print(f"""

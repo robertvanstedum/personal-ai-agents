@@ -916,7 +916,7 @@ def _handle_tg_text(text: str, token: str, chat_id: str):
                 _tg_send(token, chat_id, f"❌ Sync error: {e}")
             return
         try:
-            d = requests.get("http://localhost:8770/status", timeout=5).json()
+            d = requests.get("http://localhost:8771/status", timeout=5).json()
             events    = d.get("events_processed", 0)
             archived  = d.get("docs_archived", 0)
             mem_chars = d.get("memory_chars", 0)
@@ -942,7 +942,7 @@ def _handle_tg_text(text: str, token: str, chat_id: str):
                 f"{last_line}"
             )
         except requests.exceptions.ConnectionError:
-            _tg_send(token, chat_id, "❌ Design/Dev agent unreachable (port 8770).")
+            _tg_send(token, chat_id, "❌ Design/Dev agent unreachable (port 8771).")
         except Exception as e:
             _tg_send(token, chat_id, f"❌ !dev error: {e}")
         return

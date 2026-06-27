@@ -1575,7 +1575,7 @@ def update_build_status(item_id):
     if new_status in ('done', 'deferred') and item and item.get('spec_file'):
         try:
             _requests.post(
-                'http://localhost:8770/archive-spec',
+                'http://localhost:8771/archive-spec',
                 json={'spec_file': item['spec_file']},
                 timeout=2,
             )
