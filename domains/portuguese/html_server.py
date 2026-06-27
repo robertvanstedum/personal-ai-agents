@@ -497,13 +497,13 @@ def _update_persona_progress(user_id, persona_slug: str):
 @app.route("/")
 def index():
     return render_template("portuguese_landing.html", active="landing",
-                           show_toggle=(_request_user_tier() in ("owner", "admin")))
+                           show_toggle=False)
 
 
 @app.route("/leitura")
 def leitura():
     return render_template("portuguese_leitura.html", active="leitura",
-                           show_toggle=(_request_user_tier() in ("owner", "admin")))
+                           show_toggle=False)
 
 
 @app.route("/conversas")
@@ -517,7 +517,7 @@ def conversas():
     return render_template(
         "portuguese_conversas.html",
         active="conversas",
-        show_toggle=(_request_user_tier() in ("owner", "admin")),
+        show_toggle=False,
         personas=personas,
         sessions=sessions,
         persona_progress=persona_progress,
@@ -530,7 +530,7 @@ def escrita():
     user_id = _request_user_id()
     writing_sessions = _get_writing_sessions(user_id, limit=5)
     return render_template("portuguese_escrita.html", active="escrita",
-                           show_toggle=(_request_user_tier() in ("owner", "admin")), writing_sessions=writing_sessions)
+                           show_toggle=False, writing_sessions=writing_sessions)
 
 
 @app.route("/palavras")
@@ -542,7 +542,7 @@ def palavras():
         + _get_vocabulary(user_id, status="pronto_para_testar", limit=50)
     )
     return render_template("portuguese_palavras.html", active="palavras",
-                           show_toggle=(_request_user_tier() in ("owner", "admin")), entries=entries, drill_pool=drill_pool)
+                           show_toggle=False, entries=entries, drill_pool=drill_pool)
 
 
 @app.route("/arquivo")
@@ -552,7 +552,7 @@ def arquivo():
     writing_sessions = _get_writing_sessions(user_id, limit=10)
     leitura_notes = _get_leitura_notes(user_id, limit=20)
     return render_template("portuguese_arquivo.html", active="arquivo",
-                           show_toggle=(_request_user_tier() in ("owner", "admin")),
+                           show_toggle=False,
                            conversas_sessions=conversas_sessions,
                            writing_sessions=writing_sessions,
                            leitura_notes=leitura_notes)
@@ -561,7 +561,7 @@ def arquivo():
 @app.route("/admin")
 def admin():
     return render_template("portuguese_admin.html", active="admin",
-                           show_toggle=(_request_user_tier() in ("owner", "admin")))
+                           show_toggle=False)
 
 
 @app.route("/health")
