@@ -56,6 +56,7 @@ services:
     environment:
       - FLASK_ENV=production
       - PORT=8770
+      - DATABASE_URL=postgresql://postgres:simple123@postgres:5432/personal_agents
     ports:
       - "127.0.0.1:8770:8770"
     depends_on:
