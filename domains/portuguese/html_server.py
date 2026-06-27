@@ -607,26 +607,36 @@ def api_pt_article(article_id):
         conn = _db_conn()
         with conn, conn.cursor() as cur:
             cur.execute(
-                "SELECT url, full_text FROM portuguese.articles WHERE id = %s",
+                "SELECT url, full_text, excerpt FROM portuguese.articles WHERE id = %s",
                 (article_id,),
             )
             row = cur.fetchone()
         if not row:
             return jsonify({"ok": False, "error": "not found"}), 404
-        url, full_text = row
+        url, full_text, excerpt = row
         if full_text:
             return jsonify({"ok": True, "text": full_text})
+        if excerpt:
+            return jsonify({"ok": True, "text": excerpt})
         # Scrape on demand
         try:
             from bs4 import BeautifulSoup
-            resp = requests.get(url, timeout=15, headers={"User-Agent": _UA})
+            resp = requests.get(url, timeout=8, headers={"User-Agent": _UA})
             resp.raise_for_status()
             soup = BeautifulSoup(resp.content, "html.parser")
-            for tag in soup(["nav", "header", "footer", "script", "style", "aside", "iframe"]):
+            for tag in soup(["nav", "header", "footer", "script", "style", "aside", "iframe", "figure"]):
                 tag.decompose()
+            # Try specific article containers first, fall back to all <p>
+            article_body = (
+                soup.find("article")
+                or soup.find(class_=lambda c: c and any(x in c for x in
+                    ("article-body", "article-content", "content-text", "materia-content",
+                     "news-content", "post-content", "entry-content")))
+            )
+            target = article_body or soup
             paras = [
                 p.get_text(separator=" ", strip=True)
-                for p in soup.find_all("p")
+                for p in target.find_all("p")
                 if len(p.get_text(strip=True)) > 40
             ]
             text = " ".join(paras)[:3000].strip()

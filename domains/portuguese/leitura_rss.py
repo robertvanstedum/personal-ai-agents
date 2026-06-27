@@ -106,10 +106,15 @@ def fetch_web(source: dict, max_articles: int) -> list[dict]:
             title = title[:200].strip()
             if len(title) < 10:
                 continue
+            # Try to grab teaser body text (description/subtitle in listing)
+            teaser_el = el.find(class_=lambda c: c and any(
+                x in c for x in ("teaser-text", "description", "subtitle", "summary", "lead")
+            )) or el.find("p")
+            excerpt = teaser_el.get_text(strip=True)[:300] if teaser_el else ""
             articles.append({
                 "url": href,
                 "title": title,
-                "excerpt": "",
+                "excerpt": excerpt,
                 "published_at": None,
             })
         log.info(f"  {source['name']}: {len(articles)} articles scraped")

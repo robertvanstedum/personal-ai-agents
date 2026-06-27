@@ -280,8 +280,7 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
     if any(t in content_type for t in ("image/", "font/", "application/font")):
         resp_headers.setdefault("Cache-Control", "public, max-age=3600")
         resp_headers.setdefault("Vary", "Accept-Encoding")
-    elif "text/html" in content_type and portal_prefix == "/app/curator":
-        # Curator briefing changes daily — never allow browser to cache it
+    elif "text/html" in content_type:
         resp_headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         resp_headers["Pragma"] = "no-cache"
 
