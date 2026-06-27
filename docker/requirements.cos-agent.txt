@@ -8,3 +8,4 @@ psycopg2-binary>=2.9.0
 python-dotenv
 keyring
 feedparser>=6.0.0
+gunicorn>=21.0.0

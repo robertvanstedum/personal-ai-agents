@@ -184,3 +184,109 @@ Last updated: 2026-06-09 | Hard cap: 8,000 chars
 ⚠️ Memory approaching cap — distillation needed
 2026-06-22 21:35 UTC: [doc_modified] spec_operations_monitoring_v2_2026-06-22.md — Spec for EC2 operations monitoring dividing labor between OpenClaw, CoS, and bot.
 ⚠️ Memory approaching cap — distillation needed
+2026-06-24 04:11 UTC: [doc_created] spec_monitoring_prometheus_grafana_2026-06-22.md — Spec for Prometheus + Grafana metrics stack on EC2.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_gesprache_testrun_followup_2026-06-15.md — Follow-up spec for layout tightening and performance fixes from KI-Sitzung test run.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_guild_type_scale_revision_2026-06-13.md — Defines guild typography scale using CSS variables for consistency.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_gesprache_prompt_kopieren_2026-06-18.md — Spec for adding Prompt Copy button and editable prompt in Gespräche.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_guild_typography_hierarchy_2026-06-13.md — Spec for new larger typography tier for section headers in Guild.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_gesprache_mobile_scroll_fix_2026-06-18.md — CSS fixes to resolve mobile scroll issues on iPhone for Gespräche.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_guild_nav_restructure_2026-06-12.md — Spec for restructuring Guild navigation to two rows with context-sensitive secondary nav.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_guild_landing_copy_2026-06-13.md — Spec for updating Guild and Curator landing copy on minimoi.ai What's Running.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_landing_copy_round2_2026-06-13.md — Follow-on spec for landing copy edits and Guild bug fix.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_guild_docs_view_2026-06-19.md — Spec for adding DOCS tab to Guild UI to browse docs/ folder.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_lesen_translate_hover_2026-06-14.md — Spec for using MyMemory API to fix Lesen preview translate hover after Cloudflare migration.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_guild_small_followups_2026-06-13.md — Spec for two small UI fixes on guild nav and dashboard subtitle.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_guild_v09_release_2026-06-13.md — Spec for Guild v0.9 GitHub release notes, tag, and description.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_gesprache_voice_input_2026-06-14.md — Spec for adding voice input to Gespräche with provider-agnostic LLM review.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_security_architecture_2026-06-14.md — Security architecture spec separating public site from live portal via subdomains.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_code_review_phase0_2026-06-19.md — Spec for Phase 0 code review of hardcoded paths and secrets.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_incomplete_reason_visibility_2026-06-13.md — Spec to display incomplete reason and document links on build cards.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_learning_system_foundation_2026-06-16.md — Commits foundational documents for mini-mois learning system and institutional knowledge.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_monitoring_prometheus_grafana_2026-06-22.md — Spec for Prometheus and Grafana metrics stack on EC2.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_gesprache_async_analysis_2026-06-18.md — Proposes options to improve UI feedback during async LLM analysis calls.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_spec_detail_view_fix_2026-06-13.md — Spec for fixing nav, download and print in spec detail view.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_roadmap_remove_how_this_works_2026-06-17.md — Spec to remove How this works section from ROADMAP.md and clean subtitle.
+⚠️ Memory approaching cap — distillation neededded
+2026-06-24 13:50 UTC: [doc_created] spec_devagent_classifier_fix_2026-06-12.md — Fix dev_agent classifier truncation and add direct structural checks for DoD/Commit.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_housekeeping_2026-06-12.md — Spec for repo sync audit and housekeeping tasks.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_mobile_audit_improvement_2026-06-16.md — Spec for auditing and improving mobile experience on minimoi.ai sites.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_cos_guest_access_2026-06-14.md — Spec for guest access requests notification and daily briefing features.
+⚠️ Memory approaching cap — distillation needed distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_guild_career_focus_editor_2026-06-16.md — Spec for simple UI to edit guild career milestones and goals.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_gesprache_kisitzung_mobile_2026-06-18.md — Mobile tuning spec for KI-Sitzung Path B to support one-handed use on 390px viewports.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_gesprache_ki_session_2026-06-15 copy.md — Defines clean Start/End Session flow for Gespräche page without tabs or previews.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_gesprache_websocket_analysis_2026-06-18.md — Spec for WebSocket server-push analysis to prevent UI blocking in Gespräche.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_mobile_ui_enhancements_2026-06-16.md — Mobile UI fixes shipped plus enhancement spec for minimoi.ai portal.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_guild_roadmap_layout_fix_2026-06-17.md — Spec amendment fixing guild roadmap layout and typography issues.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_monitoring_stack_2026-06-18.md — Specification for mini-moi monitoring stack using Sentry, Prometheus, Grafana and CloudWatch.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_created] spec_landing_page_uptime_2026-06-13.md — Investigation and roadmap entry for always-on minimoi.ai landing page.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 13:50 UTC: [doc_modified] spec_cicd_pipeline_2026-06-20.md — CI/CD pipeline spec for mini-moi production EC2 deployment via GitHub Actions.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 18:29 UTC: [doc_created] spec_2_portuguese_domain_shell_2026-06-24.md — Spec for Portuguese domain shell with five tabs, nav, and Rio-inspired design system.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 18:29 UTC: [doc_created] spec_1_auth_multiuser_2026-06-24.md — Specification for multi-user auth system replacing single-user Google OAuth.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 18:29 UTC: [doc_created] spec_cicd_pipeline_2026-06-24.md — Spec for CI/CD pipeline and regression test suite protecting Portuguese domain build.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 18:37 UTC: [doc_modified] spec_2_portuguese_domain_shell_2026-06-24.md — Specification for Portuguese domain shell with five tabs, navigation and design system.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 18:37 UTC: [doc_modified] spec_1_auth_multiuser_2026-06-24.md — Specification for multi-user auth system replacing Google OAuth with approval-based accounts and roles.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 18:37 UTC: [doc_modified] spec_cicd_pipeline_2026-06-24.md — Spec for CI/CD pipeline and regression test suite for Portuguese domain.
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 20:08 UTC: [doc_created] spec_1_auth_multiuser_2026-06-24.md — Spec: spec_1_auth_multiuser_2026-06-24.md
+⚠️ Memory approaching cap — distillation needed
+2026-06-24 20:08 UTC: [doc_created] spec_cicd_pipeline_2026-06-24.md — Spec: spec_cicd_pipeline_2026-06-24.md
+⚠️ Memory approaching cap — distillation needed
+2026-06-25 01:12 UTC: [doc_created] spec_1_auth_multiuser_2026-06-24.md — Specification for multi-user auth system for Portuguese domain launch.
+⚠️ Memory approaching cap — distillation needed
+2026-06-25 01:19 UTC: [doc_modified] spec_1_auth_multiuser_2026-06-24.md — Spec for multi-user auth system for Portuguese domain launch.
+⚠️ Memory approaching cap — distillation needed
+2026-06-25 02:12 UTC: [doc_created] spec_1_auth_multiuser_2026-06-24.md — Spec for multi-user auth system with Robert approval for Portuguese domain.
+⚠️ Memory approaching cap — distillation needed
+2026-06-25 04:15 UTC: [doc_created] spec_2_addendum_palette_toggle_2026-06-25.md — Addendum to Spec 2 defining three-palette CSS toggle system.
+⚠️ Memory approaching cap — distillation needed
+2026-06-25 13:00 UTC: [doc_created] spec_1_auth_final_2026-06-25.md — Spec for multi-user auth system for Portuguese domain launch.
+⚠️ Memory approaching cap — distillation needed
+2026-06-25 13:01 UTC: [doc_modified] spec_1_auth_final_2026-06-25.md — Specification for multi-user auth system with Robert approval flow.
+⚠️ Memory approaching cap — distillation needed
+2026-06-27 13:07 UTC: [doc_created] spec_leitura_article_quality_2026-06-27.md — Spec for fixing Leitura article quality and content problems.
+⚠️ Memory approaching cap — distillation needed
+2026-06-27 13:17 UTC: [doc_created] spec_writing_save_fix_2026-06-27.md — Fix writing session save bugs and add German writing prompts.
+⚠️ Memory approaching cap — distillation needed
+2026-06-27 13:44 UTC: [doc_created] spec_deploy_fix_writing_save_2026-06-27.md — Spec for fixing CI/CD deploy reliability and writing save issues.
+⚠️ Memory approaching cap — distillation needed
+2026-06-27 13:47 UTC: [doc_modified] spec_deploy_fix_writing_save_2026-06-27.md — Fix deploy reliability in CI/CD pipeline before validating production changes.
+⚠️ Memory approaching cap — distillation needed

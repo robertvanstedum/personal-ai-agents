@@ -779,5 +779,445 @@
     "loop_name": "devagent_watcher",
     "status": "pending",
     "created_at": "2026-06-22T21:35:55.612372+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T04:11:07.760093+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:14.060960+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:14.145541+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:14.191419+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:14.335618+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:14.352634+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:14.379783+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:14.410259+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:14.667720+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:14.982419+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:15.009299+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:15.058276+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:15.255004+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:15.296456+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:15.326257+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:15.341330+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:15.385544+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:15.501369+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:15.597087+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:15.678783+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:20.543836+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:20.868467+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:20.917804+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:20.919385+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:20.943350+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:20.970179+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:21.115258+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:21.195606+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:21.410477+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:21.508493+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:21.948628+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:22.095432+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:22.163658+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:22.421070+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:22.758381+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T13:50:36.755334+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T18:29:21.005229+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T18:29:21.360332+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T18:29:22.446650+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T18:37:41.651069+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T18:37:42.273212+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T18:37:42.801388+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T20:08:58.704022+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T20:08:58.709335+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-24T20:08:59.067219+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-25T01:12:54.249297+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-25T01:19:57.174496+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-25T02:12:50.464342+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-25T04:15:18.971021+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-25T13:00:00.770261+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-25T13:01:51.071314+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-27T13:07:25.422091+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-27T13:17:44.727428+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-27T13:44:18.137060+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-06-27T13:47:32.150263+00:00"
   }
 ]

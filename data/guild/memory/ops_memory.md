@@ -186,3 +186,45 @@ Unloaded `homebrew.mxcl.colima.plist` (conflicts with custom plist). Custom plis
 - Disk: 98.7% used, 3.0 GB free
 - Checks run today: 150
 - Open escalations: 0
+
+### 2026-06-23 05:00 UTC
+- Services: curator-server ✅, german-html-server ✅, minimoi-portal ✅
+- Disk: 94.2% used, 13.2 GB free
+- Checks run today: 401
+- Open escalations: 0
+
+### 2026-06-24 03:10 UTC
+- Services: curator-server ❌, german-html-server ✅, minimoi-portal ✅
+- Disk: 99.1% used, 2.1 GB free
+- Checks run today: 1
+- Open escalations: 0
+
+### 2026-06-24 03:10 UTC
+- Services: curator-server ❌, german-html-server ✅, minimoi-portal ✅
+- Disk: 99.1% used, 2.1 GB free
+- Checks run today: 1
+- Open escalations: 0
+
+### 2026-06-24 05:01 UTC
+- Services: curator-server ✅, german-html-server ✅, minimoi-portal ✅
+- Disk: 86.1% used, 31.7 GB free
+- Checks run today: 23
+- Open escalations: 0
+
+### 2026-06-25 05:25 UTC
+- Services: curator-server ✅, german-html-server ✅, minimoi-portal ✅
+- Disk: 90.2% used, 22.4 GB free
+- Checks run today: 225
+- Open escalations: 0
+
+### 2026-06-26 05:02 UTC
+- Services: curator-server ✅, german-html-server ✅, minimoi-portal ✅
+- Disk: 93.6% used, 14.5 GB free
+- Checks run today: 431
+- Open escalations: 0
+
+### 2026-06-27 04:19 UTC
+- Services: curator-server ✅, german-html-server ✅, minimoi-portal ✅
+- Disk: 80.3% used, 44.9 GB free
+- Checks run today: 1
+- Open escalations: 0
