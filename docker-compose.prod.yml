@@ -71,6 +71,8 @@ services:
       - PORT=5001
     volumes:
       - /opt/minimoi/data/guild/build_queue.json:/app/data/guild/build_queue.json
+      - /opt/minimoi/auth/users.json:/app/minimoi_portal/auth/users.json
+      - /opt/minimoi/auth/guests.json:/app/minimoi_portal/auth/guests.json
     ports:
       - "127.0.0.1:5001:5001"
     depends_on:
