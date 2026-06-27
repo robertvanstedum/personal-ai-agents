@@ -307,7 +307,7 @@ document.body.classList.add('parch-mode');
           btnSave.disabled = true; btnSave.textContent = '＋ Em Palavras';
           showPopover(row.getBoundingClientRect());
           fetchTranslation(art.title);
-        }, 2500);
+        }, 5000);
       });
       row.addEventListener('mouseleave', () => clearTimeout(_hoverTimer));
       container.appendChild(row);
