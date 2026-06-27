@@ -283,9 +283,10 @@ function showSaveToast() {
   async function saveDiarioEntry(text, corrected, notes) {
     const status = document.getElementById('diario-status');
     try {
-      await postJSON('/api/pt/escrita/save', {
+      const data = await postJSON('/api/pt/escrita/save', {
         text, corrected_text: corrected, notes, mode: 'diario',
       });
+      if (!data.ok) throw new Error(data.error || 'save failed');
       showSaveToast();
       document.getElementById('diario-input').value = '';
       setTimeout(() => { window.location.reload(); }, 1500);
@@ -323,18 +324,22 @@ function showSaveToast() {
   });
 
   document.getElementById('kontext-save').addEventListener('click', async () => {
-    const btn = document.getElementById('kontext-save');
+    const btn    = document.getElementById('kontext-save');
+    const status = document.getElementById('kontext-status');
     try {
-      await postJSON('/api/pt/escrita/save', {
+      const data = await postJSON('/api/pt/escrita/save', {
         text:           btn.dataset.original  || '',
         corrected_text: btn.dataset.corrected || '',
         notes:          JSON.parse(btn.dataset.notes || '[]'),
         mode:           'contexto',
       });
+      if (!data.ok) throw new Error(data.error || 'save failed');
       showSaveToast();
       btn.disabled = true;
       setTimeout(() => { window.location.reload(); }, 1500);
-    } catch {}
+    } catch {
+      status.textContent = 'Erro ao salvar.';
+    }
   });
 
   // ── Vocabulário ───────────────────────────────────────────────

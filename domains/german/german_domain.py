@@ -1004,15 +1004,16 @@ def translate_phrase(phrase: str) -> tuple[str, bool, dict]:
     return (result.strip() if result else ""), False, {"total_ms": total_ms, "deepl_ms": 0, "llm_ms": llm_ms}
 
 
-def save_lesen_phrase(german: str, english: str, context_sentence: str, article_title: str) -> dict:
-    """Save a captured phrase to phrasebook with lesen provenance."""
+def save_lesen_phrase(german: str, english: str, context_sentence: str, article_title: str,
+                      scene: str = "lesen") -> dict:
+    """Save a captured phrase to phrasebook."""
     data = _load_phrasebook()
     today = datetime.date.today().isoformat()
     new_entry = {
         "id": _phrase_next_id(data.get("phrases", []), today),
         "german": german,
         "english": english,
-        "scene": "lesen",
+        "scene": scene,
         "added": today,
         "status": "library",
         "verb_hint": "",

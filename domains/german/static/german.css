@@ -3022,6 +3022,31 @@ details[open] > .gesprache-transcript-summary::before {
   margin-left: auto;
 }
 
+/* ── Manual word entry ───────────────────────────────────── */
+
+.manual-entry-form {
+  display: flex; gap: 8px; align-items: center;
+  margin: 0 0 6px 0;
+}
+.manual-entry-form input {
+  flex: 1; padding: 8px 12px;
+  border: 1px solid var(--md-parch-deep); border-radius: 6px;
+  font-size: 16px; background: var(--md-parch);
+  color: var(--md-text-primary); font-family: var(--font-body);
+}
+.manual-entry-form input:focus { outline: none; border-color: var(--md-accent); }
+.btn-add {
+  padding: 8px 14px; min-height: 44px;
+  background: var(--md-accent); color: #fff;
+  border: none; border-radius: 6px; font-size: 18px; font-weight: 600;
+  cursor: pointer; white-space: nowrap; transition: opacity 0.15s;
+}
+.btn-add:hover { opacity: 0.85; }
+.manual-entry-status {
+  font-size: 0.85rem; color: var(--md-text-muted);
+  min-height: 1.2rem; margin-bottom: 12px;
+}
+
 .woerter-table-wrap {
   overflow-x: auto;
 }

@@ -792,6 +792,7 @@ def api_pt_escrita_correct():
 
 @app.route("/api/pt/escrita/save", methods=["POST"])
 def api_pt_escrita_save():
+    _ensure_writing_sessions_table()
     body     = request.get_json(force=True)
     text     = (body.get("text") or "").strip()
     mode     = (body.get("mode") or "diario").strip()

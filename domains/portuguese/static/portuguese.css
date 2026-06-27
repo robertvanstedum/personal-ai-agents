@@ -117,7 +117,7 @@ body::before {
 }
 
 body.landing-mode::before {
-  opacity: 0.55;
+  opacity: 0.30;
 }
 
 body.leitura-mode::before {
@@ -2060,6 +2060,31 @@ body.reading-mode nav { background: #1B2E1F; border-bottom-color: var(--parch-ac
   cursor: pointer; font-size: 0.82rem; padding: 0.3rem 0.8rem; transition: all 0.15s;
 }
 .btn-filter-reset:hover { border-color: var(--pt-accent); color: var(--pt-accent); }
+
+/* ── Manual word entry ───────────────────────────────────── */
+
+.manual-entry-form {
+  display: flex; gap: 8px; align-items: center;
+  margin: 0 0 6px 0;
+}
+.manual-entry-form input {
+  flex: 1; padding: 8px 12px;
+  border: 1px solid var(--pt-parch-deep); border-radius: 6px;
+  font-size: 16px; background: var(--pt-parch);
+  color: var(--pt-text-primary); font-family: var(--font-body);
+}
+.manual-entry-form input:focus { outline: none; border-color: var(--pt-accent); }
+.btn-add {
+  padding: 8px 14px; min-height: 44px;
+  background: var(--pt-accent); color: #fff;
+  border: none; border-radius: 6px; font-size: 18px; font-weight: 600;
+  cursor: pointer; white-space: nowrap; transition: opacity 0.15s;
+}
+.btn-add:hover { opacity: 0.85; }
+.manual-entry-status {
+  font-size: 0.85rem; color: var(--pt-text-muted);
+  min-height: 1.2rem; margin-bottom: 12px;
+}
 
 /* ── Wörter table ────────────────────────────────────────── */
 

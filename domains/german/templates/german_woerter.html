@@ -51,6 +51,17 @@
      title="Export all vocabulary to Anki flashcard deck">Anki Export — Alle</a>
 </div>
 
+<div class="manual-entry-form">
+  <input type="text" id="manual-word"
+         placeholder="Wort oder Phrase auf Deutsch..."
+         onkeydown="if(event.key==='Tab'&&!event.shiftKey){event.preventDefault();document.getElementById('manual-translation').focus();}">
+  <input type="text" id="manual-translation"
+         placeholder="Übersetzung (optional)"
+         onkeydown="if(event.key==='Enter')addWordManually()">
+  <button class="btn-add" onclick="addWordManually()">+</button>
+</div>
+<div class="manual-entry-status" id="manual-status"></div>
+
 <!-- ── Word table ──────────────────────────────────────────────────────── -->
 <div class="woerter-table-wrap">
   {% if entries %}
@@ -605,5 +616,63 @@ document.body.classList.add('parch-mode');
   }
 
 })();
+
+async function addWordManually() {
+  const wordEl   = document.getElementById('manual-word');
+  const transEl  = document.getElementById('manual-translation');
+  const statusEl = document.getElementById('manual-status');
+  const word = wordEl.value.trim();
+  if (!word) return;
+
+  const cells = document.querySelectorAll('#woerter-tbody .w-german');
+  if ([...cells].some(td => td.textContent.trim().toLowerCase() === word.toLowerCase())) {
+    statusEl.textContent = 'Dieses Wort ist bereits in deiner Liste.';
+    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    return;
+  }
+
+  let translation = transEl.value.trim();
+  if (!translation) {
+    try {
+      const r = await fetch('/api/translate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phrase: word }),
+      });
+      translation = (await r.json()).translation || '';
+    } catch {}
+  }
+
+  try {
+    const r = await fetch('/api/save-phrase', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ german: word, english: translation, source: 'manual' }),
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'save failed');
+
+    const tbody = document.getElementById('woerter-tbody');
+    if (tbody) {
+      const tr = document.createElement('tr');
+      tr.className = 'woerter-row';
+      tr.dataset.source = 'manual'; tr.dataset.status = 'library';
+      const deCell = document.createElement('td'); deCell.className = 'w-german'; deCell.textContent = word;
+      const enCell = document.createElement('td'); enCell.className = 'w-english'; enCell.textContent = translation;
+      const btnCell = document.createElement('td'); btnCell.className = 'w-expand-col';
+      const btn = document.createElement('button');
+      btn.className = 'btn-expand'; btn.textContent = 'Details'; btn.disabled = true;
+      btnCell.appendChild(btn); tr.append(deCell, enCell, btnCell);
+      tbody.prepend(tr);
+      document.getElementById('filter-quelle').dispatchEvent(new Event('change'));
+    } else {
+      setTimeout(() => location.reload(), 1500);
+    }
+    wordEl.value = ''; transEl.value = '';
+    statusEl.textContent = '✓ Gespeichert';
+    setTimeout(() => { statusEl.textContent = ''; }, 2000);
+  } catch {
+    statusEl.textContent = 'Fehler beim Speichern. Bitte erneut versuchen.';
+    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+  }
+}
 </script>
 {% endblock %}
