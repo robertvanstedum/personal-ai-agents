@@ -300,6 +300,7 @@ document.body.classList.add('parch-mode');
       let _hoverTimer = null;
       row.addEventListener('mouseenter', () => {
         _hoverTimer = setTimeout(() => {
+          if (document.body.classList.contains('reading-mode')) return;
           currentPhrase = art.title; currentTranslation = '';
           popPhrase.textContent = art.title;
           popTrans.textContent = 'Tradução…'; popTiming.textContent = '';
