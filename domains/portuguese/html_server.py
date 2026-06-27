@@ -56,6 +56,35 @@ def _init_sentry():
 _init_sentry()
 
 
+def _ensure_writing_sessions_table():
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS portuguese.writing_sessions (
+                    id              SERIAL PRIMARY KEY,
+                    user_id         INTEGER REFERENCES auth.users(id) ON DELETE SET NULL,
+                    mode            VARCHAR(50),
+                    prompt          TEXT,
+                    original_text   TEXT NOT NULL,
+                    corrected_text  TEXT,
+                    feedback        JSONB,
+                    notes           JSONB DEFAULT '[]',
+                    article_id      INTEGER REFERENCES portuguese.articles(id) ON DELETE SET NULL,
+                    created_at      TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_pt_writing_user"
+                " ON portuguese.writing_sessions(user_id, created_at DESC)"
+            )
+    except Exception as e:
+        print(f"[portuguese] migration writing_sessions table: {e}", flush=True)
+
+
+_ensure_writing_sessions_table()
+
+
 def _ensure_writing_sessions_notes():
     try:
         conn = _db_conn()
