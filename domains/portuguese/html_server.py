@@ -640,6 +640,13 @@ def api_pt_article(article_id):
                 if len(p.get_text(strip=True)) > 40
             ]
             text = " ".join(paras)[:3000].strip()
+            # Fallback: og:description / meta description (works even on JS-rendered sites)
+            if not text:
+                for sel in ({"property": "og:description"}, {"name": "description"}):
+                    tag = soup.find("meta", attrs=sel)
+                    if tag and tag.get("content", "").strip():
+                        text = tag["content"].strip()
+                        break
         except Exception as scrape_err:
             print(f"[article/{article_id}] scrape failed: {scrape_err}", flush=True)
             text = ""
