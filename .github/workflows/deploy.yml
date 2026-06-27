@@ -145,19 +145,13 @@ jobs:
 
           echo "Deploy command ID: $COMMAND_ID"
 
-          # Poll for completion. Falls back to a fixed sleep if ssm:GetCommandInvocation
-          # is not in the IAM policy — add it to minimoi-deploy for proper verification.
+          # Poll until EC2 confirms completion. Use || echo "Pending" so set -e does not
+          # abort on InvocationDoesNotExist (returned when polled too soon after send-command).
           for i in $(seq 1 60); do
             STATUS=$(aws ssm get-command-invocation \
               --command-id "$COMMAND_ID" \
               --instance-id ${{ secrets.EC2_INSTANCE_ID }} \
-              --query 'Status' --output text 2>/dev/null)
-            if [ -z "$STATUS" ]; then
-              echo "ssm:GetCommandInvocation not permitted — sleeping 180s for docker pull+restart"
-              sleep 180
-              echo "Deploy assumed complete (add ssm:GetCommandInvocation to minimoi-deploy IAM for real verification)"
-              break
-            fi
+              --query 'Status' --output text 2>/dev/null || echo "Pending")
             echo "[$i/60] Deploy status: $STATUS"
             if [ "$STATUS" = "Success" ]; then break; fi
             if [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ] || [ "$STATUS" = "TimedOut" ]; then
@@ -165,13 +159,18 @@ jobs:
               aws ssm get-command-invocation \
                 --command-id "$COMMAND_ID" \
                 --instance-id ${{ secrets.EC2_INSTANCE_ID }} \
-                --query 'StandardErrorContent' --output text || true
+                --query 'StandardErrorContent' --output text 2>/dev/null || true
               exit 1
             fi
             sleep 10
           done
 
-          echo "Deploy step complete"
+          if [ "$STATUS" != "Success" ]; then
+            echo "Deploy timed out after 10 minutes"
+            exit 1
+          fi
+
+          echo "Deploy confirmed successful on EC2"
 
   notify:
     needs: [test, build-push, deploy]
