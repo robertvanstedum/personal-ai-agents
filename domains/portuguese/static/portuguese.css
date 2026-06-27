@@ -584,14 +584,14 @@ body.parch-mode .admin-card h3 { color: #C68A5E; }
 body.parch-mode .admin-card p { color: var(--pt-text-secondary); }
 body.parch-mode .btn-primary { background: var(--pt-dark); }
 
-/* ── Palette toggle widget (design tool — owner/admin only) ── */
+/* ── Palette toggle widget — permanently disabled ── */
 
 .palette-toggle {
+  display: none !important;
   position: fixed;
   bottom: 80px;
   right: 16px;
   z-index: 999;
-  display: flex;
   align-items: center;
   gap: 6px;
   background: rgba(0,0,0,0.7);
