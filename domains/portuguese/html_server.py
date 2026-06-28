@@ -58,19 +58,32 @@ _init_sentry()
 
 import datetime as _dt
 
-_PT_WRITING_SESSIONS_FILE = BASE_DIR / "data" / "writing_sessions.json"
+_PT_DATA_DIR = BASE_DIR / "data"
 
 
-def _pt_save_writing_entry(mode: str, text_original: str,
+def _writing_sessions_path(user_id) -> Path:
+    key = str(user_id) if user_id is not None else "anonymous"
+    return _PT_DATA_DIR / "writing_sessions" / f"user_{key}.json"
+
+
+def _conversas_sessions_path(user_id) -> Path:
+    key = str(user_id) if user_id is not None else "anonymous"
+    return _PT_DATA_DIR / "conversas_sessions" / f"user_{key}.json"
+
+
+def _pt_save_writing_entry(user_id, mode: str, text_original: str,
                             text_corrected: str = "", notes: list = None) -> dict:
+    path = _writing_sessions_path(user_id)
     data = {"entries": []}
-    if _PT_WRITING_SESSIONS_FILE.exists():
+    if path.exists():
         try:
-            data = json.loads(_PT_WRITING_SESSIONS_FILE.read_text())
+            data = json.loads(path.read_text())
         except Exception:
             pass
     entry = {
         "id": f"pt_ws_{_dt.datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        "user_id": user_id,
+        "created_at": _dt.datetime.now().isoformat(),
         "mode": mode,
         "text_original": text_original,
         "text_corrected": text_corrected,
@@ -79,17 +92,43 @@ def _pt_save_writing_entry(mode: str, text_original: str,
     }
     data.setdefault("entries", []).append(entry)
     data["entries"] = data["entries"][-50:]
-    _PT_WRITING_SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _PT_WRITING_SESSIONS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
     return entry
 
 
-def _pt_get_writing_sessions(limit: int = 10) -> list:
-    if not _PT_WRITING_SESSIONS_FILE.exists():
+def _pt_get_writing_sessions(user_id, limit: int = 10) -> list:
+    path = _writing_sessions_path(user_id)
+    if not path.exists():
         return []
     try:
-        data = json.loads(_PT_WRITING_SESSIONS_FILE.read_text())
+        data = json.loads(path.read_text())
         return list(reversed(data.get("entries", [])))[:limit]
+    except Exception:
+        return []
+
+
+def _pt_save_conversas_session(user_id, session_data: dict) -> None:
+    path = _conversas_sessions_path(user_id)
+    data = {"sessions": []}
+    if path.exists():
+        try:
+            data = json.loads(path.read_text())
+        except Exception:
+            pass
+    data.setdefault("sessions", []).append(session_data)
+    data["sessions"] = data["sessions"][-100:]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+
+
+def _pt_get_conversas_sessions(user_id, limit: int = 10) -> list:
+    path = _conversas_sessions_path(user_id)
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text())
+        return list(reversed(data.get("sessions", [])))[:limit]
     except Exception:
         return []
 
@@ -499,7 +538,7 @@ def conversas():
     personas = _load_personas()
     for p in personas:
         p["slug"] = _name_to_slug(p["name"])
-    sessions = _get_sessions(user_id, limit=5)
+    sessions = _pt_get_conversas_sessions(user_id, limit=5)
     persona_progress = _get_persona_progress(user_id)
     return render_template(
         "portuguese_conversas.html",
@@ -513,7 +552,8 @@ def conversas():
 
 @app.route("/escrita")
 def escrita():
-    writing_sessions = _pt_get_writing_sessions(limit=5)
+    user_id = _request_user_id()
+    writing_sessions = _pt_get_writing_sessions(user_id, limit=5)
     return render_template("portuguese_escrita.html", active="escrita",
                            writing_sessions=writing_sessions)
 
@@ -533,8 +573,8 @@ def palavras():
 @app.route("/arquivo")
 def arquivo():
     user_id = _request_user_id()
-    conversas_sessions = _get_sessions(user_id, limit=10)
-    writing_sessions = _pt_get_writing_sessions(limit=10)
+    conversas_sessions = _pt_get_conversas_sessions(user_id, limit=10)
+    writing_sessions = _pt_get_writing_sessions(user_id, limit=10)
     leitura_notes = _get_leitura_notes(user_id, limit=20)
     return render_template("portuguese_arquivo.html", active="arquivo",
                            conversas_sessions=conversas_sessions,
@@ -758,6 +798,7 @@ def api_pt_escrita_save():
         return jsonify({"ok": False, "error": "text required"}), 400
     try:
         entry = _pt_save_writing_entry(
+            user_id=_request_user_id(),
             mode=mode,
             text_original=text,
             text_corrected=(body.get("corrected_text") or ""),
@@ -845,22 +886,41 @@ def api_pt_review():
         from review_router import run_review, ProviderError
         result = run_review(transcript, persona_name, scene, model)
 
-        # Save to postgres.portuguese.sessions
-        import datetime as _dt
         date_str = _dt.datetime.now().strftime("%Y-%m-%d")
         duration_min = max(1, len(transcript) // 300)
         uid = _request_user_id()
-        _save_session(
-            user_id=uid,
-            date_str=date_str,
-            persona=persona_name,
-            scenario=scene,
-            source=source,
-            raw_transcript=transcript,
-            reviewer_output=result.get("feedback", {}),
-            model=model,
-            duration_min=duration_min,
-        )
+
+        # JSON-first: save to per-user file (always)
+        _pt_save_conversas_session(uid, {
+            "id": f"pt_cs_{_dt.datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            "user_id": uid,
+            "created_at": _dt.datetime.now().isoformat(),
+            "date": date_str,
+            "persona": persona_name,
+            "scenario": scene,
+            "source": source,
+            "raw_transcript": transcript,
+            "reviewer_output": result.get("feedback", {}),
+            "model": model,
+            "duration_min": duration_min,
+        })
+
+        # Postgres projection: best-effort, non-blocking
+        try:
+            _save_session(
+                user_id=uid,
+                date_str=date_str,
+                persona=persona_name,
+                scenario=scene,
+                source=source,
+                raw_transcript=transcript,
+                reviewer_output=result.get("feedback", {}),
+                model=model,
+                duration_min=duration_min,
+            )
+        except Exception as _pg_err:
+            print(f"[portuguese] Postgres session projection failed (non-fatal): {_pg_err}", flush=True)
+
         if uid and persona_name:
             _update_persona_progress(uid, _name_to_slug(persona_name))
 
@@ -1006,7 +1066,7 @@ def api_pt_admin_article():
 @app.route("/api/pt/sessions")
 def api_pt_sessions():
     limit = min(int(request.args.get("limit", 5)), 20)
-    sessions = _get_sessions(_request_user_id(), limit=limit)
+    sessions = _pt_get_conversas_sessions(_request_user_id(), limit=limit)
     return jsonify(sessions)
 
 
