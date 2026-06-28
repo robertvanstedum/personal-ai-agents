@@ -21,11 +21,40 @@
       <div class="archiv-section-label">Conversas</div>
       {% if conversas_sessions %}
         {% for s in conversas_sessions %}
-        <div class="archiv-row">
+        <div class="archiv-row archiv-row-expandable" onclick="toggleDetail('c-{{ s.id }}')">
           <span class="archiv-date">{{ s.date }}</span>
           <span class="archiv-persona">{{ s.persona }}</span>
           <span class="archiv-scene">{{ s.scenario }}</span>
           <span class="archiv-source archiv-source-{{ s.source }}">{{ {'ki_sessao':'KI-Sessão','KI_SESSAO':'KI-Sessão','mobile':'Celular','desktop':'Desktop','real_sessao':'Sessão real','REAL_SESSAO':'Sessão real'}.get(s.source, s.source) }}</span>
+          <span class="archiv-toggle">▼</span>
+        </div>
+        <div class="archiv-detail" id="c-{{ s.id }}" style="display:none">
+          {% if s.raw_transcript %}
+          <div class="ad-label">TRANSCRIÇÃO</div>
+          <div class="ad-text">{{ s.raw_transcript }}</div>
+          {% endif %}
+          {% if s.reviewer_output %}
+          {% set ro = s.reviewer_output %}
+          {% if ro.overall_summary %}
+          <div class="ad-label">ANÁLISE</div>
+          <div class="ad-text">{{ ro.overall_summary }}</div>
+          {% endif %}
+          {% if ro.strengths %}
+          <div class="ad-label">PONTOS FORTES</div>
+          {% for strength in ro.strengths %}
+          <div class="ad-note">{{ strength }}</div>
+          {% endfor %}
+          {% endif %}
+          {% if ro.corrections %}
+          <div class="ad-label">CORREÇÕES</div>
+          {% for c in ro.corrections %}
+          <div class="ad-note"><em>{{ c.original }}</em> → {{ c.correction }}{% if c.explanation %} · {{ c.explanation }}{% endif %}</div>
+          {% endfor %}
+          {% endif %}
+          {% endif %}
+          {% if not s.raw_transcript and not s.reviewer_output %}
+          <div class="ad-loading">Sem dados disponíveis.</div>
+          {% endif %}
         </div>
         {% endfor %}
       {% else %}
@@ -38,11 +67,26 @@
       <div class="archiv-section-label">Escrita</div>
       {% if writing_sessions %}
         {% for s in writing_sessions %}
-        <div class="archiv-row">
+        <div class="archiv-row archiv-row-expandable" onclick="toggleDetail('e-{{ s.id }}')">
           <span class="archiv-date">{{ s.timestamp[:10] }}</span>
           <span class="archiv-mode-badge">{{ s.mode }}</span>
           <span class="archiv-preview">{{ s.text_original[:60] }}…</span>
           {% if s.notes %}<span class="archiv-hints">{{ s.notes|length }} {% if s.notes|length == 1 %}Dica{% else %}Dicas{% endif %}</span>{% endif %}
+          <span class="archiv-toggle">▼</span>
+        </div>
+        <div class="archiv-detail" id="e-{{ s.id }}" style="display:none">
+          <div class="ad-label">ORIGINAL</div>
+          <div class="ad-text">{{ s.text_original }}</div>
+          {% if s.text_corrected and s.text_corrected != s.text_original %}
+          <div class="ad-label">CORRIGIDO</div>
+          <div class="ad-text">{{ s.text_corrected }}</div>
+          {% endif %}
+          {% if s.notes %}
+          <div class="ad-label">FEEDBACK</div>
+          {% for note in s.notes %}
+          <div class="ad-note">{{ note }}</div>
+          {% endfor %}
+          {% endif %}
         </div>
         {% endfor %}
       {% else %}
@@ -81,9 +125,48 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+  .archiv-row-expandable { cursor: pointer; user-select: none; }
+  .archiv-row-expandable:hover { background: rgba(139,94,42,0.06); }
+  .archiv-toggle {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--pt-accent, #8b5e2a);
+    flex-shrink: 0;
+    transition: transform 0.15s;
+  }
+  .archiv-toggle.open { transform: rotate(180deg); }
+  .archiv-detail {
+    padding: 14px 18px 16px;
+    border-bottom: 1px solid rgba(139,94,42,0.15);
+    background: rgba(139,94,42,0.04);
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .ad-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    color: var(--pt-accent, #8b5e2a);
+    margin-top: 12px;
+    margin-bottom: 4px;
+  }
+  .ad-label:first-child { margin-top: 0; }
+  .ad-text { white-space: pre-wrap; color: var(--pt-text, #2a1f14); }
+  .ad-note {
+    padding: 2px 0 2px 14px;
+    position: relative;
+    color: var(--pt-text-muted, #6b5040);
+  }
+  .ad-note::before { content: '›'; position: absolute; left: 2px; }
+  .ad-loading { color: var(--pt-accent, #8b5e2a); font-style: italic; font-size: 0.85rem; }
+</style>
 <script>
 document.body.classList.add('parch-mode');
 (function () {
+  'use strict';
+
+  // Tab switcher
   document.querySelectorAll('.archiv-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.archiv-tab').forEach(t => t.classList.remove('active'));
@@ -93,6 +176,17 @@ document.body.classList.add('parch-mode');
       if (target) target.classList.remove('hidden');
     });
   });
+
+  // Toggle inline detail (Escrita + Conversas — data already embedded)
+  window.toggleDetail = function(id) {
+    const detail = document.getElementById(id);
+    if (!detail) return;
+    const row = detail.previousElementSibling;
+    const arrow = row && row.querySelector('.archiv-toggle');
+    const isHidden = detail.style.display === 'none';
+    detail.style.display = isHidden ? 'block' : 'none';
+    if (arrow) arrow.classList.toggle('open', isHidden);
+  };
 })();
 </script>
 {% endblock %}

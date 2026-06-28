@@ -23,11 +23,15 @@
       <div class="archiv-section-label">Gespräche</div>
       {% if gesprache_sessions %}
         {% for s in gesprache_sessions %}
-        <div class="archiv-row">
+        <div class="archiv-row archiv-row-expandable" onclick="toggleGesprache('g-{{ s.stem }}', '{{ s.stem }}')">
           <span class="archiv-date">{{ s.date }}</span>
           <span class="archiv-persona">{{ s.persona }}</span>
           <span class="archiv-scene">{{ s.scenario }}</span>
           <span class="archiv-source archiv-source-{{ s.source }}">{{ s.source }}</span>
+          <span class="archiv-toggle">▼</span>
+        </div>
+        <div class="archiv-detail" id="g-{{ s.stem }}" style="display:none">
+          <div class="ad-loading">Lade…</div>
         </div>
         {% endfor %}
       {% else %}
@@ -40,11 +44,26 @@
       <div class="archiv-section-label">Schreiben</div>
       {% if writing_sessions %}
         {% for s in writing_sessions %}
-        <div class="archiv-row">
+        <div class="archiv-row archiv-row-expandable" onclick="toggleDetail('w-{{ s.id }}')">
           <span class="archiv-date">{{ s.timestamp[:10] }}</span>
           <span class="archiv-mode-badge">{{ s.mode }}</span>
           <span class="archiv-preview">{{ s.text_original[:60] }}…</span>
           {% if s.notes %}<span class="archiv-hints">{{ s.notes|length }} Hinweise</span>{% endif %}
+          <span class="archiv-toggle">▼</span>
+        </div>
+        <div class="archiv-detail" id="w-{{ s.id }}" style="display:none">
+          <div class="ad-label">ORIGINAL</div>
+          <div class="ad-text">{{ s.text_original }}</div>
+          {% if s.text_corrected and s.text_corrected != s.text_original %}
+          <div class="ad-label">KORRIGIERT</div>
+          <div class="ad-text">{{ s.text_corrected }}</div>
+          {% endif %}
+          {% if s.notes %}
+          <div class="ad-label">FEEDBACK</div>
+          {% for note in s.notes %}
+          <div class="ad-note">{{ note }}</div>
+          {% endfor %}
+          {% endif %}
         </div>
         {% endfor %}
       {% else %}
@@ -87,11 +106,55 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+  .archiv-row-expandable { cursor: pointer; user-select: none; }
+  .archiv-row-expandable:hover { background: rgba(139,94,42,0.06); }
+  .archiv-toggle {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--md-text-muted, #8b5e2a);
+    flex-shrink: 0;
+    transition: transform 0.15s;
+  }
+  .archiv-toggle.open { transform: rotate(180deg); }
+  .archiv-detail {
+    padding: 14px 18px 16px;
+    border-bottom: 1px solid rgba(139,94,42,0.15);
+    background: rgba(139,94,42,0.04);
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .ad-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    color: var(--md-text-muted, #8b5e2a);
+    margin-top: 12px;
+    margin-bottom: 4px;
+  }
+  .ad-label:first-child { margin-top: 0; }
+  .ad-text { white-space: pre-wrap; color: var(--md-text, #2a1f14); }
+  .ad-note {
+    padding: 2px 0 2px 14px;
+    position: relative;
+    color: var(--md-text-muted, #6b5040);
+  }
+  .ad-note::before { content: '›'; position: absolute; left: 2px; }
+  .ad-loading { color: var(--md-text-muted, #8b5e2a); font-style: italic; font-size: 0.85rem; }
+  .ad-turn { margin-bottom: 6px; }
+  .ad-speaker {
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: var(--md-text-muted, #8b5e2a);
+    margin-right: 6px;
+  }
+</style>
 <script>
 document.body.classList.add('parch-mode');
 (function () {
   'use strict';
 
+  // Tab switcher
   document.querySelectorAll('.archiv-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.archiv-tab').forEach(t => t.classList.remove('active'));
@@ -101,6 +164,91 @@ document.body.classList.add('parch-mode');
       if (target) target.classList.remove('hidden');
     });
   });
+
+  // Toggle inline detail (Schreiben)
+  window.toggleDetail = function(id) {
+    const detail = document.getElementById(id);
+    if (!detail) return;
+    const row = detail.previousElementSibling;
+    const arrow = row && row.querySelector('.archiv-toggle');
+    const isHidden = detail.style.display === 'none';
+    detail.style.display = isHidden ? 'block' : 'none';
+    if (arrow) arrow.classList.toggle('open', isHidden);
+  };
+
+  // Toggle + lazy-load Gespräche detail
+  window.toggleGesprache = function(id, stem) {
+    const detail = document.getElementById(id);
+    if (!detail) return;
+    const row = detail.previousElementSibling;
+    const arrow = row && row.querySelector('.archiv-toggle');
+    const isHidden = detail.style.display === 'none';
+    detail.style.display = isHidden ? 'block' : 'none';
+    if (arrow) arrow.classList.toggle('open', isHidden);
+
+    if (isHidden && !detail.dataset.loaded) {
+      fetch('/api/gesprache-session/' + stem)
+        .then(r => r.json())
+        .then(data => {
+          if (!data.ok || !data.session) {
+            detail.innerHTML = '<div class="ad-loading">Keine Daten verfügbar.</div>';
+            return;
+          }
+          const s = data.session;
+          let html = '';
+
+          const transcript = s.raw_transcript;
+          if (Array.isArray(transcript) && transcript.length) {
+            html += '<div class="ad-label">TRANSKRIPT</div>';
+            transcript.forEach(turn => {
+              html += '<div class="ad-turn"><span class="ad-speaker">'
+                + escHtml(turn.speaker || '') + ':</span>'
+                + escHtml(turn.text || '') + '</div>';
+            });
+          } else if (typeof transcript === 'string' && transcript.trim()) {
+            html += '<div class="ad-label">TRANSKRIPT</div>';
+            html += '<div class="ad-text">' + escHtml(transcript) + '</div>';
+          }
+
+          const ro = s.reviewer_output;
+          if (ro && typeof ro === 'object') {
+            if (ro.overall_summary) {
+              html += '<div class="ad-label">FEEDBACK</div>';
+              html += '<div class="ad-text">' + escHtml(ro.overall_summary) + '</div>';
+            }
+            if (Array.isArray(ro.strengths) && ro.strengths.length) {
+              html += '<div class="ad-label">STÄRKEN</div>';
+              ro.strengths.forEach(n => {
+                html += '<div class="ad-note">' + escHtml(n) + '</div>';
+              });
+            }
+            if (Array.isArray(ro.corrections) && ro.corrections.length) {
+              html += '<div class="ad-label">KORREKTUREN</div>';
+              ro.corrections.forEach(c => {
+                html += '<div class="ad-note"><em>' + escHtml(c.original || '') + '</em> → '
+                  + escHtml(c.correction || '');
+                if (c.explanation) html += ' · ' + escHtml(c.explanation);
+                html += '</div>';
+              });
+            }
+          }
+
+          detail.innerHTML = html || '<div class="ad-loading">Keine weiteren Daten.</div>';
+          detail.dataset.loaded = 'true';
+        })
+        .catch(() => {
+          detail.innerHTML = '<div class="ad-loading">Fehler beim Laden.</div>';
+        });
+    }
+  };
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
 })();
 </script>
 {% endblock %}
