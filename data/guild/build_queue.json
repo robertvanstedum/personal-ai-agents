@@ -703,12 +703,13 @@
   },
   {
     "id": 112,
-    "spec_title": "German Design Backport",
-    "spec_file": null,
-    "status": "design",
-    "last_transition_at": "2026-06-24T00:00:00Z",
-    "blocked_reason": "Gates on Portuguese stable",
-    "notes": "Phase 2 Spec 10."
+    "spec_title": "German Multiuser Isolation",
+    "spec_file": "spec_archiv_expand_german_multiuser_2026-06-28.md",
+    "status": "done",
+    "github_issue": null,
+    "blocked_reason": null,
+    "last_transition_at": "2026-06-28T00:00:00Z",
+    "notes": "Per-user JSON for Schreiben, Gespräche, Wörter, Lesen notes. Data migrated (8 entries, 4 notes, 18 phrases, 76 sessions) to user_1. Commit ba60a6a."
   },
   {
     "id": 113,
@@ -718,6 +719,16 @@
     "github_issue": null,
     "blocked_reason": null,
     "last_transition_at": "2026-06-28T02:31:00.391863+00:00",
-    "notes": " | 2026-06-27: Multiuser per-user JSON shipped (commit 308568a). Remaining: Leitura backend wiring, EC2 Postgres migrations 003-009, Palavras translate endpoint test."
+    "notes": "2026-06-27: Multiuser per-user JSON shipped (commit 308568a). 2026-06-28: EC2 Postgres migrations 003-009 run; SSM subdirs created. Remaining: Leitura/Palavras end-to-end verify on minimoi.ai."
+  },
+  {
+    "id": 114,
+    "spec_title": "Archiv/Arquivo Expandable Session Rows",
+    "spec_file": "spec_archiv_expand_german_multiuser_2026-06-28.md",
+    "status": "done",
+    "github_issue": 62,
+    "blocked_reason": null,
+    "last_transition_at": "2026-06-28T00:00:00Z",
+    "notes": "Click to expand rows in German Archiv (Gespräche lazy load, Schreiben inline) and Portuguese Arquivo (Conversas + Escrita inline). Commit a5c6b5b."
   }
 ]
