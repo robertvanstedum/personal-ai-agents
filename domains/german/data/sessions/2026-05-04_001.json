@@ -246,5 +246,6 @@
   "scaffold_avoided": [
     "Einen Moment bitte — ich überlege kurz."
   ],
-  "scaffold_deployment_rate": "2/3 scaffold phrases used"
+  "scaffold_deployment_rate": "2/3 scaffold phrases used",
+  "user_id": 1
 }

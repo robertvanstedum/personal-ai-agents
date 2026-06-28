@@ -24,5 +24,6 @@
   },
   "anki_generated": true,
   "next_lesson_generated": true,
-  "reviewer_raw_output": "I need the actual transcript content to analyze. You've provided the persona (Stefan), scenario (U-Bahn), and date (2026-04-24), but the transcript itself appears to be empty or missing.\n\nCould you please paste the conversation transcript so I can analyze Robert's German and return the JSON feedback?"
+  "reviewer_raw_output": "I need the actual transcript content to analyze. You've provided the persona (Stefan), scenario (U-Bahn), and date (2026-04-24), but the transcript itself appears to be empty or missing.\n\nCould you please paste the conversation transcript so I can analyze Robert's German and return the JSON feedback?",
+  "user_id": 1
 }

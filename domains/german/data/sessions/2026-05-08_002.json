@@ -301,5 +301,6 @@
   "scaffold_avoided": [
     "Könnte ich bitte die Rechnung haben?"
   ],
-  "scaffold_deployment_rate": "2/3 scaffold phrases used"
+  "scaffold_deployment_rate": "2/3 scaffold phrases used",
+  "user_id": 1
 }

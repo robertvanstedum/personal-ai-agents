@@ -27,5 +27,6 @@
   "drill_mode": false,
   "drill_session": 0,
   "drill_total": 0,
-  "reviewer_raw_output": "The transcript appears to be empty - no conversation content was provided beyond the header information. I cannot analyze a session without actual dialogue.\n\nPlease provide the full transcript of the conversation between Robert and Anna, and I will return the requested JSON analysis."
+  "reviewer_raw_output": "The transcript appears to be empty - no conversation content was provided beyond the header information. I cannot analyze a session without actual dialogue.\n\nPlease provide the full transcript of the conversation between Robert and Anna, and I will return the requested JSON analysis.",
+  "user_id": 1
 }

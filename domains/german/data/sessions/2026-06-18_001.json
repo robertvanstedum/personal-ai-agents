@@ -104,5 +104,6 @@
   },
   "model": "grok",
   "anki_generated": false,
-  "next_lesson_generated": false
+  "next_lesson_generated": false,
+  "user_id": 1
 }

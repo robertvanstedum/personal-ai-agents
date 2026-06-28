@@ -24,7 +24,9 @@ from german_domain import (
     correct_writing,
     correct_lesen_note,
     save_writing_entry,
+    get_writing_sessions,
     save_note,
+    get_lesen_notes,
     save_lesen_drill,
     get_phrasebook_entries,
     update_phrase_status,
@@ -111,6 +113,12 @@ GOOGLE_SCOPES        = ["https://www.googleapis.com/auth/drive.readonly"]
 GOOGLE_REDIRECT_URI  = "http://localhost:8767/api/google/callback"
 
 
+def _de_request_user_id():
+    """Return auth user id (int) from portal proxy header, or None for unauthenticated."""
+    uid = request.headers.get('X-Minimoi-Auth-Id')
+    return int(uid) if uid else None
+
+
 # ── Page routes ───────────────────────────────────────────────────────────────
 
 @app.route("/")
@@ -125,14 +133,8 @@ def lesen():
 
 @app.route("/schreiben")
 def schreiben():
-    sessions_file = GERMAN_DIR / "config" / "writing_sessions.json"
-    sessions = []
-    if sessions_file.exists():
-        try:
-            data = json.loads(sessions_file.read_text())
-            sessions = list(reversed(data.get("entries", [])[-10:]))
-        except Exception:
-            pass
+    user_id = _de_request_user_id()
+    sessions = get_writing_sessions(user_id=user_id, limit=10)
     prompts = get_tagebuch_prompts()
     return render_template("german_schreiben.html", active="schreiben",
                            sessions=sessions, tagebuch_prompts=prompts)
@@ -145,7 +147,8 @@ def gesprache():
         slug = persona_to_slug(p["name"])
         p["slug"] = slug
         p["memory"] = get_persona_memory(DEFAULT_USER, slug)
-    sessions = get_gesprache_sessions(limit=5)
+    user_id = _de_request_user_id()
+    sessions = get_gesprache_sessions(limit=5, user_id=user_id)
     return render_template("german_gesprache.html", active="gesprache",
                            personas=personas, sessions=sessions,
                            whereby_room_url=WHEREBY_ROOM_URL,
@@ -159,8 +162,9 @@ def ueben_redirect():
 
 @app.route("/woerter")
 def woerter():
-    entries = get_phrasebook_entries()
-    drill_pool = get_drill_pool()
+    user_id = _de_request_user_id()
+    entries = get_phrasebook_entries(user_id=user_id)
+    drill_pool = get_drill_pool(user_id=user_id)
     return render_template("german_woerter.html", active="woerter",
                            entries=entries, drill_pool=drill_pool)
 
@@ -191,23 +195,10 @@ def admin():
 
 @app.route("/archiv")
 def archiv():
-    sessions_file = GERMAN_DIR / "config" / "writing_sessions.json"
-    writing_sessions = []
-    if sessions_file.exists():
-        try:
-            data = json.loads(sessions_file.read_text())
-            writing_sessions = list(reversed(data.get("entries", [])))[:50]
-        except Exception:
-            pass
-    gesprache_sessions = get_gesprache_sessions(limit=50)
-    notes_file = GERMAN_DIR / "config" / "notes.json"
-    lesen_notes = []
-    if notes_file.exists():
-        try:
-            data = json.loads(notes_file.read_text())
-            lesen_notes = list(reversed(data.get("notes", [])))[:50]
-        except Exception:
-            pass
+    user_id = _de_request_user_id()
+    writing_sessions = get_writing_sessions(user_id=user_id, limit=50)
+    gesprache_sessions = get_gesprache_sessions(limit=50, user_id=user_id)
+    lesen_notes = get_lesen_notes(user_id=user_id, limit=50)
     return render_template("german_archiv.html", active="archiv",
                            gesprache_sessions=gesprache_sessions,
                            writing_sessions=writing_sessions,
@@ -261,7 +252,8 @@ def api_save_phrase():
     if not german:
         return jsonify({"ok": False, "error": "german required"}), 400
     scene = source if source in ('manual', 'schreiben') else 'lesen'
-    entry = save_lesen_phrase(german, english, context_sentence, article_title, scene=scene)
+    user_id = _de_request_user_id()
+    entry = save_lesen_phrase(german, english, context_sentence, article_title, scene=scene, user_id=user_id)
     return jsonify({"ok": True, "id": entry["id"]})
 
 
@@ -281,12 +273,14 @@ def api_write_correct():
 @app.route("/api/write-save", methods=["POST"])
 def api_write_save():
     body = request.get_json(force=True)
+    user_id = _de_request_user_id()
     entry = save_writing_entry(
         mode=body.get("mode", "tagebuch"),
         text_original=body.get("text_original", ""),
         text_corrected=body.get("text_corrected", ""),
         notes=body.get("notes", []),
         context_title=body.get("context_title", ""),
+        user_id=user_id,
     )
     return jsonify({"ok": True, "id": entry["id"]})
 
@@ -294,12 +288,14 @@ def api_write_save():
 @app.route("/api/note-save", methods=["POST"])
 def api_note_save():
     body = request.get_json(force=True)
+    user_id = _de_request_user_id()
     note = save_note(
         article_id=body.get("article_id", ""),
         article_title=body.get("article_title", ""),
         original=body.get("original", ""),
         corrected=body.get("corrected", ""),
         rewritten=body.get("rewritten", ""),
+        user_id=user_id,
     )
     return jsonify({"success": True, "note_id": note["note_id"]})
 
@@ -343,7 +339,8 @@ def api_drill_result():
     result = body.get("result", "")
     if not phrase_id or result not in ("correct", "wrong", "skip"):
         return jsonify({"ok": False, "error": "invalid params"}), 400
-    entry = save_drill_result(phrase_id, result)
+    user_id = _de_request_user_id()
+    entry = save_drill_result(phrase_id, result, user_id=user_id)
     return jsonify({"ok": bool(entry), "entry": entry})
 
 
@@ -356,7 +353,8 @@ def api_phrase_update():
     new_status = body.get("status", "")
     if not phrase_id or not new_status:
         return jsonify({"ok": False, "error": "id and status required"}), 400
-    ok = update_phrase_status(phrase_id, new_status)
+    user_id = _de_request_user_id()
+    ok = update_phrase_status(phrase_id, new_status, user_id=user_id)
     return jsonify({"ok": ok})
 
 
@@ -364,7 +362,8 @@ def api_phrase_update():
 def api_anki_export():
     source = request.args.get("source") or None
     status = request.args.get("status") or None
-    entries = get_phrasebook_entries(source=source, status=status)
+    user_id = _de_request_user_id()
+    entries = get_phrasebook_entries(source=source, status=status, user_id=user_id)
     lines = ["German\tEnglish\tContext"]
     for e in entries:
         german = e.get("german", "").replace("\t", " ")
@@ -444,6 +443,7 @@ def api_review():
             import datetime as _dt, json as _json
             date_str = _dt.datetime.now().strftime("%Y-%m-%d")
             file_stem = _next_session_filename(date_str)
+            _review_user_id = _de_request_user_id()
             session_data = {
                 "session_id": f"session_{file_stem}",
                 "date": date_str,
@@ -456,6 +456,7 @@ def api_review():
                 "model": model,
                 "anki_generated": False,
                 "next_lesson_generated": False,
+                "user_id": _review_user_id,
             }
             (_SESSIONS_DIR / f"{file_stem}.json").write_text(
                 _json.dumps(session_data, indent=2, ensure_ascii=False)

@@ -145,5 +145,6 @@
     "Meine Frau hätte gerne den Apfelstrudel.",
     "Einen Moment bitte — ich überlege kurz."
   ],
-  "scaffold_deployment_rate": "1/3 scaffold phrases used"
+  "scaffold_deployment_rate": "1/3 scaffold phrases used",
+  "user_id": 1
 }

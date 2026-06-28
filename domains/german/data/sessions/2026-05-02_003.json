@@ -190,5 +190,6 @@
   "next_lesson_generated": true,
   "drill_mode": false,
   "drill_session": 0,
-  "drill_total": 0
+  "drill_total": 0,
+  "user_id": 1
 }

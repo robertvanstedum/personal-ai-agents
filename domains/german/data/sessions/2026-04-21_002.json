@@ -23,5 +23,6 @@
   },
   "anki_generated": true,
   "next_lesson_generated": true,
-  "reviewer_raw_output": "The transcript appears to be empty - no conversation content was provided between Robert and Herr Fischer. I need actual dialogue to analyze.\n\nPlease provide the transcript text and I will return the analysis JSON."
+  "reviewer_raw_output": "The transcript appears to be empty - no conversation content was provided between Robert and Herr Fischer. I need actual dialogue to analyze.\n\nPlease provide the transcript text and I will return the analysis JSON.",
+  "user_id": 1
 }

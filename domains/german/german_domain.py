@@ -1005,12 +1005,14 @@ def translate_phrase(phrase: str) -> tuple[str, bool, dict]:
 
 
 def save_lesen_phrase(german: str, english: str, context_sentence: str, article_title: str,
-                      scene: str = "lesen") -> dict:
+                      scene: str = "lesen", user_id=None) -> dict:
     """Save a captured phrase to phrasebook."""
     data = _load_phrasebook()
     today = datetime.date.today().isoformat()
+    user_key = str(user_id) if user_id is not None else DEFAULT_USER
     new_entry = {
         "id": _phrase_next_id(data.get("phrases", []), today),
+        "user": user_key,
         "german": german,
         "english": english,
         "scene": scene,
@@ -1029,8 +1031,18 @@ def save_lesen_phrase(german: str, english: str, context_sentence: str, article_
 
 # ─── Schreiben — writing sessions (Group D: HTML interface) ──────────────────
 
-_WRITING_SESSIONS_FILE = GERMAN_DIR / "config" / "writing_sessions.json"
-_NOTES_FILE            = GERMAN_DIR / "config" / "notes.json"
+_WRITING_SESSIONS_FILE = GERMAN_DIR / "config" / "writing_sessions.json"  # legacy single-user
+_NOTES_FILE            = GERMAN_DIR / "config" / "notes.json"               # legacy single-user
+
+
+def _writing_sessions_path(user_id) -> Path:
+    key = str(user_id) if user_id is not None else "anonymous"
+    return GERMAN_DIR / "writing_sessions" / f"user_{key}.json"
+
+
+def _lesen_notes_path(user_id) -> Path:
+    key = str(user_id) if user_id is not None else "anonymous"
+    return GERMAN_DIR / "lesen_notes" / f"user_{key}.json"
 
 _TAGEBUCH_PROMPTS = [
     "Was hast du heute in Wien gesehen?",
@@ -1079,17 +1091,19 @@ def correct_writing(text: str, context: str = "") -> dict:
 
 
 def save_note(article_id: str, article_title: str, original: str,
-              corrected: str, rewritten: str) -> dict:
-    """Save a Notizen entry (write→correct→rewrite) linked to a Lesen article."""
+              corrected: str, rewritten: str, user_id=None) -> dict:
+    """Save a Notizen entry (write→correct→rewrite) to per-user JSON."""
     import uuid
+    path = _lesen_notes_path(user_id)
     data = {"notes": []}
-    if _NOTES_FILE.exists():
+    if path.exists():
         try:
-            data = json.loads(_NOTES_FILE.read_text())
+            data = json.loads(path.read_text())
         except Exception:
             pass
     note = {
         "note_id": str(uuid.uuid4()),
+        "user_id": user_id,
         "article_id": article_id,
         "article_title": article_title,
         "date": datetime.date.today().isoformat(),
@@ -1099,8 +1113,21 @@ def save_note(article_id: str, article_title: str, original: str,
         "saved": True,
     }
     data.setdefault("notes", []).append(note)
-    _NOTES_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
     return note
+
+
+def get_lesen_notes(user_id=None, limit: int = 50) -> list:
+    """Return last N lesen notes for a user (newest first)."""
+    path = _lesen_notes_path(user_id)
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text())
+        return list(reversed(data.get("notes", [])))[:limit]
+    except Exception:
+        return []
 
 
 # ─── Lesen — writing drill ────────────────────────────────────────────────────
@@ -1203,16 +1230,19 @@ def save_lesen_drill(article_id: str, article_title: str, direction: str,
 
 
 def save_writing_entry(mode: str, text_original: str, text_corrected: str = "",
-                       notes: list = None, context_title: str = "") -> dict:
-    """Append a writing session entry. Trims to last 50. Returns new entry."""
+                       notes: list = None, context_title: str = "",
+                       user_id=None) -> dict:
+    """Append a writing session entry to per-user JSON. Trims to last 50. Returns new entry."""
+    path = _writing_sessions_path(user_id)
     data = {"entries": []}
-    if _WRITING_SESSIONS_FILE.exists():
+    if path.exists():
         try:
-            data = json.loads(_WRITING_SESSIONS_FILE.read_text())
+            data = json.loads(path.read_text())
         except Exception:
             pass
     entry = {
         "id": f"ws_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        "user_id": user_id,
         "mode": mode,
         "text_original": text_original,
         "text_corrected": text_corrected,
@@ -1222,21 +1252,36 @@ def save_writing_entry(mode: str, text_original: str, text_corrected: str = "",
     }
     data.setdefault("entries", []).append(entry)
     data["entries"] = data["entries"][-50:]
-    _WRITING_SESSIONS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
     return entry
+
+
+def get_writing_sessions(user_id=None, limit: int = 10) -> list:
+    """Return last N writing sessions for a user (newest first)."""
+    path = _writing_sessions_path(user_id)
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text())
+        return list(reversed(data.get("entries", [])))[:limit]
+    except Exception:
+        return []
 
 
 # ─── Wörter / Phrasebook ──────────────────────────────────────────────────────
 
 def get_phrasebook_entries(source: str = None, status: str = None,
-                           user: str = DEFAULT_USER) -> list:
+                           user: str = DEFAULT_USER, user_id=None) -> list:
     """
     Returns phrasebook entries sorted by date desc.
     source: scene tag filter — 'lesen', 'telegram', 'manual', or None for all.
     status: 'library', 'practice', 'review_ready', 'mastered', or None for all.
+    user_id: int auth id (preferred); falls back to user string.
     """
+    user_key = str(user_id) if user_id is not None else user
     data = _load_phrasebook()
-    entries = [e for e in data.get("phrases", []) if e.get("user") == user]
+    entries = [e for e in data.get("phrases", []) if e.get("user") == user_key]
     if source:
         entries = [e for e in entries if e.get("scene", "") == source]
     if status:
@@ -1255,21 +1300,22 @@ def get_personas() -> list:
         return []
 
 
-def get_drill_pool(user: str = DEFAULT_USER) -> list:
+def get_drill_pool(user: str = DEFAULT_USER, user_id=None) -> list:
     """Phrasebook entries with status == 'practice' for this user."""
-    return get_phrasebook_entries(status="practice", user=user)
+    return get_phrasebook_entries(status="practice", user=user, user_id=user_id)
 
 
-def save_drill_result(phrase_id: str, result: str, user: str = DEFAULT_USER) -> dict:
+def save_drill_result(phrase_id: str, result: str, user: str = DEFAULT_USER, user_id=None) -> dict:
     """
     Records drill result. result = "correct" | "wrong" | "skip"
     Updates practice_count, last_practiced.
     Amendment 4: at 5 correct, sets status='review_ready' — never auto-promotes to mastered.
     Returns updated entry dict, or {} if not found.
     """
+    user_key = str(user_id) if user_id is not None else user
     data = _load_phrasebook()
     for entry in data.get("phrases", []):
-        if entry.get("id") == phrase_id and entry.get("user") == user:
+        if entry.get("id") == phrase_id and entry.get("user") == user_key:
             if result == "correct":
                 entry["practice_count"] = entry.get("practice_count", 0) + 1
             entry["last_practiced"] = datetime.datetime.now().isoformat()
@@ -1281,7 +1327,7 @@ def save_drill_result(phrase_id: str, result: str, user: str = DEFAULT_USER) -> 
 
 
 def update_phrase_status(phrase_id: str, new_status: str,
-                         user: str = DEFAULT_USER) -> bool:
+                         user: str = DEFAULT_USER, user_id=None) -> bool:
     """
     Updates status on a phrase. Returns True if found and updated.
     Valid statuses: library, practice, review_ready, mastered.
@@ -1289,9 +1335,10 @@ def update_phrase_status(phrase_id: str, new_status: str,
     valid = {"library", "practice", "review_ready", "mastered"}
     if new_status not in valid:
         return False
+    user_key = str(user_id) if user_id is not None else user
     data = _load_phrasebook()
     for entry in data.get("phrases", []):
-        if entry.get("id") == phrase_id and entry.get("user") == user:
+        if entry.get("id") == phrase_id and entry.get("user") == user_key:
             entry["status"] = new_status
             _save_phrasebook(data)
             return True
@@ -1849,8 +1896,9 @@ def analyse_session(transcript: str, persona_name: str, scene: str) -> dict:
     return {"session_id": session_id, "feedback": feedback}
 
 
-def get_gesprache_sessions(limit: int = 5) -> list:
-    """Return last N sessions (newest first) with summary fields."""
+def get_gesprache_sessions(limit: int = 5, user_id=None) -> list:
+    """Return last N sessions (newest first) with summary fields, scoped to user_id.
+    Sessions without user_id field are treated as Robert's (backwards compat)."""
     if not _SESSIONS_DIR.exists():
         return []
     paths = sorted(_SESSIONS_DIR.glob("*.json"), reverse=True)
@@ -1858,6 +1906,11 @@ def get_gesprache_sessions(limit: int = 5) -> list:
     for path in paths:
         try:
             data = json.loads(path.read_text())
+            session_uid = data.get("user_id")
+            # Include session if: no user_id filter requested, or user_id matches,
+            # or session has no user_id (legacy sessions belong to user 1 / Robert)
+            if user_id is not None and session_uid is not None and session_uid != user_id:
+                continue
             result.append({
                 "session_id": data.get("session_id", path.stem),
                 "stem": path.stem,

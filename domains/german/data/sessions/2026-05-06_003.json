@@ -270,5 +270,6 @@
     "Ich möchte lieber etwas sehen, was Touristen nicht kennen.",
     "Entschuldigung — ich verstehe, aber ich suche die Antwort auf Deutsch."
   ],
-  "scaffold_deployment_rate": "0/3 scaffold phrases used"
+  "scaffold_deployment_rate": "0/3 scaffold phrases used",
+  "user_id": 1
 }

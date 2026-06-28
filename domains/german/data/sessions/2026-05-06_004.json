@@ -245,5 +245,6 @@
   "scaffold_avoided": [
     "Ich komme aus Chicago — kennen Sie die Stadt?"
   ],
-  "scaffold_deployment_rate": "2/3 scaffold phrases used"
+  "scaffold_deployment_rate": "2/3 scaffold phrases used",
+  "user_id": 1
 }
