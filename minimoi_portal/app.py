@@ -1335,7 +1335,7 @@ def guild_build():
 def guild_build_queue():
     _STATUS_RANK = {"blocked": 1, "in_build": 2, "spec_ready": 3,
                     "incomplete": 4, "done": 5}
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
 
     all_items = _load_build_queue()
     items = [
