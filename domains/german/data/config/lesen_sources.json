@@ -9,5 +9,10 @@
     {"name": "ORF Kultur",            "url": "https://rss.orf.at/kultur.xml",                   "active": true,  "category": "kultur"},
     {"name": "ORF News",              "url": "https://rss.orf.at/news.xml",                     "active": true,  "category": "politik"},
     {"name": "Heute",                 "url": "https://www.heute.at/rss",                        "active": true,  "category": "alltag"}
-  ]
+  ],
+  "article_selection": {
+    "max_per_category": 10,
+    "max_per_source_per_category": 3,
+    "min_per_category": 3
+  }
 }

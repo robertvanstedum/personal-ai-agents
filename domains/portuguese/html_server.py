@@ -167,6 +167,43 @@ else:
         _secret_key_file.write_text(app.secret_key)
 
 
+# ── Article selection ─────────────────────────────────────────────────────────
+
+_LEITURA_SOURCES_FILE = BASE_DIR / "data" / "leitura_sources.json"
+
+
+def _load_leitura_selection_config() -> dict:
+    try:
+        data = json.loads(_LEITURA_SOURCES_FILE.read_text())
+        return data.get("article_selection", {})
+    except Exception:
+        return {}
+
+
+def _apply_source_cap(articles: list, config: dict) -> list:
+    """Cap articles per source per category. Applied at display time, not ingestion."""
+    max_per_cat = config.get("max_per_category", 10)
+    max_per_src = config.get("max_per_source_per_category", 3)
+    min_per_cat = config.get("min_per_category", 3)
+    source_counts: dict = {}
+    selected = []
+    for article in articles:
+        src = article.get("source", "")
+        if source_counts.get(src, 0) < max_per_src:
+            selected.append(article)
+            source_counts[src] = source_counts.get(src, 0) + 1
+        if len(selected) >= max_per_cat:
+            break
+    if len(selected) < min_per_cat:
+        already = set(id(a) for a in selected)
+        for article in articles:
+            if id(article) not in already:
+                selected.append(article)
+                if len(selected) >= min_per_cat:
+                    break
+    return selected
+
+
 # ── Personas ──────────────────────────────────────────────────────────────────
 
 _PERSONAS_JSON = BASE_DIR / "data" / "personas.json"
@@ -604,11 +641,11 @@ def api_pt_leitura_category():
                 "SELECT id, title, source, url, full_text, excerpt, date_fetched"
                 " FROM portuguese.articles"
                 " WHERE category = %s AND is_active = TRUE"
-                " ORDER BY date_fetched DESC, id DESC LIMIT 12",
+                " ORDER BY date_fetched DESC, id DESC LIMIT 50",
                 (category,),
             )
             rows = cur.fetchall()
-        articles = [
+        candidates = [
             {
                 "id": r[0], "title": r[1], "source": r[2] or "",
                 "url": r[3] or "#",
@@ -617,6 +654,7 @@ def api_pt_leitura_category():
             }
             for r in rows
         ]
+        articles = _apply_source_cap(candidates, _load_leitura_selection_config())
     except Exception as e:
         print(f"[portuguese] leitura-category error: {e}", flush=True)
         articles = []

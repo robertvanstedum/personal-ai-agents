@@ -721,6 +721,38 @@ def _load_rss_sources() -> list:
         return []
 
 
+def _load_lesen_selection_config() -> dict:
+    try:
+        data = json.loads(_LESEN_SOURCES_FILE.read_text())
+        return data.get("article_selection", {})
+    except Exception:
+        return {}
+
+
+def _apply_source_cap(articles: list, config: dict) -> list:
+    """Cap articles per source per category. Applied at display time, not ingestion."""
+    max_per_cat = config.get("max_per_category", 10)
+    max_per_src = config.get("max_per_source_per_category", 3)
+    min_per_cat = config.get("min_per_category", 3)
+    source_counts: dict[str, int] = {}
+    selected = []
+    for article in articles:
+        src = article.get("source", "")
+        if source_counts.get(src, 0) < max_per_src:
+            selected.append(article)
+            source_counts[src] = source_counts.get(src, 0) + 1
+        if len(selected) >= max_per_cat:
+            break
+    if len(selected) < min_per_cat:
+        already = set(id(a) for a in selected)
+        for article in articles:
+            if id(article) not in already:
+                selected.append(article)
+                if len(selected) >= min_per_cat:
+                    break
+    return selected
+
+
 def _load_lesen_blocked_keywords() -> list:
     try:
         data = json.loads(_LESEN_FILTERS_FILE.read_text())
@@ -785,7 +817,7 @@ def get_lesen_pool(category: str | None = None) -> list:
                 a["category"] = source_category_map.get(a.get("source", ""), "wien")
     if category:
         pool = [a for a in pool if a.get("category") == category]
-    return pool
+    return _apply_source_cap(pool, _load_lesen_selection_config())
 
 
 def categorize_article(title: str, summary: str,

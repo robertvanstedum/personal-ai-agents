@@ -81,5 +81,10 @@
   ],
   "max_articles_per_source": 3,
   "max_age_days": 7,
-  "retention_days": 30
+  "retention_days": 30,
+  "article_selection": {
+    "max_per_category": 10,
+    "max_per_source_per_category": 3,
+    "min_per_category": 3
+  }
 }
