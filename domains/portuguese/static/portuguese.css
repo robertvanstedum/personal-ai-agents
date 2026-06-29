@@ -1752,6 +1752,9 @@ body.reading-mode nav { background: #1B2E1F; border-bottom-color: var(--parch-ac
   display: -webkit-box; -webkit-line-clamp: 10;
   -webkit-box-orient: vertical; overflow: hidden;
 }
+.article-para { margin: 0 0 1em; }
+.article-para:last-child { margin-bottom: 0; }
+.fetch-failed-msg { color: var(--pt-text-muted, #6b5040); font-style: italic; margin-bottom: 0.75rem; }
 
 .reading-footer {
   flex-shrink: 0; display: flex; gap: 0.5rem; align-items: center;

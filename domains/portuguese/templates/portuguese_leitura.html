@@ -324,26 +324,41 @@ document.body.classList.add('parch-mode');
     const openLink = document.getElementById('btn-art-open');
     openLink.href = art.url || '#';
     const textEl = document.getElementById('reading-text');
-    textEl.textContent = art.summary || 'Carregando…';
+    renderArticleBody(textEl, art.summary || 'Carregando…');
     textTruncated = true; applyTruncation();
     const btnM = document.getElementById('btn-merken');
     btnM.textContent = '🔖 Salvar'; btnM.disabled = false;
     document.getElementById('woerter-list').innerHTML =
       '<li class="woerter-empty-hint">Marque palavras para salvar.</li>';
-    if (!art.summary) {
-      try {
-        const res = await fetch(`/api/pt/article/${art.id}`);
-        const data = await res.json();
-        if (data.ok && data.text) {
-          art.summary = data.text;
-          textEl.textContent = data.text;
-        } else {
-          textEl.textContent = 'Leia o artigo completo na fonte.';
-        }
-      } catch {
-        textEl.textContent = 'Leia o artigo completo na fonte.';
+    try {
+      const res = await fetch(`/api/pt/article/${art.id}`);
+      const data = await res.json();
+      if (data.ok && data.text) {
+        art.summary = data.text;
+        renderArticleBody(textEl, data.text);
+      } else {
+        textEl.innerHTML = `<p class="fetch-failed-msg">Não foi possível carregar o artigo completo.</p>
+          <a href="${escHtml(art.url)}" target="_blank" rel="noopener" class="reading-art-open">
+            Abrir artigo na fonte ↗</a>`;
       }
+    } catch {
+      renderArticleBody(textEl, art.summary || 'Leia o artigo completo na fonte.');
     }
+  }
+
+  function renderArticleBody(el, text) {
+    const paras = text.split(/\n\n+/).filter(p => p.trim());
+    if (paras.length > 1) {
+      el.innerHTML = paras.map(p => `<p class="article-para">${escHtml(p)}</p>`).join('');
+    } else {
+      el.innerHTML = `<p class="article-para">${escHtml(text)}</p>`;
+    }
+  }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   function applyTruncation() {
