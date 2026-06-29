@@ -817,7 +817,8 @@ def get_lesen_pool(category: str | None = None) -> list:
                 a["category"] = source_category_map.get(a.get("source", ""), "wien")
     if category:
         pool = [a for a in pool if a.get("category") == category]
-    return _apply_source_cap(pool, _load_lesen_selection_config())
+        pool = _apply_source_cap(pool, _load_lesen_selection_config())
+    return pool
 
 
 def categorize_article(title: str, summary: str,
