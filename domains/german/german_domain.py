@@ -803,6 +803,7 @@ def get_lesen_pool(category: str | None = None) -> list:
         if "category" not in a:
             a["category"] = source_category_map.get(a.get("source", ""), "wien")
         pool.append(a)
+    pool.sort(key=lambda a: a.get("date_fetched", ""), reverse=True)
     # Fallback: if the 5-day window is empty, return newest 30 active articles
     if not pool:
         all_active = sorted(
