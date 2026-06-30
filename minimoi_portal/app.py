@@ -25,6 +25,7 @@ from get_secret import get_secret
 from flask import (
     Flask,
     Response,
+    flash,
     jsonify,
     redirect,
     render_template,
@@ -648,8 +649,9 @@ def guest_deep_dive():
 def admin_guests():
     guests  = _auth.list_guests()
     pending = _auth.load_pending()
+    users   = _auth.load_users()
     return render_template("admin_guests.html", user=_current_user(),
-                           guests=guests, pending=pending)
+                           guests=guests, pending=pending, users=users)
 
 
 @app.route("/admin/guests/approve/<token>", methods=["POST"])
@@ -789,6 +791,35 @@ def admin_guests_create():
 @_require_owner
 def admin_guests_revoke(username):
     _auth.revoke_guest(username)
+    return redirect(url_for("admin_guests"))
+
+
+@app.route("/admin/reset-password", methods=["POST"])
+@_require_owner
+def admin_reset_password():
+    target    = request.form.get("username", "").strip()
+    password  = request.form.get("password", "")
+    confirm   = request.form.get("confirm", "")
+
+    if not target:
+        flash("Select a user.", "error")
+        return redirect(url_for("admin_guests"))
+    if password != confirm:
+        flash("Passwords do not match.", "error")
+        return redirect(url_for("admin_guests"))
+    if len(password) < 8:
+        flash("Password must be at least 8 characters.", "error")
+        return redirect(url_for("admin_guests"))
+
+    users       = _auth.load_users()
+    target_user = next((u for u in users if u["username"] == target), None)
+    if not target_user:
+        flash("User not found.", "error")
+        return redirect(url_for("admin_guests"))
+
+    _auth.reset_user_password(target, password)
+    name = target_user.get("display_name", target)
+    flash(f"Password updated for {name}.", "success")
     return redirect(url_for("admin_guests"))
 
 

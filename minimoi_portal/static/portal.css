@@ -747,6 +747,39 @@ body.admin { background: var(--parch-mid); }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Flash messages ─────────────────────────────────────────────────────────── */
+.flash {
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.flash-success { background: #e8f5e8; border: 1px solid #a0c8a0; color: #2d6a2d; }
+.flash-error   { background: #fdf0f0; border: 1px solid #e0a0a0; color: #8a2d2d; }
+
+/* ── Select input (reuse form-group input styles) ───────────────────────────── */
+.form-group select {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  transition: border-color 0.15s;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.85rem center;
+  padding-right: 2.5rem;
+}
+.form-group select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 /* ── Responsive ─────────────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
   .portal-nav { padding: 0 1rem; }

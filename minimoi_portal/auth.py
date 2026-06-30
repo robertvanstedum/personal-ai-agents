@@ -210,6 +210,21 @@ def revoke_guest(username: str) -> bool:
     return True
 
 
+def reset_user_password(username: str, new_password: str) -> bool:
+    """Set a new password for a permanent user. Returns True if user found and updated."""
+    data = _load_json("users.json")
+    users = data.get("users", [])
+    found = False
+    for user in users:
+        if user["username"] == username:
+            user["password_hash"] = generate_password_hash(new_password)
+            found = True
+            break
+    if found:
+        _write_json("users.json", data)
+    return found
+
+
 def list_guests() -> list:
     """Return all active guests with expiry status."""
     now = datetime.now(timezone.utc)

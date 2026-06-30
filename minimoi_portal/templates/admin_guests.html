@@ -22,6 +22,40 @@
 
   <h1 class="admin-title">Guest Access</h1>
 
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <!-- User Management (owner-only) -->
+  <section class="admin-section">
+    <h2>User Management</h2>
+    <form method="POST" action="/admin/reset-password" class="guest-form"
+          onsubmit="return document.getElementById('pw').value === document.getElementById('pw2').value || (alert('Passwords do not match.'), false)">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="username">User</label>
+          <select id="username" name="username" required>
+            <option value="">— select user —</option>
+            {% for u in users %}
+              <option value="{{ u.username }}">{{ u.display_name }} ({{ u.email }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="pw">New password</label>
+          <input type="password" id="pw" name="password" minlength="8" required>
+        </div>
+        <div class="form-group">
+          <label for="pw2">Confirm password</label>
+          <input type="password" id="pw2" name="confirm" minlength="8" required>
+        </div>
+      </div>
+      <button type="submit" class="btn-primary">Reset password →</button>
+    </form>
+  </section>
+
   <!-- Pending approval requests -->
   {% if pending %}
     <section class="admin-section pending-section">
