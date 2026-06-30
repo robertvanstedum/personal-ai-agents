@@ -653,8 +653,14 @@ def admin_guests():
     guests  = _auth.list_guests()
     pending = _auth.load_pending()
     users   = _auth.load_users()
+    # All accounts for the password reset dropdown: permanent users first, then active guests
+    all_accounts = (
+        [{"username": u["username"], "label": f"{u.get('display_name', u['username'])} ({u.get('email', u['username'])}) — {u['tier']}"} for u in users]
+        + [{"username": g["username"], "label": f"{g.get('display_name', g['username'])} ({g['username']}) — guest"} for g in guests if not g.get("expired")]
+    )
     return render_template("admin_guests.html", user=_current_user(),
-                           guests=guests, pending=pending, users=users)
+                           guests=guests, pending=pending, users=users,
+                           all_accounts=all_accounts)
 
 
 @app.route("/admin/guests/approve/<token>", methods=["POST"])
@@ -800,9 +806,9 @@ def admin_guests_revoke(username):
 @app.route("/admin/reset-password", methods=["POST"])
 @_require_owner
 def admin_reset_password():
-    target    = request.form.get("username", "").strip()
-    password  = request.form.get("password", "")
-    confirm   = request.form.get("confirm", "")
+    target   = request.form.get("username", "").strip()
+    password = request.form.get("password", "")
+    confirm  = request.form.get("confirm", "")
 
     if not target:
         flash("Select a user.", "error")
@@ -814,16 +820,54 @@ def admin_reset_password():
         flash("Password must be at least 8 characters.", "error")
         return redirect(url_for("admin_guests"))
 
+    # Check permanent users first, then active guests
     users       = _auth.load_users()
     target_user = next((u for u in users if u["username"] == target), None)
-    if not target_user:
-        flash("User not found.", "error")
-        return redirect(url_for("admin_guests"))
+    if target_user:
+        _auth.reset_user_password(target, password)
+    else:
+        guests      = _auth.load_guests()
+        target_user = next((g for g in guests if g["username"] == target), None)
+        if not target_user:
+            flash("User not found.", "error")
+            return redirect(url_for("admin_guests"))
+        _auth.reset_guest_password(target, password)
 
-    _auth.reset_user_password(target, password)
     name = target_user.get("display_name", target)
     flash(f"Password updated for {name}.", "success")
     return redirect(url_for("admin_guests"))
+
+
+@app.route("/account/password", methods=["GET", "POST"])
+@_require_login
+def account_password():
+    user = _current_user()
+    if request.method == "GET":
+        return render_template("account_password.html", user=user)
+
+    current_pw = request.form.get("current_password", "")
+    new_pw     = request.form.get("password", "")
+    confirm    = request.form.get("confirm", "")
+
+    if new_pw != confirm:
+        flash("New passwords do not match.", "error")
+        return render_template("account_password.html", user=user)
+    if len(new_pw) < 8:
+        flash("Password must be at least 8 characters.", "error")
+        return render_template("account_password.html", user=user)
+
+    # Validate current password
+    verified, err = _auth.authenticate(user["username"], current_pw)
+    if not verified:
+        flash("Current password is incorrect.", "error")
+        return render_template("account_password.html", user=user)
+
+    # Update in whichever store the user lives in
+    if not _auth.reset_user_password(user["username"], new_pw):
+        _auth.reset_guest_password(user["username"], new_pw)
+
+    flash("Password updated.", "success")
+    return redirect(url_for("account_password"))
 
 
 # ── Guild domain (owner-only) ─────────────────────────────────────────────────

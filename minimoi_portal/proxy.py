@@ -127,7 +127,7 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
   <a href="/app/german"     style="color:#C68A5E;text-decoration:none;margin-right:14px;{german_active}">German</a>
   <a href="/app/portuguese" style="color:#C68A5E;text-decoration:none;margin-right:14px;{portuguese_active}">Português</a>
   <a href="/guild"          style="color:#C68A5E;text-decoration:none;{guild_active}">Guild</a>
-  <span style="color:rgba(255,255,255,0.45);margin-left:auto;margin-right:12px;">{display_name}</span>
+  <a href="/account/password" style="color:rgba(255,255,255,0.45);text-decoration:none;margin-left:auto;margin-right:12px;">{display_name}</a>
   <a href="/logout" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;">Sign out</a>
 </div>
 """

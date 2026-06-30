@@ -39,8 +39,8 @@
           <label for="username">User</label>
           <select id="username" name="username" required>
             <option value="">— select user —</option>
-            {% for u in users %}
-              <option value="{{ u.username }}">{{ u.display_name }} ({{ u.email }})</option>
+            {% for a in all_accounts %}
+              <option value="{{ a.username }}">{{ a.label }}</option>
             {% endfor %}
           </select>
         </div>
