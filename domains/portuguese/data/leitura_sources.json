@@ -22,6 +22,20 @@
       "active": true
     },
     {
+      "name": "Folha Cotidiano",
+      "url": "https://feeds.folha.uol.com.br/cotidiano/rss091.xml",
+      "category": "cotidiano",
+      "level": "intermediario",
+      "active": true
+    },
+    {
+      "name": "Correio da Manhã",
+      "url": "https://www.cmjornal.pt/rss",
+      "category": "cotidiano",
+      "level": "intermediario",
+      "active": true
+    },
+    {
       "name": "Veja Rio",
       "url": "https://vejario.abril.com.br/feed/",
       "category": "rio",
@@ -31,6 +45,13 @@
     {
       "name": "G1 Rio de Janeiro",
       "url": "https://g1.globo.com/rss/g1/rj/rio-de-janeiro/",
+      "category": "rio",
+      "level": "intermediario",
+      "active": true
+    },
+    {
+      "name": "O Globo Rio",
+      "url": "https://oglobo.globo.com/rio/rss.xml",
       "category": "rio",
       "level": "intermediario",
       "active": true
@@ -58,6 +79,13 @@
       "active": true
     },
     {
+      "name": "O Globo Cultura",
+      "url": "https://oglobo.globo.com/cultura/rss.xml",
+      "category": "cultura",
+      "level": "intermediario",
+      "active": true
+    },
+    {
       "name": "Agência Brasil",
       "url": "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml",
       "category": "noticias",
@@ -76,6 +104,13 @@
       "url": "https://feeds.folha.uol.com.br/emcimadahora/rss091.xml",
       "category": "noticias",
       "level": "avancado",
+      "active": true
+    },
+    {
+      "name": "BBC Brasil",
+      "url": "https://feeds.bbci.co.uk/portuguese/rss.xml",
+      "category": "noticias",
+      "level": "intermediario",
       "active": true
     }
   ],

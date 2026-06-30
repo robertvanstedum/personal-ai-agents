@@ -5,9 +5,9 @@
     {"name": "Vienna.at",             "url": "https://www.vienna.at/rss",                       "active": true,  "category": "wien"},
     {"name": "Standard Kultur",       "url": "https://www.derstandard.at/rss/kultur",           "active": true,  "category": "kultur"},
     {"name": "ORF Sport",             "url": "https://rss.orf.at/sport.xml",                    "active": true,  "category": "alltag"},
-    {"name": "Wiener Bezirksblätter", "url": "https://www.meinbezirk.at/rss",                  "active": true,  "category": "wien"},
+    {"name": "Wiener Bezirksblätter", "url": "https://www.meinbezirk.at/rss",                  "active": true,  "category": "alltag"},
     {"name": "ORF Kultur",            "url": "https://rss.orf.at/kultur.xml",                   "active": true,  "category": "kultur"},
-    {"name": "ORF News",              "url": "https://rss.orf.at/news.xml",                     "active": true,  "category": "politik"},
+    {"name": "ORF News",              "url": "https://rss.orf.at/news.xml",                     "active": true,  "category": "nachrichten"},
     {"name": "Heute",                 "url": "https://www.heute.at/rss",                        "active": true,  "category": "alltag"}
   ],
   "article_selection": {
