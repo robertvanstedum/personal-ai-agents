@@ -3477,6 +3477,14 @@ details[open] > .gesprache-transcript-summary::before {
 .admin-list-item:last-child { border-bottom: none; }
 .admin-list-item:hover { background: var(--md-parch-mid); }
 
+a.admin-list-link {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+a.admin-list-link:hover { background: var(--md-parch-mid); }
+.admin-link-arrow { color: var(--md-accent); font-size: 1rem; }
+
 .admin-item-info { display: flex; align-items: baseline; gap: 0.75rem; }
 
 .admin-item-name {

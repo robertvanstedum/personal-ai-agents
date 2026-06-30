@@ -582,6 +582,21 @@ body.parch-mode .admin-card {
 }
 body.parch-mode .admin-card h3 { color: #C68A5E; }
 body.parch-mode .admin-card p { color: var(--pt-text-secondary); }
+
+a.admin-card-link {
+  display: block;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+a.admin-card-link:hover {
+  border-color: var(--pt-accent);
+  box-shadow: 0 0 0 1px var(--pt-accent);
+}
+body.parch-mode a.admin-card-link:hover {
+  border-color: #C68A5E;
+  box-shadow: 0 0 0 1px #C68A5E;
+}
 body.parch-mode .btn-primary { background: var(--pt-dark); }
 
 /* ── Palette toggle widget — permanently disabled ── */
