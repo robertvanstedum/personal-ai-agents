@@ -642,6 +642,23 @@ def guest_deep_dive():
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+# ── Admin: catch proxy-rewritten domain links back to portal admin ────────────
+# The HTML proxy prefixes all /... links with /app/<domain>, so links like
+# /admin/guests inside a domain page become /app/german/admin/guests.
+# These routes redirect them back to the canonical portal URL.
+
+@app.route("/app/<domain>/admin/guests")
+@_require_login
+def domain_admin_guests_redirect(domain):
+    return redirect(url_for("admin_guests"))
+
+
+@app.route("/app/<domain>/admin/reset-password", methods=["POST"])
+@_require_owner
+def domain_admin_reset_password_redirect(domain):
+    return redirect(url_for("admin_guests"))
+
+
 # ── Admin: guest management (owner only) ──────────────────────────────────────
 
 @app.route("/admin/guests")
