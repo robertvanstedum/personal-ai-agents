@@ -21,6 +21,9 @@ SESSION_LIFETIME_DAYS = 30
 # Portal runs on this port (Cloudflare Tunnel points here)
 PORT = int(os.environ.get("PORTAL_PORT", 5001))
 
+# Public base URL — used in outbound emails; override in dev to avoid sending prod links
+BASE_URL = os.environ.get("BASE_URL", "https://minimoi.ai")
+
 # Email (Zoho SMTP) — all configurable via env vars, no hardcoded values
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.zoho.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "465"))

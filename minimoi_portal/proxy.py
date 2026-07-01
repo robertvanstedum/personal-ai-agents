@@ -95,12 +95,7 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
     portuguese_active = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/portuguese" else ""
     guild_active      = "color:#ffffff;font-weight:600;" if portal_prefix == "/guild"          else ""
 
-    # Hide German nav link for JSON guests (tier=guest, no auth_id) — they get lesen only
-    is_json_guest = user and user.get("tier") == "guest" and not user.get("auth_id")
-    german_nav_link = (
-        "" if is_json_guest else
-        f'<a href="/app/german" style="color:#C68A5E;text-decoration:none;margin-right:14px;{german_active}">German</a>'
-    )
+    german_nav_link = f'<a href="/app/german" style="color:#C68A5E;text-decoration:none;margin-right:14px;{german_active}">German</a>'
 
     # Per-backend layout offset so backend sticky elements don't hide under our nav.
     # Curator body is display:flex (row) — padding-top pushes the flex row down.

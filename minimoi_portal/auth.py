@@ -142,7 +142,7 @@ def create_pending(display_name: str, email: str, password: str) -> dict:
 
 def approve_pending(token: str) -> dict | None:
     """
-    Move a pending registration to active guests (2-hour expiry).
+    Move a pending registration to active guests (7-day trial window).
     If the same email already exists in guests, the old entry is replaced.
     Returns the new guest dict or None if token not found.
     """
@@ -159,8 +159,8 @@ def approve_pending(token: str) -> dict | None:
     data["pending"] = [p for p in pending_list if p["token"] != token]
     _write_json("pending.json", data)
 
-    # 2-hour expiry from approval
-    expires_at = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+    # 7-day trial window from approval
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
 
     guests_data = _load_json("guests.json")
     if "guests" not in guests_data:

@@ -543,8 +543,12 @@ def german_proxy(path):
     if path in ("admin/guests", "admin/reset-password"):
         return redirect(url_for("admin_guests"))
     if user["tier"] == "guest":
-        # Guests: lesen only — block everything else
-        _GUEST_ALLOWED = ("lesen", "static/")
+        # Guests: all tabs except Gespräche and Admin (Gespräche deferred to Part 2)
+        _GUEST_ALLOWED = ("lesen", "schreiben", "woerter", "archiv", "static/")
+        if path.startswith("gesprache"):
+            return render_template("guest_restricted.html", section="Gespräche")
+        if path.startswith("admin"):
+            return render_template("guest_restricted.html", section="Admin")
         if not any(path.startswith(p) for p in _GUEST_ALLOWED):
             return render_template("guest_restricted.html", section="this section")
     return _proxy.proxy_to(_cfg.GERMAN_BACKEND, path, "/app/german", user=user)
@@ -829,7 +833,7 @@ def _send_approval_email(guest: dict) -> None:
 
 Your access to mini-moi has been approved! You can sign in now at:
 
-  https://minimoi.ai/login
+  {_cfg.BASE_URL}/login
 
 Use the email address and password you chose when you registered.
 
@@ -2040,16 +2044,21 @@ def guild_docs_reader(filename):
 
 @app.route("/app/portuguese")
 @app.route("/app/portuguese/")
-@requires_domain("portuguese")
+@_require_login
 def portuguese_root():
+    user = _current_user()
+    if user.get("auth_id") and not _dauth.has_domain_access(user["auth_id"], "portuguese"):
+        return render_template("access_denied.html", user=user), 403
     return _proxy.proxy_to(_cfg.PORTUGUESE_BACKEND, "/", "/app/portuguese",
-                           user=_current_user())
+                           user=user)
 
 
 @app.route("/app/portuguese/<path:path>", methods=["GET", "POST"])
-@requires_domain("portuguese")
+@_require_login
 def portuguese_proxy(path):
     user = _current_user()
+    if user.get("auth_id") and not _dauth.has_domain_access(user["auth_id"], "portuguese"):
+        return render_template("access_denied.html", user=user), 403
     # Portal-level admin paths — pass through to portal, not the domain server
     if path in ("admin/guests", "admin/reset-password"):
         return redirect(url_for("admin_guests"))
