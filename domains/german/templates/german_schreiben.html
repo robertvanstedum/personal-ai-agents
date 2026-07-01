@@ -247,15 +247,9 @@ function showSaveToast() {
           context_title: contextTitle,
         }),
       });
-      const data = await res.json();
-      if (data.guest) {
-        btn.textContent = 'Nicht verfügbar im Gast-Modus';
-        btn.disabled = true;
-      } else {
-        showSaveToast();
-        btn.disabled = true;
-        setTimeout(() => { window.location.reload(); }, 1500);
-      }
+      showSaveToast();
+      btn.disabled = true;
+      setTimeout(() => { window.location.reload(); }, 1500);
     } catch (e) {}
   });
 
@@ -358,14 +352,9 @@ function showSaveToast() {
           context_title: prompts[promptIdx] || '',
         }),
       });
-      const data = await res.json();
-      if (data.guest) {
-        status.textContent = 'Nicht verfügbar im Gast-Modus.';
-      } else {
-        showSaveToast();
-        document.getElementById('tagebuch-input').value = '';
-        setTimeout(() => { window.location.reload(); }, 1500);
-      }
+      showSaveToast();
+      document.getElementById('tagebuch-input').value = '';
+      setTimeout(() => { window.location.reload(); }, 1500);
     } catch (e) {
       status.textContent = 'Fehler beim Speichern.';
     }

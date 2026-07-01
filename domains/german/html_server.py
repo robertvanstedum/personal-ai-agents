@@ -114,13 +114,17 @@ GOOGLE_REDIRECT_URI  = "http://localhost:8767/api/google/callback"
 
 
 def _de_request_user_id():
-    """Return auth user id (int) from portal proxy header, or None for unauthenticated."""
+    """Return user id: int auth_id for owners/family, username string for guests, None if unknown."""
     uid = request.headers.get('X-Minimoi-Auth-Id')
-    return int(uid) if uid else None
+    if uid:
+        return int(uid)
+    # Guests have no auth_id — use username as string key to scope their data separately from Robert's
+    username = request.headers.get('X-Minimoi-Username')
+    return username if username else None
 
 
 def _de_is_guest():
-    """Return True if request is from a guest-tier user (no writes allowed)."""
+    """Return True if request is from a guest-tier user."""
     return request.headers.get("X-Minimoi-User-Tier") == "guest"
 
 
@@ -201,10 +205,6 @@ def admin():
 
 @app.route("/archiv")
 def archiv():
-    if _de_is_guest():
-        return render_template("german_archiv.html", active="archiv",
-                               gesprache_sessions=[], writing_sessions=[], lesen_notes=[],
-                               guest_mode=True)
     user_id = _de_request_user_id()
     writing_sessions = get_writing_sessions(user_id=user_id, limit=50)
     gesprache_sessions = get_gesprache_sessions(limit=50, user_id=user_id)
@@ -264,8 +264,6 @@ def api_save_phrase():
     source = body.get("source", "").strip()
     if not german:
         return jsonify({"ok": False, "error": "german required"}), 400
-    if _de_is_guest():
-        return jsonify({"ok": True, "id": None, "guest": True})
     scene = source if source in ('manual', 'schreiben') else 'lesen'
     user_id = _de_request_user_id()
     entry = save_lesen_phrase(german, english, context_sentence, article_title, scene=scene, user_id=user_id)
@@ -287,8 +285,6 @@ def api_write_correct():
 
 @app.route("/api/write-save", methods=["POST"])
 def api_write_save():
-    if _de_is_guest():
-        return jsonify({"ok": True, "id": None, "guest": True})
     body = request.get_json(force=True)
     user_id = _de_request_user_id()
     entry = save_writing_entry(
@@ -304,8 +300,6 @@ def api_write_save():
 
 @app.route("/api/note-save", methods=["POST"])
 def api_note_save():
-    if _de_is_guest():
-        return jsonify({"success": True, "note_id": None, "guest": True})
     body = request.get_json(force=True)
     user_id = _de_request_user_id()
     note = save_note(
@@ -335,8 +329,6 @@ def api_lesen_correct():
 
 @app.route("/api/lesen/drill-save", methods=["POST"])
 def api_lesen_drill_save():
-    if _de_is_guest():
-        return jsonify({"success": True, "id": None, "guest": True})
     body = request.get_json(force=True)
     record = save_lesen_drill(
         article_id=body.get("article_id", ""),
@@ -360,8 +352,6 @@ def api_drill_result():
     result = body.get("result", "")
     if not phrase_id or result not in ("correct", "wrong", "skip"):
         return jsonify({"ok": False, "error": "invalid params"}), 400
-    if _de_is_guest():
-        return jsonify({"ok": True, "entry": None, "guest": True})
     user_id = _de_request_user_id()
     entry = save_drill_result(phrase_id, result, user_id=user_id)
     return jsonify({"ok": bool(entry), "entry": entry})
@@ -376,8 +366,6 @@ def api_phrase_update():
     new_status = body.get("status", "")
     if not phrase_id or not new_status:
         return jsonify({"ok": False, "error": "id and status required"}), 400
-    if _de_is_guest():
-        return jsonify({"ok": True, "guest": True})
     user_id = _de_request_user_id()
     ok = update_phrase_status(phrase_id, new_status, user_id=user_id)
     return jsonify({"ok": ok})
