@@ -377,10 +377,12 @@
 <nav class="curator-subnav">
     <a href="/briefing" class="subnav-tab active">Daily</a>
     <a href="/curator_library.html" class="subnav-tab">Reading Room</a>
+    {% if tier != 'guest' %}
     <a href="/scans-dives" class="subnav-tab">Scans &amp; Dives</a>
     <a href="/research/leanings" class="subnav-tab">Leanings</a>
     <a href="/archive" class="subnav-tab">Archive</a>
     <a href="/research/dashboard" class="subnav-tab subnav-focus">Desk</a>
+    {% endif %}
 </nav>
 
 <main class="briefing-main">
@@ -486,6 +488,8 @@
 </main>
 
 <script>
+const IS_GUEST = {{ 'true' if tier == 'guest' else 'false' }};
+
 // ── HTML-escape helper ───────────────────────────────────────────────────────
 function esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -494,23 +498,35 @@ function esc(s) {
 // ── Feedback (Like / Pass / Save) ───────────────────────────────────────────
 function showFeedback(button, action, rank) {
     var row = button.closest('.article-card');
-    var articleData = {
-        id:       row.dataset.hashId || ('row-' + rank),
-        title:    row.dataset.title  || 'Unknown',
-        link:     row.dataset.url    || '#',
-        source:   row.dataset.source || 'Unknown',
-        category: row.dataset.category || 'other'
-    };
+    var hashId = row.dataset.hashId || ('row-' + rank);
 
     button.style.opacity = '0.3';
     button.style.cursor  = 'not-allowed';
     button.disabled = true;
 
-    fetch('/feedback', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ action: action, rank: rank, article: articleData })
-    })
+    var fetchPromise;
+    if (IS_GUEST) {
+        fetchPromise = fetch('/guest/feedback', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ hash_id: hashId, action: action })
+        });
+    } else {
+        var articleData = {
+            id:       hashId,
+            title:    row.dataset.title  || 'Unknown',
+            link:     row.dataset.url    || '#',
+            source:   row.dataset.source || 'Unknown',
+            category: row.dataset.category || 'other'
+        };
+        fetchPromise = fetch('/feedback', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ action: action, rank: rank, article: articleData })
+        });
+    }
+
+    fetchPromise
     .then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.success) {
@@ -875,8 +891,10 @@ loadTopicsStrip();
     </div>
     <div class="inv-tabs">
       <button class="inv-tab active" data-tab="scan"  onclick="switchInvTab('scan')">🔭 Scan</button>
+      {% if tier != 'guest' %}
       <button class="inv-tab"        data-tab="track" onclick="switchInvTab('track')">🗓 Track</button>
       <button class="inv-tab"        data-tab="lean"  onclick="switchInvTab('lean')">📎 Lean</button>
+      {% endif %}
     </div>
     <!-- Scan pane -->
     <div class="inv-pane active" id="inv-pane-scan">

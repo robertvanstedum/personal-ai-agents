@@ -996,6 +996,8 @@ def index():
 @app.route('/briefing')
 def briefing():
     """Daily briefing — previously served at /."""
+    from flask import request as _req
+    tier = _req.headers.get("X-Minimoi-User-Tier", "owner")
     result = _load_briefing_articles()
     if result is not None:
         articles, day_str, date_str, model_display, briefing_date = result
@@ -1008,6 +1010,7 @@ def briefing():
             run_mode='production',
             briefing_date=briefing_date,
             radar_articles=_load_radar_articles(),
+            tier=tier,
         )
     return send_from_directory(BASE_DIR, 'curator_latest.html')
 
@@ -1254,6 +1257,8 @@ def _archive_page_placeholder():
 @app.route('/curator_briefing.html')
 def briefing_page():
     """Serve briefing from Jinja2 template when JSON exists."""
+    from flask import request as _req
+    tier = _req.headers.get("X-Minimoi-User-Tier", "owner")
     result = _load_briefing_articles()
     if result is not None:
         articles, day_str, date_str, model_display, briefing_date = result
@@ -1265,6 +1270,7 @@ def briefing_page():
             model_display=model_display,
             run_mode='production',
             briefing_date=briefing_date,
+            tier=tier,
         )
     return send_from_directory(BASE_DIR, 'curator_briefing.html')
 

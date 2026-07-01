@@ -446,7 +446,7 @@ def curator_root():
     if user["tier"] == "guest":
         if user.get("auth_id"):
             return render_template("access_denied.html", user=user), 403
-        return redirect(url_for("guest_briefing"))
+        return _proxy.proxy_to(_cfg.CURATOR_BACKEND, "briefing", "/app/curator", user=user)
     return _proxy.proxy_to(_cfg.CURATOR_BACKEND, "/", "/app/curator", user=user)
 
 
@@ -457,10 +457,10 @@ def curator_proxy(path):
     if user["tier"] == "guest":
         if user.get("auth_id"):
             return render_template("access_denied.html", user=user), 403
-        # Allow static assets and deep dive HTML — guests need these to render pages
-        if path.startswith(("interests/", "static/")):
+        # Allow briefing page, static assets, and deep dive HTML
+        if path.startswith(("briefing", "interests/", "static/")):
             return _proxy.proxy_to(_cfg.CURATOR_BACKEND, path, "/app/curator", user=user)
-        return redirect(url_for("guest_briefing"))
+        return redirect(url_for("curator_root"))
     return _proxy.proxy_to(_cfg.CURATOR_BACKEND, path, "/app/curator", user=user)
 
 
