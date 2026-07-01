@@ -1219,6 +1219,7 @@ def guild_landing():
     }
 
     guest_requests = _get_guest_requests()
+    active_guests = _auth.load_guests()
 
     return render_template("guild/guild_landing.html",
         ops=ops,
@@ -1226,8 +1227,16 @@ def guild_landing():
         build=build,
         ahead=ahead,
         guest_requests=guest_requests,
+        active_guests=active_guests,
         user=_current_user()
     )
+
+
+@app.route("/guild/guests/<username>/revoke", methods=["POST"])
+@_require_owner
+def guild_guest_revoke(username):
+    _auth.revoke_guest(username)
+    return redirect(url_for("guild_landing"))
 
 
 @app.route("/guild/guest-requests/<int:req_id>/status", methods=["POST"])

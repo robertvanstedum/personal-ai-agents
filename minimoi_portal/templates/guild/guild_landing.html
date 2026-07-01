@@ -404,10 +404,36 @@
     {% endif %}
   </div>
 
-  {# ── ACCESS REQUESTS ─────────────────────────────────────────── #}
-  {% if guest_requests %}
+  {# ── GUEST ACCESS ─────────────────────────────────────────────── #}
+  {% if active_guests or guest_requests %}
   <div class="section access-full-width">
-    <div class="section-label">Access Requests <span class="section-label-line"></span></div>
+    <div class="section-label">Guest Access <span class="section-label-line"></span>
+      <a href="/admin/guests" class="section-goto">Manage →</a>
+    </div>
+    {% if active_guests %}
+    <div class="guest-row" style="font-size:10px;font-weight:700;letter-spacing:0.06em;color:var(--text-dim);border-bottom:none;padding-bottom:2px;">
+      <span class="guest-name">NAME</span>
+      <span class="guest-reason">EXPIRES</span>
+      <span style="flex:1"></span>
+    </div>
+    {% for g in active_guests %}
+    <div class="guest-row">
+      <span class="guest-name">{{ g.display_name or g.username }}</span>
+      <span class="guest-reason">{{ g.expires_at[:10] if g.expires_at else '—' }}</span>
+      <span style="flex:1"></span>
+      <form method="POST" action="/guild/guests/{{ g.username }}/revoke" style="display:inline">
+        <button type="submit" class="btn-action btn-reject"
+          onclick="return confirm('Revoke access for {{ g.display_name or g.username }}?')">Revoke</button>
+      </form>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="guest-row"><span class="guest-reason" style="color:var(--text-dim)">No active guests.</span></div>
+    {% endif %}
+
+    {# Pending requests sub-section #}
+    {% if guest_requests %}
+    <div class="section-label" style="margin-top:1rem;font-size:9px;">Pending Requests <span class="section-label-line"></span></div>
     {% for req in guest_requests %}
     <div class="guest-row">
       <span class="guest-name">{{ req.name }}</span>
@@ -431,6 +457,7 @@
       {% endif %}
     </div>
     {% endfor %}
+    {% endif %}
   </div>
   {% endif %}
 
