@@ -549,7 +549,7 @@ def german_proxy(path):
     if path in ("admin/guests", "admin/reset-password"):
         return redirect(url_for("admin_guests"))
     if user["tier"] == "guest":
-        _GUEST_ALLOWED = ("lesen", "schreiben", "woerter", "archiv", "gesprache", "static/")
+        _GUEST_ALLOWED = ("lesen", "schreiben", "woerter", "archiv", "gesprache", "static/", "api/")
         if path.startswith("admin"):
             return render_template("guest_restricted.html", section="Admin")
         if not any(path.startswith(p) for p in _GUEST_ALLOWED):

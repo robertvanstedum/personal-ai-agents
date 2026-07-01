@@ -612,6 +612,9 @@ def api_send_to_telegram():
     paste it directly into Grok Voice — no clipboard transfer needed."""
     import requests as _requests
 
+    if _de_is_guest():
+        return jsonify({"ok": False, "error": "Telegram nicht verfügbar im Gast-Modus."}), 403
+
     data = request.json or {}
     persona_name = data.get("persona_name", "")
     scene_key    = data.get("scene_key", "")
