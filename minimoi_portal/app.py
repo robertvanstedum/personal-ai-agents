@@ -495,6 +495,12 @@ def deepdive_passthrough():
     user = _current_user()
     return _proxy.proxy_to(_cfg.CURATOR_BACKEND, "deepdive", "/app/curator", user=user)
 
+@app.route("/feedback", methods=["GET", "POST"])
+@_require_login
+def feedback_passthrough():
+    user = _current_user()
+    return _proxy.proxy_to(_cfg.CURATOR_BACKEND, "feedback", "/app/curator", user=user)
+
 @app.route("/api/<path:path>", methods=["GET", "POST", "DELETE", "PATCH"])
 @_require_login
 def api_passthrough(path):
@@ -556,7 +562,11 @@ def german_proxy(path):
 @app.route("/guest/briefing")
 @_require_login
 def guest_briefing():
-    """Daily briefing for legacy guest users (non-domain-auth) only."""
+    """Redirect legacy /guest/briefing URL to the unified curator briefing."""
+    return redirect(url_for("curator_root"))
+
+def _guest_briefing_legacy():
+    """Kept for reference — was the old guest-only briefing page."""
     user = _current_user()
     if user.get("auth_id"):
         return render_template("access_denied.html", user=user), 403
