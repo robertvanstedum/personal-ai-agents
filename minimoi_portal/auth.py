@@ -240,6 +240,94 @@ def reset_guest_password(username: str, new_password: str) -> bool:
     return found
 
 
+def set_must_change_password(username: str) -> None:
+    """Set must_change_password=True on a user or guest account."""
+    for filename in ("users.json", "guests.json"):
+        data = _load_json(filename)
+        key = "users" if filename == "users.json" else "guests"
+        for entry in data.get(key, []):
+            if entry["username"] == username:
+                entry["must_change_password"] = True
+                _write_json(filename, data)
+                return
+
+
+def clear_must_change_password(username: str) -> None:
+    """Clear must_change_password flag on a user or guest account."""
+    for filename in ("users.json", "guests.json"):
+        data = _load_json(filename)
+        key = "users" if filename == "users.json" else "guests"
+        for entry in data.get(key, []):
+            if entry["username"] == username:
+                entry.pop("must_change_password", None)
+                _write_json(filename, data)
+                return
+
+
+def check_must_change_password(username: str) -> bool:
+    """Return True if the account has must_change_password set."""
+    for filename in ("users.json", "guests.json"):
+        data = _load_json(filename)
+        key = "users" if filename == "users.json" else "guests"
+        for entry in data.get(key, []):
+            if entry["username"] == username:
+                return bool(entry.get("must_change_password"))
+    return False
+
+
+def create_reset_request(username: str, display_name: str, email: str) -> dict:
+    """Append a password reset request. Returns the new request dict."""
+    import uuid
+    data = _load_json("reset_requests.json")
+    if "requests" not in data:
+        data["requests"] = []
+    req = {
+        "id": str(uuid.uuid4()),
+        "username": username,
+        "display_name": display_name,
+        "email": email,
+        "requested_at": datetime.now(timezone.utc).isoformat(),
+    }
+    data["requests"].append(req)
+    _write_json("reset_requests.json", data)
+    return req
+
+
+def load_reset_requests() -> list:
+    """Return active (non-expired) reset requests. Prunes expired on read."""
+    from datetime import timedelta
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+    data = _load_json("reset_requests.json")
+    active, changed = [], False
+    for r in data.get("requests", []):
+        try:
+            requested_at = datetime.fromisoformat(r["requested_at"])
+            if requested_at.tzinfo is None:
+                requested_at = requested_at.replace(tzinfo=timezone.utc)
+            if requested_at > cutoff:
+                active.append(r)
+            else:
+                changed = True
+        except Exception:
+            changed = True
+    if changed:
+        data["requests"] = active
+        _write_json("reset_requests.json", data)
+    return active
+
+
+def consume_reset_request(req_id: str) -> bool:
+    """Remove a reset request by id. Returns False if not found or expired."""
+    active = load_reset_requests()
+    found = next((r for r in active if r["id"] == req_id), None)
+    if not found:
+        return False
+    data = _load_json("reset_requests.json")
+    data["requests"] = [r for r in data.get("requests", []) if r["id"] != req_id]
+    _write_json("reset_requests.json", data)
+    return True
+
+
 def list_guests() -> list:
     """Return all active guests with expiry status."""
     now = datetime.now(timezone.utc)

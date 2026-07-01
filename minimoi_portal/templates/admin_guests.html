@@ -29,6 +29,43 @@
     {% endfor %}
   {% endwith %}
 
+  <!-- Password Reset Requests -->
+  {% if reset_requests %}
+    <section class="admin-section pending-section">
+      <h2>🔑 Password reset requests <span class="pending-count">{{ reset_requests | length }}</span></h2>
+      <table class="guests-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Requested</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in reset_requests %}
+            <tr>
+              <td>{{ r.display_name }}</td>
+              <td>{{ r.email }}</td>
+              <td>{{ r.requested_at[:10] }}</td>
+              <td class="pending-actions">
+                <form method="POST" action="/admin/reset-requests/approve/{{ r.id }}"
+                      style="display:inline">
+                  <button type="submit" class="btn-approve">Send temp password</button>
+                </form>
+                <form method="POST" action="/admin/reset-requests/dismiss/{{ r.id }}"
+                      style="display:inline"
+                      onsubmit="return confirm('Dismiss reset request from {{ r.display_name }}?')">
+                  <button type="submit" class="btn-danger-sm">Dismiss</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% endif %}
+
   <!-- User Management (owner-only) -->
   <section class="admin-section">
     <h2>User Management</h2>

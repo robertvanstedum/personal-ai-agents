@@ -145,6 +145,10 @@ def _require_login(f):
     def decorated(*args, **kwargs):
         if not _current_user():
             return redirect(url_for("login", next=request.path))
+        # Enforce forced password change on every authenticated request
+        if request.endpoint != "account_password":
+            if _auth.check_must_change_password(_current_user()["username"]):
+                return redirect(url_for("account_password", forced=1))
         return f(*args, **kwargs)
     return decorated
 
@@ -243,10 +247,40 @@ def login():
                 "display_name": user.get("display_name", user["username"]),
                 "tier": user["tier"],
             }
+            if _auth.check_must_change_password(user["username"]):
+                return redirect(url_for("account_password", forced=1))
             next_url = request.args.get("next") or url_for("dashboard")
             return redirect(next_url)
 
     return render_template("login.html", error=error)
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if _current_user():
+        return redirect(url_for("dashboard"))
+    submitted = False
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        submitted = True
+        if email and "@" in email:
+            # Look up by email — users first, then guests
+            match = None
+            for u in _auth.load_users():
+                if u.get("email", "").lower() == email:
+                    match = u
+                    break
+            if not match:
+                for g in _auth.load_guests():
+                    if g.get("email", "").lower() == email:
+                        match = g
+                        break
+            if match:
+                req = _auth.create_reset_request(
+                    match["username"], match.get("display_name", ""), email
+                )
+                _notify_telegram_reset_request(match.get("display_name", ""), email)
+    return render_template("forgot_password.html", submitted=submitted)
 
 
 @app.route("/logout")
@@ -509,13 +543,10 @@ def german_proxy(path):
     if path in ("admin/guests", "admin/reset-password"):
         return redirect(url_for("admin_guests"))
     if user["tier"] == "guest":
-        # Block owner-only sections — show a friendly restricted page
-        _GERMAN_OWNER_ONLY = {
-            "admin": "Admin",
-        }
-        for prefix, label in _GERMAN_OWNER_ONLY.items():
-            if path.startswith(prefix):
-                return render_template("guest_restricted.html", section=label)
+        # Guests: lesen only — block everything else
+        _GUEST_ALLOWED = ("lesen", "static/")
+        if not any(path.startswith(p) for p in _GUEST_ALLOWED):
+            return render_template("guest_restricted.html", section="this section")
     return _proxy.proxy_to(_cfg.GERMAN_BACKEND, path, "/app/german", user=user)
 
 
@@ -658,9 +689,53 @@ def admin_guests():
         [{"username": u["username"], "label": f"{u.get('display_name', u['username'])} ({u.get('email', u['username'])}) — {u['tier']}"} for u in users]
         + [{"username": g["username"], "label": f"{g.get('display_name', g['username'])} ({g['username']}) — guest"} for g in guests if not g.get("expired")]
     )
+    reset_requests = _auth.load_reset_requests()
     return render_template("admin_guests.html", user=_current_user(),
                            guests=guests, pending=pending, users=users,
-                           all_accounts=all_accounts)
+                           all_accounts=all_accounts, reset_requests=reset_requests)
+
+
+@app.route("/admin/reset-requests/approve/<req_id>", methods=["POST"])
+@_require_owner
+def admin_reset_request_approve(req_id):
+    import secrets as _secrets
+    req = next((r for r in _auth.load_reset_requests() if r["id"] == req_id), None)
+    if not req:
+        flash("Reset request expired or not found.", "error")
+        return redirect(url_for("admin_guests"))
+
+    if not _auth.consume_reset_request(req_id):
+        flash("Reset request expired.", "error")
+        return redirect(url_for("admin_guests"))
+
+    temp_pw = _secrets.token_urlsafe(8)
+    username = req["username"]
+    if not _auth.reset_user_password(username, temp_pw):
+        _auth.reset_guest_password(username, temp_pw)
+    _auth.set_must_change_password(username)
+
+    name = req.get("display_name", "")
+    body = f"""Hi {name},
+
+Your temporary password for mini-moi is:
+
+  {temp_pw}
+
+Sign in at https://minimoi.ai/login — you'll be asked to set a new password immediately after logging in.
+
+mini-moi
+"""
+    _send_email(req["email"], "Your temporary mini-moi password", body)
+    flash(f"Temporary password sent to {req['email']}.", "success")
+    return redirect(url_for("admin_guests"))
+
+
+@app.route("/admin/reset-requests/dismiss/<req_id>", methods=["POST"])
+@_require_owner
+def admin_reset_request_dismiss(req_id):
+    _auth.consume_reset_request(req_id)
+    flash("Reset request dismissed.", "success")
+    return redirect(url_for("admin_guests"))
 
 
 @app.route("/admin/guests/approve/<token>", methods=["POST"])
@@ -671,6 +746,27 @@ def admin_guests_approve(token):
         _notify_telegram_approved(guest)
         _send_approval_email(guest)
     return redirect(url_for("admin_guests"))
+
+
+def _notify_telegram_reset_request(display_name: str, email: str) -> None:
+    """Notify Robert that a guest requested a password reset."""
+    try:
+        token   = get_secret("TELEGRAM_BOT_TOKEN", "telegram", "bot_token")
+        chat_id = 8379221702
+        text = (
+            f"🔑 <b>Password reset request</b>\n\n"
+            f"<b>Name:</b> {display_name}\n"
+            f"<b>Email:</b> {email}\n\n"
+            f"Approve at:\nhttps://minimoi.ai/admin/guests"
+        )
+        _requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": text, "parse_mode": "HTML",
+                  "disable_web_page_preview": True},
+            timeout=10,
+        )
+    except Exception as e:
+        print(f"⚠️  Telegram reset notification failed: {e}")
 
 
 def _notify_telegram_approved(guest: dict) -> None:
@@ -694,24 +790,42 @@ def _notify_telegram_approved(guest: dict) -> None:
         print(f"⚠️  Telegram approval notification failed: {e}")
 
 
-def _send_approval_email(guest: dict) -> None:
-    """Send an approval email to the guest from robert.vanstedum@gmail.com."""
-    import smtplib
+def _send_email(to: str, subject: str, body: str) -> None:
+    """Send via Zoho SMTP. All settings from config — no hardcoded values."""
+    import smtplib, ssl
     from email.mime.text import MIMEText
 
+    try:
+        smtp_password = (
+            os.environ.get("SMTP_PASSWORD")
+            or get_secret("ZOHO_SMTP_PASSWORD", "zoho_smtp", "no-reply")
+        )
+        if not smtp_password:
+            print("⚠️  SMTP password not found")
+            return
+
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"]    = _cfg.SMTP_FROM
+        msg["To"]      = to
+
+        ctx = ssl.create_default_context()
+        with smtplib.SMTP_SSL(_cfg.SMTP_HOST, _cfg.SMTP_PORT, context=ctx) as smtp:
+            smtp.login(_cfg.SMTP_USER, smtp_password)
+            smtp.send_message(msg)
+
+        print(f"✅ Email sent to {to}")
+    except Exception as e:
+        print(f"⚠️  Email failed: {e}")
+
+
+def _send_approval_email(guest: dict) -> None:
+    """Send a guest approval email from no-reply@minimoi.ai via Zoho."""
     to_email = guest.get("email", "")
     if not to_email:
         return
-
     name = guest.get("display_name", "there")
-
-    try:
-        app_password = get_secret("GMAIL_APP_PASSWORD", "gmail", "app_password")
-        if not app_password:
-            print("⚠️  Gmail app password not found in Keychain")
-            return
-
-        body = f"""Hi {name},
+    body = f"""Hi {name},
 
 Your access to mini-moi has been approved! You can sign in now at:
 
@@ -722,18 +836,7 @@ Use the email address and password you chose when you registered.
 Welcome,
 Robert
 """
-        msg = MIMEText(body)
-        msg["Subject"] = "You're in — mini-moi access approved"
-        msg["From"]    = "robert.vanstedum@gmail.com"
-        msg["To"]      = to_email
-
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login("robert.vanstedum@gmail.com", app_password)
-            smtp.send_message(msg)
-
-        print(f"✅ Approval email sent to {to_email}")
-    except Exception as e:
-        print(f"⚠️  Approval email failed: {e}")
+    _send_email(to_email, "You're in — mini-moi access approved", body)
 
 
 def _send_login_link_email(email: str, name: str, token: str) -> bool:
@@ -842,32 +945,36 @@ def admin_reset_password():
 @_require_login
 def account_password():
     user = _current_user()
+    forced = bool(request.args.get("forced"))
     if request.method == "GET":
-        return render_template("account_password.html", user=user)
+        return render_template("account_password.html", user=user, forced=forced)
 
     current_pw = request.form.get("current_password", "")
     new_pw     = request.form.get("password", "")
     confirm    = request.form.get("confirm", "")
+    forced     = request.form.get("forced") == "1"
 
     if new_pw != confirm:
         flash("New passwords do not match.", "error")
-        return render_template("account_password.html", user=user)
+        return render_template("account_password.html", user=user, forced=forced)
     if len(new_pw) < 8:
         flash("Password must be at least 8 characters.", "error")
-        return render_template("account_password.html", user=user)
+        return render_template("account_password.html", user=user, forced=forced)
 
-    # Validate current password
-    verified, err = _auth.authenticate(user["username"], current_pw)
-    if not verified:
-        flash("Current password is incorrect.", "error")
-        return render_template("account_password.html", user=user)
+    # Skip current-password check when using a forced temp password
+    if not forced:
+        verified, err = _auth.authenticate(user["username"], current_pw)
+        if not verified:
+            flash("Current password is incorrect.", "error")
+            return render_template("account_password.html", user=user, forced=forced)
 
     # Update in whichever store the user lives in
     if not _auth.reset_user_password(user["username"], new_pw):
         _auth.reset_guest_password(user["username"], new_pw)
 
+    _auth.clear_must_change_password(user["username"])
     flash("Password updated.", "success")
-    return redirect(url_for("account_password"))
+    return redirect(url_for("dashboard"))
 
 
 # ── Guild domain (owner-only) ─────────────────────────────────────────────────

@@ -118,6 +118,7 @@ _NewDomains/language-german/language/german/progress.json
 # Portal auth — credentials never in public repo (keep in mini-moi-private)
 minimoi_portal/auth/users.json
 minimoi_portal/auth/guests.json
+minimoi_portal/auth/reset_requests.json
 
 # Guild domain — private data lives in mini-moi-private repo
 _NewDomains/guild/job-search/**

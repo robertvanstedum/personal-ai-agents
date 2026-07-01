@@ -95,6 +95,13 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
     portuguese_active = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/portuguese" else ""
     guild_active      = "color:#ffffff;font-weight:600;" if portal_prefix == "/guild"          else ""
 
+    # Hide German nav link for JSON guests (tier=guest, no auth_id) — they get lesen only
+    is_json_guest = user and user.get("tier") == "guest" and not user.get("auth_id")
+    german_nav_link = (
+        "" if is_json_guest else
+        f'<a href="/app/german" style="color:#C68A5E;text-decoration:none;margin-right:14px;{german_active}">German</a>'
+    )
+
     # Per-backend layout offset so backend sticky elements don't hide under our nav.
     # Curator body is display:flex (row) — padding-top pushes the flex row down.
     # German/Portuguese body is block — padding-top pushes block content down.
@@ -124,8 +131,8 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
   <a href="/dashboard" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
   <span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
   <a href="/app/curator"    style="color:#C68A5E;text-decoration:none;margin-right:14px;{curator_active}">Curator</a>
-  <a href="/app/german"     style="color:#C68A5E;text-decoration:none;margin-right:14px;{german_active}">German</a>
-  <a href="/app/portuguese" style="color:#C68A5E;text-decoration:none;margin-right:14px;{portuguese_active}">Português</a>
+  {german_nav_link}
+  <a href="/app/portuguese" style="color:#C68A5E;text-decoration:none;margin-right:14px;{portuguese_active}">Meu Português</a>
   <a href="/guild"          style="color:#C68A5E;text-decoration:none;{guild_active}">Guild</a>
   <a href="/account/password" style="color:rgba(255,255,255,0.45);text-decoration:none;margin-left:auto;margin-right:12px;">{display_name}</a>
   <a href="/logout" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;">Sign out</a>
