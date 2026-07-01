@@ -67,7 +67,7 @@
                       data-hash="{{ a.hash_id }}"
                       data-title="{{ a.title | e }}"
                       data-summary="{{ a.summary[:200] | e }}">
-                🔍 Deep Dive
+                🔭 Scan
               </button>
             {% endif %}
             <button class="action-btn comment-toggle-btn"
@@ -190,7 +190,7 @@ document.querySelectorAll('.dive-btn').forEach(btn => {
     btn.textContent = '⏳ Generating…';
     result.style.display = 'block';
     result.className = 'dive-result dive-loading';
-    result.innerHTML = '<span class="dive-spinner"></span> Generating your deep dive — this takes about 30 seconds…';
+    result.innerHTML = '<span class="dive-spinner"></span> Generating your scan — this takes about 30 seconds…';
 
     try {
       const resp = await fetch('/guest/deep-dive', {
@@ -202,16 +202,16 @@ document.querySelectorAll('.dive-btn').forEach(btn => {
 
       if (data.success && data.html_path) {
         result.className = 'dive-result dive-ready';
-        result.innerHTML = `<a class="dive-link" href="/app/curator${data.html_path}" target="_blank">📖 Read your deep dive →</a>`;
+        result.innerHTML = `<a class="dive-link" href="/app/curator${data.html_path}" target="_blank">📖 Read your scan →</a>`;
       } else {
         result.className = 'dive-result dive-error';
-        result.innerHTML = `<span>Deep dive failed: ${data.message || 'unknown error'}. Try again.</span>`;
+        result.innerHTML = `<span>Scan failed: ${data.message || 'unknown error'}. Try again.</span>`;
       }
     } catch (e) {
       result.className = 'dive-result dive-error';
       result.innerHTML = '<span>Something went wrong. Try again.</span>';
     } finally {
-      btn.textContent = '🔍 Deep Dive';
+      btn.textContent = '🔭 Scan';
       btn.disabled = false;
     }
   });
