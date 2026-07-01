@@ -202,7 +202,7 @@ document.querySelectorAll('.dive-btn').forEach(btn => {
 
       if (data.success && data.html_path) {
         result.className = 'dive-result dive-ready';
-        result.innerHTML = `<a class="dive-link" href="/app/curator/${data.html_path}" target="_blank">📖 Read your deep dive →</a>`;
+        result.innerHTML = `<a class="dive-link" href="/app/curator${data.html_path}" target="_blank">📖 Read your deep dive →</a>`;
       } else {
         result.className = 'dive-result dive-error';
         result.innerHTML = `<span>Deep dive failed: ${data.message || 'unknown error'}. Try again.</span>`;
