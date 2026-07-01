@@ -83,10 +83,12 @@
                       title="Prompt in die Zwischenablage kopieren — kein App-Wechsel">
                 📋 Prompt kopieren
               </button>
+              {% if not is_guest %}
               <button class="btn-delivery" id="btn-telegram"
                       title="Kopiert den Prompt und öffnet Telegram — dort einfügen">
                 ✈ Telegram
               </button>
+              {% endif %}
               <button class="btn-delivery" id="btn-download"
                       title="Speichert den vollständigen Prompt als Textdatei">
                 💾 Als .txt

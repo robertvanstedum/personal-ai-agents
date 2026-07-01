@@ -157,7 +157,8 @@ def gesprache():
     return render_template("german_gesprache.html", active="gesprache",
                            personas=personas, sessions=sessions,
                            whereby_room_url=WHEREBY_ROOM_URL,
-                           whereby_host_available=bool(WHEREBY_HOST_URL))
+                           whereby_host_available=bool(WHEREBY_HOST_URL),
+                           is_guest=_de_is_guest())
 
 
 @app.route("/ueben")

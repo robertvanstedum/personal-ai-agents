@@ -236,7 +236,7 @@ function showSaveToast() {
     const correctedEl = document.getElementById('kontext-corrected');
     const contextTitle = document.getElementById('kontext-title').textContent;
     try {
-      await fetch('/api/write-save', {
+      const res = await fetch('/api/write-save', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -247,9 +247,15 @@ function showSaveToast() {
           context_title: contextTitle,
         }),
       });
-      showSaveToast();
-      btn.disabled = true;
-      setTimeout(() => { window.location.reload(); }, 1500);
+      const data = await res.json();
+      if (data.guest) {
+        btn.textContent = 'Nicht verfügbar im Gast-Modus';
+        btn.disabled = true;
+      } else {
+        showSaveToast();
+        btn.disabled = true;
+        setTimeout(() => { window.location.reload(); }, 1500);
+      }
     } catch (e) {}
   });
 
@@ -341,7 +347,7 @@ function showSaveToast() {
   async function saveTagebuchEntry(text, corrected, notes) {
     const status = document.getElementById('tagebuch-status');
     try {
-      await fetch('/api/write-save', {
+      const res = await fetch('/api/write-save', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -352,9 +358,14 @@ function showSaveToast() {
           context_title: prompts[promptIdx] || '',
         }),
       });
-      showSaveToast();
-      document.getElementById('tagebuch-input').value = '';
-      setTimeout(() => { window.location.reload(); }, 1500);
+      const data = await res.json();
+      if (data.guest) {
+        status.textContent = 'Nicht verfügbar im Gast-Modus.';
+      } else {
+        showSaveToast();
+        document.getElementById('tagebuch-input').value = '';
+        setTimeout(() => { window.location.reload(); }, 1500);
+      }
     } catch (e) {
       status.textContent = 'Fehler beim Speichern.';
     }
