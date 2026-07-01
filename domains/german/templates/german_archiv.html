@@ -12,6 +12,12 @@
       <p class="archiv-description">Gespeicherte Verlaufsdaten aus Gespräche, Schreiben und Lesen.</p>
     </div>
 
+    {% if guest_mode %}
+    <div class="archiv-guest-notice">
+      Deine Sitzungen erscheinen hier, sobald du ein vollständiges Konto hast.
+    </div>
+    {% endif %}
+
     <div class="archiv-tabs">
       <button class="archiv-tab active" data-section="gesprache">Gespräche</button>
       <button class="archiv-tab" data-section="schreiben">Schreiben</button>
@@ -107,6 +113,15 @@
 
 {% block scripts %}
 <style>
+  .archiv-guest-notice {
+    background: rgba(139,94,42,0.08);
+    border: 1px solid rgba(139,94,42,0.2);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.25rem;
+    font-size: 0.88rem;
+    color: var(--md-text-muted, #6b5040);
+  }
   .archiv-row-expandable { cursor: pointer; user-select: none; }
   .archiv-row-expandable:hover { background: rgba(139,94,42,0.06); }
   .archiv-toggle {

@@ -119,6 +119,11 @@ def _de_request_user_id():
     return int(uid) if uid else None
 
 
+def _de_is_guest():
+    """Return True if request is from a guest-tier user (no writes allowed)."""
+    return request.headers.get("X-Minimoi-User-Tier") == "guest"
+
+
 # ── Page routes ───────────────────────────────────────────────────────────────
 
 @app.route("/")
@@ -195,6 +200,10 @@ def admin():
 
 @app.route("/archiv")
 def archiv():
+    if _de_is_guest():
+        return render_template("german_archiv.html", active="archiv",
+                               gesprache_sessions=[], writing_sessions=[], lesen_notes=[],
+                               guest_mode=True)
     user_id = _de_request_user_id()
     writing_sessions = get_writing_sessions(user_id=user_id, limit=50)
     gesprache_sessions = get_gesprache_sessions(limit=50, user_id=user_id)
@@ -227,6 +236,9 @@ def api_lesen_action():
     action = body.get("action", "")
     if not article_id or action not in ("pos", "neg", "pin", "unpin"):
         return jsonify({"ok": False, "error": "invalid params"}), 400
+    if _de_is_guest():
+        # Guest feed actions suppressed — isolation of feed state deferred to Part 3
+        return jsonify({"ok": True})
     lesen_action(article_id, action)
     return jsonify({"ok": True})
 
@@ -251,6 +263,8 @@ def api_save_phrase():
     source = body.get("source", "").strip()
     if not german:
         return jsonify({"ok": False, "error": "german required"}), 400
+    if _de_is_guest():
+        return jsonify({"ok": True, "id": None, "guest": True})
     scene = source if source in ('manual', 'schreiben') else 'lesen'
     user_id = _de_request_user_id()
     entry = save_lesen_phrase(german, english, context_sentence, article_title, scene=scene, user_id=user_id)
@@ -272,6 +286,8 @@ def api_write_correct():
 
 @app.route("/api/write-save", methods=["POST"])
 def api_write_save():
+    if _de_is_guest():
+        return jsonify({"ok": True, "id": None, "guest": True})
     body = request.get_json(force=True)
     user_id = _de_request_user_id()
     entry = save_writing_entry(
@@ -287,6 +303,8 @@ def api_write_save():
 
 @app.route("/api/note-save", methods=["POST"])
 def api_note_save():
+    if _de_is_guest():
+        return jsonify({"success": True, "note_id": None, "guest": True})
     body = request.get_json(force=True)
     user_id = _de_request_user_id()
     note = save_note(
@@ -316,6 +334,8 @@ def api_lesen_correct():
 
 @app.route("/api/lesen/drill-save", methods=["POST"])
 def api_lesen_drill_save():
+    if _de_is_guest():
+        return jsonify({"success": True, "id": None, "guest": True})
     body = request.get_json(force=True)
     record = save_lesen_drill(
         article_id=body.get("article_id", ""),
@@ -339,6 +359,8 @@ def api_drill_result():
     result = body.get("result", "")
     if not phrase_id or result not in ("correct", "wrong", "skip"):
         return jsonify({"ok": False, "error": "invalid params"}), 400
+    if _de_is_guest():
+        return jsonify({"ok": True, "entry": None, "guest": True})
     user_id = _de_request_user_id()
     entry = save_drill_result(phrase_id, result, user_id=user_id)
     return jsonify({"ok": bool(entry), "entry": entry})
@@ -353,6 +375,8 @@ def api_phrase_update():
     new_status = body.get("status", "")
     if not phrase_id or not new_status:
         return jsonify({"ok": False, "error": "id and status required"}), 400
+    if _de_is_guest():
+        return jsonify({"ok": True, "guest": True})
     user_id = _de_request_user_id()
     ok = update_phrase_status(phrase_id, new_status, user_id=user_id)
     return jsonify({"ok": ok})
@@ -389,6 +413,8 @@ def api_analyse_transcript():
     scene = body.get("scene", "").strip()
     if not transcript:
         return jsonify({"ok": False, "error": "transcript required"}), 400
+    if _de_is_guest():
+        return jsonify({"ok": True, "guest": True})
     result = analyse_session(transcript, persona_name, scene)
     return jsonify({"ok": True, **result})
 
@@ -437,32 +463,33 @@ def api_review():
         from providers.review_router import run_review, ProviderError
         result = run_review(transcript, persona_name, scene, model)
 
-        # Save session to disk so it appears in Letzte Sitzungen
-        try:
-            from german_domain import _next_session_filename, _SESSIONS_DIR, _parse_transcript_turns
-            import datetime as _dt, json as _json
-            date_str = _dt.datetime.now().strftime("%Y-%m-%d")
-            file_stem = _next_session_filename(date_str)
-            _review_user_id = _de_request_user_id()
-            session_data = {
-                "session_id": f"session_{file_stem}",
-                "date": date_str,
-                "persona": persona_name,
-                "scenario": scene,
-                "duration_estimate_min": max(1, len(transcript) // 300),
-                "source": source,
-                "raw_transcript": _parse_transcript_turns(transcript),
-                "reviewer_output": result.get("feedback", {}),
-                "model": model,
-                "anki_generated": False,
-                "next_lesson_generated": False,
-                "user_id": _review_user_id,
-            }
-            (_SESSIONS_DIR / f"{file_stem}.json").write_text(
-                _json.dumps(session_data, indent=2, ensure_ascii=False)
-            )
-        except Exception as save_err:
-            pass  # Don't fail the review response if save fails
+        # Save session to disk so it appears in Letzte Sitzungen (owner only — guests get AI feedback but no save)
+        if not _de_is_guest():
+            try:
+                from german_domain import _next_session_filename, _SESSIONS_DIR, _parse_transcript_turns
+                import datetime as _dt, json as _json
+                date_str = _dt.datetime.now().strftime("%Y-%m-%d")
+                file_stem = _next_session_filename(date_str)
+                _review_user_id = _de_request_user_id()
+                session_data = {
+                    "session_id": f"session_{file_stem}",
+                    "date": date_str,
+                    "persona": persona_name,
+                    "scenario": scene,
+                    "duration_estimate_min": max(1, len(transcript) // 300),
+                    "source": source,
+                    "raw_transcript": _parse_transcript_turns(transcript),
+                    "reviewer_output": result.get("feedback", {}),
+                    "model": model,
+                    "anki_generated": False,
+                    "next_lesson_generated": False,
+                    "user_id": _review_user_id,
+                }
+                (_SESSIONS_DIR / f"{file_stem}.json").write_text(
+                    _json.dumps(session_data, indent=2, ensure_ascii=False)
+                )
+            except Exception as save_err:
+                pass  # Don't fail the review response if save fails
 
         return jsonify({"ok": True, **result})
     except Exception as e:
@@ -533,6 +560,8 @@ def api_round_action():
     action = body.get("action", "").strip()
     if not persona_slug or action not in ("close", "extend"):
         return jsonify({"ok": False, "error": "invalid params"}), 400
+    if _de_is_guest():
+        return jsonify({"ok": True, "guest": True})
     if action == "close":
         close_round(DEFAULT_USER, persona_slug)
     elif action == "extend":
