@@ -71,7 +71,7 @@ body::before {
 }
 
 body.landing-mode::before {
-  opacity: 0.30;
+  opacity: 0;
 }
 
 body::after {
@@ -286,6 +286,13 @@ body.landing-mode {
   color: var(--text);
 }
 
+body.landing-mode .page {
+  max-width: 100%;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+}
+
 .landing-hero {
   display: flex;
   flex-direction: column;
@@ -294,6 +301,23 @@ body.landing-mode {
   min-height: calc(100vh - 68px);
   text-align: center;
   padding: 2rem;
+  position: relative;
+  background-image: url('/static/bg-primary.jpg?v=2');
+  background-size: cover;
+  background-position: center bottom;
+}
+
+.landing-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.landing-hero > * {
+  position: relative;
+  z-index: 1;
 }
 
 .landing-title {
@@ -301,7 +325,8 @@ body.landing-mode {
   font-size: clamp(36px, 6vw, 52px);
   font-style: italic;
   font-weight: 400;
-  color: var(--md-accent);
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.35);
   line-height: 1.15;
   margin-bottom: 0.75rem;
 }
@@ -311,8 +336,8 @@ body.landing-mode {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--md-accent);
-  text-shadow: 1px 1px 3px rgba(0,0,0,0.6);
+  color: rgba(255,255,255,0.88);
+  text-shadow: 0 1px 6px rgba(0,0,0,0.5);
   margin-bottom: 3rem;
 }
 
@@ -325,12 +350,13 @@ body.landing-mode {
 .landing-nav a {
   font-size: 1.05rem;
   font-weight: 500;
-  color: var(--text-muted);
+  color: rgba(255,255,255,0.85);
+  text-shadow: 0 1px 6px rgba(0,0,0,0.7), 0 2px 16px rgba(0,0,0,0.5);
   transition: color 0.15s;
 }
 
 .landing-nav a:hover {
-  color: var(--md-accent);
+  color: #fff;
 }
 
 /* ── Tab hero (full-width photo hero below nav) ──────────── */

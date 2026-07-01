@@ -359,7 +359,8 @@ body.landing-mode {
   font-size: clamp(36px, 6vw, 52px);
   font-style: italic;
   font-weight: 400;
-  color: #C68A5E;
+  color: rgba(255,255,255,0.82);
+  text-shadow: 0 2px 10px rgba(0,0,0,0.45), 0 1px 3px rgba(0,0,0,0.3);
   line-height: 1.15;
   margin-bottom: 0.75rem;
 }
@@ -369,8 +370,8 @@ body.landing-mode {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #C68A5E;
-  text-shadow: 1px 1px 3px rgba(0,0,0,0.6);
+  color: rgba(255,255,255,0.65);
+  text-shadow: 0 1px 5px rgba(0,0,0,0.45);
   margin-bottom: 3rem;
 }
 
@@ -385,12 +386,13 @@ body.landing-mode {
 .landing-nav a {
   font-size: 1.05rem;
   font-weight: 500;
-  color: var(--text-muted);
+  color: rgba(255,255,255,0.70);
+  text-shadow: 0 1px 5px rgba(0,0,0,0.5);
   transition: color 0.15s;
 }
 
 .landing-nav a:hover {
-  color: var(--pt-accent);
+  color: rgba(255,255,255,0.92);
 }
 
 /* ── Tab hero (full-width photo below nav) ────────────────── */
