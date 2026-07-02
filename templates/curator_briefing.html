@@ -638,10 +638,20 @@ function runScan() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.success && data.html_path) {
-            window.open(data.html_path, '_blank');
-            btn.textContent = '✅ View Scan';
-            btn.disabled = false;
-            btn.onclick = function() { window.open(data.html_path, '_blank'); };
+            var a = document.createElement('a');
+            a.href = data.html_path;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            var link = document.createElement('a');
+            link.href = data.html_path;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.className = 'action-btn btn-investigate';
+            link.textContent = '✅ View Scan →';
+            btn.parentNode.replaceChild(link, btn);
         } else {
             btn.textContent = '✅ Done';
             btn.disabled = false;
