@@ -450,6 +450,13 @@ def curator_root():
     return _proxy.proxy_to(_cfg.CURATOR_BACKEND, "/", "/app/curator", user=user)
 
 
+@app.route("/app/curator/guest/feedback", methods=["POST"])
+@_require_login
+def curator_guest_feedback():
+    """Portal-level guest feedback — /guest/feedback gets rewritten to this path by the proxy."""
+    return guest_feedback()
+
+
 @app.route("/app/curator/<path:path>", methods=["GET", "POST", "DELETE", "PATCH"])
 @_require_login
 def curator_proxy(path):
@@ -457,8 +464,8 @@ def curator_proxy(path):
     if user["tier"] == "guest":
         if user.get("auth_id"):
             return render_template("access_denied.html", user=user), 403
-        # Allow briefing page, static assets, and deep dive HTML
-        if path.startswith(("briefing", "interests/", "static/")):
+        # Allow briefing page, library, static assets, deep dive, and scan
+        if path.startswith(("briefing", "curator_library", "interests/", "static/", "deepdive")):
             return _proxy.proxy_to(_cfg.CURATOR_BACKEND, path, "/app/curator", user=user)
         return redirect(url_for("curator_root"))
     return _proxy.proxy_to(_cfg.CURATOR_BACKEND, path, "/app/curator", user=user)
