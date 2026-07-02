@@ -901,7 +901,7 @@ def admin_guests_reject(token):
 def admin_guests_create():
     display_name = request.form.get("display_name", "Guest").strip()
     password     = request.form.get("password", "").strip()
-    expires_days = int(request.form.get("expires_days", 7))
+    expires_days = max(1, int(request.form.get("expires_days", 7) or 7))
 
     if not password:
         return redirect(url_for("admin_guests"))
