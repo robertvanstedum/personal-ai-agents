@@ -629,7 +629,7 @@ def guest_feedback():
         return jsonify({"error": "Invalid request"}), 400
 
     state = _gdata.record_feedback(user["username"], hash_id, action)
-    return jsonify(state)
+    return jsonify({"success": True, "message": f"Article {action}d", **state})
 
 
 @app.route("/guest/comment", methods=["POST"])
