@@ -638,13 +638,6 @@ function runScan() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.success && data.html_path) {
-            var a = document.createElement('a');
-            a.href = data.html_path;
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
             var link = document.createElement('a');
             link.href = data.html_path;
             link.target = '_blank';
@@ -652,6 +645,7 @@ function runScan() {
             link.className = 'action-btn btn-investigate';
             link.textContent = '✅ View Scan →';
             btn.parentNode.replaceChild(link, btn);
+            showToast('Scan complete — click View Scan to open', 'success');
         } else {
             btn.textContent = '✅ Done';
             btn.disabled = false;
