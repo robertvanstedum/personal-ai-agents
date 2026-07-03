@@ -837,19 +837,23 @@ def _send_email(to: str, subject: str, body: str) -> None:
         print(f"⚠️  Email failed: {e}")
 
 
-def _send_approval_email(guest: dict) -> None:
+def _send_approval_email(guest: dict, temp_password: str = "") -> None:
     """Send a guest approval email from no-reply@minimoi.ai via Zoho."""
     to_email = guest.get("email", "")
     if not to_email:
         return
     name = guest.get("display_name", "there")
+    if temp_password:
+        pw_line = f"Your temporary password is: {temp_password}\n\nPlease change it after you log in."
+    else:
+        pw_line = "Use the email address and password you chose when you registered."
     body = f"""Hi {name},
 
 Your access to mini-moi has been approved! You can sign in now at:
 
   {_cfg.BASE_URL}/login
 
-Use the email address and password you chose when you registered.
+{pw_line}
 
 Welcome,
 Robert
@@ -1270,15 +1274,21 @@ def update_guest_request_status(req_id):
         if rows:
             req = rows[0]
             try:
-                user_id = _dauth.create_user(req["email"], req["name"])
-                _dauth.grant_domain_access(user_id, req.get("domain") or "portuguese")
-                token = _dauth.create_login_token(user_id)
-                ok = _send_login_link_email(req["email"], req["name"], token)
-                if not ok:
-                    _update_guest_request_status(req_id, "approved_pending_email")
-                    return redirect(url_for("guild_landing"))
+                import secrets as _secrets
+                temp_pw = _secrets.token_urlsafe(10)[:10]
+                expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+                guest = _auth.create_guest(
+                    display_name=req["name"],
+                    expires_at_iso=expires_at,
+                    password=temp_pw,
+                    email=req["email"],
+                )
+                guest["must_change_password"] = True
+                _notify_telegram_approved(guest)
+                _send_approval_email(guest, temp_password=temp_pw)
+                print(f"✅ Guild Grant: created guest {guest['username']} for {req['email']}")
             except Exception as e:
-                print(f"⚠️  Auth provisioning failed for request {req_id}: {e}")
+                print(f"⚠️  Guild Grant provisioning failed for request {req_id}: {e}")
 
     _update_guest_request_status(req_id, status)
     return redirect(url_for("guild_landing"))
