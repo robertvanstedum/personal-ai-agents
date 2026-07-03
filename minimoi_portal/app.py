@@ -928,6 +928,14 @@ def admin_guests_revoke(username):
     return redirect(url_for("admin_guests"))
 
 
+@app.route("/admin/guests/extend/<username>", methods=["POST"])
+@_require_owner
+def admin_guests_extend(username):
+    days = int(request.form.get("days", 7))
+    _auth.extend_guest(username, days=days)
+    return redirect(url_for("admin_guests"))
+
+
 @app.route("/admin/reset-password", methods=["POST"])
 @_require_owner
 def admin_reset_password():

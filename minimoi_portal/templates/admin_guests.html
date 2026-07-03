@@ -195,7 +195,12 @@
                   <span class="badge badge-active">Active</span>
                 {% endif %}
               </td>
-              <td>
+              <td style="white-space:nowrap">
+                <form method="POST" action="/admin/guests/extend/{{ g.username }}"
+                      style="display:inline">
+                  <input type="hidden" name="days" value="7">
+                  <button type="submit" class="btn-sm">+7d</button>
+                </form>
                 <form method="POST" action="/admin/guests/revoke/{{ g.username }}"
                       style="display:inline"
                       onsubmit="return confirm('Revoke access for {{ g.display_name }}?')">

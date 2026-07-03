@@ -210,6 +210,22 @@ def revoke_guest(username: str) -> bool:
     return True
 
 
+def extend_guest(username: str, days: int = 7) -> bool:
+    """Extend a guest's expiry by N days from today. Returns True if found."""
+    from datetime import timedelta
+    data = _load_json("guests.json")
+    for g in data.get("guests", []):
+        if g["username"] == username:
+            base = max(datetime.now(timezone.utc),
+                       datetime.fromisoformat(g["expires_at"]).replace(tzinfo=timezone.utc)
+                       if datetime.fromisoformat(g["expires_at"]).tzinfo is None
+                       else datetime.fromisoformat(g["expires_at"]))
+            g["expires_at"] = (base + timedelta(days=days)).isoformat()
+            _write_json("guests.json", data)
+            return True
+    return False
+
+
 def reset_user_password(username: str, new_password: str) -> bool:
     """Set a new password for a permanent user. Returns True if user found and updated."""
     data = _load_json("users.json")

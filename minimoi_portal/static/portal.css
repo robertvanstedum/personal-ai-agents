@@ -113,6 +113,18 @@ ul { list-style: none; }
 
 .btn-full { width: 100%; text-align: center; }
 
+.btn-sm {
+  background: none;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 0.2rem 0.6rem;
+  border-radius: 3px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-sm:hover { background: var(--accent-pale); }
+
 .btn-danger-sm {
   background: none;
   border: 1px solid #c0392b;
