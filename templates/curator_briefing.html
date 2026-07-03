@@ -639,7 +639,7 @@ function runScan() {
     .then(function(data) {
         if (data.success && data.html_path) {
             var link = document.createElement('a');
-            link.href = data.html_path;
+            link.href = data.html_path.replace(/^\//, '');
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
             link.className = 'action-btn btn-investigate';
