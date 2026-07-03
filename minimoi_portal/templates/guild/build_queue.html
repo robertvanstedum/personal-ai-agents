@@ -106,6 +106,25 @@
       text-align: center;
     }
 
+    /* ── Mobile: stack columns ── */
+    @media (max-width: 768px) {
+      .board {
+        grid-template-columns: 1fr;
+        margin: 0 12px 40px;
+      }
+      .board-col {
+        border-right: none;
+        border-bottom: 1px solid #b8ae9e;
+        padding-bottom: 16px;
+        margin-bottom: 8px;
+      }
+      .board-col:last-child { border-bottom: none; }
+      .card-title { font-size: 14px; }
+      .card-meta { font-size: 11px; }
+      .card-select { max-width: 100%; font-size: 12px; padding: 6px 8px; }
+      .save-btn, .detail-btn { font-size: 12px; padding: 6px 12px; }
+    }
+
     /* ── Cards ── */
     .card {
       background: var(--surface);
