@@ -13,12 +13,12 @@
 <nav class="portal-nav">
   <span class="portal-nav-brand">mini-moi</span>
   <div class="portal-nav-links">
-    <a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank">GitHub</a>
-    <a href="https://www.linkedin.com/in/robert-van-stedum" target="_blank">LinkedIn</a>
+    <a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank" class="nav-hide-mobile">GitHub</a>
+    <a href="https://www.linkedin.com/in/robert-van-stedum" target="_blank" class="nav-hide-mobile">LinkedIn</a>
     {% if user %}
       <a href="/dashboard" class="nav-btn">Dashboard →</a>
     {% else %}
-      <a href="https://minimoi.ai/preview/curator/briefing.html" class="nav-btn-ghost">Browse preview →</a>
+      <a href="https://minimoi.ai/preview/curator/briefing.html" class="nav-btn-ghost nav-hide-mobile">Browse preview →</a>
       <a href="/register" class="nav-btn-ghost">Request access →</a>
       <a href="/login" class="nav-btn">Sign in</a>
     {% endif %}
