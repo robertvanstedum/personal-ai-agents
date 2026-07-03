@@ -749,6 +749,6 @@
     "github_issue": null,
     "blocked_reason": null,
     "last_transition_at": "2026-07-03T00:00:00Z",
-    "notes": "Part 1: visitor/guest framing section (build-ready). Part 2: domain blurb refresh to working draft copy — final copy pending design session with Claude.ai."
+    "notes": "Updated spec 2026-07-03. Part 1: visitor/guest framing section (build-ready). Part 2: domain blurb refresh — working drafts in spec, final copy + version numbers need design session to resolve cross-source inconsistencies (Curator v1.1 vs v1.2, Guild v0.9 vs v1.0). Meu Português absent from landing page — must be added. Source material in spec: current landing, resume, GitHub About, README."
   }
 ]
