@@ -718,6 +718,7 @@ body.parch-mode .session-preview {
   min-height: 1.3em;
   max-height: 8em;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .popover-timing {
@@ -2061,6 +2062,18 @@ body.reading-mode nav {
 .word-popover {
   position: fixed !important;
   z-index: 600;
+}
+
+/* ── Word popover — mobile constraints ───────────────────────── */
+
+@media (max-width: 768px) {
+  .word-popover {
+    max-width: calc(100vw - 2rem);
+    left: 1rem !important;
+  }
+  .popover-translation {
+    max-height: 6em;
+  }
 }
 
 /* ── Lesen responsive — below 768px ─────────────────────────── */

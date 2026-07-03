@@ -470,32 +470,46 @@
 
   btnClose.addEventListener('click', hidePopover);
 
-  // ── Draggable popover ─────────────────────────────────────────────
+  // ── Draggable popover (mouse + touch) ────────────────────────────
   let _popDrag = null;
 
-  popover.addEventListener('mousedown', e => {
-    if (e.target.closest('button, a')) return;   // don't intercept action buttons
-    e.preventDefault();                           // prevent text selection during drag
+  function _startDrag(clientX, clientY) {
     _popDrag = {
-      startX:   e.clientX,
-      startY:   e.clientY,
+      startX:   clientX,
+      startY:   clientY,
       origTop:  parseInt(popover.style.top,  10) || 0,
       origLeft: parseInt(popover.style.left, 10) || 0,
     };
-    popover.style.cursor = 'grabbing';
-  });
-
-  document.addEventListener('mousemove', e => {
+  }
+  function _moveDrag(clientX, clientY) {
     if (!_popDrag) return;
-    const top  = _popDrag.origTop  + (e.clientY - _popDrag.startY);
-    const left = _popDrag.origLeft + (e.clientX - _popDrag.startX);
+    const top  = _popDrag.origTop  + (clientY - _popDrag.startY);
+    const left = _popDrag.origLeft + (clientX - _popDrag.startX);
     popover.style.top  = Math.max(4, top)  + 'px';
     popover.style.left = Math.max(4, left) + 'px';
-  });
+  }
+  function _endDrag() { _popDrag = null; popover.style.cursor = ''; }
 
-  document.addEventListener('mouseup', () => {
-    if (_popDrag) { _popDrag = null; popover.style.cursor = ''; }
+  popover.addEventListener('mousedown', e => {
+    if (e.target.closest('button, a')) return;
+    e.preventDefault();
+    _startDrag(e.clientX, e.clientY);
+    popover.style.cursor = 'grabbing';
   });
+  document.addEventListener('mousemove', e => _moveDrag(e.clientX, e.clientY));
+  document.addEventListener('mouseup', _endDrag);
+
+  popover.addEventListener('touchstart', e => {
+    if (e.target.closest('button, a, .popover-translation')) return;
+    const t = e.touches[0];
+    _startDrag(t.clientX, t.clientY);
+  }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    if (!_popDrag) return;
+    const t = e.touches[0];
+    _moveDrag(t.clientX, t.clientY);
+  }, { passive: true });
+  document.addEventListener('touchend', _endDrag);
 
   function handleSelection() {
     const sel = window.getSelection();
