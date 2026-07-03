@@ -221,6 +221,13 @@
     .btn-grant:hover  { background: var(--ok-bg); }
     .btn-reject { color: var(--danger); border-color: var(--danger-border); }
     .btn-reject:hover { background: var(--danger-bg); }
+    .btn-extend { color: var(--accent); border-color: var(--accent); }
+    .btn-extend:hover { background: var(--accent-pale, #f0e0d0); }
+    @media (max-width: 600px) {
+      .guest-row { flex-wrap: wrap; gap: 6px; }
+      .guest-name { flex: 1 1 100%; }
+      .guest-reason { flex: 1 1 auto; }
+    }
     .access-full-width { grid-column: 1 / -1; }
   </style>
 </head>
@@ -420,7 +427,10 @@
     <div class="guest-row">
       <span class="guest-name">{{ g.display_name or g.username }}</span>
       <span class="guest-reason">{{ g.expires_at[:10] if g.expires_at else '—' }}</span>
-      <span style="flex:1"></span>
+      <form method="POST" action="/guild/guests/{{ g.username }}/extend" style="display:inline">
+        <input type="hidden" name="days" value="7">
+        <button type="submit" class="btn-action btn-extend">+7d</button>
+      </form>
       <form method="POST" action="/guild/guests/{{ g.username }}/revoke" style="display:inline">
         <button type="submit" class="btn-action btn-reject"
           onclick="return confirm('Revoke access for {{ g.display_name or g.username }}?')">Revoke</button>

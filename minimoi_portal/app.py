@@ -1261,6 +1261,14 @@ def guild_landing():
     )
 
 
+@app.route("/guild/guests/<username>/extend", methods=["POST"])
+@_require_owner
+def guild_guest_extend(username):
+    days = int(request.form.get("days", 7))
+    _auth.extend_guest(username, days=days)
+    return redirect(url_for("guild_landing"))
+
+
 @app.route("/guild/guests/<username>/revoke", methods=["POST"])
 @_require_owner
 def guild_guest_revoke(username):
