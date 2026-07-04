@@ -1169,16 +1169,17 @@ def guild_landing():
     # ── 3. Build ──────────────────────────────────────────────────────────────
     build = {"counts": {}, "blocked": [], "spec_ready": [], "agenda": [], "error": False}
     try:
-        for row in _guild_db_query(
-            "SELECT status, COUNT(*) as cnt FROM guild.design_log GROUP BY status"
-        ):
-            build["counts"][row["status"]] = int(row["cnt"])
-        build["blocked"] = _guild_db_query(
-            "SELECT spec_title, blocked_reason FROM guild.design_log WHERE status='blocked'"
-        )
-        build["spec_ready"] = _guild_db_query(
-            "SELECT spec_title FROM guild.design_log WHERE status='spec_ready' ORDER BY id DESC"
-        )
+        _bq = _load_build_queue()
+        from collections import Counter
+        build["counts"] = dict(Counter(i.get("status") for i in _bq if i.get("status")))
+        build["blocked"] = [
+            {"spec_title": i["spec_title"], "blocked_reason": i.get("blocked_reason", "")}
+            for i in _bq if i.get("status") == "blocked"
+        ]
+        build["spec_ready"] = [
+            {"spec_title": i["spec_title"]}
+            for i in _bq if i.get("status") == "spec_ready"
+        ]
         build["agenda"] = _guild_db_query(
             "SELECT domain, description, confidence FROM guild.cos_agenda"
             " WHERE status='pending' ORDER BY confidence DESC NULLS LAST LIMIT 5"
