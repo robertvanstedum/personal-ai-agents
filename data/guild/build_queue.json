@@ -45,15 +45,6 @@
     "last_transition_at": "2026-06-24T03:01:51.447280+00:00"
   },
   {
-    "id": 81,
-    "spec_title": "Gespr\u00e4che: Deferred Analysis (v2)",
-    "spec_file": "spec_gesprache_deferred_analysis_2026-06-18 (1).md",
-    "status": "design",
-    "github_issue": null,
-    "blocked_reason": null,
-    "last_transition_at": "2026-06-18T18:50:07Z"
-  },
-  {
     "id": 79,
     "spec_title": "Gespr\u00e4che: Deferred Analysis",
     "spec_file": "spec_gesprache_deferred_analysis_2026-06-18.md",
@@ -678,8 +669,8 @@
     "id": 109,
     "spec_title": "Prometheus + Grafana Dashboards",
     "spec_file": "spec_monitoring_prometheus_grafana_2026-06-22.md",
-    "status": "spec_ready",
-    "last_transition_at": "2026-06-24T00:00:00Z",
+    "status": "backlog",
+    "last_transition_at": "2026-07-04T12:09:15.984817+00:00",
     "blocked_reason": "Build before daughters invited in",
     "notes": "Phase 2 Spec 7. Existing spec promoted into Phase 2."
   },
