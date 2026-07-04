@@ -2397,3 +2397,12 @@ body.reading-mode nav { background: #1B2E1F; border-bottom-color: var(--parch-ac
   font-size: 0.9rem; color: var(--pt-text-secondary); margin-bottom: 1.25rem; line-height: 1.5;
 }
 .round-modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
+
+/* ── Contextual tip bar ── */
+.page-tip {
+  font-size: 0.8rem;
+  color: var(--pt-text-secondary);
+  padding: 8px 0 12px 0;
+  border-bottom: 1px solid var(--pt-border);
+  margin-bottom: 12px;
+}

@@ -4529,3 +4529,12 @@ body.archiv-mode .page {
     justify-content: center;
   }
 }
+
+/* ── Contextual tip bar ── */
+.page-tip {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  padding: 8px 0 12px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}

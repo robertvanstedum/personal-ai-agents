@@ -1,6 +1,62 @@
 {
   "briefing.main": {
     "active": true,
-    "text": "Your daily briefing — ~700 articles scored against your learned profile. Like or Save to teach the system your interests."
+    "text": "Your daily briefing — curated signals across geopolitics, finance, and technology. Use the category filters to focus, or read straight through."
+  },
+  "portuguese.landing": {
+    "active": true,
+    "text": "Meu Portugu\u00eas pulls live articles from Brazilian and European Portuguese sources daily. Start in Leitura to read, or jump to Conversas to practice with a persona."
+  },
+  "portuguese.leitura": {
+    "active": true,
+    "text": "Four categories \u2014 Cotidiano, Cultura, Not\u00edcias, Rio. Hover any word to translate it inline. Open an article to take notes and save words to Palavras."
+  },
+  "portuguese.leitura.article": {
+    "active": true,
+    "text": "Hover a word for a quick translation. Hit '+ Em Palavras' to save it to your vocabulary. Use Notas to write a reaction in Portuguese \u2014 then hit Corrigir for feedback."
+  },
+  "portuguese.conversas": {
+    "active": true,
+    "text": "Pick a persona and start a session. Maria is good for short practical exchanges; Lucas for casual conversation. Check 'Prepara\u00e7\u00e3o de hoje' before starting to warm up."
+  },
+  "portuguese.escrita": {
+    "active": true,
+    "text": "Three modes: Di\u00e1rio (free write), Em Contexto (prompted), Vocabul\u00e1rio (use your saved words). Check 'Solicitar corre\u00e7\u00e3o' to get feedback when you submit."
+  },
+  "portuguese.palavras": {
+    "active": true,
+    "text": "Words saved from Leitura, Conversas, and Escrita all land here. Filter by origin or status, add words manually, or export to Anki. Switch to Treino mode to drill what you've saved."
+  },
+  "portuguese.arquivo": {
+    "active": true,
+    "text": "Your full history \u2014 past conversations, writing sessions, and reading. Use it to track consistency and revisit sessions worth reviewing."
+  },
+  "german.landing": {
+    "active": true,
+    "text": "Mein Deutsch pulls live German articles daily, focused on Vienna and Austria. Start in Lesen to read, or go to Gespr\u00e4che to practice with a Vienna persona."
+  },
+  "german.lesen": {
+    "active": true,
+    "text": "Four categories \u2014 Alltag, Kultur, Nachrichten, Wien. Articles are selected and summarized for your level. Hover any word to translate it inline."
+  },
+  "german.lesen.article": {
+    "active": true,
+    "text": "Hover a word to translate it. Save words to W\u00f6rter with one click. Use the notes field to write a reaction in German \u2014 Corrigir gives you feedback on what you wrote."
+  },
+  "german.gesprache": {
+    "active": true,
+    "text": "Two modes: KI-Personas for structured practice with Vienna characters, Konversation for free conversation. Eight personas available \u2014 each with a specific context and register."
+  },
+  "german.schreiben": {
+    "active": true,
+    "text": "Three modes \u2014 free write, prompted, and vocabulary-driven. Always worth checking the correction toggle before submitting."
+  },
+  "german.woerter": {
+    "active": true,
+    "text": "Your German vocabulary saved from Lesen. Filter by origin or status, export to Anki, or switch to Treino mode to drill what you've saved."
+  },
+  "german.archiv": {
+    "active": true,
+    "text": "Full history of your German sessions \u2014 conversations, writing, and reading. Useful for tracking consistency and revisiting good sessions."
   }
 }

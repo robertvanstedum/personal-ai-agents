@@ -557,16 +557,31 @@ def _update_persona_progress(user_id, persona_slug: str):
         print(f"[portuguese] persona_progress update error: {e}", flush=True)
 
 
+# ── Tips ──────────────────────────────────────────────────────────────────────
+
+_TIPS_FILE = REPO_ROOT / "config" / "curator" / "tips.json"
+
+def _load_tip(slot: str):
+    try:
+        tips = json.loads(_TIPS_FILE.read_text()) if _TIPS_FILE.exists() else {}
+        entry = tips.get(slot, {})
+        return entry.get("text") if entry.get("active") else None
+    except Exception:
+        return None
+
+
 # ── Page routes ───────────────────────────────────────────────────────────────
 
 @app.route("/")
 def index():
-    return render_template("portuguese_landing.html", active="landing")
+    return render_template("portuguese_landing.html", active="landing",
+                           tip=_load_tip("portuguese.landing"))
 
 
 @app.route("/leitura")
 def leitura():
-    return render_template("portuguese_leitura.html", active="leitura")
+    return render_template("portuguese_leitura.html", active="leitura",
+                           tip=_load_tip("portuguese.leitura"))
 
 
 @app.route("/conversas")
@@ -584,6 +599,7 @@ def conversas():
         sessions=sessions,
         persona_progress=persona_progress,
         sessions_per_round=SESSIONS_PER_ROUND,
+        tip=_load_tip("portuguese.conversas"),
     )
 
 
@@ -592,7 +608,8 @@ def escrita():
     user_id = _request_user_id()
     writing_sessions = _pt_get_writing_sessions(user_id, limit=5)
     return render_template("portuguese_escrita.html", active="escrita",
-                           writing_sessions=writing_sessions)
+                           writing_sessions=writing_sessions,
+                           tip=_load_tip("portuguese.escrita"))
 
 
 @app.route("/palavras")
@@ -604,7 +621,8 @@ def palavras():
         + _get_vocabulary(user_id, status="pronto_para_testar", limit=50)
     )
     return render_template("portuguese_palavras.html", active="palavras",
-                           entries=entries, drill_pool=drill_pool)
+                           entries=entries, drill_pool=drill_pool,
+                           tip=_load_tip("portuguese.palavras"))
 
 
 @app.route("/arquivo")
@@ -616,7 +634,8 @@ def arquivo():
     return render_template("portuguese_arquivo.html", active="arquivo",
                            conversas_sessions=conversas_sessions,
                            writing_sessions=writing_sessions,
-                           leitura_notes=leitura_notes)
+                           leitura_notes=leitura_notes,
+                           tip=_load_tip("portuguese.arquivo"))
 
 
 @app.route("/admin")

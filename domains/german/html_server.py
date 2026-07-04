@@ -128,16 +128,31 @@ def _de_is_guest():
     return request.headers.get("X-Minimoi-User-Tier") == "guest"
 
 
+# ── Tips ──────────────────────────────────────────────────────────────────────
+
+_TIPS_FILE = REPO_ROOT / "config" / "curator" / "tips.json"
+
+def _load_tip(slot: str):
+    try:
+        tips = json.loads(_TIPS_FILE.read_text()) if _TIPS_FILE.exists() else {}
+        entry = tips.get(slot, {})
+        return entry.get("text") if entry.get("active") else None
+    except Exception:
+        return None
+
+
 # ── Page routes ───────────────────────────────────────────────────────────────
 
 @app.route("/")
 def index():
-    return render_template("german_landing.html", active="landing")
+    return render_template("german_landing.html", active="landing",
+                           tip=_load_tip("german.landing"))
 
 
 @app.route("/lesen")
 def lesen():
-    return render_template("german_lesen.html", active="lesen")
+    return render_template("german_lesen.html", active="lesen",
+                           tip=_load_tip("german.lesen"))
 
 
 @app.route("/schreiben")
@@ -146,7 +161,8 @@ def schreiben():
     sessions = get_writing_sessions(user_id=user_id, limit=10)
     prompts = get_tagebuch_prompts()
     return render_template("german_schreiben.html", active="schreiben",
-                           sessions=sessions, tagebuch_prompts=prompts)
+                           sessions=sessions, tagebuch_prompts=prompts,
+                           tip=_load_tip("german.schreiben"))
 
 
 @app.route("/gesprache")
@@ -162,7 +178,8 @@ def gesprache():
                            personas=personas, sessions=sessions,
                            whereby_room_url=WHEREBY_ROOM_URL,
                            whereby_host_available=bool(WHEREBY_HOST_URL),
-                           is_guest=_de_is_guest())
+                           is_guest=_de_is_guest(),
+                           tip=_load_tip("german.gesprache"))
 
 
 @app.route("/ueben")
@@ -176,7 +193,8 @@ def woerter():
     entries = get_phrasebook_entries(user_id=user_id)
     drill_pool = get_drill_pool(user_id=user_id)
     return render_template("german_woerter.html", active="woerter",
-                           entries=entries, drill_pool=drill_pool)
+                           entries=entries, drill_pool=drill_pool,
+                           tip=_load_tip("german.woerter"))
 
 
 @app.route("/bibliothek")
@@ -212,7 +230,8 @@ def archiv():
     return render_template("german_archiv.html", active="archiv",
                            gesprache_sessions=gesprache_sessions,
                            writing_sessions=writing_sessions,
-                           lesen_notes=lesen_notes)
+                           lesen_notes=lesen_notes,
+                           tip=_load_tip("german.archiv"))
 
 
 # ── Lesen API ─────────────────────────────────────────────────────────────────
