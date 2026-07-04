@@ -74,6 +74,7 @@ services:
       - PORT=5001
     volumes:
       - /opt/minimoi/data/guild/build_queue.json:/app/data/guild/build_queue.json
+      - /opt/minimoi/docs/design:/app/docs/design
       - /opt/minimoi/auth/users.json:/app/minimoi_portal/auth/users.json
       - /opt/minimoi/auth/guests.json:/app/minimoi_portal/auth/guests.json
     ports:
