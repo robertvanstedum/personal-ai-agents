@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  minimoi Curator — Flask server for daily briefing and article scoring
+
+  Starts curator_server.py on login.
+  Proxied by minimoi Portal at /app/curator.
+
+  Port: 8766
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.vanstedum.minimoi-curator</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/vanstedum/Projects/personal-ai-agents/venv/bin/python3</string>
+        <string>/Users/vanstedum/Projects/personal-ai-agents/curator_server.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/vanstedum/Projects/personal-ai-agents</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/vanstedum/Projects/personal-ai-agents/logs/curator_stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/vanstedum/Projects/personal-ai-agents/logs/curator_stderr.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>PORT</key>
+        <string>8766</string>
+    </dict>
+</dict>
+</plist>
