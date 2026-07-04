@@ -782,7 +782,7 @@ def get_lesen_pool(category: str | None = None) -> list:
     """Return active articles from the last 5 days. Falls back to newest 30 if pool is empty.
 
     Args:
-        category: Optional filter — 'alltag' | 'kultur' | 'politik' | 'wien'.
+        category: Optional filter — 'alltag' | 'kultur' | 'nachrichten' | 'wien'.
                   None returns all categories.
     """
     data = _load_lesen_articles()
@@ -827,7 +827,7 @@ def categorize_article(title: str, summary: str,
     """LLM-based categorization of a German news article.
 
     Uses the source-based category as a hint and fallback.
-    Returns: 'alltag' | 'kultur' | 'politik' | 'wien'
+    Returns: 'alltag' | 'kultur' | 'nachrichten' | 'wien'
     """
     prompt = (
         "Categorize this German news article into exactly one category.\n"
@@ -839,7 +839,7 @@ def categorize_article(title: str, summary: str,
         "  morning-show register, everyday practical content\n"
         "- kultur: arts, music, film, theatre, festivals, exhibitions,\n"
         "  pop culture\n"
-        "- politik: politics, economics, government, law,\n"
+        "- nachrichten: politics, economics, government, law,\n"
         "  international news, business\n"
         "- wien: Vienna/Austrian local news, neighborhoods, parks,\n"
         "  transport, city life, Austrian geography and culture\n\n"
@@ -853,7 +853,7 @@ def categorize_article(title: str, summary: str,
         print(f"⚠️  categorize_article: LLM returned None for '{title[:60]}'")
         return source_category
     category = result.strip().lower()
-    valid = ("alltag", "kultur", "politik", "wien")
+    valid = ("alltag", "kultur", "nachrichten", "wien")
     if category not in valid:
         print(f"⚠️  categorize_article: unexpected result '{category}' for '{title[:60]}'")
         return source_category
