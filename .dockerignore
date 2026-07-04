@@ -1,0 +1,47 @@
+# Python environments
+venv/
+ai-env/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Working / scratch
+_working/
+_review_session/
+logs/
+
+# Local dev data not needed in images
+curator_media/
+curator_archive/
+curator_cache/
+
+# Docs and design — exclude large/binary subdirs, keep root .md files needed at runtime
+docs/screenshots/
+docs/workspace-templates/
+docs/german-domain/
+docs/poc/
+docs/portfolio/
+docs/releases/
+docs/decision-records/
+docs/design/
+docs/specs/
+docs/*.docx
+_NewDomains/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Tests and CI
+tests/
+*.test.py
+
+# OS
+.DS_Store

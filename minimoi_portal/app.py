@@ -1740,8 +1740,11 @@ def guild_build_roadmap():
     content = _re.sub(r'<tr>.*?</tr>', _process_row, content, flags=_re.DOTALL)
 
     # Source doc links — link cells that exactly match a docs/ filename
-    _docs_files = {f.name for f in (Path(__file__).parent.parent / "docs").iterdir()
-                   if f.is_file() and f.suffix == '.md'}
+    try:
+        _docs_files = {f.name for f in (Path(__file__).parent.parent / "docs").iterdir()
+                       if f.is_file() and f.suffix == '.md'}
+    except OSError:
+        _docs_files = set()
     _gh_base = "https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/"
 
     def _linkify(m):
