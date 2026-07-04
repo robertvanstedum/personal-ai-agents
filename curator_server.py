@@ -1001,6 +1001,13 @@ def briefing():
     result = _load_briefing_articles()
     if result is not None:
         articles, day_str, date_str, model_display, briefing_date = result
+        tips_file = BASE_DIR / 'config' / 'curator' / 'tips.json'
+        try:
+            tips = json.loads(tips_file.read_text()) if tips_file.exists() else {}
+        except Exception:
+            tips = {}
+        entry = tips.get('briefing.main', {})
+        tip = entry.get('text') if entry.get('active') else None
         return render_template(
             'curator_briefing.html',
             articles=articles,
@@ -1011,6 +1018,7 @@ def briefing():
             briefing_date=briefing_date,
             radar_articles=_load_radar_articles(),
             tier=tier,
+            tip=tip,
         )
     return send_from_directory(BASE_DIR, 'curator_latest.html')
 

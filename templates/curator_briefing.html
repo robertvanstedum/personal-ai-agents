@@ -101,6 +101,13 @@
         }
 
         /* ── Article cards ── */
+        .page-tip {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            padding: 8px 0 12px 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 12px;
+        }
         .article-list {
             border: 1px solid var(--border);
             border-radius: 10px;
@@ -394,6 +401,9 @@
         <span id="topics-strip-label">Topics</span>
         <div id="topics-pills" style="display:contents;"></div>
     </div>
+{% if tip %}
+    <div class="page-tip">💡 {{ tip }}</div>
+{% endif %}
     <div class="article-list">
 {% for entry in articles %}
 {% set rank = loop.index %}
