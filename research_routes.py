@@ -66,24 +66,6 @@ def research_save_ui():
     return html.read_text(), 200, {'Content-Type': 'text/html'}
 
 
-@research_bp.route('/research/dashboard')
-def research_dashboard_ui():
-    """Serve the research desk/dashboard page."""
-    html = RESEARCH_ROOT / 'web' / 'dashboard.html'
-    if not html.exists():
-        return "dashboard.html not found", 404
-    return html.read_text(), 200, {'Content-Type': 'text/html'}
-
-
-@research_bp.route('/research/leanings')
-def research_leanings_ui():
-    """Serve the leanings page."""
-    html = RESEARCH_ROOT / 'web' / 'leanings.html'
-    if not html.exists():
-        return "leanings.html not found", 404
-    return html.read_text(), 200, {'Content-Type': 'text/html'}
-
-
 # ── API: Observe ──────────────────────────────────────────────────────────────
 
 @research_bp.route('/api/research/observe', methods=['POST'])
