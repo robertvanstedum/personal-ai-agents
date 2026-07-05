@@ -98,14 +98,25 @@ def _pt_save_writing_entry(user_id, mode: str, text_original: str,
 
 
 def _pt_get_writing_sessions(user_id, limit: int = 10) -> list:
+    entries = []
+    # Per-user file (current)
     path = _writing_sessions_path(user_id)
-    if not path.exists():
-        return []
-    try:
-        data = json.loads(path.read_text())
-        return list(reversed(data.get("entries", [])))[:limit]
-    except Exception:
-        return []
+    if path.exists():
+        try:
+            entries = json.loads(path.read_text()).get("entries", [])
+        except Exception:
+            pass
+    # Legacy flat file (pre-multiuser migration — merge to avoid data loss)
+    legacy = _PT_DATA_DIR / "writing_sessions.json"
+    if legacy.exists():
+        try:
+            legacy_entries = json.loads(legacy.read_text()).get("entries", [])
+            seen = {e.get("id") for e in entries}
+            entries += [e for e in legacy_entries if e.get("id") not in seen]
+        except Exception:
+            pass
+    entries.sort(key=lambda e: e.get("created_at") or e.get("timestamp") or "", reverse=True)
+    return entries[:limit]
 
 
 def _pt_save_conversas_session(user_id, session_data: dict) -> None:
@@ -123,14 +134,43 @@ def _pt_save_conversas_session(user_id, session_data: dict) -> None:
 
 
 def _pt_get_conversas_sessions(user_id, limit: int = 10) -> list:
+    sessions = []
+    # Per-user JSON file (current)
     path = _conversas_sessions_path(user_id)
-    if not path.exists():
-        return []
+    if path.exists():
+        try:
+            sessions = json.loads(path.read_text()).get("sessions", [])
+        except Exception:
+            pass
+    # Postgres historical sessions (pre-JSON migration — merge to avoid data loss)
     try:
-        data = json.loads(path.read_text())
-        return list(reversed(data.get("sessions", [])))[:limit]
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                """SELECT id, date, persona, scenario, source, created_at
+                   FROM portuguese.sessions
+                   WHERE user_id IS NULL OR user_id = %s
+                   ORDER BY created_at DESC LIMIT %s""",
+                (user_id, limit),
+            )
+            rows = cur.fetchall()
+        seen_ids = {s.get("id") for s in sessions}
+        for r in rows:
+            pg_id = f"pg_{r[0]}"
+            if pg_id not in seen_ids:
+                sessions.append({
+                    "id": pg_id,
+                    "date": str(r[1]),
+                    "persona": r[2],
+                    "scenario": r[3],
+                    "source": r[4],
+                    "created_at": r[5].isoformat() if r[5] else "",
+                })
+        conn.close()
     except Exception:
-        return []
+        pass
+    sessions.sort(key=lambda s: s.get("created_at") or s.get("date") or "", reverse=True)
+    return sessions[:limit]
 
 
 def _ensure_persona_progress_table():
