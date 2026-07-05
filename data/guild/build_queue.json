@@ -726,11 +726,11 @@
     "id": 115,
     "spec_title": "Contextual Tips System \u2014 Curator Briefing Pilot",
     "spec_file": "spec_contextual_tips_pilot_2026-07-03.md",
-    "status": "spec_ready",
+    "status": "done",
     "github_issue": null,
     "blocked_reason": null,
-    "last_transition_at": "2026-07-03T00:00:00Z",
-    "notes": "Backend-driven tips.json; tip renders above article list when active, absent from DOM when not. Pilot on Curator briefing only \u2014 validate before rolling to other pages."
+    "last_transition_at": "2026-07-04T00:00:00Z",
+    "notes": "Shipped. Tips live across Curator, Meu Portugu\u00eas (6 pages), Mein Deutsch (6 pages). config/curator/tips.json is the source of truth. Slot registry at docs/design/tips_slot_registry.md. Article detail slots (portuguese.leitura.article, german.lesen.article) defined but not yet wired \u2014 JS-rendered, separate task."
   },
   {
     "id": 116,
