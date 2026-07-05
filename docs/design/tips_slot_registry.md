@@ -52,16 +52,16 @@ To add a new slot: add the key here first, then add the server-side `tips.get('s
 > Meu Português pulls live articles from Brazilian and European Portuguese sources daily. Start in Leitura to read, or jump to Conversas to practice with a persona.
 
 **`portuguese.leitura`**
-> Four categories — Cotidiano, Cultura, Notícias, Rio. Hover any word to translate it inline. Open an article to take notes and save words to Palavras.
+> Best on desktop — read, hover to translate, and save words to Palavras in one flow. On mobile, tap and hold to translate.
 
 **`portuguese.leitura.article`**
 > Hover a word for a quick translation. Hit '+ Em Palavras' to save it to your vocabulary. Use Notas to write a reaction in Portuguese — then hit Corrigir for feedback.
 
 **`portuguese.conversas`**
-> Pick a persona and start a session. Maria is good for short practical exchanges; Lucas for casual conversation. Check 'Preparação de hoje' before starting to warm up.
+> For the best voice experience, copy the prompt and use it in Grok, Claude, Gemini, or ChatGPT on your phone — native apps have faster, more natural voice. In-app voice works but has more latency due to API calls.
 
 **`portuguese.escrita`**
-> Three modes: Diário (free write), Em Contexto (prompted), Vocabulário (use your saved words). Check 'Solicitar correção' to get feedback when you submit.
+> Best on desktop for the full correction experience. On mobile, dictate into the text field and submit — Corrigir works the same way.
 
 **`portuguese.palavras`**
 > Words saved from Leitura, Conversas, and Escrita all land here. Filter by origin or status, add words manually, or export to Anki. Switch to Treino mode to drill what you've saved.
@@ -87,16 +87,16 @@ To add a new slot: add the key here first, then add the server-side `tips.get('s
 > Mein Deutsch pulls live German articles daily, focused on Vienna and Austria. Start in Lesen to read, or go to Gespräche to practice with a Vienna persona.
 
 **`german.lesen`**
-> Four categories — Alltag, Kultur, Nachrichten, Wien. Articles are selected and summarized for your level. Hover any word to translate it inline.
+> Best on desktop — read, hover to translate, and save words to Wörter in one flow. On mobile, tap and hold to translate.
 
 **`german.lesen.article`**
 > Hover a word to translate it. Save words to Wörter with one click. Use the notes field to write a reaction in German — Corrigir gives you feedback on what you wrote.
 
 **`german.gesprache`**
-> Two modes: KI-Personas for structured practice with Vienna characters, Konversation for free conversation. Eight personas available — each with a specific context and register.
+> For the best voice experience, copy the prompt and use it in Grok, Claude, Gemini, or ChatGPT on your phone — native apps have faster, more natural voice. In-app voice works but has more latency due to API calls.
 
 **`german.schreiben`**
-> Three modes — free write, prompted, and vocabulary-driven. Always worth checking the correction toggle before submitting.
+> Best on desktop for the full correction experience. On mobile, dictate into the text field and submit — Corrigir works the same way.
 
 **`german.woerter`**
 > Your German vocabulary saved from Lesen. Filter by origin or status, export to Anki, or switch to Treino mode to drill what you've saved.
@@ -111,6 +111,7 @@ To add a new slot: add the key here first, then add the server-side `tips.get('s
 | Date | Change |
 |---|---|
 | 2026-07-04 | Initial registry — 15 slots across Curator, Meu Português, Mein Deutsch |
+| 2026-07-05 | Synced tip texts to updated tips.json — leitura, conversas, escrita, lesen, gesprache, schreiben revised |
 
 ---
 

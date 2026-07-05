@@ -1,7 +1,7 @@
 {
   "briefing.main": {
     "active": true,
-    "text": "Your daily briefing — curated signals across geopolitics, finance, and technology. Use the category filters to focus, or read straight through."
+    "text": "Your daily briefing \u2014 curated signals across geopolitics, finance, and technology. Use the category filters to focus, or read straight through."
   },
   "portuguese.landing": {
     "active": true,
@@ -9,7 +9,7 @@
   },
   "portuguese.leitura": {
     "active": true,
-    "text": "Four categories \u2014 Cotidiano, Cultura, Not\u00edcias, Rio. Hover any word to translate it inline. Open an article to take notes and save words to Palavras."
+    "text": "Best on desktop \u2014 read, hover to translate, and save words to Palavras in one flow. On mobile, tap and hold to translate."
   },
   "portuguese.leitura.article": {
     "active": true,
@@ -17,11 +17,11 @@
   },
   "portuguese.conversas": {
     "active": true,
-    "text": "Pick a persona and start a session. Maria is good for short practical exchanges; Lucas for casual conversation. Check 'Prepara\u00e7\u00e3o de hoje' before starting to warm up."
+    "text": "For the best voice experience, copy the prompt and use it in Grok, Claude, Gemini, or ChatGPT on your phone \u2014 native apps have faster, more natural voice. In-app voice works but has more latency due to API calls."
   },
   "portuguese.escrita": {
     "active": true,
-    "text": "Three modes: Di\u00e1rio (free write), Em Contexto (prompted), Vocabul\u00e1rio (use your saved words). Check 'Solicitar corre\u00e7\u00e3o' to get feedback when you submit."
+    "text": "Best on desktop for the full correction experience. On mobile, dictate into the text field and submit \u2014 Corrigir works the same way."
   },
   "portuguese.palavras": {
     "active": true,
@@ -37,7 +37,7 @@
   },
   "german.lesen": {
     "active": true,
-    "text": "Four categories \u2014 Alltag, Kultur, Nachrichten, Wien. Articles are selected and summarized for your level. Hover any word to translate it inline."
+    "text": "Best on desktop \u2014 read, hover to translate, and save words to W\u00f6rter in one flow. On mobile, tap and hold to translate."
   },
   "german.lesen.article": {
     "active": true,
@@ -45,11 +45,11 @@
   },
   "german.gesprache": {
     "active": true,
-    "text": "Two modes: KI-Personas for structured practice with Vienna characters, Konversation for free conversation. Eight personas available \u2014 each with a specific context and register."
+    "text": "For the best voice experience, copy the prompt and use it in Grok, Claude, Gemini, or ChatGPT on your phone \u2014 native apps have faster, more natural voice. In-app voice works but has more latency due to API calls."
   },
   "german.schreiben": {
     "active": true,
-    "text": "Three modes \u2014 free write, prompted, and vocabulary-driven. Always worth checking the correction toggle before submitting."
+    "text": "Best on desktop for the full correction experience. On mobile, dictate into the text field and submit \u2014 Corrigir works the same way."
   },
   "german.woerter": {
     "active": true,
