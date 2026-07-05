@@ -231,7 +231,7 @@ mining latent connections across months of accumulated sessions. The
 backtrace vision: *"I thought X in March 2026 — was I right, and what
 led me there."*
 
-See [ROADMAP.md](ROADMAP.md) for full detail.
+See [ROADMAP.md](ROADMAP.md) for the full platform roadmap — multi-agent working model, phase map, and guiding principles.
 
 **Intelligence layer architecture and design:**
 - [`docs/INTELLIGENCE_LAYER.md`](docs/INTELLIGENCE_LAYER.md) — architecture, AI concept reference, build sequence

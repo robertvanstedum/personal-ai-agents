@@ -1,7 +1,11 @@
+> **Superseded.** This document has been replaced by [`ROADMAP.md`](../ROADMAP.md) at the repo root (updated 2026-07-05). The content below is archived for reference.
+
+---
+
 # Roadmap — Operations: From Human Oversight to Bounded Agent Autonomy
 *Created: 2026-06-22 — Claude.ai*
 *Location: docs/OPERATIONS_ROADMAP.md*
-*Status: Living document — update as phases complete*
+*Status: Archived — superseded by ROADMAP.md*
 
 ---
 
