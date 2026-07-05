@@ -1,4 +1,4 @@
-# Spec: Domain Standardization — German & Portuguese as Template
+# Spec #120: Domain Standardization — German & Portuguese as Template
 **File:** `spec_domain_standardization_2026-07-04.md`
 **Status:** Spec Ready
 **Date:** 2026-07-04

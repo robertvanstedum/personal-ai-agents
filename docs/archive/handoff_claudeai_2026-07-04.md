@@ -5,7 +5,7 @@
 
 ## What this session covered
 
-Full day session — infrastructure fixes, security, Guild redesign spec, domain standardization spec, tips system, and significant cleanup. Context strong at end of day — summarized here for clean start.
+Full day session — infrastructure fixes, security, Guild redesign spec, domain standardization spec, tips system, narrative sync spec, and significant cleanup. Context strong at end of day — summarized here for clean start.
 
 ---
 
@@ -19,16 +19,41 @@ Full day session — infrastructure fixes, security, Guild redesign spec, domain
 
 ---
 
-## Specs produced today (4 total)
+## Spec naming convention — NEW today
+
+All spec files now follow numbered convention:
+`spec_<number>_<name>_<date>.md`
+Title inside: `# Spec #<number>: <Title>`
+
+Claude Code task: rename all existing specs in docs/specs/ to numbered convention where build queue number is known.
+
+---
+
+## Specs produced today (5 total)
 
 | # | File | Status | Notes |
 |---|---|---|---|
-| #117 | spec_guild_navigation_redesign_2026-07-04.md | Backlog | Grok reviewed. Full lifecycle, write API, live Roadmap. Build after #120. |
-| #118 | spec_code_review_security_phase1_2026-07-04.md | Backlog | Code quality + security audit. Pre-external review gate. |
-| #120 | spec_domain_standardization_2026-07-04.md | Spec Ready | Grok reviewed and approved. Start Phase 1 now. |
+| #116 | spec_116_narrative_sync_2026-07-04.md | Spec Ready | Replaces spec_landing_page_update_2026-07-03.md. Five surfaces: minimoi.ai landing, GitHub README, GitHub About, LinkedIn, resume. Design session required before Claude Code builds — scheduled tomorrow. |
+| #117 | spec_117_guild_navigation_redesign_2026-07-04.md | Backlog | Grok reviewed. Full lifecycle, write API, live Roadmap. Build after #120. |
+| #118 | spec_118_code_review_security_phase1_2026-07-04.md | Backlog | Code quality + security audit. Pre-external review gate. |
+| #120 | spec_120_domain_standardization_2026-07-04.md | Spec Ready | Grok reviewed and approved. Phase 1 active. |
 | — | design_github_docs_cleanup_2026-07-04.md | Design | Decisions pending before build-ready. |
 
-All four need to be committed to docs/ and synced to EC2 if not already done.
+---
+
+## Claude Code tasks before closing today
+
+- [ ] Rename spec files to numbered convention (spec_116_, spec_117_, spec_118_, spec_120_)
+- [ ] Update H1 titles inside each file to match (#116, #117, etc.)
+- [ ] Update build_queue.json spec_file references to new filenames
+- [ ] Update #116 title in build_queue.json to "Narrative Synchronization — minimoi.ai / GitHub / LinkedIn / Resume"
+- [ ] Commit all today's specs + design doc + tips files to docs/specs/ and docs/design/
+- [ ] tips_slot_registry.md → docs/design/
+- [ ] tips.json → config/curator/ (replace existing)
+- [ ] investigation_german_portuguese_parity_2026-07-04.md → docs/design/ (superseded by #120 but keep for reference)
+- [ ] Run sync_docs.sh 100.57.23.192
+- [ ] Confirm all files visible in Guild Docs view on prod
+- [ ] Mark spec_landing_page_update_2026-07-03.md as cancelled/superseded in build_queue.json
 
 ---
 
@@ -53,6 +78,21 @@ Four clarifications folded in from Grok review:
 
 ---
 
+## #116 Narrative Sync — design session tomorrow
+
+Five surfaces to synchronize in one coordinated update:
+1. minimoi.ai landing page — visitor framing, four domain blurbs (Meu Português currently absent), Meu Português added
+2. GitHub README — canonical narrative, multi-agent working model surfaced, tech stack current
+3. GitHub About — one sentence, 160 chars (Robert updates manually)
+4. LinkedIn — mini-moi section sync (Robert updates manually)
+5. Resume — mini-moi bullets sync (Robert updates .docx manually)
+
+Core narrative locked: *"LLMs have the world's knowledge. They don't have your intent, your goals, your history, your risk tolerance."* — do not change this line.
+
+Design session plan: pull all five current texts side by side → agree canonical narrative → write copy in five formats → Grok review → Claude Code builds landing + README only.
+
+---
+
 ## Architecture principles — locked
 
 1. JSON-first — JSON is source of truth, Postgres is rebuildable projection
@@ -69,13 +109,21 @@ Four clarifications folded in from Grok review:
 | # | Title | Status |
 |---|---|---|
 | #115 | Contextual Tips System | Done ✅ |
-| #116 | Landing Page Update | Spec Ready — not started today |
+| #116 | Narrative Sync — minimoi.ai / GitHub / LinkedIn / Resume | Spec Ready — design session tomorrow |
 | #117 | Guild Navigation Redesign | Backlog |
 | #118 | Code Review & Security Phase 1 | Backlog |
 | #119 | Move DATABASE_URL to .env | Backlog |
 | #120 | Domain Standardization | Spec Ready — Phase 1 active |
 | #109 | Prometheus + Grafana | Backlog |
 | #113 | Portuguese Backend Completion | In Build |
+
+---
+
+## Tomorrow's priority order
+
+1. **#116 Narrative sync design session** — pull all five surfaces, write canonical copy, Grok review
+2. **Memory/intent layer v3 + OpenClaw as CoS** — strategic design session
+3. **Code review (#118) + domain standardization (#120) jointly** — Claude Code runs investigation in parallel with design
 
 ---
 
@@ -90,10 +138,9 @@ Four clarifications folded in from Grok review:
 
 ## Design threads open (schedule separately)
 
-- **Landing page copy session** — final blurbs for Curator, Mein Deutsch, Meu Português, Guild (#116 source material already in spec)
-- **Memory/intent layer v3 revision** — four reshapes to fold in: exploratory archetype, archetypes-as-product, portable instances, seed personas
+- **Memory/intent layer v3 revision** — four reshapes: exploratory archetype, archetypes-as-product, portable instances, seed personas
 - **OpenClaw as CoS on AWS** — clone to AWS, scope to mini-moi only, Telegram integration. Phase 1 of memory/intent layer.
-- **Multi-agent curation case study** — idea stage, needs 1-2 more review rounds
+- **Multi-agent curation case study** — idea stage, 1-2 more review rounds needed
 
 ---
 
@@ -101,7 +148,7 @@ Four clarifications folded in from Grok review:
 
 - Dev first. Always. No ECR push without Robert's explicit approval.
 - Hotfix process: Robert says "hotfix" explicitly → Claude Code opens GitHub issue labeled `hotfix` → deploys. No exceptions.
-- Specs need: Intent + Definition of Done + Commit sections.
+- Specs need: Intent + Definition of Done + Commit sections. Numbered filename convention.
 - New domain template: `docs/architecture/DOMAIN_TEMPLATE.md` — read before starting any new domain.
 - No credentials in git. Ever.
 

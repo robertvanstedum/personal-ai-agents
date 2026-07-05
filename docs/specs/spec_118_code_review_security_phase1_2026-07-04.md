@@ -1,4 +1,4 @@
-# Spec: Code Review & Security Audit — Phase 1 (Pre-External Review)
+# Spec #118: Code Review & Security Audit — Phase 1 (Pre-External Review)
 **File:** `spec_code_review_security_phase1_2026-07-04.md`
 **Status:** Backlog
 **Date:** 2026-07-04

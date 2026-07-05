@@ -5,7 +5,7 @@
     "spec_file": "CODE_REVIEW_PLAN.md",
     "status": "cancelled",
     "github_issue": null,
-    "blocked_reason": "Reference doc \u2014 already in docs/CODE_REVIEW_PLAN.md",
+    "blocked_reason": "Reference doc — already in docs/CODE_REVIEW_PLAN.md",
     "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
@@ -28,11 +28,11 @@
   },
   {
     "id": 85,
-    "spec_title": "Gespr\u00e4che: Server-Push Analysis via WebSocket",
+    "spec_title": "Gespräche: Server-Push Analysis via WebSocket",
     "spec_file": "spec_gesprache_websocket_analysis_2026-06-18.md",
     "status": "cancelled",
     "github_issue": null,
-    "blocked_reason": "Investigation complete \u2014 decision captured in DR; HTTP polling retained",
+    "blocked_reason": "Investigation complete — decision captured in DR; HTTP polling retained",
     "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
@@ -46,7 +46,7 @@
   },
   {
     "id": 79,
-    "spec_title": "Gespr\u00e4che: Deferred Analysis",
+    "spec_title": "Gespräche: Deferred Analysis",
     "spec_file": "spec_gesprache_deferred_analysis_2026-06-18.md",
     "status": "design",
     "github_issue": null,
@@ -55,7 +55,7 @@
   },
   {
     "id": 82,
-    "spec_title": "Gespr\u00e4che: KI-Sitzung Mobile Tuning",
+    "spec_title": "Gespräche: KI-Sitzung Mobile Tuning",
     "spec_file": "spec_gesprache_kisitzung_mobile_2026-06-18.md",
     "status": "design",
     "github_issue": null,
@@ -64,7 +64,7 @@
   },
   {
     "id": 83,
-    "spec_title": "Gespr\u00e4che Mobile: Scroll Fix + Button Hierarchy",
+    "spec_title": "Gespräche Mobile: Scroll Fix + Button Hierarchy",
     "spec_file": "spec_gesprache_mobile_scroll_fix_2026-06-18.md",
     "status": "design",
     "github_issue": null,
@@ -82,7 +82,7 @@
   },
   {
     "id": 98,
-    "spec_title": "DNS flip: minimoi.ai \u2192 EC2, dev.minimoi.ai \u2192 Mac",
+    "spec_title": "DNS flip: minimoi.ai → EC2, dev.minimoi.ai → Mac",
     "spec_file": "NEAR_TERM_PLAN.md",
     "status": "done",
     "github_issue": null,
@@ -109,7 +109,7 @@
   },
   {
     "id": 86,
-    "spec_title": "AWS Migration Phase 0 \u2014 Containerization",
+    "spec_title": "AWS Migration Phase 0 — Containerization",
     "spec_file": "AWS_MIGRATION_PLAN.md",
     "status": "done",
     "github_issue": null,
@@ -127,7 +127,7 @@
   },
   {
     "id": 53,
-    "spec_title": "Gespr\u00e4che Vision & Mobile Roadmap",
+    "spec_title": "Gespräche Vision & Mobile Roadmap",
     "spec_file": "docs_GESPRACHE_ROADMAP_2026-06-16.md",
     "status": "done",
     "github_issue": null,
@@ -199,7 +199,7 @@
   },
   {
     "id": 35,
-    "spec_title": "Gespr\u00e4che: All Current Improvements",
+    "spec_title": "Gespräche: All Current Improvements",
     "spec_file": "spec_gesprache_consolidated_2026-06-15.md",
     "status": "done",
     "github_issue": null,
@@ -208,7 +208,7 @@
   },
   {
     "id": 37,
-    "spec_title": "Gespr\u00e4che: Start Session / End Session",
+    "spec_title": "Gespräche: Start Session / End Session",
     "spec_file": "spec_gesprache_ki_session_2026-06-15 copy.md",
     "status": "done",
     "github_issue": null,
@@ -217,7 +217,7 @@
   },
   {
     "id": 33,
-    "spec_title": "Gespr\u00e4che: Start Session / End Session (Single Window)",
+    "spec_title": "Gespräche: Start Session / End Session (Single Window)",
     "spec_file": "spec_gesprache_ki_session_2026-06-15.md",
     "status": "done",
     "github_issue": null,
@@ -226,7 +226,7 @@
   },
   {
     "id": 76,
-    "spec_title": "Gespr\u00e4che: Prompt kopieren button",
+    "spec_title": "Gespräche: Prompt kopieren button",
     "spec_file": "spec_gesprache_prompt_kopieren_2026-06-18.md",
     "status": "done",
     "github_issue": null,
@@ -235,7 +235,7 @@
   },
   {
     "id": 38,
-    "spec_title": "Gespr\u00e4che Test-Run Follow-Up",
+    "spec_title": "Gespräche Test-Run Follow-Up",
     "spec_file": "spec_gesprache_testrun_followup_2026-06-15.md",
     "status": "done",
     "github_issue": null,
@@ -244,7 +244,7 @@
   },
   {
     "id": 49,
-    "spec_title": "Gespr\u00e4che Transcript Paste Panel",
+    "spec_title": "Gespräche Transcript Paste Panel",
     "spec_file": "spec_gesprache_transcript_paste_panel_2026-06-16.md",
     "status": "done",
     "github_issue": null,
@@ -253,7 +253,7 @@
   },
   {
     "id": 31,
-    "spec_title": "Gespr\u00e4che Voice Input + Provider-Agnostic Review",
+    "spec_title": "Gespräche Voice Input + Provider-Agnostic Review",
     "spec_file": "spec_gesprache_voice_input_2026-06-14.md",
     "status": "done",
     "github_issue": null,
@@ -505,7 +505,7 @@
   },
   {
     "id": 68,
-    "spec_title": "Gespr\u00e4che Forward Spec",
+    "spec_title": "Gespräche Forward Spec",
     "spec_file": "docs_GESPRACHE_FORWARD_SPEC_2026-06-17.md",
     "status": "cancelled",
     "github_issue": null,
@@ -514,7 +514,7 @@
   },
   {
     "id": 71,
-    "spec_title": "Gespr\u00e4che Forward Spec (v2)",
+    "spec_title": "Gespräche Forward Spec (v2)",
     "spec_file": "GESPRACHE_FORWARD_SPEC.md",
     "status": "deferred",
     "github_issue": null,
@@ -554,7 +554,7 @@
     "spec_file": "spec_career_two_page_2026-06-11.md",
     "status": "deferred",
     "github_issue": null,
-    "blocked_reason": "Robert decision 2026-06-24 \u2014 job search focus shifted, defer until further notice",
+    "blocked_reason": "Robert decision 2026-06-24 — job search focus shifted, defer until further notice",
     "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
@@ -572,7 +572,7 @@
     "spec_file": "spec_telegram_architecture_v2_2026-06-20.md",
     "status": "cancelled",
     "github_issue": null,
-    "blocked_reason": "Duplicate \u2014 see #94 (done)",
+    "blocked_reason": "Duplicate — see #94 (done)",
     "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
@@ -590,7 +590,7 @@
     "spec_file": "spec_guild_docs_view_2026-06-19.md",
     "status": "cancelled",
     "github_issue": null,
-    "blocked_reason": "Duplicate \u2014 see #89 (done)",
+    "blocked_reason": "Duplicate — see #89 (done)",
     "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
@@ -609,7 +609,7 @@
     "status": "done",
     "last_transition_at": "2026-06-24T13:00:00Z",
     "blocked_reason": null,
-    "notes": "Phase 2 gate. Block E. Shipped \u2014 13 tests green, pipeline live, first deploy via SSM confirmed."
+    "notes": "Phase 2 gate. Block E. Shipped — 13 tests green, pipeline live, first deploy via SSM confirmed."
   },
   {
     "id": 103,
@@ -618,7 +618,7 @@
     "status": "done",
     "last_transition_at": "2026-06-24T15:00:00Z",
     "blocked_reason": null,
-    "notes": "Phase 2 Spec 1. Shipped: domain_auth.py, migration 002, /login/<token>, requires_domain(), SES email, 11 tests. Flask-Login skipped \u2014 existing session pattern. Final spec: spec_1_auth_final_2026-06-25.md"
+    "notes": "Phase 2 Spec 1. Shipped: domain_auth.py, migration 002, /login/<token>, requires_domain(), SES email, 11 tests. Flask-Login skipped — existing session pattern. Final spec: spec_1_auth_final_2026-06-25.md"
   },
   {
     "id": 104,
@@ -627,7 +627,7 @@
     "status": "done",
     "last_transition_at": "2026-06-25T00:00:00Z",
     "blocked_reason": null,
-    "notes": "Shipped: domains/portuguese/ Flask shell (port 8770), 6 tabs + admin, --pt-* CSS tokens, 3 palette blocks + toggle, portal proxy routes, launchd plist. Running under launchd. Photos folder ready: domains/portuguese/static/photos/ \u2014 Robert to drop Rio photos."
+    "notes": "Shipped: domains/portuguese/ Flask shell (port 8770), 6 tabs + admin, --pt-* CSS tokens, 3 palette blocks + toggle, portal proxy routes, launchd plist. Running under launchd. Photos folder ready: domains/portuguese/static/photos/ — Robert to drop Rio photos."
   },
   {
     "id": 105,
@@ -700,7 +700,7 @@
     "github_issue": null,
     "blocked_reason": null,
     "last_transition_at": "2026-06-28T00:00:00Z",
-    "notes": "Per-user JSON for Schreiben, Gespr\u00e4che, W\u00f6rter, Lesen notes. Data migrated (8 entries, 4 notes, 18 phrases, 76 sessions) to user_1. Commit ba60a6a."
+    "notes": "Per-user JSON for Schreiben, Gespräche, Wörter, Lesen notes. Data migrated (8 entries, 4 notes, 18 phrases, 76 sessions) to user_1. Commit ba60a6a."
   },
   {
     "id": 113,
@@ -720,32 +720,32 @@
     "github_issue": 62,
     "blocked_reason": null,
     "last_transition_at": "2026-06-28T00:00:00Z",
-    "notes": "Click to expand rows in German Archiv (Gespr\u00e4che lazy load, Schreiben inline) and Portuguese Arquivo (Conversas + Escrita inline). Commit a5c6b5b."
+    "notes": "Click to expand rows in German Archiv (Gespräche lazy load, Schreiben inline) and Portuguese Arquivo (Conversas + Escrita inline). Commit a5c6b5b."
   },
   {
     "id": 115,
-    "spec_title": "Contextual Tips System \u2014 Curator Briefing Pilot",
+    "spec_title": "Contextual Tips System — Curator Briefing Pilot",
     "spec_file": "spec_contextual_tips_pilot_2026-07-03.md",
     "status": "done",
     "github_issue": null,
     "blocked_reason": null,
     "last_transition_at": "2026-07-04T00:00:00Z",
-    "notes": "Shipped. Tips live across Curator, Meu Portugu\u00eas (6 pages), Mein Deutsch (6 pages). config/curator/tips.json is the source of truth. Slot registry at docs/design/tips_slot_registry.md. Article detail slots (portuguese.leitura.article, german.lesen.article) defined but not yet wired \u2014 JS-rendered, separate task."
+    "notes": "Shipped. Tips live across Curator, Meu Português (6 pages), Mein Deutsch (6 pages). config/curator/tips.json is the source of truth. Slot registry at docs/design/tips_slot_registry.md. Article detail slots (portuguese.leitura.article, german.lesen.article) defined but not yet wired — JS-rendered, separate task."
   },
   {
     "id": 116,
-    "spec_title": "minimoi.ai Landing Page Update",
-    "spec_file": "spec_landing_page_update_2026-07-03.md",
+    "spec_title": "Narrative Synchronization — minimoi.ai / GitHub / LinkedIn / Resume",
+    "spec_file": "spec_116_narrative_sync_2026-07-04.md",
     "status": "spec_ready",
     "github_issue": null,
     "blocked_reason": null,
     "last_transition_at": "2026-07-03T00:00:00Z",
-    "notes": "Updated spec 2026-07-03. Part 1: visitor/guest framing section (build-ready). Part 2: domain blurb refresh \u2014 working drafts in spec, final copy + version numbers need design session to resolve cross-source inconsistencies (Curator v1.1 vs v1.2, Guild v0.9 vs v1.0). Meu Portugu\u00eas absent from landing page \u2014 must be added. Source material in spec: current landing, resume, GitHub About, README."
+    "notes": "Replaces spec_landing_page_update_2026-07-03.md. Five surfaces: minimoi.ai landing, GitHub README, GitHub About, LinkedIn, resume. Design session required before Claude Code builds — scheduled next."
   },
   {
     "id": 117,
     "spec_title": "Guild Navigation & Build Queue Redesign",
-    "spec_file": "spec_guild_navigation_redesign_2026-07-04.md",
+    "spec_file": "spec_117_guild_navigation_redesign_2026-07-04.md",
     "status": "backlog",
     "github_issue": null,
     "blocked_reason": null,
@@ -754,7 +754,7 @@
   {
     "id": 118,
     "spec_title": "Code Review + Security Audit Phase 1",
-    "spec_file": "spec_code_review_security_phase1_2026-07-04.md",
+    "spec_file": "spec_118_code_review_security_phase1_2026-07-04.md",
     "status": "backlog",
     "github_issue": null,
     "blocked_reason": null,
@@ -774,7 +774,7 @@
   {
     "id": 120,
     "spec_title": "Domain Standardization — German + Portuguese",
-    "spec_file": "spec_domain_standardization_2026-07-04.md",
+    "spec_file": "spec_120_domain_standardization_2026-07-04.md",
     "status": "spec_ready",
     "github_issue": null,
     "blocked_reason": null,

@@ -1,4 +1,4 @@
-# Spec: Guild Navigation & Build Queue Redesign
+# Spec #117: Guild Navigation & Build Queue Redesign
 **File:** `spec_guild_navigation_redesign_2026-07-04.md`
 **Status:** Backlog
 **Date:** 2026-07-04
