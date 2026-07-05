@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/portuguese.css?v=11">
+  <link rel="stylesheet" href="/static/portuguese.css?v=12">
   {% block head %}{% endblock %}
 </head>
 <body class="{{ active }}-mode">
@@ -22,7 +22,16 @@
     <li><a href="/arquivo"   {% if active=='arquivo' %}class="active"{% endif %} title="Arquivo">Arquivo</a></li>
     <li><a href="/admin"     {% if active=='admin' %}class="active"{% endif %} title="Admin">Admin</a></li>
   </ul>
+  {% if tip %}<button class="nav-tip" id="navTip" aria-label="Dica" type="button">💡<span class="nav-tip-popover">{{ tip }}</span></button>{% endif %}
 </nav>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var t = document.getElementById('navTip');
+  if (!t) return;
+  t.addEventListener('click', function(e) { e.stopPropagation(); t.classList.toggle('tip-open'); });
+  document.addEventListener('click', function() { t.classList.remove('tip-open'); });
+});
+</script>
 
 {% block page_strip %}{% endblock %}
 

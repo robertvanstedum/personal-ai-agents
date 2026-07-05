@@ -2398,11 +2398,63 @@ body.reading-mode nav { background: #1B2E1F; border-bottom-color: var(--parch-ac
 }
 .round-modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
 
-/* ── Contextual tip bar ── */
-.page-tip {
-  font-size: 0.8rem;
-  color: var(--pt-text-secondary);
-  padding: 8px 0 12px 0;
-  border-bottom: 1px solid var(--pt-border);
-  margin-bottom: 12px;
+/* ── Nav tip icon + popover ── */
+.nav-tip {
+  margin-left: auto;
+  position: relative;
+  background: none;
+  border: none;
+  padding: 4px 0 4px 1.5rem;
+  cursor: default;
+  font-size: 14px;
+  line-height: 1;
+  color: rgba(247, 242, 232, 0.6);
+  opacity: 0.55;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.nav-tip:hover,
+.nav-tip.tip-open { opacity: 1; }
+
+.nav-tip-popover {
+  display: none;
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 280px;
+  padding: 10px 14px;
+  background: rgba(27, 58, 42, 0.98);
+  border: 1px solid var(--pt-border);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: rgba(247, 242, 232, 0.65);
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.55);
+  z-index: 200;
+  cursor: default;
+}
+.nav-tip:hover .nav-tip-popover,
+.nav-tip.tip-open .nav-tip-popover { display: block; }
+
+/* Mobile: popover escapes the overflow-clipping bottom nav via fixed positioning */
+@media (max-width: 768px) {
+  .nav-tip-popover {
+    position: fixed;
+    top: auto;
+    bottom: 60px;
+    right: 8px;
+    left: auto;
+    width: calc(100vw - 16px);
+    max-width: 340px;
+  }
+}
+
+/* ── Conversas inline voice tip ── */
+.conversas-inline-tip {
+  font-size: 11px;
+  color: var(--pt-text-muted);
+  margin-top: 10px;
+  line-height: 1.5;
 }
