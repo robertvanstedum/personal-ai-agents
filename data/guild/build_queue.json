@@ -756,10 +756,30 @@
     "spec_title": "Move German session/conversation storage to Postgres",
     "spec_file": null,
     "status": "backlog",
-    "github_issue": 54,
+    "github_issue": null,
     "blocked_reason": null,
     "last_transition_at": "2026-07-04T00:00:00Z",
-    "notes": "Move German session/conversation storage from JSON files to Postgres, matching Portuguese persistence pattern. GitHub issue #54."
+    "notes": "Move German session/conversation storage from JSON files to Postgres, matching Portuguese persistence pattern. No GitHub issue yet — separate from #54 (system-bot HTTP endpoints refactor)."
+  },
+  {
+    "id": 120,
+    "spec_title": "GitHub/Docs Cleanup — Repo for External Review",
+    "spec_file": null,
+    "status": "backlog",
+    "github_issue": null,
+    "blocked_reason": null,
+    "last_transition_at": "2026-07-05T00:00:00Z",
+    "notes": "Archive old docs and superseded specs, README rewrite (public-facing, portfolio quality), clean up stale issues, remove any remaining sensitive references. Goal: repo presentable for T-Mobile AI team review."
+  },
+  {
+    "id": 121,
+    "spec_title": "Code Review + Security Audit (pre-external review)",
+    "spec_file": null,
+    "status": "backlog",
+    "github_issue": null,
+    "blocked_reason": null,
+    "last_transition_at": "2026-07-05T00:00:00Z",
+    "notes": "Phase 1: internal review (Claude Code + Grok) — hardcoded paths, secrets, error handling, test coverage gaps. Phase 2: mitigations applied. Phase 3: invite T-Mobile AI team. Builds on spec_code_review_phase0_2026-06-19.md (done) — this covers security specifically."
   },
   {
     "id": 119,
