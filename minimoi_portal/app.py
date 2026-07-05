@@ -1250,6 +1250,7 @@ def guild_landing():
 
     guest_requests = _get_guest_requests()
     active_guests = _auth.load_guests()
+    admin_users = [u for u in _auth.load_users() if u.get("tier") != "owner"]
 
     return render_template("guild/guild_landing.html",
         ops=ops,
@@ -1258,6 +1259,7 @@ def guild_landing():
         ahead=ahead,
         guest_requests=guest_requests,
         active_guests=active_guests,
+        admin_users=admin_users,
         user=_current_user()
     )
 

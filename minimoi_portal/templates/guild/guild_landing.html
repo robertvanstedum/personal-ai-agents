@@ -412,14 +412,25 @@
   </div>
 
   {# ── GUEST ACCESS ─────────────────────────────────────────────── #}
-  {% if active_guests or guest_requests %}
+  {% if admin_users or active_guests or guest_requests %}
   <div class="section access-full-width">
-    <div class="section-label">Guest Access <span class="section-label-line"></span>
+    <div class="section-label">Access <span class="section-label-line"></span>
       <a href="/admin/guests" class="section-goto">Manage →</a>
     </div>
-    {% if active_guests %}
+    {% if admin_users %}
     <div class="guest-row" style="font-size:10px;font-weight:700;letter-spacing:0.06em;color:var(--text-dim);border-bottom:none;padding-bottom:2px;">
-      <span class="guest-name">NAME</span>
+      <span class="guest-name">ADMIN USERS</span>
+    </div>
+    {% for u in admin_users %}
+    <div class="guest-row">
+      <span class="guest-name">{{ u.display_name or u.username }}</span>
+      <span class="guest-reason" style="color:var(--text-dim);font-size:10px;">{{ u.tier }} · {{ u.email or u.username }}</span>
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% if active_guests %}
+    <div class="guest-row" style="font-size:10px;font-weight:700;letter-spacing:0.06em;color:var(--text-dim);border-bottom:none;padding-bottom:2px;{% if admin_users %}margin-top:0.75rem;{% endif %}">
+      <span class="guest-name">GUESTS</span>
       <span class="guest-reason">EXPIRES</span>
       <span style="flex:1"></span>
     </div>
