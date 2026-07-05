@@ -753,33 +753,13 @@
   },
   {
     "id": 118,
-    "spec_title": "Move German session/conversation storage to Postgres",
-    "spec_file": null,
-    "status": "backlog",
-    "github_issue": null,
-    "blocked_reason": null,
-    "last_transition_at": "2026-07-04T00:00:00Z",
-    "notes": "Move German session/conversation storage from JSON files to Postgres, matching Portuguese persistence pattern. No GitHub issue yet — separate from #54 (system-bot HTTP endpoints refactor)."
-  },
-  {
-    "id": 120,
-    "spec_title": "GitHub/Docs Cleanup — Repo for External Review",
-    "spec_file": null,
+    "spec_title": "Code Review + Security Audit Phase 1",
+    "spec_file": "spec_code_review_security_phase1_2026-07-04.md",
     "status": "backlog",
     "github_issue": null,
     "blocked_reason": null,
     "last_transition_at": "2026-07-05T00:00:00Z",
-    "notes": "Archive old docs and superseded specs, README rewrite (public-facing, portfolio quality), clean up stale issues, remove any remaining sensitive references. Goal: repo presentable for T-Mobile AI team review."
-  },
-  {
-    "id": 121,
-    "spec_title": "Code Review + Security Audit (pre-external review)",
-    "spec_file": null,
-    "status": "backlog",
-    "github_issue": null,
-    "blocked_reason": null,
-    "last_transition_at": "2026-07-05T00:00:00Z",
-    "notes": "Phase 1: internal review (Claude Code + Grok) — hardcoded paths, secrets, error handling, test coverage gaps. Phase 2: mitigations applied. Phase 3: invite T-Mobile AI team. Builds on spec_code_review_phase0_2026-06-19.md (done) — this covers security specifically."
+    "notes": "Two parallel tracks: code quality + security audit across all domains. Produces findings reports. Pre-external review gate. Extends Phase 0 (spec_code_review_phase0, done). Spec in docs/specs/."
   },
   {
     "id": 119,
@@ -790,5 +770,25 @@
     "blocked_reason": null,
     "last_transition_at": "2026-07-04T00:00:00Z",
     "notes": "Remove DATABASE_URL connection string from docker-compose.prod.yml — move to /opt/minimoi/.env so compose file has no connection logic at all. One-line change on EC2, no ECR push needed."
+  },
+  {
+    "id": 120,
+    "spec_title": "Domain Standardization — German + Portuguese",
+    "spec_file": "spec_domain_standardization_2026-07-04.md",
+    "status": "spec_ready",
+    "github_issue": null,
+    "blocked_reason": null,
+    "last_transition_at": "2026-07-05T00:00:00Z",
+    "notes": "JSON-first principle locked — no storage migration. Four phases: (1) bot refactor / #54 gates everything, (2) per-user isolation fix for German persona memory, (3) launchd plists for German + Portuguese dev servers, (4) tips verification. Produces docs/DOMAIN_TEMPLATE.md. Spec exists as PDF in _working/ — .md version needed from OpenClaw before build. Grok review requested."
+  },
+  {
+    "id": 121,
+    "spec_title": "GitHub/Docs Cleanup — Repo for External Review",
+    "spec_file": null,
+    "status": "design",
+    "github_issue": null,
+    "blocked_reason": "Open questions on what to surface publicly",
+    "last_transition_at": "2026-07-05T00:00:00Z",
+    "notes": "README rewrite (portfolio quality), archive old docs and superseded specs, stale issue cleanup, remove sensitive references. Goal: repo presentable for T-Mobile AI team review. Design doc: design_github_docs_cleanup_2026-07-04.md."
   }
 ]
