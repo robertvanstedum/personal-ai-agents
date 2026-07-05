@@ -30,6 +30,9 @@ docs/design/
 docs/specs/
 docs/*.docx
 _NewDomains/
+!_NewDomains/research-intelligence/web/
+!_NewDomains/research-intelligence/web/static/
+!_NewDomains/research-intelligence/agent/
 
 # Git
 .git/
