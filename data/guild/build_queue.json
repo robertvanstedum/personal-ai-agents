@@ -783,6 +783,16 @@
   },
   {
     "id": 121,
+    "spec_title": "Tips UX Redesign — Nav Bar Icon + Tab-Specific Popovers",
+    "spec_file": "spec_121_tips_ux_redesign_2026-07-05.md",
+    "status": "in_build",
+    "github_issue": null,
+    "blocked_reason": null,
+    "last_transition_at": "2026-07-05T00:00:00Z",
+    "notes": "Phase A shipped: full-width banner removed from all German + Portuguese tabs, nav bar 💡 icon with tab-specific popover, Gespräche/Conversas secondary inline tip. CSS: german.css v=29, portuguese.css v=12. Phase B (Curator tips) deferred until DESK/LEANINGS routing confirmed working."
+  },
+  {
+    "id": 122,
     "spec_title": "GitHub/Docs Cleanup — Repo for External Review",
     "spec_file": null,
     "status": "design",
