@@ -11,15 +11,15 @@
     "last_transition_at": "2026-07-05T23:50:00Z"
   },
   {
-    "id": 124,
-    "spec_title": "Model Name Centralization \u2014 Remove Hardcoded Strings Across All Domains",
-    "spec_file": null,
+    "id": 125,
+    "spec_title": "Domain Standardization Phase 2 \u2014 Model Name Centralization",
+    "spec_file": "spec_125_model_standardization_2026-07-05.md",
     "status": "backlog",
     "github_issue": 78,
     "priority": "normal",
-    "blocked_reason": "Standalone spec required before build. Full regression test plan is a precondition.",
-    "notes": "Centralize all LLM model names to config/models.json \u2014 16 files currently hardcoded across all domains (Curator, German, Portuguese, Guild). Gold standard already exists: domains/german/reviewer.py + domains/guild/config/challenger_config.json. Requires full regression test before deploy. Do not fold into #120.",
-    "last_transition_at": "2026-07-06T00:33:29Z"
+    "blocked_reason": "Prerequisite: #120 Domain Standardization Phase 1 complete. Grok review required before build.",
+    "notes": "Centralize all LLM model names to config/models.json \u2014 16 files currently hardcoded across all domains (Curator, German, Portuguese, Guild). Gold standard already exists: domains/german/reviewer.py + domains/guild/config/challenger_config.json. Requires full regression test before deploy. Standalone spec \u2014 do not fold into #120.",
+    "last_transition_at": "2026-07-06T00:39:47Z"
   },
   {
     "id": 88,
