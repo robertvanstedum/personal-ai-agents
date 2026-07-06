@@ -1148,12 +1148,20 @@ def _archive_observations():
 @app.route('/archive')
 def archive_page():
     """Archive — live browse page (Phase 5)."""
+    tips_file = BASE_DIR / 'config' / 'curator' / 'tips.json'
+    try:
+        tips = json.loads(tips_file.read_text()) if tips_file.exists() else {}
+    except Exception:
+        tips = {}
+    entry = tips.get('curator.archive', {})
+    tip = entry.get('text') if entry.get('active') else None
     return render_template('curator_archive.html',
         daily_editions = _archive_daily_editions(),
         sources        = _archive_sources(),
         scans          = _archive_scans(),
         dives          = _archive_dives(),
         observations   = _archive_observations(),
+        tip            = tip,
     )
 
 
@@ -1206,8 +1214,15 @@ def _scans_dives_data():
 @app.route('/scans-dives')
 def scans_dives_page():
     """Scans & Dives — Flask-rendered page."""
+    tips_file = BASE_DIR / 'config' / 'curator' / 'tips.json'
+    try:
+        tips = json.loads(tips_file.read_text()) if tips_file.exists() else {}
+    except Exception:
+        tips = {}
+    entry = tips.get('curator.scans-dives', {})
+    tip = entry.get('text') if entry.get('active') else None
     dives, scans = _scans_dives_data()
-    return render_template('curator_scans_dives.html', dives=dives, scans=scans)
+    return render_template('curator_scans_dives.html', dives=dives, scans=scans, tip=tip)
 
 
 # ── (legacy placeholder kept below for reference — removed Phase 5) ──────────

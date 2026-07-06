@@ -70,6 +70,11 @@
         .subnav-tab:hover { color: var(--text); }
         .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
         .subnav-focus { margin-left: auto; }
+        .nav-tip { position: relative; background: none; border: none; padding: 4px 0 4px 1rem; cursor: default; font-size: 14px; opacity: 0.55; transition: opacity 0.15s; flex-shrink: 0; margin-left: auto; }
+        .nav-tip:hover, .nav-tip.tip-open { opacity: 1; }
+        .nav-tip-popover { display: none; position: absolute; top: calc(100% + 10px); right: 0; width: 280px; padding: 10px 14px; background: rgba(42,31,20,0.97); color: #f0ebe0; border-radius: 6px; font-size: 12px; line-height: 1.5; z-index: 200; }
+        .nav-tip:hover .nav-tip-popover, .nav-tip.tip-open .nav-tip-popover { display: block; }
+        @media (max-width: 768px) { .nav-tip-popover { position: fixed; bottom: 60px; right: 8px; width: calc(100vw - 16px); max-width: 340px; } }
 
         /* ── Main layout ── */
         main.briefing-main {
@@ -101,13 +106,6 @@
         }
 
         /* ── Article cards ── */
-        .page-tip {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            padding: 8px 0 12px 0;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 12px;
-        }
         .article-list {
             border: 1px solid var(--border);
             border-radius: 10px;
@@ -390,6 +388,7 @@
     <a href="/archive" class="subnav-tab">Archive</a>
     <a href="/research/dashboard" class="subnav-tab subnav-focus">Desk</a>
     {% endif %}
+    {% if tip %}<button class="nav-tip" id="navTip" aria-label="Tip" type="button">💡<span class="nav-tip-popover">{{ tip }}</span></button>{% endif %}
 </nav>
 
 <main class="briefing-main">
@@ -401,9 +400,6 @@
         <span id="topics-strip-label">Topics</span>
         <div id="topics-pills" style="display:contents;"></div>
     </div>
-{% if tip %}
-    <div class="page-tip">💡 {{ tip }}</div>
-{% endif %}
     <div class="article-list">
 {% for entry in articles %}
 {% set rank = loop.index %}
@@ -975,5 +971,14 @@ loadTopicsStrip();
     </div>
   </div>
 </div>
+<script>
+(function(){
+  const btn = document.getElementById('navTip');
+  if (btn) {
+    btn.addEventListener('click', () => btn.classList.toggle('tip-open'));
+    document.addEventListener('click', e => { if (btn && !btn.contains(e.target)) btn.classList.remove('tip-open'); });
+  }
+}());
+</script>
 </body>
 </html>

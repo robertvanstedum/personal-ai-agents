@@ -3,6 +3,14 @@
     "active": true,
     "text": "Your daily briefing \u2014 curated signals across geopolitics, finance, and technology. Use the category filters to focus, or read straight through."
   },
+  "curator.archive": {
+    "active": true,
+    "text": "Your reading history \u2014 articles you've opened or saved. Use it to revisit stories or track what you've been following."
+  },
+  "curator.scans-dives": {
+    "active": true,
+    "text": "Quick pass through today's top stories \u2014 scored and ranked. Click into any article to go deeper."
+  },
   "portuguese.landing": {
     "active": true,
     "text": "Meu Portugu\u00eas pulls live articles from Brazilian and European Portuguese sources daily. Start in Leitura to read, or jump to Conversas to practice with a persona."
