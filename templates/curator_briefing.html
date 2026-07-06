@@ -70,7 +70,7 @@
         .subnav-tab:hover { color: var(--text); }
         .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
         .subnav-focus { margin-left: auto; }
-        .nav-tip { position: relative; background: none; border: none; padding: 4px 0 4px 1rem; cursor: default; font-size: 14px; opacity: 0.55; transition: opacity 0.15s; flex-shrink: 0; margin-left: auto; }
+        .nav-tip { position: relative; background: none; border: none; padding: 4px 0 4px 1rem; cursor: default; font-size: 14px; opacity: 0.55; transition: opacity 0.15s; flex-shrink: 0; }
         .nav-tip:hover, .nav-tip.tip-open { opacity: 1; }
         .nav-tip-popover { display: none; position: absolute; top: calc(100% + 10px); right: 0; width: 280px; padding: 10px 14px; background: rgba(42,31,20,0.97); color: #f0ebe0; border-radius: 6px; font-size: 12px; line-height: 1.5; z-index: 200; }
         .nav-tip:hover .nav-tip-popover, .nav-tip.tip-open .nav-tip-popover { display: block; }
@@ -387,8 +387,8 @@
     <a href="/research/leanings" class="subnav-tab">Leanings</a>
     <a href="/archive" class="subnav-tab">Archive</a>
     <a href="/research/dashboard" class="subnav-tab subnav-focus">Desk</a>
-    {% endif %}
     {% if tip %}<button class="nav-tip" id="navTip" aria-label="Tip" type="button">💡<span class="nav-tip-popover">{{ tip }}</span></button>{% endif %}
+    {% endif %}
 </nav>
 
 <main class="briefing-main">
