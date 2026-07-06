@@ -30,6 +30,7 @@ services:
       - /opt/minimoi/data/curator_radar.json:/app/curator_radar.json
       - /opt/minimoi/data/curator:/app/data/curator
       - /opt/minimoi/data/interests:/app/interests
+      - /opt/minimoi/data/research-intelligence:/app/_NewDomains/research-intelligence/data
     ports:
       - "127.0.0.1:8766:8766"
     depends_on:
