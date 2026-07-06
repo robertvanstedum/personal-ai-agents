@@ -289,10 +289,10 @@ function fmtDate(iso) {
 // ── Row builders ──────────────────────────────────────────────────────────────
 function dailyRow(ed) {
   const summary = ed.count ? `${ed.count} articles` : '';
-  // TODO: link to /briefing/<date> once per-date archive route exists
   return `<div class="archive-row daily-row" data-search="${ed.date} ${summary}">
     <span class="row-date">${fmtDate(ed.date)}</span>
     <span class="row-title muted">${summary || '—'}</span>
+    <a class="row-action" href="/curator_archive/${ed.file}">View →</a>
   </div>`;
 }
 
@@ -301,6 +301,7 @@ function sourceRow(a) {
     <span class="row-date">${fmtDate(a.date)}</span>
     <span class="row-title">${esc(a.title)}</span>
     <span class="row-source">${esc(a.source)}</span>
+    <a class="row-action" href="${a.url}" target="_blank" rel="noopener">View →</a>
   </div>`;
 }
 
@@ -346,6 +347,7 @@ function renderDailySection() {
     return `<div class="archive-row daily-row${cls}" data-index="${i}" data-search="${ed.date} ${summary}">
       <span class="row-date">${fmtDate(ed.date)}</span>
       <span class="row-title muted">${summary || '—'}</span>
+      <a class="row-action" href="/curator_archive/${ed.file}">View →</a>
     </div>`;
   }).join('');
   if (items.length > PAGE_SIZE) {
