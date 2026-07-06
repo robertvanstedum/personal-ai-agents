@@ -32,6 +32,17 @@
     "last_transition_at": "2026-07-06T00:39:47Z"
   },
   {
+    "id": 126,
+    "spec_title": "Curator visual consistency — Leanings and Archive design alignment",
+    "spec_file": null,
+    "status": "backlog",
+    "github_issue": null,
+    "priority": "normal",
+    "blocked_reason": null,
+    "notes": "Leanings and Archive pages have inconsistent background color, card styling, and typography weight vs Daily and Reading Room. Needs a design pass for visual cohesion. Standard to match: Daily and Reading Room palette and typography.",
+    "last_transition_at": "2026-07-05T00:00:00Z"
+  },
+  {
     "id": 88,
     "spec_title": "mini-moi Code Quality Review Plan",
     "spec_file": "CODE_REVIEW_PLAN.md",

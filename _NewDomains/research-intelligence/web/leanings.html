@@ -70,6 +70,11 @@
     .subnav-tab:hover { color: var(--text); }
     .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
     .subnav-focus { margin-left: auto; }
+    .nav-tip { position: relative; background: none; border: none; padding: 0 0 0 0.75rem; cursor: pointer; color: var(--text-muted); display: inline-flex; align-items: center; flex-shrink: 0; }
+    .nav-tip:hover, .nav-tip.tip-open { color: var(--text); }
+    .nav-tip-popover { display: none; position: absolute; top: calc(100% + 10px); right: 0; width: 280px; padding: 10px 14px; background: #f5f0e8; color: #2a1f14; border: 1px solid rgba(42,31,20,0.18); border-radius: 6px; font-size: 12px; line-height: 1.5; z-index: 200; box-shadow: 0 2px 8px rgba(42,31,20,0.10); }
+    .nav-tip:hover .nav-tip-popover, .nav-tip.tip-open .nav-tip-popover { display: block; }
+    @media (max-width: 768px) { .nav-tip-popover { position: fixed; bottom: 60px; right: 8px; width: calc(100vw - 16px); max-width: 340px; } }
 
     /* ── Main content ── */
     .main-content { padding: 32px 40px 80px; max-width: 860px; margin: 0 auto; }
@@ -283,6 +288,7 @@
   <a href="/research/leanings" class="subnav-tab active">Leanings</a>
   <a href="/archive" class="subnav-tab">Archive</a>
   <a href="/research/dashboard" class="subnav-tab subnav-focus">Desk</a>
+  {% if tip %}<button class="nav-tip" id="navTip" aria-label="Tip" type="button"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7z"/></svg><span class="nav-tip-popover">{{ tip }}</span></button>{% endif %}
 </nav>
 
 <div class="main-content">
@@ -720,5 +726,14 @@ function obsCard(obs) {
 loadObservations('');
 </script>
 
+<script>
+(function(){
+  const btn = document.getElementById('navTip');
+  if (btn) {
+    btn.addEventListener('click', () => btn.classList.toggle('tip-open'));
+    document.addEventListener('click', e => { if (btn && !btn.contains(e.target)) btn.classList.remove('tip-open'); });
+  }
+}());
+</script>
 </body>
 </html>

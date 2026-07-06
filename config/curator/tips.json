@@ -11,6 +11,14 @@
     "active": true,
     "text": "Quick pass through today's top stories \u2014 scored and ranked. Click into any article to go deeper."
   },
+  "curator.reading_room": {
+    "active": true,
+    "text": "Articles you\u2019ve saved for deeper reading. Open any article to read the full text, take notes, and save words to your vocabulary."
+  },
+  "curator.leanings": {
+    "active": true,
+    "text": "Track beliefs in progress \u2014 from open question to held position. Add a leaning, set its state, and watch your thinking evolve over time."
+  },
   "portuguese.landing": {
     "active": true,
     "text": "Meu Portugu\u00eas pulls live articles from Brazilian and European Portuguese sources daily. Start in Leitura to read, or jump to Conversas to practice with a persona."

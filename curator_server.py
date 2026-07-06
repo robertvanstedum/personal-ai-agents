@@ -1023,7 +1023,14 @@ def briefing():
 @app.route('/curator_library.html')
 @app.route('/reading-room')
 def library_page():
-    return send_from_directory(BASE_DIR, 'curator_library.html')
+    tips_file = BASE_DIR / 'config' / 'curator' / 'tips.json'
+    try:
+        tips = json.loads(tips_file.read_text()) if tips_file.exists() else {}
+    except Exception:
+        tips = {}
+    entry = tips.get('curator.reading_room', {})
+    tip = entry.get('text') if entry.get('active') else None
+    return render_template('curator_library.html', tip=tip)
 
 # ── Archive data helpers (Phase 5) ────────────────────────────────────────────
 

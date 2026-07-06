@@ -20,7 +20,7 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from flask import Blueprint, jsonify, request, redirect
+from flask import Blueprint, jsonify, request, redirect, render_template_string
 from get_secret import get_secret
 
 # ── Blueprint ─────────────────────────────────────────────────────────────────
@@ -2589,10 +2589,17 @@ def api_activate_topic(slug: str):
 @research_bp.route('/research/leanings')
 def research_leanings_ui():
     """Serve the Leanings page."""
-    html = RESEARCH_ROOT / 'web' / 'leanings.html'
-    if not html.exists():
+    html_path = RESEARCH_ROOT / 'web' / 'leanings.html'
+    if not html_path.exists():
         return "leanings.html not found", 404
-    return html.read_text(), 200, {'Content-Type': 'text/html'}
+    tips_file = RESEARCH_ROOT.parent.parent / 'config' / 'curator' / 'tips.json'
+    try:
+        tips = json.loads(tips_file.read_text()) if tips_file.exists() else {}
+    except Exception:
+        tips = {}
+    entry = tips.get('curator.leanings', {})
+    tip = entry.get('text') if entry.get('active') else None
+    return render_template_string(html_path.read_text(), tip=tip)
 
 
 # ── Leanings — API ────────────────────────────────────────────────────────────
