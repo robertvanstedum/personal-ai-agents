@@ -1,6 +1,6 @@
 [
   {
-    "id": 123,
+    "id": 122,
     "spec_title": "Three-Tier Production Backup \u2014 Local EC2 + S3 + Dropbox",
     "spec_file": "spec_production_backup_2026-07-05.md",
     "status": "spec_ready",
@@ -8,7 +8,17 @@
     "priority": "high",
     "blocked_reason": null,
     "notes": "Tier 1 (local EC2 backup_local.sh) already live as hotfix 2026-07-05. Build Tier 2 (S3) and Tier 3 (Dropbox) this week. S3 IAM setup requires Robert. Motivated by data loss incident \u2014 curator_archive and research_dives wiped by force-recreate without volume mounts.",
-    "last_transition_at": "2026-07-05T23:50:00Z"
+    "last_transition_at": "2026-07-06T00:51:24Z"
+  },
+  {
+    "id": 123,
+    "spec_title": "AI Observations path fix \u2014 port intelligence job to EC2",
+    "spec_file": null,
+    "status": "backlog",
+    "github_issue": null,
+    "blocked_reason": "Spec required from OpenClaw before build.",
+    "notes": "curator_intelligence.py writes to Path.home()/'.openclaw'/'workspace'/ \u2014 hardcoded to ~/.openclaw/workspace/ which on EC2 is /root/.openclaw/workspace/ (container-local, not mounted). curator_server.py reads from /app/data/curator/intelligence_*.json (volume-mounted). Two options: (A) run job via docker exec on EC2 + set CURATOR_DATA_DIR to redirect output, or (B) sync Mac job output to EC2 after each run. 31 historical files SCPed to /tmp/intelligence_restore/ on EC2 (Mar\u2013Apr 2026). Anthropic API key confirmed in SSM (/minimoi/production/anthropic_api_key). Investigation complete 2026-07-05 \u2014 no code touched.",
+    "last_transition_at": "2026-07-06T00:51:24Z"
   },
   {
     "id": 125,
@@ -814,13 +824,13 @@
     "notes": "Phase A shipped: full-width banner removed from all German + Portuguese tabs, nav bar \ud83d\udca1 icon with tab-specific popover, Gespr\u00e4che/Conversas secondary inline tip. CSS: german.css v=29, portuguese.css v=12. Phase B (Curator tips) deferred until DESK/LEANINGS routing confirmed working."
   },
   {
-    "id": 122,
+    "id": 124,
     "spec_title": "GitHub/Docs Cleanup \u2014 Repo for External Review",
     "spec_file": null,
     "status": "design",
     "github_issue": null,
     "blocked_reason": "Open questions on what to surface publicly",
-    "last_transition_at": "2026-07-05T00:00:00Z",
+    "last_transition_at": "2026-07-06T00:51:24Z",
     "notes": "README rewrite (portfolio quality), archive old docs and superseded specs, stale issue cleanup, remove sensitive references. Goal: repo presentable for T-Mobile AI team review. Design doc: design_github_docs_cleanup_2026-07-04.md."
   }
 ]
