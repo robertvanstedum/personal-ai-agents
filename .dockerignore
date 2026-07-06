@@ -17,6 +17,7 @@ logs/
 curator_media/
 curator_archive/
 curator_cache/
+curator_history.json
 
 # Docs and design — exclude large/binary subdirs, keep root .md files needed at runtime
 docs/screenshots/

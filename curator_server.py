@@ -404,9 +404,7 @@ def api_library():
     scans_dir = BASE_DIR / 'interests' / '2026' / 'scans'
     dive_url_map = {}  # hash_id -> web URL
     if scans_dir.exists():
-        for f in scans_dir.glob('*.html'):
-            if f.name == 'index.html':
-                continue
+        for f in scans_dir.glob('*.md'):
             parts = f.name.split('-', 1)
             if len(parts) >= 1 and len(parts[0]) == 5:
                 # Route to Flask scan view, not the old static HTML
