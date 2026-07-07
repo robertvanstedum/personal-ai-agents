@@ -8,7 +8,13 @@
 
 ## How the system works
 
-Tips are served from `config/curator/tips.json`. Each slot has a key, a text value, and an active flag. The server reads the slot key and returns the tip text if active, nothing if not. To change a tip, edit the file and sync. To hide a tip, set `active: false`. No redeploy needed — `config/curator/tips.json` is volume-mounted on EC2.
+**One file controls all tips across all domains — Curator, Mein Deutsch, and Meu Português:**
+
+```
+config/curator/tips.json
+```
+
+Each slot has a key, a text value, and an active flag:
 
 ```json
 {
@@ -19,7 +25,11 @@ Tips are served from `config/curator/tips.json`. Each slot has a key, a text val
 }
 ```
 
-To add a new slot: add the key here first, then add the server-side `tips.get('slot.key')` call in the relevant domain server, then add the frontend render point.
+**To change tip text:** edit `config/curator/tips.json` directly — changes are immediate on dev (server reads on each request) and immediate on EC2 (file is volume-mounted, no redeploy needed).
+
+**To hide a tip without deleting it:** set `"active": false`.
+
+**To add a new slot:** add the key here first, then wire the server-side `tips.get('slot.key')` call in the relevant domain server, then add the frontend render point — then update this registry.
 
 ---
 
