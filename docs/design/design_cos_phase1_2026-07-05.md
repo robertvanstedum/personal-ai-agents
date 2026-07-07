@@ -1,175 +1,196 @@
-# Design: OpenClaw as CoS — Phase 1
+# Design: Chief of Staff — Phase 1
 **File:** `docs/design/design_cos_phase1_2026-07-05.md`
 **Status:** Design — not yet build-ready
-**Date:** 2026-07-05
-**Author:** Claude.ai design session
-**References:** ROADMAP.md (Phase 1), CoS_Test_Instance_Setup.md (OpenClaw design doc)
+**Date:** 2026-07-05 (v3 — Grok refinements applied)
+**Author:** Claude.ai design session + Grok review (two passes)
+**References:** ROADMAP.md (Phase 1), CoS_Test_Instance_Setup.md
 
 ---
 
 ## Intent
 
-The Chief of Staff role in mini-moi exists in name but has no dedicated tooling today. I can't talk to CoS like a real partner. OpenClaw gives conversational continuity and memory — but it's currently personal, not platform-scoped. Phase 1 closes that gap: a dedicated mini-moi OpenClaw instance that makes the CoS role functional for the first time.
+The Chief of Staff is Robert's personal Cabinet leader and strategic thinking partner. It is not a note-taker, not a task tracker, not a scrum master. It is the central nervous system of the mini-moi operation — watching across all domains, maintaining memory of what has happened and why, questioning what needs questioning, and handing off to the right actor at the right time.
 
-This is not about building the full memory/intelligence layer (Phase 2). It is about getting a safe, isolated, containerized OpenClaw instance running with tight initial use cases that prove the pattern before expanding scope.
+Phase 1 gets this capability live for the first time. The current Guild CoS agent is a placeholder. This replaces it with a real CoS — containerized, isolated from personal OpenClaw, with cross-domain read access, autonomous (within limits) decisions/actions writing, and proactive watching behavior.
 
-**Critical design requirement locked in Phase 1:** Agent swappability is not a Phase 2 consideration — it is a Phase 1 exit criterion. Before Phase 1 is complete, a parallel A/B test with a second agent (Cowork or equivalent) must prove that the platform works identically regardless of which agent is behind the CoS interface. This prevents deep embedding before swappability is proven.
-
----
-
-## The Agent Interface Contract
-
-The platform depends on the CoS interface, not on OpenClaw specifically. OpenClaw is the first implementation. Any agent that implements the interface is a valid CoS agent.
-
-**The interface is defined first. OpenClaw is configured second.**
-
-### Interface requirements (any CoS agent must):
-- Accept commands via Telegram using the defined command set
-- Write decisions to `openclaw/decisions.md` in the defined format
-- Write actions to `openclaw/actions.md` in the defined format
-- Respond to document retrieval requests from known locations
-- Create GitHub issues on request with correct labels
-- Scope all activity to mini-moi domains only
-- Reject out-of-scope requests explicitly
-
-### What the platform must NOT do:
-- Call OpenClaw APIs directly from Guild or domain servers
-- Hard-code OpenClaw-specific behavior anywhere in mini-moi code
-- Store data in a format only OpenClaw can read
+**Critical design requirement:** Agent swappability is a Phase 1 exit criterion. Before Phase 1 is complete, a parallel A/B test with a second agent must prove the platform works identically regardless of which agent implements the CoS interface. Memory and decisions belong to the platform, not to OpenClaw.
 
 ---
 
-## Agent Swappability — Phase 1 Exit Criterion
+## Role Definition
 
-**Before Phase 1 is considered complete:**
+**Chief of Staff** — Cabinet leader, executive board member, personal strategic thinking partner.
 
-1. Run OpenClaw CoS instance for 2+ weeks — prove the four use cases work reliably
-2. Stand up a second agent (Cowork or equivalent) against the same interface
-3. A/B test: both agents handle the same use cases, write to the same memory files
-4. Confirm: platform output (decisions.md, actions.md, GitHub issues) is indistinguishable
-5. Document: what worked, what didn't, what would make swapping easier next time
+| Dimension | Description |
+|---|---|
+| Level | Strategic / Executive |
+| Scope | All domains + personal conversations + Robert's overall thinking |
+| Nature | High-level advisor, cross-domain coordinator, proactive watcher |
+| Memory | Writes decisions and actions naturally as part of its own flow — not prompted |
+| Autonomy | Watches, questions, flags, and proposes handoffs within defined Phase 1 limits |
+| Access | Read access to all domains. Full access to CoS domain. |
+| Visibility | No other agent sees the CoS domain. Master Craftsman can notify CoS but cannot read it. |
 
-**This is not optional.** Swappability proven in Phase 1 means we are never deeply embedded in any one tool. It also gives real evidence for which agent performs better before committing to Phase 2 scope.
+**What CoS is not:**
+- Not a TPM, scrum master, or ops director (that's the Master Craftsman's territory)
+- Not a chatbot that waits to be asked
+- Not a note-taker that only acts when told
+- Not deeply embedded in any one tool — agent-agnostic by design
 
 ---
 
-## The Two Instances
+## The Two Roles — CoS vs Master Craftsman
 
-Personal OpenClaw stays completely separate. This document is only about the mini-moi business instance.
+| Role | Level | Focus | Domain | Access to other |
+|---|---|---|---|---|
+| **Chief of Staff** | Strategic | Thinking partner, cross-domain watching, decisions/memory | CoS Domain (private) | Reads all domains |
+| **Master Craftsman** | Tactical | Build quality, standards, domain template compliance | Build Domain | Can notify CoS only — cannot read CoS domain |
 
-| | Personal OpenClaw | mini-moi CoS Agent (OpenClaw Phase 1) |
+CoS is senior. Master Craftsman reports up. One-way visibility.
+
+---
+
+## Access Model
+
+| Actor | CoS Domain | Build Domain | All other domains |
+|---|---|---|---|
+| CoS | Full | Read | Read + can propose handoff |
+| Master Craftsman | Notify only (no read) | Full | Read (build-relevant only) |
+| Other agents | None | Via interface only | Own domain only |
+| Robert | Full | Full | Full |
+
+---
+
+## Memory — Natural Flow, Not Prompted
+
+CoS writes to the shared memory stores as part of its natural operation. Robert does not need to tell it to log something.
+
+**Decisions store** (`openclaw/decisions.md` — platform-owned, all actors can read):
+Written when a strategic, cross-domain, or architectural decision is made. Not every tactical action.
+```
+## 2026-07-05 — CoS and Build domains to be split from Guild
+**Decision:** Guild evolves into three distinct roles: CoS domain (private, strategic),
+Build domain (shareable, execution), Master Craftsman (quality guardian in Build).
+**Why:** Guild is doing too many jobs. Clean separation improves shareability and focus.
+**Actors:** Robert (decision), Claude.ai + Grok (design)
+**Domain:** cross-domain
+```
+
+**Actions store** (`openclaw/actions.md` — platform-owned, all actors can read):
+Written when a meaningful action occurs. Terse, timestamped.
+```
+2026-07-05T22:14:00Z | cross-domain | cos | Flagged: leanings.json not volume-mounted — data loss risk
+2026-07-05T22:31:00Z | guild | cos | Handoff proposed to Claude Code: register three idea-phase items
+```
+
+**All strategic decisions go to `decisions.md`** — no separate private decisions layer in Phase 1. Platform-owned, queryable. Revisit in Phase 2 only if genuinely sensitive content requires separation.
+
+**CoS private memory** (`~/.openclaw-cos/` — CoS internal working memory, not shared):
+OpenClaw's own context. Survives agent swap because the platform stores what matters externally.
+
+---
+
+## Autonomous Behaviors (Phase 1 — within limits)
+
+**Permitted autonomously:**
+- Write to decisions.md and actions.md
+- Flag issues noticed across any domain (Telegram notification to Robert)
+- Propose a handoff to any agent (write to actions.md + Telegram message to Robert — Robert approves)
+- Retrieve any document from any domain on request
+- Create GitHub issues for bugs or defects Robert identifies on mobile
+
+**Requires Robert approval before acting:**
+- Any write to domain data files
+- Any deployment or infrastructure change
+- Executing any proposed handoff
+- Any action not in the permitted list above
+
+**Not in Phase 1:**
+- Executing code or running scripts autonomously
+- Writing to production systems without approval
+- Cross-agent orchestration beyond handoff proposals
+- Full memory layer ingestion (Phase 2)
+
+---
+
+## Proactive Watching
+
+CoS monitors across domains and surfaces what needs attention without being asked.
+
+**Phase 1 observation sources (explicit):**
+- `build_queue.json` — spec status, age, blocked items, items without progress
+- GitHub issues — open/unresolved, items missing build queue entries
+- `decisions.md` — gap detection (decision made in session but not logged)
+- `actions.md` — pattern detection across actions
+- Domain health endpoints — is everything up and responding?
+- EC2 disk and backup status — trending issues before crisis
+
+**Example watching behaviors:**
+- Spec in `in_build` for 10+ days with no commit → flags to Robert
+- Disk usage trending up → flags before crisis
+- Decision made in design session not yet in decisions.md → writes it
+- GitHub issue open with no build queue entry → proposes adding it
+- German and Portuguese domains diverging from domain template → flags to Master Craftsman
+
+**Watching cadence:** On-demand plus hourly scheduled scans. Not continuous — adds complexity without proportional value in Phase 1.
+
+**Handoff mechanism:** CoS writes to `actions.md` (the record), then sends a Telegram message to Robert with the proposed handoff and rationale. Robert approves or redirects. CoS does not execute the handoff autonomously in Phase 1.
+
+---
+
+## Telegram Interface
+
+**Bot:** Command prefix `!cos` on existing `@minimoi_agent_bot`. Simpler than a dedicated bot in Phase 1 — fewer moving parts, easier to manage. Dedicated CoS bot when scope expands in Phase 2.
+
+**Example interactions:**
+```
+Robert: !cos what's blocked in the build queue?
+Robert: !cos file a bug — German lesen scroll broken on mobile
+Robert: !cos what did we decide about the backup system?
+```
+
+CoS also sends proactive Telegram messages to Robert when it flags something — without being asked.
+
+---
+
+## The Two OpenClaw Instances
+
+| | Personal OpenClaw | mini-moi CoS (OpenClaw Phase 1) |
 |---|---|---|
-| Purpose | Private, home use | Platform coordination, CoS role |
-| Scope | Unrestricted | Bounded to mini-moi domains |
+| Purpose | Private, home use | Platform CoS role |
+| Scope | Unrestricted personal | Bounded to mini-moi domains |
 | Memory | Personal | Platform — writes to shared stores |
-| Telegram | Existing personal bot | mini-moi bot (TBD — see open questions) |
+| Telegram | Existing personal bot | `!cos` prefix on `@minimoi_agent_bot` |
 | Data | `~/.openclaw/` | `~/.openclaw-cos/` or container volume |
 | Swappable | N/A | Yes — by design from day one |
 
 ---
 
-## Why Containerized from Day One
+## Agent Interface Contract
 
-Running the CoS agent in Docker means:
-- Dev → EC2 → Mac Mini is the same move every other mini-moi service makes
-- No reinstall, no reconfiguration when moving between hosts
-- Fits the existing `docker-compose.prod.yml` pattern
-- Connectivity setup (Telegram bot token, SSM credentials) is the only variable
-- **Swapping agents means swapping the container image — not rebuilding infrastructure**
+The platform depends on the CoS interface, not on OpenClaw specifically.
 
-The Mac dev test instance is not a throwaway — it becomes the container image that promotes to EC2.
+**Any CoS agent must:**
+- Accept `!cos` commands via Telegram
+- Write decisions to `openclaw/decisions.md` naturally as part of operation
+- Write actions to `openclaw/actions.md` naturally as part of operation
+- Maintain read access to all domain data sources
+- Run hourly watching scans across Phase 1 observation sources
+- Propose handoffs via actions.md + Telegram — never execute autonomously
+- Scope all activity to mini-moi domains
+- Reject out-of-scope requests explicitly
 
----
+**The platform must NOT:**
+- Call OpenClaw APIs directly from Guild or domain servers
+- Hard-code OpenClaw-specific behavior anywhere in mini-moi code
+- Store memory in a format only OpenClaw can read
 
-## Phase 1 Use Cases (tight scope)
-
-These are the only things CoS does in Phase 1. Scope expands in Phase 2 based on demonstrated reliability.
-
-**1. Mobile note-taking**
-Robert says something via Telegram → CoS agent stores it, timestamps it, tags it with domain if obvious, writes to the actions store. No processing, no summarizing — just capture and confirm.
-
-**2. Bug/defect filing**
-Robert identifies a bug on mobile → tells CoS via Telegram → CoS agent creates a GitHub issue with the right label, confirms to Robert. Robert does not need to open GitHub. This is the single biggest friction point on mobile today.
-
-**3. Document retrieval**
-Robert asks for a specific spec, design doc, or handoff → CoS agent retrieves it from known locations and returns it. Wide read access across `docs/`, `_working/`, and the build queue.
-
-**4. Decision writing**
-As design sessions produce decisions, CoS agent writes them to the shared decisions store. This replaces the decision log that isn't being used because it's manual. Guild surfaces decisions in real time.
-
-**What is explicitly out of Phase 1:**
-- Autonomous actions without Robert approval
-- Writing to production systems (read-only on prod, read-write on dev only)
-- Cross-agent orchestration
-- Full memory layer (Phase 2)
-- Any action not in the list above
+Interface documented in: `config/openclaw/cos_interface.md` (to be written before build)
 
 ---
 
-## Access Model (Phase 1)
+## Containerization
 
-**Read access (wide):**
-- All `docs/` directories
-- `build_queue.json`
-- GitHub issues (read)
-- `./openclaw/` md files
-
-**Write access (tight):**
-- GitHub issues (create only, no edit/close)
-- Decisions store (append only)
-- Actions store (append only)
-- Own memory (`~/.openclaw-cos/`)
-
-**No access:**
-- Production docker-compose or EC2 configuration
-- SSM parameters
-- Any domain data files
-- Personal OpenClaw instance
-
----
-
-## Memory Writing Obligation (Phase 1)
-
-Phase 1 introduces the two external memory files that Phase 2 builds on. These files are the interface — not OpenClaw internals. Any CoS agent writes to them in the same format.
-
-**Decisions file** (`openclaw/decisions.md` — shared, visible to all actors)
-Written by CoS agent when a decision is made. Format:
-```
-## 2026-07-05 — Spec naming convention established
-**Decision:** All spec files follow numbered convention: spec_<number>_<name>_<date>.md
-**Why:** Build queue number in filename makes it immediately clear what spec maps to what queue item.
-**Actors:** Robert (decision), Claude.ai (proposed)
-**Domain:** cross-domain
-```
-
-**Actions file** (`openclaw/actions.md` — shared, visible to all actors)
-Written by CoS agent when a meaningful action is taken. Format:
-```
-2026-07-05T14:23:00Z | note | cross-domain | "Meeting with SEI Adam Hartstein next week — prep needed"
-2026-07-05T14:31:00Z | github_issue | guild | #121 created — "pipeline.items unavailable on Guild dashboard"
-```
-
-These two files are the foundation of the memory layer. They belong to the platform — not to OpenClaw. Any replacement agent reads them and continues.
-
----
-
-## Containerization Design
-
-### Directory structure
-```
-docker/
-  Dockerfile.openclaw-cos    — CoS agent container image (OpenClaw Phase 1)
-openclaw/
-  decisions.md               — shared decisions store (volume-mounted, platform-owned)
-  actions.md                 — shared actions store (volume-mounted, platform-owned)
-  .openclaw-cos/             — agent internal memory (volume-mounted, agent-private)
-config/
-  openclaw/
-    cos_config.yaml          — CoS interface definition, scope, allowed actions
-    cos_interface.md         — the interface contract (agent-agnostic reference)
-```
-
-### docker-compose addition
 ```yaml
 openclaw-cos:
   build:
@@ -178,82 +199,62 @@ openclaw-cos:
   ports:
     - "18889:18889"
   volumes:
-    - /opt/minimoi/openclaw:/app/openclaw
-    - /opt/minimoi/.openclaw-cos:/root/.openclaw
+    - /opt/minimoi/openclaw:/app/openclaw        # shared decisions + actions
+    - /opt/minimoi/.openclaw-cos:/root/.openclaw  # CoS private memory
   env_file: /opt/minimoi/.env
   restart: unless-stopped
 ```
 
-### Promotion path
-- Phase 1: Mac dev (manual start or LaunchAgent)
-- Phase 2: EC2 (same docker-compose pattern)
-- Future: Mac Mini (same image, new host, connectivity setup only)
-- Agent swap: replace Dockerfile.openclaw-cos, keep everything else
-
----
-
-## CoS Persona (Phase 1)
-
-The mini-moi CoS agent has a defined scope and persona from day one:
-
-- **Role:** Chief of Staff for the mini-moi platform
-- **Tone:** Direct, organized, concise — not a chatbot
-- **Scope:** mini-moi domains only. Does not discuss personal matters.
-- **Default response to out-of-scope requests:** "That's outside my scope for this instance."
-- **Proactive behaviors:** None in Phase 1. Responds to requests only.
-
-This persona is defined in `config/openclaw/cos_config.yaml` — not hardcoded in any agent. A replacement agent reads the same config.
+Promotion path: Mac dev → EC2 → Mac Mini. Same image, different host, connectivity setup only.
+Agent swap: replace `Dockerfile.openclaw-cos`, keep everything else.
 
 ---
 
 ## Open Questions (decide before build)
 
-1. **Telegram bot** — Command prefix on existing `@minimoi_agent_bot` (e.g. `!cos`) or dedicated CoS bot? Lean toward command prefix during Phase 1 — simpler, fewer moving parts. Dedicated bot when scope expands.
+1. **Secrets** — Separate SSM prefix `/minimoi/cos/` or shared `.env` with naming convention?
+2. **Startup on Mac dev** — Manual start during early testing or LaunchAgent?
+3. **`./openclaw/` directory** — In repo (gitignored) or volume-mounted outside repo?
+4. **A/B test agent** — Cowork is the current candidate. Confirm before Phase 1 exit.
+5. **`cos_interface.md`** — Written before build starts. Who writes first draft — Claude.ai or OpenClaw?
 
-2. **Secrets** — Separate SSM prefix (`/minimoi/cos/`) for CoS-specific credentials, or shared `.env` with naming convention (`COS_TELEGRAM_TOKEN` etc.)? Lean toward separate SSM prefix — cleaner separation.
-
-3. **Startup on Mac dev** — Manual start during early testing or separate LaunchAgent? Manual first, LaunchAgent once the pattern is proven stable.
-
-4. **`./openclaw/` directory** — Does this live in the repo root (gitignored sensitive content) or as a separate mounted path? Lean toward volume-mounted outside repo, same pattern as `guests.json`.
-
-5. **A/B test agent** — Which second agent for the swappability test? Cowork is the current candidate. Decision needed before Phase 1 exit criteria can be confirmed.
+*Previously open questions now resolved:*
+- Telegram bot: `!cos` prefix on `@minimoi_agent_bot` ✅
+- Watching cadence: on-demand + hourly scheduled ✅
+- Private decisions layer: no — all strategic decisions to decisions.md ✅
 
 ---
 
 ## Phase 1 Exit Criteria
 
-Phase 1 is complete when ALL of these are true:
+All must be true before Phase 2 begins:
 
-- [ ] CoS agent running reliably for 2+ weeks on Mac dev
-- [ ] All four use cases proven via daily Telegram use
-- [ ] decisions.md and actions.md writing correctly and consistently
-- [ ] Guild surfacing decisions and actions in real time
+- [ ] CoS running reliably for 2+ weeks on Mac dev
+- [ ] Robert using CoS daily via Telegram — natural conversation, not just commands
+- [ ] decisions.md writing automatically — no prompting required
+- [ ] actions.md writing automatically across all observed events
+- [ ] At least 3 proactive flags generated without Robert asking
+- [ ] At least 1 cross-domain handoff proposed by CoS
+- [ ] Hourly watching scans confirmed running
+- [ ] Guild surfaces decisions and actions in real time
 - [ ] A/B test with second agent completed — swappability confirmed
 - [ ] `config/openclaw/cos_interface.md` written and accurate
 - [ ] No incidents involving personal OpenClaw instance
-- [ ] Robert comfortable saying: "I could swap this agent tomorrow if needed"
+- [ ] Robert can say: "CoS knows what's going on without me telling it"
 
 ---
 
-## Next Steps (in order)
+## Connection to ROADMAP.md and Future Phases
 
-1. Answer the five open questions above
-2. Write `config/openclaw/cos_interface.md` — the agent-agnostic interface contract
-3. Grok review pass on this design doc
-4. Claude Code writes the containerization spec (Dockerfile + compose addition)
-5. Robert approves and Claude Code builds on dev
-6. Robert tests Phase 1 use cases via Telegram for 2+ weeks
-7. A/B test with second agent
-8. Phase 2 design session begins only after Phase 1 exit criteria all met
+**Phase 2 (memory layer):** CoS's natural decisions/actions writing in Phase 1 becomes the foundation. Raw data in decisions.md, actions.md, and `~/.openclaw-cos/` feeds the intelligence layer.
+
+**Guild split (Ideas #2 + #3):** CoS moves to its own domain. Master Craftsman takes the tactical build quality role in Build domain. CoS retains cross-domain read access and strategic oversight.
+
+**Phase 3+ (bounded autonomy):** Watching behaviors expand. Proactive flags become proposals. Proposals become autonomous actions within policy. Mirrors the ROADMAP.md phase map.
 
 ---
 
-## Connection to ROADMAP.md
-
-This document implements Phase 1 of the solution roadmap. The memory writing obligation introduced here (decisions.md, actions.md) is the foundation Phase 2 (memory and intelligence layer) builds on. The agent swappability requirement introduced here is the foundation for the agent-agnostic architecture in Phase 2. Design for Phase 2 is in `docs/design/design_memory_intelligence_layer_v3_2026-07-05.md`.
-
----
-
-*Design document · mini-moi · 2026-07-05 · Not build-ready — open questions pending*
-*Grok review before build*
-*Key addition 2026-07-05 evening: Agent swappability is a Phase 1 exit criterion — A/B test required before Phase 1 is considered complete*
+*Design document · mini-moi · 2026-07-05 · v3*
+*Full rewrite from note-taker framing — Cabinet leader definition throughout*
+*Two Grok review passes completed — open questions resolved*
+*Next: answer 5 remaining open questions → write cos_interface.md → build spec*
