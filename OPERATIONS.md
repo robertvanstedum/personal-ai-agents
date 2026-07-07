@@ -45,13 +45,22 @@ CoS runs `check_ec2_health()` every 30 minutes on EC2 only. Checks:
 
 Alerts fire via `minimoi_system_bot`. CoS detects and escalates — **Robert decides the action.**
 
+### Security group inbound rules (sg-007791ae5cd1979e9)
+
+| Protocol | Source | Purpose |
+|----------|--------|---------|
+| HTTPS | 0.0.0.0/0 | Public web traffic |
+| HTTP | 0.0.0.0/0 | Public web traffic |
+| SSH | 202.49.186.0/24 | NordVPN Chicago range |
+| SSH | 172.59.187.202/32 | Home T-Mobile IPv4 |
+| SSH | 18.206.107.24/29 | EC2 Instance Connect — **do not delete** |
+
 ### SSH access
 
-Two rules in EC2 security group (sg-007791ae5cd1979e9):
-- **Home T-Mobile** (`172.59.187.202/32`) — works directly, no VPN needed
-- **NordVPN** (`202.49.186.107/32`) — connect to United States #11564 (Chicago) before SSHing
-
-If away from home and the NordVPN IP has rotated: check `whatismyip.com` while connected to NordVPN, then update the NordVPN SSH rule in the EC2 security group to the new IP.
+- **At home:** T-Mobile IPv4 rule works directly, no VPN needed.
+- **Away from home:** Connect to NordVPN Chicago server first, then SSH.
+- **NordVPN range:** `/24` covers the full Chicago range — no more updating a single IP when NordVPN rotates.
+- **EC2 Instance Connect (`18.206.107.24/29`):** This is AWS's service IP for browser-based shell access. It must never be removed — without it, Instance Connect fails and you lose the emergency access path if your SSH rules are wrong.
 
 ### Manual EC2 health check
 
