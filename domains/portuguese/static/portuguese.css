@@ -2405,16 +2405,15 @@ body.reading-mode nav { background: #1B2E1F; border-bottom-color: var(--parch-ac
   background: none;
   border: none;
   padding: 4px 0 4px 1.5rem;
-  cursor: default;
-  font-size: 14px;
-  line-height: 1;
-  color: rgba(247, 242, 232, 0.6);
-  opacity: 0.55;
-  transition: opacity 0.15s;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  transition: color 0.15s;
   flex-shrink: 0;
 }
 .nav-tip:hover,
-.nav-tip.tip-open { opacity: 1; }
+.nav-tip.tip-open { color: var(--text); }
 
 .nav-tip-popover {
   display: none;

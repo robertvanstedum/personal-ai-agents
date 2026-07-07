@@ -430,7 +430,7 @@ def dashboard():
     user = _current_user()
     auth_id = user.get("auth_id")
     has_portuguese = (
-        user.get("tier") in ("owner", "guest")
+        user.get("tier") in ("owner", "admin", "guest")
         or (auth_id is not None and _dauth.has_domain_access(auth_id, "portuguese"))
     )
     return render_template("dashboard.html", user=user, has_portuguese=has_portuguese)

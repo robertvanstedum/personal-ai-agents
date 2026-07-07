@@ -29,10 +29,26 @@ To add a new slot: add the key here first, then add the server-side `tips.get('s
 
 | Slot key | Page | Context | Active |
 |---|---|---|---|
-| `briefing.main` | Curator briefing | Main briefing view | ✅ |
+| `briefing.main` | Daily (Curator briefing) | Main briefing view | ✅ |
+| `curator.reading_room` | Reading Room | Article library view | ✅ |
+| `curator.scans-dives` | Scans & Dives | Scan browse view | ✅ |
+| `curator.leanings` | Leanings | Beliefs tracker | ✅ |
+| `curator.archive` | Archive | Reading history | ✅ |
 
 **`briefing.main`**
 > Your daily briefing — curated signals across geopolitics, finance, and technology. Use the category filters to focus, or read straight through.
+
+**`curator.reading_room`**
+> Articles you've saved for deeper reading. Open any article to read the full text, take notes, and save words to your vocabulary.
+
+**`curator.scans-dives`**
+> Quick pass through today's top stories — scored and ranked. Click into any article to go deeper.
+
+**`curator.leanings`**
+> Track beliefs in progress — from open question to held position. Add a leaning, set its state, and watch your thinking evolve over time.
+
+**`curator.archive`**
+> Your reading history — articles you've opened or saved. Use it to revisit stories or track what you've been following.
 
 ---
 
@@ -112,6 +128,7 @@ To add a new slot: add the key here first, then add the server-side `tips.get('s
 |---|---|
 | 2026-07-04 | Initial registry — 15 slots across Curator, Meu Português, Mein Deutsch |
 | 2026-07-05 | Synced tip texts to updated tips.json — leitura, conversas, escrita, lesen, gesprache, schreiben revised |
+| 2026-07-07 | Added 4 Curator slots: curator.reading_room, curator.scans-dives, curator.leanings, curator.archive |
 
 ---
 
