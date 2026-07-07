@@ -1,7 +1,8 @@
 #!/bin/bash
 # Sync build queue and spec docs from Mac to EC2.
 # Run after updating build_queue.json, docs/design/, or docs/specs/ on dev.
-# The portal reads these from host-mounted paths -- no container restart needed.
+# The portal reads these from host-mounted paths. --inplace on build_queue sync
+# preserves the inode so Docker bind mounts see changes without a restart.
 #
 # Usage: ./scripts/sync_docs.sh <ec2-public-ip>
 # Requires: SSH key configured for ec2-user@<ip>
@@ -19,7 +20,7 @@ EC2_USER="ec2-user"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "=== Syncing build queue ==="
-rsync -avz \
+rsync -avz --inplace \
   "${REPO_ROOT}/data/guild/build_queue.json" \
   "${EC2_USER}@${EC2_IP}:/opt/minimoi/data/guild/build_queue.json"
 
