@@ -843,5 +843,38 @@
     "blocked_reason": "Open questions on what to surface publicly",
     "last_transition_at": "2026-07-06T00:51:24Z",
     "notes": "README rewrite (portfolio quality), archive old docs and superseded specs, stale issue cleanup, remove sensitive references. Goal: repo presentable for T-Mobile AI team review. Design doc: design_github_docs_cleanup_2026-07-04.md."
+  },
+  {
+    "id": 127,
+    "spec_title": "Curator Tech Domain \u2014 AI/ML research feed",
+    "spec_file": null,
+    "status": "idea",
+    "github_issue": null,
+    "priority": "normal",
+    "blocked_reason": null,
+    "last_transition_at": "2026-07-07T00:00:00Z",
+    "notes": "Add Tech as a focused Curator category or standalone domain. Sources: ArXiv, Anthropic/xAI/Mistral blogs, Hugging Face, applied AI engineering newsletters. Scoped narrowly to memory architectures, context learning, agent coordination, personal AI systems \u2014 developments directly relevant to mini-moi. Start as a new Curator category, evaluate after 4-6 weeks, promote to standalone domain if signal quality is proven."
+  },
+  {
+    "id": 128,
+    "spec_title": "Split Guild into standalone Build domain and CoS domain",
+    "spec_file": null,
+    "status": "idea",
+    "github_issue": null,
+    "priority": "normal",
+    "blocked_reason": "Gates on #117 Guild navigation redesign completion \u2014 do not start before #117 is done",
+    "last_transition_at": "2026-07-07T00:00:00Z",
+    "notes": "Guild currently does three jobs: Build (specs, queue, roadmap \u2014 shareable with collaborators), CoS (career, operations, agent coordination \u2014 private to Robert), and navigation container. Separate into two standalone domains. Build domain becomes shareable \u2014 appropriate for external review by collaborators or the T-Mobile AI team. CoS domain stays private, owns the memory layer and OpenClaw integration."
+  },
+  {
+    "id": 129,
+    "spec_title": "Repurpose Guild CoS agent as Master Craftsman \u2014 build quality guardian",
+    "spec_file": null,
+    "status": "idea",
+    "github_issue": null,
+    "priority": "normal",
+    "blocked_reason": "Depends on #128 CoS domain split",
+    "last_transition_at": "2026-07-07T00:00:00Z",
+    "notes": "Once CoS moves to its own domain (#128), the current Guild CoS agent is repurposed rather than deprecated. New role: Master Craftsman \u2014 focused on build quality, code review, domain template compliance, and standards enforcement. Fits the Guild metaphor naturally: craftsmen (builders), master craftsman (quality/standards), CoS (operations/coordination). Three distinct roles, three distinct surfaces. Rename and reframe the agent \u2014 do not delete the infrastructure."
   }
 ]
