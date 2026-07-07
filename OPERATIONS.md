@@ -45,6 +45,14 @@ CoS runs `check_ec2_health()` every 30 minutes on EC2 only. Checks:
 
 Alerts fire via `minimoi_system_bot`. CoS detects and escalates — **Robert decides the action.**
 
+### SSH access
+
+Two rules in EC2 security group (sg-007791ae5cd1979e9):
+- **Home T-Mobile** (`172.59.187.202/32`) — works directly, no VPN needed
+- **NordVPN** (`202.49.186.107/32`) — connect to United States #11564 (Chicago) before SSHing
+
+If away from home and the NordVPN IP has rotated: check `whatismyip.com` while connected to NordVPN, then update the NordVPN SSH rule in the EC2 security group to the new IP.
+
 ### Manual EC2 health check
 
 Access via AWS EC2 Instance Connect (no SSH key needed — browser terminal from AWS console).
