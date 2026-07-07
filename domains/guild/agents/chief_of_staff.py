@@ -330,15 +330,17 @@ _EXPECTED_CONTAINERS = [
     "postgres-ai-agents",
     "minimoi-curator",
     "minimoi-german",
+    "minimoi-portuguese",
     "minimoi-portal",
     "minimoi-system-bot",
     "minimoi-cos-bot",
 ]
 
 _HEALTH_ENDPOINTS = [
-    ("curator", "http://localhost:8766/health"),
-    ("german",  "http://localhost:8767/health"),
-    ("portal",  "http://localhost:5001/health"),
+    ("curator",    "http://minimoi-curator:8766/health"),
+    ("german",     "http://minimoi-german:8767/health"),
+    ("portal",     "http://minimoi-portal:5001/health"),
+    ("portuguese", "http://minimoi-portuguese:8770/health"),
 ]
 
 _ec2_alert_cooldown: dict = {}
@@ -361,6 +363,27 @@ def _get_instance_id() -> str:
         return r.text.strip()
     except Exception:
         return ""
+
+
+def _list_running_containers() -> set:
+    """List running container names via Docker socket. No CLI binary required."""
+    import http.client
+    import socket as _socket
+
+    class _UnixConn(http.client.HTTPConnection):
+        def __init__(self, path):
+            super().__init__("localhost")
+            self._path = path
+        def connect(self):
+            s = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+            s.connect(self._path)
+            self.sock = s
+
+    conn = _UnixConn("/var/run/docker.sock")
+    conn.request("GET", "/containers/json")
+    resp = conn.getresponse()
+    data = json.loads(resp.read())
+    return {name.lstrip("/") for c in data for name in c.get("Names", [])}
 
 
 def _check_ec2_health() -> dict:
@@ -388,11 +411,7 @@ def _check_ec2_health() -> dict:
 
     # ── 1. Container check ────────────────────────────────────────────────────
     try:
-        result = subprocess.run(
-            ["docker", "ps", "--format", "{{.Names}}"],
-            capture_output=True, text=True, timeout=15
-        )
-        running = set(result.stdout.strip().splitlines())
+        running = _list_running_containers()
         for name in _EXPECTED_CONTAINERS:
             if name not in running:
                 svc = name.replace("minimoi-", "")
@@ -404,7 +423,7 @@ def _check_ec2_health() -> dict:
                 )
                 issues.append(f"container_down:{name}")
     except Exception as e:
-        log.error("EC2 health: docker ps failed: %s", e)
+        log.error("EC2 health: container check failed: %s", e)
 
     # ── 2. Disk check ─────────────────────────────────────────────────────────
     try:
@@ -426,24 +445,25 @@ def _check_ec2_health() -> dict:
 
     # ── 3. Memory check ───────────────────────────────────────────────────────
     try:
-        result = subprocess.run(["free", "-m"], capture_output=True, text=True, timeout=10)
-        lines = result.stdout.strip().splitlines()
-        if len(lines) >= 2:
-            parts = lines[1].split()
-            total = int(parts[1])
-            used  = int(parts[2])
-            pct   = int(used / total * 100) if total > 0 else 0
-            if pct >= 85:
-                avail = parts[6] if len(parts) >= 7 else "?"
-                _ec2_alert(token, chat_id, "memory_high",
-                    f"⚠️ <b>EC2 Health Alert</b>\n"
-                    f"Memory usage: <b>{pct}%</b> (threshold: 85%)\n"
-                    f"Used: {used}MB / {total}MB — Available: {avail}MB\n\n"
-                    f"Check consumers: <code>docker stats --no-stream</code>"
-                )
-                issues.append(f"memory:{pct}%")
+        meminfo = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                key, val = line.split(":", 1)
+                meminfo[key.strip()] = int(val.strip().split()[0])  # kB
+        total = meminfo.get("MemTotal", 0)
+        avail = meminfo.get("MemAvailable", 0)
+        used  = total - avail
+        pct   = int(used / total * 100) if total > 0 else 0
+        if pct >= 85:
+            _ec2_alert(token, chat_id, "memory_high",
+                f"⚠️ <b>EC2 Health Alert</b>\n"
+                f"Memory usage: <b>{pct}%</b> (threshold: 85%)\n"
+                f"Used: {used // 1024}MB / {total // 1024}MB — Available: {avail // 1024}MB\n\n"
+                f"Check consumers: <code>docker stats --no-stream</code>"
+            )
+            issues.append(f"memory:{pct}%")
     except Exception as e:
-        log.error("EC2 health: free failed: %s", e)
+        log.error("EC2 health: memory check failed: %s", e)
 
     # ── 4. /health endpoint check ─────────────────────────────────────────────
     for name, url in _HEALTH_ENDPOINTS:

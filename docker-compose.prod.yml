@@ -131,6 +131,7 @@ services:
     volumes:
       - /opt/minimoi/data/guild/memory/cos_memory.md:/app/data/guild/memory/cos_memory.md
       - /opt/minimoi/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json
+      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "127.0.0.1:8769:8769"
     depends_on:
