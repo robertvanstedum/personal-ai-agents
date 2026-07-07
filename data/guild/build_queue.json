@@ -876,5 +876,16 @@
     "blocked_reason": "Depends on #128 CoS domain split",
     "last_transition_at": "2026-07-07T00:00:00Z",
     "notes": "Once CoS moves to its own domain (#128), the current Guild CoS agent is repurposed rather than deprecated. New role: Master Craftsman \u2014 focused on build quality, code review, domain template compliance, and standards enforcement. Fits the Guild metaphor naturally: craftsmen (builders), master craftsman (quality/standards), CoS (operations/coordination). Three distinct roles, three distinct surfaces. Rename and reframe the agent \u2014 do not delete the infrastructure."
+  },
+  {
+    "id": 130,
+    "spec_title": "Chief of Staff \u2014 Phase 0 agent evaluation + Phase 1 platform wiring",
+    "spec_file": "design_cos_consolidated_v1.1_2026-07-06.md",
+    "status": "design",
+    "github_issue": null,
+    "priority": "normal",
+    "blocked_reason": null,
+    "last_transition_at": "2026-07-07T00:00:00Z",
+    "notes": "Chief of Staff consolidated design v1.1 \u2014 Phase 0 agent evaluation (OpenClaw + Cowork baseline), then build custom cos_agent_grok.py as permanent #2, wire to platform via cos_interface.md. Supersedes design_cos_phase1_2026-07-05.md. Do not start Phase 1 until Phase 0 evaluation complete (2-4 weeks daily use). Next: investigation task on MemGPT/Letta + Grok API capabilities, then Phase 0 setup."
   }
 ]
