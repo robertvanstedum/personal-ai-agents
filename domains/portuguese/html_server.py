@@ -1139,17 +1139,27 @@ def api_pt_admin_article():
     try:
         conn = _db_conn()
         with conn, conn.cursor() as cur:
+            # Match date_fetched to the most recent article in this category so
+            # manually added articles group with the existing feed in HOJE filter.
+            cur.execute(
+                "SELECT date_fetched FROM portuguese.articles"
+                " WHERE category = %s AND is_active = TRUE AND date_fetched IS NOT NULL"
+                " ORDER BY date_fetched DESC LIMIT 1",
+                (category,),
+            )
+            row = cur.fetchone()
+            date_fetched = row[0] if row else None
             cur.execute(
                 "INSERT INTO portuguese.articles"
-                " (url, title, excerpt, full_text, source, category, added_by)"
-                " VALUES (%s, %s, %s, %s, %s, %s, %s)"
+                " (url, title, excerpt, full_text, source, category, added_by, date_fetched)"
+                " VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
                 " ON CONFLICT (url) DO UPDATE SET"
                 "   title = EXCLUDED.title,"
                 "   full_text = EXCLUDED.full_text,"
                 "   excerpt = EXCLUDED.excerpt,"
                 "   is_active = TRUE"
                 " RETURNING id",
-                (url, title, excerpt or None, full_text or None, source or None, category, user_id),
+                (url, title, excerpt or None, full_text or None, source or None, category, user_id, date_fetched),
             )
             article_id = cur.fetchone()[0]
         return jsonify({"ok": True, "id": article_id})
