@@ -235,7 +235,7 @@ def _chat_grok(system_prompt: str, history: list) -> str:
         raise ProviderError("xAI API key not found")
     client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
     resp = client.chat.completions.create(
-        model="grok-4.3",
+        model="grok-3-mini",
         max_tokens=200,
         temperature=0.7,
         messages=[{"role": "system", "content": system_prompt}] + _build_chat_messages(history),

@@ -38,6 +38,9 @@ case "$TARGET" in
   portal)
     build_and_push portal minimoi/portal docker/Dockerfile.portal
     ;;
+  portuguese)
+    build_and_push portuguese minimoi/portuguese docker/Dockerfile.portuguese
+    ;;
   system-bot)
     build_and_push system-bot minimoi/system-bot docker/Dockerfile.telegram
     ;;
@@ -50,13 +53,14 @@ case "$TARGET" in
   all)
     build_and_push curator minimoi/curator docker/Dockerfile.curator
     build_and_push german minimoi/mein-deutsch docker/Dockerfile.german
+    build_and_push portuguese minimoi/portuguese docker/Dockerfile.portuguese
     build_and_push portal minimoi/portal docker/Dockerfile.portal
     build_and_push system-bot minimoi/system-bot docker/Dockerfile.telegram
     build_and_push cos-bot minimoi/cos-bot docker/Dockerfile.cos-bot
     build_and_push cos-scheduler minimoi/cos-scheduler docker/Dockerfile.cos-scheduler
     ;;
   *)
-    echo "Usage: $0 [curator|german|portal|system-bot|cos-bot|cos-scheduler|all]"
+    echo "Usage: $0 [curator|german|portuguese|portal|system-bot|cos-bot|cos-scheduler|all]"
     exit 1
     ;;
 esac
