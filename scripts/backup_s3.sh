@@ -9,10 +9,29 @@ DATE=$(date +%Y-%m-%d)
 S3_BUCKET="s3://minimoi-backups"
 LOCAL_BACKUP="/opt/minimoi/backups/${DATE}"
 LOG_FILE="/opt/minimoi/logs/backup_s3.log"
+TELEGRAM_CHAT_ID="8379221702"
 
 mkdir -p /opt/minimoi/logs
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
+
+notify_failure() {
+    local token
+    token=$(aws ssm get-parameter \
+        --name /minimoi/production/telegram_bot_token \
+        --with-decryption \
+        --query Parameter.Value \
+        --output text \
+        --region us-east-1 2>/dev/null || true)
+    if [ -n "$token" ]; then
+        curl -sf "https://api.telegram.org/bot${token}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d text="❌ S3 backup FAILED — $(date '+%Y-%m-%d %H:%M UTC'). Check /opt/minimoi/logs/backup_s3.log on EC2." \
+            > /dev/null || true
+    fi
+}
+
+trap 'notify_failure' ERR
 
 log "=== S3 backup starting: ${DATE} ==="
 
