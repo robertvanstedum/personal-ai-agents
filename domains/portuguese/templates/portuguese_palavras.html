@@ -44,7 +44,7 @@
   <span class="filter-count" id="filter-count"></span>
   <button class="btn-filter-reset" id="btn-reset-filters">Mostrar tudo</button>
   <a class="btn-ghost woerter-export-all" href="/api/pt/anki-export" download
-     title="Exportar vocabulário para Anki">Anki Export — Todos</a>
+     title="Export vocabulary to Anki">Anki Export — Todos</a>
 </div>
 
 <div class="manual-entry-form">
@@ -77,7 +77,7 @@
         <td class="w-german">{{ entry.portuguese }}</td>
         <td class="w-english">{{ entry.english }}</td>
         <td class="w-expand-col">
-          <button class="btn-expand" title="Ver detalhes">Detalhes</button>
+          <button class="btn-expand" title="Show details">Detalhes</button>
         </td>
       </tr>
       <tr class="woerter-detail" id="detail-{{ entry.id }}" style="display:none"
@@ -109,21 +109,21 @@
             <div class="expand-practice">
               <div class="expand-label">PRATICAR</div>
               <div class="direction-toggle-inline">
-                <button class="dir-btn active" data-dir="pt-en" title="Português para Inglês">🇧🇷 → 🇺🇸</button>
-                <button class="dir-btn" data-dir="en-pt" title="Inglês para Português">🇺🇸 → 🇧🇷</button>
+                <button class="dir-btn active" data-dir="pt-en" title="Portuguese to English">🇧🇷 → 🇺🇸</button>
+                <button class="dir-btn" data-dir="en-pt" title="English to Portuguese">🇺🇸 → 🇧🇷</button>
               </div>
               <div class="practice-prompt">
                 <span class="practice-prompt-text">{{ entry.portuguese }}</span>
                 <button class="btn-voice-out btn-speak-practice"
-                        data-text="{{ entry.portuguese }}" title="Ouvir pronuncia">🔊</button>
+                        data-text="{{ entry.portuguese }}" title="Hear pronunciation">🔊</button>
               </div>
               <div class="practice-input-wrap">
                 <textarea class="practice-input" placeholder="Sua resposta…" rows="2"></textarea>
                 <div style="display:flex;gap:0.5rem;margin-top:0.4rem">
                   <button class="btn-voice-mic btn-voice-practice"
-                          data-direction="pt-en" title="Falar sua resposta">🎤</button>
+                          data-direction="pt-en" title="Speak your answer">🎤</button>
                   <button class="btn-delivery btn-pruefen-practice"
-                          data-id="{{ entry.id }}" title="Verificar resposta">Verificar</button>
+                          data-id="{{ entry.id }}" title="Check answer">Verificar</button>
                 </div>
               </div>
               <div class="practice-correction" style="display:none">
@@ -160,7 +160,7 @@
               </button>
               {% endif %}
               <a class="btn-ghost" href="/api/pt/anki-export?status={{ entry.status }}" download
-                 title="Exportar para Anki">Anki Export</a>
+                 title="Export to Anki">Anki Export</a>
             </div>
           </div>
         </td>
@@ -186,10 +186,10 @@
 <div class="woerter-section" id="section-treino" style="display:none">
   {% if drill_pool %}
   <div class="direction-toggle" id="direction-toggle">
-    <button class="dir-btn active" data-dir="pt-en" id="dir-pt-en" title="Português para Inglês">
+    <button class="dir-btn active" data-dir="pt-en" id="dir-pt-en" title="Portuguese to English">
       🇧🇷 → 🇺🇸 Português para Inglês
     </button>
-    <button class="dir-btn" data-dir="en-pt" id="dir-en-pt" title="Inglês para Português">
+    <button class="dir-btn" data-dir="en-pt" id="dir-en-pt" title="English to Portuguese">
       🇺🇸 → 🇧🇷 Inglês para Português
     </button>
   </div>
@@ -201,13 +201,13 @@
 
   <div class="drill-card" id="drill-card">
     <div class="drill-prompt" id="drill-prompt"></div>
-    <button class="btn-voice-out" id="btn-speak-prompt" title="Ouvir pronuncia">🔊 Ouvir</button>
+    <button class="btn-voice-out" id="btn-speak-prompt" title="Hear pronunciation">🔊 Ouvir</button>
 
     <div class="drill-input-area" id="drill-input-area">
       <textarea id="drill-input" placeholder="Sua resposta aqui…" rows="3"></textarea>
       <div class="drill-input-row">
-        <button class="btn-voice-mic" id="voice-drill" title="Entrada de voz">🎤</button>
-        <button class="btn-delivery" id="btn-pruefen" title="Verificar resposta">Verificar</button>
+        <button class="btn-voice-mic" id="voice-drill" title="Voice input">🎤</button>
+        <button class="btn-delivery" id="btn-pruefen" title="Check answer">Verificar</button>
       </div>
     </div>
 
@@ -230,9 +230,9 @@
     </div>
 
     <div class="drill-assess" id="drill-assess" style="display:none">
-      <button class="btn-richtig" id="drill-correct" title="Marcar correto">✓ Certo</button>
-      <button class="btn-falsch"  id="drill-wrong"  title="Marcar errado">✗ Errado</button>
-      <button class="btn-skip"    id="drill-skip"   title="Pular">→ Pular</button>
+      <button class="btn-richtig" id="drill-correct" title="Mark correct">✓ Certo</button>
+      <button class="btn-falsch"  id="drill-wrong"  title="Mark wrong">✗ Errado</button>
+      <button class="btn-skip"    id="drill-skip"   title="Skip this card">→ Pular</button>
     </div>
   </div>
 

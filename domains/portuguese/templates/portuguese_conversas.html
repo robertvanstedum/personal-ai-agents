@@ -37,7 +37,7 @@
             <div class="persona-info">
               <div class="persona-name">
                 {{ p.name }}
-                {% if p_ready %}<span class="round-ready-dot" title="Pronta para avançar">●</span>{% endif %}
+                {% if p_ready %}<span class="round-ready-dot" title="Ready to advance">●</span>{% endif %}
               </div>
               <div class="persona-role">
                 {{ p.role }}
@@ -90,19 +90,19 @@
             </div>
             <div class="prompt-actions">
               <button class="btn-session-start" id="start-session-btn"
-                      title="Inicia a sessão de IA diretamente no navegador">
+                      title="Start AI session directly in the browser">
                 ▶ Iniciar sessão
               </button>
               <button class="btn-delivery" id="btn-copy"
-                      title="Copiar prompt para a área de transferência">
+                      title="Copy prompt to clipboard">
                 📋 Copiar prompt
               </button>
               <button class="btn-delivery" id="btn-telegram"
-                      title="Enviar prompt para Telegram">
+                      title="Send prompt to Telegram">
                 ✈ Telegram
               </button>
               <button class="btn-delivery" id="btn-download"
-                      title="Salvar prompt como arquivo de texto">
+                      title="Save prompt as text file">
                 💾 Como .txt
               </button>
             </div>
@@ -118,8 +118,8 @@
                 · <span id="session-persona-label"></span>
                 · <span id="session-model-label"></span>
               </span>
-              <button id="session-pause-btn" class="btn-session-pause" title="Pausar conversa">⏸ Pausar</button>
-              <button id="session-mute-btn" class="btn-session-mute" title="Silenciar">🔊</button>
+              <button id="session-pause-btn" class="btn-session-pause" title="Pause conversation">⏸ Pausar</button>
+              <button id="session-mute-btn" class="btn-session-mute" title="Mute">🔊</button>
               <button id="end-session-btn" class="btn-session-end">■ Encerrar</button>
             </div>
             <div class="session-listen-status" id="session-listen-status" style="display:none"></div>
@@ -170,7 +170,7 @@
                   <button class="gesprache-source-pill" data-source="desktop">💻 Desktop</button>
                 </div>
                 <div class="gesprache-submit-row">
-                  <button class="btn-primary btn-analysieren-full" id="btn-analisar" title="Analisar a conversa" disabled>Analisar →</button>
+                  <button class="btn-primary btn-analysieren-full" id="btn-analisar" title="Analyse conversation" disabled>Analisar →</button>
                   <span class="gesprache-status" id="analyse-status"></span>
                 </div>
                 <div class="analysieren-helper" id="analysieren-helper">Cole a transcrição para analisar</div>
@@ -719,7 +719,7 @@ document.body.classList.add('parch-mode');
       `<div class="session-saved-actions">` +
         `<button class="btn-session-card-transcript">Transcrição ▾</button>` +
         teilenBtn +
-        `<button class="btn-session-card-delete" title="Excluir sessão">✕</button>` +
+        `<button class="btn-session-card-delete" title="Delete session">✕</button>` +
         `<button class="btn-session-card-analyse">Analisar →</button>` +
       `</div>` +
       `<div class="session-card-transcript-wrap" style="display:none">` +

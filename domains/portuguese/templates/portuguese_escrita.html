@@ -11,28 +11,28 @@
     </div>
 
 <div class="mode-toggle">
-  <button class="mode-btn active" data-mode="diario" title="Escrita livre de diário">Diário</button>
-  <button class="mode-btn" data-mode="contexto" title="Escrever em contexto de artigo">Em Contexto</button>
-  <button class="mode-btn" data-mode="vocabulario" title="Registrar vocabulário manualmente">Vocabulário</button>
+  <button class="mode-btn active" data-mode="diario" title="Journal writing mode">Diário</button>
+  <button class="mode-btn" data-mode="contexto" title="Practice writing in context">Em Contexto</button>
+  <button class="mode-btn" data-mode="vocabulario" title="Vocabulary practice mode">Vocabulário</button>
 </div>
 
 <!-- ── Diário ────────────────────────────────────────────────────── -->
 <div class="mode-pane" id="pane-diario">
   <div class="tagebuch-prompt-row">
     <p class="tagebuch-prompt" id="diario-prompt"></p>
-    <button class="btn-ghost" id="diario-next-prompt" title="Outro prompt de escrita">↻ Outro</button>
+    <button class="btn-ghost" id="diario-next-prompt" title="Another writing prompt">↻ Outro</button>
   </div>
   <textarea class="notebook-textarea" id="diario-input" rows="6"
     placeholder="Escreva aqui…"></textarea>
   <div class="pane-actions">
     <div class="pane-actions-left">
-      <button class="btn-voice" id="voice-diario" title="Entrada de voz">🎤</button>
+      <button class="btn-voice" id="voice-diario" title="Voice input">🎤</button>
       <label class="toggle-label">
         <input type="checkbox" id="diario-correct" checked>
         Solicitar correção
       </label>
     </div>
-    <button class="btn-primary" id="diario-korrigieren" title="Verificar gramática ou salvar">Corrigir</button>
+    <button class="btn-primary" id="diario-korrigieren" title="Request grammar correction">Corrigir</button>
   </div>
   <span class="write-status" id="diario-status"></span>
   <div class="correction-display" id="diario-correction" style="display:none">
@@ -42,8 +42,8 @@
     </div>
     <ul class="correction-notes" id="diario-notes"></ul>
     <div class="correction-actions">
-      <button class="btn-accept" id="diario-accept" title="Aceitar correção na área de texto">↑ Aceitar</button>
-      <button class="btn-primary" id="diario-submit" title="Salvar entrada corrigida">Salvar</button>
+      <button class="btn-accept" id="diario-accept" title="Apply corrected text to text box">↑ Aceitar</button>
+      <button class="btn-primary" id="diario-submit" title="Save corrected entry">Salvar</button>
     </div>
   </div>
 </div>
@@ -59,9 +59,9 @@
     placeholder="Escreva aqui em português — sobre o artigo ou um tema livre…"></textarea>
   <div class="pane-actions">
     <div class="pane-actions-left">
-      <button class="btn-voice" id="voice-kontext" title="Entrada de voz">🎤</button>
+      <button class="btn-voice" id="voice-kontext" title="Voice input">🎤</button>
     </div>
-    <button class="btn-primary" id="kontext-submit" title="Solicitar correção de gramática">Corrigir</button>
+    <button class="btn-primary" id="kontext-submit" title="Request grammar correction">Corrigir</button>
   </div>
   <span class="write-status" id="kontext-status"></span>
   <div class="correction-display" id="kontext-correction" style="display:none">
@@ -75,8 +75,8 @@
     </div>
     <ul class="correction-notes" id="kontext-notes"></ul>
     <div class="correction-actions">
-      <button class="btn-accept" id="kontext-accept" title="Aceitar correção na área de texto">↑ Aceitar</button>
-      <button class="btn-primary" id="kontext-save" title="Salvar entrada corrigida">Salvar</button>
+      <button class="btn-accept" id="kontext-accept" title="Apply corrected text to text box">↑ Aceitar</button>
+      <button class="btn-primary" id="kontext-save" title="Save corrected entry">Salvar</button>
     </div>
   </div>
 </div>
@@ -86,7 +86,7 @@
   <div class="mode-explainer">
     <p>Registre palavras e frases manualmente — de uma conversa, livro ou vídeo.
     Entradas salvas aparecem em
-    <a href="/palavras" title="Ir para Palavras">Palavras</a>.</p>
+    <a href="/palavras" title="Go to vocabulary library">Palavras</a>.</p>
   </div>
 </div>
 
@@ -120,8 +120,8 @@
   <div class="popover-timing" id="popover-timing"></div>
   <div class="popover-actions">
     <button class="btn-save-phrase" id="btn-save-phrase"
-            title="Salvar palavra ou frase em Palavras">＋ Em Palavras</button>
-    <button class="btn-close-popover" id="btn-close-popover" title="Fechar">✕</button>
+            title="Save word or phrase to Palavras">＋ Em Palavras</button>
+    <button class="btn-close-popover" id="btn-close-popover" title="Close">✕</button>
   </div>
 </div>
 

@@ -78,7 +78,7 @@
   <div class="strip-empty" id="lesen-empty-state" style="display:none">
     <span class="strip-empty-text">Nenhum artigo carregado.</span>
     <button class="strip-action-btn" id="btn-artikel-laden"
-            title="Atualizar feed de artigos">Artigos ↻</button>
+            title="Refresh article feed">Artigos ↻</button>
   </div>
 
 </div>
@@ -89,11 +89,11 @@
     <span class="wien-banner-label" id="leitura-banner-label">Leitura</span>
   </div>
   <div class="article-bar">
-    <button class="article-bar-btn" id="btn-back-liste" title="Voltar à lista">← Lista</button>
+    <button class="article-bar-btn" id="btn-back-liste" title="Back to article list">← Lista</button>
     <div class="article-bar-center">
-      <button class="article-bar-btn" id="btn-art-prev" title="Artigo anterior">‹</button>
+      <button class="article-bar-btn" id="btn-art-prev" title="Previous article">‹</button>
       <span class="article-bar-counter" id="art-counter">1 / 1</span>
-      <button class="article-bar-btn" id="btn-art-next" title="Próximo artigo">›</button>
+      <button class="article-bar-btn" id="btn-art-next" title="Next article">›</button>
     </div>
   </div>
   <div class="reading-body">
@@ -112,20 +112,20 @@
             <textarea class="notizen-input" id="notizen-original" rows="4"
               placeholder="Escrever uma nota…"></textarea>
             <button class="btn-voice" id="voice-notizen"
-                    title="Entrada de voz">🎤</button>
+                    title="Voice input">🎤</button>
           </div>
           <div class="notizen-actions">
             <button class="notizen-btn" id="btn-notizen-correct"
-                    title="Solicitar correção de gramática">Corrigir</button>
+                    title="Request grammar correction">Corrigir</button>
             <button class="notizen-btn notizen-btn-save" id="btn-notizen-save"
-                    title="Salvar nota">Salvar</button>
+                    title="Save note">Salvar</button>
             <span class="notizen-status" id="notizen-status"></span>
           </div>
           <div class="notizen-correction" id="notizen-correction" style="display:none">
             <div class="notizen-correction-label" id="notizen-corrected-label">Correção:</div>
             <div class="notizen-corrected-row">
               <div class="notizen-correction-text" id="notizen-correction-text"></div>
-              <button class="notizen-accept-btn" id="btn-notizen-accept" title="Copiar correção">← Aceitar</button>
+              <button class="notizen-accept-btn" id="btn-notizen-accept" title="Copy correction into text box">← Aceitar</button>
             </div>
             <div class="notizen-translation-row" id="notizen-translation-row" style="display:none">
               <div class="notizen-correction-label notizen-translation-label" id="notizen-translation-label">Em inglês:</div>
@@ -137,13 +137,13 @@
       </div>
       <div class="reading-footer">
         <button class="reading-footer-btn" id="btn-mehr"
-                title="Expandir texto completo">＋ Mais</button>
+                title="Expand full article text">＋ Mais</button>
         <button class="reading-footer-btn" id="btn-weniger"
-                title="Recolher texto">－ Menos</button>
+                title="Collapse article text">－ Menos</button>
         <button class="reading-footer-btn" id="btn-merken"
-                title="Salvar artigo">🔖 Salvar</button>
+                title="Save article for later">🔖 Salvar</button>
         <button class="reading-footer-btn" id="btn-vorlesen"
-                title="Ler artigo em voz alta">🔊 Ouvir</button>
+                title="Read article aloud">🔊 Ouvir</button>
       </div>
     </div>
     <aside class="reading-sidebar">
@@ -164,8 +164,8 @@
   <div class="popover-timing" id="popover-timing"></div>
   <div class="popover-actions">
     <button class="btn-save-phrase" id="btn-save-phrase"
-            title="Salvar palavra em Palavras">＋ Em Palavras</button>
-    <button class="btn-close-popover" id="btn-close-popover" title="Fechar">✕</button>
+            title="Save word to Palavras">＋ Em Palavras</button>
+    <button class="btn-close-popover" id="btn-close-popover" title="Close">✕</button>
   </div>
 </div>
 {% endblock %}
