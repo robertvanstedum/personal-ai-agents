@@ -3,12 +3,12 @@
     "id": 122,
     "spec_title": "Three-Tier Production Backup \u2014 Local EC2 + S3 + Dropbox",
     "spec_file": "spec_production_backup_2026-07-05.md",
-    "status": "spec_ready",
+    "status": "in_build",
     "github_issue": 76,
     "priority": "high",
     "blocked_reason": null,
-    "notes": "Tier 1 (local EC2 backup_local.sh) already live as hotfix 2026-07-05. Build Tier 2 (S3) and Tier 3 (Dropbox) this week. S3 IAM setup requires Robert. Motivated by data loss incident \u2014 curator_archive and research_dives wiped by force-recreate without volume mounts.",
-    "last_transition_at": "2026-07-06T00:51:24Z"
+    "notes": "Tier 1 (local EC2 backup_local.sh) live since 2026-07-05. Tier 2 (S3) live as of 2026-07-09: bucket minimoi-backups (versioned, AES-256, 90-day lifecycle), IAM instance role policy minimoi-s3-backup, backup_s3.sh deployed to /opt/minimoi/scripts/, cron 3am UTC daily, Telegram failure alert via ERR trap. First 5 backups confirmed in S3 (5\u00d7~32-35MB). Tier 3 (Dropbox) pending: backup_dropbox.sh deployed, cron 4am UTC Sundays installed, blocked on rclone install + Dropbox OAuth browser flow (separate session).",
+    "last_transition_at": "2026-07-09T00:00:00Z"
   },
   {
     "id": 123,
@@ -828,11 +828,11 @@
     "id": 121,
     "spec_title": "Tips UX Redesign \u2014 Nav Bar Icon + Tab-Specific Popovers",
     "spec_file": "spec_121_tips_ux_redesign_2026-07-05.md",
-    "status": "in_build",
+    "status": "built",
     "github_issue": null,
     "blocked_reason": null,
-    "last_transition_at": "2026-07-05T00:00:00Z",
-    "notes": "Phase A shipped: full-width banner removed from all German + Portuguese tabs, nav bar \ud83d\udca1 icon with tab-specific popover, Gespr\u00e4che/Conversas secondary inline tip. CSS: german.css v=29, portuguese.css v=12. Phase B (Curator tips) deferred until DESK/LEANINGS routing confirmed working."
+    "last_transition_at": "2026-07-09T00:00:00Z",
+    "notes": "Phase A shipped: full-width banner removed from all German + Portuguese tabs, nav bar SVG lightbulb icon with tab-specific popover, Gespr\u00e4che/Conversas secondary inline tip (commit 7063a83: replaced \ud83d\udca1 emoji with inline SVG). All German + Portuguese tooltip title attributes translated to English. CSS: german.css v=29, portuguese.css v=12. Phase B (Curator tips) deferred until DESK/LEANINGS routing confirmed working."
   },
   {
     "id": 124,
