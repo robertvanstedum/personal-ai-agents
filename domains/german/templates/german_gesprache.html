@@ -34,7 +34,7 @@
             <div class="persona-info">
               <div class="persona-name">
                 {{ p.name }}
-                {% if p.memory.ready_to_archive %}<span class="round-ready-dot" title="Runde abgeschlossen — Aktion erforderlich">●</span>{% endif %}
+                {% if p.memory.ready_to_archive %}<span class="round-ready-dot" title="Round complete — action required">●</span>{% endif %}
               </div>
               <div class="persona-role">
                 {{ p.role }}
@@ -76,21 +76,21 @@
             </div>
             <div class="prompt-actions">
               <button class="btn-session-start" id="start-session-btn"
-                      title="Startet die KI-Sitzung direkt im Browser">
+                      title="Start AI session directly in the browser">
                 ▶ Sitzung starten
               </button>
               <button class="btn-delivery" id="btn-copy"
-                      title="Prompt in die Zwischenablage kopieren — kein App-Wechsel">
+                      title="Copy prompt to clipboard — no app switching">
                 📋 Prompt kopieren
               </button>
               {% if not is_guest %}
               <button class="btn-delivery" id="btn-telegram"
-                      title="Kopiert den Prompt und öffnet Telegram — dort einfügen">
+                      title="Copy prompt and open Telegram — paste there">
                 ✈ Telegram
               </button>
               {% endif %}
               <button class="btn-delivery" id="btn-download"
-                      title="Speichert den vollständigen Prompt als Textdatei">
+                      title="Save full prompt as text file">
                 💾 Als .txt
               </button>
             </div>
@@ -106,8 +106,8 @@
                 · <span id="session-persona-label"></span>
                 · <span id="session-model-label"></span>
               </span>
-              <button id="session-pause-btn" class="btn-session-pause" title="Gespräch pausieren">⏸ Pause</button>
-              <button id="session-mute-btn" class="btn-session-mute" title="Ton ausschalten">🔊</button>
+              <button id="session-pause-btn" class="btn-session-pause" title="Pause conversation">⏸ Pause</button>
+              <button id="session-mute-btn" class="btn-session-mute" title="Mute">🔊</button>
               <button id="end-session-btn" class="btn-session-end">■ Beenden</button>
             </div>
             <div class="session-listen-status" id="session-listen-status" style="display:none"></div>
@@ -158,7 +158,7 @@
                   <button class="gesprache-source-pill" data-source="desktop">💻 Desktop</button>
                 </div>
                 <div class="gesprache-submit-row">
-                  <button class="btn-primary btn-analysieren-full" id="btn-analysieren" title="Analyse des Gesprächs" disabled>Analysieren →</button>
+                  <button class="btn-primary btn-analysieren-full" id="btn-analysieren" title="Analyse conversation" disabled>Analysieren →</button>
                   <span class="gesprache-status" id="analyse-status"></span>
                 </div>
                 <div class="analysieren-helper" id="analysieren-helper">Transkript zum Analysieren einfügen</div>
@@ -270,7 +270,7 @@
                     <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:0.3rem;">
                       <label class="konv-field-label" style="margin-bottom:0;">Transkript einfügen</label>
                       <button id="btn-fetch-transcript" class="konv-drive-link"
-                              title="Neuestes Transkript von Google Drive laden" disabled>
+                              title="Load latest transcript from Google Drive" disabled>
                         Von Drive →
                       </button>
                     </div>
@@ -855,7 +855,7 @@ document.body.classList.add('parch-mode');
       `<div class="session-saved-actions">` +
         `<button class="btn-session-card-transcript">Transkript ▾</button>` +
         teilenBtn +
-        `<button class="btn-session-card-delete" title="Sitzung löschen">✕</button>` +
+        `<button class="btn-session-card-delete" title="Delete session">✕</button>` +
         `<button class="btn-session-card-analyse">Analysieren →</button>` +
       `</div>` +
       `<div class="session-card-transcript-wrap" style="display:none">` +
