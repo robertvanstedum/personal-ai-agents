@@ -3,12 +3,12 @@
     "id": 122,
     "spec_title": "Three-Tier Production Backup \u2014 Local EC2 + S3 + Dropbox",
     "spec_file": "spec_production_backup_2026-07-05.md",
-    "status": "in_build",
+    "status": "done",
     "github_issue": 76,
     "priority": "high",
     "blocked_reason": null,
-    "notes": "Tier 1 (local EC2 backup_local.sh) live since 2026-07-05. Tier 2 (S3) live as of 2026-07-09: bucket minimoi-backups (versioned, AES-256, 90-day lifecycle), IAM instance role policy minimoi-s3-backup, backup_s3.sh deployed to /opt/minimoi/scripts/, cron 3am UTC daily, Telegram failure alert via ERR trap. First 5 backups confirmed in S3 (5\u00d7~32-35MB). Tier 3 (Dropbox) pending: backup_dropbox.sh deployed, cron 4am UTC Sundays installed, blocked on rclone install + Dropbox OAuth browser flow (separate session).",
-    "last_transition_at": "2026-07-09T00:00:00Z"
+    "notes": "Tier 1 (local EC2 backup_local.sh) live since 2026-07-05. Tier 2 (S3) live as of 2026-07-09: bucket minimoi-backups (versioned, AES-256, 90-day lifecycle), IAM instance role policy minimoi-s3-backup, backup_s3.sh deployed, cron 3am UTC daily, Telegram failure alert via ERR trap. First 5 backups confirmed in S3. Tier 3 (Dropbox) deferred indefinitely \u2014 backup_dropbox.sh and cron stub in place; blocked on rclone install + Dropbox OAuth browser flow when needed.",
+    "last_transition_at": "2026-07-09T12:00:00Z"
   },
   {
     "id": 123,
@@ -749,11 +749,11 @@
     "id": 113,
     "spec_title": "Portuguese Domain: Backend Completion",
     "spec_file": "build_plan_portuguese_completion_2026-06-26.md",
-    "status": "in_build",
+    "status": "done",
     "github_issue": null,
     "blocked_reason": null,
-    "last_transition_at": "2026-06-28T02:31:00.391863+00:00",
-    "notes": "2026-06-27: Multiuser per-user JSON shipped (commit 308568a). 2026-06-28: EC2 Postgres migrations 003-009 run; SSM subdirs created. Remaining: Leitura/Palavras end-to-end verify on minimoi.ai."
+    "last_transition_at": "2026-07-09T12:00:00Z",
+    "notes": "2026-06-27: Multiuser per-user JSON shipped (commit 308568a). 2026-06-28: EC2 Postgres migrations 003-009 run; SSM subdirs created. Leitura/Palavras end-to-end verified in prod by Robert 2026-07-09."
   },
   {
     "id": 114,
@@ -779,11 +779,11 @@
     "id": 116,
     "spec_title": "Narrative Synchronization \u2014 minimoi.ai / GitHub / LinkedIn / Resume",
     "spec_file": "spec_116_narrative_sync_2026-07-04.md",
-    "status": "spec_ready",
+    "status": "deferred",
     "github_issue": null,
-    "blocked_reason": null,
-    "last_transition_at": "2026-07-03T00:00:00Z",
-    "notes": "Replaces spec_landing_page_update_2026-07-03.md. Five surfaces: minimoi.ai landing, GitHub README, GitHub About, LinkedIn, resume. Design session required before Claude Code builds \u2014 scheduled next."
+    "blocked_reason": "Design session scheduled for Saturday 2026-07-12",
+    "last_transition_at": "2026-07-09T12:00:00Z",
+    "notes": "Replaces spec_landing_page_update_2026-07-03.md. Five surfaces: minimoi.ai landing, GitHub README, GitHub About, LinkedIn, resume. Design session required before Claude Code builds \u2014 scheduled Saturday 2026-07-12."
   },
   {
     "id": 117,
@@ -808,11 +808,11 @@
     "id": 119,
     "spec_title": "Move DATABASE_URL to .env on EC2",
     "spec_file": null,
-    "status": "backlog",
+    "status": "done",
     "github_issue": null,
     "blocked_reason": null,
-    "last_transition_at": "2026-07-04T00:00:00Z",
-    "notes": "Remove DATABASE_URL connection string from docker-compose.prod.yml \u2014 move to /opt/minimoi/.env so compose file has no connection logic at all. One-line change on EC2, no ECR push needed."
+    "last_transition_at": "2026-07-09T12:00:00Z",
+    "notes": "DATABASE_URL was already present in /opt/minimoi/.env (minimoi user). Removed inline entry from docker-compose.prod.yml portuguese service \u2014 Portuguese container now picks it up from env_file. CI/CD deploy will apply on next push."
   },
   {
     "id": 120,

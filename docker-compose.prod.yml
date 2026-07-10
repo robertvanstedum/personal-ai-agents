@@ -57,7 +57,6 @@ services:
     environment:
       - FLASK_ENV=production
       - PORT=8770
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/personal_agents
     volumes:
       - /opt/minimoi/data/portuguese:/app/domains/portuguese/data
     ports:
