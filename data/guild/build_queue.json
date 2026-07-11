@@ -3,12 +3,12 @@
     "id": 134,
     "spec_title": "CoS Domain Extraction",
     "spec_file": "spec_cos_domain_extraction_2026-07-11.md",
-    "status": "in_build",
+    "status": "done",
     "github_issue": null,
     "priority": "normal",
     "blocked_reason": null,
-    "last_transition_at": "2026-07-11T00:00:00Z",
-    "notes": "Prerequisite to spec #133 Phase 1. Moves chief_of_staff.py from domains/guild/agents/ to domains/cos/ and relocates cos_memory.md to platform-owned path. Pre-Flight Q1–Q5 answered: clean cut, only telegram_cos_bot.py imports from old path. BASE_DIR depth changes from 4 to 3 parent levels."
+    "last_transition_at": "2026-07-11T15:05:00Z",
+    "notes": "Prerequisite to spec #133 Phase 1. Moved chief_of_staff.py from domains/guild/agents/ to domains/cos/ via git mv (history preserved). BASE_DIR depth fixed 4→3 parent levels. cos_memory.md relocated to data/cos_memory.md; docker-compose.prod.yml both volume mounts updated. telegram_cos_bot.py import paths updated. sync_private_repo.sh updated. GUILD_CHARTER.md amended. launchd plist (com.user.cos) updated to new path. Service healthy: /health ok, memory_chars 675 at new path. EC2 manual step pending: cp /opt/minimoi/data/guild/memory/cos_memory.md /opt/minimoi/cos_memory.md before next CI/CD deploy."
   },
   {
     "id": 122,
