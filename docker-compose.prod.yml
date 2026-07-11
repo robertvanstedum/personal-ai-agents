@@ -78,6 +78,7 @@ services:
       - /opt/minimoi/docs/specs:/app/docs/specs
       - /opt/minimoi/auth/users.json:/app/minimoi_portal/auth/users.json
       - /opt/minimoi/auth/guests.json:/app/minimoi_portal/auth/guests.json
+      - /opt/minimoi/agent_logs:/app/agent_logs
     ports:
       - "127.0.0.1:5001:5001"
     depends_on:

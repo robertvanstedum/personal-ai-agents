@@ -69,6 +69,9 @@ VOICE_NOTES.md
 # Logs (generated, not source)
 logs/
 
+# Agent logs — host-mounted data on EC2, not tracked in repo
+agent_logs/
+
 # Cloudflare Wrangler local cache
 .wrangler/
 

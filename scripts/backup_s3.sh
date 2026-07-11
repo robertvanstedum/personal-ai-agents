@@ -50,4 +50,9 @@ docker exec postgres-ai-agents pg_dump -U postgres personal_agents | \
     aws s3 cp - "${S3_BUCKET}/${DATE}/postgres.dump"
 log "Postgres dump complete"
 
+# Sync agent logs to S3 (persistent path, not date-partitioned)
+log "Syncing agent_logs → ${S3_BUCKET}/agent_logs/"
+aws s3 sync /opt/minimoi/agent_logs/ "${S3_BUCKET}/agent_logs/" --quiet
+log "Agent logs sync complete"
+
 log "=== S3 backup complete: ${S3_BUCKET}/${DATE}/ ==="
