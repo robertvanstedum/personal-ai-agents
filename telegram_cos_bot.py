@@ -41,7 +41,7 @@ def _identity() -> str:
 
 
 def _chat(text: str) -> str:
-    from domains.guild.agents.chief_of_staff import _chat as cos_chat
+    from domains.cos.chief_of_staff import _chat as cos_chat
     return cos_chat(text)
 
 
@@ -52,7 +52,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from domains.guild.agents.chief_of_staff import _state, _state_lock, _read_memory
+    from domains.cos.chief_of_staff import _state, _state_lock, _read_memory
     with _state_lock:
         snap = dict(_state)
     mem = _read_memory()

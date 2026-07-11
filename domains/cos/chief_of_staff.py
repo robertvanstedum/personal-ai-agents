@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-domains/guild/agents/chief_of_staff.py — Chief of Staff Agent
+domains/cos/chief_of_staff.py — Chief of Staff Agent
 Guild Phase 3
 
 Flask service on port 8769:
@@ -31,10 +31,10 @@ from openai import OpenAI
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
-BASE_DIR        = Path(__file__).parent.parent.parent.parent   # repo root
+BASE_DIR        = Path(__file__).parent.parent.parent   # repo root
 COS_CONTEXT_FILE = BASE_DIR / "domains/guild/config/cos_context.json"
 COS_SOUL_FILE    = BASE_DIR / "domains/guild/config/cos_soul.md"
-COS_MEMORY_FILE  = BASE_DIR / "data/guild/memory/cos_memory.md"
+COS_MEMORY_FILE  = BASE_DIR / "data/cos_memory.md"
 AGENDA_FILE      = BASE_DIR / "data/guild/cos_agenda.json"
 LOGS_DIR         = BASE_DIR / "logs"
 

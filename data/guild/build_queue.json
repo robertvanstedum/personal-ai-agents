@@ -1,5 +1,16 @@
 [
   {
+    "id": 134,
+    "spec_title": "CoS Domain Extraction",
+    "spec_file": "spec_cos_domain_extraction_2026-07-11.md",
+    "status": "in_build",
+    "github_issue": null,
+    "priority": "normal",
+    "blocked_reason": null,
+    "last_transition_at": "2026-07-11T00:00:00Z",
+    "notes": "Prerequisite to spec #133 Phase 1. Moves chief_of_staff.py from domains/guild/agents/ to domains/cos/ and relocates cos_memory.md to platform-owned path. Pre-Flight Q1–Q5 answered: clean cut, only telegram_cos_bot.py imports from old path. BASE_DIR depth changes from 4 to 3 parent levels."
+  },
+  {
     "id": 122,
     "spec_title": "Three-Tier Production Backup \u2014 Local EC2 + S3 + Dropbox",
     "spec_file": "spec_production_backup_2026-07-05.md",

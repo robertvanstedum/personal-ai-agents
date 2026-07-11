@@ -21,7 +21,7 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 SYNC_PATHS=(
     # Guild memory + config
-    "data/guild/memory/cos_memory.md"
+    "data/cos_memory.md"
     "data/guild/memory/ops_memory.md"
     "data/guild/memory/devagent_memory.md"
     "data/guild/cos_agenda.json"

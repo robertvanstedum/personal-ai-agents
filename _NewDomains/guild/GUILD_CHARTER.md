@@ -441,6 +441,10 @@ mini-moi-private/guild/          ← sensitive, separate private repo
 | **Phase 5** | Operations — health monitor + runbooks | Claude Code | After Phase 4 |
 | **Release** | German v1.0 + Guild v1.0 launch together | All agents | Phase 5 complete |
 
+### 2026-07-11 — Chief of Staff graduated from Guild to standalone domain
+
+`chief_of_staff.py` moved from `domains/guild/agents/` to `domains/cos/` (spec #134, prerequisite to spec #133 Intelligence Layer Phase 1). CoS now runs as its own top-level domain — same Flask service, same port 8769, same bots. Memory file relocated from `data/guild/memory/cos_memory.md` to `data/cos_memory.md` (agent-agnostic memory principle: memory must outlive any single agent implementation). The four-cabinet Guild model remains; CoS cabinet is now externalized. `telegram_cos_bot.py` import path updated.
+
 ---
 
 ## 13. The Bigger Idea
