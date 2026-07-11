@@ -881,33 +881,44 @@
     "id": 130,
     "spec_title": "Chief of Staff \u2014 Phase 0 agent evaluation + Phase 1 platform wiring",
     "spec_file": "design_cos_consolidated_v1.1_2026-07-06.md",
-    "status": "design",
+    "status": "cancelled",
     "github_issue": null,
     "priority": "normal",
-    "blocked_reason": null,
-    "last_transition_at": "2026-07-07T00:00:00Z",
-    "notes": "Chief of Staff consolidated design v1.1 \u2014 Phase 0 agent evaluation (OpenClaw + Cowork baseline), then build custom cos_agent_grok.py as permanent #2, wire to platform via cos_interface.md. Supersedes design_cos_phase1_2026-07-05.md. Do not start Phase 1 until Phase 0 evaluation complete (2-4 weeks daily use). Next: investigation task on MemGPT/Letta + Grok API capabilities, then Phase 0 setup."
+    "blocked_reason": "Superseded by #133 spec_133_intelligence_layer_v1.1_2026-07-10.md",
+    "last_transition_at": "2026-07-10T00:00:00Z",
+    "notes": "Superseded by #133 (Intelligence Layer v1.1) which incorporates CoS Phase 0/1 and the full memory + local LLM architecture."
   },
   {
     "id": 131,
     "spec_title": "CoS v0 \u2014 Conversational entry point, routing, memory store",
     "spec_file": "spec_cos_v0_2026-07-10.md",
-    "status": "spec_ready",
+    "status": "cancelled",
     "github_issue": null,
     "priority": "high",
-    "blocked_reason": "Grok review required before build",
+    "blocked_reason": "Superseded by #133 spec_133_intelligence_layer_v1.1_2026-07-10.md",
     "last_transition_at": "2026-07-10T00:00:00Z",
-    "notes": "Full rewrite from note-taker to Cabinet leader. Natural conversation entry point \u2014 no prefix, everything not a domain command routes to CoS by default. Two OpenClaw instances: personal (#1) + mini-moi (#2), hard container isolation. Memory store: cos_memory.json (JSON first, Postgres schema designed). Spec produced 2026-07-10."
+    "notes": "Superseded by #133 (Intelligence Layer v1.1). CoS v0 content fully incorporated into Phase 1 of #133."
   },
   {
     "id": 132,
     "spec_title": "Local LLM + Memory Intelligence Layer",
     "spec_file": null,
-    "status": "idea",
+    "status": "cancelled",
     "github_issue": null,
     "priority": "normal",
-    "blocked_reason": "Combined spec not yet written \u2014 open thread from 2026-07-10 design session",
+    "blocked_reason": "Superseded by #133 spec_133_intelligence_layer_v1.1_2026-07-10.md",
     "last_transition_at": "2026-07-10T00:00:00Z",
-    "notes": "Separate dev/staging EC2 instance (t3.medium always-on + g4dn.xlarge spot overnight). One model shared across four domains: Build Intelligence (spec/code consistency, drift detection), Curator Intelligence (conversational archive query, preference learning), Language Intelligence (German + Portuguese unified, session continuity, error patterns), CoS (reads all three, executes queries). Two-stage processing: local LLM indexes/structures, cloud LLM reasons/synthesizes. First model candidate: Llama 3.1 8B via Ollama. Nightly spot run ~$0.16/hr. Full combined spec to be written \u2014 Opus review planned after."
+    "notes": "Superseded by #133 (Intelligence Layer v1.1). Incorporated into Phases 2 and 3. Model candidate updated to Qwen2.5-14B Q4 (not Llama 3.1 8B); cost model revised to start/stop only."
+  },
+  {
+    "id": 133,
+    "spec_title": "mini-moi Intelligence Layer \u2014 CoS + OpenClaw #2 + Memory + Local LLM",
+    "spec_file": "spec_133_intelligence_layer_v1.1_2026-07-10.md",
+    "status": "spec_ready",
+    "github_issue": null,
+    "priority": "high",
+    "blocked_reason": "cos_interface.md requires OpenClaw review before Phase 1 build starts",
+    "last_transition_at": "2026-07-10T00:00:00Z",
+    "notes": "v1.1 \u2014 reviews by Grok + Claude frontier + Robert incorporated. Three phases: (1) CoS domain + OpenClaw #2 + memory capture + agent_logs \u2014 this week, committed. (2) Local LLM infrastructure + Build Intelligence \u2014 after Phase 1 stable. (3) Curator + Language Intelligence + full wiring. First model candidate: Qwen2.5-14B Q4 on g4dn.xlarge spot. No always-on instances. Cost POC ~$15-20/month. Month-3 hardware gate: Mac mini M4 Pro 48GB. Companion: config/cos_interface.md \u2014 OpenClaw review required before build."
   }
 ]
