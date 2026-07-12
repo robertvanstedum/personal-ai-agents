@@ -25,7 +25,7 @@ from pathlib import Path
 
 import requests
 from apscheduler.schedulers.background import BackgroundScheduler
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -144,27 +144,26 @@ Hard limits (never cross these):
 def _read_build_state() -> str:
     """Query guild.design_log for active items — for /chat context."""
     try:
-        conn = _db()
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT status,
-                       COALESCE(spec_title, spec_file, file_path) AS title,
-                       EXTRACT(EPOCH FROM (NOW() - last_transition_at))/86400 AS age_days,
-                       blocked_reason,
-                       github_issue
-                FROM guild.design_log
-                WHERE status IN ('spec_ready','in_build','blocked','incomplete')
-                ORDER BY
-                  CASE status
-                    WHEN 'blocked'    THEN 1
-                    WHEN 'in_build'   THEN 2
-                    WHEN 'spec_ready' THEN 3
-                    WHEN 'incomplete' THEN 4
-                  END,
-                  last_transition_at DESC
-            """)
-            rows = cur.fetchall()
-        conn.close()
+        with _db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT status,
+                           COALESCE(spec_title, spec_file, file_path) AS title,
+                           EXTRACT(EPOCH FROM (NOW() - last_transition_at))/86400 AS age_days,
+                           blocked_reason,
+                           github_issue
+                    FROM guild.design_log
+                    WHERE status IN ('spec_ready','in_build','blocked','incomplete')
+                    ORDER BY
+                      CASE status
+                        WHEN 'blocked'    THEN 1
+                        WHEN 'in_build'   THEN 2
+                        WHEN 'spec_ready' THEN 3
+                        WHEN 'incomplete' THEN 4
+                      END,
+                      last_transition_at DESC
+                """)
+                rows = cur.fetchall()
         if not rows:
             return "No active build items."
         lines = []
@@ -991,6 +990,34 @@ def loops_status():
     return jsonify(snap)
 
 
+# ── Web UI (Phase A — localhost only, no auth, dev testing tool) ──────────────
+
+@app.route("/ui")
+def ui():
+    return render_template("cos_ui.html")
+
+
+@app.route("/ui/send", methods=["POST"])
+def ui_send():
+    body = request.get_json(silent=True) or {}
+    text = (body.get("text") or "").strip()
+    if not text:
+        return jsonify({"reply": "Nothing to respond to."})
+    try:
+        reply = _chat(text)
+        _inc_chat()
+        return jsonify({"reply": reply})
+    except Exception as e:
+        _log_file("ui_send_error", str(e))
+        return jsonify({"reply": f"CoS error: {e}"}), 500
+
+
+@app.route("/ui/memory")
+def ui_memory():
+    mem = _read_memory()
+    return render_template("cos_memory.html", memory=mem, memory_chars=len(mem))
+
+
 @app.route("/event", methods=["POST"])
 def receive_event():
     """
@@ -1064,11 +1091,14 @@ def main():
 
     print(f"""
 💼  Chief of Staff starting on port {PORT}…
-   /chat    — conversational endpoint (POST {{"text": "..."}})
-   /status  — agent state
-   /health  — liveness probe
-   /loops   — intelligence loop status
-   /event   — receive events from Guild agents (POST)
+   /chat       — conversational endpoint (POST {{"text": "..."}})
+   /status     — agent state
+   /health     — liveness probe
+   /loops      — intelligence loop status
+   /event      — receive events from Guild agents (POST)
+   /ui         — web UI (Phase A: Talk tab functional, localhost only, no auth)
+   /ui/send    — POST {{"text":"..."}} from browser
+   /ui/memory  — read-only cos_memory.md dump
 """)
 
     # 1. Check DB availability

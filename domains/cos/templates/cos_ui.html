@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chief of Staff</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Georgia, serif;
+      background: #1a1a1a;
+      color: #e8e2d4;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #111;
+      border-bottom: 1px solid #333;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      height: 52px;
+    }
+    header h1 {
+      font-size: 1rem;
+      letter-spacing: 0.12em;
+      font-weight: normal;
+      color: #b8a98a;
+      text-transform: uppercase;
+      margin: 0;
+    }
+    nav {
+      display: flex;
+      gap: 0;
+      margin-left: auto;
+    }
+    nav button {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: #888;
+      padding: 0 18px;
+      height: 52px;
+      cursor: pointer;
+      font-family: Georgia, serif;
+      font-size: 0.85rem;
+      letter-spacing: 0.05em;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    nav button:hover { color: #c8b898; }
+    nav button.active {
+      color: #e8e2d4;
+      border-bottom-color: #b8a98a;
+    }
+    nav button.stub { color: #555; cursor: default; }
+    nav button.stub:hover { color: #555; }
+
+    /* ── Chicago photo placeholder (header banner) ── */
+    .photo-banner {
+      height: 120px;
+      border: 2px dashed #444;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #555;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      background: #161616;
+      margin: 0;
+    }
+
+    /* ── Main layout ── */
+    main {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 24px 24px 0;
+    }
+
+    /* ── Tab panels ── */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Talk tab ── */
+    #chat-log {
+      height: 420px;
+      overflow-y: auto;
+      border: 1px solid #333;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+      background: #131313;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+    .msg { margin-bottom: 14px; }
+    .msg-label {
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    .msg-user .msg-label { color: #7a9ab8; }
+    .msg-cos  .msg-label { color: #b8a98a; }
+    .msg-text { white-space: pre-wrap; word-break: break-word; }
+
+    .thinking { color: #555; font-style: italic; font-size: 0.85rem; }
+
+    #send-form {
+      display: flex;
+      gap: 8px;
+    }
+    #send-input {
+      flex: 1;
+      background: #111;
+      border: 1px solid #333;
+      color: #e8e2d4;
+      padding: 10px 14px;
+      font-family: Georgia, serif;
+      font-size: 0.9rem;
+      outline: none;
+    }
+    #send-input:focus { border-color: #665a46; }
+    #send-btn {
+      background: #2e2820;
+      border: 1px solid #4a3f2e;
+      color: #c8b898;
+      padding: 10px 20px;
+      font-family: Georgia, serif;
+      font-size: 0.85rem;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+    }
+    #send-btn:hover { background: #3a3020; }
+    #send-btn:disabled { opacity: 0.4; cursor: default; }
+
+    .scope-note {
+      margin-top: 10px;
+      font-size: 0.72rem;
+      color: #555;
+      letter-spacing: 0.04em;
+    }
+    .scope-note a { color: #665a46; text-decoration: none; }
+    .scope-note a:hover { color: #b8a98a; }
+
+    /* ── Stub tabs ── */
+    .coming-soon {
+      padding: 48px 0;
+      color: #555;
+      font-size: 0.9rem;
+      font-style: italic;
+    }
+    .coming-soon p { margin: 0 0 8px; }
+    .coming-soon a { color: #665a46; text-decoration: none; }
+    .coming-soon a:hover { color: #b8a98a; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Chief of Staff</h1>
+    <nav>
+      <button class="tab-btn active" data-tab="talk">Talk</button>
+      <button class="tab-btn stub" data-tab="feed" title="Coming in Phase B">Feed</button>
+      <button class="tab-btn stub" data-tab="todo" title="Coming in Phase B">To-do</button>
+      <button class="tab-btn stub" data-tab="archive" title="Coming in Phase B">Archive</button>
+    </nav>
+  </header>
+
+  <!-- Chicago photo placeholder — Phase B: swap this div for an <img> -->
+  <div class="photo-banner">[Chicago photo — header]</div>
+
+  <main>
+
+    <!-- Talk tab (functional) -->
+    <div id="tab-talk" class="tab-panel active">
+      <div id="chat-log"></div>
+      <form id="send-form" onsubmit="sendMessage(event)">
+        <input id="send-input" type="text" placeholder="Message CoS…" autocomplete="off" autofocus>
+        <button id="send-btn" type="submit">Send</button>
+      </form>
+      <p class="scope-note">
+        Phase A — localhost only · no auth · <a href="/ui/memory" target="_blank">view memory ↗</a>
+        · Telegram path unaffected
+      </p>
+    </div>
+
+    <!-- Feed tab (Phase B placeholder) -->
+    <div id="tab-feed" class="tab-panel">
+      <div class="coming-soon">
+        <p>Feed — memory entries, decisions, and observations.</p>
+        <p>Coming in Phase B.</p>
+        <p><a href="/ui/memory" target="_blank">Raw memory dump →</a></p>
+      </div>
+    </div>
+
+    <!-- To-do tab (Phase B placeholder) -->
+    <div id="tab-todo" class="tab-panel">
+      <div class="coming-soon">
+        <p>To-do — open action items from memory + pending agenda recommendations.</p>
+        <p>Coming in Phase B.</p>
+      </div>
+    </div>
+
+    <!-- Archive tab (Phase B placeholder) -->
+    <div id="tab-archive" class="tab-panel">
+      <div class="coming-soon">
+        <p>Archive — full history across memory and agent logs, searchable.</p>
+        <p>Coming in Phase B.</p>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    // ── Tab switching ──────────────────────────────────────────────────────────
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      if (btn.classList.contains('stub')) return;
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      });
+    });
+
+    // ── Chat log ───────────────────────────────────────────────────────────────
+    const chatLog = document.getElementById('chat-log');
+
+    function appendMsg(role, text) {
+      const wrap = document.createElement('div');
+      wrap.className = 'msg msg-' + role;
+      const label = document.createElement('div');
+      label.className = 'msg-label';
+      label.textContent = role === 'user' ? 'You' : 'CoS';
+      const body = document.createElement('div');
+      body.className = 'msg-text';
+      body.textContent = text;
+      wrap.appendChild(label);
+      wrap.appendChild(body);
+      chatLog.appendChild(wrap);
+      chatLog.scrollTop = chatLog.scrollHeight;
+      return wrap;
+    }
+
+    function appendThinking() {
+      const el = document.createElement('div');
+      el.className = 'thinking';
+      el.textContent = 'Thinking…';
+      chatLog.appendChild(el);
+      chatLog.scrollTop = chatLog.scrollHeight;
+      return el;
+    }
+
+    async function sendMessage(e) {
+      e.preventDefault();
+      const input = document.getElementById('send-input');
+      const btn   = document.getElementById('send-btn');
+      const text  = input.value.trim();
+      if (!text) return;
+
+      input.value = '';
+      input.disabled = true;
+      btn.disabled = true;
+
+      appendMsg('user', text);
+      const thinking = appendThinking();
+
+      try {
+        const resp = await fetch('/ui/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        const data = await resp.json();
+        thinking.remove();
+        appendMsg('cos', data.reply || '(empty reply)');
+      } catch (err) {
+        thinking.remove();
+        appendMsg('cos', 'Error: ' + err.message);
+      } finally {
+        input.disabled = false;
+        btn.disabled = false;
+        input.focus();
+      }
+    }
+  </script>
+</body>
+</html>

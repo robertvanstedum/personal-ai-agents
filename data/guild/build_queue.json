@@ -922,6 +922,17 @@
     "notes": "Superseded by #133 (Intelligence Layer v1.1). Incorporated into Phases 2 and 3. Model candidate updated to Qwen2.5-14B Q4 (not Llama 3.1 8B); cost model revised to start/stop only."
   },
   {
+    "id": 135,
+    "spec_title": "CoS Web Interface \u2014 Skeleton Now, Domain Later",
+    "spec_file": "spec_cos_web_interface_2026-07-12.md",
+    "status": "in_build",
+    "github_issue": null,
+    "priority": "high",
+    "blocked_reason": null,
+    "last_transition_at": "2026-07-12T00:00:00Z",
+    "notes": "Phase A shipped: GET /ui (Talk tab functional), POST /ui/send (calls _chat()), GET /ui/memory (read-only cos_memory.md dump), four-tab nav (Feed/To-do/Archive as visible Phase B placeholders), Chicago photo placeholder in header. Fixed pre-existing _read_build_state() context manager bug. Localhost only, no auth \u2014 both deliberate Phase A scope. Phase B deferred: full visual design, auth, Feed/To-do/Archive tabs, portal proxy."
+  },
+  {
     "id": 133,
     "spec_title": "mini-moi Intelligence Layer \u2014 CoS + Memory + Local LLM (Multi-Agent, Lock-In-Free)",
     "spec_file": "spec_133_intelligence_layer_v1.3_2026-07-12.md",
