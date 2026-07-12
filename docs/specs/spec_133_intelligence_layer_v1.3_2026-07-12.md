@@ -1,13 +1,13 @@
-# Spec #133 v1.2: mini-moi Intelligence Layer
+# Spec #133 v1.3: mini-moi Intelligence Layer
 ## CoS Domain + Memory + Local LLM — Multi-Agent, Lock-In-Free, Compounding
 
-**File:** `spec_133_intelligence_layer_v1.2_2026-07-11.md`
-**Status:** ~~Spec Ready~~ **SUPERSEDED by v1.3 (`spec_133_intelligence_layer_v1.3_2026-07-12.md`)**
-**Date:** 2026-07-11
+**File:** `spec_133_intelligence_layer_v1.3_2026-07-12.md`
+**Status:** Spec Ready — Phase 0 complete, Phase 1 reconciled with reality and Grok-reviewed, ready for build
+**Date:** 2026-07-12
 **Build queue:** #133
 **Author:** Claude.ai design session (Fable 5)
-**Reviews:** Grok (2026-07-10, incorporated) · Claude frontier review (2026-07-10, incorporated) · Robert (resequencing, cost model, data architecture, all approved)
-**Companion document:** `VISION_mini_moi_intelligence_layer_2026-07-11.md`
+**Reviews:** Grok (2026-07-10 and 2026-07-12, both incorporated) · Claude frontier review (2026-07-10, incorporated) · Robert (sequencing, cost, data architecture, Phase 1 reality-check, ways-of-working — all approved)
+**Companion documents:** `VISION_mini_moi_intelligence_layer_2026-07-11.md`, `design_memory_architecture_direction_2026-07-12.md` (pending artifact review — see Open Questions, may be superseded by existing content)
 
 ---
 
@@ -15,9 +15,10 @@
 
 | Document | Status |
 |---|---|
-| `spec_133_intelligence_layer_v1.1_2026-07-10.md` | **Superseded by this version** |
+| `spec_133_intelligence_layer_v1.2_2026-07-11.md` | **Superseded by this version** |
+| `spec_133_intelligence_layer_v1.1_2026-07-10.md` | Superseded |
 | `spec_133_intelligence_layer_2026-07-10.md` (v1.0) | Superseded |
-| `spec_cos_domain_extraction_2026-07-11.md` | **Incorporated as Phase 0 — complete, build queue #134** |
+| `spec_cos_domain_extraction_2026-07-11.md` | Incorporated as Phase 0 — complete, build queue #134 |
 | `design_cos_consolidated_v1.1_2026-07-06.md` | Superseded |
 | `spec_cos_v0_2026-07-10.md` | Superseded |
 | `design_memory_intelligence_layer_v3_2026-07-05.md` | Superseded |
@@ -25,7 +26,20 @@
 | `CoS_Test_Instance_Setup.md` | Superseded |
 | `design_curator_tech_domain_2026-07-10.md` | Referenced — Curator domain concern |
 | `spec_117_guild_navigation_redesign_2026-07-04.md` | Referenced — Guild split deferred |
-| `config/cos_interface.md` | **Companion document** — needs recheck against real `chief_of_staff.py` internals before Phase 1 build (see Open Questions) |
+| `config/cos_interface.md` (v0.2) | **Companion — Grok-reviewed and finalized 2026-07-12, no blocker remaining** |
+| `design_memory_architecture_direction_2026-07-12.md` | **New — pending artifact review before registration** (see Open Questions); may duplicate existing content, not yet confirmed |
+
+---
+
+## Change Log — v1.2 → v1.3 (2026-07-12)
+
+1. **`cos_interface.md` finalized as v0.2** — rechecked against real `chief_of_staff.py` internals, corrected from whole-agent-replacement framing to the coordination-layer/backend-call boundary. Grok-reviewed same day; implementation notes and a concrete conformance test added per that review. No blocker remains before Phase 1 build.
+2. **Backend-swap target confirmed as OpenClaw**, not Gemini/Claude as first suggested — a dedicated, CoS-scoped Gateway instance, native tools scoped to observation only (see Scope Enforcement).
+3. **Scope enforcement corrected** from a list of banned technologies ("no git access") to an observe/mutate principle — CoS gets real, unrestricted authority to observe and research; only mutation requires Robert's sign-off. Matches "chief of staff, not secretary."
+4. **CoS role sharpened**: right-hand advisor with real authority, never the executor of domain processes. Architecture Principle #4 and the CoS Role section both updated to state this explicitly, closing a possible ambiguity rather than leaving it implicit.
+5. **Phase 1 Deliverables and Rollback/Production Safety sections added**, per Grok's 2026-07-12 review — CoS is live in prod; containerization must not risk it.
+6. **Memory taxonomy adopted**: `cos_memory.md` named explicitly as mini-moi's episodic memory tier, part of a three-tier (episodic/semantic/procedural) direction — see `design_memory_architecture_direction_2026-07-12.md`. Naming only, no implementation change.
+7. **Correction (2026-07-12, same night):** a standalone `WAYS_OF_WORKING.md` was drafted and then retracted — a formal ways-of-working document already exists in GitHub, predating this session. Creating a second one would have been exactly the scattered-duplication problem this spec's Data Flow Model work was meant to prevent. See `investigation_artifact_review_2026-07-12.md` — grounding this in what actually exists is now a separate, open-ended investigation, not resolved here.
 
 ---
 
@@ -82,7 +96,7 @@ This spec builds the intelligence layer that makes mini-moi compound over time. 
 1. **JSON-first** — JSON is source of truth, Postgres is rebuildable projection
 2. **Agent- and environment-agnostic memory** — memory belongs to the platform, not to any one agent or any one environment (dev or prod). See Data Flow Model below for the consolidation rules.
 3. **Two-stage processing** — local LLM indexes/structures, cloud LLM reasons/synthesizes; the index is a map with pointers to raw sources, never a lossy replacement for them
-4. **Domains stand alone** — CoS executes against domains, domains don't depend on CoS; intelligence services live in their domains, CoS calls them
+4. **Domains stand alone; CoS advises, it doesn't execute** — CoS is a right-hand advisor with real observational authority, not the delivery mechanism for domain processes. It calls/queries domain services and proposes actions; domains own and execute their own work. CoS is never the central point that "does" things — that stays with the domains and with Robert's sign-off on mutation.
 5. **Reuse and extend** — one model serves all intelligence domains during evaluation; per-task model profiles are a Phase 3+ optimization, considered only with usage data
 6. **Store everything, tag lightly** — let future intelligence decide what's relevant
 7. **No vendor lock-in** — OpenClaw is swappable, LLM is swappable, cloud provider is swappable, and the hardware path ends local
@@ -191,9 +205,9 @@ minimoi_cos_bot / minimoi_cos_test_bot  → chief_of_staff.py:_chat (always)
 @minimoi_agent_bot                        → OpenClaw #1, personal, untouched
 ```
 
-## CoS Role — Cabinet Leader (already substantially built)
+## CoS Role — Right-Hand Advisor, Not Executor (already substantially built)
 
-Not a note-taker. Not a task tracker. Not an intelligence orchestrator. The conversational entry point and memory capture layer — already functional:
+Not a note-taker. Not a task tracker. Not an intelligence orchestrator. Not the thing that "does" — **an advisor with real authority to observe and propose, never the delivery mechanism for domain work.** The conversational entry point and memory capture layer — already functional:
 
 - Full chat loop on Grok (`grok-4-1-fast-reasoning`), already deployed
 - Tool calls already exist: ops status, ops log, domain health, queue recommendation — **Phase 1 task: verify none of these mutate state; treat as write-capable until confirmed read-only**
@@ -219,6 +233,8 @@ Redirect behavior for mutation requests: acknowledge, offer to capture as an act
 The CoS-dedicated OpenClaw instance should have real observational tool access enabled — git, local files, web search — matching the principle above, not the earlier "no tools at all" recommendation. The risk worth designing against isn't tool access itself, it's a *mutating* action triggered autonomously by adversarial content the backend reads (a malicious instruction embedded in a webpage or article causing an unreviewed destructive command) — this is a documented OpenClaw attack class (prompt injection via external content), not a hypothetical. Mitigation: observation stays unrestricted; anything that would mutate state still routes through the same propose-not-execute boundary as the rest of CoS, regardless of what triggered it.
 
 ## Memory Store (reality, not the v1.1 plan)
+
+**Naming note:** `cos_memory.md` is mini-moi's *episodic* memory tier, per the three-tier taxonomy (episodic/semantic/procedural) adopted 2026-07-12 — see `design_memory_architecture_direction_2026-07-12.md` for the full mapping and grounding. No implementation change here; naming only.
 
 **`data/cos_memory.md`** — platform-owned, relocated from Guild's domain in Phase 0 (#134). Currently flat markdown with dated `[chat]` entries, a 7,500-char cap, and LLM-judged storage-worthiness via `_maybe_update_memory()`.
 
@@ -315,6 +331,23 @@ The platform must work identically regardless of which backend sits behind the c
 ## Definition of Done
 
 This spec's DoD is phase-gated — see **Phase 1 Definition of Done** and **Phase 2 Definition of Done** below for the checklists. Phase 3 DoD is written with the Phase 3 spec, per the phasing table above. Spec-level done means: Phase 1 DoD passed, Phase 1 post-build verification passed, and Robert has approved moving to Phase 2.
+
+## Phase 1 Deliverables (added 2026-07-12, per Grok review — scannable summary, detail in Build Tasks below)
+
+1. `call_backend(prompt, context, tool_policy) → response` — the coordination-layer/backend boundary itself, extracted as a clean abstraction
+2. `grok_backend.py` — mostly extraction/wrapping of what already runs; low risk
+3. `openclaw_backend.py` — new: WebSocket client to a dedicated, CoS-scoped OpenClaw Gateway instance
+4. Updated containerization for the full CoS service (see Rollback / Production Safety below — this is live in prod today)
+5. Updated `cos_interface.md` (done — v0.2) + the conformance test proving mid-conversation backend swap
+
+## Rollback / Production Safety (added 2026-07-12, per Grok review)
+
+CoS is live in production today — real conversations, real memory accumulating. Containerization must not risk that.
+
+- **Parallel, not in-place:** build and test the containerized version on a different port alongside the existing bare-process deployment. Don't stop the running process until the container passes full Phase 1 DoD.
+- **Cutover only after verification:** switch `minimoi_cos_bot`'s polling to the container only once the containerized version has passed the conformance test and all Phase 1 post-build verification steps against a **copy** of `cos_memory.md`, not the live file.
+- **Backup before touching anything:** snapshot `data/cos_memory.md` before any migration or container cutover step — this is exactly what `sync_private.sh` already does; run it explicitly as a pre-cutover step, not just on its normal schedule.
+- **Quick revert path, documented before cutover starts:** `docker stop` the container, restart the bare `chief_of_staff.py` process from its last-known-good state. This should be a single documented command, not something worked out under pressure if the container misbehaves.
 
 ## Phase 1 Build Tasks (Claude Code)
 
@@ -527,33 +560,36 @@ No always-on instances. No nightly runs. Local Mac evaluation path costs $0.
 
 ## Open Questions
 
-**Resolved this session (2026-07-11):**
+**Resolved this session (2026-07-11 through 2026-07-12):**
 
 - **SSH Mac→EC2.** Root cause was a local SSH key mismatch (`id_rsa` assumed, `id_ed25519` actual), not infrastructure. Two-path sync locked: `sync_docs.sh` (GitHub, public/shareable) and `sync_private.sh` (direct SSH, never touches GitHub).
 - **Doc-sync-to-prod gap.** Fixed SSH restores manual `sync_docs.sh` — deliberately not automated; weekly cadence doesn't justify polling infrastructure. Event-driven webhook noted as a future option if cadence increases.
 - **Dev/prod design-history consolidation.** Full rule set in Data Flow Model section above.
 - **Bot inventory.** All 9 bots identified via BotFather + code grep. No cutover needed anywhere — see Bot Inventory table above.
 - **Primary CoS agent identity.** Grok/`chief_of_staff.py`, proven and already running — corrected from v1.1's OpenClaw-first assumption. See Change Log.
+- **`cos_interface.md` recheck against real `chief_of_staff.py` internals — done.** v0.2 finalized, Grok-reviewed same day. No blocker remains.
+- **Scope enforcement principle** — corrected to observe/mutate; CoS confirmed as right-hand advisor, never domain executor.
 
-**Still pending — blocks Phase 1 build:**
-
-1. **`cos_interface.md` recheck against real `chief_of_staff.py` internals** — the single remaining blocker. See Agent Swappability section.
+**No remaining blockers to Phase 1 build.**
 
 **Still pending — doesn't block Phase 1, tracked for completion:**
 
-2. Confirm `data/` is `.gitignore`'d as the structural safety net for `sync_private.sh` content
-3. Confirm spec #122 (three-tier backup) is actually running on EC2, not just designed, and covers the full private-data path list
-4. Confirm `agent_logs/` auto-write is actually firing per-actor (audit); add `agent_logs/` to `sync_private_repo.sh`'s `SYNC_PATHS` (currently missing)
-5. Confirm S3 bucket for the mini-moi Portable Archive exists (per #122) and has versioning enabled
-6. `@rvsopenbot`'s exact scope — confirmed as a multi-domain relay (Guild notices, Portuguese summaries, claimed curator feedback), not curator-specific as first assumed. Protected regardless; full scope clarification is low priority.
-7. `minimoi_opts_bot` and remaining unidentified `_test_bot`s — low priority
+1. Confirm `data/` is `.gitignore`'d as the structural safety net for `sync_private.sh` content
+2. Confirm spec #122 (three-tier backup) is actually running on EC2, not just designed, and covers the full private-data path list
+3. Confirm `agent_logs/` auto-write is actually firing per-actor (audit); add `agent_logs/` to `sync_private_repo.sh`'s `SYNC_PATHS` (currently missing)
+4. Confirm S3 bucket for the mini-moi Portable Archive exists (per #122) and has versioning enabled
+5. `@rvsopenbot`'s exact scope — confirmed as a multi-domain relay, not curator-specific as first assumed. Protected regardless; full scope clarification is low priority.
+6. `minimoi_opts_bot` and remaining unidentified `_test_bot`s — low priority
+7. Weekly reminder digest cadence — not yet confirmed by Robert
 
 **Low-stakes, builder's discretion:**
 
 8. Robert's Mac unified memory size → decides whether Phase 2 evaluation needs AWS at all
 9. CoS view in Guild: tab vs section
 10. `agent_logs` retention: keep all forever vs rolling window (default: keep all; revisit at 1GB)
-11. Cross-agent code double-check (catch drift between Claude Code's work and a second agent's review) — deliberately deferred. Robert will discuss with CoS once operational, have it draft the proposal, and register it as a new build task then — not scoped here.
+11. Cross-agent code double-check — deliberately deferred. Robert will discuss with CoS once operational, have it draft the proposal, and register it as a new build task then — not scoped here.
+12. Semantic memory layer — named gap, not yet built. See `design_memory_architecture_direction_2026-07-12.md`. Direction: emerges from Phase 2's Build/Curator Intelligence work, not a separate project.
+13. Front-end / CoS-domain spec — direction agreed 2026-07-11, not yet written. Dedicated session, not folded into #133.
 
 ---
 
@@ -561,13 +597,14 @@ No always-on instances. No nightly runs. Local Mac evaluation path costs $0.
 
 | Item | Location | Actor |
 |---|---|---|
-| This spec | `docs/specs/spec_133_intelligence_layer_v1.2_2026-07-11.md` | Claude Code |
-| v1.1, v1.0 specs | Retained in `docs/specs/`, marked superseded | Claude Code |
+| This spec | `docs/specs/spec_133_intelligence_layer_v1.3_2026-07-12.md` | Claude Code |
+| v1.2, v1.1, v1.0 specs | Retained in `docs/specs/`, marked superseded | Claude Code |
 | `VISION_mini_moi_intelligence_layer_2026-07-11.md` | `docs/design/` | Claude Code |
-| `cos_interface.md` (rechecked against real `chief_of_staff.py`) | `config/cos_interface.md` | Claude Code + OpenClaw review |
-| Grok review + frontier review + today's session log | `agent_logs/claude_ai/` | Claude Code |
-| `build_queue.json` | #133 → spec_ready (v1.2) | Claude Code |
-| Sync | `sync_docs.sh` (fixed, no longer needs an IP argument) | Claude Code |
+| `design_memory_architecture_direction_2026-07-12.md` | **Hold — do not commit yet.** Pending artifact review; may duplicate existing content | — |
+| `cos_interface.md` v0.2 (finalized, Grok-reviewed) | `config/cos_interface.md` | Claude Code |
+| Session log + handoff + this round's log | `agent_logs/claude_ai/` | Claude Code |
+| `build_queue.json` | #133 → spec_ready (v1.3) | Claude Code |
+| Sync | `sync_docs.sh` (fixed, no IP argument needed) | Claude Code |
 
 Registration approval: Robert.
 
@@ -575,10 +612,10 @@ Registration approval: Robert.
 
 ## Connection to ROADMAP.md
 
-Implements ROADMAP.md Phases 1 and 2. Compound stack mapping: Layer 1 primitives = existing domains; Layer 2 orchestration = CoS (proven, Grok-backed); Layer 3 memory = `agent_logs/` (per-agent, dual-synced) + `cos_memory.md` + future pointer-indexes; Layer 4 self-improvement = scheduled runs + feedback loops, growing only as fast as each loop proves its value.
+Implements ROADMAP.md Phases 1 and 2. Compound stack mapping: Layer 1 primitives = existing domains; Layer 2 orchestration = CoS (proven, Grok-backed, right-hand advisor not executor); Layer 3 memory = `agent_logs/` (episodic, per-agent, dual-synced) + `cos_memory.md` (episodic, platform) + future semantic layer + future pointer-indexes; Layer 4 self-improvement = scheduled runs + feedback loops, growing only as fast as each loop proves its value.
 
 ---
 
-*Spec #133 v1.2 · 2026-07-11 · Claude.ai (Fable 5)*
-*Reviews incorporated: Grok 2026-07-10 · Claude frontier 2026-07-10 · Robert (sequencing, cost, data architecture, Phase 1 reality-check)*
-*Status: Spec Ready — Phase 0 complete, one blocker remains before Phase 1 build (cos_interface.md recheck)*
+*Spec #133 v1.3 · 2026-07-12 · Claude.ai (Fable 5)*
+*Reviews incorporated: Grok 2026-07-10 and 2026-07-12 · Claude frontier 2026-07-10 · Robert (sequencing, cost, data architecture, Phase 1 reality-check, ways-of-working)*
+*Status: Spec Ready — no remaining blockers, ready for Phase 1 build*

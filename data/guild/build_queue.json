@@ -924,12 +924,12 @@
   {
     "id": 133,
     "spec_title": "mini-moi Intelligence Layer \u2014 CoS + Memory + Local LLM (Multi-Agent, Lock-In-Free)",
-    "spec_file": "spec_133_intelligence_layer_v1.2_2026-07-11.md",
+    "spec_file": "spec_133_intelligence_layer_v1.3_2026-07-12.md",
     "status": "spec_ready",
     "github_issue": null,
     "priority": "high",
-    "blocked_reason": "cos_interface.md recheck against real chief_of_staff.py required before Phase 1 build",
-    "last_transition_at": "2026-07-12T00:00:00Z",
-    "notes": "v1.2 \u2014 Phase 0 complete (build queue #134, done). Phase 1 formalizes and containerizes existing Grok-backed chief_of_staff.py \u2014 does not rebuild. Two-layer backend model: coordination layer (permanent) vs. backend call (swappable). OpenClaw confirmed as Phase 1 second backend. Data Flow Model + Portable Archive (per-agent agent_logs/, dual GitHub+S3) added. SSH root cause resolved, sync_docs.sh rewritten for SSM. Single blocker remaining: cos_interface.md recheck against real chief_of_staff.py code."
+    "blocked_reason": null,
+    "last_transition_at": "2026-07-12T12:00:00Z",
+    "notes": "v1.3 \u2014 Phase 0 complete (#134, done). Phase 1 in build. Two-layer backend model: coordination layer (permanent) vs. backend call (swappable). OpenClaw as second backend. cos_interface.md v0.2 finalized and Grok-reviewed. Scope enforcement: observe/mutate boundary. Rollback/Production Safety required before containerization cutover."
   }
 ]

@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# System deps for psycopg2
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY docker/requirements.cos-agent.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Application code
+COPY utils/ utils/
+COPY get_secret.py .
+COPY domains/cos/ domains/cos/
+COPY domains/guild/ domains/guild/
+
+# Data directories created at runtime via volume mounts
+RUN mkdir -p data/guild logs agent_logs
+
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8769
+
+CMD ["python", "domains/cos/chief_of_staff.py"]

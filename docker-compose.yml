@@ -62,6 +62,30 @@ services:
       - curator
       - german
 
+  # CoS scheduler — Phase 1 containerized version. Runs on port 18769 (dev)
+  # so it coexists with the bare launchd process on 8769 during testing.
+  # Rollback: docker stop minimoi-cos-dev, bare process continues on 8769.
+  cos:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.cos
+    container_name: minimoi-cos-dev
+    env_file: .env
+    environment:
+      - MINIMOI_ROLE=standby
+      - PORT=18769
+      - DISABLE_TELEGRAM_POLL=1
+    volumes:
+      - ./domains/cos:/app/domains/cos
+      - ./data:/app/data
+      - ./docs:/app/docs
+      - ./data/guild/build_queue.json:/app/data/guild/build_queue.json
+      - ./agent_logs:/app/agent_logs
+    ports:
+      - "127.0.0.1:18769:18769"
+    depends_on:
+      - postgres
+
 volumes:
   neo4j-data:
   postgres-data:

@@ -23,11 +23,9 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-import keyring
 import requests
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, jsonify, request
-from openai import OpenAI
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -557,66 +555,10 @@ def _build_system_prompt() -> str:
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
 
-_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_ops_status",
-            "description": "Get the current live status of the Operations agent — disk usage, service health, uptime, open escalations.",
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_ops_log",
-            "description": "Get the last N maintenance actions Operations has taken — what it fixed, what it escalated.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "n": {
-                        "type": "integer",
-                        "description": "Number of recent actions to return. Default 5.",
-                    }
-                },
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_domain_health",
-            "description": "Check whether the core mini-moi services are responding — Curator (8766), German (8767), Portal (5001).",
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "queue_recommendation",
-            "description": "Add an actionable item to the CoS recommendations queue for Robert to review later.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "domain": {
-                        "type": "string",
-                        "description": "Which domain: curator, german, career_focus, mini_moi, operations",
-                    },
-                    "description": {
-                        "type": "string",
-                        "description": "What the recommendation is",
-                    },
-                    "confidence": {
-                        "type": "number",
-                        "description": "0.0 to 1.0",
-                    },
-                },
-                "required": ["domain", "description"],
-            },
-        },
-    },
-]
+# ── Backend ───────────────────────────────────────────────────────────────────
+# Active backend instance — initialized in main(). Always GrokBackend unless
+# explicitly swapped. Swapping does not change the coordination layer.
+_backend = None
 
 
 def _dispatch_tool(name: str, args: dict) -> dict:
@@ -693,99 +635,41 @@ def _dispatch_tool(name: str, args: dict) -> dict:
 
     return {"error": f"Unknown tool: {name}"}
 
-# ── LLM chat loop ─────────────────────────────────────────────────────────────
+# ── Coordination layer: call_backend() ────────────────────────────────────────
 
-def _get_xai_client() -> OpenAI:
-    from get_secret import get_secret
-    try:
-        api_key = get_secret("XAI_API_KEY", "xai", "api_key")
-    except Exception as e:
-        raise ValueError(f"xAI API key not found: {e}")
-    return OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
+def call_backend(prompt: str, context: dict, tool_policy: dict) -> str:
+    """
+    Coordination-layer dispatcher — the formal boundary from cos_interface.md v0.2.
+
+    Assembles context (pre-built system prompt, recent memory) and delegates to
+    the active backend. Tool dispatch and memory writes stay in this layer;
+    the backend calls back through _dispatch_tool and _append_memory via the
+    callables passed at GrokBackend.__init__.
+    """
+    if _backend is None:
+        raise RuntimeError("Backend not initialized — init_backend() was not called in main()")
+    return _backend.call_backend(prompt, context, tool_policy)
 
 
 def _chat(text: str) -> str:
-    """Run the CoS chat loop. Returns the final reply string."""
-    system = _build_system_prompt()
-    messages = [{"role": "user", "content": text}]
-
-    client = _get_xai_client()
-    MAX_TOOL_ROUNDS = 3
-
-    for _ in range(MAX_TOOL_ROUNDS):
-        resp = client.chat.completions.create(
-            model="grok-4-1-fast-reasoning",
-            messages=[{"role": "system", "content": system}] + messages,
-            tools=_TOOLS,
-            tool_choice="auto",
-            temperature=0.7,
-            max_tokens=600,
-        )
-        msg = resp.choices[0].message
-
-        if not msg.tool_calls:
-            reply = (msg.content or "").strip()
-            _maybe_update_memory(text, reply)
-            return reply
-
-        # Append assistant message with tool calls
-        messages.append({
-            "role": "assistant",
-            "content": msg.content or "",
-            "tool_calls": [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments,
-                    },
-                }
-                for tc in msg.tool_calls
-            ],
-        })
-
-        # Dispatch each tool call and append results
-        for tc in msg.tool_calls:
-            try:
-                args = json.loads(tc.function.arguments)
-            except Exception:
-                args = {}
-            result = _dispatch_tool(tc.function.name, args)
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tc.id,
-                "content": json.dumps(result),
-            })
-
-    # Fallback if loop exhausted
-    return "I ran into a loop trying to gather data. Try asking again."
+    """
+    Coordination layer: build context and route to call_backend().
+    Kept as the internal call site for the Flask /chat endpoint and Telegram handler.
+    """
+    context = {
+        "recent_memory": _read_memory(),
+        "system_prompt": _build_system_prompt(),
+    }
+    tool_policy = {"observation": True, "mutation": False}
+    return call_backend(text, context, tool_policy)
 
 
-def _maybe_update_memory(user_text: str, reply: str):
-    """Make a cheap secondary call to check if this conversation is memory-worthy."""
-    try:
-        client = _get_xai_client()
-        check_prompt = (
-            "Review this conversation snippet. "
-            "Did it contain a new fact about Robert's goals, a decision he made, "
-            "or a non-obvious system observation worth remembering long-term?\n\n"
-            f"User: {user_text}\n"
-            f"CoS: {reply}\n\n"
-            "If yes: reply with a single sentence starting with the key fact (no preamble).\n"
-            "If no: reply with exactly the word NONE."
-        )
-        resp = client.chat.completions.create(
-            model="grok-4-1-fast-reasoning",
-            messages=[{"role": "user", "content": check_prompt}],
-            temperature=0.0,
-            max_tokens=80,
-        )
-        result = (resp.choices[0].message.content or "").strip()
-        if result and result.upper() != "NONE":
-            _append_memory(result)
-    except Exception as e:
-        _log_file("memory_check_error", str(e))
+def init_backend():
+    """Initialize the active backend. Called once from main() at startup."""
+    global _backend
+    from domains.cos.backends.grok_backend import GrokBackend
+    _backend = GrokBackend(write_memory=_append_memory, dispatch_tool=_dispatch_tool)
+    log.info("Backend initialized: GrokBackend (grok-4-1-fast-reasoning)")
 
 # ── Agent state ───────────────────────────────────────────────────────────────
 
@@ -1193,13 +1077,12 @@ def main():
     else:
         print("   DB: unavailable — queue_recommendation will use file fallback")
 
-    # 2. Verify xAI key exists
+    # 2. Initialize backend (GrokBackend wrapping the Grok API call)
     try:
-        from get_secret import get_secret
-        get_secret("XAI_API_KEY", "xai", "api_key")
-        print("   xAI: key found ✅")
-    except Exception:
-        print("   ⚠️  xAI API key not found — chat will fail")
+        init_backend()
+        print("   Backend: GrokBackend initialized ✅")
+    except Exception as e:
+        print(f"   ⚠️  Backend init failed: {e} — chat will fail")
 
     # 3. Start Telegram polling thread (skipped when cos-bot container handles polling)
     if os.environ.get("DISABLE_TELEGRAM_POLL"):

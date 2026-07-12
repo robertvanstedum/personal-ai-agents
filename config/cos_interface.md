@@ -76,6 +76,54 @@ Conformance doesn't require identical plumbing — it requires both mechanisms t
 | `grok_backend.py` | Direct Grok API call | Proven, running today |
 | `openclaw_backend.py` | WebSocket client to a dedicated, CoS-scoped OpenClaw Gateway instance — own port/process, isolated from personal OpenClaw #1, native tools scoped to observation only | Phase 1 build target |
 
+## Implementation Notes for Claude Code (added 2026-07-12, per Grok review)
+
+**Exact expected signature:**
+```python
+def call_backend(prompt: str, context: dict, tool_policy: dict) -> str:
+    """
+    prompt: the user's message text, already extracted from the channel
+            (Telegram or, later, the web interface) before this call —
+            call_backend never sees raw channel payloads.
+
+    context: {
+        "recent_memory": str,   # cos_memory.md content, capped at the
+                                  # existing 7,500-char limit. Phase 1 keeps
+                                  # this simple — full (capped) file content,
+                                  # not selective retrieval. Smarter context
+                                  # assembly (relevant-excerpt selection,
+                                  # agent_logs correlation) is a Phase 2/3
+                                  # concern once the two-stage indexing
+                                  # layer exists — don't build it early.
+    }
+
+    tool_policy: {
+        "observation": True,     # always True — git/log/health/web-search
+                                   # unrestricted, per spec #133 v1.2
+        "mutation": False        # True only for this specific turn, only
+                                   # with Robert's explicit approval already
+                                   # captured upstream of this call
+    }
+
+    Returns: response string, relayed back to Robert as-is.
+    """
+```
+
+**Context assembly, honestly stated:** Phase 1 does not build retrieval. `context["recent_memory"]` is the coordination layer reading `cos_memory.md` via the existing `_read_memory()`-equivalent path, capped at the current character limit. No filtering, no relevance ranking. That's intentional — matches "formalize what's running," not "add capability that wasn't there."
+
+**Write path — single source of truth, confirmed:** `_append_memory()` (or its equivalent inside whichever backend module) is the *only* approved write path to `cos_memory.md`. Neither `grok_backend.py` nor `openclaw_backend.py` opens or writes the file directly — both call back through the coordination layer's existing write function. This is what keeps the coordination layer the actual arbiter of *where* and *how* memory is stored, even though backends own the *judgment* of what's worth storing (see Two Layers, above).
+
+## Conformance Test — concrete shape (added 2026-07-12, per Grok review)
+
+Claude Code implements this as part of the Phase 1 deliverable, not a separate task:
+
+1. Fix a short sequence of test prompts (reuse the five storage acceptance examples from spec #133 v1.2).
+2. Run the first half through `grok_backend.py`. Capture `cos_memory.md` state after each turn.
+3. **Mid-conversation, swap to `openclaw_backend.py`** without resetting anything. Run the second half through it.
+4. Assert: conversation stays coherent across the swap (context assembly is backend-agnostic, so this should just work if the boundary is clean). Memory entries continue accumulating correctly through both halves. `tool_policy` is respected by both backends — observation requests succeed, mutation requests are refused in both halves.
+5. Pass/fail is binary: if the swap requires any special-casing in the coordination layer to work, the boundary isn't clean yet — that's a real fail, not a detail to smooth over.
+
 ---
 
 *cos_interface v0.2 · 2026-07-12 · Claude.ai (Fable 5) · Corrects v0.1 against real `chief_of_staff.py` code and spec #133 v1.2*
+*Implementation notes and conformance test added same day, per Grok review*

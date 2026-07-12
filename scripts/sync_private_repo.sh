@@ -40,6 +40,9 @@ SYNC_PATHS=(
     "domains/german/data/lessons/"
     "domains/german/data/progress.json"
 
+    # Agent logs — per-agent session logs and handoffs (comprehensive store)
+    "agent_logs/"
+
     # Working docs archive
     "_working/archive/"
 )
