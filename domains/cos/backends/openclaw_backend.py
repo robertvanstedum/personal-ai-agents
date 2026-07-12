@@ -33,6 +33,9 @@ class OpenClawBackend:
     at the gateway_url and configured with observation-only native tools.
     """
 
+    backend_label = "OpenClaw"
+    model_label   = "pending"
+
     def __init__(self, write_memory, dispatch_tool, gateway_url: str = f"ws://localhost:{_GATEWAY_PORT}"):
         self._write_memory = write_memory
         self._dispatch_tool = dispatch_tool

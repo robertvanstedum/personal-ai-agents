@@ -8,43 +8,43 @@
     "priority": "normal",
     "blocked_reason": null,
     "last_transition_at": "2026-07-11T15:05:00Z",
-    "notes": "Prerequisite to spec #133 Phase 1. Moved chief_of_staff.py from domains/guild/agents/ to domains/cos/ via git mv (history preserved). BASE_DIR depth fixed 4\u21923 parent levels. cos_memory.md relocated to data/cos_memory.md; docker-compose.prod.yml both volume mounts updated. telegram_cos_bot.py import paths updated. sync_private_repo.sh updated. GUILD_CHARTER.md amended. launchd plist (com.user.cos) updated to new path. Service healthy: /health ok, memory_chars 675 at new path. EC2 manual step pending: cp /opt/minimoi/data/guild/memory/cos_memory.md /opt/minimoi/cos_memory.md before next CI/CD deploy."
+    "notes": "Prerequisite to spec #133 Phase 1. Moved chief_of_staff.py from domains/guild/agents/ to domains/cos/ via git mv (history preserved). BASE_DIR depth fixed 4→3 parent levels. cos_memory.md relocated to data/cos_memory.md; docker-compose.prod.yml both volume mounts updated. telegram_cos_bot.py import paths updated. sync_private_repo.sh updated. GUILD_CHARTER.md amended. launchd plist (com.user.cos) updated to new path. Service healthy: /health ok, memory_chars 675 at new path. EC2 manual step pending: cp /opt/minimoi/data/guild/memory/cos_memory.md /opt/minimoi/cos_memory.md before next CI/CD deploy."
   },
   {
     "id": 122,
-    "spec_title": "Three-Tier Production Backup \u2014 Local EC2 + S3 + Dropbox",
+    "spec_title": "Three-Tier Production Backup — Local EC2 + S3 + Dropbox",
     "spec_file": "spec_production_backup_2026-07-05.md",
     "status": "done",
     "github_issue": 76,
     "priority": "high",
     "blocked_reason": null,
-    "notes": "Tier 1 (local EC2 backup_local.sh) live since 2026-07-05. Tier 2 (S3) live as of 2026-07-09: bucket minimoi-backups (versioned, AES-256, 90-day lifecycle), IAM instance role policy minimoi-s3-backup, backup_s3.sh deployed, cron 3am UTC daily, Telegram failure alert via ERR trap. First 5 backups confirmed in S3. Tier 3 (Dropbox) deferred indefinitely \u2014 backup_dropbox.sh and cron stub in place; blocked on rclone install + Dropbox OAuth browser flow when needed.",
+    "notes": "Tier 1 (local EC2 backup_local.sh) live since 2026-07-05. Tier 2 (S3) live as of 2026-07-09: bucket minimoi-backups (versioned, AES-256, 90-day lifecycle), IAM instance role policy minimoi-s3-backup, backup_s3.sh deployed, cron 3am UTC daily, Telegram failure alert via ERR trap. First 5 backups confirmed in S3. Tier 3 (Dropbox) deferred indefinitely — backup_dropbox.sh and cron stub in place; blocked on rclone install + Dropbox OAuth browser flow when needed.",
     "last_transition_at": "2026-07-09T12:00:00Z"
   },
   {
     "id": 123,
-    "spec_title": "AI Observations path fix \u2014 port intelligence job to EC2",
+    "spec_title": "AI Observations path fix — port intelligence job to EC2",
     "spec_file": null,
     "status": "backlog",
     "github_issue": null,
     "blocked_reason": "Spec required from OpenClaw before build.",
-    "notes": "curator_intelligence.py writes to Path.home()/'.openclaw'/'workspace'/ \u2014 hardcoded to ~/.openclaw/workspace/ which on EC2 is /root/.openclaw/workspace/ (container-local, not mounted). curator_server.py reads from /app/data/curator/intelligence_*.json (volume-mounted). Two options: (A) run job via docker exec on EC2 + set CURATOR_DATA_DIR to redirect output, or (B) sync Mac job output to EC2 after each run. 31 historical files SCPed to /tmp/intelligence_restore/ on EC2 (Mar\u2013Apr 2026). Anthropic API key confirmed in SSM (/minimoi/production/anthropic_api_key). Investigation complete 2026-07-05 \u2014 no code touched.",
+    "notes": "curator_intelligence.py writes to Path.home()/'.openclaw'/'workspace'/ — hardcoded to ~/.openclaw/workspace/ which on EC2 is /root/.openclaw/workspace/ (container-local, not mounted). curator_server.py reads from /app/data/curator/intelligence_*.json (volume-mounted). Two options: (A) run job via docker exec on EC2 + set CURATOR_DATA_DIR to redirect output, or (B) sync Mac job output to EC2 after each run. 31 historical files SCPed to /tmp/intelligence_restore/ on EC2 (Mar–Apr 2026). Anthropic API key confirmed in SSM (/minimoi/production/anthropic_api_key). Investigation complete 2026-07-05 — no code touched.",
     "last_transition_at": "2026-07-06T00:51:24Z"
   },
   {
     "id": 125,
-    "spec_title": "Domain Standardization Phase 2 \u2014 Model Name Centralization",
+    "spec_title": "Domain Standardization Phase 2 — Model Name Centralization",
     "spec_file": "spec_125_model_standardization_2026-07-05.md",
     "status": "backlog",
     "github_issue": 78,
     "priority": "normal",
     "blocked_reason": "Prerequisite: #120 Domain Standardization Phase 1 complete. Grok review required before build.",
-    "notes": "Centralize all LLM model names to config/models.json \u2014 16 files currently hardcoded across all domains (Curator, German, Portuguese, Guild). Gold standard already exists: domains/german/reviewer.py + domains/guild/config/challenger_config.json. Requires full regression test before deploy. Standalone spec \u2014 do not fold into #120.",
+    "notes": "Centralize all LLM model names to config/models.json — 16 files currently hardcoded across all domains (Curator, German, Portuguese, Guild). Gold standard already exists: domains/german/reviewer.py + domains/guild/config/challenger_config.json. Requires full regression test before deploy. Standalone spec — do not fold into #120.",
     "last_transition_at": "2026-07-06T00:39:47Z"
   },
   {
     "id": 126,
-    "spec_title": "Curator visual consistency \u2014 Leanings and Archive design alignment",
+    "spec_title": "Curator visual consistency — Leanings and Archive design alignment",
     "spec_file": null,
     "status": "backlog",
     "github_issue": null,
@@ -59,7 +59,7 @@
     "spec_file": "CODE_REVIEW_PLAN.md",
     "status": "cancelled",
     "github_issue": null,
-    "blocked_reason": "Reference doc \u2014 already in docs/CODE_REVIEW_PLAN.md",
+    "blocked_reason": "Reference doc — already in docs/CODE_REVIEW_PLAN.md",
     "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
@@ -82,11 +82,11 @@
   },
   {
     "id": 85,
-    "spec_title": "Gespr\u00e4che: Server-Push Analysis via WebSocket",
+    "spec_title": "Gespräche: Server-Push Analysis via WebSocket",
     "spec_file": "spec_gesprache_websocket_analysis_2026-06-18.md",
     "status": "cancelled",
     "github_issue": null,
-    "blocked_reason": "Investigation complete \u2014 decision captured in DR; HTTP polling retained",
+    "blocked_reason": "Investigation complete — decision captured in DR; HTTP polling retained",
     "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
@@ -100,7 +100,7 @@
   },
   {
     "id": 79,
-    "spec_title": "Gespr\u00e4che: Deferred Analysis",
+    "spec_title": "Gespräche: Deferred Analysis",
     "spec_file": "spec_gesprache_deferred_analysis_2026-06-18.md",
     "status": "design",
     "github_issue": null,
@@ -109,7 +109,7 @@
   },
   {
     "id": 82,
-    "spec_title": "Gespr\u00e4che: KI-Sitzung Mobile Tuning",
+    "spec_title": "Gespräche: KI-Sitzung Mobile Tuning",
     "spec_file": "spec_gesprache_kisitzung_mobile_2026-06-18.md",
     "status": "design",
     "github_issue": null,
@@ -118,7 +118,7 @@
   },
   {
     "id": 83,
-    "spec_title": "Gespr\u00e4che Mobile: Scroll Fix + Button Hierarchy",
+    "spec_title": "Gespräche Mobile: Scroll Fix + Button Hierarchy",
     "spec_file": "spec_gesprache_mobile_scroll_fix_2026-06-18.md",
     "status": "design",
     "github_issue": null,
@@ -136,7 +136,7 @@
   },
   {
     "id": 98,
-    "spec_title": "DNS flip: minimoi.ai \u2192 EC2, dev.minimoi.ai \u2192 Mac",
+    "spec_title": "DNS flip: minimoi.ai → EC2, dev.minimoi.ai → Mac",
     "spec_file": "NEAR_TERM_PLAN.md",
     "status": "done",
     "github_issue": null,
@@ -163,7 +163,7 @@
   },
   {
     "id": 86,
-    "spec_title": "AWS Migration Phase 0 \u2014 Containerization",
+    "spec_title": "AWS Migration Phase 0 — Containerization",
     "spec_file": "AWS_MIGRATION_PLAN.md",
     "status": "done",
     "github_issue": null,
@@ -181,7 +181,7 @@
   },
   {
     "id": 53,
-    "spec_title": "Gespr\u00e4che Vision & Mobile Roadmap",
+    "spec_title": "Gespräche Vision & Mobile Roadmap",
     "spec_file": "docs_GESPRACHE_ROADMAP_2026-06-16.md",
     "status": "done",
     "github_issue": null,
@@ -253,7 +253,7 @@
   },
   {
     "id": 35,
-    "spec_title": "Gespr\u00e4che: All Current Improvements",
+    "spec_title": "Gespräche: All Current Improvements",
     "spec_file": "spec_gesprache_consolidated_2026-06-15.md",
     "status": "done",
     "github_issue": null,
@@ -262,7 +262,7 @@
   },
   {
     "id": 37,
-    "spec_title": "Gespr\u00e4che: Start Session / End Session",
+    "spec_title": "Gespräche: Start Session / End Session",
     "spec_file": "spec_gesprache_ki_session_2026-06-15 copy.md",
     "status": "done",
     "github_issue": null,
@@ -271,7 +271,7 @@
   },
   {
     "id": 33,
-    "spec_title": "Gespr\u00e4che: Start Session / End Session (Single Window)",
+    "spec_title": "Gespräche: Start Session / End Session (Single Window)",
     "spec_file": "spec_gesprache_ki_session_2026-06-15.md",
     "status": "done",
     "github_issue": null,
@@ -280,7 +280,7 @@
   },
   {
     "id": 76,
-    "spec_title": "Gespr\u00e4che: Prompt kopieren button",
+    "spec_title": "Gespräche: Prompt kopieren button",
     "spec_file": "spec_gesprache_prompt_kopieren_2026-06-18.md",
     "status": "done",
     "github_issue": null,
@@ -289,7 +289,7 @@
   },
   {
     "id": 38,
-    "spec_title": "Gespr\u00e4che Test-Run Follow-Up",
+    "spec_title": "Gespräche Test-Run Follow-Up",
     "spec_file": "spec_gesprache_testrun_followup_2026-06-15.md",
     "status": "done",
     "github_issue": null,
@@ -298,7 +298,7 @@
   },
   {
     "id": 49,
-    "spec_title": "Gespr\u00e4che Transcript Paste Panel",
+    "spec_title": "Gespräche Transcript Paste Panel",
     "spec_file": "spec_gesprache_transcript_paste_panel_2026-06-16.md",
     "status": "done",
     "github_issue": null,
@@ -307,7 +307,7 @@
   },
   {
     "id": 31,
-    "spec_title": "Gespr\u00e4che Voice Input + Provider-Agnostic Review",
+    "spec_title": "Gespräche Voice Input + Provider-Agnostic Review",
     "spec_file": "spec_gesprache_voice_input_2026-06-14.md",
     "status": "done",
     "github_issue": null,
@@ -559,7 +559,7 @@
   },
   {
     "id": 68,
-    "spec_title": "Gespr\u00e4che Forward Spec",
+    "spec_title": "Gespräche Forward Spec",
     "spec_file": "docs_GESPRACHE_FORWARD_SPEC_2026-06-17.md",
     "status": "cancelled",
     "github_issue": null,
@@ -568,7 +568,7 @@
   },
   {
     "id": 71,
-    "spec_title": "Gespr\u00e4che Forward Spec (v2)",
+    "spec_title": "Gespräche Forward Spec (v2)",
     "spec_file": "GESPRACHE_FORWARD_SPEC.md",
     "status": "deferred",
     "github_issue": null,
@@ -608,7 +608,7 @@
     "spec_file": "spec_career_two_page_2026-06-11.md",
     "status": "deferred",
     "github_issue": null,
-    "blocked_reason": "Robert decision 2026-06-24 \u2014 job search focus shifted, defer until further notice",
+    "blocked_reason": "Robert decision 2026-06-24 — job search focus shifted, defer until further notice",
     "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
@@ -626,7 +626,7 @@
     "spec_file": "spec_telegram_architecture_v2_2026-06-20.md",
     "status": "cancelled",
     "github_issue": null,
-    "blocked_reason": "Duplicate \u2014 see #94 (done)",
+    "blocked_reason": "Duplicate — see #94 (done)",
     "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
@@ -644,7 +644,7 @@
     "spec_file": "spec_guild_docs_view_2026-06-19.md",
     "status": "cancelled",
     "github_issue": null,
-    "blocked_reason": "Duplicate \u2014 see #89 (done)",
+    "blocked_reason": "Duplicate — see #89 (done)",
     "last_transition_at": "2026-06-24T04:19:53.793989+00:00"
   },
   {
@@ -663,7 +663,7 @@
     "status": "done",
     "last_transition_at": "2026-06-24T13:00:00Z",
     "blocked_reason": null,
-    "notes": "Phase 2 gate. Block E. Shipped \u2014 13 tests green, pipeline live, first deploy via SSM confirmed."
+    "notes": "Phase 2 gate. Block E. Shipped — 13 tests green, pipeline live, first deploy via SSM confirmed."
   },
   {
     "id": 103,
@@ -672,7 +672,7 @@
     "status": "done",
     "last_transition_at": "2026-06-24T15:00:00Z",
     "blocked_reason": null,
-    "notes": "Phase 2 Spec 1. Shipped: domain_auth.py, migration 002, /login/<token>, requires_domain(), SES email, 11 tests. Flask-Login skipped \u2014 existing session pattern. Final spec: spec_1_auth_final_2026-06-25.md"
+    "notes": "Phase 2 Spec 1. Shipped: domain_auth.py, migration 002, /login/<token>, requires_domain(), SES email, 11 tests. Flask-Login skipped — existing session pattern. Final spec: spec_1_auth_final_2026-06-25.md"
   },
   {
     "id": 104,
@@ -681,7 +681,7 @@
     "status": "done",
     "last_transition_at": "2026-06-25T00:00:00Z",
     "blocked_reason": null,
-    "notes": "Shipped: domains/portuguese/ Flask shell (port 8770), 6 tabs + admin, --pt-* CSS tokens, 3 palette blocks + toggle, portal proxy routes, launchd plist. Running under launchd. Photos folder ready: domains/portuguese/static/photos/ \u2014 Robert to drop Rio photos."
+    "notes": "Shipped: domains/portuguese/ Flask shell (port 8770), 6 tabs + admin, --pt-* CSS tokens, 3 palette blocks + toggle, portal proxy routes, launchd plist. Running under launchd. Photos folder ready: domains/portuguese/static/photos/ — Robert to drop Rio photos."
   },
   {
     "id": 105,
@@ -754,7 +754,7 @@
     "github_issue": null,
     "blocked_reason": null,
     "last_transition_at": "2026-06-28T00:00:00Z",
-    "notes": "Per-user JSON for Schreiben, Gespr\u00e4che, W\u00f6rter, Lesen notes. Data migrated (8 entries, 4 notes, 18 phrases, 76 sessions) to user_1. Commit ba60a6a."
+    "notes": "Per-user JSON for Schreiben, Gespräche, Wörter, Lesen notes. Data migrated (8 entries, 4 notes, 18 phrases, 76 sessions) to user_1. Commit ba60a6a."
   },
   {
     "id": 113,
@@ -774,27 +774,27 @@
     "github_issue": 62,
     "blocked_reason": null,
     "last_transition_at": "2026-06-28T00:00:00Z",
-    "notes": "Click to expand rows in German Archiv (Gespr\u00e4che lazy load, Schreiben inline) and Portuguese Arquivo (Conversas + Escrita inline). Commit a5c6b5b."
+    "notes": "Click to expand rows in German Archiv (Gespräche lazy load, Schreiben inline) and Portuguese Arquivo (Conversas + Escrita inline). Commit a5c6b5b."
   },
   {
     "id": 115,
-    "spec_title": "Contextual Tips System \u2014 Curator Briefing Pilot",
+    "spec_title": "Contextual Tips System — Curator Briefing Pilot",
     "spec_file": "spec_contextual_tips_pilot_2026-07-03.md",
     "status": "done",
     "github_issue": null,
     "blocked_reason": null,
     "last_transition_at": "2026-07-04T00:00:00Z",
-    "notes": "Shipped. Tips live across Curator, Meu Portugu\u00eas (6 pages), Mein Deutsch (6 pages). config/curator/tips.json is the source of truth. Slot registry at docs/design/tips_slot_registry.md. Article detail slots (portuguese.leitura.article, german.lesen.article) defined but not yet wired \u2014 JS-rendered, separate task."
+    "notes": "Shipped. Tips live across Curator, Meu Português (6 pages), Mein Deutsch (6 pages). config/curator/tips.json is the source of truth. Slot registry at docs/design/tips_slot_registry.md. Article detail slots (portuguese.leitura.article, german.lesen.article) defined but not yet wired — JS-rendered, separate task."
   },
   {
     "id": 116,
-    "spec_title": "Narrative Synchronization \u2014 minimoi.ai / GitHub / LinkedIn / Resume",
+    "spec_title": "Narrative Synchronization — minimoi.ai / GitHub / LinkedIn / Resume",
     "spec_file": "spec_116_narrative_sync_2026-07-04.md",
     "status": "deferred",
     "github_issue": null,
     "blocked_reason": "Design session scheduled for Saturday 2026-07-12",
     "last_transition_at": "2026-07-09T12:00:00Z",
-    "notes": "Replaces spec_landing_page_update_2026-07-03.md. Five surfaces: minimoi.ai landing, GitHub README, GitHub About, LinkedIn, resume. Design session required before Claude Code builds \u2014 scheduled Saturday 2026-07-12."
+    "notes": "Replaces spec_landing_page_update_2026-07-03.md. Five surfaces: minimoi.ai landing, GitHub README, GitHub About, LinkedIn, resume. Design session required before Claude Code builds — scheduled Saturday 2026-07-12."
   },
   {
     "id": 117,
@@ -823,31 +823,31 @@
     "github_issue": null,
     "blocked_reason": null,
     "last_transition_at": "2026-07-09T12:00:00Z",
-    "notes": "DATABASE_URL was already present in /opt/minimoi/.env (minimoi user). Removed inline entry from docker-compose.prod.yml portuguese service \u2014 Portuguese container now picks it up from env_file. CI/CD deploy will apply on next push."
+    "notes": "DATABASE_URL was already present in /opt/minimoi/.env (minimoi user). Removed inline entry from docker-compose.prod.yml portuguese service — Portuguese container now picks it up from env_file. CI/CD deploy will apply on next push."
   },
   {
     "id": 120,
-    "spec_title": "Domain Standardization \u2014 German + Portuguese",
+    "spec_title": "Domain Standardization — German + Portuguese",
     "spec_file": "spec_120_domain_standardization_2026-07-04.md",
     "status": "spec_ready",
     "github_issue": null,
     "blocked_reason": null,
     "last_transition_at": "2026-07-06T00:11:33Z",
-    "notes": "JSON-first principle locked \u2014 no storage migration. Four phases: (1) bot refactor / #54 gates everything, (2) per-user isolation fix for German persona memory, (3) launchd plists for German + Portuguese dev servers + Colima (Colima plist confirmed working 2026-07-05; homebrew.mxcl.colima disabled, com.vanstedum.colima is sole manager, stop/restart tested), (4) tips verification. Produces docs/DOMAIN_TEMPLATE.md. Spec exists as PDF in _working/ \u2014 .md version needed from OpenClaw before build. Grok review requested."
+    "notes": "JSON-first principle locked — no storage migration. Four phases: (1) bot refactor / #54 gates everything, (2) per-user isolation fix for German persona memory, (3) launchd plists for German + Portuguese dev servers + Colima (Colima plist confirmed working 2026-07-05; homebrew.mxcl.colima disabled, com.vanstedum.colima is sole manager, stop/restart tested), (4) tips verification. Produces docs/DOMAIN_TEMPLATE.md. Spec exists as PDF in _working/ — .md version needed from OpenClaw before build. Grok review requested."
   },
   {
     "id": 121,
-    "spec_title": "Tips UX Redesign \u2014 Nav Bar Icon + Tab-Specific Popovers",
+    "spec_title": "Tips UX Redesign — Nav Bar Icon + Tab-Specific Popovers",
     "spec_file": "spec_121_tips_ux_redesign_2026-07-05.md",
     "status": "built",
     "github_issue": null,
     "blocked_reason": null,
     "last_transition_at": "2026-07-09T00:00:00Z",
-    "notes": "Phase A shipped: full-width banner removed from all German + Portuguese tabs, nav bar SVG lightbulb icon with tab-specific popover, Gespr\u00e4che/Conversas secondary inline tip (commit 7063a83: replaced \ud83d\udca1 emoji with inline SVG). All German + Portuguese tooltip title attributes translated to English. CSS: german.css v=29, portuguese.css v=12. Phase B (Curator tips) deferred until DESK/LEANINGS routing confirmed working."
+    "notes": "Phase A shipped: full-width banner removed from all German + Portuguese tabs, nav bar SVG lightbulb icon with tab-specific popover, Gespräche/Conversas secondary inline tip (commit 7063a83: replaced 💡 emoji with inline SVG). All German + Portuguese tooltip title attributes translated to English. CSS: german.css v=29, portuguese.css v=12. Phase B (Curator tips) deferred until DESK/LEANINGS routing confirmed working."
   },
   {
     "id": 124,
-    "spec_title": "GitHub/Docs Cleanup \u2014 Repo for External Review",
+    "spec_title": "GitHub/Docs Cleanup — Repo for External Review",
     "spec_file": null,
     "status": "design",
     "github_issue": null,
@@ -857,14 +857,14 @@
   },
   {
     "id": 127,
-    "spec_title": "Curator Tech Domain \u2014 AI/ML research feed",
+    "spec_title": "Curator Tech Domain — AI/ML research feed",
     "spec_file": "design_curator_tech_domain_2026-07-10.md",
     "status": "design",
     "github_issue": null,
     "priority": "normal",
     "blocked_reason": null,
     "last_transition_at": "2026-07-10T00:00:00Z",
-    "notes": "Three interest areas: AI & Agents, Living Systems, Physical World Tech. Tags emerge from reading \u2014 not rigid categories. Inside Curator architecture (not new top-level domain). Decision context not news. Design doc produced 2026-07-10. Full spec needed before build."
+    "notes": "Three interest areas: AI & Agents, Living Systems, Physical World Tech. Tags emerge from reading — not rigid categories. Inside Curator architecture (not new top-level domain). Decision context not news. Design doc produced 2026-07-10. Full spec needed before build."
   },
   {
     "id": 128,
@@ -873,24 +873,24 @@
     "status": "idea",
     "github_issue": null,
     "priority": "normal",
-    "blocked_reason": "Gates on #117 Guild navigation redesign completion \u2014 do not start before #117 is done",
+    "blocked_reason": "Gates on #117 Guild navigation redesign completion — do not start before #117 is done",
     "last_transition_at": "2026-07-07T00:00:00Z",
-    "notes": "Guild currently does three jobs: Build (specs, queue, roadmap \u2014 shareable with collaborators), CoS (career, operations, agent coordination \u2014 private to Robert), and navigation container. Separate into two standalone domains. Build domain becomes shareable \u2014 appropriate for external review by collaborators or the T-Mobile AI team. CoS domain stays private, owns the memory layer and OpenClaw integration."
+    "notes": "Guild currently does three jobs: Build (specs, queue, roadmap — shareable with collaborators), CoS (career, operations, agent coordination — private to Robert), and navigation container. Separate into two standalone domains. Build domain becomes shareable — appropriate for external review by collaborators or the T-Mobile AI team. CoS domain stays private, owns the memory layer and OpenClaw integration."
   },
   {
     "id": 129,
-    "spec_title": "Repurpose Guild CoS agent as Master Craftsman \u2014 build quality guardian",
+    "spec_title": "Repurpose Guild CoS agent as Master Craftsman — build quality guardian",
     "spec_file": null,
     "status": "idea",
     "github_issue": null,
     "priority": "normal",
     "blocked_reason": "Depends on #128 CoS domain split",
     "last_transition_at": "2026-07-07T00:00:00Z",
-    "notes": "Once CoS moves to its own domain (#128), the current Guild CoS agent is repurposed rather than deprecated. New role: Master Craftsman \u2014 focused on build quality, code review, domain template compliance, and standards enforcement. Fits the Guild metaphor naturally: craftsmen (builders), master craftsman (quality/standards), CoS (operations/coordination). Three distinct roles, three distinct surfaces. Rename and reframe the agent \u2014 do not delete the infrastructure."
+    "notes": "Once CoS moves to its own domain (#128), the current Guild CoS agent is repurposed rather than deprecated. New role: Master Craftsman — focused on build quality, code review, domain template compliance, and standards enforcement. Fits the Guild metaphor naturally: craftsmen (builders), master craftsman (quality/standards), CoS (operations/coordination). Three distinct roles, three distinct surfaces. Rename and reframe the agent — do not delete the infrastructure."
   },
   {
     "id": 130,
-    "spec_title": "Chief of Staff \u2014 Phase 0 agent evaluation + Phase 1 platform wiring",
+    "spec_title": "Chief of Staff — Phase 0 agent evaluation + Phase 1 platform wiring",
     "spec_file": "design_cos_consolidated_v1.1_2026-07-06.md",
     "status": "cancelled",
     "github_issue": null,
@@ -901,7 +901,7 @@
   },
   {
     "id": 131,
-    "spec_title": "CoS v0 \u2014 Conversational entry point, routing, memory store",
+    "spec_title": "CoS v0 — Conversational entry point, routing, memory store",
     "spec_file": "spec_cos_v0_2026-07-10.md",
     "status": "cancelled",
     "github_issue": null,
@@ -923,24 +923,24 @@
   },
   {
     "id": 135,
-    "spec_title": "CoS Web Interface \u2014 Skeleton Now, Domain Later",
-    "spec_file": "spec_cos_web_interface_2026-07-12.md",
-    "status": "in_build",
+    "spec_title": "CoS Web Interface — Skeleton Now, Domain Later",
+    "spec_file": "spec_cos_web_interface_v2_2026-07-12.md",
+    "status": "done",
     "github_issue": null,
     "priority": "high",
     "blocked_reason": null,
     "last_transition_at": "2026-07-12T00:00:00Z",
-    "notes": "Phase A shipped: GET /ui (Talk tab functional), POST /ui/send (calls _chat()), GET /ui/memory (read-only cos_memory.md dump), four-tab nav (Feed/To-do/Archive as visible Phase B placeholders), Chicago photo placeholder in header. Fixed pre-existing _read_build_state() context manager bug. Localhost only, no auth \u2014 both deliberate Phase A scope. Phase B deferred: full visual design, auth, Feed/To-do/Archive tabs, portal proxy."
+    "notes": "v2 complete: all four tabs functional (Talk + voice, Feed, To-do, Archive), parchment/dark-nav design system, Chicago photo banner, backend badge (/status), lazy tab loading, VAD voice via Whisper (/ui/transcribe). Portal: COS_BACKEND in config, /app/cos proxy (owner-only), dashboard tile. Phase A shipped first: /ui Talk tab, /ui/memory. v2 registered as spec_cos_web_interface_v2_2026-07-12.md."
   },
   {
     "id": 133,
-    "spec_title": "mini-moi Intelligence Layer \u2014 CoS + Memory + Local LLM (Multi-Agent, Lock-In-Free)",
+    "spec_title": "mini-moi Intelligence Layer — CoS + Memory + Local LLM (Multi-Agent, Lock-In-Free)",
     "spec_file": "spec_133_intelligence_layer_v1.3_2026-07-12.md",
     "status": "spec_ready",
     "github_issue": null,
     "priority": "high",
     "blocked_reason": null,
     "last_transition_at": "2026-07-12T12:00:00Z",
-    "notes": "v1.3 \u2014 Phase 0 complete (#134, done). Phase 1 in build. Two-layer backend model: coordination layer (permanent) vs. backend call (swappable). OpenClaw as second backend. cos_interface.md v0.2 finalized and Grok-reviewed. Scope enforcement: observe/mutate boundary. Rollback/Production Safety required before containerization cutover."
+    "notes": "v1.3 — Phase 0 complete (#134, done). Phase 1 in build. Two-layer backend model: coordination layer (permanent) vs. backend call (swappable). OpenClaw as second backend. cos_interface.md v0.2 finalized and Grok-reviewed. Scope enforcement: observe/mutate boundary. Rollback/Production Safety required before containerization cutover."
   }
 ]

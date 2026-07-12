@@ -974,6 +974,8 @@ def status():
     )
     snap["db_available"] = _DB_AVAILABLE
     snap["memory_chars"] = len(_read_memory())
+    snap["backend_label"] = getattr(_backend, "backend_label", "unknown") if _backend else "uninitialized"
+    snap["model_label"]   = getattr(_backend, "model_label",   "unknown") if _backend else ""
     return jsonify(snap)
 
 
@@ -990,7 +992,82 @@ def loops_status():
     return jsonify(snap)
 
 
-# ── Web UI (Phase A — localhost only, no auth, dev testing tool) ──────────────
+# ── Web UI data helpers ───────────────────────────────────────────────────────
+
+def _parse_memory_for_feed() -> list:
+    """Parse cos_memory.md into structured entries for the Feed tab."""
+    mem = _read_memory()
+    entries = []
+    current_section = "General"
+    for line in mem.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            current_section = stripped[3:].strip()
+            continue
+        if stripped.startswith("#"):
+            continue
+        # Tagged entries: [chat] YYYY-MM-DD: content  or  [action] YYYY-MM-DD: content
+        if stripped.startswith("[") and "] " in stripped:
+            close = stripped.index("]")
+            tag = stripped[1:close]
+            rest = stripped[close + 2:]
+            if ": " in rest:
+                date_part, content = rest.split(": ", 1)
+            else:
+                date_part, content = "", rest
+            entries.append({
+                "type": tag,
+                "date": date_part.strip(),
+                "content": content.strip(),
+                "section": current_section,
+            })
+    return sorted(entries, key=lambda x: x.get("date", ""), reverse=True)
+
+
+def _get_agenda_pending() -> list:
+    """Fetch pending cos_agenda items from DB (fallback: file)."""
+    if _DB_AVAILABLE:
+        try:
+            with _db() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT domain, description, confidence, "
+                        "created_at::text AS created_at FROM guild.cos_agenda "
+                        "WHERE status='pending' ORDER BY created_at DESC LIMIT 25"
+                    )
+                    return [dict(r) for r in cur.fetchall()]
+        except Exception as e:
+            log.warning("agenda_pending DB error: %s", e)
+    # File fallback
+    try:
+        items = json.loads(AGENDA_FILE.read_text()) if AGENDA_FILE.exists() else []
+        return [i for i in items if i.get("status") == "pending"][:25]
+    except Exception:
+        return []
+
+
+def _get_agent_log_listing() -> list:
+    """List recent files across agent_logs/ subdirectories."""
+    logs_dir = BASE_DIR / "agent_logs"
+    if not logs_dir.exists():
+        return []
+    files = []
+    for subdir in sorted(logs_dir.iterdir()):
+        if not subdir.is_dir():
+            continue
+        for f in sorted(subdir.iterdir(), reverse=True)[:5]:
+            if f.is_file():
+                files.append({
+                    "dir": subdir.name,
+                    "name": f.name,
+                    "path": str(f.relative_to(BASE_DIR)),
+                    "size": f.stat().st_size,
+                    "mtime": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d"),
+                })
+    return sorted(files, key=lambda x: (x["mtime"], x["name"]), reverse=True)[:40]
+
+
+# ── Web UI (Phase A skeleton → v2 all-tabs) ───────────────────────────────────
 
 @app.route("/ui")
 def ui():
@@ -1016,6 +1093,50 @@ def ui_send():
 def ui_memory():
     mem = _read_memory()
     return render_template("cos_memory.html", memory=mem, memory_chars=len(mem))
+
+
+@app.route("/ui/feed")
+def ui_feed():
+    return jsonify(_parse_memory_for_feed())
+
+
+@app.route("/ui/todo")
+def ui_todo():
+    mem_entries = _parse_memory_for_feed()
+    action_types = {"action", "task", "todo", "follow-up", "followup", "decision"}
+    mem_actions = [e for e in mem_entries if e.get("type", "").lower() in action_types]
+    agenda = _get_agenda_pending()
+    return jsonify({"memory_actions": mem_actions, "agenda": agenda})
+
+
+@app.route("/ui/archive")
+def ui_archive():
+    return jsonify(_get_agent_log_listing())
+
+
+@app.route("/ui/transcribe", methods=["POST"])
+def ui_transcribe():
+    if "audio" not in request.files:
+        return jsonify({"error": "No audio file"}), 400
+    audio_file = request.files["audio"]
+    try:
+        from openai import OpenAI as _OAI
+        from get_secret import get_secret
+        api_key = get_secret("OPENAI_API_KEY", "openai", "api_key")
+        if not api_key:
+            return jsonify({"error": "OPENAI_API_KEY not configured"}), 500
+        client = _OAI(api_key=api_key)
+        audio_file.stream.seek(0)
+        fname = audio_file.filename or "audio.webm"
+        content_type = audio_file.content_type or "audio/webm"
+        response = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=(fname, audio_file.stream, content_type),
+            response_format="text",
+        )
+        return jsonify({"transcript": response})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/event", methods=["POST"])
@@ -1096,9 +1217,13 @@ def main():
    /health     — liveness probe
    /loops      — intelligence loop status
    /event      — receive events from Guild agents (POST)
-   /ui         — web UI (Phase A: Talk tab functional, localhost only, no auth)
-   /ui/send    — POST {{"text":"..."}} from browser
-   /ui/memory  — read-only cos_memory.md dump
+   /ui             — web UI (v2: all four tabs functional)
+   /ui/send        — POST {{"text":"..."}} from browser
+   /ui/memory      — read-only cos_memory.md dump
+   /ui/feed        — parsed memory entries (JSON)
+   /ui/todo        — action items + agenda pending (JSON)
+   /ui/archive     — agent_logs listing (JSON)
+   /ui/transcribe  — POST audio → Whisper transcript (JSON)
 """)
 
     # 1. Check DB availability

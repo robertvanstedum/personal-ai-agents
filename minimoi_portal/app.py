@@ -534,6 +534,23 @@ def curator_static_passthrough(filename):
     abort(404)
 
 
+# ── Chief of Staff proxy (owner only — no auth at CoS service layer yet) ─────
+
+@app.route("/app/cos")
+@app.route("/app/cos/")
+@_require_owner
+def cos_root():
+    user = _current_user()
+    return _proxy.proxy_to(_cfg.COS_BACKEND, "ui", "/app/cos", user=user)
+
+
+@app.route("/app/cos/<path:path>", methods=["GET", "POST"])
+@_require_owner
+def cos_proxy(path):
+    user = _current_user()
+    return _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user)
+
+
 # ── Mein Deutsch proxy (owner + family full; guest: lesen only, no admin) ────
 
 @app.route("/app/german")

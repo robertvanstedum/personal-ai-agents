@@ -113,6 +113,9 @@ class GrokBackend:
         dispatch_tool: callable — coordination layer's _dispatch_tool(name, args)
     """
 
+    backend_label = "Grok (direct API)"
+    model_label   = "grok-4-1-fast-reasoning"
+
     def __init__(self, write_memory, dispatch_tool):
         self._write_memory = write_memory
         self._dispatch_tool = dispatch_tool
