@@ -1,7 +1,7 @@
 # cos_interface.md — CoS Agent Interface Contract v0.1
 
 **Status:** Draft — Claude.ai authored, OpenClaw review requested before Phase 1 build
-**Companion to:** spec #133 v1.1
+**Companion to:** spec #133 v1.2
 **Rule this contract exists to enforce:** the platform works identically regardless of which agent sits behind CoS. All state lives in platform files. The agent is stateless and disposable.
 
 ---
@@ -71,7 +71,7 @@ If replacing the agent loses information, that information was stored in the wro
 ## Behavioral Requirements (agent-agnostic)
 
 1. **Storage criteria:** apply spec #133's rule — store what Robert would be annoyed to repeat. Must pass the five acceptance examples.
-2. **Scope enforcement:** redirect the four out-of-scope classes (code changes, infra/credentials, direct domain operations, git). Acknowledge, offer to log an action, name the right actor.
+2. **Scope enforcement — observe vs. mutate (corrected 2026-07-12):** observation (git status/log, local files, health checks, web search/research) is genuinely unrestricted — not filtered through a tool allowlist. Mutation (deploy, push/force-push code, infra or credential changes, direct domain operations, or any irreversible action triggered autonomously by content the agent read) still redirects: acknowledge, offer to log an action, name the right actor. The boundary is what the action *does*, not which technology it touches.
 3. **Proposals only:** handoffs are proposed in `proposed_handoffs`, never executed (Phase 1).
 4. **No side channels:** no writes outside `store_entry` and the agent's own log file in agent_logs.
 
@@ -99,3 +99,4 @@ Pass = swappability confirmed = Phase 1 exit criterion met.
 ---
 
 *cos_interface v0.1 · 2026-07-10 · Claude.ai (Fable 5) · OpenClaw review before build*
+*Scope enforcement corrected 2026-07-12 — observe vs. mutate, not a technology allowlist*

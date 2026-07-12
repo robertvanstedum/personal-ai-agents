@@ -2,7 +2,7 @@
 ## CoS Domain + OpenClaw #2 + Memory + Local LLM
 
 **File:** `spec_133_intelligence_layer_v1.1_2026-07-10.md`
-**Status:** Spec Ready — reviews complete, approved for build
+**Status:** ~~Spec Ready~~ **SUPERSEDED by v1.2 (`spec_133_intelligence_layer_v1.2_2026-07-11.md`)**
 **Date:** 2026-07-10
 **Build queue:** #133
 **Author:** Claude.ai design session (Fable 5)

@@ -8,7 +8,7 @@
     "priority": "normal",
     "blocked_reason": null,
     "last_transition_at": "2026-07-11T15:05:00Z",
-    "notes": "Prerequisite to spec #133 Phase 1. Moved chief_of_staff.py from domains/guild/agents/ to domains/cos/ via git mv (history preserved). BASE_DIR depth fixed 4→3 parent levels. cos_memory.md relocated to data/cos_memory.md; docker-compose.prod.yml both volume mounts updated. telegram_cos_bot.py import paths updated. sync_private_repo.sh updated. GUILD_CHARTER.md amended. launchd plist (com.user.cos) updated to new path. Service healthy: /health ok, memory_chars 675 at new path. EC2 manual step pending: cp /opt/minimoi/data/guild/memory/cos_memory.md /opt/minimoi/cos_memory.md before next CI/CD deploy."
+    "notes": "Prerequisite to spec #133 Phase 1. Moved chief_of_staff.py from domains/guild/agents/ to domains/cos/ via git mv (history preserved). BASE_DIR depth fixed 4\u21923 parent levels. cos_memory.md relocated to data/cos_memory.md; docker-compose.prod.yml both volume mounts updated. telegram_cos_bot.py import paths updated. sync_private_repo.sh updated. GUILD_CHARTER.md amended. launchd plist (com.user.cos) updated to new path. Service healthy: /health ok, memory_chars 675 at new path. EC2 manual step pending: cp /opt/minimoi/data/guild/memory/cos_memory.md /opt/minimoi/cos_memory.md before next CI/CD deploy."
   },
   {
     "id": 122,
@@ -44,7 +44,7 @@
   },
   {
     "id": 126,
-    "spec_title": "Curator visual consistency — Leanings and Archive design alignment",
+    "spec_title": "Curator visual consistency \u2014 Leanings and Archive design alignment",
     "spec_file": null,
     "status": "backlog",
     "github_issue": null,
@@ -923,13 +923,13 @@
   },
   {
     "id": 133,
-    "spec_title": "mini-moi Intelligence Layer \u2014 CoS + OpenClaw #2 + Memory + Local LLM",
-    "spec_file": "spec_133_intelligence_layer_v1.1_2026-07-10.md",
+    "spec_title": "mini-moi Intelligence Layer \u2014 CoS + Memory + Local LLM (Multi-Agent, Lock-In-Free)",
+    "spec_file": "spec_133_intelligence_layer_v1.2_2026-07-11.md",
     "status": "spec_ready",
     "github_issue": null,
     "priority": "high",
-    "blocked_reason": "cos_interface.md requires OpenClaw review before Phase 1 build starts",
-    "last_transition_at": "2026-07-10T00:00:00Z",
-    "notes": "v1.1 \u2014 reviews by Grok + Claude frontier + Robert incorporated. Three phases: (1) CoS domain + OpenClaw #2 + memory capture + agent_logs \u2014 this week, committed. (2) Local LLM infrastructure + Build Intelligence \u2014 after Phase 1 stable. (3) Curator + Language Intelligence + full wiring. First model candidate: Qwen2.5-14B Q4 on g4dn.xlarge spot. No always-on instances. Cost POC ~$15-20/month. Month-3 hardware gate: Mac mini M4 Pro 48GB. Companion: config/cos_interface.md \u2014 OpenClaw review required before build."
+    "blocked_reason": "cos_interface.md recheck against real chief_of_staff.py required before Phase 1 build",
+    "last_transition_at": "2026-07-12T00:00:00Z",
+    "notes": "v1.2 \u2014 Phase 0 complete (build queue #134, done). Phase 1 formalizes and containerizes existing Grok-backed chief_of_staff.py \u2014 does not rebuild. Two-layer backend model: coordination layer (permanent) vs. backend call (swappable). OpenClaw confirmed as Phase 1 second backend. Data Flow Model + Portable Archive (per-agent agent_logs/, dual GitHub+S3) added. SSH root cause resolved, sync_docs.sh rewritten for SSM. Single blocker remaining: cos_interface.md recheck against real chief_of_staff.py code."
   }
 ]
