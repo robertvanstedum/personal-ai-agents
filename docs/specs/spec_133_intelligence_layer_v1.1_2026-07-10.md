@@ -78,10 +78,13 @@ This spec builds the intelligence layer that makes mini-moi compound over time. 
 
 | Phase | Focus | Gate to next phase |
 |---|---|---|
-| **Phase 1 (this week, committed)** | CoS domain + OpenClaw #2 + memory capture + agent_logs | Phase 1 DoD + verification passed; one week of stable daily use |
+| **Phase 0 (complete — 2026-07-11)** | CoS domain extraction — `chief_of_staff.py` moved to `domains/cos/`, memory relocated to `data/cos_memory.md`, dev/prod bot separation (`minimoi_cos_bot` / `minimoi_cos_test_bot`) confirmed working | ✅ Done — see `spec_cos_domain_extraction_2026-07-11.md`, build queue #134 |
+| **Phase 1 (this week, committed)** | CoS containerization + OpenClaw #2 + memory capture + agent_logs | Phase 1 DoD + verification passed; one week of stable daily use |
 | **Phase 2 (next)** | Local LLM infrastructure (start/stop) + Build Intelligence | First evaluation model passes/fails documented; scheduled runs stable for two weeks |
 | **Phase 3 (after Phase 2 stable)** | Curator Intelligence + Language Intelligence + CoS routing to all domains | — |
 | **Month-3 decision gate** | Hardware: Mac mini as permanent local home vs continue cloud | Decided with real usage + cost data |
+
+**Phase 0 note:** CoS was found already running as a substantial, working agent (`chief_of_staff.py` on Grok, with chat loop, tool calls, scheduled loops, and its own memory/agenda) rather than needing to be built from scratch — Phase 0 extracted it into its own domain and cleaned up dev/prod bot separation so Phase 1 containerization wraps a standalone domain instead of code still nested in Guild's import tree. Phase 1 below now formalizes and containerizes what's already running, rather than building new CoS logic. **Phase 1 is blocked on OpenClaw's review of `config/cos_interface.md` before build starts.**
 
 ---
 
@@ -214,6 +217,24 @@ openclaw-cos:
 
 Pre-build check: confirm personal OpenClaw mounts nothing under `/opt/minimoi/` (that path holds `cos_memory.json`). Isolation is verified, not assumed — see verification checklist.
 
+## Bot Inventory & Prod Cutover (confirmed 2026-07-11)
+
+| Bot | Confirmed role | Touched by this spec? |
+|---|---|---|
+| `@minimoi_agent_bot` | Currently OpenClaw #1 (general chat, planning, memory, agent coordination) | **Yes — transitions to CoS/OpenClaw #2 at prod cutover only** |
+| `@minimoi_cmd_bot` | Drills/commands/German + curator pipeline commands | No |
+| `@rvsopenbot` | Curator daily briefings + like/dislike/save feedback capture | **No — protected.** Feedback signal it captures is a direct input to Phase 3 Curator Intelligence (preference learning from natural signals). Do not repurpose under any circumstance. |
+| `minimoi_system_test_bot` | System/dev testing | No |
+| `minimoi_cos_dev_bot` (new) | CoS dev container, Mac | Yes — dev only, built first |
+
+**Prod cutover sequence (executed once, at Phase 1 EC2 deploy — not during Mac dev):**
+1. Create a new dedicated bot for OpenClaw #1 via BotFather
+2. Point OpenClaw #1's Telegram integration at the new bot token; verify `~/.openclaw/` memory/planning continuity is unaffected (state lives in files, not bot identity)
+3. Only after step 2 is verified: repoint `@minimoi_agent_bot`'s token to the OpenClaw #2 / CoS container; enable default-route-to-CoS behavior
+4. Confirm OpenClaw #1's new bot and `@minimoi_agent_bot` (now CoS) both function correctly before declaring Phase 1 prod-complete
+
+Dev-phase work (this section's build tasks above) proceeds entirely on `minimoi_cos_dev_bot` and does not require this cutover.
+
 ## Voice Notes
 
 Telegram voice → Whisper transcription → CoS processes → stores raw + summary → decisions/actions extracted to `cos_memory.json`. Platform-owned, not agent-owned.
@@ -247,6 +268,10 @@ The platform must work identically regardless of which agent sits behind the CoS
 - **`config/cos_interface.md` is written before build starts** (companion draft ships with this spec). Contract surface: `handle_message`, `store_entry`, `query_memory`, plus the rule that all state lives in platform files (cos_memory.json, agent_logs), never in the agent.
 - **A/B test mechanism:** a thin test harness feeds the same message payloads to OpenClaw #2 and to a skeleton `cos_agent_grok.py` (see below); both must produce valid `cos_memory.json` entries per the storage criteria. The skeleton doubles as the A/B baseline — no Cowork adapter needed.
 - **cos_agent_grok.py is a committed deliverable, not an open question:** lightweight pure-Python agent on the Grok API, no Anthropic dependency, permanent CoS agent #2. Skeleton (interface-conformant, minimal logic) built in Phase 1 for the A/B test; full capability built during/after Phase 0 agent evaluation.
+
+## Definition of Done
+
+This spec's DoD is phase-gated — see **Phase 1 Definition of Done** and **Phase 2 Definition of Done** below for the checklists. Phase 3 DoD is written with the Phase 3 spec, per the phasing table above. Spec-level done means: Phase 1 DoD passed, Phase 1 post-build verification passed, and Robert has approved moving to Phase 2.
 
 ## Phase 1 Build Tasks (Claude Code)
 
@@ -458,6 +483,8 @@ No always-on instances. No nightly runs. Local Mac evaluation path costs $0.
 1. Robert's Mac unified memory size → decides whether Phase 2 evaluation needs AWS at all
 2. CoS view in Guild: tab vs section (builder's choice, low stakes)
 3. agent_logs retention: keep all forever vs rolling window (default: keep all; revisit at 1GB)
+4. **Doc-sync gap (found 2026-07-11):** `docs/specs/` on EC2 is volume-mounted, not CI/CD-deployed — every new/edited spec needs a manual `sync_docs.sh` or SSM push to appear in the portal. Known gap, folds into the existing pending CI/CD (GitHub Actions, Phase 3) work — not a new initiative.
+5. **SSH Mac→EC2 currently blocked (found 2026-07-11):** worked around via SSM push this session. Unconfirmed whether this is a recurrence of the earlier documented IP-rotation/Instance Connect issue or a new cause. Needs diagnosis before it becomes the default workaround — not urgent, but shouldn't sit indefinitely either.
 
 Resolved since v1.0: cos_agent_grok.py (committed, Phase 1 skeleton), spot checkpoint pattern (specified above, pre-run), Language Intelligence scope (deferred to Phase 3 spec by design), cos_interface.md (companion draft ships with this spec).
 
