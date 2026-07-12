@@ -1,37 +1,115 @@
 #!/bin/bash
-# Sync build queue and spec docs from Mac to EC2.
-# Run after updating build_queue.json, docs/design/, or docs/specs/ on dev.
-# The portal reads these from host-mounted paths. --inplace on build_queue sync
-# preserves the inode so Docker bind mounts see changes without a restart.
+# sync_docs.sh — push docs/build-queue from Mac to EC2 via AWS SSM.
 #
-# Usage: ./scripts/sync_docs.sh <ec2-public-ip>
-# Requires: SSH key configured for ec2-user@<ip>
+# Replaces the SSH/rsync approach. Immune to Mac IP rotation because it uses
+# ssm:SendCommand (same IAM credential as aws CLI already in use) — no SSH
+# key, no EC2 security group rule, no fixed IP required.
 #
-# One-time EC2 bootstrap (run on EC2 before first sync):
-#   sudo mkdir -p /opt/minimoi/data/guild /opt/minimoi/docs/design /opt/minimoi/docs/specs /opt/minimoi/auth
-#   sudo chown ec2-user:ec2-user /opt/minimoi/data/guild /opt/minimoi/docs/design /opt/minimoi/docs/specs
-#   sudo docker cp minimoi-portal:/app/minimoi_portal/auth/guests.json /opt/minimoi/auth/guests.json
-#   sudo docker cp minimoi-portal:/app/data/guild/build_queue.json /opt/minimoi/data/guild/build_queue.json
-#   # Then run this script to populate docs/ from Mac
+# EC2 side pulls files from GitHub raw URLs pinned to the current commit.
+# Files must be committed before running this script.
+#
+# Usage: ./scripts/sync_docs.sh
+# Requires: aws CLI configured with minimoi-deploy credentials
+#           (same credential used for ECR push and SSM parameter store)
+
 set -euo pipefail
 
-EC2_IP="${1:?Usage: sync_docs.sh <ec2-public-ip>}"
-EC2_USER="ec2-user"
+INSTANCE_ID="i-0d13db821169627e2"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+GITHUB_REPO="robertvanstedum/personal-ai-agents"
 
-echo "=== Syncing build queue ==="
-rsync -avz --inplace \
-  "${REPO_ROOT}/data/guild/build_queue.json" \
-  "${EC2_USER}@${EC2_IP}:/opt/minimoi/data/guild/build_queue.json"
+# Guard: EC2 pulls from GitHub, not local disk — files must be committed.
+DIRTY=$(git -C "$REPO_ROOT" diff --name-only HEAD -- \
+  data/guild/build_queue.json docs/design/ docs/specs/ 2>/dev/null || true)
+if [[ -n "$DIRTY" ]]; then
+  echo "ERROR: uncommitted changes in synced paths — commit first, then run sync_docs.sh"
+  echo "$DIRTY"
+  exit 1
+fi
 
-echo "=== Syncing design docs ==="
-rsync -avz --delete \
-  "${REPO_ROOT}/docs/design/" \
-  "${EC2_USER}@${EC2_IP}:/opt/minimoi/docs/design/"
+COMMIT=$(git -C "$REPO_ROOT" rev-parse HEAD)
+RAW_BASE="https://raw.githubusercontent.com/${GITHUB_REPO}/${COMMIT}"
 
-echo "=== Syncing spec docs ==="
-rsync -avz --delete \
-  "${REPO_ROOT}/docs/specs/" \
-  "${EC2_USER}@${EC2_IP}:/opt/minimoi/docs/specs/"
+echo "=== sync_docs.sh: SSM push (commit ${COMMIT:0:7}) ==="
 
-echo "=== Done -- prod reads from host paths, no restart needed ==="
+# Build the list of (github-raw-url → ec2-dest-path) pairs
+SRCS=()
+DSTS=()
+
+SRCS+=("${RAW_BASE}/data/guild/build_queue.json")
+DSTS+=("/opt/minimoi/data/guild/build_queue.json")
+
+for f in "${REPO_ROOT}"/docs/design/*; do
+  [[ -f "$f" ]] || continue
+  name=$(basename "$f")
+  SRCS+=("${RAW_BASE}/docs/design/${name}")
+  DSTS+=("/opt/minimoi/docs/design/${name}")
+done
+
+for f in "${REPO_ROOT}"/docs/specs/*; do
+  [[ -f "$f" ]] || continue
+  name=$(basename "$f")
+  SRCS+=("${RAW_BASE}/docs/specs/${name}")
+  DSTS+=("/opt/minimoi/docs/specs/${name}")
+done
+
+TOTAL=${#SRCS[@]}
+echo "Files to sync: ${TOTAL}"
+
+# Build a shell script to run on EC2 — one curl per file, fail-fast
+LINES=("set -e")
+for i in "${!SRCS[@]}"; do
+  LINES+=("curl -fsSL '${SRCS[$i]}' -o '${DSTS[$i]}' && echo \"OK ($(( i + 1 ))/${TOTAL}): $(basename "${DSTS[$i]}")\"")
+done
+LINES+=("echo '=== done: ${TOTAL} files ==='")
+
+# Encode as a JSON array of command lines (each line is a shell command)
+CMD_JSON=$(python3 -c "
+import json, sys
+lines = sys.stdin.read().splitlines()
+print(json.dumps(lines))
+" <<< "$(printf '%s\n' "${LINES[@]}")")
+
+CMD_ID=$(aws ssm send-command \
+  --instance-ids "$INSTANCE_ID" \
+  --document-name "AWS-RunShellScript" \
+  --parameters "commands=${CMD_JSON}" \
+  --query 'Command.CommandId' \
+  --output text)
+
+echo "SSM command: ${CMD_ID}"
+echo -n "Waiting"
+
+for _ in $(seq 1 30); do
+  sleep 5
+  echo -n "."
+  STATUS=$(aws ssm get-command-invocation \
+    --command-id "$CMD_ID" \
+    --instance-id "$INSTANCE_ID" \
+    --query 'Status' \
+    --output text 2>/dev/null || echo "Pending")
+
+  if [[ "$STATUS" == "Success" ]]; then
+    echo ""
+    aws ssm get-command-invocation \
+      --command-id "$CMD_ID" \
+      --instance-id "$INSTANCE_ID" \
+      --query 'StandardOutputContent' \
+      --output text
+    exit 0
+  elif [[ "$STATUS" == "Failed" || "$STATUS" == "Cancelled" ]]; then
+    echo ""
+    echo "=== FAILED (${STATUS}) ==="
+    aws ssm get-command-invocation \
+      --command-id "$CMD_ID" \
+      --instance-id "$INSTANCE_ID" \
+      --query '[StandardOutputContent, StandardErrorContent]' \
+      --output text
+    exit 1
+  fi
+done
+
+echo ""
+echo "Timed out (2.5 min) — check manually:"
+echo "  aws ssm get-command-invocation --command-id ${CMD_ID} --instance-id ${INSTANCE_ID}"
+exit 1
