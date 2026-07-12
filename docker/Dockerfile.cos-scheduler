@@ -8,8 +8,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY get_secret.py .
 COPY utils/ utils/
 COPY domains/guild/ domains/guild/
+COPY domains/cos/ domains/cos/
 
 ENV PORT=8769
 EXPOSE 8769
 
-CMD ["python", "domains/guild/agents/chief_of_staff.py"]
+CMD ["python", "domains/cos/chief_of_staff.py"]

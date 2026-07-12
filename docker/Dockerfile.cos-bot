@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY get_secret.py .
 COPY utils/ utils/
 COPY domains/guild/ domains/guild/
+COPY domains/cos/ domains/cos/
 COPY telegram_cos_bot.py .
 
 CMD ["python", "telegram_cos_bot.py"]
