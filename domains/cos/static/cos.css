@@ -1,11 +1,10 @@
 /*
  * cos.css — Chief of Staff domain stylesheet
  * Parchment/dark-nav design system (matches German/Portuguese palette)
- * Phase A: functional skeleton. Phase B: full visual polish.
+ * v3: landing hero + two-column sidebar layout per tab
  */
 
 :root {
-  /* Parchment palette — same tokens as German/Portuguese */
   --bg:          #F5F0E8;
   --card:        #EDE7DC;
   --border:      #C4B49A;
@@ -15,15 +14,17 @@
   --accent:      #C68A5E;
   --accent-dark: #A06030;
 
-  /* Nav (dark) */
   --nav-bg:      #111108;
   --nav-text:    #D8CEB4;
   --nav-dim:     #665A46;
   --nav-active:  #C68A5E;
 
-  /* Chat */
   --user-label:  #4A6A8A;
   --cos-label:   #7A5A36;
+
+  --nav-h:  48px;   /* CoS sticky nav height */
+  --port-h: 38px;   /* portal nav bar height (injected by proxy) */
+  --total-h: 86px;  /* nav-h + port-h */
 
   --radius: 6px;
   --shadow: 0 1px 4px rgba(42, 31, 20, 0.10);
@@ -53,7 +54,7 @@ html, body {
   display: flex;
   align-items: center;
   padding: 0 20px;
-  height: 48px;
+  height: var(--nav-h);
   gap: 20px;
 }
 
@@ -64,6 +65,7 @@ html, body {
   text-transform: uppercase;
   color: var(--nav-text);
   white-space: nowrap;
+  text-decoration: none;
 }
 
 /* ── Tab navigation ────────────────────────────────────────────────────────── */
@@ -80,7 +82,7 @@ html, body {
   border-bottom: 2px solid transparent;
   color: var(--nav-dim);
   padding: 0 16px;
-  height: 48px;
+  height: var(--nav-h);
   cursor: pointer;
   font-family: Georgia, serif;
   font-size: 0.82rem;
@@ -106,34 +108,110 @@ html, body {
   border-radius: 3px;
 }
 
-/* ── Chicago photo banner ──────────────────────────────────────────────────── */
-/* Drop domains/cos/static/photos/chicago_header.jpg — shows automatically */
+/* ── Landing page ──────────────────────────────────────────────────────────── */
 
-.photo-banner {
-  width: 100%;
-  height: 180px;
-  background:
-    linear-gradient(to bottom, rgba(17,17,8,0.55) 0%, rgba(17,17,8,0.20) 100%),
-    url('/static/photos/chicago_header.jpg') center 35% / cover no-repeat,
-    #1a1a12;
+body.landing-mode .cos-header { position: sticky; top: 0; }
+
+.cos-landing {
   display: flex;
-  align-items: flex-end;
-  padding: 14px 24px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - var(--total-h));
+  text-align: center;
+  padding: 2rem;
+  position: relative;
+  background-image: url('/static/photos/cos_landing.jpg');
+  background-size: cover;
+  background-position: center 60%;
 }
 
-.photo-caption {
-  font-size: 0.7rem;
-  letter-spacing: 0.12em;
+.cos-landing::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(17, 17, 8, 0.35);
+  pointer-events: none;
+}
+
+.cos-landing > * { position: relative; z-index: 1; }
+
+.landing-title {
+  font-family: Georgia, serif;
+  font-size: clamp(36px, 6vw, 52px);
+  font-style: italic;
+  font-weight: 400;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.35);
+  line-height: 1.15;
+  margin: 0 0 0.75rem;
+}
+
+.landing-subtitle {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(216, 206, 180, 0.55);
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 1px 6px rgba(0,0,0,0.5);
+  margin: 0 0 3rem;
 }
 
-/* ── Main content area ─────────────────────────────────────────────────────── */
+.landing-nav {
+  display: flex;
+  gap: 2.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
 
-.cos-main {
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 28px 24px 48px;
+.landing-nav a {
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.7), 0 2px 16px rgba(0,0,0,0.5);
+  transition: color 0.15s;
+}
+.landing-nav a:hover { color: #fff; }
+
+/* ── Two-column split layout ───────────────────────────────────────────────── */
+
+.tab-layout-split {
+  display: grid;
+  grid-template-columns: 1fr 460px;
+  min-height: calc(100vh - var(--total-h));
+}
+
+/* Left column — scrollable content */
+.tab-content {
+  height: calc(100vh - var(--total-h));
+  overflow-y: auto;
+  padding: 2.5rem 3rem;
+  background: var(--bg);
+}
+
+/* Right column — sticky sidebar photo */
+.tab-panel-photo {
+  position: sticky;
+  top: var(--total-h);
+  height: calc(100vh - var(--total-h));
+  overflow: hidden;
+}
+
+.tab-photo {
+  display: none;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tab-photo.active { display: block; }
+
+@media (max-width: 768px) {
+  .tab-layout-split { grid-template-columns: 1fr; }
+  .tab-panel-photo  { display: none; }
+  .tab-content      { height: auto; padding: 1.5rem 1.25rem; }
 }
 
 /* ── Tab panels ────────────────────────────────────────────────────────────── */
@@ -141,10 +219,35 @@ html, body {
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
 
-/* ── Talk tab ──────────────────────────────────────────────────────────────── */
+/* ── Tab content header ────────────────────────────────────────────────────── */
+
+.tab-split-header {
+  margin-bottom: 1.5rem;
+}
+
+.tab-hero-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-family: 'Courier New', monospace;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.tab-split-header h1 {
+  font-family: Georgia, serif;
+  font-size: 1.65rem;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--ink);
+  margin: 0;
+  line-height: 1.2;
+}
+
+/* ── Discuss / chat ────────────────────────────────────────────────────────── */
 
 #chat-log {
-  height: 430px;
+  height: 340px;
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -213,11 +316,7 @@ html, body {
   flex-shrink: 0;
 }
 #btn-voice:hover { background: var(--border); color: var(--ink); }
-#btn-voice.recording {
-  background: #8A3020;
-  border-color: #8A3020;
-  color: #F5F0E8;
-}
+#btn-voice.recording { background: #8A3020; border-color: #8A3020; color: #F5F0E8; }
 
 #btn-send {
   background: var(--accent);
@@ -232,7 +331,7 @@ html, body {
   transition: background 0.12s;
   flex-shrink: 0;
 }
-#btn-send:hover { background: var(--accent-dark); }
+#btn-send:hover    { background: var(--accent-dark); }
 #btn-send:disabled { opacity: 0.45; cursor: default; }
 
 .talk-meta {
@@ -245,7 +344,7 @@ html, body {
 .talk-meta a { color: var(--muted); text-decoration: underline; }
 .talk-meta a:hover { color: var(--accent); }
 
-/* ── Feed & Archive — entry cards ─────────────────────────────────────────── */
+/* ── Notes / entry cards ───────────────────────────────────────────────────── */
 
 .section-divider {
   font-size: 0.68rem;
@@ -284,9 +383,9 @@ html, body {
   padding: 1px 6px;
   color: var(--ink-mid);
 }
-.entry-tag.chat    { color: var(--cos-label); }
-.entry-tag.action  { color: #4A7040; border-color: #4A7040; }
-.entry-tag.decision{ color: var(--user-label); border-color: var(--user-label); }
+.entry-tag.chat     { color: var(--cos-label); }
+.entry-tag.action   { color: #4A7040; border-color: #4A7040; }
+.entry-tag.decision { color: var(--user-label); border-color: var(--user-label); }
 
 .entry-date {
   font-size: 0.72rem;
@@ -346,15 +445,7 @@ html, body {
   margin-top: 3px;
 }
 
-.empty-state {
-  text-align: center;
-  padding: 40px 0;
-  color: var(--muted);
-  font-size: 0.9rem;
-  font-style: italic;
-}
-
-/* ── Archive — log file list ───────────────────────────────────────────────── */
+/* ── Repository — log file list ────────────────────────────────────────────── */
 
 .archive-group { margin-bottom: 24px; }
 
@@ -391,7 +482,15 @@ html, body {
   white-space: nowrap;
 }
 
-/* ── Loading state ─────────────────────────────────────────────────────────── */
+/* ── Shared states ─────────────────────────────────────────────────────────── */
+
+.empty-state {
+  text-align: center;
+  padding: 40px 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-style: italic;
+}
 
 .loading {
   color: var(--muted);

@@ -25,7 +25,7 @@ from pathlib import Path
 
 import requests
 from apscheduler.schedulers.background import BackgroundScheduler
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, redirect
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -1067,11 +1067,20 @@ def _get_agent_log_listing() -> list:
     return sorted(files, key=lambda x: (x["mtime"], x["name"]), reverse=True)[:40]
 
 
-# ── Web UI (Phase A skeleton → v2 all-tabs) ───────────────────────────────────
+# ── Web UI (v3: landing + four-tab SPA with sidebar photos) ───────────────────
+
+_VALID_TABS = {"discuss", "notes", "todo", "repository"}
 
 @app.route("/ui")
 def ui():
-    return render_template("cos_ui.html")
+    return render_template("cos_landing.html")
+
+
+@app.route("/ui/<tab>")
+def ui_tab(tab):
+    if tab not in _VALID_TABS:
+        return redirect("/ui")
+    return render_template("cos_ui.html", initial_tab=tab)
 
 
 @app.route("/ui/send", methods=["POST"])
@@ -1095,8 +1104,8 @@ def ui_memory():
     return render_template("cos_memory.html", memory=mem, memory_chars=len(mem))
 
 
-@app.route("/ui/feed")
-def ui_feed():
+@app.route("/ui/notes")
+def ui_notes():
     return jsonify(_parse_memory_for_feed())
 
 
@@ -1109,8 +1118,8 @@ def ui_todo():
     return jsonify({"memory_actions": mem_actions, "agenda": agenda})
 
 
-@app.route("/ui/archive")
-def ui_archive():
+@app.route("/ui/repository")
+def ui_repository():
     return jsonify(_get_agent_log_listing())
 
 

@@ -11,75 +11,104 @@
   <!-- ── Sticky dark header ── -->
   <header class="cos-header">
     <div class="header-nav">
-      <span class="brand">Chief of Staff</span>
+      <a href="/ui" class="brand">Chief of Staff</a>
       <nav class="tab-nav">
-        <button class="tab-btn active" data-tab="talk">Talk</button>
-        <button class="tab-btn" data-tab="feed">Feed</button>
+        <button class="tab-btn" data-tab="discuss">Discuss</button>
+        <button class="tab-btn" data-tab="notes">Notes</button>
         <button class="tab-btn" data-tab="todo">To-do</button>
-        <button class="tab-btn" data-tab="archive">Archive</button>
+        <button class="tab-btn" data-tab="repository">Repository</button>
       </nav>
       <div class="backend-badge" id="backend-badge">···</div>
     </div>
   </header>
 
-  <!-- ── Chicago photo banner ── -->
-  <!-- Phase B: drop chicago_header.jpg into domains/cos/static/photos/ -->
-  <div class="photo-banner">
-    <span class="photo-caption">Chicago</span>
-  </div>
+  <!-- ── Two-column split: content left, photo right ── -->
+  <div class="tab-layout-split">
 
-  <div class="cos-main">
+    <!-- ── Left: tab content panels ── -->
+    <div class="tab-content">
 
-    <!-- ── Talk tab ── -->
-    <div id="tab-talk" class="tab-panel active">
-      <div id="chat-log"></div>
-      <div class="input-row">
-        <input id="send-input" type="text" placeholder="Message CoS…" autocomplete="off" autofocus>
-        <button id="btn-voice" title="Voice input (Whisper)">🎙</button>
-        <button id="btn-send">Send</button>
+      <!-- Discuss -->
+      <div id="tab-discuss" class="tab-panel">
+        <div class="tab-split-header">
+          <div class="tab-hero-label">[CHICAGO]</div>
+          <h1>Discuss</h1>
+        </div>
+        <div id="chat-log"></div>
+        <div class="input-row">
+          <input id="send-input" type="text" placeholder="Message CoS…" autocomplete="off" autofocus>
+          <button id="btn-voice" title="Voice input (Whisper)">🎙</button>
+          <button id="btn-send">Send</button>
+        </div>
+        <div class="talk-meta">
+          <span id="voice-status"></span>
+          <a href="/ui/memory" target="_blank">memory ↗</a>
+        </div>
       </div>
-      <div class="talk-meta">
-        <span>localhost only · no auth · Phase A</span>
-        <a href="/ui/memory" target="_blank">memory ↗</a>
-        <span id="voice-status"></span>
+
+      <!-- Notes -->
+      <div id="tab-notes" class="tab-panel">
+        <div class="tab-split-header">
+          <div class="tab-hero-label">[CHICAGO]</div>
+          <h1>Notes</h1>
+        </div>
+        <div id="notes-content" class="loading">Loading…</div>
       </div>
+
+      <!-- To-do -->
+      <div id="tab-todo" class="tab-panel">
+        <div class="tab-split-header">
+          <div class="tab-hero-label">[CHICAGO]</div>
+          <h1>To-do</h1>
+        </div>
+        <div id="todo-content" class="loading">Loading…</div>
+      </div>
+
+      <!-- Repository -->
+      <div id="tab-repository" class="tab-panel">
+        <div class="tab-split-header">
+          <div class="tab-hero-label">[CHICAGO]</div>
+          <h1>Repository</h1>
+        </div>
+        <div id="repository-content" class="loading">Loading…</div>
+      </div>
+
+    </div><!-- .tab-content -->
+
+    <!-- ── Right: sidebar photos (all pre-loaded, JS shows active) ── -->
+    <div class="tab-panel-photo">
+      <img src="/static/photos/cos_discuss.jpg"    class="tab-photo" data-tab="discuss"    style="object-position:center 30%" alt="">
+      <img src="/static/photos/cos_notes.jpg"      class="tab-photo" data-tab="notes"      style="object-position:center center" alt="">
+      <img src="/static/photos/cos_todo.jpg"       class="tab-photo" data-tab="todo"       style="object-position:center 40%" alt="">
+      <img src="/static/photos/cos_repository.jpg" class="tab-photo" data-tab="repository" style="object-position:center center" alt="">
     </div>
 
-    <!-- ── Feed tab ── -->
-    <div id="tab-feed" class="tab-panel">
-      <div id="feed-content" class="loading">Loading…</div>
-    </div>
-
-    <!-- ── To-do tab ── -->
-    <div id="tab-todo" class="tab-panel">
-      <div id="todo-content" class="loading">Loading…</div>
-    </div>
-
-    <!-- ── Archive tab ── -->
-    <div id="tab-archive" class="tab-panel">
-      <div id="archive-content" class="loading">Loading…</div>
-    </div>
-
-  </div><!-- .cos-main -->
+  </div><!-- .tab-layout-split -->
 
 <script>
+const INITIAL_TAB = '{{ initial_tab }}';
+
 // ── Tab switching ─────────────────────────────────────────────────────────────
-const tabBtns    = document.querySelectorAll('.tab-btn');
-const tabPanels  = document.querySelectorAll('.tab-panel');
-const tabLoaded  = { talk: true, feed: false, todo: false, archive: false };
+const tabBtns   = document.querySelectorAll('.tab-btn');
+const tabPanels = document.querySelectorAll('.tab-panel');
+const tabPhotos = document.querySelectorAll('.tab-photo');
+const tabLoaded = { discuss: true, notes: false, todo: false, repository: false };
+
+function activateTab(tab, pushState) {
+  tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  tabPanels.forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
+  tabPhotos.forEach(img => img.classList.toggle('active', img.dataset.tab === tab));
+  if (pushState) history.pushState({tab}, '', tab);
+  if (!tabLoaded[tab]) { tabLoaded[tab] = true; loadTab(tab); }
+}
 
 tabBtns.forEach(btn => {
-  btn.addEventListener('click', () => {
-    tabBtns.forEach(b => b.classList.remove('active'));
-    tabPanels.forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    const tab = btn.dataset.tab;
-    document.getElementById('tab-' + tab).classList.add('active');
-    if (!tabLoaded[tab]) {
-      tabLoaded[tab] = true;
-      loadTab(tab);
-    }
-  });
+  btn.addEventListener('click', () => activateTab(btn.dataset.tab, true));
+});
+
+window.addEventListener('popstate', e => {
+  const tab = (e.state && e.state.tab) || 'discuss';
+  activateTab(tab, false);
 });
 
 // ── Backend badge ─────────────────────────────────────────────────────────────
@@ -94,8 +123,10 @@ async function loadBackendBadge() {
 }
 loadBackendBadge();
 
-// ── Chat log ──────────────────────────────────────────────────────────────────
-const chatLog = document.getElementById('chat-log');
+// ── Chat (Discuss tab) ────────────────────────────────────────────────────────
+const chatLog   = document.getElementById('chat-log');
+const sendInput = document.getElementById('send-input');
+const btnSend   = document.getElementById('btn-send');
 
 function appendMsg(role, text) {
   const wrap  = document.createElement('div');
@@ -121,12 +152,6 @@ function appendThinking() {
   return el;
 }
 
-// ── Send message ─────────────────────────────────────────────────────────────
-const sendInput = document.getElementById('send-input');
-const btnSend   = document.getElementById('btn-send');
-
-document.getElementById('send-input').form;
-document.querySelector('.input-row').addEventListener('submit', e => e.preventDefault());
 btnSend.addEventListener('click', sendMessage);
 sendInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
 
@@ -160,7 +185,7 @@ function setInputDisabled(disabled) {
   btnSend.disabled   = disabled;
 }
 
-// ── Voice input (MediaRecorder + VAD, ported from German domain) ──────────────
+// ── Voice input (VAD + Whisper) ───────────────────────────────────────────────
 const btnVoice    = document.getElementById('btn-voice');
 const voiceStatus = document.getElementById('voice-status');
 let   isRecording = false;
@@ -168,7 +193,7 @@ let   isRecording = false;
 btnVoice.addEventListener('click', toggleVoice);
 
 async function toggleVoice() {
-  if (isRecording) return; // VAD handles stop automatically
+  if (isRecording) return;
   if (!navigator.mediaDevices || !window.MediaRecorder) {
     voiceStatus.textContent = 'Microphone not available in this browser.';
     return;
@@ -184,10 +209,7 @@ async function toggleVoice() {
   btnVoice.title = 'Voice input (Whisper)';
   isRecording = false;
 
-  if (!blob) {
-    voiceStatus.textContent = '';
-    return;
-  }
+  if (!blob) { voiceStatus.textContent = ''; return; }
 
   voiceStatus.textContent = 'Transcribing…';
   try {
@@ -195,116 +217,79 @@ async function toggleVoice() {
     fd.append('audio', blob, 'audio.webm');
     const resp = await fetch('/ui/transcribe', { method: 'POST', body: fd });
     const data = await resp.json();
-    if (data.error) {
-      voiceStatus.textContent = 'Transcription error: ' + data.error;
-      return;
-    }
+    if (data.error) { voiceStatus.textContent = 'Transcription error: ' + data.error; return; }
     const t = (data.transcript || '').trim();
-    if (t) {
-      sendInput.value = t;
-      voiceStatus.textContent = '';
-      sendMessage();
-    } else {
-      voiceStatus.textContent = 'No speech detected.';
-    }
+    if (t) { sendInput.value = t; voiceStatus.textContent = ''; sendMessage(); }
+    else { voiceStatus.textContent = 'No speech detected.'; }
   } catch(err) {
     voiceStatus.textContent = 'Transcription failed: ' + err.message;
   }
 }
 
-// VAD: records until 2 s of silence after ≥300 ms of speech
 async function captureWithVAD() {
-  const SPEECH_RMS  = 0.018;
-  const SILENCE_RMS = 0.012;
-  const SPEECH_MIN  = 300;
-  const SILENCE_MS  = 2000;
-
+  const SPEECH_RMS = 0.018, SILENCE_RMS = 0.012, SPEECH_MIN = 300, SILENCE_MS = 2000;
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg;codecs=opus']
     .find(t => MediaRecorder.isTypeSupported(t)) || '';
   const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
   const chunks = [];
   recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   await audioCtx.resume().catch(() => {});
   const analyser = audioCtx.createAnalyser();
   analyser.fftSize = 256;
   audioCtx.createMediaStreamSource(stream).connect(analyser);
   const pcmData = new Float32Array(analyser.fftSize);
-
   return new Promise(resolve => {
     let speechStart = null, silenceFrom = null, recording = false, done = false;
-
-    function finish(blob) {
-      if (done) return;
-      done = true;
-      clearInterval(vad);
+    function finish() {
+      if (done) return; done = true; clearInterval(vad);
       if (recorder.state !== 'inactive') {
-        recorder.onstop = () => resolve(blob || new Blob(chunks, { type: mimeType || 'audio/webm' }));
+        recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType || 'audio/webm' }));
         recorder.stop();
-      } else {
-        resolve(blob);
-      }
-      audioCtx.close();
-      stream.getTracks().forEach(t => t.stop());
+      } else { resolve(null); }
+      audioCtx.close(); stream.getTracks().forEach(t => t.stop());
     }
-
     recorder.start(100);
-
     const vad = setInterval(() => {
       analyser.getFloatTimeDomainData(pcmData);
       let sum = 0;
       for (let i = 0; i < pcmData.length; i++) sum += pcmData[i] * pcmData[i];
       const rms = Math.sqrt(sum / pcmData.length);
-
       if (rms >= SPEECH_RMS) {
         if (!speechStart) speechStart = Date.now();
         silenceFrom = null;
-        if (!recording && Date.now() - speechStart >= SPEECH_MIN) {
-          recording = true;
-        }
+        if (!recording && Date.now() - speechStart >= SPEECH_MIN) recording = true;
       } else if (rms < SILENCE_RMS) {
         if (recording && !silenceFrom) silenceFrom = Date.now();
-        if (recording && silenceFrom && Date.now() - silenceFrom >= SILENCE_MS) {
-          finish(null); // resolve with chunks collected so far
-        }
-        if (!speechStart && !recording) {
-          // Prevent indefinite waiting if no speech at all (30 s timeout)
-        }
+        if (recording && silenceFrom && Date.now() - silenceFrom >= SILENCE_MS) finish();
       }
     }, 50);
-
-    // Safety timeout: 30 s max
-    setTimeout(() => finish(null), 30000);
+    setTimeout(finish, 30000);
   });
 }
 
-// ── Feed tab ──────────────────────────────────────────────────────────────────
-async function loadFeed() {
-  const el = document.getElementById('feed-content');
+// ── Notes tab ─────────────────────────────────────────────────────────────────
+async function loadNotes() {
+  const el = document.getElementById('notes-content');
   try {
-    const entries = await fetch('/ui/feed').then(r => r.json());
+    const entries = await fetch('/ui/notes').then(r => r.json());
     if (!entries.length) {
-      el.innerHTML = '<p class="empty-state">No memory entries yet — start chatting and CoS will begin writing notes.</p>';
+      el.innerHTML = '<p class="empty-state">No memory entries yet.</p>';
       return;
     }
-
-    // Group by section
     const sections = {};
     entries.forEach(e => {
       const sec = e.section || 'General';
       if (!sections[sec]) sections[sec] = [];
       sections[sec].push(e);
     });
-
     let html = '';
     for (const [sec, items] of Object.entries(sections)) {
       html += `<div class="section-divider">${esc(sec)}</div>`;
       items.forEach(e => {
         const tag = e.type || 'chat';
-        html += `
-        <div class="entry-card">
+        html += `<div class="entry-card">
           <div class="entry-meta">
             <span class="entry-tag ${esc(tag)}">${esc(tag)}</span>
             <span class="entry-date">${esc(e.date || '')}</span>
@@ -315,7 +300,7 @@ async function loadFeed() {
     }
     el.innerHTML = html;
   } catch(err) {
-    el.innerHTML = `<p class="empty-state">Feed unavailable: ${esc(err.message)}</p>`;
+    el.innerHTML = `<p class="empty-state">Notes unavailable: ${esc(err.message)}</p>`;
   }
 }
 
@@ -324,16 +309,13 @@ async function loadTodo() {
   const el = document.getElementById('todo-content');
   try {
     const data = await fetch('/ui/todo').then(r => r.json());
-    const agenda = data.agenda || [];
-    const memActs = data.memory_actions || [];
+    const agenda = data.agenda || [], memActs = data.memory_actions || [];
     let html = '';
-
     if (agenda.length) {
       html += '<div class="todo-section-title">From CoS recommendations</div>';
       agenda.forEach(item => {
         const conf = item.confidence ? ` · ${Math.round(item.confidence * 100)}% confidence` : '';
-        html += `
-        <div class="todo-item">
+        html += `<div class="todo-item">
           <div class="todo-dot"></div>
           <div class="todo-body">
             <div class="todo-content">${esc(item.description || '')}</div>
@@ -342,12 +324,10 @@ async function loadTodo() {
         </div>`;
       });
     }
-
     if (memActs.length) {
       html += '<div class="todo-section-title">From memory</div>';
       memActs.forEach(e => {
-        html += `
-        <div class="todo-item">
+        html += `<div class="todo-item">
           <div class="todo-dot"></div>
           <div class="todo-body">
             <div class="todo-content">${esc(e.content || '')}</div>
@@ -356,34 +336,29 @@ async function loadTodo() {
         </div>`;
       });
     }
-
     if (!agenda.length && !memActs.length) {
-      html = '<p class="empty-state">No open action items. CoS will surface them here as it identifies things worth following up on.</p>';
+      html = '<p class="empty-state">No open action items.</p>';
     }
-
     el.innerHTML = html;
   } catch(err) {
     el.innerHTML = `<p class="empty-state">To-do unavailable: ${esc(err.message)}</p>`;
   }
 }
 
-// ── Archive tab ───────────────────────────────────────────────────────────────
-async function loadArchive() {
-  const el = document.getElementById('archive-content');
+// ── Repository tab ────────────────────────────────────────────────────────────
+async function loadRepository() {
+  const el = document.getElementById('repository-content');
   try {
-    const files = await fetch('/ui/archive').then(r => r.json());
+    const files = await fetch('/ui/repository').then(r => r.json());
     if (!files.length) {
-      el.innerHTML = '<p class="empty-state">No agent log files yet. Logs from each agent session will appear here.</p>';
+      el.innerHTML = '<p class="empty-state">No agent log files yet.</p>';
       return;
     }
-
-    // Group by dir
     const groups = {};
     files.forEach(f => {
       if (!groups[f.dir]) groups[f.dir] = [];
       groups[f.dir].push(f);
     });
-
     let html = '';
     for (const [dir, items] of Object.entries(groups)) {
       html += `<div class="archive-group">
@@ -399,25 +374,26 @@ async function loadArchive() {
     }
     el.innerHTML = html;
   } catch(err) {
-    el.innerHTML = `<p class="empty-state">Archive unavailable: ${esc(err.message)}</p>`;
+    el.innerHTML = `<p class="empty-state">Repository unavailable: ${esc(err.message)}</p>`;
   }
 }
 
 // ── Tab loader dispatch ───────────────────────────────────────────────────────
 function loadTab(tab) {
-  if (tab === 'feed')    loadFeed();
-  if (tab === 'todo')    loadTodo();
-  if (tab === 'archive') loadArchive();
+  if (tab === 'notes')      loadNotes();
+  if (tab === 'todo')       loadTodo();
+  if (tab === 'repository') loadRepository();
 }
 
 // ── Escape helper ─────────────────────────────────────────────────────────────
 function esc(s) {
   return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+// ── Initialise on load ───────────────────────────────────────────────────────
+activateTab(INITIAL_TAB, false);
+if (INITIAL_TAB !== 'discuss') loadTab(INITIAL_TAB);
 </script>
 </body>
 </html>
