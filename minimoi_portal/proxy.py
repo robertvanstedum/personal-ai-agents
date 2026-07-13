@@ -94,10 +94,12 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
     german_active     = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/german"     else ""
     portuguese_active = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/portuguese" else ""
     guild_active      = "color:#ffffff;font-weight:600;" if portal_prefix == "/guild"          else ""
+    cos_active        = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/cos"        else ""
 
     german_nav_link = f'<a href="/app/german" style="color:#C68A5E;text-decoration:none;margin-right:14px;{german_active}">German</a>'
     is_guest = user and user.get("tier") == "guest"
-    guild_nav_link = "" if is_guest else f'<a href="/guild" style="color:#C68A5E;text-decoration:none;{guild_active}">Guild</a>'
+    guild_nav_link = "" if is_guest else f'<a href="/guild" style="color:#C68A5E;text-decoration:none;margin-right:14px;{guild_active}">Guild</a>'
+    cos_nav_link   = "" if is_guest else f'<a href="/app/cos" style="color:#C68A5E;text-decoration:none;{cos_active}">CoS</a>'
 
     # Per-backend layout offset so backend sticky elements don't hide under our nav.
     # Curator body is display:flex (row) — padding-top pushes the flex row down.
@@ -131,6 +133,7 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
   {german_nav_link}
   <a href="/app/portuguese" style="color:#C68A5E;text-decoration:none;margin-right:14px;{portuguese_active}">Meu Português</a>
   {guild_nav_link}
+  {cos_nav_link}
   <a href="/account/password" style="color:rgba(255,255,255,0.45);text-decoration:none;margin-left:auto;margin-right:12px;">{display_name}</a>
   <a href="/logout" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;">Sign out</a>
 </div>

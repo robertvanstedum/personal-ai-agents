@@ -95,6 +95,20 @@ html, body {
   border-bottom-color: var(--nav-active);
 }
 
+/* ── In-build badge ────────────────────────────────────────────────────────── */
+
+.dev-badge {
+  font-family: 'Courier New', monospace;
+  font-size: 0.63rem;
+  letter-spacing: 0.1em;
+  color: #B87820;
+  background: rgba(184, 120, 32, 0.12);
+  border: 1px solid rgba(184, 120, 32, 0.35);
+  border-radius: 3px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
 /* ── Backend badge ─────────────────────────────────────────────────────────── */
 
 .backend-badge {
