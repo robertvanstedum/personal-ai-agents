@@ -273,7 +273,7 @@ async function captureWithVAD() {
 async function loadNotes() {
   const el = document.getElementById('notes-content');
   try {
-    const entries = await fetch('/ui/notes').then(r => r.json());
+    const entries = await fetch('/ui/api/notes').then(r => r.json());
     if (!entries.length) {
       el.innerHTML = '<p class="empty-state">No memory entries yet.</p>';
       return;
@@ -308,7 +308,7 @@ async function loadNotes() {
 async function loadTodo() {
   const el = document.getElementById('todo-content');
   try {
-    const data = await fetch('/ui/todo').then(r => r.json());
+    const data = await fetch('/ui/api/todo').then(r => r.json());
     const agenda = data.agenda || [], memActs = data.memory_actions || [];
     let html = '';
     if (agenda.length) {
@@ -349,7 +349,7 @@ async function loadTodo() {
 async function loadRepository() {
   const el = document.getElementById('repository-content');
   try {
-    const files = await fetch('/ui/repository').then(r => r.json());
+    const files = await fetch('/ui/api/repository').then(r => r.json());
     if (!files.length) {
       el.innerHTML = '<p class="empty-state">No agent log files yet.</p>';
       return;

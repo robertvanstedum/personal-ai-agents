@@ -1104,12 +1104,12 @@ def ui_memory():
     return render_template("cos_memory.html", memory=mem, memory_chars=len(mem))
 
 
-@app.route("/ui/notes")
+@app.route("/ui/api/notes")
 def ui_notes():
     return jsonify(_parse_memory_for_feed())
 
 
-@app.route("/ui/todo")
+@app.route("/ui/api/todo")
 def ui_todo():
     mem_entries = _parse_memory_for_feed()
     action_types = {"action", "task", "todo", "follow-up", "followup", "decision"}
@@ -1118,7 +1118,7 @@ def ui_todo():
     return jsonify({"memory_actions": mem_actions, "agenda": agenda})
 
 
-@app.route("/ui/repository")
+@app.route("/ui/api/repository")
 def ui_repository():
     return jsonify(_get_agent_log_listing())
 
