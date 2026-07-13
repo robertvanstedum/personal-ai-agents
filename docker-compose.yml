@@ -36,6 +36,8 @@ services:
       - ./curator_signals.json:/app/curator_signals.json
       - ./curator_latest.json:/app/curator_latest.json
       - ./curator_radar.json:/app/curator_radar.json
+      - ./interests:/app/interests
+      - ./_NewDomains/research-intelligence/data:/app/_NewDomains/research-intelligence/data
 
   german:
     build:

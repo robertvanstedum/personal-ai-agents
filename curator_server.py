@@ -1197,7 +1197,8 @@ def _scans_dives_data():
     # ── Dives from data/dives/*.md ────────────────────────────────────────────
     dives_dir = BASE_DIR / '_NewDomains' / 'research-intelligence' / 'data' / 'dives'
     try:
-        for f in sorted(dives_dir.glob('*.md'), reverse=True):
+        raw_dives = []
+        for f in dives_dir.glob('*.md'):
             text    = f.read_text()
             title_m = re.match(r'^#\s+DEEPER DIVE:\s*(.+)', text, re.IGNORECASE)
             title   = title_m.group(1).strip() if title_m else ' '.join(
@@ -1205,13 +1206,18 @@ def _scans_dives_data():
             )
             date_m  = re.search(r'Generated:\s*(\d{4}-\d{2}-\d{2})', text)
             date    = date_m.group(1) if date_m else ''
-            dives.append({
-                'href':    f'/research/dive-result/{f.stem}',
-                'title':   title,
-                'excerpt': '',
-                'meta':    date,
-                'date':    date,
+            sort_key = date if date else str(f.stat().st_mtime)
+            raw_dives.append({
+                'href':     f'/research/dive-result/{f.stem}',
+                'title':    title,
+                'excerpt':  '',
+                'meta':     date,
+                'date':     date,
+                '_sort_key': sort_key,
             })
+        dives = sorted(raw_dives, key=lambda d: d['_sort_key'], reverse=True)
+        for d in dives:
+            del d['_sort_key']
     except Exception:
         pass
 
