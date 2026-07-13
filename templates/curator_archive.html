@@ -292,7 +292,7 @@ function dailyRow(ed) {
   return `<div class="archive-row daily-row" data-search="${ed.date} ${summary}">
     <span class="row-date">${fmtDate(ed.date)}</span>
     <span class="row-title muted">${summary || '—'}</span>
-    <a class="row-action" href="/curator_archive/${ed.file}">View →</a>
+    <a class="row-action" href="curator_archive/${ed.file}">View →</a>
   </div>`;
 }
 
@@ -318,7 +318,7 @@ function diveRow(d) {
   return `<div class="archive-row" data-search="${d.title} dive">
     <span class="dive-badge">Thread</span>
     <span class="row-title">${esc(d.title)}</span>
-    <a class="row-action" href="/research/dive-result/${encodeURIComponent(d.slug)}">View →</a>
+    <a class="row-action" href="research/dive-result/${encodeURIComponent(d.slug)}">View →</a>
   </div>`;
 }
 
@@ -327,7 +327,7 @@ function obsRow(o) {
   return `<div class="archive-row" data-search="${o.date} ${label}">
     <span class="row-date">${fmtDate(o.date)}</span>
     <span class="row-title muted">${label}</span>
-    <a class="row-action" href="/research/leanings?date=${o.date}">View →</a>
+    <a class="row-action" href="research/leanings?date=${o.date}">View →</a>
   </div>`;
 }
 
@@ -347,7 +347,7 @@ function renderDailySection() {
     return `<div class="archive-row daily-row${cls}" data-index="${i}" data-search="${ed.date} ${summary}">
       <span class="row-date">${fmtDate(ed.date)}</span>
       <span class="row-title muted">${summary || '—'}</span>
-      <a class="row-action" href="/curator_archive/${ed.file}">View →</a>
+      <a class="row-action" href="curator_archive/${ed.file}">View →</a>
     </div>`;
   }).join('');
   if (items.length > PAGE_SIZE) {

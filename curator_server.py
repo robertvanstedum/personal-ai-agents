@@ -1105,7 +1105,7 @@ def _archive_scans():
                 'date':   m['date'],
                 'title':  m['title'],
                 'source': m['source'],
-                'url':    f'/research/scan/{m["hash_id"]}',
+                'url':    f'research/scan/{m["hash_id"]}',
             })
         scans = sorted(raw, key=lambda s: s['date'], reverse=True)
     except Exception:
