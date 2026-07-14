@@ -5,10 +5,10 @@
     "spec_file": "defect_container_persistence_2026-07-14.md",
     "status": "open",
     "github_issue": null,
-    "priority": "high",
+    "priority": "critical",
     "blocked_reason": null,
     "last_transition_at": "2026-07-14T00:00:00Z",
-    "notes": "Systematic audit defect — immediate patches for curator_archive and docs/specs already shipped tonight. Open task is the audit: verify all containers have volume mounts for any persistent data they write. Process fix: add volume-mount check to Definition of Done for any build that introduces persistent container data."
+    "notes": "Scope expanded same night: two compounding failures. (1) Missing volume mounts — immediate patches shipped, systematic audit still open. (2) Backup system not functional for file data — Tier 1 local script never written; S3 and Dropbox receive Postgres + agent_logs only, no curator_archive or other file data. spec #122 was marked closed but Tier 1 was never built. Build backup_local.sh before this can close."
   },
   {
     "id": 135,

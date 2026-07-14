@@ -2,17 +2,21 @@
 
 **Date:** 2026-07-14
 **Status:** Open
-**Priority:** High — data loss in production, recurring
-**Filed by:** Claude.ai (Fable 5) based on four instances surfaced 2026-07-13/14
-**Build queue:** Register as defect, assign number at registration
+**Priority:** Critical — data loss in production, backup system not functional, recurring
+**Filed by:** Claude.ai (Fable 5) based on four instances surfaced 2026-07-13/14; scope expanded same night after backup investigation
+**Build queue:** #136
 
 ---
 
 ## Summary
 
-Multiple production containers write data to ephemeral storage instead of host-mounted paths. Every CI/CD deploy rebuilds the image and recreates the container, silently wiping that data. The failure mode is invisible until a user notices missing content — no error, no warning, no log entry.
+Two compounding failures, discovered the same night:
 
-This has surfaced four times in one session. Each instance was treated as a one-off fix. This defect tracks the root cause and requires a systematic audit, not another one-off patch.
+**Failure 1 — Missing volume mounts:** Multiple production containers write data to ephemeral storage instead of host-mounted paths. Every CI/CD deploy rebuilds the image and recreates the container, silently wiping that data. The failure mode is invisible until a user notices missing content — no error, no warning, no log entry.
+
+**Failure 2 — Backup system not protecting data:** Spec #122 (three-tier backup) was marked closed and "live" but the Tier 1 local backup script was never written. Without Tier 1 creating `/opt/minimoi/backups/YYYY-MM-DD/`, the Tier 2 (S3) and Tier 3 (Dropbox) scripts silently log a warning and skip the file sync. S3 has received only Postgres dumps and agent logs — no curator briefings, no archive files. The safety net that was supposed to catch volume-mount gaps does not exist.
+
+These two failures are independent but compound each other. Either one alone is serious. Together they mean: data written to containers has no host path, and even if it did, the backup would not have captured it.
 
 ---
 
@@ -20,12 +24,15 @@ This has surfaced four times in one session. Each instance was treated as a one-
 
 | Domain | Data Lost | Window | Recoverable? |
 |---|---|---|---|
-| Curator | Daily briefing archive (`curator_archive/`) | June 22 – July 12, 2026 | **No** — permanent gap |
-| Curator | Sources history (`curator_history.json`) | June 22 – July 12, 2026 | Unknown — audit required |
-| Curator | Scans (`interests/2026/scans/`) | June 22 – July 12, 2026 | Partial — dev copy rsynced up |
-| Curator | Deep dives (`_NewDomains/research-intelligence/data/dives/`) | June 22 – July 12, 2026 | Partial — dev copy rsynced up |
+| Curator | Daily briefing archive (`curator_archive/`) | June 22 – July 12, 2026 | **No** — confirmed permanent gap |
+| Curator | Sources history (`curator_history.json`) | June 22 – July 12, 2026 | **No** — same ephemeral path, same wipe pattern |
+| Curator | Scans (`interests/2026/scans/`) | June 22 – July 12, 2026 | Partial — pre-migration dev copy rsynced |
+| Curator | Deep dives (`_NewDomains/research-intelligence/data/dives/`) | June 22 – July 12, 2026 | Partial — pre-migration dev copy rsynced |
+| All containers | Any data written to ephemeral paths | June 21 – July 14, 2026 | Unknown — full audit required |
 
-CoS (`cos_memory.md`) and `agent_logs/` were identified as at-risk and addressed separately tonight. They are not in the table above because they were caught before data loss occurred — but they are the same class of problem.
+The archive page currently shows pre-migration dev data (Feb–June 21), a permanent gap (June 22–July 12), then correct data from July 13 onward.
+
+CoS (`cos_memory.md`) and `agent_logs/` were identified as at-risk and addressed separately tonight — same class of problem, caught before confirmed loss.
 
 ---
 
@@ -47,6 +54,35 @@ The pattern: **local dev works → container works within a session → deploy w
 
 ---
 
+## Backup System Gap (discovered same night — second root cause)
+
+### What was built vs. what was designed
+
+Spec #122 described a three-tier system:
+- **Tier 1** — Local EC2 daily rsync to `/opt/minimoi/backups/YYYY-MM-DD/` (14-day retention)
+- **Tier 2** — S3 daily sync from Tier 1 output + Postgres dump
+- **Tier 3** — Dropbox weekly from Tier 1 output
+
+`scripts/backup_s3.sh` and `scripts/backup_dropbox.sh` exist and are correctly written. **`backup_local.sh` (Tier 1) does not exist.** Both Tier 2 and Tier 3 check for `$LOCAL_BACKUP` and log a warning + skip if it's missing. The spec was marked closed with #122 noted as "Tier 2 S3 live" — this was inaccurate. The Postgres dump and agent logs reach S3. File-based data (curator_archive, curator_history, scans, dives) never did.
+
+### Confirmed state after investigation
+
+| Tier | Script | Status | What's in it |
+|---|---|---|---|
+| 1 — Local EC2 | Not written | **Missing** | — |
+| 2 — S3 | `backup_s3.sh` ✓ | Running, partial | Postgres dumps + agent_logs only — no file data |
+| 3 — Dropbox | `backup_dropbox.sh` ✓ | Running, empty | Nothing (Tier 1 output never exists) |
+| Private repo | `sync_private_repo.sh` ✓ | Running, partial | `curator_signals.json`, `curator_latest.*`, memory files — no archive |
+
+### Checked and ruled out
+
+- **S3 bucket `minimoi-backups`**: has Postgres dumps and agent_logs; no `curator_archive` files. Verified by tracing what `backup_s3.sh` actually sends.
+- **Dropbox `minimoi-backups/`**: nothing useful — Tier 1 never populated `$LOCAL_BACKUP`.
+- **Private GitHub repo (`mini-moi-private`)**: `curator_archive/` not in `SYNC_PATHS`.
+- **Mac local `curator_archive/`**: stops at June 21 — pre-migration dev runs only.
+
+---
+
 ## Required Fix
 
 ### Immediate (already done tonight, confirm complete)
@@ -56,6 +92,20 @@ The pattern: **local dev works → container works within a session → deploy w
 - [x] `interests/2026/scans/` — volume mount added, data rsynced
 - [x] `_NewDomains/research-intelligence/data/dives/` — volume mount added, data rsynced
 - [ ] `curator_history.json` — confirm Sources data gap matches or differs from archive gap (audit required)
+
+### Backup Tier 1 (must be built before this defect can close)
+
+Write `scripts/backup_local.sh`: daily rsync of all persistent data paths from `/opt/minimoi/data/` to `/opt/minimoi/backups/YYYY-MM-DD/`, with 14-day retention. Add to `setup_backup_cron.sh` at 2am UTC. Only after Tier 1 exists do Tier 2 and Tier 3 become real protection.
+
+Paths to include (at minimum):
+- `/opt/minimoi/data/curator_archive/`
+- `/opt/minimoi/data/curator_history.json`
+- `/opt/minimoi/data/curator/` (intelligence files)
+- `/opt/minimoi/data/interests/` (scans)
+- `/opt/minimoi/data/research-intelligence/` (dives)
+- `/opt/minimoi/data/german/` (sessions, progress)
+- `/opt/minimoi/data/portuguese/` (sessions)
+- `/opt/minimoi/auth/` (users, guests)
 
 ### Systematic audit (this defect's actual scope)
 
@@ -75,7 +125,21 @@ Add to the Ways of Working / build checklist: **before any new container feature
 
 ## What Is Not Recoverable
 
-The June 22 – July 12 production daily briefings are permanently gone. They were written to ephemeral container storage and wiped on each deploy during that window. This is a known, accepted permanent gap. The archive page in production currently shows pre-migration dev data (Feb – June 21) followed by this gap, then correct persistent data from July 13 onward.
+The June 22 – July 12 production daily briefings are permanently gone. Investigated thoroughly:
+- Ephemeral container storage: wiped on each deploy ✗
+- S3 `minimoi-backups`: Postgres + agent_logs only — no briefing files ✗
+- Dropbox: empty (Tier 1 never ran) ✗
+- Private GitHub repo: curator_archive not in SYNC_PATHS ✗
+- Mac local: stops at June 21 ✗
+
+The June 22–July 12 gap in the archive is a known, accepted permanent loss. The archive shows pre-migration dev data (Feb–June 21), this gap, then correct data from July 13 onward.
+
+**Time-sensitive:** if the curator ran on July 14 before tonight's volume mount deployed, today's briefing may still exist in the running container. Rescue window closes when the c22ff28 pipeline finishes and recreates the container. Run from Mac:
+```bash
+ssh minimoi "docker exec minimoi-curator ls curator_archive/ 2>/dev/null | tail -5"
+# If today's file is there:
+ssh minimoi "docker cp minimoi-curator:/app/curator_archive/. /opt/minimoi/data/curator_archive/"
+```
 
 ---
 
@@ -90,5 +154,5 @@ Registration approval: Robert.
 
 ---
 
-*Defect: Container Data Persistence · 2026-07-14 · Claude.ai (Fable 5)*
-*Four instances in one session — root cause documented, systematic audit required*
+*Defect: Container Data Persistence + Backup System Gap · 2026-07-14 · Claude.ai (Fable 5)*
+*Scope expanded same night: backup system confirmed non-functional for file data; Tier 1 never built*
