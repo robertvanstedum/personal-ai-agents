@@ -28,7 +28,6 @@ docs/portfolio/
 docs/releases/
 docs/decision-records/
 docs/design/
-docs/specs/
 docs/*.docx
 _NewDomains/
 !_NewDomains/research-intelligence/web/
