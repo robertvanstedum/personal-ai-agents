@@ -263,7 +263,7 @@
       {% endif %}
       {% if item.github_issue %}
         <a href="https://github.com/robertvanstedum/personal-ai-agents/issues/{{ item.github_issue | replace('#','') }}"
-           target="_blank" class="card-tag tag-gh">#{{ item.github_issue | replace('#','') }}</a>
+           target="_blank" rel="noopener noreferrer" class="card-tag tag-gh">#{{ item.github_issue | replace('#','') }}</a>
       {% endif %}
     </div>
     {% if status == 'incomplete' %}

@@ -361,7 +361,7 @@
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             {% if item.github_issue %}
             <a href="https://github.com/robertvanstedum/personal-ai-agents/issues/{{ item.github_issue | replace('#','') }}"
-               target="_blank" class="gh-badge">#{{ item.github_issue | replace('#','') }}</a>
+               target="_blank" rel="noopener noreferrer" class="gh-badge">#{{ item.github_issue | replace('#','') }}</a>
             {% else %}<span style="color:var(--text-dim)">—</span>{% endif %}
             <a class="edit-link" onclick="toggleEditRow({{ item.id }})">edit</a>
             <a class="edit-link" onclick="toggleHistRow({{ item.id }})">hist</a>
