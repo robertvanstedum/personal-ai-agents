@@ -29,6 +29,8 @@ services:
       - /opt/minimoi/data/curator_latest.json:/app/curator_latest.json
       - /opt/minimoi/data/curator_radar.json:/app/curator_radar.json
       - /opt/minimoi/data/curator:/app/data/curator
+      - /opt/minimoi/data/curator_archive:/app/curator_archive
+      - /opt/minimoi/data/curator_history.json:/app/curator_history.json
       - /opt/minimoi/data/interests:/app/interests
       - /opt/minimoi/data/research-intelligence:/app/_NewDomains/research-intelligence/data
     ports:
