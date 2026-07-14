@@ -102,3 +102,5 @@ agent_active: false
 | 2026-05-31 | uat-100-b | 1min | $0.00 | $0.09 | uat-100-b: 12 triaged, top find: ndupress.ndu.edu SF No. 310 1 Winning the Fight Taiwan Canno |
 
 | 2026-05-31 | uat-100-c | 1min | $0.00 | $0.09 | uat-100-c: 12 triaged, top find: r/CredibleDefense on Reddit: Winning the Fight Taiwan Cannot |
+
+| 2026-07-13 | large-current-account-imbalances-002 | 1min | $0.00 | $0.09 | large-current-account-imbalances-002: 9 triaged, top find: Is the U.S. Current Account Deficit Sustainable? If Not, How |

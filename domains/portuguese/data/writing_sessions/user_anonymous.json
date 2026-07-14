@@ -1,0 +1,18 @@
+{
+  "entries": [
+    {
+      "id": "pt_ws_20260701_195326",
+      "user_id": null,
+      "created_at": "2026-07-01T19:53:26.410347",
+      "mode": "diario",
+      "text_original": "Eu gostaria de aprender como escriver melhor em Português.",
+      "text_corrected": "Eu gostaria de aprender como escrever melhor em português.",
+      "notes": [
+        "Escriver → escrever (erro de digitação/ortografia)",
+        "português é minúsculo quando não é início de frase",
+        "Sua frase está bem estruturada! Continue praticando."
+      ],
+      "timestamp": "2026-07-01T19:53:26.410358"
+    }
+  ]
+}

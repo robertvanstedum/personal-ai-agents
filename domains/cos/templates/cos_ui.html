@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chief of Staff</title>
-  <link rel="stylesheet" href="/static/cos.css">
+  <link rel="stylesheet" href="/static/cos.css?v=2">
 </head>
 <body>
 
@@ -13,10 +13,10 @@
     <div class="header-nav">
       <a href="/ui" class="brand">Chief of Staff</a>
       <nav class="tab-nav">
-        <button class="tab-btn" data-tab="discuss">Discuss</button>
-        <button class="tab-btn" data-tab="notes">Notes</button>
-        <button class="tab-btn" data-tab="todo">To-do</button>
-        <button class="tab-btn" data-tab="repository">Repository</button>
+        <button class="tab-btn" data-tab="confer">Confer</button>
+        <button class="tab-btn" data-tab="record">Record</button>
+        <button class="tab-btn" data-tab="agenda">Agenda</button>
+        <button class="tab-btn" data-tab="store">Store</button>
       </nav>
       <span class="dev-badge">IN BUILD</span>
       <div class="backend-badge" id="backend-badge">···</div>
@@ -29,11 +29,11 @@
     <!-- ── Left: tab content panels ── -->
     <div class="tab-content">
 
-      <!-- Discuss -->
-      <div id="tab-discuss" class="tab-panel">
+      <!-- Confer -->
+      <div id="tab-confer" class="tab-panel">
         <div class="tab-split-header">
           <div class="tab-hero-label">[CHICAGO]</div>
-          <h1>Discuss</h1>
+          <h1>Confer</h1>
         </div>
         <div id="chat-log"></div>
         <div class="input-row">
@@ -47,29 +47,29 @@
         </div>
       </div>
 
-      <!-- Notes -->
-      <div id="tab-notes" class="tab-panel">
+      <!-- Record -->
+      <div id="tab-record" class="tab-panel">
         <div class="tab-split-header">
           <div class="tab-hero-label">[CHICAGO]</div>
-          <h1>Notes</h1>
+          <h1>Record</h1>
         </div>
         <div id="notes-content" class="loading">Loading…</div>
       </div>
 
-      <!-- To-do -->
-      <div id="tab-todo" class="tab-panel">
+      <!-- Agenda -->
+      <div id="tab-agenda" class="tab-panel">
         <div class="tab-split-header">
           <div class="tab-hero-label">[CHICAGO]</div>
-          <h1>To-do</h1>
+          <h1>Agenda</h1>
         </div>
         <div id="todo-content" class="loading">Loading…</div>
       </div>
 
-      <!-- Repository -->
-      <div id="tab-repository" class="tab-panel">
+      <!-- Store -->
+      <div id="tab-store" class="tab-panel">
         <div class="tab-split-header">
           <div class="tab-hero-label">[CHICAGO]</div>
-          <h1>Repository</h1>
+          <h1>Store</h1>
         </div>
         <div id="repository-content" class="loading">Loading…</div>
       </div>
@@ -78,10 +78,10 @@
 
     <!-- ── Right: sidebar photos (all pre-loaded, JS shows active) ── -->
     <div class="tab-panel-photo">
-      <img src="/static/photos/cos_discuss.jpg"    class="tab-photo" data-tab="discuss"    style="object-position:center 30%" alt="">
-      <img src="/static/photos/cos_notes.jpg"      class="tab-photo" data-tab="notes"      style="object-position:center center" alt="">
-      <img src="/static/photos/cos_todo.jpg"       class="tab-photo" data-tab="todo"       style="object-position:center 40%" alt="">
-      <img src="/static/photos/cos_repository.jpg" class="tab-photo" data-tab="repository" style="object-position:center center" alt="">
+      <img src="/static/photos/cos_discuss.jpg"    class="tab-photo" data-tab="confer"  style="object-position:center 30%" alt="">
+      <img src="/static/photos/cos_notes.jpg"      class="tab-photo" data-tab="record"  style="object-position:center center" alt="">
+      <img src="/static/photos/cos_todo.jpg"       class="tab-photo" data-tab="agenda"  style="object-position:center 40%" alt="">
+      <img src="/static/photos/cos_repository.jpg" class="tab-photo" data-tab="store"   style="object-position:center center" alt="">
     </div>
 
   </div><!-- .tab-layout-split -->
@@ -93,7 +93,7 @@ const INITIAL_TAB = '{{ initial_tab }}';
 const tabBtns   = document.querySelectorAll('.tab-btn');
 const tabPanels = document.querySelectorAll('.tab-panel');
 const tabPhotos = document.querySelectorAll('.tab-photo');
-const tabLoaded = { discuss: true, notes: false, todo: false, repository: false };
+const tabLoaded = { confer: true, record: false, agenda: false, store: false };
 
 function activateTab(tab, pushState) {
   tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
@@ -108,7 +108,7 @@ tabBtns.forEach(btn => {
 });
 
 window.addEventListener('popstate', e => {
-  const tab = (e.state && e.state.tab) || 'discuss';
+  const tab = (e.state && e.state.tab) || 'confer';
   activateTab(tab, false);
 });
 

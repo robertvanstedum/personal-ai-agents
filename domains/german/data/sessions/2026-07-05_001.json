@@ -1,0 +1,87 @@
+{
+  "session_id": "session_2026-07-05_001",
+  "date": "2026-07-05",
+  "persona": "Maria",
+  "scenario": "cafe bill",
+  "duration_estimate_min": 2,
+  "source": "ki_sitzung",
+  "raw_transcript": [
+    {
+      "speaker": "Maria",
+      "text": "Grüß dich! Willkommen, setz dich schnell. Was darf's sein – eine Melange vielleicht?"
+    },
+    {
+      "speaker": "Sie",
+      "text": "Ja, ich möchte eine Melange und einen Verlängerter, bitte."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Klar, eine Melange und einen Verlängerter kommen sofort! Möchtest du noch einen Gugelhupf dazu?"
+    },
+    {
+      "speaker": "Sie",
+      "text": "Nein, danke. Und der Kaffee ist für, wie sagt man, Reise, mitnehmen, ist für mitnehmen."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Ach so, zum Mitnehmen! Kein Problem, die Melange und der Verlängerter sind fertig. Das macht 7,50 Euro, bitte. Willst du bar zahlen und Trinkgeld geben?"
+    },
+    {
+      "speaker": "Sie",
+      "text": "Ja, 10 Prozent."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Perfekt, mit 10 Prozent Trinkgeld sind es 8 Euro 25. Hier ist die Rechnung, danke schön! Gute Reise noch."
+    },
+    {
+      "speaker": "Sie",
+      "text": "Tschau, bis später."
+    },
+    {
+      "speaker": "Maria",
+      "text": "Tschüss, bis bald! Gute Reise noch, und schau wieder vorbei."
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "The session simulated a cafe interaction focused on ordering coffee to go and settling the bill with a tip. Robert communicated his needs clearly overall and handled the transaction, but had some trouble with noun forms and expressing 'takeaway'. The main takeaway is solid basic ordering skills with room to refine accuracy in specifics.",
+    "errors": [
+      {
+        "type": "gender",
+        "original": "einen Verlängerter",
+        "correction": "einen Verlängerten",
+        "explanation": "The masculine noun 'Verlängerter' needs the accusative ending '-en'.",
+        "context": "Ja, ich möchte eine Melange und einen Verlängerter, bitte."
+      },
+      {
+        "type": "vocabulary",
+        "original": "der Kaffee ist für, wie sagt man, Reise, mitnehmen, ist für mitnehmen",
+        "correction": "Der Kaffee ist zum Mitnehmen.",
+        "explanation": "The standard phrase for takeaway is 'zum Mitnehmen'.",
+        "context": "Nein, danke. Und der Kaffee ist für, wie sagt man, Reise, mitnehmen, ist für mitnehmen."
+      }
+    ],
+    "strengths": [
+      "Clearly stated the order and requested takeaway",
+      "Correctly offered 10% tip and handled payment",
+      "Used polite phrases like 'bitte' and 'danke'"
+    ],
+    "next_focus": "Mastering noun declension and case endings for common food/drink items",
+    "topics": [
+      "cafe ordering",
+      "coffee to go",
+      "paying the bill"
+    ],
+    "vocabulary": [
+      "Melange",
+      "Verlängerter",
+      "Gugelhupf",
+      "zum Mitnehmen",
+      "Trinkgeld"
+    ]
+  },
+  "model": "grok",
+  "anki_generated": false,
+  "next_lesson_generated": false,
+  "user_id": "robert"
+}

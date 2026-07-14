@@ -1,0 +1,47 @@
+{
+  "sessions": [
+    {
+      "id": "pt_cs_20260701_152325",
+      "user_id": null,
+      "created_at": "2026-07-01T15:23:25.829359",
+      "date": "2026-07-01",
+      "persona": "Maria",
+      "scenario": "padaria chat",
+      "source": "ki_sessao",
+      "raw_transcript": "Maria: Oi! Beleza? Que bom te ver por aqui de novo! Tá cedo hoje, hein? O pão saiu agora do forno, tá quentinho. O que você quer?\nVocê: Queria seis pais e 300 de presunto para levar.\nMaria: Seis pãezinhos e 300 de presunto, tá bom! Deixa eu cortar esse presunto aqui rapidinho para você.\nVocê: Pronto?\nMaria: Pronto sim! Seis pãezinhos quentinhos e 300 gramas de presunto. Quer mais alguma coisa? Um cafezinho, talvez?\nVocê: Não, só isso.\nMaria: Tá bom! Fica 18 reais para você.\nVocê: Aqui é o meu cartão.\nMaria: Perfeito! Passa aqui na maquininha... pronto, fechou! Obrigada, viu? Volta sempre!",
+      "reviewer_output": {
+        "overall_summary": "Robert demonstrated good communication in a bakery transaction with mostly correct Portuguese. However, there was one notable spelling error and a minor grammatical issue that should be addressed.",
+        "errors": [
+          {
+            "original": "Queria seis pais e 300 de presunto para levar.",
+            "correction": "Queria seis pães e 300 gramas de presunto para levar.",
+            "explanation": "You wrote 'pais' (fathers) instead of 'pães' (breads). Also, it's more natural to include 'gramas' (grams) when specifying the quantity of ham."
+          }
+        ],
+        "strengths": [
+          "Used polite, natural language appropriate for a bakery setting",
+          "Correctly used 'queria' (conditional form) to make a polite request",
+          "Maintained natural conversation flow with brief, authentic responses like 'Pronto?' and 'Aqui é o meu cartão'",
+          "Handled the complete transaction smoothly from order to payment"
+        ],
+        "next_focus": "Review the spelling of common bakery items, particularly 'pão/pães' (bread/breads), to avoid spelling errors in food-related contexts.",
+        "topics": [
+          "bakery shopping",
+          "food ordering",
+          "polite requests",
+          "payment transactions"
+        ],
+        "vocabulary": [
+          "pães (breads)",
+          "presunto (ham)",
+          "gramas (grams)",
+          "quentinho/a (warm/hot)",
+          "levar (to take/carry away)",
+          "cartão (card)"
+        ]
+      },
+      "model": "claude",
+      "duration_min": 1
+    }
+  ]
+}

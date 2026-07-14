@@ -18,3 +18,5 @@ Last distilled: 2026-06-08 (initialized) | Size: ~200 chars
 
 ## Domain health standing notes
 [Per-domain observations that don't expire]
+
+[chat] 2026-07-11: CoS runs on the mini-moi platform backend and is independent of any client device.

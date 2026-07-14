@@ -89,10 +89,15 @@ def create_guest(display_name: str, expires_at_iso: str, password: str,
     """
     Create an active guest credential. Returns the guest dict.
     expires_at_iso: ISO 8601 string e.g. '2026-06-15T00:00:00Z'
+    If email already exists in guests.json the old entry is removed first.
     """
     data = _load_json("guests.json")
     if "guests" not in data:
         data["guests"] = []
+
+    if email:
+        data["guests"] = [g for g in data["guests"]
+                          if g.get("email", "").lower() != email.lower()]
 
     username = f"guest_{secrets.token_hex(4)}"
     guest = {
@@ -358,3 +363,61 @@ def list_guests() -> list:
             expired = True
         result.append({**g, "expired": expired})
     return result
+
+
+# ── Email verification tokens ────────────────────────────────────────────────
+
+def _prune_verifications(verifications: list) -> list:
+    """Remove expired entries from a verifications list."""
+    now = datetime.now(timezone.utc)
+    kept = []
+    for v in verifications:
+        try:
+            exp = datetime.fromisoformat(v["expires_at"])
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if now < exp:
+                kept.append(v)
+        except (KeyError, ValueError):
+            pass
+    return kept
+
+
+def create_verification(email: str, name: str, reason: str, domain: str) -> str:
+    """
+    Store a pending email verification token (24h TTL).
+    One token per email — replaces any prior unverified entry for the same address.
+    Returns the token string.
+    """
+    from datetime import timedelta
+    data = _load_json("email_verifications.json")
+    verifications = _prune_verifications(data.get("verifications", []))
+    verifications = [v for v in verifications
+                     if v.get("email", "").lower() != email.lower()]
+    token = secrets.token_hex(16)
+    verifications.append({
+        "token":      token,
+        "email":      email.lower(),
+        "name":       name,
+        "reason":     reason,
+        "domain":     domain,
+        "expires_at": (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat(),
+    })
+    _write_json("email_verifications.json", {"verifications": verifications})
+    return token
+
+
+def consume_verification(token: str) -> dict | None:
+    """
+    Validate a token, remove it, and return its stored fields.
+    Returns None if the token is not found or has expired.
+    """
+    data = _load_json("email_verifications.json")
+    verifications = _prune_verifications(data.get("verifications", []))
+    entry = next((v for v in verifications if v.get("token") == token), None)
+    if not entry:
+        _write_json("email_verifications.json", {"verifications": verifications})
+        return None
+    verifications = [v for v in verifications if v.get("token") != token]
+    _write_json("email_verifications.json", {"verifications": verifications})
+    return entry

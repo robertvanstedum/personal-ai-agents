@@ -290,3 +290,121 @@ Last updated: 2026-06-09 | Hard cap: 8,000 chars
 ⚠️ Memory approaching cap — distillation needed
 2026-06-27 13:47 UTC: [doc_modified] spec_deploy_fix_writing_save_2026-06-27.md — Fix deploy reliability in CI/CD pipeline before validating production changes.
 ⚠️ Memory approaching cap — distillation needed
+2026-06-28 12:19 UTC: [doc_created] spec_archiv_expand_german_multiuser_2026-06-28.md — Spec for expandable archive rows and German multiuser isolation in both domains.
+⚠️ Memory approaching cap — distillation needed
+2026-06-29 11:49 UTC: [doc_created] spec_source_variety_cap_2026-06-29.md — Bug fix spec capping max articles per source per category for Leitura and Lesen.
+⚠️ Memory approaching cap — distillation needed
+2026-06-30 00:14 UTC: [doc_created] spec_password_reset_admin_only_2026-06-29.md — Admin-only password reset spec for managing user passwords directly.
+⚠️ Memory approaching cap — distillation needed
+2026-06-30 00:27 UTC: [doc_created] spec_language_domains_categories_sources_2026-06-29.md — Handoff for German and Portuguese language domain categories and sources.
+⚠️ Memory approaching cap — distillation needed
+2026-06-30 04:46 UTC: [doc_modified] spec_password_reset_admin_only_2026-06-29.md — Admin-only password reset spec without self-service or email flows.
+⚠️ Memory approaching cap — distillation needed
+2026-06-30 04:46 UTC: [doc_modified] spec_language_domains_categories_sources_2026-06-29.md — Handoff detailing category changes and source updates for German and Portuguese domains.
+⚠️ Memory approaching cap — distillation needed
+2026-06-30 04:46 UTC: [doc_modified] spec_source_variety_cap_2026-06-29.md — Bug fix spec for per-source article cap in Leitura and Lesen domains.
+⚠️ Memory approaching cap — distillation needed
+2026-06-30 13:50 UTC: [doc_created] spec_dual_correction_literal_natural_2026-06-30.md — Spec for dual literal/natural corrections in German/Portuguese writing exercises.
+⚠️ Memory approaching cap — distillation needed
+2026-07-01 13:51 UTC: [doc_created] spec_mein_deutsch_landing_brightness_2026-06-30.md — Lighten Mein Deutsch landing page background to match Portuguese domain brightness.
+⚠️ Memory approaching cap — distillation needed
+2026-07-01 13:51 UTC: [doc_created] spec_guest_access_hardening_part1_2026-06-30.md — Spec for guest access hardening and data isolation audit with component checks.
+⚠️ Memory approaching cap — distillation needed
+2026-07-01 18:32 UTC: [doc_created] spec_guest_access_part2_2026-07-01.md — Spec for German Gespräche scoping and admin cleanup for guest access.
+⚠️ Memory approaching cap — distillation needed
+2026-07-01 19:57 UTC: [doc_created] spec_guest_access_part2_2026-07-01.md — Revised spec for German guest read-only isolation and admin cleanup in Part 2.
+⚠️ Memory approaching cap — distillation needed
+2026-07-01 22:34 UTC: [doc_created] spec_guest_access_part2_addendum_2026-07-01.md — Addendum documenting pre-build decisions for guest access part 2.
+⚠️ Memory approaching cap — distillation needed
+2026-07-01 22:38 UTC: [doc_modified] spec_guest_access_part2_addendum_2026-07-01.md — Addendum with binding pre-build decisions for guest access part 2.
+⚠️ Memory approaching cap — distillation needed
+2026-07-02 00:51 UTC: [doc_created] spec_guest_access_part2_addendum_2026-07-01.md — Addendum documenting pre-build decisions for guest access part 2.
+⚠️ Memory approaching cap — distillation needed
+2026-07-03 16:14 UTC: [doc_created] spec_landing_page_update_2026-07-03.md — Spec for updating minimoi.ai landing page framing and domain blurbs.
+⚠️ Memory approaching cap — distillation needed
+2026-07-03 16:14 UTC: [doc_created] spec_contextual_tips_pilot_2026-07-03.md — Spec for backend-driven contextual tips system pilot on curator briefing page.
+⚠️ Memory approaching cap — distillation needed
+2026-07-03 16:26 UTC: [doc_created] spec_landing_page_update_2026-07-03.md — Spec for updating minimoi.ai landing page blurbs and visitor framing.
+⚠️ Memory approaching cap — distillation needed
+2026-07-04 11:56 UTC: [doc_created] spec_guild_navigation_redesign_2026-07-04.md — Redesigns Guild navigation with item lifecycle and API for multi-actor build tracking.
+⚠️ Memory approaching cap — distillation needed
+2026-07-04 12:04 UTC: [doc_modified] spec_guild_navigation_redesign_2026-07-04.md — Redesigns Guild navigation with lifecycle states and API for multi-actor tracking.
+⚠️ Memory approaching cap — distillation needed
+2026-07-04 12:04 UTC: [doc_modified] spec_contextual_tips_pilot_2026-07-03.md — Spec for contextual tips system pilot on curator briefing page.
+⚠️ Memory approaching cap — distillation needed
+2026-07-04 12:04 UTC: [doc_modified] spec_landing_page_update_2026-07-03.md — Spec for updating minimoi.ai landing page blurbs and visitor framing.
+⚠️ Memory approaching cap — distillation needed
+2026-07-05 04:23 UTC: [doc_created] spec_code_review_security_phase1_2026-07-04.md — Phase 1 spec for code quality review and security audit before external review.
+⚠️ Memory approaching cap — distillation needed
+2026-07-05 04:40 UTC: [doc_modified] spec_code_review_security_phase1_2026-07-04.md — Phase 1 spec for code review and security audit before external review.
+⚠️ Memory approaching cap — distillation needed
+2026-07-05 04:41 UTC: [doc_created] spec_domain_standardization_2026-07-04.md — Standardizes German and Portuguese domains to a reusable template for future domains.
+⚠️ Memory approaching cap — distillation needed
+2026-07-05 04:41 UTC: [doc_modified] spec_domain_standardization_2026-07-04.md — Standardizes German and Portuguese domains to reusable template for future domains.
+⚠️ Memory approaching cap — distillation needed
+2026-07-05 05:02 UTC: [doc_created] spec_narrative_sync_2026-07-04.md — Spec for synchronizing canonical narrative across five mini-moi surfaces.
+⚠️ Memory approaching cap — distillation needed
+2026-07-05 05:08 UTC: [doc_modified] spec_116_narrative_sync_2026-07-04.md — Defines canonical narrative and syncs it across five mini-moi surfaces.
+⚠️ Memory approaching cap — distillation needed
+2026-07-05 05:08 UTC: [doc_modified] spec_116_narrative_sync_2026-07-04.md — Spec for synchronizing mini-moi narrative across five surfaces.
+⚠️ Memory approaching cap — distillation needed
+2026-07-05 05:08 UTC: [doc_modified] spec_117_guild_navigation_redesign_2026-07-04.md — Redesigns guild navigation with lifecycle states and API for multi-actor build tracking.
+⚠️ Memory approaching cap — distillation needed
+2026-07-05 05:08 UTC: [doc_modified] spec_118_code_review_security_phase1_2026-07-04.md — Phase 1 spec for code quality review and security audit before external review.
+⚠️ Memory approaching cap — distillation needed
+2026-07-05 05:08 UTC: [doc_modified] spec_120_domain_standardization_2026-07-04.md — Standardizes German and Portuguese domains into reusable template for future mini-moi domains.
+⚠️ Memory approaching cap — distillation needed
+2026-07-05 14:01 UTC: [doc_created] spec_121_tips_ux_redesign_2026-07-05.md — Redesigns tips UX to discrete, attractive, contextual placement in domain nav bar.
+⚠️ Memory approaching cap — distillation needed
+2026-07-05 14:26 UTC: [doc_modified] spec_121_tips_ux_redesign_2026-07-05.md — Spec for redesigning tips UX to be discrete, attractive and contextually placed.
+⚠️ Memory approaching cap — distillation needed
+2026-07-05 23:42 UTC: [doc_created] spec_production_backup_2026-07-05.md — Spec for three-tier production backup system to prevent data loss.
+⚠️ Memory approaching cap — distillation needed
+2026-07-05 23:54 UTC: [doc_modified] spec_production_backup_2026-07-05.md — Establishes three-tier backup system for mini-moi data with no single vendor dependency.
+⚠️ Memory approaching cap — distillation needed
+2026-07-06 00:39 UTC: [doc_created] spec_125_model_standardization_2026-07-05.md — Centralizes all LLM model names into config/models.json across 16 violating files.
+⚠️ Memory approaching cap — distillation needed
+2026-07-06 00:39 UTC: [doc_modified] spec_125_model_standardization_2026-07-05.md — Centralizes LLM model names in config/models.json to remove hardcoded strings from 16 files.
+⚠️ Memory approaching cap — distillation needed
+2026-07-10 21:21 UTC: [doc_created] spec_cos_v0_2026-07-10.md — Spec for CoS Agent v0 enabling natural Telegram conversation and automatic memory storage.
+⚠️ Memory approaching cap — distillation needed
+2026-07-11 03:08 UTC: [doc_modified] spec_cos_v0_2026-07-10.md — Defines v0 CoS agent for natural Telegram conversations with automatic memory storage.
+⚠️ Memory approaching cap — distillation needed
+2026-07-11 03:37 UTC: [doc_created] spec_133_intelligence_layer_2026-07-10.md — Spec for mini-moi intelligence layer with CoS, memory, and LLM.
+⚠️ Memory approaching cap — distillation needed
+2026-07-11 04:25 UTC: [doc_created] spec_133_intelligence_layer_v1.1_2026-07-10.md — Spec v1.1 for mini-moi Intelligence Layer covering CoS, memory, and local LLM.
+⚠️ Memory approaching cap — distillation needed
+2026-07-11 04:33 UTC: [doc_modified] spec_133_intelligence_layer_v1.1_2026-07-10.md — Spec for mini-moi Intelligence Layer v1.1 covering CoS, memory, and local LLM.
+⚠️ Memory approaching cap — distillation needed
+2026-07-11 14:29 UTC: [doc_created] spec_cos_domain_extraction_2026-07-11.md — Spec to extract CoS from Guild into standalone domains/cos/ domain.
+⚠️ Memory approaching cap — distillation needed
+2026-07-11 15:02 UTC: [doc_modified] spec_cos_domain_extraction_2026-07-11.md — Spec for extracting CoS from Guild domain to standalone cos/.
+⚠️ Memory approaching cap — distillation needed
+2026-07-12 01:15 UTC: [doc_created] spec_cos_domain_extraction_2026-07-11 copy.md — Spec for extracting CoS domain from Guild to standalone domains/cos/.
+⚠️ Memory approaching cap — distillation needed
+2026-07-12 01:55 UTC: [doc_created] spec_133_intelligence_layer_v1.1_2026-07-10.md — v1.1 spec for mini-moi Intelligence Layer covering CoS, memory and local LLM.
+⚠️ Memory approaching cap — distillation needed
+2026-07-12 02:00 UTC: [doc_modified] spec_133_intelligence_layer_v1.1_2026-07-10.md — Spec for mini-moi Intelligence Layer v1.1 covering CoS, memory, and local LLM.
+⚠️ Memory approaching cap — distillation needed
+2026-07-12 05:40 UTC: [doc_created] spec_133_intelligence_layer_v1.2_2026-07-11.md — Spec v1.2 for mini-moi Intelligence Layer with CoS, memory, and multi-agent setup.
+⚠️ Memory approaching cap — distillation needed
+2026-07-12 05:49 UTC: [doc_modified] spec_133_intelligence_layer_v1.2_2026-07-11.md — Spec for mini-moi Intelligence Layer v1.2 covering CoS, memory and local LLM.
+⚠️ Memory approaching cap — distillation needed
+2026-07-12 13:18 UTC: [doc_created] spec_133_intelligence_layer_v1.3_2026-07-12.md — v1.3 spec for mini-moi intelligence layer covering CoS, memory and local LLM.
+⚠️ Memory approaching cap — distillation needed
+2026-07-12 13:37 UTC: [doc_modified] spec_133_intelligence_layer_v1.3_2026-07-12.md — Specification for mini-moi Intelligence Layer v1.3 covering CoS Domain, Memory and Local LLM.
+⚠️ Memory approaching cap — distillation needed
+2026-07-12 14:05 UTC: [doc_created] spec_cos_web_interface_2026-07-12.md — Spec for minimal CoS web UI skeleton enabling laptop testing without Telegram.
+⚠️ Memory approaching cap — distillation needed
+2026-07-12 14:25 UTC: [doc_modified] spec_cos_web_interface_2026-07-12.md — Spec for minimal CoS web UI skeleton enabling laptop testing without Telegram.
+⚠️ Memory approaching cap — distillation needed
+2026-07-12 14:31 UTC: [doc_created] spec_cos_web_interface_v2_2026-07-12.md — Spec for CoS Web Interface v2 with full tabs, visuals, and Chicago photography.
+⚠️ Memory approaching cap — distillation needed
+2026-07-12 15:16 UTC: [doc_modified] spec_cos_web_interface_v2_2026-07-12.md — Version 2 spec for attractive, usable CoS web interface with all tabs functional.
+⚠️ Memory approaching cap — distillation needed
+2026-07-12 16:50 UTC: [doc_created] spec_cos_web_interface_v3_2026-07-12.md — Spec for CoS Web Interface v3 correcting photo treatments to match German reference.
+⚠️ Memory approaching cap — distillation needed
+2026-07-13 03:23 UTC: [doc_created] spec_guild_landing_2026-07-12.md — Spec for Guild landing page with Build/Operate/Improve cards replacing nav-tab.
+⚠️ Memory approaching cap — distillation needed
+2026-07-13 03:25 UTC: [doc_created] spec_platform_tour_2026-07-12.md — Spec for full platform screenshot tour with status labels.
+⚠️ Memory approaching cap — distillation needed

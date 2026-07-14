@@ -77,6 +77,13 @@ def _db_conn():
     return psycopg2.connect(db_url)
 
 
+def _strip_cdata(text: str) -> str:
+    text = text.strip()
+    if text.startswith("<![CDATA[") and text.endswith("]]>"):
+        return text[9:-3].strip()
+    return text
+
+
 def _clean_summary(text: str) -> str:
     clean = re.sub(r"<[^>]+>", "", text or "").strip()
     return (clean[:300] + "…") if len(clean) > 300 else clean
@@ -128,13 +135,13 @@ def fetch_feed(source: dict, max_articles: int) -> list[dict]:
         articles = []
         for entry in feed.entries[:max_articles]:
             link = entry.get("link", "")
-            title = (entry.get("title") or "").strip()
+            title = _strip_cdata((entry.get("title") or "").strip())
             if not link or not title:
                 continue
             articles.append({
                 "url": link,
                 "title": title,
-                "excerpt": _clean_summary(entry.get("summary", "")),
+                "excerpt": _clean_summary(_strip_cdata(entry.get("summary", ""))),
                 "published_at": _parse_date(entry),
             })
         log.info(f"  {source['name']}: {len(articles)} articles fetched")

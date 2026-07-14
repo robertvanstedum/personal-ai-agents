@@ -1,22 +1,3 @@
 {
-  "pending": [
-    {
-      "token": "992e42462a8b08e84df2b616ea4a9e32",
-      "username": "guest_e551b6bf",
-      "password_hash": "scrypt:32768:8:1$38v5V9E38ZOZIOwj$82d7ce5140f0fef816f9fbb98559a0597985bd111f115cdfd529cf5ea250d5e3ed165252cf892e54bf7ee79ffad531983dc099ebd87220d0e45c611d765ac57e",
-      "tier": "guest",
-      "display_name": "Robert-dev4",
-      "email": "robert.vanstedum@rvsassociates.com",
-      "requested_at": "2026-06-25T03:22:05.097925+00:00"
-    },
-    {
-      "token": "a59294a241681d10e1e4ce419666e022",
-      "username": "guest_bc4c2e5d",
-      "password_hash": "scrypt:32768:8:1$mK6cKdFAdM5Ghdnw$9c2393dfd817f5a6d72ac4221a1bebfb5f10c1de492987e8f0634f24c204b74f9fbf05a14212ed068ddf86ef00524ad2987712e3da8e752d10009b7b767b1f05",
-      "tier": "guest",
-      "display_name": "robertyahoo",
-      "email": "robert_van_stedum@yahoo.com.br",
-      "requested_at": "2026-06-25T03:26:32.169868+00:00"
-    }
-  ]
+  "pending": []
 }

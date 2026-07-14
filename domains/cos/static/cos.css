@@ -193,7 +193,7 @@ body.landing-mode .cos-header { position: sticky; top: 0; }
 
 .tab-layout-split {
   display: grid;
-  grid-template-columns: 1fr 560px;
+  grid-template-columns: 1fr 460px;
   min-height: calc(100vh - var(--total-h));
 }
 
