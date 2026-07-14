@@ -1324,7 +1324,7 @@ def main():
     print(f"   State: running\n")
 
     # 7. Serve
-    app.run(host="localhost", port=PORT, debug=False)
+    app.run(host="0.0.0.0", port=PORT, debug=False)
 
 
 if __name__ == "__main__":
