@@ -15,7 +15,7 @@
       <nav class="tab-nav">
         <button class="tab-btn" data-tab="confer">Confer</button>
         <button class="tab-btn" data-tab="record">Record</button>
-        <button class="tab-btn" data-tab="agenda">Agenda</button>
+        <button class="tab-btn" data-tab="track">Track</button>
         <button class="tab-btn" data-tab="store">Store</button>
       </nav>
       <span class="dev-badge">IN BUILD</span>
@@ -56,11 +56,11 @@
         <div id="notes-content" class="loading">Loading…</div>
       </div>
 
-      <!-- Agenda -->
-      <div id="tab-agenda" class="tab-panel">
+      <!-- Track -->
+      <div id="tab-track" class="tab-panel">
         <div class="tab-split-header">
           <div class="tab-hero-label">[CHICAGO]</div>
-          <h1>Agenda</h1>
+          <h1>Track</h1>
         </div>
         <div id="todo-content" class="loading">Loading…</div>
       </div>
@@ -80,7 +80,7 @@
     <div class="tab-panel-photo">
       <img src="/static/photos/cos_discuss.jpg"    class="tab-photo" data-tab="confer"  style="object-position:center 30%" alt="">
       <img src="/static/photos/cos_notes.jpg"      class="tab-photo" data-tab="record"  style="object-position:center center" alt="">
-      <img src="/static/photos/cos_todo.jpg"       class="tab-photo" data-tab="agenda"  style="object-position:center 40%" alt="">
+      <img src="/static/photos/cos_todo.jpg"       class="tab-photo" data-tab="track"  style="object-position:center 40%" alt="">
       <img src="/static/photos/cos_repository.jpg" class="tab-photo" data-tab="store"   style="object-position:center center" alt="">
     </div>
 
@@ -93,7 +93,7 @@ const INITIAL_TAB = '{{ initial_tab }}';
 const tabBtns   = document.querySelectorAll('.tab-btn');
 const tabPanels = document.querySelectorAll('.tab-panel');
 const tabPhotos = document.querySelectorAll('.tab-photo');
-const tabLoaded = { confer: true, record: false, agenda: false, store: false };
+const tabLoaded = { confer: true, record: false, track: false, store: false };
 
 function activateTab(tab, pushState) {
   tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
@@ -381,9 +381,9 @@ async function loadRepository() {
 
 // ── Tab loader dispatch ───────────────────────────────────────────────────────
 function loadTab(tab) {
-  if (tab === 'notes')      loadNotes();
-  if (tab === 'todo')       loadTodo();
-  if (tab === 'repository') loadRepository();
+  if (tab === 'record') loadNotes();
+  if (tab === 'track')  loadTodo();
+  if (tab === 'store')  loadRepository();
 }
 
 // ── Escape helper ─────────────────────────────────────────────────────────────
@@ -394,7 +394,7 @@ function esc(s) {
 
 // ── Initialise on load ───────────────────────────────────────────────────────
 activateTab(INITIAL_TAB, false);
-if (INITIAL_TAB !== 'discuss') loadTab(INITIAL_TAB);
+if (INITIAL_TAB !== 'confer') loadTab(INITIAL_TAB);
 </script>
 </body>
 </html>
