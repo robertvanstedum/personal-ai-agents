@@ -18,7 +18,7 @@
 
     /* ── Guild nav ── */
     nav.guild-nav {
-      position: sticky; top: 0; z-index: 100;
+      position: sticky; top: 38px; z-index: 100;
       background: #2a1f14;
       border-bottom: 1px solid rgba(255,255,255,0.08);
     }
@@ -230,6 +230,7 @@
   </style>
 </head>
 <body>
+{% include 'guild/_portal_nav.html' %}
 
 {# ── Macro: board card — MUST be defined before use ── #}
 {% macro board_card(item) %}
@@ -332,19 +333,8 @@
 {# ── Page ── #}
 
 <nav class="guild-nav">
-  <div class="guild-nav-brand">
-    <a href="/dashboard">mini-moi</a>
-    <span class="nav-sep">|</span>
-    <a href="/app/curator">Curator</a>
-    <span class="nav-sep">|</span>
-    <a href="/app/german">German</a>
-    <span class="nav-sep">|</span>
-    <a href="/app/portuguese">Português</a>
-    <span class="nav-sep">|</span>
-    <a href="/guild" class="nav-active">Guild</a>
-  </div>
+  {% include 'guild/_section_subnav.html' %}
   <div class="guild-subnav">
-    <a href="/guild" class="subnav-back">← Guild</a>
     <a href="/guild/build/queue" class="subnav-link subnav-active">Queue</a>
     <span class="subnav-dot">&nbsp;·&nbsp;</span>
     <a href="/guild/build" class="subnav-link">Build Log</a>
@@ -352,6 +342,8 @@
     <a href="/guild/build/roadmap" class="subnav-link">Roadmap</a>
     <span class="subnav-dot">&nbsp;·&nbsp;</span>
     <a href="/guild/docs" class="subnav-link">Docs</a>
+    <span class="subnav-dot">&nbsp;·&nbsp;</span>
+    <a href="/guild/career" class="subnav-link">Career Focus</a>
   </div>
 </nav>
 

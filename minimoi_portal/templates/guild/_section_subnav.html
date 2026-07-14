@@ -1,0 +1,13 @@
+{# Section subnav — Build · Operate · Improve — active state inferred from request.path #}
+{% set _p = request.path %}
+{% if '/build' in _p or '/docs' in _p or '/spec/' in _p or '/career' in _p %}{% set _sec = 'build' %}
+{% elif '/operate' in _p %}{% set _sec = 'operate' %}
+{% elif '/improve' in _p %}{% set _sec = 'improve' %}
+{% else %}{% set _sec = '' %}{% endif %}
+<div class="guild-subnav guild-sections">
+  <a href="/guild/build/queue" class="subnav-link{% if _sec == 'build' %} subnav-active{% endif %}">Build</a>
+  <span class="subnav-dot">&nbsp;·&nbsp;</span>
+  <a href="/guild/operate" class="subnav-link{% if _sec == 'operate' %} subnav-active{% endif %}">Operate</a>
+  <span class="subnav-dot">&nbsp;·&nbsp;</span>
+  <a href="/guild/improve" class="subnav-link{% if _sec == 'improve' %} subnav-active{% endif %}">Improve</a>
+</div>

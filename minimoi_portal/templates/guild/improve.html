@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Improve — Guild</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/guild.css">
+  <style>
+    :root {
+      --bg: #f5f0e8; --surface: #faf7f2;
+      --border: #ddd6c8; --text: #2a2418; --text-muted: #6b5f4e;
+      --text-dim: #9e9080; --accent: #8b5e2a;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+    nav.guild-nav {
+      position: sticky; top: 38px; z-index: 100;
+      background: #2a1f14; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .guild-nav-brand {
+      height: 44px; display: flex; align-items: center; padding: 0 1.5rem;
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); letter-spacing: 0.08em;
+    }
+    .guild-nav-brand a { color: #C68A5E; text-decoration: none; }
+    .guild-nav-brand a:hover { color: #ffffff; }
+    .guild-nav-brand a.nav-active { color: #ffffff; font-weight: 700; }
+    .nav-sep { color: rgba(255,255,255,0.2); margin: 0 12px; }
+    .guild-subnav {
+      height: 36px; display: flex; align-items: center; padding: 0 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.15);
+    }
+    .subnav-back {
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: rgba(198,138,94,0.4); text-decoration: none;
+      padding: 0 14px 0 0; height: 36px; display: flex; align-items: center;
+      margin-right: 10px; border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    .subnav-back:hover { color: rgba(198,138,94,0.75); }
+
+    .stub-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 80px);
+      padding: 3rem 2rem;
+      text-align: center;
+    }
+    .stub-banner {
+      background: rgba(139,90,42,0.07);
+      border: 1px solid rgba(139,90,42,0.25);
+      border-radius: 5px;
+      padding: 1.5rem 2.5rem;
+      max-width: 480px;
+    }
+    .stub-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #8b5e2a;
+      margin-bottom: 0.6rem;
+    }
+    .stub-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.5rem;
+      font-weight: 400;
+      color: var(--text);
+      margin-bottom: 0.75rem;
+    }
+    .stub-body {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+{% include 'guild/_portal_nav.html' %}
+
+<nav class="guild-nav">
+  {% include 'guild/_section_subnav.html' %}
+</nav>
+
+<div class="stub-wrap">
+  <div class="stub-banner">
+    <div class="stub-label">In Redesign</div>
+    <div class="stub-title">Improve</div>
+    <div class="stub-body">This section is being planned. Retrospectives, reviews, and craft-levelling tooling will live here.</div>
+  </div>
+</div>
+
+</body>
+</html>

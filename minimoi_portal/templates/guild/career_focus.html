@@ -18,7 +18,7 @@
 
     /* ── Guild nav ── */
     nav.guild-nav {
-      position: sticky; top: 0; z-index: 100;
+      position: sticky; top: 38px; z-index: 100;
       background: #2a1f14;
       border-bottom: 1px solid rgba(255,255,255,0.08);
     }
@@ -259,21 +259,11 @@
   </style>
 </head>
 <body>
+{% include 'guild/_portal_nav.html' %}
 
 <nav class="guild-nav">
-  <div class="guild-nav-brand">
-    <a href="/dashboard">mini-moi</a>
-    <span class="nav-sep">|</span>
-    <a href="/app/curator">Curator</a>
-    <span class="nav-sep">|</span>
-    <a href="/app/german">German</a>
-    <span class="nav-sep">|</span>
-    <a href="/app/portuguese">Português</a>
-    <span class="nav-sep">|</span>
-    <a href="/guild" class="nav-active">Guild</a>
-  </div>
+  {% include 'guild/_section_subnav.html' %}
   <div class="guild-subnav">
-    <a href="/guild" class="subnav-back">← Guild</a>
     <a href="/guild/career" class="subnav-link subnav-active">Positions</a>
     <span class="subnav-dot">&nbsp;·&nbsp;</span>
     <a href="/guild/career/active" class="subnav-link">Active Pipeline</a>
@@ -281,6 +271,11 @@
     <a href="/guild/career-focus/edit" class="subnav-link">Edit Goals</a>
   </div>
 </nav>
+
+<div style="background:rgba(139,90,42,0.07);border-bottom:1px solid rgba(139,90,42,0.2);padding:7px 32px;display:flex;align-items:center;gap:12px;">
+  <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:#8b5e2a;white-space:nowrap;">Being Deprecated</span>
+  <span style="font-family:'Source Sans 3',sans-serif;font-size:12px;color:#6b5f4e;">Career Focus is moving to CoS — New Ventures pillar. Fully functional until then.</span>
+</div>
 
 <div class="page-header">
   <h1 class="page-title">Positions</h1>

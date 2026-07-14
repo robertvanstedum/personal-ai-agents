@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Operate — Guild</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/guild.css">
+  <style>
+    :root {
+      --bg: #f5f0e8; --surface: #faf7f2; --surface2: #f0ebe0;
+      --border: #ddd6c8; --text: #2a2418; --text-muted: #6b5f4e;
+      --text-dim: #9e9080; --accent: #8b5e2a;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+    nav.guild-nav {
+      position: sticky; top: 38px; z-index: 100;
+      background: #2a1f14; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .guild-subnav {
+      height: 36px; display: flex; align-items: center; padding: 0 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.15);
+    }
+    .subnav-link {
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: rgba(198,138,94,0.7); text-decoration: none;
+      padding: 0 12px; height: 36px;
+      display: flex; align-items: center;
+      border-bottom: 2px solid transparent;
+    }
+    .subnav-link:hover { color: #C68A5E; }
+    .subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; font-weight: 700; }
+    .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
+
+    /* ── Page layout ── */
+    .page-content {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 28px 24px 60px;
+    }
+    .page-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.5rem; font-weight: 400;
+      color: var(--text);
+      margin-bottom: 28px;
+    }
+
+    /* ── Sections ── */
+    .access-section { margin-bottom: 40px; }
+    .section-heading {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 7px; margin-bottom: 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-count {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1px 7px;
+      font-size: 9px; color: var(--text-dim);
+    }
+    .group-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 8px; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--text-dim);
+      margin: 16px 0 8px;
+    }
+    .empty-msg {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px; color: var(--text-dim);
+      padding: 8px 0;
+    }
+
+    /* ── System status ── */
+    .sys-row {
+      display: flex; align-items: center; gap: 14px;
+      flex-wrap: wrap; margin-bottom: 10px;
+    }
+    .sys-state {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px; letter-spacing: 0.12em;
+      text-transform: uppercase; padding: 3px 10px;
+      border-radius: 3px; border: 1px solid; font-weight: 500;
+    }
+    .sys-state.running  { color: #3a6e28; background: rgba(58,110,40,0.1); border-color: rgba(58,110,40,0.35); }
+    .sys-state.degraded { color: #7a5810; background: rgba(139,94,0,0.1); border-color: rgba(139,94,0,0.35); }
+    .sys-state.unreachable { color: #8b2020; background: rgba(139,32,32,0.08); border-color: rgba(139,32,32,0.3); }
+    .sys-metrics {
+      display: flex; gap: 0; flex-wrap: wrap;
+      border: 1px solid var(--border); border-radius: 5px;
+      background: var(--surface); overflow: hidden;
+    }
+    .sys-metric {
+      padding: 10px 18px;
+      border-right: 1px solid var(--border);
+      min-width: 100px;
+    }
+    .sys-metric:last-child { border-right: none; }
+    .sys-metric-label {
+      font-family: 'DM Mono', monospace; font-size: 8px;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--text-dim); margin-bottom: 4px;
+    }
+    .sys-metric-value {
+      font-family: 'DM Mono', monospace; font-size: 16px;
+      font-weight: 500; color: var(--text);
+      line-height: 1;
+    }
+    .sys-metric-value.warn { color: #8b5e2a; }
+    .sys-metric-value.alert { color: #8b2020; }
+    .sys-footer {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-dim); margin-top: 8px;
+    }
+
+    /* ── Access Request rows ── */
+    .req-row {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .req-row.req-actioned { opacity: 0.6; }
+    .req-info { flex: 1; min-width: 200px; }
+    .req-name { font-weight: 500; font-size: 14px; display: block; margin-bottom: 2px; }
+    .req-email {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-muted); display: block; margin-bottom: 4px;
+    }
+    .req-reason {
+      font-style: italic; font-size: 13px;
+      color: var(--text-muted); display: block; margin-bottom: 4px;
+    }
+    .req-meta {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-dim); display: flex; gap: 10px; flex-wrap: wrap;
+    }
+    .req-badge {
+      font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 1px 6px; border-radius: 3px; border: 1px solid;
+    }
+    .req-badge.granted  { color: #4a6e30; background: rgba(74,110,48,0.08); border-color: rgba(74,110,48,0.3); }
+    .req-badge.rejected { color: #8b2020; background: rgba(139,32,32,0.07); border-color: rgba(139,32,32,0.25); }
+    .req-badge.requested{ color: #7a5810; background: rgba(139,94,0,0.08);  border-color: rgba(139,94,0,0.25); }
+    .req-actions { display: flex; gap: 7px; align-items: flex-start; flex-shrink: 0; }
+
+    /* ── Guest rows ── */
+    .guest-row {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .guest-row.guest-expired { opacity: 0.55; }
+    .guest-info { flex: 1; min-width: 200px; }
+    .guest-name { font-weight: 500; font-size: 14px; }
+    .guest-email {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-muted); margin-left: 10px;
+    }
+    .guest-expiry {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      color: var(--text-dim); display: block; margin-top: 3px;
+    }
+    .expiry-red { color: #8b2020; }
+    .guest-actions { display: flex; gap: 7px; flex-shrink: 0; }
+
+    /* ── Buttons ── */
+    .btn-grant, .btn-extend {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      padding: 4px 12px; border-radius: 4px;
+      background: var(--accent); color: #fff;
+      border: none; cursor: pointer;
+    }
+    .btn-grant:hover, .btn-extend:hover { opacity: 0.85; }
+    .btn-reject, .btn-revoke {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      padding: 4px 12px; border-radius: 4px;
+      background: transparent; color: #8b2020;
+      border: 1px solid rgba(139,32,32,0.35); cursor: pointer;
+    }
+    .btn-reject:hover, .btn-revoke:hover { background: rgba(139,32,32,0.07); }
+
+    /* ── Reset-request amber warning ── */
+    .req-badge.expired-warn {
+      color: #7a5000; background: rgba(139,94,0,0.1); border-color: rgba(139,94,0,0.35);
+    }
+    .btn-renew-send {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      padding: 4px 12px; border-radius: 4px;
+      background: #7a5810; color: #fff;
+      border: none; cursor: pointer;
+    }
+    .btn-renew-send:hover { opacity: 0.85; }
+    .btn-dismiss {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      padding: 4px 12px; border-radius: 4px;
+      background: transparent; color: var(--text-dim);
+      border: 1px solid var(--border); cursor: pointer;
+    }
+    .btn-dismiss:hover { background: var(--surface2); }
+
+    @media (max-width: 600px) {
+      .req-row, .guest-row { flex-direction: column; }
+      .req-actions, .guest-actions { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+{% include 'guild/_portal_nav.html' %}
+
+<nav class="guild-nav">
+  {% include 'guild/_section_subnav.html' %}
+</nav>
+
+<div class="page-content">
+
+  <h1 class="page-title">Operate</h1>
+
+  {# ── System Status ── #}
+  <div class="access-section">
+    <div class="section-heading">System Status</div>
+
+    {% set last = ops.get('last_action', {}) %}
+    {% set disk = last.get('disk_pct') %}
+    {% set disk_class = 'alert' if disk and disk > 90 else ('warn' if disk and disk > 80 else '') %}
+
+    <div class="sys-row">
+      <span class="sys-state {{ ops.get('state', 'unreachable') }}">{{ ops.get('state', 'unreachable') }}</span>
+    </div>
+
+    {% if ops.get('state') != 'unreachable' %}
+    <div class="sys-metrics">
+      {% if disk is not none %}
+      <div class="sys-metric">
+        <div class="sys-metric-label">Disk</div>
+        <div class="sys-metric-value {{ disk_class }}">{{ '%.1f'|format(disk) }}%</div>
+      </div>
+      {% endif %}
+      {% if last.get('services') %}
+      <div class="sys-metric">
+        <div class="sys-metric-label">Services</div>
+        <div class="sys-metric-value">{{ last.services }}</div>
+      </div>
+      {% endif %}
+      <div class="sys-metric">
+        <div class="sys-metric-label">Checks Run</div>
+        <div class="sys-metric-value">{{ ops.get('checks_run', '—') }}</div>
+      </div>
+      <div class="sys-metric">
+        <div class="sys-metric-label">Escalations</div>
+        <div class="sys-metric-value {{ 'alert' if ops.get('open_escalations', 0) > 0 else '' }}">{{ ops.get('open_escalations', 0) }}</div>
+      </div>
+    </div>
+    {% if last.get('at') %}
+    <div class="sys-footer">Last check: {{ last.at[:19] | replace('T', ' ') }} UTC</div>
+    {% endif %}
+    {% else %}
+    <p class="empty-msg">Operations agent unreachable — is it running?</p>
+    {% endif %}
+  </div>
+
+  {# ── Access Requests ── #}
+  <div class="access-section">
+    {% set pending_reqs  = guest_requests | rejectattr('status', 'equalto', 'granted') | rejectattr('status', 'equalto', 'rejected') | list %}
+    {% set actioned_reqs = (guest_requests | selectattr('status', 'equalto', 'granted') | list) + (guest_requests | selectattr('status', 'equalto', 'rejected') | list) %}
+    <div class="section-heading">
+      Access Requests
+      {% if pending_reqs %}
+        <span class="section-count">{{ pending_reqs | length }} pending</span>
+      {% endif %}
+    </div>
+
+    {% if not guest_requests %}
+      <p class="empty-msg">No access requests yet.</p>
+    {% else %}
+
+      {% if pending_reqs %}
+        <div class="group-label">Pending</div>
+        {% for req in pending_reqs %}
+          <div class="req-row">
+            <div class="req-info">
+              <span class="req-name">{{ req.name }}</span>
+              <span class="req-email">{{ req.email }}</span>
+              {% if req.reason %}<span class="req-reason">"{{ req.reason }}"</span>{% endif %}
+              <div class="req-meta">
+                <span>{{ req.domain or '—' }}</span>
+                <span>{{ req.requested_at | string | truncate(10, true, '') }}</span>
+              </div>
+            </div>
+            <div class="req-actions">
+              <form method="POST" action="/guild/guest-requests/{{ req.id }}/status">
+                <input type="hidden" name="status" value="granted">
+                <button type="submit" class="btn-grant">Grant</button>
+              </form>
+              <form method="POST" action="/guild/guest-requests/{{ req.id }}/status">
+                <input type="hidden" name="status" value="rejected">
+                <button type="submit" class="btn-reject">Reject</button>
+              </form>
+            </div>
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      {% if actioned_reqs %}
+        <div class="group-label">Actioned</div>
+        {% for req in actioned_reqs %}
+          <div class="req-row req-actioned">
+            <div class="req-info">
+              <span class="req-name">{{ req.name }}</span>
+              <span class="req-email">{{ req.email }}</span>
+              <div class="req-meta">
+                <span class="req-badge {{ req.status }}">{{ req.status }}</span>
+                <span>{{ req.actioned_at | string | truncate(10, true, '') }}</span>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      {% endif %}
+
+    {% endif %}
+  </div>
+
+  {# ── Password Reset Requests ── #}
+  {% if reset_requests %}
+  <div class="access-section">
+    <div class="section-heading">
+      Password Reset Requests
+      <span class="section-count">{{ reset_requests | length }}</span>
+    </div>
+    {% for req in reset_requests %}
+      <div class="req-row">
+        <div class="req-info">
+          <span class="req-name">{{ req.display_name or req.username }}</span>
+          <span class="req-email">{{ req.email }}</span>
+          <div class="req-meta">
+            <span>{{ req.username }}</span>
+            <span>{{ req.requested_at | string | truncate(16, true, '') | replace('T', ' ') }}</span>
+            {% if req.account_expired %}
+              <span class="req-badge expired-warn">EXPIRED ACCOUNT</span>
+            {% elif req.account_missing %}
+              <span class="req-badge rejected">ACCOUNT MISSING</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="req-actions">
+          {% if req.account_expired %}
+            <form method="POST" action="/guild/guests/{{ req.username }}/renew-and-reset">
+              <input type="hidden" name="days" value="30">
+              <input type="hidden" name="req_id" value="{{ req.id }}">
+              <button type="submit" class="btn-renew-send">Renew (30d) + Send Password</button>
+            </form>
+          {% elif not req.account_missing %}
+            <form method="POST" action="/guild/reset-requests/{{ req.id }}/send-password">
+              <button type="submit" class="btn-grant">Send Password</button>
+            </form>
+          {% endif %}
+          <form method="POST" action="/guild/reset-requests/{{ req.id }}/dismiss">
+            <button type="submit" class="btn-dismiss">Dismiss</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# ── Active Guests ── #}
+  <div class="access-section">
+    <div class="section-heading">
+      Active Guests
+      <span class="section-count">{{ guests | length }}</span>
+    </div>
+
+    {% if not guests %}
+      <p class="empty-msg">No guests provisioned yet.</p>
+    {% else %}
+      {% for guest in guests %}
+        <div class="guest-row {% if guest.expired %}guest-expired{% endif %}">
+          <div class="guest-info">
+            <span class="guest-name">{{ guest.display_name }}</span>
+            {% if guest.email %}<span class="guest-email">{{ guest.email }}</span>{% endif %}
+            <span class="guest-expiry {% if guest.expired %}expiry-red{% endif %}">
+              {{ 'Expired' if guest.expired else 'Expires' }} {{ guest.expires_at[:10] if guest.expires_at else '—' }}
+            </span>
+          </div>
+          <div class="guest-actions">
+            <form method="POST" action="/guild/guests/{{ guest.username }}/extend">
+              <input type="hidden" name="days" value="{{ 30 if guest.expired else 7 }}">
+              <button type="submit" class="btn-extend">{{ 'Renew (30d)' if guest.expired else '+7 days' }}</button>
+            </form>
+            <form method="POST" action="/guild/guests/{{ guest.username }}/revoke">
+              <button type="submit" class="btn-revoke">Revoke</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+</div>
+
+</body>
+</html>

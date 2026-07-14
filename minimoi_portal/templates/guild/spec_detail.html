@@ -18,7 +18,7 @@
 
     /* ── Guild nav ── */
     nav.guild-nav {
-      position: sticky; top: 0; z-index: 100;
+      position: sticky; top: 38px; z-index: 100;
       background: #2a1f14;
       border-bottom: 1px solid rgba(255,255,255,0.08);
     }
@@ -129,21 +129,11 @@
   </style>
 </head>
 <body>
+{% include 'guild/_portal_nav.html' %}
 
 <nav class="guild-nav">
-  <div class="guild-nav-brand">
-    <a href="/dashboard">mini-moi</a>
-    <span class="nav-sep">|</span>
-    <a href="/app/curator">Curator</a>
-    <span class="nav-sep">|</span>
-    <a href="/app/german">German</a>
-    <span class="nav-sep">|</span>
-    <a href="/app/portuguese">Português</a>
-    <span class="nav-sep">|</span>
-    <a href="/guild" class="nav-active">Guild</a>
-  </div>
+  {% include 'guild/_section_subnav.html' %}
   <div class="guild-subnav">
-    <a href="/guild/build" class="subnav-back">← Build Log</a>
   </div>
 </nav>
 
