@@ -1,7 +1,13 @@
 ai-env/
+venv/
+.venv/
+env/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 .DS_Store
+**/.DS_Store
 
 # CI test output (generated, not committed)
 reports/*.xml
@@ -50,6 +56,20 @@ curator_history.json
 x_adapter_cache.json
 x_import_archive_cache.json
 x_pull_state.json
+
+# Runtime state files (root level)
+_active_drill_state.json
+_drill_list_state.json
+
+# Runtime state files (discovered in working tree audit 2026-07-14)
+curator_latest.json
+data/guild/cos_agenda.json
+data/guild/memory/devagent_memory.md
+
+# Backup artifacts
+*.zip
+*.tar.gz
+*.bak
 
 # X data archive (personal bookmark data — never commit)
 bookmarks.js
