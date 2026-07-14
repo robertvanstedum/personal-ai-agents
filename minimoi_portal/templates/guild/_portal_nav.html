@@ -1,5 +1,13 @@
 {# Portal nav — injected into all /guild/* pages since they run in-process (not proxied) #}
-<style id="portal-offset-css">body{padding-top:38px!important;}</style>
+<style id="portal-offset-css">
+body{padding-top:38px!important;}
+/* Subnav styles inlined here — guaranteed regardless of guild.css load order */
+.guild-subnav{height:36px;display:flex;align-items:center;padding:0 1.5rem;border-top:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.15);}
+.subnav-link{font-family:'DM Mono',monospace;font-size:13px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(198,138,94,0.7);text-decoration:none;padding:0 12px;height:36px;display:flex;align-items:center;border-bottom:2px solid transparent;}
+.subnav-link:hover{color:#C68A5E;}
+.subnav-link.subnav-active{color:#C68A5E;border-bottom-color:#C68A5E;font-weight:700;}
+.subnav-dot{color:rgba(198,138,94,0.3);font-size:9px;}
+</style>
 <div id="portal-nav-bar" style="position:fixed;top:0;left:0;right:0;z-index:999999;height:38px;background:#12122a;color:#e8e8e8;display:flex;align-items:center;padding:0 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.12);box-shadow:0 1px 8px rgba(0,0,0,0.4);">
   <a href="/dashboard" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
   <span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
