@@ -81,6 +81,7 @@ jobs:
             ["portuguese"]="docker/Dockerfile.portuguese"
             ["system-bot"]="docker/Dockerfile.telegram"
             ["cos-bot"]="docker/Dockerfile.cos-bot"
+            ["cos-scheduler"]="docker/Dockerfile.cos-scheduler"
           )
           for name in "${!IMAGES[@]}"; do
             dockerfile="${IMAGES[$name]}"
