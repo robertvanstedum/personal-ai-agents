@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% if verified %}Request confirmed{% else %}Link expired{% endif %} — mini-moi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/portal.css">
+</head>
+<body class="login">
+
+<nav class="portal-nav">
+  <a href="/" class="portal-nav-brand">mini-moi</a>
+</nav>
+
+<main class="login-main">
+  <div class="login-card">
+
+    {% if verified %}
+
+      <h1 class="login-title">Email confirmed</h1>
+      <div class="pending-confirm">
+        <p>Thanks{% if name %}, {{ name }}{% endif %} — your request is in. Robert will review it and you'll receive an email once you're approved.</p>
+        <p class="pending-note">No need to create a password yet. Your approval email will include everything you need to get started.</p>
+      </div>
+      <p class="login-footer"><a href="/">← Back to mini-moi</a></p>
+
+    {% else %}
+
+      <h1 class="login-title">Link expired</h1>
+      <div class="pending-confirm">
+        <p>This confirmation link is no longer valid — it may have expired or already been used.</p>
+      </div>
+      <p class="login-footer"><a href="/request-access">Submit a new request →</a></p>
+
+    {% endif %}
+
+  </div>
+</main>
+
+</body>
+</html>
