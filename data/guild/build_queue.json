@@ -1,5 +1,16 @@
 [
   {
+    "id": 136,
+    "spec_title": "Defect: Container Data Persistence — Missing Volume Mounts",
+    "spec_file": "defect_container_persistence_2026-07-14.md",
+    "status": "open",
+    "github_issue": null,
+    "priority": "high",
+    "blocked_reason": null,
+    "last_transition_at": "2026-07-14T00:00:00Z",
+    "notes": "Systematic audit defect — immediate patches for curator_archive and docs/specs already shipped tonight. Open task is the audit: verify all containers have volume mounts for any persistent data they write. Process fix: add volume-mount check to Definition of Done for any build that introduces persistent container data."
+  },
+  {
     "id": 135,
     "spec_title": "OpenClaw #2 — CoS-Scoped Gateway, Dev Setup",
     "spec_file": "spec_133_plan_openclaw2_dev_setup_v2_2026-07-14.md",
