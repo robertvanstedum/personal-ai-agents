@@ -10,6 +10,7 @@
 
   /* Nav rows — brand (row 1) and subnav (row 2) */
   --guild-nav-size: 13px;
+  --guild-subnav-size: 11px;
 }
 
 /* ── Guild subnav rows (shared across all pages) ── */
@@ -23,7 +24,7 @@
 }
 .subnav-link {
   font-family: 'DM Mono', monospace;
-  font-size: var(--guild-nav-size);
+  font-size: var(--guild-subnav-size);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: rgba(198,138,94,0.7);
@@ -39,7 +40,7 @@
 .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
 .subnav-back {
   font-family: 'DM Mono', monospace;
-  font-size: var(--guild-nav-size);
+  font-size: var(--guild-subnav-size);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: rgba(198,138,94,0.4);
