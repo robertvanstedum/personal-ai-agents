@@ -1916,7 +1916,7 @@ def analyse_session(transcript: str, persona_name: str, scene: str, user_id=None
     session_path.write_text(json.dumps(session, indent=2, ensure_ascii=False))
 
     update_persona_memory(
-        user=DEFAULT_USER,
+        user=str(user_id) if user_id is not None else "anonymous",
         persona_slug=persona_to_slug(persona_name),
         updates={
             "last_seen": date_str,

@@ -167,12 +167,13 @@ def schreiben():
 
 @app.route("/gesprache")
 def gesprache():
+    user_id = _de_request_user_id()
+    user_key = str(user_id) if user_id is not None else "anonymous"
     personas = get_personas()
     for p in personas:
         slug = persona_to_slug(p["name"])
         p["slug"] = slug
-        p["memory"] = get_persona_memory(DEFAULT_USER, slug)
-    user_id = _de_request_user_id()
+        p["memory"] = get_persona_memory(user_key, slug)
     sessions = get_gesprache_sessions(limit=5, user_id=user_id)
     return render_template("german_gesprache.html", active="gesprache",
                            personas=personas, sessions=sessions,
@@ -204,11 +205,13 @@ def bibliothek():
 
 @app.route("/admin")
 def admin():
+    user_id = _de_request_user_id()
+    user_key = str(user_id) if user_id is not None else "anonymous"
     personas = get_personas()
     persona_rounds = []
     for p in personas:
         slug = persona_to_slug(p["name"])
-        mem = get_persona_memory(DEFAULT_USER, slug)
+        mem = get_persona_memory(user_key, slug)
         persona_rounds.append({
             "name": p["name"],
             "emoji": p.get("emoji", ""),
@@ -571,10 +574,12 @@ def api_round_action():
         return jsonify({"ok": False, "error": "invalid params"}), 400
     if _de_is_guest():
         return jsonify({"ok": True, "guest": True})
+    user_id = _de_request_user_id()
+    user_key = str(user_id) if user_id is not None else "anonymous"
     if action == "close":
-        close_round(DEFAULT_USER, persona_slug)
+        close_round(user_key, persona_slug)
     elif action == "extend":
-        extend_round(DEFAULT_USER, persona_slug)
+        extend_round(user_key, persona_slug)
     return jsonify({"ok": True})
 
 
@@ -609,7 +614,9 @@ def api_persona_prompt():
     if not persona:
         return jsonify({"error": "persona not found"}), 404
 
-    memory = get_persona_memory(DEFAULT_USER, persona_slug)
+    user_id = _de_request_user_id()
+    user_key = str(user_id) if user_id is not None else "anonymous"
+    memory = get_persona_memory(user_key, persona_slug)
     prompt = assemble_session_prompt(persona, scene, memory)
     brief = build_session_brief(persona, scene, memory)
 
@@ -637,7 +644,9 @@ def api_send_to_telegram():
     if not persona:
         return jsonify({"ok": False, "error": "persona not found"}), 404
 
-    memory = get_persona_memory(DEFAULT_USER, persona_to_slug(persona_name))
+    user_id = _de_request_user_id()
+    user_key = str(user_id) if user_id is not None else "anonymous"
+    memory = get_persona_memory(user_key, persona_to_slug(persona_name))
     prompt = assemble_session_prompt(persona, scene_key, memory)
 
     # Header line so it's easy to identify in the chat
