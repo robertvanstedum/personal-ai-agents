@@ -423,7 +423,8 @@ def api_analyse_transcript():
         return jsonify({"ok": False, "error": "transcript required"}), 400
     if _de_is_guest():
         return jsonify({"ok": True, "guest": True})
-    result = analyse_session(transcript, persona_name, scene)
+    user_id = _de_request_user_id()
+    result = analyse_session(transcript, persona_name, scene, user_id=user_id)
     return jsonify({"ok": True, **result})
 
 
@@ -580,7 +581,7 @@ def api_round_action():
 @app.route("/api/gesprache-sessions")
 def api_gesprache_sessions():
     limit = min(int(request.args.get("limit", 5)), 20)
-    sessions = get_gesprache_sessions(limit=limit)
+    sessions = get_gesprache_sessions(limit=limit, user_id=_de_request_user_id())
     return jsonify(sessions)
 
 
@@ -591,6 +592,10 @@ def api_gesprache_session_detail(stem):
     if not path.exists():
         return jsonify({"ok": False, "error": "not found"}), 404
     data = json.loads(path.read_text())
+    # Fail closed: only the owning user can fetch this session's detail.
+    user_id = _de_request_user_id()
+    if user_id is None or data.get("user_id") != user_id:
+        return jsonify({"ok": False, "error": "not found"}), 404
     return jsonify({"ok": True, "session": data})
 
 

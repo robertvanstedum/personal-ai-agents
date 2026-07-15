@@ -1844,7 +1844,7 @@ def _next_session_filename(date_str: str) -> str:
     return f"{date_str}_{n:03d}"
 
 
-def analyse_session(transcript: str, persona_name: str, scene: str) -> dict:
+def analyse_session(transcript: str, persona_name: str, scene: str, user_id=None) -> dict:
     """Analyse a pasted Grok Voice transcript. Returns {session_id, feedback}."""
     import anthropic as _anthropic
 
@@ -1901,6 +1901,7 @@ def analyse_session(transcript: str, persona_name: str, scene: str) -> dict:
 
     session = {
         "session_id": session_id,
+        "user_id": user_id,
         "date": date_str,
         "persona": persona_name,
         "scenario": scene,
@@ -1932,8 +1933,11 @@ def analyse_session(transcript: str, persona_name: str, scene: str) -> dict:
 
 def get_gesprache_sessions(limit: int = 5, user_id=None) -> list:
     """Return last N sessions (newest first) with summary fields, scoped to user_id.
-    Sessions without user_id field are treated as Robert's (backwards compat)."""
-    if not _SESSIONS_DIR.exists():
+    Fails closed: no resolved user_id means no access, and sessions with no
+    user_id field are no longer treated as visible to everyone — legacy
+    ownerless sessions get reconciled via a separate data migration, not by
+    a permanent read-side bypass."""
+    if not _SESSIONS_DIR.exists() or user_id is None:
         return []
     paths = sorted(_SESSIONS_DIR.glob("*.json"), reverse=True)
     result = []
@@ -1941,9 +1945,7 @@ def get_gesprache_sessions(limit: int = 5, user_id=None) -> list:
         try:
             data = json.loads(path.read_text())
             session_uid = data.get("user_id")
-            # Include session if: no user_id filter requested, or user_id matches,
-            # or session has no user_id (legacy sessions belong to user 1 / Robert)
-            if user_id is not None and session_uid is not None and session_uid != user_id:
+            if session_uid != user_id:
                 continue
             result.append({
                 "session_id": data.get("session_id", path.stem),

@@ -192,6 +192,11 @@ def _pt_get_conversas_sessions(user_id, limit: int = 10) -> list:
             sessions = json.loads(path.read_text()).get("sessions", [])
         except Exception:
             pass
+    # Fail closed: no resolved user_id means no proven identity, so skip
+    # the Postgres legacy-session merge entirely rather than surface the
+    # ownerless (user_id IS NULL) bucket to an unauthenticated request.
+    if user_id is None:
+        return sessions
     # Postgres historical sessions (pre-JSON migration — merge to avoid data loss)
     try:
         conn = _db_conn()
@@ -359,24 +364,20 @@ def _save_session(user_id, date_str, persona, scenario, source,
 
 
 def _get_sessions(user_id, limit=5) -> list:
+    # Fail closed: no resolved user_id means no proven identity, so no
+    # sessions are returned — never fall back to an unfiltered query.
+    if not user_id:
+        return []
     try:
         conn = _db_conn()
         with conn, conn.cursor() as cur:
-            if user_id:
-                cur.execute(
-                    """SELECT id, date, persona, scenario, source, created_at
-                       FROM portuguese.sessions
-                       WHERE user_id = %s
-                       ORDER BY created_at DESC LIMIT %s""",
-                    (user_id, limit),
-                )
-            else:
-                cur.execute(
-                    """SELECT id, date, persona, scenario, source, created_at
-                       FROM portuguese.sessions
-                       ORDER BY created_at DESC LIMIT %s""",
-                    (limit,),
-                )
+            cur.execute(
+                """SELECT id, date, persona, scenario, source, created_at
+                   FROM portuguese.sessions
+                   WHERE user_id = %s
+                   ORDER BY created_at DESC LIMIT %s""",
+                (user_id, limit),
+            )
             rows = cur.fetchall()
         return [
             {
@@ -531,14 +532,15 @@ def _run_correction(text: str) -> dict:
 # ── Vocabulary helpers ────────────────────────────────────────────────────────
 
 def _get_vocabulary(user_id, source=None, status=None, limit=100) -> list:
+    # Fail closed: no resolved user_id means no proven identity, so no
+    # vocabulary is returned — never fall back to an unfiltered query.
+    if user_id is None:
+        return []
     try:
         conn = _db_conn()
         with conn, conn.cursor() as cur:
-            clauses = []
-            params: list = []
-            if user_id is not None:
-                clauses.append("user_id = %s")
-                params.append(user_id)
+            clauses = ["user_id = %s"]
+            params: list = [user_id]
             if source:
                 clauses.append("source = %s")
                 params.append(source)
@@ -570,23 +572,19 @@ def _get_vocabulary(user_id, source=None, status=None, limit=100) -> list:
 
 
 def _get_leitura_notes(user_id, limit=20) -> list:
+    # Fail closed: no resolved user_id means no proven identity, so no
+    # notes are returned — never fall back to an unfiltered query.
+    if user_id is None:
+        return []
     try:
         conn = _db_conn()
         with conn, conn.cursor() as cur:
-            if user_id is not None:
-                cur.execute(
-                    "SELECT id, article_title, original, corrected, created_at"
-                    " FROM portuguese.leitura_notes"
-                    " WHERE user_id = %s ORDER BY created_at DESC LIMIT %s",
-                    (user_id, limit),
-                )
-            else:
-                cur.execute(
-                    "SELECT id, article_title, original, corrected, created_at"
-                    " FROM portuguese.leitura_notes"
-                    " ORDER BY created_at DESC LIMIT %s",
-                    (limit,),
-                )
+            cur.execute(
+                "SELECT id, article_title, original, corrected, created_at"
+                " FROM portuguese.leitura_notes"
+                " WHERE user_id = %s ORDER BY created_at DESC LIMIT %s",
+                (user_id, limit),
+            )
             rows = cur.fetchall()
         return [
             {
@@ -968,19 +966,17 @@ def api_pt_palavras_status():
     valid = {"biblioteca", "praticando", "pronto_para_testar", "aprendido"}
     if status not in valid:
         return jsonify({"ok": False, "error": "invalid status"}), 400
+    # Fail closed: no resolved user_id means no proven identity, so no
+    # update is allowed — never fall back to an unscoped write.
+    if user_id is None:
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
     try:
         conn = _db_conn()
         with conn, conn.cursor() as cur:
-            if user_id is not None:
-                cur.execute(
-                    "UPDATE portuguese.vocabulary SET status = %s WHERE id = %s AND user_id = %s",
-                    (status, word_id, user_id),
-                )
-            else:
-                cur.execute(
-                    "UPDATE portuguese.vocabulary SET status = %s WHERE id = %s",
-                    (status, word_id),
-                )
+            cur.execute(
+                "UPDATE portuguese.vocabulary SET status = %s WHERE id = %s AND user_id = %s",
+                (status, word_id, user_id),
+            )
         return jsonify({"ok": True})
     except Exception as e:
         print(f"[portuguese] palavras-status error: {e}", flush=True)
