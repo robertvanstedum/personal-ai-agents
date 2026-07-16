@@ -57,13 +57,13 @@ def authenticate(username: str, password: str) -> tuple:
         if user["username"].lower() == login or user.get("email", "").lower() == login:
             if check_password_hash(user["password_hash"], password):
                 return user, None
-            return None, "Incorrect password."
+            return None, "Invalid email or password."
 
     # Check active guests (by username or email)
     for guest in load_guests():
         if guest["username"].lower() == login or guest.get("email", "").lower() == login:
             if not check_password_hash(guest["password_hash"], password):
-                return None, "Incorrect password."
+                return None, "Invalid email or password."
             try:
                 expires_at = datetime.fromisoformat(guest["expires_at"])
                 if expires_at.tzinfo is None:
@@ -79,9 +79,9 @@ def authenticate(username: str, password: str) -> tuple:
         if pending["username"].lower() == login or pending.get("email", "").lower() == login:
             if check_password_hash(pending["password_hash"], password):
                 return None, "Your account is pending approval. You'll receive access once approved."
-            return None, "Incorrect password."
+            return None, "Invalid email or password."
 
-    return None, "User not found."
+    return None, "Invalid email or password."
 
 
 def create_guest(display_name: str, expires_at_iso: str, password: str,

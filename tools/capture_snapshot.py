@@ -585,9 +585,12 @@ def capture_all(password: str = "") -> dict:
         )
         page = context.new_page()
 
-        # ── Auth via localhost-only capture route ──────────────────────────
+        # ── Auth via secret-gated capture route ────────────────────────────
+        # Route is disabled unless CAPTURE_AUTH_SECRET is set on the portal;
+        # pass the same secret as ?token=. Falls back to password login below.
         print(f"  Authenticating via /capture-auth...", end=" ", flush=True)
-        page.goto(f"{PORTAL_URL}/capture-auth")
+        _cap_secret = os.environ.get("CAPTURE_AUTH_SECRET", "")
+        page.goto(f"{PORTAL_URL}/capture-auth?token={_cap_secret}")
         if page.inner_text("body").strip() != "ok":
             # Fallback: password login
             if password:

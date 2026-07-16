@@ -10,6 +10,7 @@ Run: cd ~/Projects/personal-ai-agents && venv/bin/python3 minimoi_portal/app.py
 
 import json
 import os
+import secrets
 import sys
 from datetime import datetime, timedelta, timezone
 from functools import wraps
@@ -194,9 +195,16 @@ def requires_domain(domain: str):
 
 @app.route("/capture-auth")
 def capture_auth():
-    """Localhost-only session bootstrap for capture_snapshot.py.
-    Only accessible from 127.0.0.1 — never reachable via Cloudflare tunnel."""
-    if request.remote_addr != "127.0.0.1":
+    """Snapshot-tooling session bootstrap for capture_snapshot.py.
+
+    SECURITY: gated on a pre-shared secret, NOT on remote_addr. The prior
+    remote_addr==127.0.0.1 check was unsafe here: behind nginx/Cloudflare the
+    app sees the proxy's loopback address as remote_addr for *all* traffic
+    (no ProxyFix), so that check could hand an owner session to the public.
+    This route is DISABLED unless CAPTURE_AUTH_SECRET is explicitly set
+    (never set in production) and the caller presents the matching token."""
+    secret = os.environ.get("CAPTURE_AUTH_SECRET")
+    if not secret or not secrets.compare_digest(request.args.get("token", ""), secret):
         return "Forbidden", 403
     session["user"] = {"username": "robert", "tier": "owner", "display_name": "Robert"}
     return "ok", 200
@@ -432,8 +440,8 @@ def register():
             error = "Please enter your name."
         elif not email or "@" not in email:
             error = "Please enter a valid email address."
-        elif len(password) < 6:
-            error = "Password must be at least 6 characters."
+        elif len(password) < 8:
+            error = "Password must be at least 8 characters."
         else:
             pending = _auth.create_pending(display_name, email, password)
             reason = request.form.get("reason", "").strip()
@@ -2096,10 +2104,12 @@ def guild_docs_readme():
 @_require_owner
 def guild_docs_reader(filename):
     import markdown as _md
-    # Path traversal guard: resolved path must be inside docs/
+    # Path traversal guard: resolved path must be inside docs/.
+    # Use is_relative_to (true path containment) — a raw string prefix match
+    # would let a sibling like docs-private/ slip past via '..' (M3).
     try:
         target = (_DOCS_DIR / filename).resolve()
-        if not str(target).startswith(str(_DOCS_DIR.resolve())):
+        if not target.is_relative_to(_DOCS_DIR.resolve()):
             return "Not found", 404
         if not target.exists() or target.suffix != ".md":
             return "Not found", 404

@@ -995,7 +995,7 @@ def index():
 def briefing():
     """Daily briefing — previously served at /."""
     from flask import request as _req
-    tier = _req.headers.get("X-Minimoi-User-Tier", "owner")
+    tier = _req.headers.get("X-Minimoi-User-Tier", "guest")  # least-privilege default (H1)
     result = _load_briefing_articles()
     if result is not None:
         articles, day_str, date_str, model_display, briefing_date = result
@@ -1292,7 +1292,7 @@ def _archive_page_placeholder():
 def briefing_page():
     """Serve briefing from Jinja2 template when JSON exists."""
     from flask import request as _req
-    tier = _req.headers.get("X-Minimoi-User-Tier", "owner")
+    tier = _req.headers.get("X-Minimoi-User-Tier", "guest")  # least-privilege default (H1)
     result = _load_briefing_articles()
     if result is not None:
         articles, day_str, date_str, model_display, briefing_date = result

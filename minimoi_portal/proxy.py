@@ -156,10 +156,16 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
     if request.query_string:
         target += f"?{request.query_string.decode()}"
 
-    # Forward request headers minus hop-by-hop
+    # Forward request headers minus hop-by-hop.
+    # SECURITY: strip any client-supplied X-Minimoi-* identity headers — only
+    # portal-derived values (set below) may ever reach a backend. Without this,
+    # a request lacking a session auth_id could smuggle a spoofed
+    # X-Minimoi-Auth-Id straight through to the domain apps (identity/IDOR).
     fwd_headers = {
         k: v for k, v in request.headers
-        if k.lower() not in _HOP_BY_HOP and k.lower() != "host"
+        if k.lower() not in _HOP_BY_HOP
+        and k.lower() != "host"
+        and not k.lower().startswith("x-minimoi-")
     }
     if user:
         fwd_headers["X-Minimoi-User-Tier"] = user.get("tier", "guest")
