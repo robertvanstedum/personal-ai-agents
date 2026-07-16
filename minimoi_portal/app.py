@@ -123,7 +123,7 @@ app.config["SESSION_REFRESH_EACH_REQUEST"] = False
 # Secure cookie flags — required for mobile browsers on HTTPS.
 # SESSION_COOKIE_SECURE=True: only send cookie over HTTPS (not HTTP).
 # SESSION_COOKIE_SAMESITE="Lax": allow cross-site navigation (normal browser links).
-app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 
@@ -247,6 +247,19 @@ def login():
                 "display_name": user.get("display_name", user["username"]),
                 "tier": user["tier"],
             }
+            # Owner/admin accounts live in users.json (no auth_id of their
+            # own) but may also have a matching row in the Postgres
+            # auth.users table, which is what every domain's identity
+            # resolution keys off (see core/identity.py). Look it up by
+            # email so downstream per-user data resolves to a stable,
+            # non-string identity instead of falling back to the username.
+            if user["tier"] in ("owner", "admin") and user.get("email"):
+                try:
+                    db_user = _dauth.get_user_by_email(user["email"])
+                    if db_user:
+                        session["user"]["auth_id"] = db_user["id"]
+                except Exception:
+                    pass
             if _auth.check_must_change_password(user["username"]):
                 return redirect(url_for("account_password", forced=1))
             next_url = request.args.get("next") or url_for("dashboard")

@@ -23,6 +23,7 @@ REPO_ROOT = BASE_DIR.parent.parent
 
 sys.path.insert(0, str(REPO_ROOT))
 from get_secret import get_secret
+from core.identity import resolve_user_id
 
 app = Flask(
     __name__,
@@ -399,14 +400,9 @@ def _get_sessions(user_id, limit=5) -> list:
             pass
 
 
-def _request_user_id() -> int | None:
-    hdr = request.headers.get("X-Minimoi-Auth-Id")
-    if hdr:
-        try:
-            return int(hdr)
-        except ValueError:
-            pass
-    return None
+def _request_user_id():
+    """Delegates to the shared resolver — see core/identity.py."""
+    return resolve_user_id(request)
 
 
 def _request_user_tier() -> str:

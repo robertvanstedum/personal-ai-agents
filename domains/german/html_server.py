@@ -9,9 +9,14 @@ Run: venv/bin/python3 html_server.py
 import json
 import os
 import secrets
+import sys
 from pathlib import Path
 from flask import Flask, render_template, redirect, request, jsonify, session
 from flask_cors import CORS
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from core.identity import resolve_user_id
+
 from german_domain import (
     GERMAN_DIR,
     DEFAULT_USER,
@@ -114,13 +119,8 @@ GOOGLE_REDIRECT_URI  = "http://localhost:8767/api/google/callback"
 
 
 def _de_request_user_id():
-    """Return user id: int auth_id for owners/family, username string for guests, None if unknown."""
-    uid = request.headers.get('X-Minimoi-Auth-Id')
-    if uid:
-        return int(uid)
-    # Guests have no auth_id — use username as string key to scope their data separately from Robert's
-    username = request.headers.get('X-Minimoi-Username')
-    return username if username else None
+    """Delegates to the shared resolver — see core/identity.py."""
+    return resolve_user_id(request)
 
 
 def _de_is_guest():
