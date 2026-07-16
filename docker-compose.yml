@@ -58,6 +58,14 @@ services:
     container_name: minimoi-portal
     restart: unless-stopped
     env_file: .env
+    environment:
+      - CURATOR_BACKEND=http://curator:8766
+      - GERMAN_BACKEND=http://german:8767
+      - COS_BACKEND=http://cos:18769
+      # Portuguese runs as a native launchd process on the Mac (port 8770),
+      # not a Docker container — host.docker.internal reaches back out to
+      # the host machine from inside this container.
+      - PORTUGUESE_BACKEND=http://host.docker.internal:8770
     ports:
       - "5001:5001"
     depends_on:
