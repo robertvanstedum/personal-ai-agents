@@ -2130,8 +2130,13 @@ def guild_docs_reader(filename):
 @_require_login
 def portuguese_root():
     user = _current_user()
-    if user.get("auth_id") and not _dauth.has_domain_access(user["auth_id"], "portuguese"):
-        return render_template("access_denied.html", user=user), 403
+    # H2: deny (not allow) when auth_id is missing. Legacy JSON-based guests
+    # have no auth_id (only owner/admin get one backfilled at login, see
+    # /login), so the old "auth_id and not has_access" check silently let
+    # them through. Owner/admin bypass, same as the rest of this file.
+    if user.get("tier") not in ("owner", "admin"):
+        if not user.get("auth_id") or not _dauth.has_domain_access(user["auth_id"], "portuguese"):
+            return render_template("access_denied.html", user=user), 403
     return _proxy.proxy_to(_cfg.PORTUGUESE_BACKEND, "/", "/app/portuguese",
                            user=user)
 
@@ -2140,8 +2145,10 @@ def portuguese_root():
 @_require_login
 def portuguese_proxy(path):
     user = _current_user()
-    if user.get("auth_id") and not _dauth.has_domain_access(user["auth_id"], "portuguese"):
-        return render_template("access_denied.html", user=user), 403
+    # H2: deny (not allow) when auth_id is missing — see portuguese_root above.
+    if user.get("tier") not in ("owner", "admin"):
+        if not user.get("auth_id") or not _dauth.has_domain_access(user["auth_id"], "portuguese"):
+            return render_template("access_denied.html", user=user), 403
     # Portal-level admin paths — pass through to portal, not the domain server
     if path in ("admin/guests", "admin/reset-password"):
         return redirect(url_for("admin_guests"))
