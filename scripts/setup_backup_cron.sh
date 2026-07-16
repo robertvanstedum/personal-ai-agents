@@ -11,7 +11,7 @@ LOG_DIR="/opt/minimoi/logs"
 mkdir -p "$SCRIPTS_DIR" "$LOG_DIR"
 chmod +x "$SCRIPTS_DIR/backup_local.sh" "$SCRIPTS_DIR/backup_s3.sh" "$SCRIPTS_DIR/backup_dropbox.sh"
 
-LOCAL_CRON="0 2 * * * $SCRIPTS_DIR/backup_local.sh >> $LOG_DIR/backup_local.log 2>&1"
+LOCAL_CRON="0 2 * * * $SCRIPTS_DIR/backup_local.sh >> $LOG_DIR/backup.log 2>&1"
 S3_CRON="0 3 * * * $SCRIPTS_DIR/backup_s3.sh >> $LOG_DIR/backup_s3.log 2>&1"
 DROPBOX_CRON="0 4 * * 0 $SCRIPTS_DIR/backup_dropbox.sh >> $LOG_DIR/backup_dropbox.log 2>&1"
 
