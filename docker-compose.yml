@@ -16,7 +16,7 @@ services:
     container_name: postgres-ai-agents
     restart: unless-stopped
     environment:
-      - POSTGRES_PASSWORD=simple123
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-simple123}
       - POSTGRES_DB=personal_agents
     ports:
       - "5432:5432"
