@@ -9,6 +9,7 @@ Usage:
 """
 
 import json
+import os
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
@@ -16,7 +17,7 @@ from typing import Optional
 import psycopg2
 import psycopg2.extras
 
-DSN = "postgresql://minimoi:simple123@localhost:5432/personal_agents"
+DSN = os.environ.get("DATABASE_URL", "postgresql://minimoi:simple123@localhost:5432/personal_agents")
 
 
 @contextmanager

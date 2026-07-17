@@ -79,7 +79,7 @@ RULES: dict = {}   # populated on startup
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
-DSN = "postgresql://minimoi:simple123@localhost:5432/personal_agents"
+DSN = os.environ.get("DATABASE_URL", "postgresql://minimoi:simple123@localhost:5432/personal_agents")
 
 @contextmanager
 def _db():

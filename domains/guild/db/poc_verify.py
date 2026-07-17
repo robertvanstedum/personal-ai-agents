@@ -9,6 +9,7 @@ Usage:
     python3 db/poc_verify.py
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -18,7 +19,7 @@ import psycopg2
 import psycopg2.extras
 from db.neo4j_driver import get_related_topics, get_sources_for_leaning, get_node_counts
 
-DSN = "postgresql://minimoi:simple123@localhost:5432/personal_agents"
+DSN = os.environ.get("DATABASE_URL", "postgresql://minimoi:simple123@localhost:5432/personal_agents")
 
 
 def q1_postgres_topics():

@@ -11,6 +11,7 @@ Usage:
 Exit 0 = all checks passed. Exit 1 = at least one failure.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -19,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 import psycopg2
 import psycopg2.extras
 
-DSN = "postgresql://minimoi:simple123@localhost:5432/personal_agents"
+DSN = os.environ.get("DATABASE_URL", "postgresql://minimoi:simple123@localhost:5432/personal_agents")
 
 PASS = "✅"
 FAIL = "❌"

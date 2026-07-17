@@ -25,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -325,7 +326,7 @@ class ChallengerService:
         try:
             import psycopg2
             conn = psycopg2.connect(
-                "postgresql://minimoi:simple123@localhost:5432/personal_agents"
+                os.environ.get("DATABASE_URL", "postgresql://minimoi:simple123@localhost:5432/personal_agents")
             )
             with conn.cursor() as cur:
                 cur.execute(

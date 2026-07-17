@@ -12,6 +12,7 @@ Usage:
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -21,7 +22,7 @@ from psycopg2.extras import execute_values
 REPO = Path(__file__).parent.parent
 RI   = REPO / "_NewDomains" / "research-intelligence" / "data"
 
-DSN  = "postgresql://minimoi:simple123@localhost:5432/personal_agents"
+DSN  = os.environ.get("DATABASE_URL", "postgresql://minimoi:simple123@localhost:5432/personal_agents")
 
 
 def connect():

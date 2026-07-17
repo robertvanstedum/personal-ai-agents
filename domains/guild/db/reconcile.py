@@ -10,6 +10,7 @@ Usage:
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -17,7 +18,7 @@ import psycopg2
 
 REPO = Path(__file__).parent.parent
 RI   = REPO / "_NewDomains" / "research-intelligence" / "data"
-DSN  = "postgresql://minimoi:simple123@localhost:5432/personal_agents"
+DSN  = os.environ.get("DATABASE_URL", "postgresql://minimoi:simple123@localhost:5432/personal_agents")
 
 
 def json_count(path: Path, key: str = None) -> int:
