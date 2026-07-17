@@ -611,7 +611,13 @@ def cos_proxy(path):
 @_require_login
 def german_root():
     user = _current_user()
-    if user.get("auth_id"):
+    # German is owner+family (full) / guest (restricted) — not domain-access
+    # gated. auth_id alone isn't a valid signal here: owner/admin now get a
+    # real auth_id too (from the A3 identity migration), so checking tier
+    # instead of "has auth_id" avoids denying the owner. This is meant to
+    # keep out Portuguese-only one-time-link guests (tier=guest, auth_id
+    # set, no German access intended).
+    if user.get("tier") == "guest" and user.get("auth_id"):
         return render_template("access_denied.html", user=user), 403
     return _proxy.proxy_to(_cfg.GERMAN_BACKEND, "/", "/app/german", user=user)
 
@@ -620,7 +626,8 @@ def german_root():
 @_require_login
 def german_proxy(path):
     user = _current_user()
-    if user.get("auth_id"):
+    # See german_root above — tier check, not raw auth_id presence.
+    if user.get("tier") == "guest" and user.get("auth_id"):
         return render_template("access_denied.html", user=user), 403
     # Portal-level admin paths — pass through to portal, not the domain server
     if path in ("admin/guests", "admin/reset-password"):
