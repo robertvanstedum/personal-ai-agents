@@ -355,6 +355,7 @@ down never affects production.
 | Tier 3 Dropbox backup broken — rclone never installed; fails silently weekly | — | **High — fix before the restore test; found by review 2026-07-18** |
 | Curator xAI key read from an OpenClaw file path, outside the SSM pattern; SSM naming (`grok_api_key` vs `xai_api_key`) unreconciled | — | Open — verify live retrieval path, then standardize |
 | Host nginx unmonitored (health loop doesn't check it) | — | Open |
+| AI Observations (`curator_intelligence.py`) has no EC2 invocation — not scheduled post-migration (verified: absent from cron, Docker config, and the CoS scheduler) | — | Open — restore the schedule |
 | APScheduler timezone unconfirmed for the 7 in-container jobs | — | Open — verify before relying on clock times |
 | Backup job failures do not alert (cron failure is silent) | — | Open — same silent-failure family as #84 |
 | No break-glass admin account | #87 | Open |
