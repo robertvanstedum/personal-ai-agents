@@ -140,7 +140,7 @@ it's the whole picture misses the pipeline.
 |---|---|---|---|
 | root | 02:00 daily | `backup_local.sh` | Tier 1 — full local backup to `/opt/minimoi/backups/YYYY-MM-DD/` |
 | root | 03:00 daily | `backup_s3.sh` | Tier 2 — S3 sync |
-| root | 04:00 Sunday | `backup_dropbox.sh` | Tier 3 — weekly Dropbox sync |
+| root | 04:00 Sunday | `backup_dropbox.sh` | Tier 3 — weekly Dropbox sync — **BROKEN: rclone not installed; fails silently every run** |
 | ec2-user | hourly | `run_curator_cron_ec2.sh` | Curator pipeline — fires at most once/day, gated below |
 
 The pipeline wrapper runs hourly but only actually fires once a day, gated in order:
@@ -168,20 +168,32 @@ unrecoverable, not an ongoing risk).
 Also host-mounted: `guests.json`, `build_queue.json`, `docs/design/`, `docs/specs/`,
 and `/opt/minimoi/agent_logs/`.
 
-### Backups — three tiers, all live
+### Backups — Tiers 1–2 live, Tier 3 broken
 
-Running daily since at least 2026-07-05, dated folders through today, including a
-manual pre-password-rotation Postgres dump (2026-07-16). What Tier 1 captures: full
-`data/` rsync, auth files, local Postgres dump, `agent_logs/` sync, retention prune.
+- **Tier 1 (local, 02:00 daily):** confirmed working — dated folders in
+  `/opt/minimoi/backups/` through today. What it captures: full `data/` rsync, auth
+  files, local Postgres dump, `agent_logs/` sync, retention prune. Includes a manual
+  pre-password-rotation Postgres dump (2026-07-16).
+- **Tier 2 (S3, 03:00 daily):** confirmed working — real objects in
+  `s3://minimoi-backups/`, logs show clean completion on consecutive recent days.
+- **Tier 3 (Dropbox, 04:00 Sunday): broken, never ran successfully.** `rclone` was
+  never installed on EC2 — the job's single log entry (its first scheduled Sunday)
+  is `rclone: command not found`, and it has failed silently every week since. It
+  remains scheduled and will keep failing until fixed. No alert fires on backup job
+  failure — that's its own gap, tracked below.
 
-**Status correction, on the record:** defect #136's framing of Tier 1 as "never built"
-was wrong — `scripts/backup_local.sh` exists (commits `1cedee6`, `abc6e5f`) and the
-cron has been running. The backup half and the persistence half of #136 are both
-resolved in practice; the issue should be formally closed with a correcting comment.
+**Status corrections, both on the record:** defect #136's framing of Tier 1 as
+"never built" was wrong — `scripts/backup_local.sh` exists and its cron runs; that
+half of #136 should be formally closed with a correcting comment. And the first
+version of *this* document claimed all three tiers verified — that verification
+checked cron entries and folder structure but not log output, which is exactly how
+a silently failing Tier 3 passed it. Verified means logs and outcomes, not
+schedules and folders.
 
-**Known gap that remains true:** a backup that exists is not a backup that restores.
-No restore test has been run and verified. That's the definition-of-done bar from the
-original spec, still open — part of the instrumented follow-up.
+**Known gaps that remain true:** Tier 3 needs `rclone` installed and a first
+successful run; backup job failures don't alert; and a backup that exists is not a
+backup that restores — no restore test has been run. All tracked below; the restore
+test is planned as the acceptance test for the staging environment.
 
 ---
 
@@ -293,6 +305,8 @@ down never affects production.
 
 | Item | Tracked | Status |
 |---|---|---|
+| Tier 3 Dropbox backup broken — rclone never installed; fails silently weekly | — | **High — fix before the restore test; found by review 2026-07-18** |
+| Backup job failures do not alert (cron failure is silent) | — | Open — same silent-failure family as #84 |
 | No break-glass admin account | #87 | Open |
 | Silent Postgres failure on login lookup (no logging) | #84 | Open — next after current work per standing decision |
 | No isolated staging environment (dev = prod origin) | — | Acknowledged; future AWS staging |
