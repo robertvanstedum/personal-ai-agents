@@ -166,7 +166,9 @@ implementation parity was the part that lagged. This closes it, both directions.
 **Gate for French:** convergence complete. French then inherits one template, not a
 choice between two — with learner-appropriate content (base personas for a new
 learner, starter reading list) designed fresh rather than copied from Robert's own
-configuration.
+configuration. To be precise about what's committed: this tier commits to
+*readiness* — the converged template. Building French itself becomes a build-queue
+item when the gate clears.
 
 **The template principle extends to Curator by design.** Curator's first instance
 is finance and geopolitics, but topic-area spin-offs are already part of the plan —
@@ -212,9 +214,13 @@ contract). Step one is deliberately practical:
 
 - **Model configuration made real.** Fix the broken `--model` flag path, make
   backend model choices (translation first) genuinely config-driven across the
-  language domains, and restore Curator's local-model fallback in the production
-  path — the founding zero-cost/offline commitment, currently a regression. The
-  spec_125 model-standardization work, informed by the July audit's call-site
+  language domains, and re-verify Curator's local-model swap end-to-end on EC2.
+  Context that matters: local inference is proven on this platform — it ran in
+  production at genesis and runs today in German's translation fallback; Curator's
+  scoring moved to cloud when Haiku's cost proved negligible, as a deliberate quick
+  backend swap (the designed pattern), and the scoring script's "ollama" label now
+  maps to keyword scoring — a naming artifact to clean up, not a broken capability.
+  The spec_125 model-standardization work, informed by the July audit's call-site
   inventory. User-facing model choices (voice, review) stay in the UI where they
   belong.
 - **Curator Deep Dive consolidation.** Verify what each of the coexisting scripts
@@ -224,12 +230,13 @@ contract). Step one is deliberately practical:
 - **Curator topic-area instances — health first.** The converged Curator template
   instantiated on a new topic area: search and scoring core carried over, new
   topic-appropriate inputs added (wearable/risk-monitor history being the health
-  case). Sequenced behind the convergence work that makes the template clean to
-  copy.
-- **A more capable local model.** Step up from the current small local model to a
-  genuinely capable one — likely cloud-hosted at first, since proving it may need
-  more capacity than current hardware has. When it proves itself in the daily
-  workflow, that's the evidence that justifies the local hardware purchase — at
+  case). An instance of the Curator domain, not a sixth platform domain. Sequenced
+  behind Curator's own cleanup — the Deep Dive consolidation above — which is what
+  makes the template clean to copy.
+- **A more capable local model.** Evaluate a stronger open-weight model on rented
+  cloud capacity first — proving it may need more compute than current hardware has
+  — then move it to owned local hardware once it earns its place in the daily
+  workflow. That proof is the evidence that justifies the capital purchase — at
   which point the Mac Mini idea, retired from its April role, resurfaces in a new
   one: not an always-on server, a local inference machine.
 - **German multi-user content readiness.** The identity layer is done (per-user

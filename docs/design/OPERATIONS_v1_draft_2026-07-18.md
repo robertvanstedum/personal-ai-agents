@@ -46,7 +46,7 @@ flowchart TD
 | `minimoi-curator` | 8766 | Curator Flask service |
 | `minimoi-german` | 8767 | Mein Deutsch Flask service |
 | `minimoi-portuguese` | 8770 | Meu Português Flask service |
-| `minimoi-system-bot` | — | Telegram polling bot (German drills, Curator delivery) |
+| `minimoi-system-bot` | — | Telegram polling bot — inbound system/German commands only; the Curator briefing is sent by `telegram_bot.py --send` inside `minimoi-curator`, via cron, on the separate outbound token |
 | `minimoi-cos-bot` | — | CoS chat bot |
 | `minimoi-cos-scheduler` | 8769 | CoS scheduled-loop agent |
 
@@ -88,26 +88,38 @@ Two operational facts worth stating plainly:
   One footnote: the workflow's `workflow_dispatch` trigger defines an `image_tag`
   input that the deploy job never actually reads — it always pulls `:latest`. That
   input is vestigial; don't mistake it for a working single-tag deploy capability.
-- **There is no isolated staging gate today.** `dev.minimoi.ai` and `minimoi.ai`
-  resolve to the same EC2 origin — "dev first" is a naming convention on the same box,
-  not environment isolation. A genuine AWS test/staging environment is future work.
-  Until then: the standing rule is that nothing is pushed without explicit approval of
-  the reviewed diff.
+- **There is no staging gate in the deploy pipeline.** A push to `main` goes
+  straight to production. `dev.minimoi.ai` routes via Cloudflare Tunnel to the Mac
+  dev environment (verified in the tunnel config) — a genuinely separate origin,
+  useful for development, but not a gate the pipeline passes through on the way to
+  prod. A real AWS staging environment is committed work (see ROADMAP). Until then:
+  the standing rule is that nothing is pushed without explicit approval of the
+  reviewed diff.
 
-### Rollback — three layers, fastest first
+### Recovery options
+
+**Access channels** (always available, independent of any rollback action): SSH
+(security-group allowlisted) and AWS SSM Session Manager / EC2 Instance Connect —
+the fallback that works even when SSH rules are wrong. Both verified working.
+
+**Rollback actions**, typical order:
 
 1. **`git revert` + push** — rides the same CI/CD pipeline; previous state live in
-   ~4–5 minutes. This is the default rollback for any bad deploy.
-2. **SSH/SSM access** — always available independent of the app: SSH (security-group
-   allowlisted) and AWS SSM Session Manager / EC2 Instance Connect as the fallback
-   channel that works even when SSH rules are wrong. Both verified working.
-3. **Manual Docker on the host** — last resort:
+   ~4–5 minutes. The default for any bad deploy.
+2. **Manual container recreate on the host** — can be faster than a revert when only
+   one service is affected:
 
 ```bash
 cd /opt/minimoi
-sudo docker compose -f docker-compose.prod.yml up -d --force-recreate <service>
-# or pull a specific prior image from ECR and recreate
+# Verify which Compose form this host actually has before an incident, not during:
+#   which docker-compose   |   docker compose version
+sudo docker-compose -f docker-compose.prod.yml up -d --force-recreate <service-name>
+# Use the Compose SERVICE name (e.g. curator), not the container name.
 ```
+
+Pulling a specific prior image from ECR is possible but Compose is pinned to
+`:latest` — an exact, tested command for that path is an open runbook item, not yet
+written.
 
 ### Manual health check (EC2)
 
@@ -123,9 +135,12 @@ systemctl status nginx                    # host nginx — not in docker ps
 sudo docker logs minimoi-portal --tail 30 # when something looks wrong
 ```
 
-Automated version: CoS runs an EC2 health check every 30 minutes (containers up, disk
-< 80%, memory < 85%, /health endpoints 200), alerting via the system bot. CoS detects
-and escalates — **Robert decides the action.**
+Automated version: CoS's Loop H runs every 30 minutes — checks the seven other
+expected containers (it cannot meaningfully check its own liveness from inside
+itself), disk < 80%, memory < 85%, and four /health endpoints — alerting via the
+**CoS bot token** (not the system bot). It does **not** check host nginx; nginx is
+currently unmonitored beyond systemd itself. CoS detects and escalates — **Robert
+decides the action.**
 
 ---
 
@@ -153,6 +168,25 @@ and tracked separately: the `--model=grok-4.3` value the script passes isn't val
 silently falls through to the hardcoded default — the model that runs is right by
 coincidence, not by configuration.
 
+### In-container scheduling (APScheduler) — the second scheduling layer
+
+Host cron is not the whole story. `minimoi-cos-scheduler` runs its own in-process
+scheduler with **seven jobs** (confirmed in `domains/cos/chief_of_staff.py`):
+
+| Job | Schedule |
+|---|---|
+| Loop A — career focus scout | 06:00 and 18:00 daily |
+| Loop B — German watch | Sunday 09:00 |
+| Loop C — Curator watch | Sunday 10:00 |
+| Loop D — novelty watch | 1st and 15th, 08:00 |
+| Loop F — build-discipline check | daily 07:30 |
+| Loop G — guest-access staleness nudge | hourly |
+| Loop H — EC2 health check | every 30 min |
+
+The scheduler's timezone has not been explicitly confirmed — verify before relying
+on these clock times. Checking only `crontab -l` misses this entire layer; the full
+scheduling inventory is host cron (both users) **plus** this container scheduler.
+
 ---
 
 ## Data Persistence & Backups
@@ -165,8 +199,8 @@ This closed the ephemeral-storage defect that cost the June 22–July 13 curator
 briefings (lost before the mounts existed — a mounts problem, historical and
 unrecoverable, not an ongoing risk).
 
-Also host-mounted: `guests.json`, `build_queue.json`, `docs/design/`, `docs/specs/`,
-and `/opt/minimoi/agent_logs/`.
+Also host-mounted: `guests.json`, `build_queue.json`, `cos_memory.md`,
+`cos_context.json`, `docs/design/`, `docs/specs/`, and `/opt/minimoi/agent_logs/`.
 
 ### Backups — Tiers 1–2 live, Tier 3 broken
 
@@ -243,6 +277,15 @@ the four that actually run in production. Not broken — misfiled. Cleanup candi
 One residual thread: whether `telegram_polling_bot_token` is actively exercised in
 production today (vs. a webhook-testing leftover) was not verified in this pass.
 
+**One real exception to the SSM pattern:** Curator's production xAI scorer reads its
+key directly from `~/.openclaw/agents/main/agent/auth-profiles.json` — an
+OpenClaw-managed file at a fixed path — rather than the shared SSM helper every other
+service uses (German, Portuguese, CoS all resolve `xai_api_key` via the helper). This
+is fragile and undocumented anywhere else: the Curator container depends on that file
+existing. Related naming wrinkle to reconcile: the SSM inventory lists
+`grok_api_key` while the shared helper resolves `xai_api_key` — verify how the live
+container actually obtains the key, then document one authoritative name.
+
 DB roles are separated (`robert_sql`, `minimoi_agent`) and rotated off the old weak
 password — confirmed as distinct SSM parameters.
 
@@ -251,10 +294,13 @@ password — confirmed as distinct SSM parameters.
 ## Docs Sync
 
 Committed docs reach the production doc viewer via `scripts/sync_docs.sh`: git commit →
-GitHub raw URL → SSM pull to `/opt/minimoi/docs/` on the host (the docs paths are
-host-mounted into the portal container). **A git push alone does not make a new spec
-visible in prod** — the sync step is what lands it. This document's own delivery
-depends on that mechanism.
+GitHub raw URL → SSM pull to the host (docs paths are host-mounted into the portal
+container). **Exact scope, verified in the script:** `docs/design/*`, `docs/specs/*`,
+and `data/guild/build_queue.json` — and nothing else. Root documents
+(`ARCHITECTURE.md`, `OPERATIONS.md`, `ROADMAP.md`) are **not** synced: they are
+GitHub-only unless a copy is placed under `docs/design/` or the sync script is
+extended. **A git push alone does not make a new spec visible in prod** — the sync
+step is what lands it.
 
 ---
 
@@ -305,7 +351,11 @@ down never affects production.
 
 | Item | Tracked | Status |
 |---|---|---|
+| Curator cron wrapper masks failed scoring runs — `STATUS=$?` captures Telegram's exit code, not curator's; a failed run + successful stale send stamps `briefing_date` as success | — | **High — idempotency guarantee weaker than documented; found by Codex review 2026-07-18** |
 | Tier 3 Dropbox backup broken — rclone never installed; fails silently weekly | — | **High — fix before the restore test; found by review 2026-07-18** |
+| Curator xAI key read from an OpenClaw file path, outside the SSM pattern; SSM naming (`grok_api_key` vs `xai_api_key`) unreconciled | — | Open — verify live retrieval path, then standardize |
+| Host nginx unmonitored (health loop doesn't check it) | — | Open |
+| APScheduler timezone unconfirmed for the 7 in-container jobs | — | Open — verify before relying on clock times |
 | Backup job failures do not alert (cron failure is silent) | — | Open — same silent-failure family as #84 |
 | No break-glass admin account | #87 | Open |
 | Silent Postgres failure on login lookup (no logging) | #84 | Open — next after current work per standing decision |
