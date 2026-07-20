@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -6,6 +7,10 @@ import pytest
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "domains" / "german"))
+
+# Importing the German Flask application must not create a repository-local
+# .flask_secret during tests.
+os.environ.setdefault("FLASK_SECRET", "minimoi-test-secret")
 
 
 @pytest.fixture(scope="session")

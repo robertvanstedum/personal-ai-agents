@@ -39,6 +39,7 @@ from german_domain import (
     get_drill_pool,
     save_drill_result,
     analyse_session,
+    save_review_session,
     get_gesprache_sessions,
     persona_to_slug,
     get_persona_memory,
@@ -123,6 +124,23 @@ def _de_request_user_id():
     return resolve_user_id(request)
 
 
+def _de_numeric_user_id():
+    """Return a proven numeric auth identity, otherwise ``None``.
+
+    Username fallback remains available to legacy read-only callers through the
+    shared resolver, but new personal history must never be written under a
+    string, ``null``, or anonymous key.
+    """
+    user_id = _de_request_user_id()
+    if isinstance(user_id, int) and not isinstance(user_id, bool) and user_id > 0:
+        return user_id
+    return None
+
+
+def _identity_required_response():
+    return jsonify({"ok": False, "error": "identity required"}), 401
+
+
 def _de_is_guest():
     """Return True if request is from a guest-tier user."""
     return request.headers.get("X-Minimoi-User-Tier") == "guest"
@@ -157,8 +175,8 @@ def lesen():
 
 @app.route("/schreiben")
 def schreiben():
-    user_id = _de_request_user_id()
-    sessions = get_writing_sessions(user_id=user_id, limit=10)
+    user_id = _de_numeric_user_id()
+    sessions = get_writing_sessions(user_id=user_id, limit=10) if user_id else []
     prompts = get_tagebuch_prompts()
     return render_template("german_schreiben.html", active="schreiben",
                            sessions=sessions, tagebuch_prompts=prompts,
@@ -167,13 +185,13 @@ def schreiben():
 
 @app.route("/gesprache")
 def gesprache():
-    user_id = _de_request_user_id()
+    user_id = _de_numeric_user_id()
     user_key = str(user_id) if user_id is not None else "anonymous"
     personas = get_personas()
     for p in personas:
         slug = persona_to_slug(p["name"])
         p["slug"] = slug
-        p["memory"] = get_persona_memory(user_key, slug)
+        p["memory"] = get_persona_memory(user_key, slug, create=user_id is not None)
     sessions = get_gesprache_sessions(limit=5, user_id=user_id)
     return render_template("german_gesprache.html", active="gesprache",
                            personas=personas, sessions=sessions,
@@ -190,9 +208,9 @@ def ueben_redirect():
 
 @app.route("/woerter")
 def woerter():
-    user_id = _de_request_user_id()
-    entries = get_phrasebook_entries(user_id=user_id)
-    drill_pool = get_drill_pool(user_id=user_id)
+    user_id = _de_numeric_user_id()
+    entries = get_phrasebook_entries(user_id=user_id) if user_id else []
+    drill_pool = get_drill_pool(user_id=user_id) if user_id else []
     return render_template("german_woerter.html", active="woerter",
                            entries=entries, drill_pool=drill_pool,
                            tip=_load_tip("german.woerter"))
@@ -205,13 +223,13 @@ def bibliothek():
 
 @app.route("/admin")
 def admin():
-    user_id = _de_request_user_id()
+    user_id = _de_numeric_user_id()
     user_key = str(user_id) if user_id is not None else "anonymous"
     personas = get_personas()
     persona_rounds = []
     for p in personas:
         slug = persona_to_slug(p["name"])
-        mem = get_persona_memory(user_key, slug)
+        mem = get_persona_memory(user_key, slug, create=user_id is not None)
         persona_rounds.append({
             "name": p["name"],
             "emoji": p.get("emoji", ""),
@@ -226,10 +244,10 @@ def admin():
 
 @app.route("/archiv")
 def archiv():
-    user_id = _de_request_user_id()
-    writing_sessions = get_writing_sessions(user_id=user_id, limit=50)
+    user_id = _de_numeric_user_id()
+    writing_sessions = get_writing_sessions(user_id=user_id, limit=50) if user_id else []
     gesprache_sessions = get_gesprache_sessions(limit=50, user_id=user_id)
-    lesen_notes = get_lesen_notes(user_id=user_id, limit=50)
+    lesen_notes = get_lesen_notes(user_id=user_id, limit=50) if user_id else []
     return render_template("german_archiv.html", active="archiv",
                            gesprache_sessions=gesprache_sessions,
                            writing_sessions=writing_sessions,
@@ -287,7 +305,9 @@ def api_save_phrase():
     if not german:
         return jsonify({"ok": False, "error": "german required"}), 400
     scene = source if source in ('manual', 'schreiben') else 'lesen'
-    user_id = _de_request_user_id()
+    user_id = _de_numeric_user_id()
+    if user_id is None:
+        return _identity_required_response()
     entry = save_lesen_phrase(german, english, context_sentence, article_title, scene=scene, user_id=user_id)
     return jsonify({"ok": True, "id": entry["id"]})
 
@@ -308,7 +328,9 @@ def api_write_correct():
 @app.route("/api/write-save", methods=["POST"])
 def api_write_save():
     body = request.get_json(force=True)
-    user_id = _de_request_user_id()
+    user_id = _de_numeric_user_id()
+    if user_id is None:
+        return _identity_required_response()
     entry = save_writing_entry(
         mode=body.get("mode", "tagebuch"),
         text_original=body.get("text_original", ""),
@@ -323,7 +345,9 @@ def api_write_save():
 @app.route("/api/note-save", methods=["POST"])
 def api_note_save():
     body = request.get_json(force=True)
-    user_id = _de_request_user_id()
+    user_id = _de_numeric_user_id()
+    if user_id is None:
+        return _identity_required_response()
     note = save_note(
         article_id=body.get("article_id", ""),
         article_title=body.get("article_title", ""),
@@ -352,6 +376,9 @@ def api_lesen_correct():
 @app.route("/api/lesen/drill-save", methods=["POST"])
 def api_lesen_drill_save():
     body = request.get_json(force=True)
+    user_id = _de_numeric_user_id()
+    if user_id is None:
+        return _identity_required_response()
     record = save_lesen_drill(
         article_id=body.get("article_id", ""),
         article_title=body.get("article_title", ""),
@@ -361,6 +388,7 @@ def api_lesen_drill_save():
         translation=body.get("translation", ""),
         retyped=body.get("retyped", ""),
         retyped_correct=bool(body.get("retyped_correct", False)),
+        user_id=user_id,
     )
     return jsonify({"success": True, "id": record["id"]})
 
@@ -374,7 +402,9 @@ def api_drill_result():
     result = body.get("result", "")
     if not phrase_id or result not in ("correct", "wrong", "skip"):
         return jsonify({"ok": False, "error": "invalid params"}), 400
-    user_id = _de_request_user_id()
+    user_id = _de_numeric_user_id()
+    if user_id is None:
+        return _identity_required_response()
     entry = save_drill_result(phrase_id, result, user_id=user_id)
     return jsonify({"ok": bool(entry), "entry": entry})
 
@@ -388,7 +418,9 @@ def api_phrase_update():
     new_status = body.get("status", "")
     if not phrase_id or not new_status:
         return jsonify({"ok": False, "error": "id and status required"}), 400
-    user_id = _de_request_user_id()
+    user_id = _de_numeric_user_id()
+    if user_id is None:
+        return _identity_required_response()
     ok = update_phrase_status(phrase_id, new_status, user_id=user_id)
     return jsonify({"ok": ok})
 
@@ -397,8 +429,11 @@ def api_phrase_update():
 def api_anki_export():
     source = request.args.get("source") or None
     status = request.args.get("status") or None
-    user_id = _de_request_user_id()
-    entries = get_phrasebook_entries(source=source, status=status, user_id=user_id)
+    user_id = _de_numeric_user_id()
+    entries = (
+        get_phrasebook_entries(source=source, status=status, user_id=user_id)
+        if user_id else []
+    )
     lines = ["German\tEnglish\tContext"]
     for e in entries:
         german = e.get("german", "").replace("\t", " ")
@@ -426,9 +461,11 @@ def api_analyse_transcript():
         return jsonify({"ok": False, "error": "transcript required"}), 400
     if _de_is_guest():
         return jsonify({"ok": True, "guest": True})
-    user_id = _de_request_user_id()
+    user_id = _de_numeric_user_id()
+    if user_id is None:
+        return _identity_required_response()
     result = analyse_session(transcript, persona_name, scene, user_id=user_id)
-    return jsonify({"ok": True, **result})
+    return jsonify({"ok": True, "saved": True, **result})
 
 
 @app.route("/api/transcribe", methods=["POST"])
@@ -469,43 +506,45 @@ def api_review():
     source      = body.get("source", "ki_sitzung").strip()
     if not transcript:
         return jsonify({"ok": False, "error": "transcript required"}), 400
+
+    is_guest = _de_is_guest()
+    user_id = None if is_guest else _de_numeric_user_id()
+    if not is_guest and user_id is None:
+        return _identity_required_response()
+
     try:
-        import sys, os
-        sys.path.insert(0, os.path.dirname(__file__))
-        from providers.review_router import run_review, ProviderError
+        from providers.review_router import run_review
         result = run_review(transcript, persona_name, scene, model)
-
-        # Save session to disk so it appears in Letzte Sitzungen (owner only — guests get AI feedback but no save)
-        if not _de_is_guest():
-            try:
-                from german_domain import _next_session_filename, _SESSIONS_DIR, _parse_transcript_turns
-                import datetime as _dt, json as _json
-                date_str = _dt.datetime.now().strftime("%Y-%m-%d")
-                file_stem = _next_session_filename(date_str)
-                _review_user_id = _de_request_user_id()
-                session_data = {
-                    "session_id": f"session_{file_stem}",
-                    "date": date_str,
-                    "persona": persona_name,
-                    "scenario": scene,
-                    "duration_estimate_min": max(1, len(transcript) // 300),
-                    "source": source,
-                    "raw_transcript": _parse_transcript_turns(transcript),
-                    "reviewer_output": result.get("feedback", {}),
-                    "model": model,
-                    "anki_generated": False,
-                    "next_lesson_generated": False,
-                    "user_id": _review_user_id,
-                }
-                (_SESSIONS_DIR / f"{file_stem}.json").write_text(
-                    _json.dumps(session_data, indent=2, ensure_ascii=False)
-                )
-            except Exception as save_err:
-                pass  # Don't fail the review response if save fails
-
-        return jsonify({"ok": True, **result})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e), "model": model}), 502
+
+    if is_guest:
+        return jsonify({"ok": True, "guest": True, "saved": False, **result})
+
+    try:
+        session_id = save_review_session(
+            transcript=transcript,
+            persona_name=persona_name,
+            scene=scene,
+            feedback=result.get("feedback", {}),
+            model=model,
+            source=source,
+            user_id=user_id,
+        )
+        return jsonify({"ok": True, "saved": True, "session_id": session_id, **result})
+    except Exception:
+        # Preserve useful AI feedback while stating plainly that history was not
+        # saved.  The log intentionally excludes transcript and feedback text.
+        app.logger.exception(
+            "German review history persistence failed for numeric user_id=%s",
+            user_id,
+        )
+        return jsonify({
+            "ok": True,
+            "saved": False,
+            "save_error": "history persistence failed",
+            **result,
+        })
 
 
 @app.route("/api/gesprache/ai-turn", methods=["POST"])
@@ -574,8 +613,10 @@ def api_round_action():
         return jsonify({"ok": False, "error": "invalid params"}), 400
     if _de_is_guest():
         return jsonify({"ok": True, "guest": True})
-    user_id = _de_request_user_id()
-    user_key = str(user_id) if user_id is not None else "anonymous"
+    user_id = _de_numeric_user_id()
+    if user_id is None:
+        return _identity_required_response()
+    user_key = str(user_id)
     if action == "close":
         close_round(user_key, persona_slug)
     elif action == "extend":
@@ -586,7 +627,7 @@ def api_round_action():
 @app.route("/api/gesprache-sessions")
 def api_gesprache_sessions():
     limit = min(int(request.args.get("limit", 5)), 20)
-    sessions = get_gesprache_sessions(limit=limit, user_id=_de_request_user_id())
+    sessions = get_gesprache_sessions(limit=limit, user_id=_de_numeric_user_id())
     return jsonify(sessions)
 
 
@@ -598,7 +639,7 @@ def api_gesprache_session_detail(stem):
         return jsonify({"ok": False, "error": "not found"}), 404
     data = json.loads(path.read_text())
     # Fail closed: only the owning user can fetch this session's detail.
-    user_id = _de_request_user_id()
+    user_id = _de_numeric_user_id()
     if user_id is None or data.get("user_id") != user_id:
         return jsonify({"ok": False, "error": "not found"}), 404
     return jsonify({"ok": True, "session": data})
@@ -614,9 +655,9 @@ def api_persona_prompt():
     if not persona:
         return jsonify({"error": "persona not found"}), 404
 
-    user_id = _de_request_user_id()
+    user_id = _de_numeric_user_id()
     user_key = str(user_id) if user_id is not None else "anonymous"
-    memory = get_persona_memory(user_key, persona_slug)
+    memory = get_persona_memory(user_key, persona_slug, create=user_id is not None)
     prompt = assemble_session_prompt(persona, scene, memory)
     brief = build_session_brief(persona, scene, memory)
 
@@ -644,8 +685,10 @@ def api_send_to_telegram():
     if not persona:
         return jsonify({"ok": False, "error": "persona not found"}), 404
 
-    user_id = _de_request_user_id()
-    user_key = str(user_id) if user_id is not None else "anonymous"
+    user_id = _de_numeric_user_id()
+    if user_id is None:
+        return _identity_required_response()
+    user_key = str(user_id)
     memory = get_persona_memory(user_key, persona_to_slug(persona_name))
     prompt = assemble_session_prompt(persona, scene_key, memory)
 

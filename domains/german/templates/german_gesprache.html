@@ -929,10 +929,14 @@ document.body.classList.add('parch-mode');
       const data = await doSubmit(1);
       session.feedbackData = data.feedback;
 
+      const analysedLabel = data.saved === false && !data.guest
+        ? '⚠ Analysiert — Verlauf nicht gespeichert'
+        : '✓ Analysiert';
+
       // Collapse card to summary row with anzeigen + transkript links
       card.innerHTML =
         `<div class="session-saved-meta session-saved-analysiert">` +
-          `✓ Analysiert — ${session.personaName} · ${formatDuration(session.durationMs)}` +
+          `${analysedLabel} — ${session.personaName} · ${formatDuration(session.durationMs)}` +
           ` <button class="btn-session-card-anzeigen">Feedback</button>` +
           ` <button class="btn-session-card-anzeigen btn-session-card-transcript-post">Transkript ▾</button>` +
         `</div>` +
@@ -974,6 +978,9 @@ document.body.classList.add('parch-mode');
       }
 
       renderFeedback(data.feedback);
+      if (data.saved === false && !data.guest) {
+        status.textContent = 'Feedback erstellt; der Verlauf konnte nicht gespeichert werden.';
+      }
       requestAnimationFrame(() => {
         const panel = document.getElementById('persona-detail');
         const wrap  = document.getElementById('gesprache-feedback-wrap');
@@ -1447,7 +1454,7 @@ document.body.classList.add('parch-mode');
 
       // Prepend new session to Letzte Sitzungen without a page reload
       const sessionList = document.getElementById('letzte-sitzungen-list');
-      if (sessionList) {
+      if (sessionList && data.saved !== false) {
         const today = new Date().toISOString().slice(0, 10);
         const src = getSelectedSource();
         const srcLabel = {'ki_sitzung':'KI-Sitzung','mobile':'Mobil','desktop':'Desktop'}[src] || src;

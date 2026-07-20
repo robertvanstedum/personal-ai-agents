@@ -317,7 +317,7 @@ def safe_read_json(path: Path) -> dict:
         return {}
 
 
-def safe_write_json(path: Path, data: dict) -> None:
+def safe_write_json(path: Path, data) -> None:
     """Write JSON atomically via temp file + rename. Exclusive lock. Creates parent dirs."""
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -350,6 +350,13 @@ _PERSONA_MEMORY_FILE   = GERMAN_DIR / "config" / "persona_memory.json"
 _PROGRESS_FILE         = GERMAN_DIR / "progress.json"
 _KEYWORD_MAP_FILE      = GERMAN_DIR / "config" / "keyword_map.json"
 _PROMPTS_DIR           = GERMAN_DIR / "config" / "prompts"
+
+
+def _require_numeric_user_id(user_id) -> int:
+    """Return a positive numeric auth ID or refuse personal persistence."""
+    if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
+        raise ValueError("numeric user identity required")
+    return user_id
 
 
 def _load_keyword_map_bot() -> dict:
@@ -1041,6 +1048,7 @@ def translate_phrase(phrase: str) -> tuple[str, bool, dict]:
 def save_lesen_phrase(german: str, english: str, context_sentence: str, article_title: str,
                       scene: str = "lesen", user_id=None) -> dict:
     """Save a captured phrase to phrasebook."""
+    user_id = _require_numeric_user_id(user_id)
     data = _load_phrasebook()
     today = datetime.date.today().isoformat()
     user_key = str(user_id) if user_id is not None else DEFAULT_USER
@@ -1128,6 +1136,7 @@ def save_note(article_id: str, article_title: str, original: str,
               corrected: str, rewritten: str, user_id=None) -> dict:
     """Save a Notizen entry (write→correct→rewrite) to per-user JSON."""
     import uuid
+    user_id = _require_numeric_user_id(user_id)
     path = _lesen_notes_path(user_id)
     data = {"notes": []}
     if path.exists():
@@ -1147,8 +1156,7 @@ def save_note(article_id: str, article_title: str, original: str,
         "saved": True,
     }
     data.setdefault("notes", []).append(note)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    safe_write_json(path, data)
     return note
 
 
@@ -1233,9 +1241,11 @@ def correct_lesen_note(text: str, article_title: str = "", article_summary: str 
 
 def save_lesen_drill(article_id: str, article_title: str, direction: str,
                      original: str, corrected: str, translation: str,
-                     retyped: str, retyped_correct: bool) -> dict:
+                     retyped: str, retyped_correct: bool,
+                     user_id: int) -> dict:
     """Save a Lesen drill record to data/lesen_drills/YYYY-MM-DD.json."""
     import uuid
+    user_id = _require_numeric_user_id(user_id)
     _LESEN_DRILLS_DIR.mkdir(exist_ok=True)
     today = datetime.date.today().isoformat()
     drill_file = _LESEN_DRILLS_DIR / f"{today}.json"
@@ -1250,7 +1260,7 @@ def save_lesen_drill(article_id: str, article_title: str, direction: str,
         "date":            today,
         "article_id":      article_id,
         "article_title":   article_title,
-        "user":            DEFAULT_USER,
+        "user":            str(user_id),
         "direction":       direction,
         "original":        original,
         "corrected":       corrected,
@@ -1259,7 +1269,7 @@ def save_lesen_drill(article_id: str, article_title: str, direction: str,
         "retyped_correct": retyped_correct,
     }
     data.append(record)
-    drill_file.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    safe_write_json(drill_file, data)
     return record
 
 
@@ -1267,6 +1277,7 @@ def save_writing_entry(mode: str, text_original: str, text_corrected: str = "",
                        notes: list = None, context_title: str = "",
                        user_id=None) -> dict:
     """Append a writing session entry to per-user JSON. Trims to last 50. Returns new entry."""
+    user_id = _require_numeric_user_id(user_id)
     path = _writing_sessions_path(user_id)
     data = {"entries": []}
     if path.exists():
@@ -1286,8 +1297,7 @@ def save_writing_entry(mode: str, text_original: str, text_corrected: str = "",
     }
     data.setdefault("entries", []).append(entry)
     data["entries"] = data["entries"][-50:]
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    safe_write_json(path, data)
     return entry
 
 
@@ -1346,7 +1356,8 @@ def save_drill_result(phrase_id: str, result: str, user: str = DEFAULT_USER, use
     Amendment 4: at 5 correct, sets status='review_ready' — never auto-promotes to mastered.
     Returns updated entry dict, or {} if not found.
     """
-    user_key = str(user_id) if user_id is not None else user
+    user_id = _require_numeric_user_id(user_id)
+    user_key = str(user_id)
     data = _load_phrasebook()
     for entry in data.get("phrases", []):
         if entry.get("id") == phrase_id and entry.get("user") == user_key:
@@ -1366,10 +1377,11 @@ def update_phrase_status(phrase_id: str, new_status: str,
     Updates status on a phrase. Returns True if found and updated.
     Valid statuses: library, practice, review_ready, mastered.
     """
+    user_id = _require_numeric_user_id(user_id)
     valid = {"library", "practice", "review_ready", "mastered"}
     if new_status not in valid:
         return False
-    user_key = str(user_id) if user_id is not None else user
+    user_key = str(user_id)
     data = _load_phrasebook()
     for entry in data.get("phrases", []):
         if entry.get("id") == phrase_id and entry.get("user") == user_key:
@@ -1407,8 +1419,13 @@ def _default_active_memory(round_number: int = 1) -> dict:
     }
 
 
-def get_persona_memory(user: str, persona_slug: str) -> dict:
-    """Return memory block for user+persona pair. Creates default on first access."""
+def get_persona_memory(user: str, persona_slug: str, create: bool = True) -> dict:
+    """Return memory for a user/persona pair.
+
+    ``create=False`` returns an in-memory default when no record exists.  Page
+    rendering uses that mode when the reverse proxy has not supplied a proven
+    numeric identity, so a read cannot create ``anonymous_*`` records.
+    """
     all_data = safe_read_json(_PERSONA_MEMORY_FILE)
     key = f"{user}_{persona_slug}"
     if key not in all_data:
@@ -1418,7 +1435,7 @@ def get_persona_memory(user: str, persona_slug: str) -> dict:
                 persona_type = p.get("type", "casual")
                 break
         round_default = _ROUND_DEFAULTS.get(persona_type, 5)
-        all_data[key] = {
+        default_memory = {
             "user": user,
             "persona": persona_slug,
             "persona_type": persona_type,
@@ -1429,6 +1446,9 @@ def get_persona_memory(user: str, persona_slug: str) -> dict:
             "active_memory": _default_active_memory(round_number=1),
             "archived_rounds": [],
         }
+        if not create:
+            return default_memory
+        all_data[key] = default_memory
         safe_write_json(_PERSONA_MEMORY_FILE, all_data)
     return all_data[key]
 
@@ -1848,6 +1868,8 @@ def analyse_session(transcript: str, persona_name: str, scene: str, user_id=None
     """Analyse a pasted Grok Voice transcript. Returns {session_id, feedback}."""
     import anthropic as _anthropic
 
+    user_id = _require_numeric_user_id(user_id)
+
     ts = datetime.datetime.now()
     date_str = ts.strftime("%Y-%m-%d")
     file_stem = _next_session_filename(date_str)
@@ -1913,7 +1935,7 @@ def analyse_session(transcript: str, persona_name: str, scene: str, user_id=None
         "next_lesson_generated": False,
     }
     session_path = _SESSIONS_DIR / f"{file_stem}.json"
-    session_path.write_text(json.dumps(session, indent=2, ensure_ascii=False))
+    safe_write_json(session_path, session)
 
     update_persona_memory(
         user=str(user_id) if user_id is not None else "anonymous",
@@ -1929,6 +1951,38 @@ def analyse_session(transcript: str, persona_name: str, scene: str, user_id=None
     )
 
     return {"session_id": session_id, "feedback": feedback}
+
+
+def save_review_session(transcript: str, persona_name: str, scene: str,
+                        feedback: dict, model: str, source: str,
+                        user_id: int) -> str:
+    """Persist feedback produced by the selectable-model review route.
+
+    The route performs the same identity check before invoking the model, and
+    this function repeats it as defense in depth so it cannot create new
+    ownerless or legacy-string sessions when called elsewhere.
+    """
+    user_id = _require_numeric_user_id(user_id)
+
+    date_str = datetime.datetime.now().strftime("%Y-%m-%d")
+    file_stem = _next_session_filename(date_str)
+    session_id = f"session_{file_stem}"
+    session_data = {
+        "session_id": session_id,
+        "date": date_str,
+        "persona": persona_name,
+        "scenario": scene,
+        "duration_estimate_min": max(1, len(transcript) // 300),
+        "source": source,
+        "raw_transcript": _parse_transcript_turns(transcript),
+        "reviewer_output": feedback,
+        "model": model,
+        "anki_generated": False,
+        "next_lesson_generated": False,
+        "user_id": user_id,
+    }
+    safe_write_json(_SESSIONS_DIR / f"{file_stem}.json", session_data)
+    return session_id
 
 
 def get_gesprache_sessions(limit: int = 5, user_id=None) -> list:
