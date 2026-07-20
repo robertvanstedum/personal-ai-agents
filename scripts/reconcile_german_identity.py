@@ -215,6 +215,27 @@ def inventory_identity_stores(data_root: str | Path) -> dict[str, Any]:
                 "valid": False,
             })
 
+    drill_files = []
+    for path in sorted((root / "lesen_drills").glob("*.json")):
+        try:
+            drills = _read_json(path, list)
+            values = [
+                drill.get("user") for drill in drills if isinstance(drill, dict)
+            ]
+            present = ["user" in drill for drill in drills if isinstance(drill, dict)]
+            drill_files.append({
+                "path": _relative_path(root, path),
+                "sha256": _sha256_file(path),
+                "entry_count": len(drills),
+                "identity_counts": _group_values(values, present),
+                "valid": all(isinstance(drill, dict) for drill in drills),
+            })
+        except MigrationRefused:
+            drill_files.append({
+                "path": _relative_path(root, path),
+                "valid": False,
+            })
+
     phrasebook_path = root / "config" / "phrasebook.json"
     phrasebook = {"present": phrasebook_path.exists(), "valid": True, "entry_count": 0}
     if phrasebook_path.exists():
@@ -265,6 +286,7 @@ def inventory_identity_stores(data_root: str | Path) -> dict[str, Any]:
         },
         "writing_sessions": {"files": writing_files},
         "lesen_notes": {"files": note_files},
+        "lesen_drills": {"files": drill_files},
         "phrasebook": phrasebook,
         "persona_memory": persona_memory,
     }
@@ -346,7 +368,12 @@ def _assert_inventory_valid(inventory: dict[str, Any]) -> None:
         for item in inventory["lesen_notes"]["files"]
         if not item.get("valid")
     ]
-    if invalid_writing or invalid_notes:
+    invalid_drills = [
+        item["path"]
+        for item in inventory["lesen_drills"]["files"]
+        if not item.get("valid")
+    ]
+    if invalid_writing or invalid_notes or invalid_drills:
         raise MigrationRefused("identity-keyed file inventory contains invalid JSON")
     if not inventory["phrasebook"].get("valid"):
         raise MigrationRefused("phrasebook inventory is invalid")

@@ -88,6 +88,13 @@ def german_data(tmp_path):
         {"notes": [{"note_id": "n1", "user_id": "robert"}]},
     )
     _write_json(
+        root / "lesen_drills" / "2026-06-18.json",
+        [
+            {"id": "d1", "date": "2026-06-18", "user": "robert"},
+            {"id": "d2", "date": "2026-06-18", "user": "7"},
+        ],
+    )
+    _write_json(
         root / "config" / "phrasebook.json",
         {"phrases": [{"id": "p1", "user": "robert"}, {"id": "p2", "user": "7"}]},
     )
@@ -125,8 +132,13 @@ def test_dry_run_inventory_is_no_write_and_contains_no_personal_payload(
         "sessions",
         "writing_sessions",
         "lesen_notes",
+        "lesen_drills",
         "phrasebook",
         "persona_memory",
+    }
+    assert manifest["inventory"]["lesen_drills"]["files"][0]["identity_counts"] == {
+        "string:7": 1,
+        "string:robert": 1,
     }
     assert manifest["digest"] == migration_module.manifest_digest(manifest)
 
@@ -171,6 +183,7 @@ def test_apply_changes_only_approved_sessions_and_merges_writing(
     # Inventory-only stores remain byte-identical.
     for relative in (
         "lesen_notes/user_robert.json",
+        "lesen_drills/2026-06-18.json",
         "config/phrasebook.json",
         "config/persona_memory.json",
     ):
@@ -233,6 +246,24 @@ def test_inventory_only_store_drift_aborts_apply(
         )
 
 
+def test_lesen_drill_drift_aborts_apply(
+    migration_module, german_data, tmp_path
+):
+    manifest = _manifest(migration_module, german_data)
+    drill_path = german_data / "lesen_drills" / "2026-06-18.json"
+    drills = json.loads(drill_path.read_text())
+    drills.append({"id": "later", "date": "2026-06-18", "user": "7"})
+    _write_json(drill_path, drills)
+
+    with pytest.raises(migration_module.MigrationRefused, match="state changed"):
+        migration_module.apply_manifest(
+            german_data,
+            manifest,
+            approved_digest=manifest["digest"],
+            backup_dir=tmp_path / "backup",
+        )
+
+
 def test_writing_source_with_other_numeric_owner_is_refused(
     migration_module, german_data
 ):
@@ -261,6 +292,13 @@ def test_invalid_inventory_only_json_blocks_manifest(migration_module, german_da
     (german_data / "config" / "phrasebook.json").write_text("{not-json")
 
     with pytest.raises(migration_module.MigrationRefused, match="phrasebook"):
+        _manifest(migration_module, german_data)
+
+
+def test_invalid_lesen_drill_json_blocks_manifest(migration_module, german_data):
+    (german_data / "lesen_drills" / "2026-06-18.json").write_text("{not-json")
+
+    with pytest.raises(migration_module.MigrationRefused, match="identity-keyed"):
         _manifest(migration_module, german_data)
 
 
