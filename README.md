@@ -1,300 +1,299 @@
-# Mini-moi — Personal AI Agent
+# mini-moi
 
-LLMs have the world's knowledge. They don't have your intent, your goals, your history,
-your risk tolerance. mini-moi builds toward that gap: specific intelligence in your context.
-Local memory, model-agnostic pipeline, swappable LLMs. Your context stays with you.
-Switch models, switch providers, go offline. The agent still knows you.
+mini-moi is a personal AI system that carries context across reading, research,
+language learning, engineering work, and cross-domain coordination. It is built
+for daily use first; the repository also records the architecture, operation,
+and evolution of the system.
 
-Three active domains:
-
-**Curator v1.2** — Geopolitics and finance briefing. ~700 RSS and X candidates scored
-daily by a reasoning model with your learned profile. Top 20 to the web portal, top 10
-to Telegram at 7 AM. In daily use since February 2026.
-
-**Mein Deutsch v1.0** — German language coaching pipeline. Vienna-tested. Lesen,
-Gespräche, Schreiben, Wörter. Anki cards earned from real friction, not passive review.
-
-**Guild** — Personal operating system. Chief of Staff model with autonomous agents,
-a career and work pipeline, and a daily executive briefing across all domains.
-
-Learns from your history and preferences, with deliberate friction built in. Not a
-curated feed that confirms what you already think — an agent that surfaces what you
-should be seeing, including content that cuts against the grain.
-
-Production system, daily use since February 2026. Local-first, model-agnostic,
-designed to expand across domains.
+The name reflects its purpose: mini-moi becomes more useful by retaining the
+user's goals, working patterns, learning history, and prior activity. It has
+been in daily use since February 2026 and has run on AWS since June 2026. This
+README provides an overview of the current system. The architecture, operations,
+and roadmap documents carry the detail and distinguish what is running from
+what is still being developed.
 
 ---
 
-## What This Is Really About
+## Current state (July 2026)
 
-The cloud LLMs have the world's knowledge. That problem is largely solved.
+| Domain | Current role |
+|---|---|
+| **Curator** | Supports daily reading and longer research in geopolitics and finance. Each morning it reduces roughly 700 candidates from international RSS feeds, X bookmarks, and theme-driven web search to 20 items on the web and 10 in Telegram. Reactions, saved items, comments, and investigations provide context for later selection. A separate serendipity pool helps prevent the learned profile from becoming a closed loop. Curator can also produce article scans, research threads, deeper-dive briefs, AI observations, and a weekly synthesis. |
+| **Mein Deutsch** | Combines simulated German immersion with interest-led reading and writing. Gespräche provides unscripted voice conversations with AI personas and user-chosen scenes. Lesen presents current German-language articles across everyday life, culture, news, and Vienna; each selection includes a short source excerpt and a link to the full original. Words and phrases can be translated and saved with context. Article-related notes can be typed or dictated, corrected and explained by AI, then retained with their original and corrected forms. Vocabulary, writing records, conversation reviews, and the archive provide material for repeated use across the different forms of practice. |
+| **Meu Português** | Followed German as a family-use version for a mixed English-Portuguese household. Both parents use both languages, but each has a different stronger language; the children have different levels of fluency, exposure, and formal practice. It was built quickly on the German base and introduced a more polished front end, multi-user separation, and per-user data boundaries. The backend is still converging with German, especially in adaptive memory. |
+| **Guild** | Holds the platform's build queue, specifications, and operations view. Its Build, Operate, and Improve sections remain in use while the domain is refocused after Chief of Staff moved out. A queued change will repurpose the former embedded Chief of Staff role as **Master Craftsman**, focused on build quality, code review, domain standards, and consistency between specifications and implementation. |
+| **Chief of Staff** | Became a standalone domain in July 2026. It provides chat with a defined voice, its own working memory and agenda, scheduled watch loops, and health checks. It remains in use while its remaining dependencies on Guild are removed and its access across the other domains is expanded. The separation gives both Chief of Staff and Guild clearer boundaries for further development. |
 
-The hard part — the part that actually matters for real decisions — is
-acting in your specific situation. Your history. Your goals. Your risk
-tolerance. Your team's context and motivation. General intelligence is
-widely available now. Specific intelligence, the kind that knows you and
-acts for you, isn't.
+Production runs on AWS EC2, with a Mac development standby. The deployment
+consists of eight containers plus host-level nginx and cron. CI/CD normally
+moves a pushed change to production in about five minutes. Error tracking and
+scheduled health checks monitor the running system.
 
-That's what this builds toward.
+The maintained reference documents are:
 
-Local memory and a local model are the foundation — context, preferences,
-and learned behavior stay with you. Cloud LLMs are central to how this
-works — they bring the world's knowledge, reasoning, and current events
-into the picture. But memory, context, and what the agent has learned
-about you stay local. That's what maintains autonomy. Switch models,
-switch providers, go offline — the agent still knows you.
-
-The vision is bigger than a personal project or one domain. If I had a
-team at work — people and agents together — I'd want this same local
-context and motivation at the center of it. Not a generic assistant that
-knows everything about the world but nothing about us. A specific
-capability, grounded in our history, our goals, our way of making
-decisions under uncertainty.
-
-That's what Mini-moi — mini-me — is about. Not a mini version of a large
-language model. A system that carries your particular point of view and
-acts on your behalf — in your real world, for you, now.
-
-And it gets better as you use it. Not because someone updated a model —
-because you and the agent are learning together.
+- [ARCHITECTURE.md](ARCHITECTURE.md) - system design and rationale
+- [OPERATIONS.md](OPERATIONS.md) - how the production system runs
+- [ROADMAP.md](ROADMAP.md) - current plans and the record of what shipped
 
 ---
 
-## Why I Built This
+## Two learning loops
 
-The best way to understand something is to build it. This project started
-as exactly that — learning by doing, with a real problem and a real use
-case, not a tutorial exercise.
+Curator and the language domains show the use of retained context most clearly.
+Curator uses reading behavior to improve later selection and research. The
+language domains connect conversation, reading, writing, correction, and review
+so that each form of practice can support the next.
 
-The future of AI isn't just larger models with more world knowledge — it's
-systems that carry specific context: your history, your goals, your way of
-reasoning through uncertainty. The cloud LLMs are powerful — but they don't
-know your personal context. And if they did, you'd risk being locked into
-one provider, with your history and preferences held somewhere you don't
-control.
+```mermaid
+flowchart TB
+    U([user])
 
-I wanted to build that layer. Not as a prototype or a tutorial exercise,
-but as something I actually use. Geopolitics and finance were the natural
-first domain — areas I follow closely, where I have a real point of view
-that a generic feed can't capture.
+    subgraph C["CURATOR"]
+        C1[personalized daily briefing] --> C2[read, react, save, or investigate]
+        C2 --> C3{{AI analyzes the article and learns from feedback}}
+        C3 --> C4[later selection and deeper research]
+    end
 
-The approach — local context, model-agnostic, flat files structured for
-future migration — was designed to scale beyond one person and one domain.
-Health, language learning, team environments at work. The architecture
-anticipates that. The first domain just had to be one I cared enough about
-to build it right.
+    subgraph L["LANGUAGE PRACTICE"]
+        L1[choose a persona and scene or a real-interest article] --> L2[converse, read, and write in context]
+        L2 --> L3{{AI translates, corrects, reviews, and identifies a next focus}}
+        L3 --> L4[saved vocabulary, writing, and session history support later practice]
+    end
 
----
+    U --> C1
+    U --> L1
 
-## How It Was Built
+    classDef curator fill:#E7F4F1,stroke:#25776F,color:#173A36,stroke-width:1.5px
+    classDef language fill:#F2ECFA,stroke:#7655A6,color:#30223F,stroke-width:1.5px
+    class C1,C2,C3,C4 curator
+    class L1,L2,L3,L4 language
+    style C fill:#F5FBFA,stroke:#25776F,stroke-width:1.5px,color:#173A36
+    style L fill:#FAF7FD,stroke:#7655A6,stroke-width:1.5px,color:#30223F
+```
 
-I set out to build this the right way — production quality, not a hack.
-AI lowers the barrier to building, but it can also take over if you let it.
-The discipline here was to use it as a genuine collaborator: coach,
-reviewer, and implementer — but never the one driving.
+The colors separate the two domains; the double-braced nodes mark the places
+where a model interprets activity rather than simply storing or displaying it.
 
-Not designed up front then implemented. The vision was fixed. The path
-was iterative — a working slice first, production feedback, then
-refinement. Each phase complete before the next one started.
+### Curator: from reading to research
 
-### The Foundation
+A selected article can remain a quick read, contribute feedback to later
+selection, or become the starting point for a longer investigation.
 
-The intent of the project kept the foundation disciplined.
+```mermaid
+flowchart TD
+    A["daily briefing: 20 articles"] --> B[choose an article]
+    B --> C[read on the original site]
+    B --> R[like, dislike, save, or comment]
+    R -. informs later scoring .-> A
+    B --> S{{"AI scan: argument, implications, counterpoint, data, and bibliography"}}
+    S --> D[optional deeper dive on this article]
+    S --> T[start a research thread from the bibliography and questions]
+    T --> TS[continue across a wider set of sources]
+    TS --> DD{{multi-session synthesis and challenge}}
+    B --> LN[record a question, leaning, or held position]
 
-From day one: a structured database for content, history, and memory, and
-a graph database for learned relationships. Both installed, both in use
-early. But the tension surfaced quickly — too much time on infrastructure,
-not enough on functionality. The breakthrough came from an unexpected
-direction. The LLM suggested structuring the JSON files to match a database
-schema — write local first, load later. I knew immediately that was the
-answer. One migration command when the time comes, no rewrite.
+    classDef curator fill:#E7F4F1,stroke:#25776F,color:#173A36,stroke-width:1.5px
+    classDef ai fill:#F2ECFA,stroke:#7655A6,color:#30223F,stroke-width:1.5px
+    class A,B,C,R,D,T,TS,LN curator
+    class S,DD ai
+```
 
-We undid some early work and rebuilt around that principle. The result:
-a system that is database-independent today, just as it is LLM-independent.
-The data is ready. The databases are waiting. The functionality came first.
+Feedback operates at two timescales. Immediate actions - likes, dislikes, saves,
+and comments - help shape later article scoring. Research threads, deeper dives,
+and recorded leanings preserve how an issue develops across sources and
+sessions. The second loop is less mature than article selection, so the roadmap
+and architecture describe its current limits.
 
-The same principle applied to models. User profile injection at the
-dispatcher level, not inside any model's prompt. Swap any model at any
-layer without touching the personalization logic. Database-independent.
-LLM-independent. The pattern held throughout.
+### Language practice: conversation and return
 
-A side benefit emerged later: a dry-run mode that validates code against
-the local model instantly, at no cost. The architecture rewarded the
-approach in ways that weren't fully anticipated at the start.
+The persona opens the exchange. The conversation is free-form, and difficulty
+inside the conversation becomes evidence for later practice rather than a
+reason to replace it with a scripted lesson.
 
----
+```mermaid
+flowchart TD
+    A[choose or create a persona] --> B[choose a scene]
+    B --> M[choose Grok, OpenAI, or Claude]
+    M --> C[persona initiates the scene]
+    C --> D[converse, struggle, recover, and continue]
+    D --> E[save the transcript]
+    E --> F{{"AI tutor review: corrections, strengths, vocabulary, and next focus"}}
+    F --> G[(saved session and progress history)]
+    G --> H[start another session, scene, or persona]
+    H --> A
 
-## What It Does
+    classDef language fill:#F2ECFA,stroke:#7655A6,color:#30223F,stroke-width:1.5px
+    classDef ai fill:#FFF3D6,stroke:#A56B16,color:#4C3312,stroke-width:1.5px
+    class A,B,M,C,D,E,G,H language
+    class F ai
+```
 
-### The Daily Briefing
+German came first and remains more developed in the backend, including the use
+of reviewed conversation context in later persona prompts. Portuguese followed
+for family use in a mixed English-Portuguese household. Both parents use both
+languages, but each has a different stronger language; the children have different
+levels of fluency, exposure, and formal practice. That variation creates useful
+design pressure: one system must support different starting points without
+splitting into separate products. Portuguese was built quickly on the German
+base and, in turn, introduced more front-end polish, multi-user separation, and
+per-user data boundaries.
 
-Every morning, a three-stage pipeline runs automatically:
+The two domains are intended to converge into the same solution from interface
+through stored data and adaptive memory. A third language, new to the whole
+family, will test that design directly: the language and content should change;
+the solution should not.
 
-- **Gather & enrich** — RSS feeds and X bookmarks are pulled and merged;
-  destination content is fetched from source URLs, giving the scorer full
-  article context, not just headlines
-- **Score** — a reasoning model ranks ~700 candidates with your learned
-  profile injected
-- **Deliver** — top 20 to the web portal, top 10 to the mobile messaging
-  channel
+### Lesen: reading, writing, and reuse
 
-Each stage uses a swappable model, tuned for cost and quality. The
-architecture supports a bulk pre-filter between gather and score — ready
-to activate as the candidate pool grows.
+Lesen uses current German-language articles from subjects with an existing
+reason to read: **Alltag** (everyday life), **Kultur** (culture),
+**Nachrichten** (news), and **Wien** (Vienna and local life). A selected article
+opens with a short excerpt drawn from the beginning of the source. The full article remains
+available on its original site.
 
-Later in the day, **AI Observations** arrives: the system's own read on
-what it surfaced — what's surging, what's missing, where the story is.
-You respond. Those responses feed the learning loop.
+```mermaid
+flowchart TD
+    A[choose Alltag, Kultur, Nachrichten, or Wien] --> B[choose a current article]
+    B --> C[read or listen to a short source excerpt]
+    C --> O[open the full article on the original site]
 
-### Research Intelligence (v1.1)
+    C --> V[highlight a word or phrase]
+    V --> VT{{translate in context}}
+    VT --> W[save with source sentence and article provenance]
+    W --> WL[(Wörter library)]
 
-Background research threads accumulate sources daily against your defined
-topics. Each session scores candidates against your research targets,
-builds a library of qualified sources, and tracks what's been seen — so
-subsequent sessions surface fresh material rather than repeating the same
-sources.
+    C --> N[write or dictate a response to the article]
+    N --> NC{{correct or translate in article context}}
+    NC --> NR[review natural German, English translation, and correction notes]
+    NR --> NA[accept, revise, and save]
+    NA --> AR[(archive: original, corrected, and rewritten note)]
 
-Five active threads as of v1.1: empire-landpower, china-rise,
-gold-geopolitics, strait-of-hormuz, hellscape-taiwan-porcupine.
+    WL --> P[revisit through vocabulary practice, writing, and conversation]
+    AR --> P
 
-### Deeper Dives
+    classDef language fill:#F2ECFA,stroke:#7655A6,color:#30223F,stroke-width:1.5px
+    classDef ai fill:#FFF3D6,stroke:#A56B16,color:#4C3312,stroke-width:1.5px
+    classDef memory fill:#E8FAF5,stroke:#149682,color:#14584F,stroke-width:1.5px
+    class A,B,C,O,V,W,N,NR,NA,P language
+    class VT,NC ai
+    class WL,AR memory
+```
 
-On-demand synthesis documents generated from research threads. A
-Synthesizer pass assembles findings and bibliography; a Challenger pass
-pressure-tests the hypothesis. The result is a structured document you
-can return to and build on. Dives are iterative — generate again after
-new sessions accumulate and get a fresh synthesis against a richer source
-base.
+Translation help is available without replacing the reading. A highlighted word
+or phrase can be translated and added to the Wörter library with its source
+sentence and article title. The excerpt can also be expanded or read aloud.
 
-The reading-to-research loop: morning article → Deep Dive → spawn thread
-→ sessions accumulate → generate Deeper Dive → repeat.
+Writing remains tied to the subject being read. A response can be typed or
+dictated, and the correction step returns natural German, an English
+translation, and short explanations of the changes. The corrected version can
+be accepted or revised before saving. The archive retains the article, the
+original response, and the corrected response; a drill record is saved with the
+same work.
 
-### On Demand
+Lesen supplies the slower layers that real-time conversation cannot: close
+reading, contextual translation, time to formulate a response, correction, and
+deliberate review. Those layers develop recognition and recall in service of
+better real conversation. Speaking exposes gaps; reading and writing provide
+material and repetition; later conversation tests whether the language can be
+retrieved.
 
-- **React & learn** — like, dislike, or save any article on either surface.
-  Every signal feeds the learning loop and shapes future scoring — including
-  the friction reserve, where the system surfaces content that cuts against
-  the grain of your usual reading, keeping the feed from becoming a
-  confirmation loop.
-- **Deep Dive** — flag any article from the web portal for a structured AI
-  brief. Add your own notes first — what caught your attention, what you
-  want explored — and the deep dive is shaped by that context, not generic.
-- **Signal Priorities** — inject a focus area directly into the scoring
-  pipeline, with a boost level and expiry.
+## Continuity while the system changes
 
----
+mini-moi is intended to keep its history even as the technology changes. Five
+years from now, the useful part should be the knowledge gathered, lessons
+learned, language practice, decisions, and some continuity of character from
+daily interaction - not any particular model, memory system, interface, or
+hosting arrangement. Provider memory can be used when it helps, while
+application and local records keep that history from depending on one provider.
 
-## How It's Built
+Domains give the work practical boundaries. Curator, the language domains,
+Guild, and Chief of Staff each have a defined purpose and set of guardrails.
+This reduces confusion about what a task is trying to accomplish and limits the
+effect of mistakes. The boundaries can change: new interests may become
+domains, while older areas may need less attention.
 
-mini-moi uses a three-agent workflow with strict separation of concerns:
-
-| Agent | Role |
-|-------|------|
-| Claude.ai | Design, strategy, architecture decisions |
-| Claude Code | Implementation, commits, file-level execution |
-| OpenClaw | Planning, documentation, memory, issue tracking |
-
-One agent is active on the repository at a time. Robert is the decision
-point between them. New domains and features stage in `_NewDomains/`
-before graduating to the main repo on release — Research Intelligence
-followed this path. Health and Jobs are next.
-
-### Cost baseline (build phase)
-
-These reflect active development. Production costs for a stable daily-use
-system will be meaningfully lower.
-
-| Item | Cost |
-|------|------|
-| Monthly API spend | $35–45 (build phase) |
-| Per research session | ~$0.002–0.005 |
-| Per deeper dive | ~$0.21–0.24 |
-| Research pilot budget | $20 allocated · $0.08 used at v1.1 |
-
-Cost discipline is a design constraint, not an afterthought.
-
----
-
-## Where It Goes Next
-
-### v1.2 — Mac Mini + infrastructure
-
-Always-on Mac Mini eliminates sleep interruptions. PostgreSQL activates
-for structured storage. Reading Room lands — full article text, not just
-links. Curator novelty scoring with 7-day windowed implementation.
-
-### v1.3 — Intelligence layer
-
-Neo4j graph activation. Cross-thread pattern detection. Local LLM for
-mining latent connections across months of accumulated sessions. The
-backtrace vision: *"I thought X in March 2026 — was I right, and what
-led me there."*
-
-See [ROADMAP.md](ROADMAP.md) for the full platform roadmap — multi-agent working model, phase map, and guiding principles.
-
-**Intelligence layer architecture and design:**
-- [`docs/INTELLIGENCE_LAYER.md`](docs/INTELLIGENCE_LAYER.md) — architecture, AI concept reference, build sequence
-- [`docs/DESIGN_SESSION_INTELLIGENCE_LAYER_2026-06-03.md`](docs/DESIGN_SESSION_INTELLIGENCE_LAYER_2026-06-03.md) — design session, June 2026
-- [`docs/LLM_REGISTRY.md`](docs/LLM_REGISTRY.md) — all LLM call sites, model rationale, and change log
-- [`docs/GUILD.md`](docs/GUILD.md) — personal operating system: agents, pipeline, daily briefing, communication layer
-- [`docs/GUILD_AGENTS_DESIGN.md`](docs/GUILD_AGENTS_DESIGN.md) — Chief of Staff + Operations autonomous agents
-- [`docs/GUILD_BUILD_LOG.md`](docs/GUILD_BUILD_LOG.md) — build sessions, calibration learnings, proof of value
-
-**Learning System** — mini-moi builds institutional knowledge over time. Decision Records
-capture design reasoning now so the local LLM training pipeline has signal when Phase 2
-(LoRA) arrives. Decision Records are the first feature of this capability plan.
-- [`docs/LEARNING_SYSTEM_ROADMAP.md`](docs/LEARNING_SYSTEM_ROADMAP.md) — phased plan: Decision Records (Phase 0) → RAG (Phase 1) → LoRA training (Phase 2) → local-first operation (Phase 3)
-- [`docs/DECISION_RECORD_PRACTICE.md`](docs/DECISION_RECORD_PRACTICE.md) — highest-signal artifacts for future LoRA adaptation; how design reasoning is captured, reviewed, and committed
-- [`docs/DESIGN_SESSION_PROMPT.md`](docs/DESIGN_SESSION_PROMPT.md) — structured design conversations across Claude, Grok, and local LLM; produces Decision Records on command
-- [`docs/GESPRACHE_FORWARD_SPEC.md`](docs/GESPRACHE_FORWARD_SPEC.md) — mobile-first voice practice vision, current build state, and next tier items; the domain where LoRA signal accumulates first
-- [`docs/COS_PAGE_ROADMAP.md`](docs/COS_PAGE_ROADMAP.md) — voice-first CoS interaction page, design session pending
-- [`docs/AWS_MIGRATION_PLAN.md`](docs/AWS_MIGRATION_PLAN.md) — containerization, cloud deployment, CI/CD, GPU instance for local LLM. Replaces Mac Mini purchase.
+Curator and German were useful starting points because they supported real
+interests and repeated use while also providing a way to learn AI by building
+with it. Parts of the continuity loop already work, including Curator's article
+selection, German's reviewed conversation memory, and Lesen's saved vocabulary
+and corrected writing. Longer-term measurement and fuller coordination are
+still being built. The aim is not to preserve today's components, but to let
+mini-moi adapt without losing the history that makes it a more useful
+collaborator. [ROADMAP.md](ROADMAP.md) records that boundary as it changes.
 
 ---
 
-## Upstream Contributions
+## Design approach
 
-Issues and observations filed during active development — real production gaps, not theoretical:
+A few choices explain most of the architecture.
 
-- **openclaw/openclaw #18160** — Direct exec mode for cron jobs (feature request)
-- **openclaw/openclaw #52314** — Pre-compaction memory flush hook for agents (feature request, emerged from OPS-001)
-- **openclaw/openclaw #19249** — Model failover on billing exhaustion: confirmed tool-layer local models don't automatically become session fallbacks when cloud billing fails (comment with production evidence)
+**Keep learned state outside the model.** Personal context lives in files owned
+by the application rather than inside one model provider. The files are
+structured to match a later database schema, and migration paths have already
+been used in the Guild and research layers. Infrastructure is added when the
+volume or behavior requires it.
 
-All three emerged from building and operating this system.
+**Use different models for different work.** Model control rests on three
+considerations:
+
+- **Cost.** Model costs became significant, then dropped substantially when
+  different tasks were routed to different models, including a local option
+  with no per-call charge.
+- **Quality for the task and evaluation.** Models differ in conversation, translation,
+  analysis, review, and coding, and those differences change over time. The
+  ability to switch models also supports direct A/B evaluation on the same task.
+- **Vendor independence and continuity.** Personal context remains above the
+  model layer, so changing providers does not reset the history or require a
+  redesign of the personalization logic. Provider-managed memory can supplement
+  that record without becoming its only home.
+
+Applying model choice consistently at every call site remains ongoing work; a
+July audit found several places where implementation still lagged the intended
+configuration.
+
+The production history reflects these tradeoffs. The first version ran on a
+local model, and a local model remains the last resort in German's translation
+fallback chain. Curator scoring moved to cloud models after the cost and quality
+tradeoff was measured. The path back to local execution remains part of the
+design and is scheduled for end-to-end verification on the current EC2 setup.
+
+**Use AI agents as contributors, with human direction.** The owner defines the
+intent, decides what enters the system, and remains responsible for the result.
+Different agents contribute design alternatives, implementation, testing, and
+review. The current set includes Claude Code, Claude.ai, OpenClaw, Grok, and
+OpenAI Codex. The particular models will change; the separation of roles is
+more durable. Important changes receive review from more than one agent before
+they are treated as complete.
+
+**Operate while the system is evolving.** Keeping daily use dependable is
+important and not trivial, especially while development continues. Drift can
+appear between domains, between code and documentation, and between assumed
+safeguards and the protection that actually exists during an incident.
+Operations is therefore a continuing process: observe production, test
+assumptions, learn from failures, reconcile code and documentation, and close
+gaps in safeguards as they are found.
 
 ---
 
 ## Screenshots
 
-| Daily Briefing | Signal Priorities |
-|---|---|
-| ![Daily Briefing](docs/screenshots/daily-briefing.png) | ![Signal Priorities](docs/screenshots/priorities.png) |
-
-| AI Observations | Deep Dives | Morning Briefing |
-|---|---|---|
-| ![AI Observations](docs/screenshots/ai-observations.png) | ![Deep Dives](docs/screenshots/deep-dives.png) | ![Morning Briefing](docs/screenshots/morning-briefing.png) |
-
-## Screenshots — German Language Domain (v0.9 beta)
-
-| Landing | Lesen |
-|---|---|
-| ![Landing](docs/screenshots/landing.png) | ![Lesen](docs/screenshots/lesen.png) |
-
-| Schreiben | Üben |
-|---|---|
-| ![Schreiben](docs/screenshots/schreiben.png) | ![Üben](docs/screenshots/ueben.png) |
-
-| Wörter | Archiv |
-|---|---|
-| ![Wörter](docs/screenshots/woerter.png) | ![Archiv](docs/screenshots/archiv.png) |
-
-| Admin | |
-|---|---|
-| ![Admin](docs/screenshots/admin.png) | &nbsp; |
+A screenshot refresh is in progress. The new set will cover the portal, Curator
+briefings and deeper dives, German and Portuguese conversation sessions, Lesen's
+article, translation, writing, and archive states, the Guild workspace, and
+Chief of Staff. Earlier screenshots remain in the repository as part of the
+project's history.
 
 ---
 
-**Status:** v1.1 — Research Intelligence (March 2026) · v0.9 — Language Learning beta (May 2026)
+## More detail
+
+- [journal/](journal/) contains the public build narrative: sprint notes, plans,
+  and records of how the project changed. It is still being populated.
+- [docs/releases/](docs/releases/) contains release notes.
+- [ARCHITECTURE.md](ARCHITECTURE.md), [OPERATIONS.md](OPERATIONS.md), and
+  [ROADMAP.md](ROADMAP.md) are the maintained core documents.
+
+---
+
+**Status:** In daily use since February 2026; running on AWS since June 2026.  
 **Author:** Robert van Stedum
-**Release notes:** [docs/releases/RELEASE_v1.1_2026-03-29.md](docs/releases/RELEASE_v1.1_2026-03-29.md)
