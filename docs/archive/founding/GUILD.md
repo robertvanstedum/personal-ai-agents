@@ -1,5 +1,11 @@
 # mini-moi-agent-guild
 
+> Founding document, preserved as written, 2026-07-21 — the naming and
+> philosophical charter for "Guild." Not to be confused with the operational
+> `docs/GUILD.md` archived in commit `7430f7c`. Current practice:
+> [ARCHITECTURE.md § CoS and Guild: separate roles, active
+> redesign](../../../ARCHITECTURE.md#cos-and-guild-separate-roles-active-redesign).
+
 > *"Not a general intelligence — a specific one. Yours."*
 
 ---

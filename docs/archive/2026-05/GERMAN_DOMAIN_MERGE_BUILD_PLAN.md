@@ -1,4 +1,8 @@
 # Build Plan: Merge feat/german-html-interface → main
+
+> SUPERSEDED 2026-07-21. Current version: [ARCHITECTURE.md](../../../ARCHITECTURE.md).
+> Preserved for history.
+
 *mini-moi · German domain v0.9 Beta*
 *Status: PENDING — do not execute until Robert gives go-ahead*
 *Reviewed: claude.ai · 2026-05-25*

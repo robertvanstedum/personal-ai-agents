@@ -1,5 +1,8 @@
 # Phase 3C — X Adapter / Domain Signals
 
+> SUPERSEDED 2026-07-21. Current version: [ROADMAP.md](../../../ROADMAP.md).
+> Preserved for history.
+
 **Goal:** Learn WHAT content ecosystem your trusted X curators point to (ft.com, nationalreview.com, etc.) and inject that as a scoring signal into the daily curator briefing — scoped by knowledge domain.
 
 ---

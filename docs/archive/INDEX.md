@@ -27,5 +27,43 @@ not on a fixed schedule.
   entry June 11, build tracking has since moved to `guild.design_log` and the
   Guild dashboard.
 
+## 2026-07-21 (repository landing cleanup, Step 1)
+
+Historical root documents, moved to their dated month with a SUPERSEDED banner
+pointing to the current equivalent (mostly ROADMAP.md or ARCHITECTURE.md):
+[BUILD_PLAN_v0.9.md](2026-02/BUILD_PLAN_v0.9.md),
+[COST_COMPARISON.md](2026-02/COST_COMPARISON.md) (stale pricing),
+[TESTING_CHECKLIST.md](2026-02/TESTING_CHECKLIST.md) (written for the
+original "simple version" Deep Dive, since superseded),
+[BUILD_Priority_Feed_v1.md](2026-03/BUILD_Priority_Feed_v1.md),
+[SPEC_Priority_Feed_v1.md](2026-03/SPEC_Priority_Feed_v1.md),
+[PHASE_3C7_SPEC.md](2026-03/PHASE_3C7_SPEC.md),
+[PHASE_3C_PLAN.md](2026-03/PHASE_3C_PLAN.md),
+[SPRINT_1.0.md](2026-03/SPRINT_1.0.md),
+[SPRINT_1_0_v2.md](2026-03/SPRINT_1_0_v2.md),
+[INITIAL_BUILD_PLAN.md](2026-04/INITIAL_BUILD_PLAN.md),
+[GERMAN_DOMAIN_MERGE_BUILD_PLAN.md](2026-05/GERMAN_DOMAIN_MERGE_BUILD_PLAN.md),
+[PORTAL_BUILD_STATE_2026-05-28.md](2026-05/PORTAL_BUILD_STATE_2026-05-28.md).
+
+**Founding documents**, moved to `founding/`, preserved as written rather than
+marked superseded:
+- **[WAYS_OF_WORKING.md](founding/WAYS_OF_WORKING.md)** — established March
+  15, 2026. Current practice: [AGENTS.md](../../AGENTS.md), which links back
+  here as its founding original.
+- **[GUILD.md](founding/GUILD.md)** — the naming/philosophical charter for
+  "Guild," distinct from the operational `docs/GUILD.md` archived above in
+  the July 20 pass. Current practice: [ARCHITECTURE.md § CoS and
+  Guild](../../ARCHITECTURE.md#cos-and-guild-separate-roles-active-redesign).
+
+**[review-packets/2026-03/](review-packets/2026-03/)** — the full March 2026
+review packet (drafts, plans, screenshots, an old README/ARCHITECTURE/CLAUDE
+snapshot from that review round). Privacy-scanned before archiving; preserved
+as history, not merged into current material.
+
+Two dated build notes moved out of the now-retired root `memory/` directory
+into the public journal instead of this archive:
+[journal/2026/05/2026-05-19.md](../../journal/2026/05/2026-05-19.md) and
+[journal/2026/05/2026-05-26.md](../../journal/2026/05/2026-05-26.md).
+
 Everything else in this folder predates this index and hasn't been
 reclassified yet.

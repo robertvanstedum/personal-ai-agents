@@ -1,4 +1,8 @@
 # Mini-moi Personal AI Curator
+
+> SUPERSEDED 2026-07-21. Current version: [ROADMAP.md](../../../ROADMAP.md).
+> Preserved for history.
+
 ## Sprint to 1.0 — March 2026 (v2)
 
 **Target:** Public GitHub launch, production-ready, two weeks
