@@ -21,8 +21,8 @@ Usage:
   python curator_intelligence.py --dry-run --date 2026-03-15  # test specific date
 
 Output:
-  ~/.openclaw/workspace/intelligence_YYYYMMDD.json
-  ~/.openclaw/workspace/intelligence_weekly_YYYYMMDD.json  (Sundays only)
+  <CURATOR_DATA_DIR>/intelligence_YYYYMMDD.json
+  <CURATOR_DATA_DIR>/intelligence_weekly_YYYYMMDD.json  (Sundays only)
 """
 
 import argparse
@@ -39,9 +39,10 @@ from curator_utils import send_telegram_alert, extract_domain
 HISTORY_PATH   = Path(__file__).parent / 'curator_history.json'
 SOURCES_PATH   = Path(__file__).parent / 'curator_sources.json'
 LATEST_PATH    = Path(__file__).parent / 'curator_latest.json'   # written by curator_rss_v2 (WS5 pre-condition)
-PREFS_PATH     = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator"))) / "curator_preferences.json"
-OUTPUT_DIR     = Path.home() / '.openclaw' / 'workspace'
-RESPONSES_PATH = Path.home() / '.openclaw' / 'workspace' / 'intelligence_responses.json'
+DATA_DIR       = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator")))
+PREFS_PATH     = DATA_DIR / "curator_preferences.json"
+OUTPUT_DIR     = DATA_DIR
+RESPONSES_PATH = DATA_DIR / "intelligence_responses.json"
 
 HAIKU_MODEL    = "claude-haiku-4-5"
 SONNET_MODEL   = "claude-sonnet-4-5"   # confirmed from curator_rss_v2.py line 801
@@ -651,7 +652,7 @@ def save_response(data: dict) -> dict:
 
 def save_output(observations: list, today_str: str, telegram_sent: bool,
                 weekly: bool = False) -> Path:
-    """Write intelligence JSON to ~/.openclaw/workspace/.
+    """Write intelligence JSON to the persistent Curator data directory.
     Weekly lateral connections saved as intelligence_weekly_YYYYMMDD.json.
     """
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
