@@ -157,7 +157,10 @@ local Ollama before any cloud model was used and should fall back to local
 operation at zero marginal cost if cloud providers become unavailable. As open
 models and local hardware improve, local inference is expected to handle more of
 the platform's work, including coding. Some call sites remain hard-coded; those
-gaps are documented below.
+gaps are documented below. `tests/test_local_llm.py` exercises this path
+directly against a running local Ollama instance — it's a real, intentional
+part of the test suite (not dead code), and skips cleanly in CI or on any
+machine without Ollama installed rather than failing the build.
 
 **3. Swappable architecture, not merely swappable configuration.** Components
 should be replaceable without breaking the rest of the system. This is a
