@@ -1,4 +1,12 @@
 # Guild — Personal Operating System
+
+> SUPERSEDED 2026-07-21. Describes Guild with Chief of Staff nested inside it
+> and a four-domain nav (`Curator | German | Guild`) — CoS has since split
+> into its own standalone domain and Portuguese has since launched. Current
+> version: [ARCHITECTURE.md § CoS and Guild: separate roles, active
+> redesign](../../../ARCHITECTURE.md#cos-and-guild-separate-roles-active-redesign).
+> Preserved for history.
+
 *mini-moi · personal-ai-agents*
 
 - **Version:** 1.0 — 2026-06-11 07:50 CDT (12:50 UTC)

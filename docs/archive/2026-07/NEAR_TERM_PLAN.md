@@ -1,4 +1,8 @@
 # Near-Term Plan — mini-moi
+
+> SUPERSEDED 2026-07-21. Current version: [ROADMAP.md](../../ROADMAP.md).
+> Preserved for history.
+
 *As of: 2026-06-24*
 *Update as blocks complete or priorities shift*
 

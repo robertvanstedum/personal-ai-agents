@@ -1,4 +1,8 @@
 # mini-moi Roadmap
+
+> SUPERSEDED 2026-07-21. Current version: [ROADMAP.md](../../ROADMAP.md).
+> Preserved for history.
+
 *Living document — versioned in GitHub*
 *As of: June 2026*
 *Next review: August 2026 or at major milestone*

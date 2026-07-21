@@ -1,4 +1,11 @@
 # GUILD — Autonomous Agents Design
+
+> Founding design document, preserved as written, 2026-07-21. Build window
+> (2026-06-08 to 2026-06-13) completed; the agents it designed have since been
+> built and Guild's structure has evolved (CoS split into its own domain).
+> Current practice: [ARCHITECTURE.md § CoS and Guild: separate roles, active
+> redesign](../../../ARCHITECTURE.md#cos-and-guild-separate-roles-active-redesign).
+
 *mini-moi · personal-ai-agents*
 
 - **Version:** FINAL v1 — 2026-06-08

@@ -1,4 +1,9 @@
 # Guild Build Log
+
+> SUPERSEDED 2026-07-21. Last entry 2026-06-11 — over a month stale despite
+> being described as a living document; build tracking has since moved
+> elsewhere. Preserved for history.
+
 *mini-moi · personal-ai-agents*
 
 Living document. One entry per significant build session.

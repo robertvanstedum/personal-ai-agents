@@ -1,4 +1,8 @@
 # Mini-moi — Internal Vision
+
+> SUPERSEDED 2026-07-21. Current direction: [ROADMAP.md](../../../ROADMAP.md).
+> Preserved for history; content predates current thinking.
+
 *Private — not for README or public docs*
 *Created: March 22, 2026*
 

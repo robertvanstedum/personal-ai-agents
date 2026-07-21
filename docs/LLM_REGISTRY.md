@@ -1,5 +1,9 @@
 # How mini-moi uses AI — LLM registry and change log
 
+> STALE 2026-07-21. Current summary: [ARCHITECTURE.md § AI Usage Across the
+> Platform](../ARCHITECTURE.md#ai-usage-across-the-platform). A full
+> correction of this registry remains a tracked roadmap item, not done here.
+
 **Author:** Robert van Stedum  
 **Updated:** 2026-06-07  
 **Repo:** github.com/robertvanstedum/personal-ai-agents

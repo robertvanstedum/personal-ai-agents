@@ -23,9 +23,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 # Files to scan for _working/ references
+# GUILD.md and GUILD_BUILD_LOG.md moved to docs/archive/2026-07/ on 2026-07-21
+# (superseded by ARCHITECTURE.md's Guild section) — pointing here so this
+# check still runs against the same content rather than silently skipping it.
 SCAN_DOCS = [
-    "docs/GUILD.md",
-    "docs/GUILD_BUILD_LOG.md",
+    "docs/archive/2026-07/GUILD.md",
+    "docs/archive/2026-07/GUILD_BUILD_LOG.md",
 ]
 
 # Also scan any plan_*.md or handoff_*.md already in _working/
