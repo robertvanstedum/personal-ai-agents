@@ -430,7 +430,10 @@
       btnLaden.textContent = 'Laden…';
       btnLaden.disabled = true;
       try {
-        await postJSON('/api/lesen-refresh', {});
+        const result = await postJSON('/api/lesen-refresh', {});
+        if (!result.ok) {
+          throw new Error(result.status || result.error || 'refresh failed');
+        }
         if (currentCategory) selectCategory(currentCategory);
         else { btnLaden.textContent = 'Artikel laden ↻'; btnLaden.disabled = false; }
       } catch {

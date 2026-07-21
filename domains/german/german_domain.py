@@ -10,13 +10,17 @@ Group C: resolver functions — sync, with optional progress_cb for mid-executio
 """
 
 import fcntl
+import hashlib
 import html
 import os
 import re
 import tempfile
 import random
 import time
+from contextlib import contextmanager
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from zoneinfo import ZoneInfo
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 
@@ -717,6 +721,39 @@ _LESEN_FEEDBACK_FILE = GERMAN_DIR / "config" / "lesen_feedback.json"
 _LESEN_SOURCES_FILE  = GERMAN_DIR / "config" / "lesen_sources.json"
 _LESEN_FILTERS_FILE  = GERMAN_DIR / "config" / "lesen_filters.json"
 _LESEN_ARCHIV_FILE   = GERMAN_DIR / "config" / "lesen_archiv.json"
+_LESEN_MUTATION_LOCK_FILE = GERMAN_DIR / "config" / ".lesen_articles.lock"
+_LESEN_REFRESH_LOCK_FILE = GERMAN_DIR / "config" / ".lesen_refresh.lock"
+_LESEN_TIMEZONE = ZoneInfo("America/Chicago")
+
+
+class LesenRefreshError(RuntimeError):
+    """Raised when a Lesen refresh cannot safely produce a valid result."""
+
+
+class LesenLockTimeout(LesenRefreshError):
+    """Raised when another Lesen mutation or refresh holds the required lock."""
+
+
+@contextmanager
+def _lesen_lock(path: Path, timeout: float = 10.0):
+    """Acquire an inter-process exclusive lock with a bounded wait."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + timeout
+    with path.open("a+", encoding="utf-8") as handle:
+        while True:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError as exc:
+                if time.monotonic() >= deadline:
+                    raise LesenLockTimeout(
+                        f"timed out acquiring Lesen lock: {path}"
+                    ) from exc
+                time.sleep(0.01)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
 
 # Sources are config-driven — edit lesen_sources.json to add/remove/disable.
 # All sources must be non-paywalled. Verify on addition. Remove immediately if paywall detected.
@@ -777,8 +814,114 @@ def _load_lesen_articles() -> dict:
     return {"articles": [], "last_fetched": None}
 
 
+def _validate_lesen_document(data: dict) -> None:
+    if not isinstance(data, dict) or not isinstance(data.get("articles"), list):
+        raise LesenRefreshError("Lesen article document has an invalid shape")
+    if not all(isinstance(article, dict) for article in data["articles"]):
+        raise LesenRefreshError("Lesen article list contains a non-object entry")
+    for article in data["articles"]:
+        if not isinstance(article.get("id"), str) or not article["id"]:
+            raise LesenRefreshError("Lesen article is missing an ID")
+        if not isinstance(article.get("url"), str) or not article["url"]:
+            raise LesenRefreshError("Lesen article is missing a URL")
+
+
+def _load_lesen_articles_strict() -> dict:
+    try:
+        data = json.loads(_LESEN_ARTICLES_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise LesenRefreshError("Lesen article document is unreadable or invalid") from exc
+    _validate_lesen_document(data)
+    return data
+
+
+def _atomic_write_lesen_articles(data: dict) -> None:
+    """Validate and atomically replace the complete Lesen article document."""
+    _validate_lesen_document(data)
+    payload = json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8") + b"\n"
+    # Validate the exact serialized payload before it can replace live state.
+    _validate_lesen_document(json.loads(payload))
+    _LESEN_ARTICLES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    mode = (
+        _LESEN_ARTICLES_FILE.stat().st_mode & 0o777
+        if _LESEN_ARTICLES_FILE.exists()
+        else 0o600
+    )
+    fd, tmp_name = tempfile.mkstemp(
+        dir=_LESEN_ARTICLES_FILE.parent,
+        prefix=".lesen_articles-",
+        suffix=".tmp",
+    )
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(tmp_path, mode)
+        os.replace(tmp_path, _LESEN_ARTICLES_FILE)
+        try:
+            directory_fd = os.open(_LESEN_ARTICLES_FILE.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+        except OSError:
+            pass
+    except Exception:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+        raise
+
+
 def _save_lesen_articles(data: dict) -> None:
-    _LESEN_ARTICLES_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    """Compatibility wrapper for a coordinated atomic article-store mutation."""
+    with _lesen_lock(_LESEN_MUTATION_LOCK_FILE):
+        _atomic_write_lesen_articles(data)
+
+
+def _normalize_lesen_url(url: str) -> str:
+    """Return a stable canonical URL for deduplication and forward-only IDs."""
+    try:
+        parts = urlsplit((url or "").strip())
+        scheme = parts.scheme.lower()
+        hostname = (parts.hostname or "").lower()
+        port = parts.port
+    except ValueError:
+        return ""
+    if not scheme or not hostname:
+        return ""
+    default_port = (scheme == "http" and port == 80) or (
+        scheme == "https" and port == 443
+    )
+    netloc = hostname if port is None or default_port else f"{hostname}:{port}"
+    path = re.sub(r"/{2,}", "/", parts.path or "")
+    if path == "/":
+        path = ""
+    elif path.endswith("/"):
+        path = path[:-1]
+    query = urlencode(
+        sorted(
+            (key, value)
+            for key, value in parse_qsl(parts.query, keep_blank_values=True)
+            if not key.lower().startswith("utm_")
+            and key.lower() not in {"fbclid", "gclid"}
+        ),
+        doseq=True,
+    )
+    return urlunsplit((scheme, netloc, path, query, ""))
+
+
+def _lesen_article_id(normalized_url: str, date_fetched: str | None = None) -> str:
+    """Return a stable ID derived only from the canonical URL.
+
+    ``date_fetched`` remains an accepted argument for compatibility with the
+    old call shape, but it deliberately does not affect identity.
+    """
+    digest = hashlib.sha256(normalized_url.encode("utf-8")).hexdigest()[:24]
+    return f"art_url_{digest}"
 
 
 def _strip_html(raw: str) -> str:
@@ -867,43 +1010,100 @@ def categorize_article(title: str, summary: str,
     return category
 
 
-def fetch_lesen_articles() -> list:
-    """Fetch all RSS sources, deduplicate against existing pool. Returns new article dicts."""
-    data = _load_lesen_articles()
-    existing_urls = {a["url"] for a in data["articles"]}
+def fetch_lesen_articles_report(
+    snapshot: dict | None = None,
+    *,
+    now: datetime.datetime | None = None,
+) -> dict:
+    """Fetch candidates and classify every source without mutating the pool."""
+    data = snapshot if snapshot is not None else _load_lesen_articles_strict()
+    _validate_lesen_document(data)
+    existing_urls = {
+        normalized
+        for article in data["articles"]
+        if (normalized := _normalize_lesen_url(article.get("url", "")))
+    }
     blocked = _load_lesen_blocked_keywords()
-    new_articles = []
-    today = datetime.date.today().isoformat()
+    candidates = []
+    current = now or datetime.datetime.now(_LESEN_TIMEZONE)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=_LESEN_TIMEZONE)
+    current = current.astimezone(_LESEN_TIMEZONE)
+    today = current.date().isoformat()
     all_sources = _load_rss_sources()
     source_category_map = {s["name"]: s.get("category", "wien") for s in all_sources}
+    statuses = []
+    seen_urls = set(existing_urls)
 
     for source in all_sources:
         try:
             feed = feedparser.parse(source["url"])
-            for i, entry in enumerate(feed.entries[:6]):
-                url = entry.get("link", "")
-                if not url or url in existing_urls:
+            entries = list(getattr(feed, "entries", []) or [])
+            is_bozo = bool(getattr(feed, "bozo", False))
+            http_status = getattr(feed, "status", None)
+            if isinstance(http_status, int) and http_status >= 400:
+                source_status = {
+                    "name": source["name"],
+                    "status": "failed",
+                    "entry_count": len(entries),
+                    "error_category": f"http_{http_status}",
+                }
+                entries = []
+            elif is_bozo and not entries:
+                error = getattr(feed, "bozo_exception", None)
+                source_status = {
+                    "name": source["name"],
+                    "status": "failed",
+                    "entry_count": len(entries),
+                    "error_category": type(error).__name__ if error else "feed_error",
+                }
+            elif entries:
+                error = getattr(feed, "bozo_exception", None) if is_bozo else None
+                source_status = {
+                    "name": source["name"],
+                    "status": "successful",
+                    "entry_count": len(entries),
+                    "error_category": type(error).__name__ if error else None,
+                }
+            else:
+                source_status = {
+                    "name": source["name"],
+                    "status": "healthy_empty",
+                    "entry_count": 0,
+                    "error_category": None,
+                }
+            for entry in entries[:6]:
+                original_url = entry.get("link", "")
+                normalized_url = _normalize_lesen_url(original_url)
+                if not normalized_url or normalized_url in seen_urls:
                     continue
                 title_lower = entry.get("title", "").lower()
                 if any(kw in title_lower for kw in blocked):
                     continue
                 raw_summary = ""
                 if entry.get("content"):
-                    raw_summary = entry.content[0].value
+                    first = entry.get("content")[0]
+                    raw_summary = (
+                        first.get("value", "")
+                        if isinstance(first, dict)
+                        else getattr(first, "value", "")
+                    )
                 elif entry.get("summary"):
-                    raw_summary = entry.summary
+                    raw_summary = entry.get("summary", "")
                 summary = _strip_html(raw_summary)[:800]
                 if not summary:
                     summary = _strip_html(entry.get("title", ""))
-                art_id = f"art_{today.replace('-','')}_{source['name'][:3].lower()}_{i:02d}"
                 title_clean = html.unescape(entry.get("title", "").strip())
                 source_cat  = source_category_map.get(source["name"], "wien")
                 category    = categorize_article(title_clean, summary,
                                                  source_category=source_cat)
-                new_articles.append({
-                    "id": art_id,
+                candidates.append({
+                    "id": _lesen_article_id(normalized_url, today),
                     "title": title_clean,
-                    "url": url,
+                    # Preserve the publisher's exact link for the reader. The
+                    # normalized form is internal to deduplication and IDs.
+                    "url": original_url.strip(),
+                    "_normalized_url": normalized_url,
                     "source": source["name"],
                     "category": category,
                     "date_fetched": today,
@@ -911,39 +1111,137 @@ def fetch_lesen_articles() -> list:
                     "status": "active",
                     "feedback": None,
                 })
-                existing_urls.add(url)
+                seen_urls.add(normalized_url)
+            statuses.append(source_status)
         except Exception as e:
-            print(f"⚠️  Lesen RSS fetch failed for {source['name']}: {e}")
+            statuses.append({
+                "name": source.get("name", "unknown"),
+                "status": "failed",
+                "entry_count": 0,
+                "error_category": type(e).__name__,
+            })
 
-    return new_articles
+    counts = {
+        "configured": len(all_sources),
+        "attempted": len(statuses),
+        "successful": sum(item["status"] == "successful" for item in statuses),
+        "healthy_empty": sum(item["status"] == "healthy_empty" for item in statuses),
+        "failed": sum(item["status"] == "failed" for item in statuses),
+    }
+    return {
+        "attempted_at": current.isoformat(),
+        "source_counts": counts,
+        "sources": statuses,
+        "candidate_count": len(candidates),
+        "candidates": candidates,
+    }
 
 
-def refresh_lesen_feed() -> dict:
-    """Fetch new articles, append to pool, save. Returns summary."""
-    data = _load_lesen_articles()
-    new_articles = fetch_lesen_articles()
-    data["articles"].extend(new_articles)
-    data["last_fetched"] = datetime.datetime.now().isoformat()
-    _save_lesen_articles(data)
-    pool_size = len(get_lesen_pool())
-    return {"added": len(new_articles), "pool_size": pool_size}
+def fetch_lesen_articles() -> list:
+    """Compatibility API: fetch candidates without mutating the article file."""
+    return [
+        {key: value for key, value in article.items() if key != "_normalized_url"}
+        for article in fetch_lesen_articles_report()["candidates"]
+    ]
+
+
+def _merge_lesen_candidates(data: dict, candidates: list[dict]) -> int:
+    existing_urls = {
+        normalized
+        for article in data["articles"]
+        if (normalized := _normalize_lesen_url(article.get("url", "")))
+    }
+    ids_to_urls: dict[str, str] = {}
+    for article in data["articles"]:
+        article_id = article.get("id")
+        normalized = _normalize_lesen_url(article.get("url", ""))
+        if article_id and normalized:
+            ids_to_urls.setdefault(article_id, normalized)
+    added = 0
+    for candidate in candidates:
+        normalized = candidate.get("_normalized_url") or _normalize_lesen_url(
+            candidate.get("url", "")
+        )
+        if not normalized or normalized in existing_urls:
+            continue
+        article_id = candidate["id"]
+        prior_url = ids_to_urls.get(article_id)
+        if prior_url is not None and prior_url != normalized:
+            raise LesenRefreshError(
+                f"new Lesen article ID collision for {article_id}"
+            )
+        candidate = dict(candidate)
+        candidate.pop("_normalized_url", None)
+        data["articles"].append(candidate)
+        existing_urls.add(normalized)
+        ids_to_urls[article_id] = normalized
+        added += 1
+    return added
+
+
+def refresh_lesen_feed(*, now: datetime.datetime | None = None) -> dict:
+    """Run one coordinated refresh with explicit source-health semantics."""
+    current = now or datetime.datetime.now(_LESEN_TIMEZONE)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=_LESEN_TIMEZONE)
+    current = current.astimezone(_LESEN_TIMEZONE)
+    with _lesen_lock(_LESEN_REFRESH_LOCK_FILE, timeout=1.0):
+        snapshot = _load_lesen_articles_strict()
+        report = fetch_lesen_articles_report(snapshot, now=current)
+        counts = report["source_counts"]
+        if counts["configured"] == 0 or counts["failed"] == counts["configured"]:
+            return {
+                "ok": False,
+                "status": "total_failure",
+                "retry": True,
+                "added": 0,
+                "pool_size": len(snapshot["articles"]),
+                "attempted_at": report["attempted_at"],
+                "source_counts": counts,
+                "sources": report["sources"],
+            }
+
+        with _lesen_lock(_LESEN_MUTATION_LOCK_FILE, timeout=10.0):
+            live = _load_lesen_articles_strict()
+            added = _merge_lesen_candidates(live, report["candidates"])
+            live["last_attempted"] = report["attempted_at"]
+            live["last_source_status"] = {
+                "counts": counts,
+                "sources": report["sources"],
+            }
+            complete = counts["failed"] == 0
+            if complete:
+                live["last_fetched"] = report["attempted_at"]
+            _atomic_write_lesen_articles(live)
+
+        return {
+            "ok": complete,
+            "status": "success" if complete else "partial_failure",
+            "retry": not complete,
+            "added": added,
+            "pool_size": len(live["articles"]),
+            "attempted_at": report["attempted_at"],
+            "source_counts": counts,
+            "sources": report["sources"],
+        }
 
 
 def lesen_action(article_id: str, action: str) -> None:
     """Record article action: pos/neg/pin/unpin. Updates pool and feedback log."""
-    data = _load_lesen_articles()
     status_map = {"pos": "dismissed_pos", "neg": "dismissed_neg", "pin": "archived", "unpin": "active"}
     archived_article = None
-    for article in data["articles"]:
-        if article["id"] == article_id:
-            new_status = status_map.get(action)
-            if new_status:
-                article["status"] = new_status
-                article["feedback"] = action
-            if action == "pin":
-                archived_article = article
-            break
-    _save_lesen_articles(data)
+    with _lesen_lock(_LESEN_MUTATION_LOCK_FILE, timeout=10.0):
+        data = _load_lesen_articles_strict()
+        for article in data["articles"]:
+            if article["id"] == article_id:
+                new_status = status_map.get(action)
+                if new_status:
+                    article["status"] = new_status
+                    article["feedback"] = action
+                if action == "pin":
+                    archived_article = dict(article)
+                break
+        _atomic_write_lesen_articles(data)
 
     if action == "pin" and archived_article:
         archiv_data = {"archived": []}

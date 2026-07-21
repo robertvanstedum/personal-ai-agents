@@ -23,6 +23,7 @@ from german_domain import (
     get_lesen_pool,
     refresh_lesen_feed,
     lesen_action,
+    LesenRefreshError,
     translate_phrase,
     save_lesen_phrase,
     get_tagebuch_prompts,
@@ -266,8 +267,18 @@ def api_lesen_category():
 
 @app.route("/api/lesen-refresh", methods=["POST"])
 def api_lesen_refresh():
-    result = refresh_lesen_feed()
-    return jsonify(result)
+    caller_tier = request.headers.get("X-Minimoi-User-Tier")
+    if caller_tier and caller_tier != "owner":
+        return jsonify({"ok": False, "error": "owner refresh required"}), 403
+    try:
+        result = refresh_lesen_feed()
+    except LesenRefreshError as exc:
+        return jsonify({
+            "ok": False,
+            "status": "refresh_error",
+            "error": str(exc),
+        }), 503
+    return jsonify(result), (200 if result.get("ok") else 503)
 
 
 @app.route("/api/lesen-action", methods=["POST"])
