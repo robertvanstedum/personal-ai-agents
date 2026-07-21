@@ -1,9 +1,9 @@
 # Ways of working — personal-ai-agents
 
-Live document. Founding original:
-[WAYS_OF_WORKING.md](docs/archive/founding/WAYS_OF_WORKING.md) — this file is
-the current, maintained practice; the founding document records where it came
-from and why.
+Live document. Founding original: [WAYS_OF_WORKING.md](WAYS_OF_WORKING.md) —
+this file is the current, maintained practice; the founding document records
+where it came from and why. Kept at root, not archived, since it's still
+referenced as the origin of current practice.
 
 Read `_NewDomains/PROJECT_STATE.md` first before starting any work.
 

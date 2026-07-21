@@ -46,10 +46,10 @@ original "simple version" Deep Dive, since superseded),
 [PORTAL_BUILD_STATE_2026-05-28.md](2026-05/PORTAL_BUILD_STATE_2026-05-28.md).
 
 **Founding documents**, moved to `founding/`, preserved as written rather than
-marked superseded:
-- **[WAYS_OF_WORKING.md](founding/WAYS_OF_WORKING.md)** — established March
-  15, 2026. Current practice: [AGENTS.md](../../AGENTS.md), which links back
-  here as its founding original.
+marked superseded. `WAYS_OF_WORKING.md` was considered for this move but
+stayed at root instead — Robert wants it to remain a current, findable
+document (either standalone or folded into `AGENTS.md`), not archived-only.
+
 - **[GUILD.md](founding/GUILD.md)** — the naming/philosophical charter for
   "Guild," distinct from the operational `docs/GUILD.md` archived above in
   the July 20 pass. Current practice: [ARCHITECTURE.md § CoS and

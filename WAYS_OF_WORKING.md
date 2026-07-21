@@ -1,7 +1,8 @@
 # Ways of Working — Principles & Conventions
 
-> Founding document, preserved as written, 2026-07-21. Current practice:
-> [AGENTS.md](../../../AGENTS.md).
+> Founding document, established March 15, 2026. [AGENTS.md](AGENTS.md) is the
+> live, maintained version of these practices — this file stays at root as the
+> original record, not archived.
 
 **Mini-moi Personal AI Curator**
 **Established:** March 15, 2026
