@@ -1,16 +1,17 @@
 # mini-moi
 
-mini-moi is a personal AI system that carries context across reading, research,
-language learning, engineering work, and cross-domain coordination. It is built
-for daily use first; the repository also records the architecture, operation,
-and evolution of the system.
+mini-moi is a personal AI system I built for my own daily use. It keeps context
+across reading, research, language learning, and the work of running and
+improving the system itself.
 
-The name reflects its purpose: mini-moi becomes more useful by retaining the
-user's goals, working patterns, learning history, and prior activity. It has
-been in daily use since February 2026 and has run on AWS since June 2026. This
-README provides an overview of the current system. The architecture, operations,
-and roadmap documents carry the detail and distinguish what is running from
-what is still being developed.
+The goal is simple: the more I use it, the more useful it becomes. It remembers
+my interests, what I have already investigated, how my thinking develops, and
+what I decide to follow up on. That record grows over time instead of resetting
+with each new conversation.
+
+mini-moi has been in daily use since February 2026 and running on AWS since June
+2026. This repository documents the system as it works today, including its
+architecture, operations, roadmap, and continuing development.
 
 ---
 
@@ -20,9 +21,9 @@ what is still being developed.
 |---|---|
 | **Curator** | Supports daily reading and longer research in geopolitics and finance. Each morning it reduces roughly 700 candidates from international RSS feeds, X bookmarks, and theme-driven web search to 20 items on the web and 10 in Telegram. Reactions, saved items, comments, and investigations provide context for later selection. A separate serendipity pool helps prevent the learned profile from becoming a closed loop. Curator can also produce article scans, research threads, deeper-dive briefs, AI observations, and a weekly synthesis. |
 | **Mein Deutsch** | Combines simulated German immersion with interest-led reading and writing. Gespräche provides unscripted voice conversations with AI personas and user-chosen scenes. Lesen presents current German-language articles across everyday life, culture, news, and Vienna; each selection includes a short source excerpt and a link to the full original. Words and phrases can be translated and saved with context. Article-related notes can be typed or dictated, corrected and explained by AI, then retained with their original and corrected forms. Vocabulary, writing records, conversation reviews, and the archive provide material for repeated use across the different forms of practice. |
-| **Meu Português** | Followed German as a family-use version for a mixed English-Portuguese household. Both parents use both languages, but each has a different stronger language; the children have different levels of fluency, exposure, and formal practice. It was built quickly on the German base and introduced a more polished front end, multi-user separation, and per-user data boundaries. The backend is still converging with German, especially in adaptive memory. |
-| **Guild** | Holds the platform's build queue, specifications, and operations view. Its Build, Operate, and Improve sections remain in use while the domain is refocused after Chief of Staff moved out. A queued change will repurpose the former embedded Chief of Staff role as **Master Craftsman**, focused on build quality, code review, domain standards, and consistency between specifications and implementation. |
-| **Chief of Staff** | Became a standalone domain in July 2026. It provides chat with a defined voice, its own working memory and agenda, scheduled watch loops, and health checks. It remains in use while its remaining dependencies on Guild are removed and its access across the other domains is expanded. The separation gives both Chief of Staff and Guild clearer boundaries for further development. |
+| **Meu Português** | Followed German as an intentional copy-and-adapt extension for a mixed English-Portuguese household. Both parents use both languages, but each has a different stronger language; the children have different levels of fluency, exposure, and formal practice. The family shares a desire to maintain and develop those abilities over time. The first release deliberately emphasized a polished frontend, multi-user separation, and per-user data boundaries so real users could evaluate it quickly. The backend is now converging with German, especially in adaptive memory. |
+| **Guild** | Gives me one place to follow ongoing planning, development, and operations across the platform. That visibility becomes more important as multiple coding agents contribute build work. Its Build, Operate, and Improve sections remain in use while the domain is refocused after Chief of Staff moved out. The planned **Master Craftsman** will coordinate build quality, code review, domain standards, and consistency between specifications and implementation inside Guild, without mixing that role with Chief of Staff. |
+| **Chief of Staff** | Released as v0.9 after becoming a standalone domain in July 2026. It provides chat with a defined voice, its own working memory and agenda, scheduled watch loops, and health checks. It remains in use while its remaining dependencies on Guild are removed and its access across the other domains is expanded. The separation gives both Chief of Staff and Guild clearer boundaries for further development. |
 
 Production runs on AWS EC2, with a Mac development standby. The deployment
 consists of eight containers plus host-level nginx and cron. CI/CD normally
@@ -35,40 +36,36 @@ The maintained reference documents are:
 - [OPERATIONS.md](OPERATIONS.md) - how the production system runs
 - [ROADMAP.md](ROADMAP.md) - current plans and the record of what shipped
 
+The [product tour](#product-tour) shows the current production interface across
+all five domains and follows one Curator topic from the daily briefing into
+long-form research.
+
 ---
 
-## Two learning loops
+## Two product loops
 
-Curator and the language domains show the use of retained context most clearly.
-Curator uses reading behavior to improve later selection and research. The
-language domains connect conversation, reading, writing, correction, and review
-so that each form of practice can support the next.
+Curator and the language domains are the clearest expressions of the product.
+One turns daily reading into a continuing research practice. The other turns an
+unscripted conversation into material for the next session.
 
 ```mermaid
 flowchart TB
-    U([user])
+    U([you])
 
-    subgraph C["CURATOR"]
-        C1[personalized daily briefing] --> C2[read, react, save, or investigate]
-        C2 --> C3{{AI analyzes the article and learns from feedback}}
-        C3 --> C4[later selection and deeper research]
-    end
+    U --> C1[CURATOR<br/>daily reading]
+    C1 --> C2{{feedback and research<br/>interpreted by AI}}
+    C2 --> C3[better selection<br/>and deeper inquiry]
 
-    subgraph L["LANGUAGE PRACTICE"]
-        L1[choose a persona and scene or a real-interest article] --> L2[converse, read, and write in context]
-        L2 --> L3{{AI translates, corrects, reviews, and identifies a next focus}}
-        L3 --> L4[saved vocabulary, writing, and session history support later practice]
-    end
-
-    U --> C1
-    U --> L1
+    U --> L1[LANGUAGE<br/>free-form conversation]
+    L1 --> L2{{review and memory<br/>interpreted by AI}}
+    L2 --> L3[next session builds<br/>on what happened]
 
     classDef curator fill:#E7F4F1,stroke:#25776F,color:#173A36,stroke-width:1.5px
     classDef language fill:#F2ECFA,stroke:#7655A6,color:#30223F,stroke-width:1.5px
-    class C1,C2,C3,C4 curator
-    class L1,L2,L3,L4 language
-    style C fill:#F5FBFA,stroke:#25776F,stroke-width:1.5px,color:#173A36
-    style L fill:#FAF7FD,stroke:#7655A6,stroke-width:1.5px,color:#30223F
+    classDef ai fill:#FFF3D6,stroke:#A56B16,color:#4C3312,stroke-width:1.5px
+    class C1,C3 curator
+    class L1,L3 language
+    class C2,L2 ai
 ```
 
 The colors separate the two domains; the double-braced nodes mark the places
@@ -79,23 +76,67 @@ where a model interprets activity rather than simply storing or displaying it.
 A selected article can remain a quick read, contribute feedback to later
 selection, or become the starting point for a longer investigation.
 
+**Reading and feedback**
+
 ```mermaid
-flowchart TD
-    A["daily briefing: 20 articles"] --> B[choose an article]
-    B --> C[read on the original site]
-    B --> R[like, dislike, save, or comment]
-    R -. informs later scoring .-> A
-    B --> S{{"AI scan: argument, implications, counterpoint, data, and bibliography"}}
-    S --> D[optional deeper dive on this article]
-    S --> T[start a research thread from the bibliography and questions]
-    T --> TS[continue across a wider set of sources]
-    TS --> DD{{multi-session synthesis and challenge}}
-    B --> LN[record a question, leaning, or held position]
+flowchart TB
+    subgraph TOP[" "]
+        direction LR
+        A["daily briefing<br/>20 articles"] --> B[choose an article]
+        B --> C[read on the<br/>original site]
+    end
+
+    subgraph BOTTOM[" "]
+        direction RL
+        R[like, dislike,<br/>save, or comment] --> P{{AI updates the<br/>preference profile}}
+        P --> F[(updated profile)]
+    end
+
+    B --> R
+    F --> A
 
     classDef curator fill:#E7F4F1,stroke:#25776F,color:#173A36,stroke-width:1.5px
     classDef ai fill:#F2ECFA,stroke:#7655A6,color:#30223F,stroke-width:1.5px
-    class A,B,C,R,D,T,TS,LN curator
+    class A,B,C,R,F curator
+    class P ai
+    style TOP fill:transparent,stroke:transparent
+    style BOTTOM fill:transparent,stroke:transparent
+```
+
+**Research**
+
+```mermaid
+flowchart TB
+    subgraph TOP[" "]
+        direction LR
+        A[selected article] --> S{{AI scan:<br/>argument · implications<br/>counterpoint · data · sources}}
+        S --> N[choose the<br/>next depth]
+    end
+
+    subgraph PATHS[" "]
+        direction LR
+        O[optional deeper dive<br/>on this article]
+        T[research thread<br/>sources + questions] --> R[comment · react<br/>redirect]
+        R --> W[continue across<br/>wider sources]
+    end
+
+    subgraph RECORD[" "]
+        direction RL
+        DD{{multi-session synthesis<br/>and challenge}} --> L[thinking record<br/>question · leaning · hold]
+        L --> E[evidence<br/>support · complicate · neutral]
+    end
+
+    N --> O
+    N --> T
+    W --> DD
+
+    classDef curator fill:#E7F4F1,stroke:#25776F,color:#173A36,stroke-width:1.5px
+    classDef ai fill:#F2ECFA,stroke:#7655A6,color:#30223F,stroke-width:1.5px
+    class A,N,O,T,R,W,L,E curator
     class S,DD ai
+    style TOP fill:transparent,stroke:transparent
+    style PATHS fill:transparent,stroke:transparent
+    style RECORD fill:transparent,stroke:transparent
 ```
 
 Feedback operates at two timescales. Immediate actions - likes, dislikes, saves,
@@ -106,37 +147,52 @@ and architecture describe its current limits.
 
 ### Language practice: conversation and return
 
+For my German, the domain addresses three practical gaps. First, I need more
+chances to speak, including the experience of getting stuck and recovering in a
+real exchange. Second, I want to read engaging, current material without the
+effort becoming burdensome; contextual hints, translation, audio, and shorter
+excerpts help me keep moving. Third, I want reasons to write about something I
+actually find interesting, with correction and explanation for the mistakes I
+make. Gespräche, Lesen, and Schreiben are complementary responses to those
+needs rather than separate exercises.
+
 The persona opens the exchange. The conversation is free-form, and difficulty
 inside the conversation becomes evidence for later practice rather than a
 reason to replace it with a scripted lesson.
 
 ```mermaid
-flowchart TD
-    A[choose or create a persona] --> B[choose a scene]
-    B --> M[choose Grok, OpenAI, or Claude]
-    M --> C[persona initiates the scene]
-    C --> D[converse, struggle, recover, and continue]
-    D --> E[save the transcript]
-    E --> F{{"AI tutor review: corrections, strengths, vocabulary, and next focus"}}
-    F --> G[(saved session and progress history)]
-    G --> H[start another session, scene, or persona]
+flowchart TB
+    subgraph TOP[" "]
+        direction LR
+        A[persona +<br/>real-world scene] --> B[choose a<br/>voice model]
+        B --> C[run in mini-moi<br/>or export prompt]
+        C --> D[free-form<br/>conversation]
+    end
+
+    subgraph BOTTOM[" "]
+        direction RL
+        E[save transcript] --> F{{"AI tutor review:<br/>corrections · strengths<br/>vocabulary · next focus"}}
+        F --> G[(saved progress<br/>and session history)]
+        G --> H[next session]
+    end
+
+    D --> E
     H --> A
 
     classDef language fill:#F2ECFA,stroke:#7655A6,color:#30223F,stroke-width:1.5px
     classDef ai fill:#FFF3D6,stroke:#A56B16,color:#4C3312,stroke-width:1.5px
-    class A,B,M,C,D,E,G,H language
+    class A,B,C,D,E,G,H language
     class F ai
+    style TOP fill:transparent,stroke:transparent
+    style BOTTOM fill:transparent,stroke:transparent
 ```
 
 German came first and remains more developed in the backend, including the use
 of reviewed conversation context in later persona prompts. Portuguese followed
-for family use in a mixed English-Portuguese household. Both parents use both
-languages, but each has a different stronger language; the children have different
-levels of fluency, exposure, and formal practice. That variation creates useful
-design pressure: one system must support different starting points without
-splitting into separate products. Portuguese was built quickly on the German
-base and, in turn, introduced more front-end polish, multi-user separation, and
-per-user data boundaries.
+as an intentional copy-and-adapt extension for family use in a mixed
+English-Portuguese household. It moved quickly and deliberately focused first on
+the frontend, multi-user separation, and per-user data boundaries so it could
+enter real family use and extend the language pattern beyond German.
 
 The two domains are intended to converge into the same solution from interface
 through stored data and adaptive memory. A third language, new to the whole
@@ -148,40 +204,37 @@ the solution should not.
 Lesen uses current German-language articles from subjects with an existing
 reason to read: **Alltag** (everyday life), **Kultur** (culture),
 **Nachrichten** (news), and **Wien** (Vienna and local life). A selected article
-opens with a short excerpt drawn from the beginning of the source. The full article remains
-available on its original site.
+opens with a short excerpt drawn from the beginning of the source. The full
+article remains available on its original site.
 
 ```mermaid
-flowchart TD
-    A[choose Alltag, Kultur, Nachrichten, or Wien] --> B[choose a current article]
-    B --> C[read or listen to a short source excerpt]
-    C --> O[open the full article on the original site]
+flowchart TB
+    subgraph TOP[" "]
+        direction LR
+        A[choose a topic] --> B[choose a current article]
+        B --> C[read or listen<br/>full article remains linked]
+    end
 
-    C --> V[highlight a word or phrase]
-    V --> VT{{translate in context}}
-    VT --> W[save with source sentence and article provenance]
-    W --> WL[(Wörter library)]
+    subgraph PRACTICE[" "]
+        direction LR
+        V["vocabulary<br/>highlight · translate · save"] --> P[reuse in later practice<br/>and conversation]
+        N["writing<br/>respond · correct · review · save"] --> P
+    end
 
-    C --> N[write or dictate a response to the article]
-    N --> NC{{correct or translate in article context}}
-    NC --> NR[review natural German, English translation, and correction notes]
-    NR --> NA[accept, revise, and save]
-    NA --> AR[(archive: original, corrected, and rewritten note)]
-
-    WL --> P[revisit through vocabulary practice, writing, and conversation]
-    AR --> P
+    C --> V
+    C --> N
 
     classDef language fill:#F2ECFA,stroke:#7655A6,color:#30223F,stroke-width:1.5px
-    classDef ai fill:#FFF3D6,stroke:#A56B16,color:#4C3312,stroke-width:1.5px
-    classDef memory fill:#E8FAF5,stroke:#149682,color:#14584F,stroke-width:1.5px
-    class A,B,C,O,V,W,N,NR,NA,P language
-    class VT,NC ai
-    class WL,AR memory
+    class A,B,C,V,N,P language
+    style TOP fill:transparent,stroke:transparent
+    style PRACTICE fill:transparent,stroke:transparent
 ```
 
-Translation help is available without replacing the reading. A highlighted word
-or phrase can be translated and added to the Wörter library with its source
-sentence and article title. The excerpt can also be expanded or read aloud.
+Translation help and other contextual hints are available without replacing the
+reading. They keep unfamiliar language from turning an interesting article into
+a burdensome decoding exercise. A highlighted word or phrase can be translated
+and added to the Wörter library with its source sentence and article title. The
+excerpt can also be expanded or read aloud.
 
 Writing remains tied to the subject being read. A response can be typed or
 dictated, and the correction step returns natural German, an English
@@ -257,7 +310,7 @@ fallback chain. Curator scoring moved to cloud models after the cost and quality
 tradeoff was measured. The path back to local execution remains part of the
 design and is scheduled for end-to-end verification on the current EC2 setup.
 
-**Use AI agents as contributors, with human direction.** The owner defines the
+**Use AI agents as contributors, with human direction.** The director defines the
 intent, decides what enters the system, and remains responsible for the result.
 Different agents contribute design alternatives, implementation, testing, and
 review. The current set includes Claude Code, Claude.ai, OpenClaw, Grok, and
@@ -275,23 +328,66 @@ gaps in safeguards as they are found.
 
 ---
 
-## Screenshots
+## Product tour
 
-A screenshot refresh is in progress. The new set will cover the portal, Curator
-briefings and deeper dives, German and Portuguese conversation sessions, Lesen's
-article, translation, writing, and archive states, the Guild workspace, and
-Chief of Staff. Earlier screenshots remain in the repository as part of the
-project's history.
+These production captures from July 21, 2026 show the five domains as they are
+currently presented and several of the workflows behind their landing pages.
+Each image opens at full size.
+
+### Five domains
+
+| Curator | Mein Deutsch |
+|---|---|
+| [![Curator landing page with Daily, Scans and Dives, Leanings, and Archive](docs/screenshots/2026-07-21/curator-landing.jpg)](docs/screenshots/2026-07-21/curator-landing.jpg) | [![Mein Deutsch landing page with a Vienna photograph and language-practice entry points](docs/screenshots/2026-07-21/german-landing.jpg)](docs/screenshots/2026-07-21/german-landing.jpg) |
+| Daily reading, research, working views, and the long-term archive. | German conversation, reading, writing, and vocabulary in a place-based learning environment. |
+
+| Meu Português | Guild | Chief of Staff |
+|---|---|---|
+| [![Meu Português landing page with a Rio photograph and language-practice entry points](docs/screenshots/2026-07-21/portuguese-landing.jpg)](docs/screenshots/2026-07-21/portuguese-landing.jpg) | [![Guild landing page with Build, Operate, and Improve](docs/screenshots/2026-07-21/guild-landing.jpg)](docs/screenshots/2026-07-21/guild-landing.jpg) | [![Chief of Staff landing page with a Chicago photograph](docs/screenshots/2026-07-21/chief-of-staff-landing.jpg)](docs/screenshots/2026-07-21/chief-of-staff-landing.jpg) |
+| A family-use Portuguese version with per-user boundaries and a polished front end. | The build, operations, and improvement workspace. | A standalone coordination domain, still visibly marked as in development. |
+
+### Curator: daily reading becomes research
+
+The daily briefing is the beginning of the Curator loop, not the finished
+product. A ranked article can be read quickly, used to provide feedback, scanned
+for its argument and evidence, or turned into a larger investigation.
+
+| Daily briefing | Article scan |
+|---|---|
+| [![Curator daily briefing with ranked articles and feedback actions](docs/screenshots/2026-07-21/curator-daily-briefing.jpg)](docs/screenshots/2026-07-21/curator-daily-briefing.jpg) | [![Curator scan of a CEPR VoxEU article about current-account imbalances](docs/screenshots/2026-07-21/curator-current-account-scan.jpg)](docs/screenshots/2026-07-21/curator-current-account-scan.jpg) |
+| The morning selection ranks articles and keeps Like, Pass, and Save close to the reading decision. | The scan connects one article to the question that made it interesting, then extracts its argument, counterpoint, evidence, and next questions. |
+
+| Research controls | Deeper-dive result |
+|---|---|
+| [![Curator controls for generating a deeper dive or starting a research thread](docs/screenshots/2026-07-21/curator-current-account-research-tools.jpg)](docs/screenshots/2026-07-21/curator-current-account-research-tools.jpg) | [![Curator deeper-dive synthesis about current-account imbalances and U.S. exceptionalism](docs/screenshots/2026-07-21/curator-current-account-deeper-dive.jpg)](docs/screenshots/2026-07-21/curator-current-account-deeper-dive.jpg) |
+| Bibliography items can seed further research; the article can also become an immediate deeper dive or a multi-session thread. | The completed synthesis states what the research did and did not establish, preserves uncertainty, and includes a separate challenge pass. |
+
+### Language practice
+
+The language interfaces use photography, personas, and real subjects to give
+practice a setting and a reason. Correction and review remain attached to the
+learner's own writing or conversation rather than becoming isolated exercises.
+
+| German writing and correction | Portuguese conversation setup |
+|---|---|
+| [![A fresh German writing example with an AI correction and explanation beside a photograph of Cafe Sperl in Vienna](docs/screenshots/2026-07-21/german-writing-correction.jpg)](docs/screenshots/2026-07-21/german-writing-correction.jpg) | [![Portuguese conversation persona and scene selection beside a photograph from Rio de Janeiro](docs/screenshots/2026-07-21/portuguese-conversation.jpg)](docs/screenshots/2026-07-21/portuguese-conversation.jpg) |
+| A fresh demonstration sentence is corrected and explained without exposing a saved learning session. | A persona, scenario, model, and voice workflow prepare an unscripted Portuguese conversation. |
+
+Earlier screenshots remain in [docs/screenshots/](docs/screenshots/) as part of
+the project's history. Approved sets are grouped by date so a later visual
+refresh can be added without overwriting this one.
 
 ---
 
 ## More detail
 
-- [journal/](journal/) contains the public build narrative: sprint notes, plans,
-  and records of how the project changed. It is still being populated.
+- [journal/](journal/) is the tracked home for the public build narrative.
+  Its publishing conventions are present; dated sprint notes, plans, and records
+  of how the project changed are still being populated.
 - [docs/releases/](docs/releases/) contains release notes.
 - [ARCHITECTURE.md](ARCHITECTURE.md), [OPERATIONS.md](OPERATIONS.md), and
-  [ROADMAP.md](ROADMAP.md) are the maintained core documents.
+  [ROADMAP.md](ROADMAP.md) are
+  the maintained core documents.
 
 ---
 

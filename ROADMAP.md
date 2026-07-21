@@ -1,270 +1,342 @@
-# mini-moi — Solution Roadmap
+# Roadmap — Mini-moi
 
-**Location:** `ROADMAP.md` (repo root)
-**Replaces:** `docs/OPERATIONS_ROADMAP.md`
-**Created:** 2026-06-22 · **Updated:** 2026-07-05
-**Status:** Living document — update as phases complete and decisions are made
+*Maintained baseline — reviewed through 2026-07-21. This replaces the former root
+roadmap; the separate Guild roadmap view remains temporarily in place until the
+Baseline document flow replaces it. Companion to ARCHITECTURE.md (what the system is
+and why) and OPERATIONS.md (how it runs). This document is what happens next — and,
+just as deliberately, what doesn't.*
 
----
-
-## Where we are
-
-mini-moi is a personal AI agent platform in daily production use since February 2026. Four domains are live on AWS EC2:
-
-- **Curator** — daily intelligence briefing across geopolitics, finance, and technology. ~700 articles scored and ranked daily.
-- **Mein Deutsch** — German practice built around real life: Vienna personas, reading lists tuned to Austria, feedback loops that turn session errors into the next drill.
-- **Meu Português** — Portuguese practice anchored in Rio — news, culture, neighborhood life. Brazilian personas, inline translation, vocabulary that builds from what I actually read.
-- **Guild** — where the agents and I coordinate. Ideas through specs, build queue, operations, and handoffs across Claude.ai, Claude Code, OpenClaw, and Grok.
-
-The platform runs on a two-node architecture: EC2 primary (always-on), Mac standby (DNS-switchable). Infrastructure is stable. The multi-agent working model is established and working. The work ahead is about deepening capability — making the platform smarter, more autonomous within safe boundaries, and genuinely useful as a long-term personal system.
-
-This document is where I think through where mini-moi goes from here. I'll read it again in six months and either it will have held up or I'll have learned something that changes it.
+*Three tiers, defined strictly: **Committed** — doing this, a matter of when, not
+whether. **Planned** — clear intent and shape, sequenced behind committed work.
+**Aspired** — real direction, not scheduled, honest about being unbuilt. Plus a
+section this roadmap treats as first-class: **paths not taken** — recorded rather
+than silently dropped, because a decision not to build is still a decision worth
+being able to revisit.*
 
 ---
 
-## The Multi-Agent Working Model
+## Where This Is Going — A System That Learns With You
 
-mini-moi is built and maintained by five actors in defined roles. This is not an accident — it is a deliberate design decision that I expect to evolve as the platform matures.
+The objective is personal and plain: make the person at the center of this a better
+decision maker and a better learner. The system accumulates context — what was
+read, what was practiced, what was decided and why, what went wrong — and uses it
+so that every next session starts smarter than the last. Frontier models bring
+capability; the accumulated personal layer brings continuity. The analogy of a
+long-tenured colleague briefing outside experts is fine as far as it goes, but it
+isn't the point. The point is that the person gets better. And that's also exactly
+what transfers conceptually to a broader setting: the same pattern, applied to a
+team, is about making the team better and its members better — not extracting
+knowledge from them. That transfer is part of the intent. The personal version
+comes first.
 
-| Actor | Role | Scope |
+The learning happens in **four bounded loops** — one per domain family,
+deliberately, so nothing drifts:
+
+**Curator** — reactions and pushback tune what tomorrow's briefing surfaces, and
+the thinking record compounds.
+
+**Guild** — the workshop loop, and it's literally the domain's own structure:
+spec → build → operate → improve, with lessons from operating feeding the next
+spec. The direction here is a "master craftsman" agent role inside Guild, taking
+over the coordination work CoS used to do when the two were one domain.
+
+```mermaid
+flowchart LR
+    S[spec] --> B[build]
+    B --> O[operate]
+    O --> I[improve]
+    I -.lessons into the next spec.-> S
+```
+
+**The language domains** — mistakes and practice inform the backend so prompts and
+personas evolve over time, and the result is measured in life, not in the system:
+actually speaking, reading, and writing better.
+
+```mermaid
+flowchart LR
+    P[practice & mistakes] --> E[prompts & personas evolve]
+    E --> N[next session, a little better]
+    N -.-> P
+```
+
+**Chief of Staff** — conversations, light tags, and the knows-me corpus make the
+next conversation smarter. CoS is also the one domain that reaches into the
+others: it can inspect and talk to any domain to get information, and — where a
+domain exposes the capability — instruct it to do something.
+
+Cross-domain flow is limited and explicit: Guild lessons flow to CoS, CoS surfaces
+new areas worth exploring back to Guild, and I sit in the middle.
+
+```mermaid
+flowchart LR
+    A[me] --> B[Chief of Staff]
+    B --> C[Guild]
+    C --> A
+    C -.lessons.-> B
+    B -.new areas.-> C
+```
+
+Some of this is still aspirational — but the shape is the commitment: each loop
+stays inside its domain's purpose. A German mistake tunes German practice. It does
+not feed a work decision. No cross-domain suggestion creep, ever, even though the
+backend can see everything.
+
+The foundation for all of it accumulates **organically, through normal use** — not
+as a parallel habit or a formal record-keeping system (a formal decision-record
+practice was tried and didn't stick; that's fine, and it's not coming back). CoS
+keeps loose track of what was decided and what's worrying as conversations happen.
+Language sessions have been accumulating the practice-and-error history all along.
+Curator reactions are the thinking record. The infrastructure that puts this
+accumulated record to full use is the one big aspiration at the end of this
+document — built when the signal warrants, not before.
+
+---
+
+## Standing Principles For This Roadmap
+
+**Real life drives the roadmap — in both directions.** Use of what exists decides
+what gets refined next. And life adds priorities the platform didn't anticipate:
+multi-user arrived that way, the CoS/Guild split arrived that way, and things not
+yet on any horizon will too. This roadmap expects items it can't name yet — that's
+not a planning failure, it's the nature of building for an ongoing life.
+
+**Sub-domains are open to reshaping.** Within existing domains, significant
+restructuring based on what usage has taught, current life focus, and what's worth
+demonstrating technically is expected — a "committed" feature inside a domain is
+committed in intent, not frozen in shape.
+
+**No new domains near-term, with one exception: French.** Growth happens inside
+what exists. French earns its exception by inheriting a proven template. (And per
+the principle above: when life adds a domain, the roadmap will make room.)
+
+**Bounded now, open to surprise later.** Today the system acts only on what it's
+explicitly told, and actions stay intentional — that's a risk posture while trust
+is being built, not the destination. The intent includes being surprised: a partner
+that only ever plays back what it was told isn't the vision. The boundary moves as
+trust is earned.
+
+**Built for real life, not for sale.** This is a model of how to use AI in an
+ongoing life — built, used, and expanded in that context. Real life is complex, so
+this roadmap deliberately under-specifies: each part of the platform gets as much
+machinery as its place in life actually needs, and no more. It is not a software
+product being shaped for a market.
+
+**Every roadmap item carries a capability.** A task that just gets done once isn't a
+roadmap item — it's a chore absorbed into one. Cleanup work in particular must ship
+features that prevent the mess from accumulating again; the one-time fix is the
+occasion, the standing capability is the item.
+
+**No deadlines here.** The roadmap holds direction loosely; dates and deadlines
+belong to the build queue, where in-flight work is tracked strictly. A tier says
+what and why. The queue says when.
+
+**Verify production reality.** Nothing on this roadmap is "done" until confirmed
+against the running system — the lesson this project learned repeatedly in July,
+in both directions. And "verified" means outputs and logs checked, not schedules
+and folder structures observed: the difference is exactly how a silently failing
+backup job passed one verification and failed the next.
+
+---
+
+## Committed — doing this now
+
+Order matters within this tier, stated without dates per the principle above: tech
+debt first, because it makes everything after it safer; convergence second, because
+it gates French; CoS step one runs alongside both, since it touches different parts
+of the system.
+
+### 1. Technical debt cleanup (near-term, first)
+
+Four scoped blocks, mostly pre-decided:
+
+- **Repo and doc rationalization** — deprecate `_NewDomains/` (its original job —
+  a safe place to build without breaking production — is now done by the dev
+  environment; contents migrate to `docs/specs/` and `docs/design/` as normal idea
+  documents, per the migration map; the March graduation criteria are resolved by
+  this decision, not abandoned). Retire stale `docs/ROADMAP.md`. Correct
+  `LLM_REGISTRY.md` against the July audit. Retire the pre-AWS Guild cabinet docs
+  with a note on where each function actually lives now.
+- **Staging environment + backup restore test — one item.** (Staging was
+  deliberately deferred earlier in July; this is its planned return.) Stand up an
+  AWS staging environment by restoring production backups into it. Proves the backups
+  restore and closes the no-staging gap in the same act — and the bar just moved:
+  the review of this very draft found Tier 3 (Dropbox) was never running at all
+  (`rclone` never installed on EC2; the weekly job has failed silently since it was
+  added). So the item is: fix Tier 3 first, then restore-test all three tiers.
+  Untested backups are assumptions; one of ours was a confirmed silent failure.
+  Staging then becomes the deployment gate the platform currently lacks.
+- **Build-health observations — the capability that replaces hygiene-as-task.** An
+  AI-Observations-style periodic review pointed at Guild's build system itself: open
+  issues going stale, specs sitting in ready-to-build that never started, items
+  marked in-build that actually shipped, drift between the queue and reality. The
+  one-time closes this rewrite surfaced (#42, #83, #136, triage #51) get done as
+  part of the cleanup — but the roadmap item is the review that makes them the
+  *last* one-time closes. It reads accumulated build state, not fresh data — the
+  same accumulate-then-review pattern Curator already proved.
+- **Security round 2** — #84 (silent Postgres failure logging), #87 (break-glass
+  account), Gespräche read-scoping, guest-flow unification.
+
+### 2. German / Portuguese convergence — the template for French
+
+Bidirectional normalization: Portuguese's Postgres-backed translation cache and
+frontend patterns where they're ahead; German's translation fallback depth (including
+the local-model safety net), review-model tier, and frontend timing transparency
+where it's ahead. The drift was the honest cost of moving at the speed of real use —
+Portuguese was the feature incubator, and promotion back to German worked; strict
+implementation parity was the part that lagged. This closes it, both directions.
+
+**Gate for French:** convergence complete. French then inherits one template, not a
+choice between two — with learner-appropriate content (base personas for a new
+learner, starter reading list) designed fresh rather than copied from Robert's own
+configuration. To be precise about what's committed: this tier commits to
+*readiness* — the converged template. Building French itself becomes a build-queue
+item when the gate clears.
+
+**The template principle extends to Curator by design.** Curator's first instance
+is finance and geopolitics, but topic-area spin-offs are already part of the plan —
+health being the clearest case: nearly copy-paste on the search and scoring core,
+with genuinely new inputs (wearable history from a risk monitor, for instance)
+where the topic demands them. Same pattern as German → Portuguese → French: prove
+the template on the first instance, converge it, then instantiate. That's growth
+inside what exists, not a new domain.
+
+### 3. Chief of Staff — partner build, step one
+
+The vision is a partner, not a task taker (ARCHITECTURE.md carries the full
+contract). Step one is deliberately practical:
+
+- **A place to converse** — the current page is a skeleton by design; the
+  conversation surface becomes channel-agnostic: HTML with voice added, Telegram
+  integrated, the input channel irrelevant to the conversation.
+- **Light tagging** — actions, decisions, and risks arising in conversation get
+  lightly tagged (domain / actor / type / time) to bucket and analyze later — a
+  loose record kept as a side effect of talking, not a formal system to maintain.
+  This is the CoS feed into the learning layer.
+- **First focus: access.** CoS gets the ability to inspect and "talk" to any
+  domain to get information — and, where a domain exposes the capability, to
+  instruct it to do something. That's what's being proven, along with whether a
+  working relationship can actually be established. Concrete daily scope:
+  escalations from operations, and ad hoc tasks, questions, and notes checking on
+  areas of the application.
+- **Stated plainly: this might not prove useful.** CoS is new enough that we don't
+  know yet. The committed work is the experiment that finds out — everything
+  further (periodic reviews over its record, expanded autonomy) waits on that
+  proof, which is why none of it appears in the Planned tier below.
+- **Bounded OpenClaw instance** — the Phase 1 agent layer, scoped to mini-moi
+  domains under the permission model. Python-only today; the instance is spec-ready
+  and currently blocked on OpenClaw-side deliverables (package name, start command,
+  config schema).
+- **The knows-me corpus begins** — background, plans, risks worried about,
+  deliberately given over time. Intentional only, accumulating slowly, aiming at
+  professional-friend-and-partner knowledge. The March research agent piloted
+  exactly this pattern; CoS generalizes it.
+
+---
+
+## Planned — clear intent, sequenced next
+
+- **Model configuration made real.** Fix the broken `--model` flag path, make
+  backend model choices (translation first) genuinely config-driven across the
+  language domains, and re-verify Curator's local-model swap end-to-end on EC2.
+  Context that matters: local inference is proven on this platform — it ran in
+  production at genesis and runs today in German's translation fallback; Curator's
+  scoring moved to cloud when Haiku's cost proved negligible, as a deliberate quick
+  backend swap (the designed pattern), and the scoring script's "ollama" label now
+  maps to keyword scoring — a naming artifact to clean up, not a broken capability.
+  The spec_125 model-standardization work, informed by the July audit's call-site
+  inventory. User-facing model choices (voice, review) stay in the UI where they
+  belong.
+- **Curator Deep Dive consolidation.** Verify what each of the coexisting scripts
+  actually serves (Scans vs. Deep Dive vs. Deeper Dive — at least four candidates at
+  last count) — then consolidate as a regression-refactor. Design holds; the backend
+  catches up to the frontend.
+- **Curator topic-area instances — health first.** The converged Curator template
+  instantiated on a new topic area: search and scoring core carried over, new
+  topic-appropriate inputs added (wearable/risk-monitor history being the health
+  case). An instance of the Curator domain, not a sixth platform domain. Sequenced
+  behind Curator's own cleanup — the Deep Dive consolidation above — which is what
+  makes the template clean to copy.
+- **A more capable local model.** Evaluate a stronger open-weight model on rented
+  cloud capacity first — proving it may need more compute than current hardware has
+  — then move it to owned local hardware once it earns its place in the daily
+  workflow. That proof is the evidence that justifies the capital purchase — at
+  which point the Mac Mini idea, retired from its April role, resurfaces in a new
+  one: not an always-on server, a local inference machine.
+- **German multi-user content readiness.** The identity layer is done (per-user
+  separation shipped with the July security work); the content half — learner
+  personas, starter reading list — rolls into the French template work naturally.
+
+---
+
+## Aspired — real direction, not scheduled
+
+**The one that matters: use the databases fully, and close the loop.** A graph —
+sources, entities, decisions, threads, and how they connect — alongside the data
+store that feeds it, put to full use, so that any part of the platform can ask what
+the accumulated record knows. That is what turns "mini-moi is a personal
+intelligence and learning partner" from a claim into a closed loop: the record
+accumulates through daily use, the system retrieves and reasons over it, and what
+comes back is visibly informed by everything that came before. The mechanics have
+names already — the graph layer (gated honestly today at 20+ tagged sources),
+retrieval over the accumulated record, adaptation when the signal warrants — but
+they are one feature, not three. This is the only big new roadmap feature in this
+tier that matters, and it moves into Planned, bumping others, as soon as sequencing
+allows.
+
+**Carried alongside, smaller:**
+
+- **The Reading Room** — the browsable research library as a genuine reading
+  experience. The library exists; the room doesn't yet.
+- **Conversational intelligence** — thinking out loud with the research layer,
+  conversations as inputs that redirect open threads. Partially alive in CoS chat.
+- **Local-first at depth** — GPU hardware, on-device voice inference, local models
+  taking on more work including coding, as models and hardware improve.
+- **If CoS proves its way of working** — bounded handoffs (approval workflow, then
+  coordination with Guild's master-craftsman agent, then policy engine and circuit breaker as trust is
+  earned), and Professional Opportunities as a standing CoS section: Loop A already
+  scouts (611 companies, output refreshing); its output lands in CoS once CoS has
+  proven itself worth landing things in.
+- **Curator sources beyond English** — German, Portuguese, and eventually French
+  sources in the daily pipeline; the March research agent's sourcing tiers are the
+  design.
+- **A commercial port — the arc's last step.** Daily personal tool, demo-ready,
+  hosted with real users: done. The architecture lifted into a standalone product
+  for a new domain stays aspired, stated plainly: mini-moi itself remains personal
+  — a commercial version would be a new thing built on the proven pattern, if and
+  when a domain makes it worth building.
+
+---
+
+## Paths Not Taken — recorded, revisitable
+
+| Path | Why not | Revisit if |
 |---|---|---|
-| **Robert** | Decision and approval authority | All final decisions. Approves all deploys. Sets direction. |
-| **Claude.ai** | Design and spec | Architecture, specs, design docs. No git access. |
-| **Claude Code** | Build, git, deploy | Implements specs, commits, pushes to ECR on Robert's explicit approval. |
-| **OpenClaw** | Memory and coordination | Context across sessions, file management, handoffs, task tracking. |
-| **Grok** | Review | Independent review pass on specs and designs before build. |
-
-The goal is not to automate Robert out of the loop — it is to make his judgment more effective by handling the coordination and memory work that currently creates friction. Each actor has a defined lane. Agents act only within explicitly defined scope.
-
----
-
-## Guiding Principles
-
-These don't change across phases. If a decision conflicts with one of these, the decision is wrong, not the principle.
-
-**Boundaries first.** Agents act only within explicitly defined policies. What is not explicitly permitted is not permitted.
-
-**JSON-first.** JSON files are the source of truth. Postgres is a rebuildable projection added only when query complexity demands it. Never migrate off JSON — add Postgres alongside it.
-
-**Domain server owns its data.** No external process reads domain data files directly. All access goes through the domain server's HTTP endpoints.
-
-**Auditability.** Every automated action is logged with reasoning, timestamp, and outcome. The log is reviewable at any time.
-
-**Human override.** I can always pause automation, reverse an action, or restrict agent scope. No action is irreversible by design.
-
-**Gradual trust.** Progress between phases depends on demonstrated reliability from the previous one. Each phase should produce usable evidence before the next one is pursued.
-
-**Reuse and extend.** Every new domain is built from the domain template, not from scratch. The template is the floor, not the ceiling.
-
-**No credentials in git.** Ever. Public or private repo. SSM + `.env` on host.
-
-**Dev-first always.** Test on dev.minimoi.ai before any ECR push. Hotfix process requires explicit approval.
+| Mac Mini + Tailscale + cloud relay (Apr 2026, retired by decision record Jun 18) | Superseded by AWS EC2 — solved the same problem better | Actively anticipated in a new role: local inference hardware, once a stronger local model proves itself (Planned) |
+| Four-cabinet Guild governance | Dissolved into the platform — each function shipped in a different form (health loop, watch loops, decision records, intent register) | Never as-designed; the functions live on |
+| TMF622 Technical Toolbox (career) | Paused — not moving forward in this form | A role or story makes it worth reviving |
+| Jaccard three-gate multi-agent curation | Design case study only; a different, real Challenger pattern shipped instead | The shipped pattern proves insufficient |
+| X integration Phase 3B (PDF / YouTube / ebook ingestion; RVS site) | Scope ended at what daily use needed | Ingestion needs actually appear |
+| Proficiency-tiered language personalization | Deliberately not the design — per-persona control is; a dead `_request_user_tier()` header in the Portuguese backend remains as the trace of the attempt | Family use surfaces a real need |
+| New Ventures cabinet | Never staffed with real work | A venture becomes real |
 
 ---
 
-## The Domain Template
+## Released This Year — the 1.x record
 
-Every mini-moi domain follows a shared pattern. German and Portuguese are the reference implementations. The template is documented in `docs/architecture/DOMAIN_TEMPLATE.md` — read it before starting any new domain.
+Shipped work leaves the tiers above; this table is the year's record at a glance.
+Detail lives in git history, CHANGELOG, and the architecture and operations
+documents' current-state sections.
 
-Current domains: Curator, Mein Deutsch, Meu Português, Guild.
-Planned domains: Career (portfolio and job search tooling), others as needs emerge.
-
-The template is what makes it possible to spin up a new domain without rebuilding from scratch. It covers directory structure, HTTP endpoint patterns, per-user data isolation, process management, tips system wiring, and the Docker/launchd deployment pattern.
-
----
-
-## Phase Map — Agent Capability
-
-The platform evolves across phases. Each phase requires demonstrated reliability from the previous one before moving forward.
-
-```
-Phase 1 (now)       Phase 2 (months)      Phase 3a (later)
-CoS functional  →   Memory layer live  →   Bounded autonomy
-"Take this note"    "Here's what we        "I handled it,
-"File this bug"      decided and why"       here's the log"
-
-Phase 3b (future)   Phase 4 (horizon)
-Broader autonomy →  Mature agent ops
-"Routine maintenance  "Weekly summary,
- handled"              exceptions only"
-```
+| Domain | Released in 1.x (2026) |
+|---|---|
+| Platform | AWS migration + two-node architecture (Jun) · CI/CD pipeline, push-to-live ~5 min (Jun) · backups: Tiers 1–2 (local, S3) verified running daily; Tier 3 (Dropbox) confirmed broken — rclone missing, fix pending · Sentry error monitoring (Jun) · unified identity/auth across domains + security remediation (Jul) |
+| Curator | daily production (Feb) · v1.0 (Mar) · X bookmark integration (Feb–Mar) · AI Observations, five types + weekly synthesis · Deep Dive research briefs with multi-model cross-check (Jun) · priority feed · reading library + web portal · model rotation to current Grok tier |
+| Mein Deutsch | v1.1 (Jun) · seven-tab web interface (May) · live voice persona conversation — TTS + Whisper (May–Jun) · three transcript-review paths with user-selectable model · Anki card + lesson-plan pipeline · mobile fixes · legacy identity history reconciled and production Lesen refresh made safe and deployable (Jul) |
+| Meu Português | Full domain live (Jun) — sibling of German · in-website voice · multi-user with per-user custom personas · Leitura / Conversas / Escrita |
+| Guild | v1.0 (Jun — v0.9 shipped the concept, v1.0 shipped it as a production system) · build queue + specs views · operations dashboard |
+| Chief of Staff | v0.9 (Jul) · extracted from Guild as its own domain · four-tab web UI · 30-minute health monitoring loop + Telegram alerts · daily cross-domain briefing · chat with a defined voice |
+| Research Intelligence | PoC pilot (Mar) · merged into Curator's Deep Dive as its production home (Jun) |
 
 ---
 
-## Phase 1 — CoS Functional (Current Build)
-
-**What this phase delivers:** OpenClaw as a real Chief of Staff tool for mini-moi — not just a title, but a daily-use capability. Right now the CoS role exists in name but has no dedicated tooling. Phase 1 closes that gap.
-
-**What's being built:**
-A dedicated mini-moi OpenClaw instance, isolated from personal OpenClaw, containerized from day one (Docker), and deployable to EC2 or Mac Mini without rework.
-
-**Phase 1 use cases (tight scope):**
-- Mobile note-taking → OpenClaw stores, timestamps, tags
-- Bug/defect filing → OpenClaw creates GitHub issue, notifies via Telegram
-- Document retrieval → OpenClaw pulls from known locations on demand
-- Decision writing → OpenClaw writes to shared decisions store (visible in Guild)
-
-**What is explicitly out of Phase 1 scope:**
-- Autonomous actions without Robert approval
-- Writing to prod systems
-- Cross-agent orchestration
-- Full memory layer (Phase 2)
-
-**Why containerized from day one:**
-Running OpenClaw in Docker means dev → EC2 → Mac Mini is the same move every other mini-moi service makes. No reinstall, no reconfiguration. Connectivity setup is the only variable.
-
-**The two OpenClaw instances:**
-
-| Instance | Purpose | Scope |
-|---|---|---|
-| Personal OpenClaw | Private, home use | Stays completely separate. Not part of this design. |
-| mini-moi OpenClaw | Business, platform use | Bounded to mini-moi domains. This is what Phase 1 builds. |
-
-**Exit criteria for Phase 2:**
-- mini-moi OpenClaw instance running reliably for 4+ weeks
-- Daily use proven: notes, bug filing, document retrieval all working via Telegram
-- Decision writing producing readable output in Guild
-- No incidents involving the personal OpenClaw instance
-
----
-
-## Phase 2 — Memory and Intelligence Layer
-
-**What this phase delivers:** Agent-agnostic memory that survives tool swaps. If OpenClaw is replaced by a better tool tomorrow, the new tool reads the external memory stores and picks up exactly where OpenClaw left off. Memory belongs to the platform, not to any one agent.
-
-**Three memory layers:**
-
-**Layer 1 — Decisions (public, real-time)**
-OpenClaw's primary writing obligation. Not conversation, not every action — just decisions. What was decided, why, and by whom. Written automatically as decisions occur. All actors can read it. Guild surfaces it as a live feed. This replaces the decision log that isn't being used because it's manual.
-
-**Layer 2 — Actions (summary, timestamped)**
-What actually happened — meaningful actions and outcomes. Not back-and-forth conversation. Terse, permanent, queryable. "Spec #120 created and committed." "Postgres credentials rotated and moved to SSM." The audit trail.
-
-**Layer 3 — Raw files (local-first, mine)**
-The `./openclaw/` md files as-is. My data, local-first. Pulled, timestamped, and ingested into Postgres on my schedule. Ad hoc queryable. Feeds the intelligence layer when I need to investigate something. This is the raw data agent layer — not consumed in real time, but always available.
-
-**The agent-agnostic principle:**
-OpenClaw writes Layers 1 and 2 externally as it works. Any agent replacing OpenClaw reads those files and continues. Memory is stored with time as the primary division — timestamp everything. Domain tagging is secondary — add it when known, don't require it.
-
-**What gets stored (store everything, tag lightly):**
-- OpenClaw decisions and actions
-- Design conversations (pre-spec sessions like this one)
-- Agent interactions across all actors
-- Raw OpenClaw md files
-- Specs, handoffs, build outputs — already happening
-- Code session summaries
-
-**Tagging model (lightweight):**
-- Domain: curator / german / portuguese / guild / cross-domain
-- Actor: claude-ai / claude-code / openclaw / grok / robert
-- Type: decision / action / design / spec / raw
-- Time: timestamp (always)
-
-**The retrieval philosophy:**
-Don't over-design retrieval now. Store richly, tag lightly, let future AI (or me) query ad hoc. The value compounds over time.
-
-**Exit criteria for Phase 3a:**
-- All three memory layers live and writing
-- Guild shows Layer 1 (decisions) and Layer 2 (actions) in real time
-- Layer 3 queryable from Guild on demand
-- At least one successful "what did we decide about X" retrieval from memory
-
----
-
-## Phase 3a — Bounded Low-Risk Autonomy
-
-**What this phase delivers:** CoS handles routine operations automatically within defined policies. Logs everything. Alerts after action.
-
-**Example actions in scope:**
-- Restart a stopped container after configurable timeout
-- Clear temporary files when disk > 85% (defined directories only)
-- Rotate logs older than configurable threshold
-- Retry a failed cron job once with cooldown
-
-**Example actions explicitly out of scope:**
-- DNS changes
-- Security group changes
-- Database operations
-- Anything touching EC2 instance configuration
-- Any action affecting external services
-
-**What needs to be built:**
-- Policy file: YAML/JSON defining allowed actions, thresholds, limits
-- Policy engine: CoS reads policy before acting — rejects anything not explicitly permitted
-- Action log: structured, queryable, linked to Decision Records
-- Circuit breaker: same action triggered 3+ times in 24h → stop, escalate
-
----
-
-## Safety Mechanisms (all phases)
-
-**Circuit Breaker**
-If CoS triggers the same automated action 3+ times in 24 hours, automatic execution stops and I'm escalated: *"Curator has restarted 3 times today. Automatic restarts paused. Something may need investigation."*
-
-**Rollback by Design**
-Every automated action is designed to be undoable. Actions that cannot be rolled back require explicit pre-approval regardless of phase.
-
-**Action Log**
-Structured, queryable, permanent record of every automated action: what triggered it, what was done, what the outcome was, which policy permitted it.
-
-```
-2026-07-15T07:23:41Z | restart_container | curator |
-reason: container_stopped_18min | outcome: healthy |
-policy: phase_3a_container_restart | approved_by: policy
-```
-
-**Human Override**
-I can always pause automation, reverse an action, or restrict agent scope at any time. No exceptions.
-
----
-
-## Connection to mini-moi Architecture
-
-**Guild as coordination surface:**
-Automated actions, decisions, and memory are visible in Guild without pulling logs manually. The Guild Navigation Redesign (#117) adds the operational visibility layer. Operations Log view or integration with Build Log — to be decided in that spec's design session.
-
-**Decision Records as policy history:**
-Every policy change produces a Decision Record. The policy file and its DR history answer "why is this allowed?" I want to be able to read back through these and understand my own reasoning, not just see what the current policy says.
-
-**Domain Template as reuse foundation:**
-New domains (Career, and others) are built from the template. The CoS capability grows with the platform — not bolted on separately.
-
-**Local LLM → Policy Intelligence (future):**
-As the local LLM matures, it can help interpret whether a novel situation falls within the spirit of a policy. Phase 3b territory — worth designing for now.
-
----
-
-## Portfolio Framing
-
-Phase 1 is being built now and demonstrable within weeks. That's the honest starting point.
-
-Phase 2 (memory layer) shows the right architecture for agent memory in a multi-agent system — agent-agnostic, time-stamped, queryable, owned by the platform not the tool. Very few teams have thought this through at this level.
-
-Phase 3 (bounded autonomy with policy engine, circuit breakers, and structured action logs) is where mini-moi enters territory that serious AI operations teams are actively working on now.
-
-The story: *"I built a personal AI platform with four live domains, a multi-agent working model, and a memory architecture designed to survive tool swaps. The CoS capability is Phase 1 of a deliberate progression toward bounded agent autonomy — designed safely, built incrementally, and grounded in daily production use."*
-
----
-
-## Open Questions
-
-**Answer before Phase 1 build:**
-1. Telegram bot strategy for mini-moi OpenClaw — command prefix on existing `@minimoi_agent_bot` or dedicated test bot?
-2. Secrets — separate SSM prefix (`/minimoi/cos/`) or shared with naming convention?
-3. Startup — separate LaunchAgent or manual during early testing?
-
-**Answer before Phase 2 build:**
-4. Decisions file format — one file per day, per topic, or continuously updated?
-5. Guild integration — new Operations Log view or fold into Build Log?
-6. Design conversation ingestion — push (OpenClaw pulls from Claude.ai export) or pull (Robert pastes manually)?
-
-**Answer before Phase 3a:**
-7. Minimum action set for Phase 3a — start with one or two actions only, expand from evidence.
-8. Policy change review process — same DR process as code decisions is the default.
-9. Trust level delta between prod and dev — stricter policy on minimoi.ai than dev.minimoi.ai.
-
----
-
-*ROADMAP.md · mini-moi · Living document*
-*Update this document as phases complete and decisions are made*
-*Short-term specs: see Guild Build Log at app.minimoi.ai/guild/build*
+*Roadmap · mini-moi · reviewed 2026-07-21 · Review at major milestones or quarterly.*
