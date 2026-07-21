@@ -1866,9 +1866,9 @@ def _next_session_filename(date_str: str) -> str:
 
 def analyse_session(transcript: str, persona_name: str, scene: str, user_id=None) -> dict:
     """Analyse a pasted Grok Voice transcript. Returns {session_id, feedback}."""
-    import anthropic as _anthropic
-
     user_id = _require_numeric_user_id(user_id)
+
+    import anthropic as _anthropic
 
     ts = datetime.datetime.now()
     date_str = ts.strftime("%Y-%m-%d")
