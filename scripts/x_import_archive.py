@@ -42,8 +42,8 @@ from x_auth import get_x_client
 from curator_config import ACTIVE_DOMAIN, KNOWN_FOLDERS
 
 # ── Paths ──────────────────────────────────────────────────────────────────
-PREFS_PATH = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator"))) / "curator_preferences.json"
-CACHE_PATH = Path(__file__).parent / 'x_import_archive_cache.json'
+PREFS_PATH = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent.parent / "data" / "curator"))) / "curator_preferences.json"
+CACHE_PATH = Path(__file__).parent.parent / 'x_import_archive_cache.json'
 
 # ── Domain noise filter ────────────────────────────────────────────────────
 SKIP_DOMAINS = {

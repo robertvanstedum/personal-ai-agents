@@ -19,7 +19,7 @@ import tweepy
 from datetime import datetime, timezone
 from pathlib import Path
 
-PREFS_PATH   = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator"))) / "curator_preferences.json"
+PREFS_PATH   = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent.parent / "data" / "curator"))) / "curator_preferences.json"
 DRY_RUN      = '--import' not in sys.argv
 
 

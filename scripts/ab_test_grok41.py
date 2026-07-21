@@ -37,7 +37,7 @@ def get_xai_client():
 
 def load_recent_articles(limit=20):
     """Load articles from today's or most recent curator run"""
-    history_file = Path(__file__).parent / 'curator_history.json'
+    history_file = Path(__file__).parent.parent / 'curator_history.json'
     
     if not history_file.exists():
         print("❌ curator_history.json not found")
@@ -60,7 +60,7 @@ def load_recent_articles(limit=20):
 
 def load_user_profile():
     """Load user profile from curator preferences"""
-    prefs_file = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator"))) / "curator_preferences.json"
+    prefs_file = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent.parent / "data" / "curator"))) / "curator_preferences.json"
     
     if not prefs_file.exists():
         return ""
@@ -319,7 +319,7 @@ def main():
         print(f"Review the rationales above before switching.")
     
     # Save report
-    report_file = Path(__file__).parent / 'docs' / 'test-reports' / f'2026-03-06-grok41-ab-test.md'
+    report_file = Path(__file__).parent.parent / 'docs' / 'test-reports' / f'2026-03-06-grok41-ab-test.md'
     report_file.parent.mkdir(parents=True, exist_ok=True)
     
     with open(report_file, 'w') as f:

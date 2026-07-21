@@ -65,8 +65,8 @@ from x_oauth2_authorize import get_valid_token
 from curator_config import ACTIVE_DOMAIN, KNOWN_FOLDERS as _CONFIG_FOLDERS
 
 # ── Paths ──────────────────────────────────────────────────────────────────
-PREFS_PATH = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator"))) / "curator_preferences.json"
-CACHE_PATH = Path(__file__).parent / 'x_adapter_cache.json'
+PREFS_PATH = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent.parent / "data" / "curator"))) / "curator_preferences.json"
+CACHE_PATH = Path(__file__).parent.parent / 'x_adapter_cache.json'
 
 # ── Twitter API base ────────────────────────────────────────────────────────
 API_BASE = 'https://api.x.com/2'

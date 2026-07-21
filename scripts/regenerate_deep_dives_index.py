@@ -11,7 +11,7 @@ import re
 def regenerate_deep_dives_index():
     """Scan deep-dives directory and regenerate index.html"""
     
-    deep_dives_dir = Path(__file__).parent / "interests" / "2026" / "deep-dives"
+    deep_dives_dir = Path(__file__).parent.parent / "interests" / "2026" / "deep-dives"
     
     if not deep_dives_dir.exists():
         print(f"❌ Deep dives directory not found: {deep_dives_dir}")
