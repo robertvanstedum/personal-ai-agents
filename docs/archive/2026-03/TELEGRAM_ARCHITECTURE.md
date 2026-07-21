@@ -1,5 +1,11 @@
 # Telegram Two-Bot Architecture
 
+> SUPERSEDED 2026-07-21. The two-bot split described here is still accurate,
+> but the environment model has since evolved (AWS EC2 as default, Mac as
+> swappable fallback). Current:
+> [spec_telegram_architecture_v2_2026-06-20.md](../../specs/spec_telegram_architecture_v2_2026-06-20.md).
+> Preserved for history.
+
 **Status:** ✅ Validated 2026-03-05
 **Replaces:** `TELEGRAM_WEBHOOK_PLAN.md` (webhook/tunnel approach — abandoned)
 

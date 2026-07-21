@@ -45,6 +45,20 @@ original "simple version" Deep Dive, since superseded),
 [GERMAN_DOMAIN_MERGE_BUILD_PLAN.md](2026-05/GERMAN_DOMAIN_MERGE_BUILD_PLAN.md),
 [PORTAL_BUILD_STATE_2026-05-28.md](2026-05/PORTAL_BUILD_STATE_2026-05-28.md).
 
+Two more root docs added to this pass after Robert asked for full scope:
+- **[PRODUCTION_SECURITY.md](2026-02/PRODUCTION_SECURITY.md)** — written for a
+  hypothetical Mac Mini/VPS migration; production shipped on AWS EC2 with SSM
+  Parameter Store instead. Current: [OPERATIONS.md § Credentials & Third
+  Parties](../../OPERATIONS.md#credentials--third-parties).
+- **[TELEGRAM_ARCHITECTURE.md](2026-03/TELEGRAM_ARCHITECTURE.md)** — the
+  two-bot split it describes is still accurate, but the environment model has
+  since evolved (AWS default, Mac swappable fallback). Current:
+  [spec_telegram_architecture_v2_2026-06-20.md](../specs/spec_telegram_architecture_v2_2026-06-20.md).
+
+`FEATURE_DELETE_DEEP_DIVES.md` moved to
+[docs/specs/spec_delete_deep_dives_2026-02-20.md](../specs/spec_delete_deep_dives_2026-02-20.md)
+instead — not superseded, just relocated into the specs convention as a still-open request.
+
 **Founding documents**, moved to `founding/`, preserved as written rather than
 marked superseded. `WAYS_OF_WORKING.md` was considered for this move but
 stayed at root instead — Robert wants it to remain a current, findable

@@ -206,7 +206,8 @@ Before committing any code:
 ## Questions?
 
 **"Can I use this on a server?"**
-Yes, but use `.env` method (keychain requires GUI). See `PRODUCTION_SECURITY.md` for server migration plan.
+Yes — production runs on AWS EC2 with credentials in SSM Parameter Store, not
+keychain. See [OPERATIONS.md § Credentials & Third Parties](OPERATIONS.md#credentials--third-parties).
 
 **"What if I lose my credentials?"**
 Keychain is backed up with Time Machine. `.env` is just a file - back it up separately if needed.
@@ -216,11 +217,11 @@ In this session, yes (you're about to give them to me). In code/git, no (never s
 
 ## Server Migration Note
 
-**When moving to Mac Mini / VPS (April 2026):**
-- Keychain won't work on headless server
-- Switch to encrypted .env or Docker secrets
-- See `PRODUCTION_SECURITY.md` for full migration guide
-- `credential_manager.py` already supports fallback (no code changes)
+Production migrated to AWS EC2 in June 2026. Keychain is dev-only; production
+credentials live in SSM Parameter Store under `/minimoi/production/*` — see
+[OPERATIONS.md § Credentials & Third Parties](OPERATIONS.md#credentials--third-parties)
+for the full inventory. `credential_manager.py`'s keychain-then-fallback
+design anticipated this and needed no code changes.
 
 ---
 
