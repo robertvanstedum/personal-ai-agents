@@ -964,5 +964,16 @@
     "blocked_reason": null,
     "last_transition_at": "2026-07-12T12:00:00Z",
     "notes": "v1.3 — Phase 0 complete (#134, done). Phase 1 in build. Two-layer backend model: coordination layer (permanent) vs. backend call (swappable). OpenClaw as second backend. cos_interface.md v0.2 finalized and Grok-reviewed. Scope enforcement: observe/mutate boundary. Rollback/Production Safety required before containerization cutover."
+  },
+  {
+    "id": 140,
+    "spec_title": "Repository Application Reorganization Phase 2",
+    "spec_file": "spec_repository_application_reorganization_phase2_2026-07-21.md",
+    "status": "backlog",
+    "github_issue": null,
+    "priority": "normal",
+    "blocked_reason": "Future work. Phase 2A is read-only; no file move is authorized until Robert approves the dependency manifest and the first vertical slice.",
+    "last_transition_at": "2026-07-21T00:00:00Z",
+    "notes": "PR #102 completed the preliminary standalone script/test move. Remaining scope is the production application cluster, beginning with a full dependency map. One slice and one production verification at a time. Do not combine the pre-existing x_adapter.py defect without explicit approval."
   }
 ]
