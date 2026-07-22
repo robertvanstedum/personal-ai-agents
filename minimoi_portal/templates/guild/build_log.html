@@ -293,8 +293,12 @@
   <a href="/guild/build" class="filter-btn {% if status_filter == 'all' %}active{% endif %}">All</a>
   <a href="/guild/build?status=in_build"   class="filter-btn {% if status_filter == 'in_build' %}active{% endif %}">In Build</a>
   <a href="/guild/build?status=spec_ready" class="filter-btn {% if status_filter == 'spec_ready' %}active{% endif %}">Spec Ready</a>
+  {% if has_incomplete %}
   <a href="/guild/build?status=incomplete" class="filter-btn {% if status_filter == 'incomplete' %}active{% endif %}">Incomplete</a>
+  {% endif %}
+  {% if has_blocked %}
   <a href="/guild/build?status=blocked"    class="filter-btn {% if status_filter == 'blocked' %}active{% endif %}">Blocked</a>
+  {% endif %}
   <a href="/guild/build?status=done"       class="filter-btn {% if status_filter == 'done' %}active{% endif %}">Done</a>
   <a href="/guild/build?status=deferred"   class="filter-btn {% if status_filter == 'deferred' %}active{% endif %}">Deferred</a>
 </form>

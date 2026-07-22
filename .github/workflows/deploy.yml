@@ -27,6 +27,10 @@ jobs:
       - name: Run regression tests
         run: pytest tests/ -v --junit-xml=reports/junit.xml --ignore=tests/smoke
 
+      - name: Check docs/specs naming/duplicates/supersession
+        if: always()
+        run: python3 scripts/check_spec_format.py
+
       - name: Upload test report
         uses: actions/upload-artifact@v4
         with:
@@ -108,6 +112,9 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
+
+      - name: Sync docs/specs and design docs to EC2
+        run: ./scripts/sync_docs.sh
 
       - name: Push docker-compose.prod.yml to EC2
         run: |
