@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """
-Negative test using the test API key (secure)
+Negative test using the test API key (secure).
+
+Manual runbook, not an automated check: it rotates the live Anthropic API
+key in Keychain and blocks on human input to revoke the test key mid-run.
+Never runs under normal `pytest` collection — requires explicit opt-in via
+RUN_MANUAL_KEY_ROTATION_TEST=1, since running it unattended could leave
+production pointed at a revoked or already-swapped key.
 
 Workflow:
 1. Switch to test key (stored in keychain)
@@ -10,63 +16,70 @@ Workflow:
 5. Switch back to production key
 """
 
-import keyring
+import os
 import subprocess
 import sys
+
+import pytest
+
+keyring = pytest.importorskip("keyring", reason="keyring not installed")
+
 
 def switch_to_test_key():
     """Switch curator to use test key"""
     test_key = keyring.get_password("anthropic", "test_key")
     if not test_key:
         print("❌ Test key not found in Keychain")
-        print("   Run: python setup_keys.py")
+        print("   Run: python scripts/setup_keys.py")
         sys.exit(1)
-    
+
     keyring.set_password("anthropic", "api_key", test_key)
     print(f"✅ Switched to TEST key (starts with: {test_key[:20]}...)")
+
 
 def switch_to_production_key():
     """Switch curator back to production key"""
     prod_key = keyring.get_password("anthropic", "production_key")
     if not prod_key:
         print("❌ Production key backup not found in Keychain")
-        print("   Run: python setup_keys.py")
+        print("   Run: python scripts/setup_keys.py")
         return False
-    
+
     keyring.set_password("anthropic", "api_key", prod_key)
     print(f"✅ Restored PRODUCTION key (starts with: {prod_key[:20]}...)")
     return True
+
 
 def main():
     print("=" * 70)
     print("NEGATIVE TEST: Test API Key Workflow")
     print("=" * 70)
     print()
-    
+
     # Step 1: Switch to test key
     print("STEP 1: Switch to test key")
     print("-" * 70)
     switch_to_test_key()
     print()
-    
+
     # Step 2: Test that it works
     print("STEP 2: Test with valid test key (should work)")
     print("-" * 70)
     print("Running: python curator_rss_v2.py --mode=ai")
     print()
-    
+
     result = subprocess.run(
         ["python", "curator_rss_v2.py", "--mode=ai"],
         capture_output=False
     )
-    
+
     if result.returncode == 0:
         print("\n✅ Test key works!")
     else:
         print("\n⚠️  Test key failed (might already be revoked)")
-    
+
     print()
-    
+
     # Step 3: User revokes key
     print("STEP 3: Revoke the test key")
     print("-" * 70)
@@ -76,26 +89,26 @@ def main():
     print()
     input("Press Enter when you've revoked the test key...")
     print()
-    
+
     # Step 4: Test with revoked key
     print("STEP 4: Test with revoked test key (should fail)")
     print("-" * 70)
     print("Running: python curator_rss_v2.py --mode=ai")
     print("(This should show authentication error)")
     print()
-    
+
     result = subprocess.run(
         ["python", "curator_rss_v2.py", "--mode=ai"],
         capture_output=False
     )
-    
+
     if result.returncode != 0:
         print("\n✅ Failed as expected (revoked key rejected)")
     else:
         print("\n⚠️  Unexpected: Test key still works (was it revoked?)")
-    
+
     print()
-    
+
     # Step 5: Restore production
     print("STEP 5: Restore production key")
     print("-" * 70)
@@ -109,7 +122,16 @@ def main():
         print("Test it: python curator_rss_v2.py --mode=ai --open")
     else:
         print("\n❌ Failed to restore production key")
-        print("   You'll need to run: python setup_keys.py")
+        print("   You'll need to run: python scripts/setup_keys.py")
+
+
+@pytest.mark.skipif(
+    not os.environ.get("RUN_MANUAL_KEY_ROTATION_TEST"),
+    reason="manual, interactive key-rotation runbook — set RUN_MANUAL_KEY_ROTATION_TEST=1 to run",
+)
+def test_key_rotation_runbook():
+    main()
+
 
 if __name__ == "__main__":
     main()

@@ -27,7 +27,7 @@ from pathlib import Path
 from urllib.parse import urlencode, urlparse, parse_qs
 
 
-_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator")))
+_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent.parent / "data" / "curator")))
 _TOKEN_FILE = _DATA_DIR / "x_oauth2_tokens.json"
 
 

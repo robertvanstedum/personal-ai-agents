@@ -20,7 +20,7 @@ from pathlib import Path
 from datetime import datetime
 import re
 
-INTERESTS_DIR = Path(__file__).parent / "interests"
+INTERESTS_DIR = Path(__file__).parent.parent / "interests"
 VALID_TAGS = ["DEEP-DIVE", "THIS-WEEK", "BACKLOG", "MUTE"]
 
 def parse_input(text: str) -> tuple:

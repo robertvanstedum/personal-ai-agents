@@ -10,8 +10,8 @@ import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Base path — same pattern as rest of project
-BASE_DIR = Path(__file__).parent
+# Base path — repo root, one level up from scripts/
+BASE_DIR = Path(__file__).parent.parent
 ANNOTATIONS_DIR = BASE_DIR / "data" / "annotations"
 
 

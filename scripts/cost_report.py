@@ -21,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 CHAT_LOG    = Path.home() / '.openclaw' / 'workspace' / 'logs' / 'usage' / 'daily_usage.json'
-CURATOR_LOG = Path(__file__).parent / 'curator_costs.json'
+CURATOR_LOG = Path(__file__).parent.parent / 'curator_costs.json'
 
 
 # ---------------------------------------------------------------------------

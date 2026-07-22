@@ -157,7 +157,15 @@ local Ollama before any cloud model was used and should fall back to local
 operation at zero marginal cost if cloud providers become unavailable. As open
 models and local hardware improve, local inference is expected to handle more of
 the platform's work, including coding. Some call sites remain hard-coded; those
-gaps are documented below.
+gaps are documented below. `tests/test_local_llm.py` is part of the standard
+regression suite. On the development host, where a local model server is
+available, it makes a real call to the configured local model whenever the
+suite runs. The test protects end-to-end execution of the local inference
+path rather than measuring search or task quality. GitHub-hosted runners
+skip only this live call because they do not provide the machine-local
+model service. This keeps the zero-marginal-cost path exercised
+continuously and prevents it from silently degrading while cloud models
+handle production work.
 
 **3. Swappable architecture, not merely swappable configuration.** Components
 should be replaceable without breaking the rest of the system. This is a
