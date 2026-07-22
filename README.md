@@ -1,6 +1,6 @@
 # mini-moi
 
-mini-moi is a personal AI agent platform, built for my own daily use. It carries
+mini-moi is a personal AI agent platform. It carries
 context across reading and research, language learning, and the work of building
 and running the system itself. It remembers my interests, what I have already
 investigated, how my thinking develops, and what I decide to follow up on.
