@@ -1,5 +1,10 @@
 # Production Security - Server Migration Plan
 
+> SUPERSEDED 2026-07-21. Written for a hypothetical Mac Mini/VPS migration;
+> production actually shipped on AWS EC2 with SSM Parameter Store. Current:
+> [OPERATIONS.md § Credentials & Third Parties](../../../OPERATIONS.md#credentials--third-parties).
+> Preserved for history.
+
 ## Current Setup (MacBook - Development)
 
 **Credential storage:** macOS Keychain  

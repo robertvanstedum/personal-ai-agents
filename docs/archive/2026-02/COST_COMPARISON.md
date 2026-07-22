@@ -1,5 +1,10 @@
 # Curator Cost Comparison
 
+> SUPERSEDED 2026-07-21, stale pricing. Current model/cost figures:
+> [ARCHITECTURE.md § AI Usage Across the
+> Platform](../../../ARCHITECTURE.md#ai-usage-across-the-platform).
+> Preserved for history.
+
 ## Provider Pricing (Feb 2026)
 
 | Provider | Input (per M tokens) | Output (per M tokens) |

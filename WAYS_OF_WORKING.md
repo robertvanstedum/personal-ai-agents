@@ -1,4 +1,9 @@
 # Ways of Working — Principles & Conventions
+
+> Founding document, established March 15, 2026. [AGENTS.md](AGENTS.md) is the
+> live, maintained version of these practices — this file stays at root as the
+> original record, not archived.
+
 **Mini-moi Personal AI Curator**
 **Established:** March 15, 2026
 **Applies to:** All agents, regardless of tool or model

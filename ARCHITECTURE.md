@@ -373,11 +373,11 @@ to cloud scoring after the per-run cost of a suitable cloud model became
 negligible. That was a convenience choice made possible by a quick backend swap,
 not a departure from the architecture.
 
-One naming artifact remains from that change. The scoring script's free-tier
-mode is still labeled "ollama," but it uses keyword scoring today rather than a
-live model. The name is imprecise; the behavior is intentional. The operational
-commitment remains that the system can return to local operation at zero
-marginal cost if cloud models become unavailable or too expensive. Re-verifying
+One historical label remains from that change. The scoring script's free-tier
+mode is still called "ollama," although it currently uses keyword scoring rather
+than a live model. The label is imprecise; the behavior is intentional. The
+operational commitment remains that the system can return to local operation at
+zero marginal cost if cloud models become unavailable or too expensive. Re-verifying
 that swap end to end on the current EC2 environment is part of the planned model
 configuration work. It is a check on a proven capability, not a replacement for
 a missing one.
@@ -404,12 +404,12 @@ impact on current Curator output. The gap is that the configured override cannot
 be relied on until the value is corrected. The defect is tracked and remains a
 clear example of Principle 7.
 
-**Multi-model challenge capability.** Curator's Deep Dive pipeline can have one
-model draft, other models cross-check, and the first model reconcile the result.
-This went live in June. It may be the same underlying capability as Research
-Intelligence's Synthesizer+Challenger framework and Guild's `ChallengerService`.
-If so, one capability currently has three names. Direct confirmation is still
-needed.
+**Multi-model challenge capability.** Curator's Deep Dive pipeline supports one
+model drafting, other models cross-checking, and the first model reconciling the
+result. Live since June, it may overlap with Research Intelligence's
+Synthesizer+Challenger framework and Guild's `ChallengerService`. Direct
+confirmation is still needed. If they are the same underlying mechanism, the
+platform should give the capability one name and one home.
 
 **Known Deep Dive regression.** Several generation scripts coexist while the
 frontend offers Scans, Deep Dive, and Deeper Dive as related but distinct options.

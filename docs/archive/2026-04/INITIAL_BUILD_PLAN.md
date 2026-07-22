@@ -1,4 +1,8 @@
 # Mini-moi — Initial Build Plan
+
+> SUPERSEDED 2026-07-21. Current version: [ARCHITECTURE.md](../../../ARCHITECTURE.md).
+> Preserved for history.
+
 ## Language German Domain + Platform Foundation
 **Version:** 1.0  
 **Date:** 2026-04-20  

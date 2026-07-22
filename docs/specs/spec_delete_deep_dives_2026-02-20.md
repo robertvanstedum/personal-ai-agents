@@ -1,5 +1,8 @@
 # Feature Request: Delete Deep Dive
 
+> Relocated from root to `docs/specs/` 2026-07-21 as part of a repository
+> cleanup — not implemented, not superseded, still an open request.
+
 **Status:** Requested (Feb 20, 2026)
 **Priority:** Medium
 **Requested by:** User

@@ -1,5 +1,10 @@
 # Testing Checklist - Deep Dive Feature
 
+> SUPERSEDED 2026-07-21. Written for the original "simple version" Deep Dive
+> implementation; the feature has since grown into several coexisting scripts
+> now tracked for consolidation in ROADMAP.md and ARCHITECTURE.md. Preserved
+> for history.
+
 **Date:** 2026-02-16
 **Status:** Ready for testing after break
 **Implementation:** Simple version (BeautifulSoup + Anthropic Sonnet 4)
