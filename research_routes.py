@@ -2423,7 +2423,7 @@ def api_research_candidates_assign():
 # Added: 2026-03-27
 # ─────────────────────────────────────────────
 
-from annotations import save_annotation, get_recent_annotations as _get_recent_annotations
+from scripts.annotations import save_annotation, get_recent_annotations as _get_recent_annotations
 
 @research_bp.route('/api/research/annotate', methods=['POST'])
 def annotate():
