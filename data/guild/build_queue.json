@@ -966,39 +966,6 @@
     "notes": "v1.3 — Phase 0 complete (#134, done). Phase 1 in build. Two-layer backend model: coordination layer (permanent) vs. backend call (swappable). OpenClaw as second backend. cos_interface.md v0.2 finalized and Grok-reviewed. Scope enforcement: observe/mutate boundary. Rollback/Production Safety required before containerization cutover."
   },
   {
-    "id": 137,
-    "spec_title": "Guild Baseline Documents Section",
-    "spec_file": "spec_guild_baseline_docs_2026-07-19.md",
-    "status": "spec_ready",
-    "github_issue": null,
-    "priority": "normal",
-    "blocked_reason": "Depends on Pass 1 repository cleanup completing first (root docs promoted, AGENTS.md live) — the Baseline section has nothing correct to show until then. No other gate.",
-    "last_transition_at": "2026-07-19T00:00:00Z",
-    "notes": "New Baseline entry in Guild nav (BASELINE · BUILD · OPERATE · IMPROVE), Baseline first as Guild's default landing view. Curates exactly 5 root docs (README, ARCHITECTURE, OPERATIONS, ROADMAP, AGENTS.md), read-only, reuses existing docs-browser rendering. Requires extending sync_docs.sh (Option A recommended) to reach these 5 root files, since it currently only watches docs/design/*, docs/specs/*, and build_queue.json. Sequencing per Robert: build after the GitHub cleanup (Pass 1) finishes, before the screen-prints/new-preview-flow work."
-  },
-  {
-    "id": 138,
-    "spec_title": "Per-Domain / Per-Model AI Cost Tracking",
-    "spec_file": "spec_ai_cost_tracking_2026-07-19.md",
-    "status": "spec_ready",
-    "github_issue": 93,
-    "priority": "normal",
-    "blocked_reason": null,
-    "last_transition_at": "2026-07-19T00:00:00Z",
-    "notes": "Approved 2026-07-19 after OpenClaw + Claude.ai review. Decisions: JSON-first confirmed (not Postgres); Whisper cost formula confirmed as specced (caller computes duration-based cost, calls log_ai_cost()); Phase 3 DoD tightened to explicitly name reading all four per-domain files. OpenClaw's shared costs.jsonl/shared-mount proposal was considered and rejected — Phase 3's in-memory four-file merge already achieves the domain x model x day view; a shared write path would be premature abstraction per the platform's own Design Principle #6 (extract only after duplication is proven, not in anticipation of it). Deferred to a real Phase 4 if a live cross-domain tail is ever genuinely needed. Still open: PRICING table rate-maintenance ownership, not resolved this round. Three phases, each independently shippable — see spec for full DoD per phase."
-  },
-  {
-    "id": 139,
-    "spec_title": "Backfill curator_YYYY-MM-DD.json for archived dates without it",
-    "spec_file": null,
-    "status": "idea",
-    "github_issue": null,
-    "priority": "normal",
-    "blocked_reason": null,
-    "last_transition_at": "2026-07-20T00:00:00Z",
-    "notes": "Follow-up from fixing Archive 'View' routing (build #140-equivalent fix, same session). 164 of 195 archived daily editions have no curator_YYYY-MM-DD.json, so they still fall back to the old frozen HTML template instead of rendering through the current one. Needs a feasibility check first: can the structured article data (title/source/score/category/url) be reconstructed by parsing the old static HTML's visible markup well enough to reconstruct valid JSON? If yes, a one-time backfill script + spec. Robert's direction: not urgent, current/recent dates and everything going forward already work correctly after the routing fix; this is purely about extending new-template rendering to old history."
-  },
-  {
     "id": 140,
     "spec_title": "Repository Application Reorganization Phase 2",
     "spec_file": "spec_repository_application_reorganization_phase2_2026-07-21.md",
