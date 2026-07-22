@@ -1,4 +1,8 @@
 # mini-moi Portal — Build State & Next Steps
+
+> SUPERSEDED 2026-07-21. Current version: [ARCHITECTURE.md](../../../ARCHITECTURE.md).
+> Preserved for history.
+
 **Date:** 2026-05-28  
 **Repo:** `~/Projects/personal-ai-agents`  
 **Branch:** `feat/german-html-interface`  

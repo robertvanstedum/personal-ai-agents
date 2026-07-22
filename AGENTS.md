@@ -2,7 +2,8 @@
 
 Live document. Founding original: [WAYS_OF_WORKING.md](WAYS_OF_WORKING.md) —
 this file is the current, maintained practice; the founding document records
-where it came from and why.
+where it came from and why. Kept at root, not archived, since it's still
+referenced as the origin of current practice.
 
 Read `_NewDomains/PROJECT_STATE.md` first before starting any work.
 

@@ -1,5 +1,8 @@
 # Phase 3C.7 — Incremental X Bookmark Pull
 
+> SUPERSEDED 2026-07-21. Current version: [ROADMAP.md](../../../ROADMAP.md).
+> Preserved for history.
+
 **Goal:** Fetch new X bookmarks since last pull, enrich with destination text, add to daily scoring pool without reprocessing the 398 historical archive signals.
 
 **New file:** `x_pull_incremental.py`  

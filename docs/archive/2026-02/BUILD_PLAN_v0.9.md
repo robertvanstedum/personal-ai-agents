@@ -1,4 +1,7 @@
 # Personal-AI-Agents — v0.9 Build Plan
+
+> SUPERSEDED 2026-07-21. Current version: [ROADMAP.md](../../../ROADMAP.md).
+> Preserved for history.
 **Date:** Feb 28, 2026  
 **Partners:** Claude (design), OpenClaw (agent/memory), Claude Code (implementation)  
 **Deadline:** ~2 weeks — repo goes live alongside resume and job search

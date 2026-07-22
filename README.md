@@ -1,17 +1,19 @@
 # mini-moi
 
-mini-moi is a personal AI system I built for my own daily use. It keeps context
-across reading, research, language learning, and the work of running and
-improving the system itself.
+mini-moi is a personal AI agent platform, built for my own daily use. It carries
+context across reading and research, language learning, and the work of building
+and running the system itself. It remembers my interests, what I have already
+investigated, how my thinking develops, and what I decide to follow up on.
 
-The goal is simple: the more I use it, the more useful it becomes. It remembers
-my interests, what I have already investigated, how my thinking develops, and
-what I decide to follow up on. That record grows over time instead of resetting
-with each new conversation.
+The same pattern applies beyond one person. Persistent context and feedback that
+compounds instead of resetting is just as useful to a team or an organization
+that wants its systems to learn from repeated work rather than start over each
+time. This repository is the personal version.
 
-mini-moi has been in daily use since February 2026 and running on AWS since June
-2026. This repository documents the system as it works today, including its
-architecture, operations, roadmap, and continuing development.
+mini-moi has been in daily use since February 2026, on AWS since June 2026. This
+repository documents the system as it works today: architecture, operations,
+roadmap, and ongoing development, with current capability kept distinct from
+planned work.
 
 ---
 

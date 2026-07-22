@@ -1,4 +1,8 @@
 # Build Package: Priority Feed (Tier 2 — Web Search Layer)
+
+> SUPERSEDED 2026-07-21. Current version: [ROADMAP.md](../../../ROADMAP.md).
+> Preserved for history.
+
 **Mini-moi Personal AI Curator**
 **Prepared:** March 13, 2026
 **For:** Claude Code
