@@ -975,5 +975,16 @@
     "blocked_reason": "Future work. Phase 2A is read-only; no file move is authorized until Robert approves the dependency manifest and the first vertical slice.",
     "last_transition_at": "2026-07-21T00:00:00Z",
     "notes": "PR #102 completed the preliminary standalone script/test move. Remaining scope is the production application cluster, beginning with a full dependency map. One slice and one production verification at a time. Do not combine the pre-existing x_adapter.py defect without explicit approval."
+  },
+  {
+    "id": 141,
+    "spec_title": "Automate docs/specs and build-queue sync into CI/CD deploy",
+    "spec_file": null,
+    "status": "backlog",
+    "github_issue": null,
+    "priority": "normal",
+    "blocked_reason": "Idea only — no design session yet. Needs Robert + design discussion on whether/how to fold this into deploy.yml.",
+    "last_transition_at": "2026-07-22T00:00:00Z",
+    "notes": "scripts/sync_docs.sh (docs/design/*, docs/specs/*, build_queue.json -> EC2 via SSM pull from GitHub raw URLs) is a manual, Mac-run step, not part of the automated deploy.yml pipeline. Surfaced 2026-07-22 when spec #140 (Phase 2 repo reorg) merged to main but its file 404d on the Guild dashboard until sync_docs.sh was run by hand. OPERATIONS.md already documents this as expected current behavior (\"A git push alone does not make a new spec visible in prod\"), so this is a known gap, not a new bug. Open questions for the future design session: fold the pull into the existing deploy.yml GitHub Actions job vs. keep it a separate manual/scheduled step; whether root docs (ARCHITECTURE.md, OPERATIONS.md, ROADMAP.md) should join the synced set; failure/retry behavior if the SSM pull fails mid-deploy."
   }
 ]
