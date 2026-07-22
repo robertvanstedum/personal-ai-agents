@@ -352,6 +352,7 @@
 {% set in_build_items   = items | selectattr('status', 'equalto', 'in_build') | list %}
 {% set blocked_items    = items | selectattr('status', 'equalto', 'blocked') | list %}
 {% set done_items       = items | selectattr('status', 'equalto', 'done') | list %}
+{% set visible_cols = 3 + (1 if incomplete_items else 0) + (1 if blocked_items else 0) %}
 
 <div class="page-header">
   <h1 class="page-title">Build Queue</h1>
@@ -361,7 +362,7 @@
   </div>
 </div>
 
-<div class="board">
+<div class="board" style="grid-template-columns: repeat({{ visible_cols }}, 1fr);">
 
   {# ── Spec Ready ── #}
   <div class="board-col">
@@ -376,18 +377,16 @@
     {% endif %}
   </div>
 
-  {# ── Incomplete ── #}
+  {# ── Incomplete (collapses when empty) ── #}
+  {% if incomplete_items %}
   <div class="board-col">
     <div class="col-header" style="color:#8b5e20;">
       Incomplete
       <span class="col-count">{{ incomplete_items | length }}</span>
     </div>
-    {% if incomplete_items %}
-      {% for item in incomplete_items %}{{ board_card(item) }}{% endfor %}
-    {% else %}
-      <div class="col-empty">—</div>
-    {% endif %}
+    {% for item in incomplete_items %}{{ board_card(item) }}{% endfor %}
   </div>
+  {% endif %}
 
   {# ── In Build ── #}
   <div class="board-col">
@@ -402,18 +401,16 @@
     {% endif %}
   </div>
 
-  {# ── Blocked ── #}
+  {# ── Blocked (collapses when empty) ── #}
+  {% if blocked_items %}
   <div class="board-col">
     <div class="col-header" style="color:#8b2020;">
       Blocked
       <span class="col-count">{{ blocked_items | length }}</span>
     </div>
-    {% if blocked_items %}
-      {% for item in blocked_items %}{{ board_card(item) }}{% endfor %}
-    {% else %}
-      <div class="col-empty">—</div>
-    {% endif %}
+    {% for item in blocked_items %}{{ board_card(item) }}{% endfor %}
   </div>
+  {% endif %}
 
   {# ── Recently Done ── #}
   <div class="board-col">

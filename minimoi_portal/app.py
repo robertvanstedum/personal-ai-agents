@@ -1595,13 +1595,20 @@ def guild_career_focus_save():
 @_require_owner
 def guild_build():
     status_filter = request.args.get('status', 'all')
-    items = _load_build_queue()
+    all_items = _load_build_queue()
+    items = all_items
     if status_filter != 'all':
         items = [i for i in items if i.get('status') == status_filter]
     # Sort: most recently transitioned first (items without timestamp go last)
     items.sort(key=lambda i: i.get('last_transition_at') or '', reverse=True)
+    # Incomplete/Blocked tabs collapse when empty across the whole queue, not
+    # just the current filter — computed from all_items so switching filters
+    # doesn't make a tab flicker in and out.
+    has_incomplete = any(i.get('status') == 'incomplete' for i in all_items)
+    has_blocked = any(i.get('status') == 'blocked' for i in all_items)
     return render_template("guild/build_log.html", items=items,
-                           status_filter=status_filter, user=_current_user())
+                           status_filter=status_filter, user=_current_user(),
+                           has_incomplete=has_incomplete, has_blocked=has_blocked)
 
 
 @app.route("/guild/build/queue")
