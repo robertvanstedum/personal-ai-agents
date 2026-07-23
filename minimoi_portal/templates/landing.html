@@ -3,110 +3,127 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>mini-moi — Personal AI Platform</title>
+  <meta name="description" content="mini-moi is a personal AI agent platform built for daily use.">
+  <title>mini-moi — Personal AI Agent Platform</title>
+  <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/portal.css">
 </head>
-<body class="landing">
+<body class="landing{% if user %} landing-authenticated{% endif %}">
 
-<nav class="portal-nav">
-  <span class="portal-nav-brand">mini-moi</span>
-  <div class="portal-nav-links">
-    <a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank" rel="noopener noreferrer" class="nav-hide-mobile">GitHub</a>
-    <a href="https://www.linkedin.com/in/robert-van-stedum" target="_blank" rel="noopener noreferrer" class="nav-hide-mobile">LinkedIn</a>
-    {% if user %}
-      <a href="/dashboard" class="nav-btn">Dashboard →</a>
-    {% else %}
-      <a href="/preview/curator/briefing.html" class="nav-btn-ghost nav-hide-mobile">Browse preview →</a>
-      <a href="/register" class="nav-btn-ghost">Request access →</a>
-      <a href="/login" class="nav-btn">Sign in</a>
-    {% endif %}
-  </div>
-</nav>
+<header class="front-door-header">
+  <nav class="front-door-nav" aria-label="mini-moi workspaces">
+    <a href="/" class="front-door-brand" aria-label="mini-moi home">mini-moi</a>
 
-<main class="landing-main">
+    <div class="workspace-nav">
+      {% for workspace in workspaces %}
+        {% if workspace.allowed %}
+          <a href="{{ workspace.path }}" class="workspace-link">
+            {{ workspace.short_label or workspace.label }}
+          </a>
+        {% else %}
+          <span class="workspace-link workspace-locked"
+                aria-disabled="true"
+                title="Sign in to open {{ workspace.label }}">
+            {{ workspace.short_label or workspace.label }}
+            <span class="workspace-lock" aria-hidden="true">🔒</span>
+            <span class="sr-only"> — sign in to open</span>
+          </span>
+        {% endif %}
+      {% endfor %}
+    </div>
 
-  <section class="hero">
-    <h1 class="hero-title">mini-moi</h1>
-    <p class="hero-tagline"><em>Your context. Your goals. Your signal.</em></p>
-  </section>
+    <div class="front-door-account">
+      <a href="https://github.com/robertvanstedum/personal-ai-agents"
+         target="_blank" rel="noopener noreferrer"
+         class="front-door-external nav-hide-compact">GitHub</a>
+      <a href="https://www.linkedin.com/in/robert-van-stedum/"
+         target="_blank" rel="noopener noreferrer"
+         class="front-door-external nav-hide-compact">LinkedIn</a>
+      {% if user %}
+        <a href="/account/password" class="front-door-user">{{ user.display_name }}</a>
+        <a href="/logout" class="front-door-signout">Sign out</a>
+      {% else %}
+        <a href="/login" class="front-door-signin">Sign in</a>
+      {% endif %}
+    </div>
+  </nav>
+</header>
 
-  <section class="about-section">
-    <div class="about-grid">
+<main class="front-door-main">
+  <section class="front-hero" aria-labelledby="front-title">
+    <div class="front-hero-copy">
+      <p class="front-eyebrow">Personal AI agent platform</p>
+      <h1 id="front-title" class="front-title">mini-moi</h1>
+      <p class="front-tagline"><em>Your context. Your goals. Your signal.</em></p>
+      <div class="front-rule" aria-hidden="true"></div>
 
-      <div class="about-card">
-        <h2>What this is</h2>
-        <p>
-          LLMs have the world's knowledge. They don't have your intent, your goals,
-          your history, your risk tolerance.
-        </p>
-        <p>
-          mini-moi builds toward specific intelligence in your context. It works with
-          cloud LLMs, stores memory locally, runs a local model, and acts together with you.
-        </p>
-        <p>
-          Focused on specific domains first. Built to grow together over time.
-        </p>
-      </div>
-
-      <div class="about-card">
-        <h2>What's running</h2>
-        <ul class="feature-list">
-          <li>
-            <strong>Curator v1.1</strong> — Geopolitics and finance briefing. ~700 candidates scored
-            daily by a reasoning model against your learned profile — counterpoints
-            by design, not an echo chamber. In daily use since February 2026.
-          </li>
-          <li>
-            <strong>Mein Deutsch v1.1</strong> — German practice built around your own life. Build your
-            own KI-Personas and scenes, manage reading lists tuned to your interests, and
-            practice with KI-Personas or real people — transcripts flow through the same
-            feedback pipeline either way. Mistakes become drills. Vienna-tested.
-          </li>
-          <li>
-            <strong>Guild v0.9</strong> — Where the agents and I work together to get better at our
-            craft. From ideas through specs, build, and operations.
-            Guild is intentionally cross-domain (Curator, German, and beyond). A Chief
-            of Staff role coordinates the agents while keeping my real goals and
-            private concerns in view.
-          </li>
-        </ul>
-        <a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank" rel="noopener noreferrer" class="text-link">
-          View source on GitHub →
-        </a>
-      </div>
-
-      <div class="about-card">
+      <div class="front-about">
         <h2>About</h2>
         <p>
-          My focus is the intersection of business objectives and technical solutions —
-          roadmap, business case, delivery. I look for the signal through the noise.
+          mini-moi is a personal AI agent platform, built for my own daily use.
+          It carries context across reading and research, language immersion,
+          and the work of building and running the system itself.
         </p>
-        <p>
-          Fluent in Portuguese, comfortable in Spanish, functional in German.
-          Lived and worked across multiple countries and regions.
-        </p>
-        <p>
-          mini-moi is built here first. Patterns developed in this personal system
-          move outward — not the other way around.
-        </p>
-        <a href="https://www.linkedin.com/in/robert-van-stedum" target="_blank" rel="noopener noreferrer" class="text-link">
-          LinkedIn →
-        </a>
       </div>
 
+      <div class="front-actions">
+        {% if user %}
+          <a href="/tour" class="front-button front-button-primary">Explore mini-moi</a>
+          <span class="front-welcome">Welcome back, {{ user.display_name }}.</span>
+        {% else %}
+          <a href="/login" class="front-button front-button-primary">Sign in</a>
+          <a href="/tour" class="front-button front-button-text">Explore mini-moi</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="front-hero-photo">
+      <img src="/static/landing/coffee-cups.jpg"
+           alt="Two cups of coffee in sunlight on a café table"
+           width="2016" height="1512" fetchpriority="high">
     </div>
   </section>
 
+  <section class="front-explore" aria-labelledby="explore-heading">
+    <div class="front-explore-copy">
+      <p class="front-eyebrow">A public view</p>
+      <h2 id="explore-heading">Explore mini-moi</h2>
+      <p>See real workflows across research, language immersion, and operations without signing in.</p>
+      <a href="/tour" class="front-button front-button-primary">Explore as a guest</a>
+    </div>
+
+    <div class="front-teaser" aria-label="Selected mini-moi workspace previews">
+      <figure class="front-teaser-card">
+        <img src="/static/tour/curator-scan.jpg"
+             alt="Curator research scan"
+             width="1425" height="854" loading="lazy">
+        <figcaption><strong>Curator</strong><span>Research</span></figcaption>
+      </figure>
+      <figure class="front-teaser-card">
+        <img src="/static/tour/portuguese-conversation.jpg"
+             alt="Meu Português conversation practice"
+             width="1425" height="854" loading="lazy">
+        <figcaption><strong>Meu Português</strong><span>Language immersion</span></figcaption>
+      </figure>
+      <figure class="front-teaser-card">
+        <img src="/static/tour/guild-landing.jpg"
+             alt="Guild build and operations workspace"
+             width="1440" height="863" loading="lazy">
+        <figcaption><strong>Guild</strong><span>Build and operations</span></figcaption>
+      </figure>
+    </div>
+  </section>
 </main>
 
-<footer class="portal-footer">
-  <span>mini-moi-agent-guild · v1.1</span>
-  <span>·</span>
-  <a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank" rel="noopener noreferrer">GitHub</a>
-  <span>·</span>
-  <a href="https://www.linkedin.com/in/robert-van-stedum" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+<footer class="front-door-footer">
+  <a href="/tour">Explore</a>
+  <a href="https://github.com/robertvanstedum/personal-ai-agents"
+     target="_blank" rel="noopener noreferrer">GitHub</a>
+  <a href="https://www.linkedin.com/in/robert-van-stedum/"
+     target="_blank" rel="noopener noreferrer">LinkedIn</a>
+  {% if not user %}<a href="/register">Request access</a>{% endif %}
 </footer>
 
 </body>

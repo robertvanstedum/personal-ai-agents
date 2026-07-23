@@ -6,8 +6,11 @@ in conftest.py) so each test starts with a clean session/cookie jar.
 DB calls in domain_auth are mocked — no real DB needed in CI.
 """
 
-import pytest
+from pathlib import Path
 from unittest.mock import patch
+
+import pytest
+from bs4 import BeautifulSoup
 
 
 @pytest.fixture
@@ -25,6 +28,176 @@ def test_unauthenticated_request_redirects_to_login(client):
     resp = client.get("/dashboard", follow_redirects=False)
     assert resp.status_code == 302
     assert "/login" in resp.headers["Location"]
+
+
+def test_authenticated_dashboard_redirects_to_landing(client):
+    with client.session_transaction() as sess:
+        sess["user"] = {
+            "username": "robert",
+            "display_name": "Robert",
+            "tier": "owner",
+        }
+    with patch("minimoi_portal.auth.check_must_change_password", return_value=False):
+        resp = client.get("/dashboard", follow_redirects=False)
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/")
+
+
+def test_signed_out_landing_shows_locked_public_workspaces(client):
+    resp = client.get("/")
+    assert resp.status_code == 200
+    soup = BeautifulSoup(resp.get_data(as_text=True), "html.parser")
+    locked = [node.get_text(" ", strip=True) for node in soup.select(".workspace-locked")]
+    assert any("Curator" in label for label in locked)
+    assert any("Mein Deutsch" in label for label in locked)
+    assert any("Meu Português" in label for label in locked)
+    assert any("Guild" in label for label in locked)
+    assert not any("Chief of Staff" in label or "CoS" in label for label in locked)
+    assert soup.select_one('a[href="/tour"]') is not None
+    assert soup.select_one('.front-actions a[href="/tour"]') is not None
+    assert soup.select_one('a[href="/login"]') is not None
+
+
+def test_owner_landing_shows_active_owner_workspaces(client):
+    with client.session_transaction() as sess:
+        sess["user"] = {
+            "username": "robert",
+            "display_name": "Robert",
+            "tier": "owner",
+        }
+    resp = client.get("/")
+    assert resp.status_code == 200
+    soup = BeautifulSoup(resp.get_data(as_text=True), "html.parser")
+    links = {a.get("href") for a in soup.select(".workspace-link[href]")}
+    assert {
+        "/app/curator",
+        "/app/german",
+        "/app/portuguese",
+        "/guild",
+        "/app/cos",
+    }.issubset(links)
+    assert not soup.select(".workspace-locked")
+
+
+def test_admin_landing_hides_owner_only_workspaces(client):
+    with client.session_transaction() as sess:
+        sess["user"] = {
+            "username": "admin",
+            "display_name": "Admin",
+            "tier": "admin",
+        }
+    resp = client.get("/")
+    soup = BeautifulSoup(resp.get_data(as_text=True), "html.parser")
+    links = {a.get("href") for a in soup.select(".workspace-link[href]")}
+    assert links == {"/app/curator", "/app/german", "/app/portuguese"}
+    assert "/guild" not in links
+    assert "/app/cos" not in links
+
+
+def test_legacy_family_guest_landing_matches_restricted_routes(client):
+    with client.session_transaction() as sess:
+        sess["user"] = {
+            "username": "family",
+            "display_name": "Family",
+            "tier": "guest",
+        }
+    resp = client.get("/")
+    soup = BeautifulSoup(resp.get_data(as_text=True), "html.parser")
+    links = {a.get("href") for a in soup.select(".workspace-link[href]")}
+    assert links == {"/app/curator", "/app/german"}
+
+
+def test_domain_guest_landing_only_activates_granted_portuguese(client):
+    with client.session_transaction() as sess:
+        sess["user"] = {
+            "username": "test@example.com",
+            "display_name": "Test User",
+            "tier": "guest",
+            "auth_id": 7,
+        }
+    with patch("minimoi_portal.domain_auth.has_domain_access", return_value=True):
+        resp = client.get("/")
+    soup = BeautifulSoup(resp.get_data(as_text=True), "html.parser")
+    links = {a.get("href") for a in soup.select(".workspace-link[href]")}
+    assert links == {"/app/portuguese"}
+    assert "/app/cos" not in resp.get_data(as_text=True)
+
+
+def test_domain_guest_without_portuguese_grant_sees_no_active_workspace(client):
+    with client.session_transaction() as sess:
+        sess["user"] = {
+            "username": "test@example.com",
+            "display_name": "Test User",
+            "tier": "guest",
+            "auth_id": 7,
+        }
+    with patch("minimoi_portal.domain_auth.has_domain_access", return_value=False):
+        resp = client.get("/")
+    soup = BeautifulSoup(resp.get_data(as_text=True), "html.parser")
+    assert not soup.select(".workspace-link[href]")
+
+
+def test_public_tour_is_static_and_excludes_cos(client):
+    resp = client.get("/tour")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Curator" in html
+    assert "Mein Deutsch" in html
+    assert "Meu Português" in html
+    assert "Guild" in html
+    assert "Chief of Staff" not in html
+    assert "/app/cos" not in html
+    assert "<form" not in html
+    soup = BeautifulSoup(html, "html.parser")
+    static_root = Path(__file__).parents[1] / "minimoi_portal" / "static"
+    images = [img.get("src") for img in soup.select('img[src^="/static/tour/"]')]
+    assert len(images) == 9
+    assert all("cos" not in src.lower() and "chief" not in src.lower() for src in images)
+    assert all((static_root / src.removeprefix("/static/")).is_file() for src in images)
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/preview/", "/preview/curator/briefing.html", "/preview/german/lesen"],
+)
+def test_legacy_preview_routes_redirect_to_tour(client, path):
+    resp = client.get(path, follow_redirects=False)
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/tour")
+
+
+def test_successful_login_defaults_to_landing(client):
+    fake_user = {
+        "username": "family",
+        "display_name": "Family",
+        "tier": "family",
+    }
+    with patch("minimoi_portal.auth.authenticate", return_value=(fake_user, None)), \
+         patch("minimoi_portal.auth.check_must_change_password", return_value=False):
+        resp = client.post(
+            "/login",
+            data={"username": "family", "password": "secret"},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/")
+
+
+def test_successful_login_preserves_explicit_next(client):
+    fake_user = {
+        "username": "family",
+        "display_name": "Family",
+        "tier": "family",
+    }
+    with patch("minimoi_portal.auth.authenticate", return_value=(fake_user, None)), \
+         patch("minimoi_portal.auth.check_must_change_password", return_value=False):
+        resp = client.post(
+            "/login?next=/app/german",
+            data={"username": "family", "password": "secret"},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/app/german")
 
 
 # ── 2. Valid login token creates session ───────────────────────────────────────

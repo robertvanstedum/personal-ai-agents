@@ -19,6 +19,8 @@ import requests
 from bs4 import BeautifulSoup
 from flask import Response, request
 
+from minimoi_portal.workspaces import workspace_navigation
+
 # Headers that must not be forwarded between proxies
 _HOP_BY_HOP = frozenset({
     "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
@@ -96,10 +98,23 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
     guild_active      = "color:#ffffff;font-weight:600;" if portal_prefix == "/guild"          else ""
     cos_active        = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/cos"        else ""
 
-    german_nav_link = f'<a href="/app/german" style="color:#C68A5E;text-decoration:none;margin-right:14px;{german_active}">German</a>'
-    is_guest = user and user.get("tier") == "guest"
-    guild_nav_link = "" if is_guest else f'<a href="/guild" style="color:#C68A5E;text-decoration:none;margin-right:14px;{guild_active}">Guild</a>'
-    cos_nav_link   = "" if is_guest else f'<a href="/app/cos" style="color:#C68A5E;text-decoration:none;{cos_active}">CoS</a>'
+    active_styles = {
+        "curator": curator_active,
+        "german": german_active,
+        "portuguese": portuguese_active,
+        "guild": guild_active,
+        "cos": cos_active,
+    }
+    nav_links = []
+    for workspace in workspace_navigation(user):
+        label = workspace.get("short_label", workspace["label"])
+        margin = "" if workspace["key"] == "cos" else "margin-right:14px;"
+        nav_links.append(
+            f'<a href="{workspace["path"]}" '
+            f'style="color:#C68A5E;text-decoration:none;{margin}'
+            f'{active_styles[workspace["key"]]}">{label}</a>'
+        )
+    workspace_links = "".join(nav_links)
 
     # Per-backend layout offset so backend sticky elements don't hide under our nav.
     # Curator body is display:flex (row) — padding-top pushes the flex row down.
@@ -127,13 +142,9 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
   font-size:13px;border-bottom:1px solid rgba(255,255,255,0.12);
   box-shadow:0 1px 8px rgba(0,0,0,0.4);
 ">
-  <a href="/dashboard" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
+  <a href="/" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
   <span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
-  <a href="/app/curator"    style="color:#C68A5E;text-decoration:none;margin-right:14px;{curator_active}">Curator</a>
-  {german_nav_link}
-  <a href="/app/portuguese" style="color:#C68A5E;text-decoration:none;margin-right:14px;{portuguese_active}">Meu Português</a>
-  {guild_nav_link}
-  {cos_nav_link}
+  {workspace_links}
   <a href="/account/password" style="color:rgba(255,255,255,0.45);text-decoration:none;margin-left:auto;margin-right:12px;">{display_name}</a>
   <a href="/logout" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;">Sign out</a>
 </div>

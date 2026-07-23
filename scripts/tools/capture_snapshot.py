@@ -33,7 +33,7 @@ from playwright.sync_api import sync_playwright
 # ── Paths ──────────────────────────────────────────────────────────────────────
 
 REPO_ROOT   = Path(__file__).parent.parent.parent
-PREVIEW_DIR = REPO_ROOT / "static" / "public" / "preview"
+PREVIEW_DIR = REPO_ROOT / "minimoi_portal" / "static" / "preview"
 ASSETS_DIR  = PREVIEW_DIR / "assets"
 PORTAL_URL  = os.environ.get("PORTAL_URL", "http://localhost:5001")
 USERNAME    = "robert"
@@ -84,7 +84,7 @@ LINK_MAP = {
     "/guild/build/queue":       "/preview/guild/queue.html",
     "/guild/build/roadmap":     "/preview/guild/roadmap.html",
     "/guild/career":            "/preview/guild/career.html",
-    "/dashboard":               "/preview/",
+    "/dashboard":               "/tour",
     "/guild/":                  "/preview/guild/briefing.html",
 }
 
@@ -308,11 +308,11 @@ def _rewrite_links(soup: BeautifulSoup) -> None:
 
 
 def _replace_dashboard_btn(soup: BeautifulSoup) -> None:
-    """Replace 'Dashboard →' nav button with 'Browse Preview →'."""
+    """Replace legacy dashboard navigation with the public tour."""
     for a in soup.find_all("a", href=True):
         if "/dashboard" in a.get("href", "") or (a.get_text(strip=True) in ("Dashboard →", "Dashboard")):
-            a["href"] = "/preview/curator/briefing.html"
-            a.string = "Browse Preview →"
+            a["href"] = "/tour"
+            a.string = "Explore mini-moi →"
 
 
 EXPAND_ONCLICK_PATTERNS = ("toggleSection", "showMore", "ShowMore", "showAll", "expandAll", "dailyShowMore",
@@ -774,4 +774,4 @@ if __name__ == "__main__":
         for f in manifest["failures"]:
             print(f"  {f['page']}: {f['error']}")
     print(f"manifest.json → {PREVIEW_DIR / 'manifest.json'}")
-    print(f"\nNext: git add static/public/preview/ && git push")
+    print("\nNext: review minimoi_portal/static/preview/ before committing")
