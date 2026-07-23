@@ -986,5 +986,16 @@
     "blocked_reason": null,
     "last_transition_at": "2026-07-23T03:40:43Z",
     "notes": "Technically reviewed by Claude Code 2026-07-22, all 5 review questions in spec section 14 confirmed, no blocking findings. Findings recorded in spec section 15 as implementation caveats: (1) workspace registry must delegate 100% to existing _require_owner/_dauth.has_domain_access() checks, never re-derive its own -- doing so also fixes a pre-existing drift bug where /dashboard has a looser Portuguese-guest check than portuguese_root; (2) scripts/tools/capture_snapshot.py and tests/test_auth.py both have real /dashboard-keyed logic needing lockstep updates, beyond the ~10 template link references; (3) /preview/* serves from minimoi_portal/static/preview/ but capture_snapshot.py writes to a different directory (static/public/preview/) -- rollback preservation must target the former; (4) docs/screenshots/2026-07-21/ has usable curated images for /tour but is .dockerignored, so must be copied into minimoi_portal/static/ to ship. Repository-reorganization merges (#107/#108/#109) confirmed complete, main is clean. Implementation not authorized -- Codex builds, Robert reviews the PR before merge/deploy. Robert authorized implementation 2026-07-22: Codex builds from this spec in a clean codex/minimoi-front-door-143 worktree/branch, stops at a reviewable PR, no merge/deploy inferred. Claude Code reviews the implementation before merge."
+  },
+  {
+    "id": 145,
+    "spec_title": "Promote Research Intelligence from PoC location to official domain",
+    "spec_file": "spec_research_intelligence_promotion_2026-07-23.md",
+    "status": "backlog",
+    "github_issue": null,
+    "priority": "normal",
+    "blocked_reason": "Future work. Precondition: PR #122 merged and verified first. Robert must choose the target location (domains/curator/research/ vs. a peer domains/research-intelligence/) before Phase 1 begins.",
+    "last_transition_at": "2026-07-23T00:00:00Z",
+    "notes": "Corrects a real documentation error (ROADMAP.md incorrectly states this was merged into Curator's Deep Dive and is superseded -- it wasn't and isn't) that nearly caused live production code to be archived as dead. Not a feature build -- a location and documentation correction for a subsystem that has been in continuous production use since March."
   }
 ]
