@@ -142,7 +142,7 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
   font-size:13px;border-bottom:1px solid rgba(255,255,255,0.12);
   box-shadow:0 1px 8px rgba(0,0,0,0.4);
 ">
-  <a href="/" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
+  <a href="/dashboard" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
   <span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
   {workspace_links}
   <a href="/account/password" style="color:rgba(255,255,255,0.45);text-decoration:none;margin-left:auto;margin-right:12px;">{display_name}</a>
