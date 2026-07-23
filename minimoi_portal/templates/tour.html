@@ -8,7 +8,7 @@
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/portal.css?v=20260723-stable1">
+  <link rel="stylesheet" href="/static/portal.css?v=20260723-ui2">
 </head>
 <body class="tour">
 
@@ -20,13 +20,14 @@
       <a href="#german">Mein Deutsch</a>
       <a href="#portuguese">Meu Português</a>
       <a href="#guild">Guild</a>
+      <a href="#cos">CoS</a>
     </div>
     <div class="front-door-account">
       <a href="https://github.com/robertvanstedum/personal-ai-agents"
          target="_blank" rel="noopener noreferrer"
          class="front-door-external nav-hide-compact">GitHub</a>
       {% if user %}
-        <a href="/dashboard" class="front-door-signin">Open mini-moi</a>
+        <a href="/dashboard" class="front-door-signin">Home</a>
       {% else %}
         <a href="/login" class="front-door-signin">Sign in</a>
       {% endif %}
@@ -274,7 +275,42 @@
     </div>
     <nav class="tour-step-nav" aria-label="Guild tour navigation">
       <a href="#portuguese">← Meu Português</a>
-      <a href="/">Return home →</a>
+      <a href="#cos">Next: Chief of Staff →</a>
+    </nav>
+  </section>
+
+  <section id="cos" class="tour-section tour-cos" aria-labelledby="cos-heading">
+    <div class="tour-section-heading">
+      <p class="tour-number">05</p>
+      <div>
+        <p class="front-eyebrow">Cross-domain coordination</p>
+        <h2 id="cos-heading">Chief of Staff</h2>
+        <p>
+          Confer carries a request across domains, records what matters, and
+          keeps coordination separate from build and operations work.
+        </p>
+      </div>
+    </div>
+    <ol class="tour-flow" aria-label="Chief of Staff use flow">
+      <li><span>👤</span> Bring a request to Confer</li>
+      <li><span>💬</span> Work through the context</li>
+      <li><span>📝</span> Record what needs attention</li>
+      <li><span>↻</span> Carry it to the right domain</li>
+    </ol>
+    <div class="tour-gallery tour-gallery-single">
+      <figure class="tour-shot tour-shot-wide">
+        <a class="tour-shot-link" href="/static/tour/cos-confer-private.png"
+           target="_blank" rel="noopener" aria-label="View Chief of Staff Confer full size">
+          <img src="/static/tour/cos-confer-private.png"
+               alt="Chief of Staff Confer conversation"
+               width="1573" height="1000" loading="lazy">
+        </a>
+        <figcaption><span>01</span> Confer across the system</figcaption>
+      </figure>
+    </div>
+    <nav class="tour-step-nav" aria-label="Chief of Staff tour navigation">
+      <a href="#guild">← Guild</a>
+      <a href="{% if user %}/dashboard{% else %}/{% endif %}">Return home →</a>
     </nav>
   </section>
 </main>

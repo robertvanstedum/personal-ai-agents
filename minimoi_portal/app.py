@@ -235,19 +235,17 @@ def landing():
         "landing.html",
         user=user,
         workspaces=workspace_navigation(user),
+        tour_workspaces=WORKSPACES,
     )
 
 
 @app.route("/tour")
 def tour():
     """Public, static screenshot tour. No production APIs or private data."""
-    public_workspaces = [
-        workspace for workspace in WORKSPACES if workspace["public_visible"]
-    ]
     return render_template(
         "tour.html",
         user=_current_user(),
-        workspaces=public_workspaces,
+        workspaces=WORKSPACES,
     )
 
 
