@@ -42,7 +42,7 @@ def test_authenticated_dashboard_renders_signed_in_home(client):
     assert resp.status_code == 200
     soup = BeautifulSoup(resp.get_data(as_text=True), "html.parser")
     assert "Welcome back, Robert." in soup.get_text(" ", strip=True)
-    cards = {a.get("href") for a in soup.select(".dashboard-workspace-card")}
+    cards = {a.get("href") for a in soup.select(".dashboard-domain-open")}
     assert {
         "/app/curator",
         "/app/german",
@@ -50,6 +50,15 @@ def test_authenticated_dashboard_renders_signed_in_home(client):
         "/guild",
         "/app/cos",
     }.issubset(cards)
+    tour_links = {
+        a.get("href") for a in soup.select(".dashboard-card-tour[href]")
+    }
+    assert tour_links == {
+        "/tour#curator",
+        "/tour#german",
+        "/tour#portuguese",
+        "/tour#guild",
+    }
 
 
 def test_signed_out_landing_shows_locked_public_workspaces(client):
@@ -125,7 +134,7 @@ def test_legacy_family_guest_dashboard_only_shows_allowed_workspaces(client):
         }
     resp = client.get("/dashboard")
     soup = BeautifulSoup(resp.get_data(as_text=True), "html.parser")
-    cards = {a.get("href") for a in soup.select(".dashboard-workspace-card")}
+    cards = {a.get("href") for a in soup.select(".dashboard-domain-open")}
     assert cards == {"/app/curator", "/app/german"}
 
 
@@ -156,7 +165,7 @@ def test_domain_guest_dashboard_only_shows_granted_portuguese(client):
     with patch("minimoi_portal.domain_auth.has_domain_access", return_value=True):
         resp = client.get("/dashboard")
     soup = BeautifulSoup(resp.get_data(as_text=True), "html.parser")
-    cards = {a.get("href") for a in soup.select(".dashboard-workspace-card")}
+    cards = {a.get("href") for a in soup.select(".dashboard-domain-open")}
     assert cards == {"/app/portuguese"}
     assert "/app/cos" not in resp.get_data(as_text=True)
 
@@ -187,8 +196,21 @@ def test_public_tour_is_static_and_excludes_cos(client):
     assert "/app/cos" not in html
     assert "<form" not in html
     soup = BeautifulSoup(html, "html.parser")
+    domain_map_links = {
+        link.get("href") for link in soup.select(".tour-domain-card[href]")
+    }
+    assert domain_map_links == {"#curator", "#german", "#portuguese", "#guild"}
     static_root = Path(__file__).parents[1] / "minimoi_portal" / "static"
-    images = [img.get("src") for img in soup.select('img[src^="/static/tour/"]')]
+    map_images = [
+        img.get("src")
+        for img in soup.select('.tour-domain-map img[src^="/static/tour/"]')
+    ]
+    assert len(map_images) == 4
+    assert all((static_root / src.removeprefix("/static/")).is_file() for src in map_images)
+    images = [
+        img.get("src")
+        for img in soup.select('.tour-shot img[src^="/static/tour/"]')
+    ]
     assert len(images) == 11
     assert all("cos" not in src.lower() and "chief" not in src.lower() for src in images)
     assert all((static_root / src.removeprefix("/static/")).is_file() for src in images)
