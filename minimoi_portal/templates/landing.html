@@ -8,7 +8,7 @@
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/portal.css">
+  <link rel="stylesheet" href="/static/portal.css?v=20260723-fit2">
 </head>
 <body class="landing{% if user %} landing-authenticated{% endif %}">
 
@@ -46,6 +46,7 @@
         <a href="/account/password" class="front-door-user">{{ user.display_name }}</a>
         <a href="/logout" class="front-door-signout">Sign out</a>
       {% else %}
+        <a href="/register" class="front-door-external nav-hide-compact">Request access</a>
         <a href="/login" class="front-door-signin">Sign in</a>
       {% endif %}
     </div>
