@@ -133,6 +133,10 @@ from minimoi_portal import auth as _auth          # noqa: E402
 from minimoi_portal import proxy as _proxy        # noqa: E402
 from minimoi_portal import guest_data as _gdata   # noqa: E402
 from minimoi_portal import domain_auth as _dauth  # noqa: E402
+from minimoi_portal.workspaces import (           # noqa: E402
+    can_access_workspace,
+    workspace_navigation,
+)
 
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
@@ -213,18 +217,8 @@ def capture_auth():
 @app.route("/preview/")
 @app.route("/preview/<path:subpath>")
 def preview(subpath=""):
-    """Serve static preview snapshots — public, no auth required."""
-    from flask import send_file as _send_file
-    preview_dir = BASE_DIR / "static" / "preview"
-    target = preview_dir / (subpath or "index.html")
-    if target.is_file():
-        return _send_file(str(target))
-    # Try appending .html
-    if not subpath.endswith(".html"):
-        alt = preview_dir / f"{subpath}.html"
-        if alt.is_file():
-            return _send_file(str(alt))
-    return "Preview page not found — run scripts/tools/capture_snapshot.py to generate snapshots.", 404
+    """Compatibility redirect from the retired frozen-HTML preview."""
+    return redirect(url_for("tour"), code=302)
 
 
 @app.route("/contact")
@@ -235,13 +229,24 @@ def contact():
 
 @app.route("/")
 def landing():
-    return render_template("landing.html", user=_current_user())
+    user = _current_user()
+    return render_template(
+        "landing.html",
+        user=user,
+        workspaces=workspace_navigation(user),
+    )
+
+
+@app.route("/tour")
+def tour():
+    """Public, static screenshot tour. No production APIs or private data."""
+    return render_template("tour.html", user=_current_user())
 
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if _current_user():
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("landing"))
 
     error = None
     if request.method == "POST":
@@ -270,7 +275,7 @@ def login():
                     pass
             if _auth.check_must_change_password(user["username"]):
                 return redirect(url_for("account_password", forced=1))
-            next_url = request.args.get("next") or url_for("dashboard")
+            next_url = request.args.get("next") or url_for("landing")
             return redirect(next_url)
 
     return render_template("login.html", error=error)
@@ -279,7 +284,7 @@ def login():
 @app.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
     if _current_user():
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("landing"))
     submitted = False
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
@@ -314,7 +319,7 @@ def logout():
 def login_by_token(token):
     """One-time login link for domain users (daughters). Token is 48h, single-use."""
     if _current_user():
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("landing"))
     try:
         user = _dauth.consume_login_token(token)
     except Exception:
@@ -342,7 +347,7 @@ def _email_has_guest_account(email: str) -> bool:
 def request_access():
     """Domain-specific access request form (hidden domain field)."""
     if _current_user():
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("landing"))
 
     domain = request.args.get("domain", "portuguese")
     error = None
@@ -399,7 +404,7 @@ def profile_password():
     user = _current_user()
     auth_id = user.get("auth_id")
     if not auth_id:
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("landing"))
 
     error = None
     success = False
@@ -428,7 +433,7 @@ def register():
     Creates a pending account and notifies Robert via Telegram.
     """
     if _current_user():
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("landing"))
 
     error = None
     if request.method == "POST":
@@ -480,13 +485,7 @@ def _notify_telegram_new_request(display_name: str, email: str, domain: str = "p
 @app.route("/dashboard")
 @_require_login
 def dashboard():
-    user = _current_user()
-    auth_id = user.get("auth_id")
-    has_portuguese = (
-        user.get("tier") in ("owner", "admin", "guest")
-        or (auth_id is not None and _dauth.has_domain_access(auth_id, "portuguese"))
-    )
-    return render_template("dashboard.html", user=user, has_portuguese=has_portuguese)
+    return redirect(url_for("landing"))
 
 
 # ── Curator proxy (owner + family only; guests get deep dive HTML only) ───────
@@ -496,9 +495,9 @@ def dashboard():
 @_require_login
 def curator_root():
     user = _current_user()
+    if not can_access_workspace(user, "curator"):
+        return render_template("access_denied.html", user=user), 403
     if user["tier"] == "guest":
-        if user.get("auth_id"):
-            return render_template("access_denied.html", user=user), 403
         return _proxy.proxy_to(_cfg.CURATOR_BACKEND, "briefing", "/app/curator", user=user)
     return _proxy.proxy_to(_cfg.CURATOR_BACKEND, "/", "/app/curator", user=user)
 
@@ -514,9 +513,9 @@ def curator_guest_feedback():
 @_require_login
 def curator_proxy(path):
     user = _current_user()
+    if not can_access_workspace(user, "curator"):
+        return render_template("access_denied.html", user=user), 403
     if user["tier"] == "guest":
-        if user.get("auth_id"):
-            return render_template("access_denied.html", user=user), 403
         # Allow briefing page, library, static assets, deep dive, and scan
         if path.startswith(("briefing", "curator_library", "interests/", "static/", "deepdive")):
             return _proxy.proxy_to(_cfg.CURATOR_BACKEND, path, "/app/curator", user=user)
@@ -617,7 +616,7 @@ def german_root():
     # instead of "has auth_id" avoids denying the owner. This is meant to
     # keep out Portuguese-only one-time-link guests (tier=guest, auth_id
     # set, no German access intended).
-    if user.get("tier") == "guest" and user.get("auth_id"):
+    if not can_access_workspace(user, "german"):
         return render_template("access_denied.html", user=user), 403
     return _proxy.proxy_to(_cfg.GERMAN_BACKEND, "/", "/app/german", user=user)
 
@@ -627,7 +626,7 @@ def german_root():
 def german_proxy(path):
     user = _current_user()
     # See german_root above — tier check, not raw auth_id presence.
-    if user.get("tier") == "guest" and user.get("auth_id"):
+    if not can_access_workspace(user, "german"):
         return render_template("access_denied.html", user=user), 403
     # Portal-level admin paths — pass through to portal, not the domain server
     if path in ("admin/guests", "admin/reset-password"):
@@ -1091,7 +1090,7 @@ def account_password():
 
     _auth.clear_must_change_password(user["username"])
     flash("Password updated.", "success")
-    return redirect(url_for("dashboard"))
+    return redirect(url_for("landing"))
 
 
 # ── Guild domain (owner-only) ─────────────────────────────────────────────────
@@ -2148,9 +2147,8 @@ def portuguese_root():
     # have no auth_id (only owner/admin get one backfilled at login, see
     # /login), so the old "auth_id and not has_access" check silently let
     # them through. Owner/admin bypass, same as the rest of this file.
-    if user.get("tier") not in ("owner", "admin"):
-        if not user.get("auth_id") or not _dauth.has_domain_access(user["auth_id"], "portuguese"):
-            return render_template("access_denied.html", user=user), 403
+    if not can_access_workspace(user, "portuguese"):
+        return render_template("access_denied.html", user=user), 403
     return _proxy.proxy_to(_cfg.PORTUGUESE_BACKEND, "/", "/app/portuguese",
                            user=user)
 
@@ -2160,9 +2158,8 @@ def portuguese_root():
 def portuguese_proxy(path):
     user = _current_user()
     # H2: deny (not allow) when auth_id is missing — see portuguese_root above.
-    if user.get("tier") not in ("owner", "admin"):
-        if not user.get("auth_id") or not _dauth.has_domain_access(user["auth_id"], "portuguese"):
-            return render_template("access_denied.html", user=user), 403
+    if not can_access_workspace(user, "portuguese"):
+        return render_template("access_denied.html", user=user), 403
     # Portal-level admin paths — pass through to portal, not the domain server
     if path in ("admin/guests", "admin/reset-password"):
         return redirect(url_for("admin_guests"))

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="A public tour of mini-moi's research, language immersion, and operations workspaces.">
+  <title>Explore mini-moi</title>
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/portal.css">
+</head>
+<body class="tour">
+
+<header class="tour-header">
+  <nav class="tour-main-nav" aria-label="Tour navigation">
+    <a href="/" class="front-door-brand">mini-moi</a>
+    <div class="tour-domain-nav">
+      <a href="#curator">Curator</a>
+      <a href="#german">Mein Deutsch</a>
+      <a href="#portuguese">Meu Português</a>
+      <a href="#guild">Guild</a>
+    </div>
+    <div class="front-door-account">
+      <a href="https://github.com/robertvanstedum/personal-ai-agents"
+         target="_blank" rel="noopener noreferrer"
+         class="front-door-external nav-hide-compact">GitHub</a>
+      {% if user %}
+        <a href="/" class="front-door-signin">Open mini-moi</a>
+      {% else %}
+        <a href="/login" class="front-door-signin">Sign in</a>
+      {% endif %}
+    </div>
+  </nav>
+</header>
+
+<main class="tour-main">
+  <header class="tour-intro">
+    <p class="front-eyebrow">A public view</p>
+    <h1>Explore mini-moi</h1>
+    <p>
+      A curated look at the real system. These are static screenshots:
+      no account, private data, or live production access is included.
+    </p>
+  </header>
+
+  <section id="curator" class="tour-section tour-curator" aria-labelledby="curator-heading">
+    <div class="tour-section-heading">
+      <p class="tour-number">01</p>
+      <div>
+        <p class="front-eyebrow">Research and decisions</p>
+        <h2 id="curator-heading">Curator</h2>
+        <p>
+          Daily reading narrows into scans, deeper dives, research tools, and a
+          record of what deserves continued attention.
+        </p>
+      </div>
+    </div>
+    <div class="tour-gallery tour-gallery-featured">
+      <figure class="tour-shot tour-shot-wide">
+        <img src="/static/tour/curator-daily-briefing.jpg"
+             alt="Curator daily briefing"
+             width="1425" height="854" loading="eager">
+        <figcaption>Daily briefing</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <img src="/static/tour/curator-scan.jpg"
+             alt="Curator scan of a selected article"
+             width="1425" height="854" loading="lazy">
+        <figcaption>Scan one issue</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <img src="/static/tour/curator-deeper-dive.jpg"
+             alt="Curator deeper-dive analysis"
+             width="1425" height="863" loading="lazy">
+        <figcaption>Choose the next depth</figcaption>
+      </figure>
+      <figure class="tour-shot tour-shot-wide">
+        <img src="/static/tour/curator-research-tools.jpg"
+             alt="Curator research tools"
+             width="1425" height="854" loading="lazy">
+        <figcaption>Continue into research</figcaption>
+      </figure>
+    </div>
+    <nav class="tour-step-nav" aria-label="Curator tour navigation">
+      <a href="/">← Home</a>
+      <a href="#german">Next: Mein Deutsch →</a>
+    </nav>
+  </section>
+
+  <section id="german" class="tour-section tour-german" aria-labelledby="german-heading">
+    <div class="tour-section-heading">
+      <p class="tour-number">02</p>
+      <div>
+        <p class="front-eyebrow">Language immersion</p>
+        <h2 id="german-heading">Mein Deutsch</h2>
+        <p>
+          Contemporary reading, real-life conversation practice, and writing
+          correction create different ways to keep the language active.
+        </p>
+      </div>
+    </div>
+    <div class="tour-gallery tour-gallery-pair">
+      <figure class="tour-shot">
+        <img src="/static/tour/german-landing.jpg"
+             alt="Mein Deutsch landing page"
+             width="1425" height="854" loading="lazy">
+        <figcaption>Choose how to practice</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <img src="/static/tour/german-writing-correction.jpg"
+             alt="Mein Deutsch writing correction"
+             width="1425" height="854" loading="lazy">
+        <figcaption>Write in context and learn from corrections</figcaption>
+      </figure>
+    </div>
+    <nav class="tour-step-nav" aria-label="German tour navigation">
+      <a href="#curator">← Curator</a>
+      <a href="#portuguese">Next: Meu Português →</a>
+    </nav>
+  </section>
+
+  <section id="portuguese" class="tour-section tour-portuguese" aria-labelledby="portuguese-heading">
+    <div class="tour-section-heading">
+      <p class="tour-number">03</p>
+      <div>
+        <p class="front-eyebrow">Language immersion</p>
+        <h2 id="portuguese-heading">Meu Português</h2>
+        <p>
+          A copy-and-adapt extension of the language pattern, designed for
+          multiple users and natural conversation practice.
+        </p>
+      </div>
+    </div>
+    <div class="tour-gallery tour-gallery-pair">
+      <figure class="tour-shot">
+        <img src="/static/tour/portuguese-landing.jpg"
+             alt="Meu Português landing page"
+             width="1425" height="854" loading="lazy">
+        <figcaption>Reading, conversation, writing, and vocabulary</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <img src="/static/tour/portuguese-conversation.jpg"
+             alt="Meu Português conversation practice"
+             width="1425" height="854" loading="lazy">
+        <figcaption>Practice a real-world conversation</figcaption>
+      </figure>
+    </div>
+    <nav class="tour-step-nav" aria-label="Portuguese tour navigation">
+      <a href="#german">← Mein Deutsch</a>
+      <a href="#guild">Next: Guild →</a>
+    </nav>
+  </section>
+
+  <section id="guild" class="tour-section tour-guild" aria-labelledby="guild-heading">
+    <div class="tour-section-heading">
+      <p class="tour-number">04</p>
+      <div>
+        <p class="front-eyebrow">Build and operations</p>
+        <h2 id="guild-heading">Guild</h2>
+        <p>
+          Specs move into builds, production work stays visible, and operating
+          lessons feed the next iteration.
+        </p>
+      </div>
+    </div>
+    <div class="tour-gallery tour-gallery-single">
+      <figure class="tour-shot">
+        <img src="/static/tour/guild-landing.jpg"
+             alt="Guild build and operations landing page"
+             width="1440" height="863" loading="lazy">
+        <figcaption>Spec, build, operate, and improve</figcaption>
+      </figure>
+    </div>
+    <nav class="tour-step-nav" aria-label="Guild tour navigation">
+      <a href="#portuguese">← Meu Português</a>
+      <a href="/">Return home →</a>
+    </nav>
+  </section>
+</main>
+
+<footer class="front-door-footer tour-footer">
+  <a href="/">mini-moi home</a>
+  <a href="https://github.com/robertvanstedum/personal-ai-agents"
+     target="_blank" rel="noopener noreferrer">GitHub</a>
+  <a href="https://www.linkedin.com/in/robert-van-stedum/"
+     target="_blank" rel="noopener noreferrer">LinkedIn</a>
+</footer>
+
+</body>
+</html>
