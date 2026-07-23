@@ -383,7 +383,7 @@ refresh can be added without overwriting this one.
 
 ## More detail
 
-- [journal/](journal/) is the tracked home for the public build narrative.
+- [docs/journal/](docs/journal/) is the tracked home for the public build narrative.
   Its publishing conventions are present; dated sprint notes, plans, and records
   of how the project changed are still being populated.
 - [docs/releases/](docs/releases/) contains release notes.

@@ -76,8 +76,33 @@ as history, not merged into current material.
 
 Two dated build notes moved out of the now-retired root `memory/` directory
 into the public journal instead of this archive:
-[journal/2026/05/2026-05-19.md](../../journal/2026/05/2026-05-19.md) and
-[journal/2026/05/2026-05-26.md](../../journal/2026/05/2026-05-26.md).
+[journal/2026/05/2026-05-19.md](../journal/2026/05/2026-05-19.md) and
+[journal/2026/05/2026-05-26.md](../journal/2026/05/2026-05-26.md). (Path
+updated 2026-07-22 when `journal/` itself moved to `docs/journal/` — see
+below.)
+
+## 2026-07-22 (root consolidation, Phase 1B)
+
+Public root-folder count reduction, no private material involved (that was
+Phase 1A, in the private repo).
+
+- **[legacy-repository/](legacy-repository/)** — the entire former root
+  `archive/` directory, moved as-is. Predates this index; not individually
+  reclassified as part of this move. `tools/export_pdf.py`'s two references
+  into `archive/german-build-2026/` updated to the new path in the same
+  commit.
+- **[founding/guild/](founding/guild/)** — the entire former root `guild/`
+  directory (`CHARTER.md`, `TECHNICAL_PLAN.md`, `README.md`, a handoff PDF).
+  Historical/founding documentation distinct from the active Guild
+  application under `domains/guild/` — confirmed zero code references before
+  moving.
+- **`journal/` → [`docs/journal/`](../journal/)** — not an archive move,
+  just a root-declutter relocation; journal content is still current, not
+  historical. Root `README.md`'s link updated in the same commit.
+- **`memory/project_drill_test_suite.md` → `tests/fixtures/project_drill_test_suite.md`**
+  — not an archive move either; it's an open test-fixture request, relocated
+  to sit with other test fixtures now that `memory/` no longer has any other
+  content.
 
 Everything else in this folder predates this index and hasn't been
 reclassified yet.

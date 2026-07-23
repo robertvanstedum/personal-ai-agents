@@ -10,14 +10,35 @@ __pycache__/
 **/.DS_Store
 
 # CI test output (generated, not committed)
-reports/*.xml
-reports/*.html
+data/reports/*.xml
+data/reports/*.html
 
 # Credentials (NEVER COMMIT!)
 .env
+.env.ec2
 .flask_secret
 credentials.json
 secrets.json
+
+# Private material — transferred to mini-moi-private (review-later/2026-07-22/), 2026-07-22.
+# _NewDomains/research-intelligence/ is NOT ignored — it's live production code.
+/job-search/
+/personal-finance/
+/_NewDomains/career/
+/_NewDomains/guild/
+/_NewDomains/phase-zero/
+/_NewDomains/ARCHITECTURE.md
+/_NewDomains/DOMAIN_SPEC_commercial.md
+/_NewDomains/DOMAIN_SPEC_finance.md
+/_NewDomains/DOMAIN_SPEC_language_learning.md
+/_NewDomains/INSTALL.md
+/_NewDomains/PROJECT_STATE.md
+/_NewDomains/README.md
+/_NewDomains/RESEARCH_INTEL_APPROACH.md
+/_NewDomains/german_backup_20260521_221856.zip
+/_NewDomains/language-german-domain-spec.md
+/_NewDomains/openclaw_direction_research_intelligence_v2.md
+/_NewDomains/origin_conversation_research_intelligence.md
 
 # Curator output files (generated, not source)
 curator_output.txt
