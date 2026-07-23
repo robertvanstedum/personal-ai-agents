@@ -49,8 +49,8 @@ from x_oauth2_authorize import get_valid_token
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 PROJECT_DIR          = Path(__file__).parent.parent
-SIGNALS_FILE         = PROJECT_DIR / 'curator_signals.json'
-URL_CACHE_FILE       = PROJECT_DIR / 'curator_url_cache.json'
+SIGNALS_FILE         = PROJECT_DIR / 'data' / 'curator' / 'curator_signals.json'
+URL_CACHE_FILE       = PROJECT_DIR / 'curator_url_cache.json'  # deliberately not moved with curator_signals.json — see decision #5
 DOMAIN_REGISTRY_FILE = PROJECT_DIR / 'domains' / 'curator' / 'curator_domain_registry.json'
 MEDIA_DIR            = PROJECT_DIR / 'curator_media'
 PREFS_FILE           = Path(os.environ.get("CURATOR_DATA_DIR", str(PROJECT_DIR / "data" / "curator"))) / "curator_preferences.json"

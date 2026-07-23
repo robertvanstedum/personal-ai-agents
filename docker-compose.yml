@@ -33,9 +33,7 @@ services:
     ports:
       - "8766:8766"
     volumes:
-      - ./curator_signals.json:/app/curator_signals.json
-      - ./curator_latest.json:/app/curator_latest.json
-      - ./curator_radar.json:/app/curator_radar.json
+      - ./data/curator:/app/data/curator
       - ./interests:/app/interests
       - ./_NewDomains/research-intelligence/data:/app/_NewDomains/research-intelligence/data
 

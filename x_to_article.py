@@ -40,7 +40,7 @@ from typing import Optional
 # ── Config ────────────────────────────────────────────────────────────────────
 
 PROJECT_DIR  = Path(__file__).parent
-SIGNALS_FILE = PROJECT_DIR / 'curator_signals.json'
+SIGNALS_FILE = PROJECT_DIR / 'data' / 'curator' / 'curator_signals.json'
 
 # Minimum tweet text length to include a tweet-only signal in the scoring pool.
 # ~23-char signals are bare t.co URLs not resolved at ingest.

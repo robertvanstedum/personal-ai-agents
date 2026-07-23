@@ -794,7 +794,7 @@ suggest_topic_links() — read-only tag-overlap suggestion (no auto-link).
 Robert is always the gate; nothing links automatically.
 """
 
-_CURATOR_LATEST  = _REPO_ROOT / "curator_latest.json"
+_CURATOR_LATEST  = _REPO_ROOT / "data" / "curator" / "curator_latest.json"
 _GROUPS_FILE     = _RESEARCH_DIR / "groups" / "groups.json"
 _AGENT_CONFIG    = _REPO_ROOT / "_NewDomains" / "research-intelligence" / "agent" / "config.json"
 

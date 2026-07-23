@@ -28,11 +28,11 @@ SYNC_PATHS=(
     "domains/guild/config/cos_context.json"
 
     # Curator — daily-generated data and personal feedback signals
-    "curator_signals.json"
+    "data/curator/curator_signals.json"
     "domains/curator/curator_latest.html"
-    "curator_latest.json"
+    "data/curator/curator_latest.json"
     "domains/curator/curator_sources.json"
-    "curator_radar.json"
+    "data/curator/curator_radar.json"
 
     # German — personal learning data
     "domains/german/data/sessions/"

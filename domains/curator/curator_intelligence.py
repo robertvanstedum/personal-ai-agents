@@ -38,10 +38,10 @@ from curator_utils import send_telegram_alert, extract_domain
 # ── Paths & constants ─────────────────────────────────────────────────────────
 
 REPO_ROOT      = Path(__file__).parent.parent.parent  # domains/curator -> domains -> repo root
+DATA_DIR       = Path(os.environ.get("CURATOR_DATA_DIR", str(REPO_ROOT / "data" / "curator")))
 HISTORY_PATH   = REPO_ROOT / 'curator_history.json'
 SOURCES_PATH   = Path(__file__).parent / 'curator_sources.json'
-LATEST_PATH    = REPO_ROOT / 'curator_latest.json'   # written by curator_rss_v2 (WS5 pre-condition)
-DATA_DIR       = Path(os.environ.get("CURATOR_DATA_DIR", str(REPO_ROOT / "data" / "curator")))
+LATEST_PATH    = DATA_DIR / 'curator_latest.json'   # written by curator_rss_v2 (WS5 pre-condition)
 PREFS_PATH     = DATA_DIR / "curator_preferences.json"
 OUTPUT_DIR     = DATA_DIR
 RESPONSES_PATH = DATA_DIR / "intelligence_responses.json"

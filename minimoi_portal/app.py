@@ -654,7 +654,7 @@ def _guest_briefing_legacy():
     if user.get("auth_id"):
         return render_template("access_denied.html", user=user), 403
 
-    latest_file = REPO_DIR / "curator_latest.json"
+    latest_file = REPO_DIR / "data" / "curator" / "curator_latest.json"
     articles = []
     briefing_date = None
 

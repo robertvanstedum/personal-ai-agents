@@ -16,7 +16,7 @@ fi
 
 # ── Idempotency check: skip if briefing already ran today ────────────────────
 TODAY=$(date +%Y-%m-%d)
-LATEST="$PROJECT_DIR/curator_latest.json"
+LATEST="$PROJECT_DIR/data/curator/curator_latest.json"
 if [ -f "$LATEST" ]; then
     FILE_DATE=$(python3 -c "import json; d=json.load(open('$LATEST')); print(d[0].get('briefing_date', d[0].get('date',''))[:10])" 2>/dev/null)
     if [ "$FILE_DATE" = "$TODAY" ]; then

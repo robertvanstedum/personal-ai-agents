@@ -25,9 +25,12 @@ services:
       - FLASK_ENV=production
       - PORT=8766
     volumes:
-      - /opt/minimoi/data/curator_signals.json:/app/curator_signals.json
-      - /opt/minimoi/data/curator_latest.json:/app/curator_latest.json
-      - /opt/minimoi/data/curator_radar.json:/app/curator_radar.json
+      # curator_signals.json, curator_latest.json, curator_radar.json now live
+      # inside this same mounted directory (data/curator/curator_*.json) rather
+      # than as separate top-level mounts -- see Phase 2 Slice 5. REQUIRES the
+      # EC2 host files to be moved from /opt/minimoi/data/curator_*.json into
+      # /opt/minimoi/data/curator/curator_*.json before this deploys, or the
+      # container will find no data at startup.
       - /opt/minimoi/data/curator:/app/data/curator
       - /opt/minimoi/data/curator_archive:/app/curator_archive
       - /opt/minimoi/data/curator_history.json:/app/curator_history.json

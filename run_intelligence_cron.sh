@@ -17,7 +17,7 @@ if [ -f "$INTEL_FILE" ]; then
 fi
 
 # ── Dependency check: briefing must have run first ───────────────────────────
-LATEST="$PROJECT_DIR/curator_latest.json"
+LATEST="$PROJECT_DIR/data/curator/curator_latest.json"
 if [ -f "$LATEST" ]; then
     FILE_DATE=$(python3 -c "import json; d=json.load(open('$LATEST')); print((d[0].get('briefing_date') or d[0].get('date',''))[:10])" 2>/dev/null)
     if [ "$FILE_DATE" != "$TODAY_ISO" ]; then

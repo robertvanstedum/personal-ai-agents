@@ -31,7 +31,7 @@ fi
 BRIEFING_DATE=$(docker exec "$CONTAINER" python3 -c "
 import json
 try:
-    with open('curator_latest.json') as f:
+    with open('data/curator/curator_latest.json') as f:
         data = json.load(f)
     print(data[0].get('briefing_date', data[0].get('date', ''))[:10])
 except Exception:
