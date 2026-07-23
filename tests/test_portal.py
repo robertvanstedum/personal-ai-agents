@@ -32,7 +32,7 @@ def test_proxy_nav_hides_owner_workspaces_from_non_owner():
         {"tier": "admin", "display_name": "Admin"},
         "/app/german",
     )
-    assert 'href="/"' in html
+    assert 'href="/dashboard"' in html
     assert 'href="/app/curator"' in html
     assert 'href="/app/german"' in html
     assert 'href="/app/portuguese"' in html

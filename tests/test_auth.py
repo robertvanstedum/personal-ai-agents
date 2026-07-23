@@ -30,7 +30,7 @@ def test_unauthenticated_request_redirects_to_login(client):
     assert "/login" in resp.headers["Location"]
 
 
-def test_authenticated_dashboard_redirects_to_landing(client):
+def test_authenticated_dashboard_renders_signed_in_home(client):
     with client.session_transaction() as sess:
         sess["user"] = {
             "username": "robert",
@@ -39,8 +39,26 @@ def test_authenticated_dashboard_redirects_to_landing(client):
         }
     with patch("minimoi_portal.auth.check_must_change_password", return_value=False):
         resp = client.get("/dashboard", follow_redirects=False)
-    assert resp.status_code == 302
-    assert resp.headers["Location"].endswith("/")
+    assert resp.status_code == 200
+    soup = BeautifulSoup(resp.get_data(as_text=True), "html.parser")
+    assert "Welcome back, Robert." in soup.get_text(" ", strip=True)
+    cards = {a.get("href") for a in soup.select(".dashboard-domain-open")}
+    assert {
+        "/app/curator",
+        "/app/german",
+        "/app/portuguese",
+        "/guild",
+        "/app/cos",
+    }.issubset(cards)
+    tour_links = {
+        a.get("href") for a in soup.select(".dashboard-card-tour[href]")
+    }
+    assert tour_links == {
+        "/tour#curator",
+        "/tour#german",
+        "/tour#portuguese",
+        "/tour#guild",
+    }
 
 
 def test_signed_out_landing_shows_locked_public_workspaces(client):
@@ -107,6 +125,19 @@ def test_legacy_family_guest_landing_matches_restricted_routes(client):
     assert links == {"/app/curator", "/app/german"}
 
 
+def test_legacy_family_guest_dashboard_only_shows_allowed_workspaces(client):
+    with client.session_transaction() as sess:
+        sess["user"] = {
+            "username": "family",
+            "display_name": "Family",
+            "tier": "guest",
+        }
+    resp = client.get("/dashboard")
+    soup = BeautifulSoup(resp.get_data(as_text=True), "html.parser")
+    cards = {a.get("href") for a in soup.select(".dashboard-domain-open")}
+    assert cards == {"/app/curator", "/app/german"}
+
+
 def test_domain_guest_landing_only_activates_granted_portuguese(client):
     with client.session_transaction() as sess:
         sess["user"] = {
@@ -120,6 +151,22 @@ def test_domain_guest_landing_only_activates_granted_portuguese(client):
     soup = BeautifulSoup(resp.get_data(as_text=True), "html.parser")
     links = {a.get("href") for a in soup.select(".workspace-link[href]")}
     assert links == {"/app/portuguese"}
+    assert "/app/cos" not in resp.get_data(as_text=True)
+
+
+def test_domain_guest_dashboard_only_shows_granted_portuguese(client):
+    with client.session_transaction() as sess:
+        sess["user"] = {
+            "username": "test@example.com",
+            "display_name": "Test User",
+            "tier": "guest",
+            "auth_id": 7,
+        }
+    with patch("minimoi_portal.domain_auth.has_domain_access", return_value=True):
+        resp = client.get("/dashboard")
+    soup = BeautifulSoup(resp.get_data(as_text=True), "html.parser")
+    cards = {a.get("href") for a in soup.select(".dashboard-domain-open")}
+    assert cards == {"/app/portuguese"}
     assert "/app/cos" not in resp.get_data(as_text=True)
 
 
@@ -149,11 +196,37 @@ def test_public_tour_is_static_and_excludes_cos(client):
     assert "/app/cos" not in html
     assert "<form" not in html
     soup = BeautifulSoup(html, "html.parser")
+    domain_map_links = {
+        link.get("href") for link in soup.select(".tour-domain-card[href]")
+    }
+    assert domain_map_links == {"#curator", "#german", "#portuguese", "#guild"}
     static_root = Path(__file__).parents[1] / "minimoi_portal" / "static"
-    images = [img.get("src") for img in soup.select('img[src^="/static/tour/"]')]
-    assert len(images) == 9
+    map_images = [
+        img.get("src")
+        for img in soup.select('.tour-domain-map img[src^="/static/tour/"]')
+    ]
+    assert len(map_images) == 4
+    assert all((static_root / src.removeprefix("/static/")).is_file() for src in map_images)
+    images = [
+        img.get("src")
+        for img in soup.select('.tour-shot img[src^="/static/tour/"]')
+    ]
+    assert len(images) == 11
     assert all("cos" not in src.lower() and "chief" not in src.lower() for src in images)
     assert all((static_root / src.removeprefix("/static/")).is_file() for src in images)
+    full_size_links = [
+        link.get("href") for link in soup.select("a.tour-shot-link[href]")
+    ]
+    assert full_size_links == images
+    expected_first_images = {
+        "curator": "/static/tour/curator-landing.jpg",
+        "german": "/static/tour/german-landing.jpg",
+        "portuguese": "/static/tour/portuguese-landing.jpg",
+        "guild": "/static/tour/guild-landing.jpg",
+    }
+    for section_id, expected_src in expected_first_images.items():
+        section = soup.select_one(f"section#{section_id}")
+        assert section.select_one("img").get("src") == expected_src
 
 
 @pytest.mark.parametrize(
@@ -166,7 +239,7 @@ def test_legacy_preview_routes_redirect_to_tour(client, path):
     assert resp.headers["Location"].endswith("/tour")
 
 
-def test_successful_login_defaults_to_landing(client):
+def test_successful_login_defaults_to_dashboard(client):
     fake_user = {
         "username": "family",
         "display_name": "Family",
@@ -180,7 +253,7 @@ def test_successful_login_defaults_to_landing(client):
             follow_redirects=False,
         )
     assert resp.status_code == 302
-    assert resp.headers["Location"].endswith("/")
+    assert resp.headers["Location"].endswith("/dashboard")
 
 
 def test_successful_login_preserves_explicit_next(client):

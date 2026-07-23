@@ -8,7 +8,7 @@
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/portal.css">
+  <link rel="stylesheet" href="/static/portal.css?v=20260723-fit4">
 </head>
 <body class="landing{% if user %} landing-authenticated{% endif %}">
 
@@ -42,9 +42,11 @@
          target="_blank" rel="noopener noreferrer"
          class="front-door-external nav-hide-compact">LinkedIn</a>
       {% if user %}
+        <a href="/dashboard" class="front-door-external">Home</a>
         <a href="/account/password" class="front-door-user">{{ user.display_name }}</a>
         <a href="/logout" class="front-door-signout">Sign out</a>
       {% else %}
+        <a href="/register" class="front-door-external nav-hide-compact">Request access</a>
         <a href="/login" class="front-door-signin">Sign in</a>
       {% endif %}
     </div>
@@ -56,7 +58,7 @@
     <div class="front-hero-copy">
       <p class="front-eyebrow">Personal AI agent platform</p>
       <h1 id="front-title" class="front-title">mini-moi</h1>
-      <p class="front-tagline"><em>Your context. Your goals. Your signal.</em></p>
+      <p class="front-tagline"><em>Building local, specific intelligence—together.</em></p>
       <div class="front-rule" aria-hidden="true"></div>
 
       <div class="front-about">
@@ -66,15 +68,20 @@
           It carries context across reading and research, language immersion,
           and the work of building and running the system itself.
         </p>
+        <p>
+          It remembers what I have already investigated, how my thinking
+          develops, and what I decide to follow up on. That record grows over
+          time instead of resetting with each interaction.
+        </p>
       </div>
 
       <div class="front-actions">
         {% if user %}
-          <a href="/tour" class="front-button front-button-primary">Explore mini-moi</a>
+          <a href="/dashboard" class="front-button front-button-primary">Open mini-moi</a>
+          <a href="/tour" class="front-button front-button-text">View public tour</a>
           <span class="front-welcome">Welcome back, {{ user.display_name }}.</span>
         {% else %}
-          <a href="/login" class="front-button front-button-primary">Sign in</a>
-          <a href="/tour" class="front-button front-button-text">Explore mini-moi</a>
+          <a href="/tour" class="front-button front-button-text">View public tour</a>
         {% endif %}
       </div>
     </div>
@@ -89,9 +96,9 @@
   <section class="front-explore" aria-labelledby="explore-heading">
     <div class="front-explore-copy">
       <p class="front-eyebrow">A public view</p>
-      <h2 id="explore-heading">Explore mini-moi</h2>
+      <h2 id="explore-heading">Public tour</h2>
       <p>See real workflows across research, language immersion, and operations without signing in.</p>
-      <a href="/tour" class="front-button front-button-primary">Explore as a guest</a>
+      <a href="/tour" class="front-button front-button-primary">View public tour</a>
     </div>
 
     <div class="front-teaser" aria-label="Selected mini-moi workspace previews">
@@ -118,7 +125,7 @@
 </main>
 
 <footer class="front-door-footer">
-  <a href="/tour">Explore</a>
+  <a href="/tour">Public tour</a>
   <a href="https://github.com/robertvanstedum/personal-ai-agents"
      target="_blank" rel="noopener noreferrer">GitHub</a>
   <a href="https://www.linkedin.com/in/robert-van-stedum/"
