@@ -1,14 +1,14 @@
 """
-tools/curator_research.py — Curator research-area data layer + CLI.
+scripts/tools/curator_research.py — Curator research-area data layer + CLI.
 
 Manages Sources, Topics, and Groups for the Curator research gathering tier.
 This module is pure data: load, save, query. No Flask, no LLM calls.
 
 Usage (CLI):
-  python3 tools/curator_research.py status
-  python3 tools/curator_research.py topics --status active-pull
-  python3 tools/curator_research.py pull narrow <slug>
-  python3 tools/curator_research.py --help
+  python3 scripts/tools/curator_research.py status
+  python3 scripts/tools/curator_research.py topics --status active-pull
+  python3 scripts/tools/curator_research.py pull narrow <slug>
+  python3 scripts/tools/curator_research.py --help
 
 Data files (all under _NewDomains/research-intelligence/data/):
   sources/sources.json   — Source records (append-only, one flat array)
@@ -29,7 +29,7 @@ from datetime import timedelta
 from typing import Optional
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-_REPO_ROOT    = Path(__file__).parent.parent   # tools/ is one level below repo root
+_REPO_ROOT    = Path(__file__).parent.parent.parent   # scripts/tools/ is two levels below repo root
 _RESEARCH_DIR = _REPO_ROOT / "_NewDomains" / "research-intelligence" / "data"
 _SOURCES_FILE = _RESEARCH_DIR / "sources" / "sources.json"
 _ALIASES_FILE = _RESEARCH_DIR / "tag_aliases.json"

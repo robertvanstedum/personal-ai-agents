@@ -2,11 +2,11 @@
 """Export markdown files to PDF. Supports single files and named bundles.
 
 Usage:
-  python tools/export_pdf.py README.md
-  python tools/export_pdf.py ARCHITECTURE.md --out ~/Desktop/ARCHITECTURE.pdf
-  python tools/export_pdf.py --bundle curator
-  python tools/export_pdf.py --bundle german
-  python tools/export_pdf.py --list-bundles
+  python scripts/tools/export_pdf.py README.md
+  python scripts/tools/export_pdf.py ARCHITECTURE.md --out ~/Desktop/ARCHITECTURE.pdf
+  python scripts/tools/export_pdf.py --bundle curator
+  python scripts/tools/export_pdf.py --bundle german
+  python scripts/tools/export_pdf.py --list-bundles
 """
 import argparse
 import sys

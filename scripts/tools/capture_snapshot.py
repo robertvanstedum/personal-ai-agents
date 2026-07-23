@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-tools/capture_snapshot.py — Playwright snapshot capture for minimoi.ai /preview.
+scripts/tools/capture_snapshot.py — Playwright snapshot capture for minimoi.ai /preview.
 
 Authenticates as owner, captures all pages in the manifest (fully-rendered DOM
 via headless Chromium), post-processes each page, and writes static HTML to
 minimoi_portal/static/preview/.
 
 Usage:
-    python tools/capture_snapshot.py
-    PORTAL_PASSWORD=mypass python tools/capture_snapshot.py
+    python scripts/tools/capture_snapshot.py
+    PORTAL_PASSWORD=mypass python scripts/tools/capture_snapshot.py
 
 Environment:
     PORTAL_URL       — defaults to http://localhost:5001
@@ -32,7 +32,7 @@ from playwright.sync_api import sync_playwright
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 
-REPO_ROOT   = Path(__file__).parent.parent
+REPO_ROOT   = Path(__file__).parent.parent.parent
 PREVIEW_DIR = REPO_ROOT / "static" / "public" / "preview"
 ASSETS_DIR  = PREVIEW_DIR / "assets"
 PORTAL_URL  = os.environ.get("PORTAL_URL", "http://localhost:5001")
