@@ -29,10 +29,9 @@ from source_utils import load_seen_urls, save_seen_urls, apply_novelty_score
 
 try:
     import anthropic
-    import keyring
     import requests
 except ImportError as e:
-    print(f"Missing dependency: {e}. Run: pip install anthropic keyring requests")
+    print(f"Missing dependency: {e}. Run: pip install anthropic requests")
     sys.exit(1)
 
 try:
@@ -47,6 +46,9 @@ except ImportError:
 ROOT         = Path(__file__).resolve().parent.parent   # research-intelligence/
 MAIN_PROJECT = ROOT.parent.parent                        # personal-ai-agents/
 SESSION_START = datetime.now()
+
+sys.path.insert(0, str(MAIN_PROJECT))
+from core.get_secret import get_secret
 
 
 # ── Config ─────────────────────────────────────────────────────────────────────
@@ -481,18 +483,25 @@ def main():
     context_md   = context_path.read_text() if context_path.exists() else ""
 
     # ── Anthropic client ───────────────────────────────────────────────────────
-    anthropic_key = keyring.get_password("anthropic", "api_key")
-    if not anthropic_key:
+    # get_secret() checks env var first (so Docker's env_file works without
+    # ever touching keyring), then macOS Keychain, then AWS SSM -- and
+    # catches keyring's NoKeyringError itself, unlike a bare
+    # keyring.get_password() call, which raises rather than returning None
+    # on a Linux container with no keychain backend.
+    try:
+        anthropic_key = get_secret("ANTHROPIC_API_KEY", "anthropic", "api_key")
+    except Exception:
         anthropic_key = env.get("ANTHROPIC_API_KEY", "")
     if not anthropic_key:
-        print("ERROR: Anthropic API key not found in keyring or .env")
+        print("ERROR: Anthropic API key not found in env, keyring, SSM, or .env")
         sys.exit(1)
     client = anthropic.Anthropic(api_key=anthropic_key)
 
-    # ── Brave API key — read from Keychain (consistent with Anthropic/Telegram) ─
-    brave_key = keyring.get_password("brave_search", "api_key") or \
-                env.get("BRAVE_API_KEY", "") or \
-                os.environ.get("BRAVE_API_KEY", "")
+    # ── Brave API key ──────────────────────────────────────────────────────────
+    try:
+        brave_key = get_secret("BRAVE_API_KEY", "brave_search", "api_key")
+    except Exception:
+        brave_key = env.get("BRAVE_API_KEY", "") or os.environ.get("BRAVE_API_KEY", "")
 
     # ── Triage model config ────────────────────────────────────────────────────
     triage_cfg      = cfg.get("triage_model", {})
@@ -995,7 +1004,10 @@ def main():
 
     # ── 8. Telegram ────────────────────────────────────────────────────────────
     print(f"\n[8] Sending Telegram summary...")
-    telegram_token   = keyring.get_password("telegram", cfg.get("research_telegram_bot", "bot_token"))
+    try:
+        telegram_token = get_secret("TELEGRAM_BOT_TOKEN", "telegram", cfg.get("research_telegram_bot", "bot_token"))
+    except Exception:
+        telegram_token = env.get("TELEGRAM_BOT_TOKEN", "")
     research_chat_id = cfg.get("research_chat_id", "")
 
     max_score          = max((c.get("score", 0) for c in scored), default=0)

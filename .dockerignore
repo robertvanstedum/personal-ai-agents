@@ -34,6 +34,9 @@ _NewDomains/
 !_NewDomains/research-intelligence/web/static/
 !_NewDomains/research-intelligence/agent/
 !_NewDomains/research-intelligence/scripts/
+!_NewDomains/research-intelligence/library/
+!_NewDomains/research-intelligence/topics/
+!_NewDomains/research-intelligence/prompts/
 
 # Git
 .git/
