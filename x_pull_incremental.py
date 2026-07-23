@@ -32,7 +32,7 @@ from x_oauth2_authorize import get_valid_token
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
-SIGNALS_FILE = Path(__file__).parent / 'curator_signals.json'
+SIGNALS_FILE = Path(__file__).parent / 'data' / 'curator' / 'curator_signals.json'
 STATE_FILE   = Path(__file__).parent / 'x_pull_state.json'
 
 # ── Logging ───────────────────────────────────────────────────────────────────

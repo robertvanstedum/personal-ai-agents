@@ -3592,7 +3592,7 @@ def main():
         try:
             if top_articles:
                 top_articles[0]['briefing_model'] = xai_model_variant if model == 'grok-4-1' else model
-            with open('curator_latest.json', 'w') as f:
+            with open(_DATA_DIR / 'curator_latest.json', 'w') as f:
                 json.dump(top_articles, f, indent=2, default=str)
             print(f"💾 Wrote {len(top_articles)} articles to curator_latest.json")
         except Exception as e:
@@ -3600,7 +3600,7 @@ def main():
 
         # Write radar articles so the Flask server can surface them in the briefing
         try:
-            with open('curator_radar.json', 'w') as f:
+            with open(_DATA_DIR / 'curator_radar.json', 'w') as f:
                 json.dump(radar_articles, f, indent=2, default=str)
             if radar_articles:
                 print(f"📡 Wrote {len(radar_articles)} radar article(s) to curator_radar.json")

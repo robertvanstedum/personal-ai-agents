@@ -25,7 +25,7 @@ TODAY=$(date -u +%Y-%m-%d)
 FILE_DATE=$(docker exec minimoi-curator python3 -c "
 import json
 try:
-    d = json.load(open('curator_latest.json'))
+    d = json.load(open('data/curator/curator_latest.json'))
     print(d[0].get('briefing_date', d[0].get('date', ''))[:10])
 except Exception:
     print('')
@@ -57,10 +57,10 @@ if [ $STATUS -eq 0 ]; then
   # Stamp briefing_date so idempotency check holds across midnight
   docker exec minimoi-curator python3 -c "
 import json, datetime
-with open('curator_latest.json') as f:
+with open('data/curator/curator_latest.json') as f:
     data = json.load(f)
 data[0]['briefing_date'] = datetime.date.today().isoformat()
-with open('curator_latest.json', 'w') as f:
+with open('data/curator/curator_latest.json', 'w') as f:
     json.dump(data, f)
 " 2>/dev/null || true
   echo "$LOG_PREFIX Briefing complete at $(date -u)"

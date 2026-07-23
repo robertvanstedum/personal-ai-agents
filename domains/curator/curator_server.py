@@ -103,7 +103,7 @@ def _load_briefing_articles():
     Returns (articles, day_str, date_str, model_display, briefing_date) or None
     if the JSON file does not exist.
     """
-    json_path = REPO_ROOT / 'curator_latest.json'
+    json_path = _DATA_DIR / 'curator_latest.json'
     if not json_path.exists():
         return None
 
@@ -136,7 +136,7 @@ def _load_briefing_articles():
 
 def _load_radar_articles():
     """Load on-radar articles from curator_radar.json. Returns [] if missing or empty."""
-    radar_path = REPO_ROOT / 'curator_radar.json'
+    radar_path = _DATA_DIR / 'curator_radar.json'
     if not radar_path.exists():
         return []
     try:
@@ -151,7 +151,7 @@ def _load_radar_articles():
 def _get_latest_briefing_date() -> str:
     """Return formatted date string from latest briefing JSON. Falls back to dash."""
     try:
-        raw = json.loads((REPO_ROOT / 'curator_latest.json').read_text())
+        raw = json.loads((_DATA_DIR / 'curator_latest.json').read_text())
         if raw:
             d = raw[0].get('briefing_date') or raw[0].get('date', '')
             if d:
@@ -165,7 +165,7 @@ def _get_latest_briefing_date() -> str:
 def _get_latest_article_count() -> int:
     """Return count of articles in latest briefing. Falls back to 0."""
     try:
-        raw = json.loads((REPO_ROOT / 'curator_latest.json').read_text())
+        raw = json.loads((_DATA_DIR / 'curator_latest.json').read_text())
         return len(raw)
     except Exception:
         return 0
@@ -1329,7 +1329,7 @@ def api_briefing():
         if not json_path.exists():
             return jsonify({'error': f'No archive for {req_date}'}), 404
     else:
-        json_path = REPO_ROOT / 'curator_latest.json'
+        json_path = _DATA_DIR / 'curator_latest.json'
         req_date = today_str
 
     try:
