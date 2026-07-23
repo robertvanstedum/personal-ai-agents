@@ -19,8 +19,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
-# Signal Store location (same directory as scripts)
-SIGNAL_STORE_PATH = Path(__file__).parent / "signal_store.jsonl"
+# Signal Store location (repo root, same as curator_history.json and other runtime state)
+SIGNAL_STORE_PATH = Path(__file__).parent.parent.parent / "signal_store.jsonl"
 
 # Session ID: generated once per script run, shared across all events in that run
 # This allows slicing the store by session to see exactly what one run did

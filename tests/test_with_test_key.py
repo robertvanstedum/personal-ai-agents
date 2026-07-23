@@ -69,7 +69,7 @@ def main():
     print()
 
     result = subprocess.run(
-        ["python", "curator_rss_v2.py", "--mode=ai"],
+        ["python", "domains/curator/curator_rss_v2.py", "--mode=ai"],
         capture_output=False
     )
 
@@ -98,7 +98,7 @@ def main():
     print()
 
     result = subprocess.run(
-        ["python", "curator_rss_v2.py", "--mode=ai"],
+        ["python", "domains/curator/curator_rss_v2.py", "--mode=ai"],
         capture_output=False
     )
 

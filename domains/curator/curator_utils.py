@@ -285,7 +285,7 @@ def validate_signal_store_correlation(n: int = 10, signal_store_path: str = None
     Prints loud, clear diagnostics to stdout.
     """
     if signal_store_path is None:
-        signal_store_path = Path(__file__).parent / "signal_store.jsonl"
+        signal_store_path = Path(__file__).parent.parent.parent / "signal_store.jsonl"
     else:
         signal_store_path = Path(signal_store_path)
     

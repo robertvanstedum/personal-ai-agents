@@ -12,4 +12,4 @@ ENV PORT=8766
 
 EXPOSE 8766
 
-CMD ["python", "curator_server.py"]
+CMD ["python", "domains/curator/curator_server.py"]

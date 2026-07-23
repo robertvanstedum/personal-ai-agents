@@ -24,7 +24,7 @@ def portal_client():
 
 @pytest.fixture(scope="session")
 def curator_client():
-    from curator_server import app
+    from domains.curator.curator_server import app
     app.config["TESTING"] = True
     with app.test_client() as client:
         yield client

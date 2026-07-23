@@ -35,7 +35,7 @@ echo "🧠 Running intelligence pipeline at $(date)..."
 source venv/bin/activate
 
 export TELEGRAM_CHAT_ID="8379221702"
-python curator_intelligence.py --telegram
+python domains/curator/curator_intelligence.py --telegram
 
 if [ $? -eq 0 ]; then
     echo "✅ Intelligence run completed successfully at $(date)"

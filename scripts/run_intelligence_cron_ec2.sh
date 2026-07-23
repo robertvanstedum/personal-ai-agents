@@ -48,7 +48,7 @@ echo "$LOG_PREFIX Starting AI Observations at $(date -u)"
 if docker exec \
   -e TELEGRAM_CHAT_ID=8379221702 \
   "$CONTAINER" \
-  python curator_intelligence.py --telegram --date "$TODAY_ISO"; then
+  python domains/curator/curator_intelligence.py --telegram --date "$TODAY_ISO"; then
   if docker exec "$CONTAINER" test -f "$OUTPUT_FILE"; then
     echo "$LOG_PREFIX AI Observations complete at $(date -u)"
     exit 0

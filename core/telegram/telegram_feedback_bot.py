@@ -82,11 +82,11 @@ def record_feedback(action, rank):
     try:
         # Build command
         if action == 'like':
-            cmd = ['python', 'curator_feedback.py', 'like', rank]
+            cmd = ['python', 'domains/curator/curator_feedback.py', 'like', rank]
         elif action == 'dislike':
-            cmd = ['python', 'curator_feedback.py', 'dislike', rank]
+            cmd = ['python', 'domains/curator/curator_feedback.py', 'dislike', rank]
         elif action == 'save':
-            cmd = ['python', 'curator_feedback.py', 'save', rank]
+            cmd = ['python', 'domains/curator/curator_feedback.py', 'save', rank]
         else:
             return {'success': False, 'message': f'Unknown action: {action}'}
         

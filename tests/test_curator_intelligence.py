@@ -1,6 +1,6 @@
 import json
 
-import curator_intelligence as intelligence
+from domains.curator import curator_intelligence as intelligence
 
 
 def test_storage_paths_share_curator_data_directory():

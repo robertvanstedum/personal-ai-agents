@@ -8,7 +8,7 @@ blueprint actually registered, not just that curator_server.py imported
 without an exception.
 """
 
-from research_routes import research_bp, save_annotation, _get_recent_annotations
+from domains.curator.research_routes import research_bp, save_annotation, _get_recent_annotations
 
 
 def test_research_routes_imports_annotations_module():

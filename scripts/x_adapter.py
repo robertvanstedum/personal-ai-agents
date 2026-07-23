@@ -60,9 +60,10 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from urllib.parse import urlparse
 
+sys.path.insert(0, str(Path(__file__).parent.parent))  # repo root, for x_auth and domains.curator imports below
 from x_auth import get_x_client
 from x_oauth2_authorize import get_valid_token
-from curator_config import ACTIVE_DOMAIN, KNOWN_FOLDERS as _CONFIG_FOLDERS
+from domains.curator.curator_config import ACTIVE_DOMAIN, KNOWN_FOLDERS as _CONFIG_FOLDERS
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 PREFS_PATH = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent.parent / "data" / "curator"))) / "curator_preferences.json"

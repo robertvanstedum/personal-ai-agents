@@ -45,7 +45,7 @@ docker exec minimoi-curator python x_pull_incremental.py 2>&1 || \
 
 # ── Run curator pipeline, then send briefing with inline buttons ──────────────
 echo "$LOG_PREFIX Running RSS curation (grok-4.3)..."
-docker exec minimoi-curator python curator_rss_v2.py \
+docker exec minimoi-curator python domains/curator/curator_rss_v2.py \
   --model=grok-4.3 --fallback --temperature=0.7
 
 echo "$LOG_PREFIX Sending Telegram briefing (system bot)..."

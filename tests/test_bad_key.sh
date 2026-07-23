@@ -28,7 +28,7 @@ echo "3. Running curator with bad API key..."
 echo "   (This should fail with authentication error)"
 echo ""
 
-python curator_rss_v2.py --mode=ai 2>&1 || echo "   ✓ Failed as expected (exit code $?)"
+python domains/curator/curator_rss_v2.py --mode=ai 2>&1 || echo "   ✓ Failed as expected (exit code $?)"
 echo ""
 
 # Restore good key

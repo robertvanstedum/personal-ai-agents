@@ -33,8 +33,11 @@ from pathlib import Path
 
 import requests
 import tweepy
+import sys
 
-from curator_utils import (
+sys.path.insert(0, str(Path(__file__).parent.parent))  # repo root, for domains.curator import below
+
+from domains.curator.curator_utils import (
     extract_domain,
     classify_source_type,
     fetch_url_metadata,
@@ -48,7 +51,7 @@ from x_oauth2_authorize import get_valid_token
 PROJECT_DIR          = Path(__file__).parent.parent
 SIGNALS_FILE         = PROJECT_DIR / 'curator_signals.json'
 URL_CACHE_FILE       = PROJECT_DIR / 'curator_url_cache.json'
-DOMAIN_REGISTRY_FILE = PROJECT_DIR / 'curator_domain_registry.json'
+DOMAIN_REGISTRY_FILE = PROJECT_DIR / 'domains' / 'curator' / 'curator_domain_registry.json'
 MEDIA_DIR            = PROJECT_DIR / 'curator_media'
 PREFS_FILE           = Path(os.environ.get("CURATOR_DATA_DIR", str(PROJECT_DIR / "data" / "curator"))) / "curator_preferences.json"
 

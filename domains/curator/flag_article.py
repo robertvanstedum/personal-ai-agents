@@ -25,7 +25,8 @@ from typing import Optional, Tuple, Dict
 import json
 
 # Project root
-PROJECT_ROOT = Path(__file__).parent
+BASE_DIR = Path(__file__).parent
+PROJECT_ROOT = BASE_DIR.parent.parent  # domains/curator -> domains -> repo root; interests/, venv/, curator_output.txt live at repo root
 
 # Priority levels configuration
 PRIORITIES = {
@@ -140,7 +141,7 @@ def trigger_deep_dive(article_data: Dict) -> bool:
     Trigger deep dive analysis for DEEP-DIVE flagged articles.
     Calls deep_dive.py with article URL.
     """
-    deep_dive_script = PROJECT_ROOT / "deep_dive.py"
+    deep_dive_script = BASE_DIR / "deep_dive.py"
     
     if not deep_dive_script.exists():
         print("⚠️  deep_dive.py not yet implemented, skipping analysis", file=sys.stderr)

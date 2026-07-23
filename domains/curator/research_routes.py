@@ -21,15 +21,19 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from flask import Blueprint, jsonify, request, redirect, render_template_string
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))  # repo root, for core.get_secret import below
 from core.get_secret import get_secret
 
 # ── Blueprint ─────────────────────────────────────────────────────────────────
 
 research_bp = Blueprint('research', __name__)
 
-# Path to the research-intelligence project (relative to this file's location)
-RESEARCH_ROOT  = Path(__file__).resolve().parent / '_NewDomains' / 'research-intelligence'
-SCANS_DIR      = Path(__file__).resolve().parent / 'interests' / '2026' / 'scans'
+# Path to the research-intelligence project (relative to repo root; _NewDomains/
+# and interests/ live at repo root, not domain-relative)
+_REPO_ROOT     = Path(__file__).resolve().parent.parent.parent
+RESEARCH_ROOT  = _REPO_ROOT / '_NewDomains' / 'research-intelligence'
+SCANS_DIR      = _REPO_ROOT / 'interests' / '2026' / 'scans'
 DIVES_DIR      = RESEARCH_ROOT / 'data' / 'dives'
 
 # Ensure agent/ modules are importable — done once at import time, not per-request

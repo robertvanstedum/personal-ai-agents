@@ -29,9 +29,9 @@ SYNC_PATHS=(
 
     # Curator — daily-generated data and personal feedback signals
     "curator_signals.json"
-    "curator_latest.html"
+    "domains/curator/curator_latest.html"
     "curator_latest.json"
-    "curator_sources.json"
+    "domains/curator/curator_sources.json"
     "curator_radar.json"
 
     # German — personal learning data

@@ -70,8 +70,8 @@ from typing import Optional, Dict
 import keyring
 from anthropic import Anthropic
 
-# Project root
-PROJECT_ROOT = Path(__file__).parent
+# Project root (domains/curator -> domains -> repo root; interests/ lives at repo root)
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 
 def fetch_article_content(url: str) -> Optional[str]:
