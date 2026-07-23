@@ -986,5 +986,16 @@
     "blocked_reason": null,
     "last_transition_at": "2026-07-23T03:40:43Z",
     "notes": "Technically reviewed by Claude Code 2026-07-22, all 5 review questions in spec section 14 confirmed, no blocking findings. Findings recorded in spec section 15 as implementation caveats: (1) workspace registry must delegate 100% to existing _require_owner/_dauth.has_domain_access() checks, never re-derive its own -- doing so also fixes a pre-existing drift bug where /dashboard has a looser Portuguese-guest check than portuguese_root; (2) scripts/tools/capture_snapshot.py and tests/test_auth.py both have real /dashboard-keyed logic needing lockstep updates, beyond the ~10 template link references; (3) /preview/* serves from minimoi_portal/static/preview/ but capture_snapshot.py writes to a different directory (static/public/preview/) -- rollback preservation must target the former; (4) docs/screenshots/2026-07-21/ has usable curated images for /tour but is .dockerignored, so must be copied into minimoi_portal/static/ to ship. Repository-reorganization merges (#107/#108/#109) confirmed complete, main is clean. Implementation not authorized -- Codex builds, Robert reviews the PR before merge/deploy. Robert authorized implementation 2026-07-22: Codex builds from this spec in a clean codex/minimoi-front-door-143 worktree/branch, stops at a reviewable PR, no merge/deploy inferred. Claude Code reviews the implementation before merge."
+  },
+  {
+    "id": 144,
+    "spec_title": "CI/CD deploy efficiency: selective image builds + auto-prune safeguard",
+    "spec_file": null,
+    "status": "backlog",
+    "github_issue": null,
+    "priority": "normal",
+    "blocked_reason": "Design deferred to a later session per Robert — idea only, no spec written yet.",
+    "last_transition_at": "2026-07-23T00:00:00Z",
+    "notes": "Surfaced 2026-07-23 after a production disk-usage alert: deploy.yml rebuilds and pushes all 7 service images on every merge regardless of which files changed, and nothing auto-prunes the resulting orphaned images between deploys. One prune run reclaimed ~22GB (89% -> 18% disk usage) after tonights unusually high number of merges. Two related asks for future design, not built yet: (1) scope build-push to only the services whose relevant files changed in a given PR/commit, instead of rebuilding all 7 unconditionally; (2) add an auto-prune safeguard as a standing operational action -- Robert specifically wants this designed as a capability the Guild/Operations playbook, toolkit, or scheduler can invoke (e.g. a periodic or threshold-triggered docker image prune -a -f on the EC2 host), not a one-off manual fix. Needs its own design session before a spec is written; do not implement either half without that."
   }
 ]
