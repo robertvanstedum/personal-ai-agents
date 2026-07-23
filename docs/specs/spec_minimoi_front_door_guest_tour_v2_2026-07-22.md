@@ -433,3 +433,37 @@ any images used from there need to be copied into `minimoi_portal/static/`
 **Repository state confirmed:** PRs #107, #108, #109 (repository root
 consolidation) are merged and deployed; `origin/main` is clean and current
 for implementation to branch from.
+
+### Robert's confirmation (2026-07-22)
+
+Reviewed the findings above. None require a v3 — this section is the right
+place to preserve implementation caveats without rewriting the approved
+product specification (§§1–13). The following are now explicit
+implementation requirements, derived from the findings above:
+
+- Delegate workspace visibility to the existing authorization checks
+  (`_require_owner`, `_require_login`, `_dauth.has_domain_access()`) —
+  the registry must not re-derive its own access logic.
+- Fix and test the Portuguese guest-access drift between `/dashboard`
+  (`app.py:487`) and `portuguese_root` (`app.py:2152`) as part of this
+  work, not as a separate follow-up.
+- Hide Chief of Staff navigation for every non-owner tier, not merely
+  guests — tighten `proxy.py`'s `is_guest` check to a proper owner-only
+  check.
+- Update `scripts/tools/capture_snapshot.py`'s `/dashboard`-keyed logic
+  and `tests/test_auth.py`'s `/dashboard` authentication test in the same
+  PR as the route change.
+- Preserve the directory Flask actually serves for `/preview/*`
+  (`minimoi_portal/static/preview/`) for rollback, not
+  `static/public/preview/`.
+- Copy selected tour screenshots into the portal's deployable static
+  directory (`minimoi_portal/static/`) rather than referencing
+  `docs/screenshots/` directly, since the latter is excluded from the
+  Docker build.
+- Mark `docs/specs/spec_landing_page_uptime_2026-06-13.md` superseded
+  only after the new front door has shipped and been verified in
+  production — not before, and not as part of this implementation PR.
+
+Registration remains held at `spec_ready`. No implementation authorization
+is inferred by this confirmation — Robert will separately and explicitly
+instruct that implementation begin from build-queue id 143.
