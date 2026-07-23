@@ -8,7 +8,7 @@
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/portal.css?v=20260723-fit3">
+  <link rel="stylesheet" href="/static/portal.css?v=20260723-fit4">
 </head>
 <body class="dashboard dashboard-home">
 
@@ -68,8 +68,7 @@
                      loading="lazy">
               {% else %}
                 <div class="dashboard-card-monogram" aria-hidden="true">
-                  <span>Chief</span>
-                  <strong>of Staff</strong>
+                  <span>{{ workspace.short_label or workspace.label }}</span>
                 </div>
               {% endif %}
             </div>

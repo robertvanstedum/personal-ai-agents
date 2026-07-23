@@ -52,7 +52,7 @@ WORKSPACES = (
         "path": "/app/cos",
         "eyebrow": "Cross-domain coordination",
         "summary": "Confer, record, track, and carry context across the system.",
-        "image": None,
+        "image": "/static/tour/cos-landing.jpg",
         "public_visible": False,
     },
 )
