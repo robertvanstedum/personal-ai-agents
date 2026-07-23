@@ -25,7 +25,7 @@ jobs:
         run: pip install -r requirements.test.txt
 
       - name: Run regression tests
-        run: pytest tests/ -v --junit-xml=reports/junit.xml --ignore=tests/smoke
+        run: pytest tests/ -v --junit-xml=data/reports/junit.xml --ignore=tests/smoke
 
       - name: Check docs/specs naming/duplicates/supersession
         if: always()
@@ -35,7 +35,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-report
-          path: reports/junit.xml
+          path: data/reports/junit.xml
         if: always()
 
       - name: File GitHub issues for failures
@@ -47,7 +47,7 @@ jobs:
         run: |
           pip install requests -q
           python3 scripts/file_defect.py \
-            --junit reports/junit.xml \
+            --junit data/reports/junit.xml \
             --sha $SHA \
             --branch $BRANCH
 

@@ -10,8 +10,8 @@ __pycache__/
 **/.DS_Store
 
 # CI test output (generated, not committed)
-reports/*.xml
-reports/*.html
+data/reports/*.xml
+data/reports/*.html
 
 # Credentials (NEVER COMMIT!)
 .env
