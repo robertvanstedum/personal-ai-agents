@@ -42,7 +42,7 @@ WORKSPACES = (
         "path": "/guild",
         "eyebrow": "Build and operations",
         "summary": "Specs, build work, operating status, and the next iteration.",
-        "image": "/static/tour/guild-landing.jpg",
+        "image": "/static/tour/guild-landing.png",
         "public_visible": True,
     },
     {
