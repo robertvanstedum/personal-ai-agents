@@ -353,6 +353,7 @@ body.tour {
   flex-wrap: wrap;
   gap: 1.25rem;
 }
+.front-actions:empty { display: none; }
 
 .front-button {
   display: inline-flex;
@@ -415,7 +416,7 @@ body.tour {
 }
 
 .front-explore {
-  margin: 0.8rem clamp(1.5rem, 3vw, 3rem);
+  margin: 1.25rem clamp(1.5rem, 3vw, 3rem);
   padding: clamp(0.9rem, 1.5vw, 1.35rem);
   display: grid;
   grid-template-columns: minmax(220px, 0.27fr) minmax(0, 1fr);
@@ -1571,6 +1572,7 @@ body.admin { background: var(--parch-mid); }
     scroll-snap-type: inline mandatory;
   }
   .front-teaser-card {
+    width: 100%;
     border-right: 0;
     scroll-snap-align: start;
     scroll-snap-stop: always;
@@ -1591,8 +1593,12 @@ body.admin { background: var(--parch-mid); }
     overscroll-behavior-inline: contain;
     scroll-padding-inline: 0;
     scroll-snap-type: inline mandatory;
+    scrollbar-width: none;
   }
+  .tour-gallery-featured::-webkit-scrollbar,
+  .tour-gallery-pair::-webkit-scrollbar { display: none; }
   .tour-shot {
+    width: 100%;
     scroll-snap-align: start;
     scroll-snap-stop: always;
   }
@@ -1652,9 +1658,9 @@ body.admin { background: var(--parch-mid); }
   .workspace-link,
   .tour-domain-nav a { font-size: 0.76rem; }
   .workspace-lock { font-size: 0.52rem; }
-  .front-hero-copy { padding: 2rem 1.25rem 1.9rem; }
+  .front-hero-copy { padding: 1.55rem 1.25rem 1.5rem; }
   .front-eyebrow { margin-bottom: 0.55rem; }
-  .front-title { font-size: clamp(3.4rem, 17vw, 4.75rem); }
+  .front-title { font-size: clamp(3.2rem, 15vw, 4.15rem); }
   .front-tagline {
     max-width: 20rem;
     font-size: 1rem;
@@ -1662,17 +1668,20 @@ body.admin { background: var(--parch-mid); }
   }
   .front-rule { margin: 0.8rem 0 0.75rem; }
   .front-about h2 { font-size: 1.08rem; }
-  .front-about p { font-size: 0.95rem; }
+  .front-about p {
+    font-size: 0.92rem;
+    line-height: 1.45;
+  }
   .front-about p + p { margin-top: 0.65rem; }
   .front-actions { margin-top: 0.8rem; }
-  .front-hero-photo { height: 235px; }
+  .front-hero-photo { height: 215px; }
   .front-explore {
-    margin: 0.8rem;
-    padding: 1.5rem;
+    margin: 1rem 0.8rem;
+    padding: 1.25rem;
     border-radius: 12px;
   }
   .front-explore-copy { display: block; }
-  .front-explore-copy .front-button { margin-bottom: 1.5rem; }
+  .front-explore-copy .front-button { margin-bottom: 1.15rem; }
   .front-teaser {
     margin: 0 -0.4rem;
   }
@@ -1680,7 +1689,7 @@ body.admin { background: var(--parch-mid); }
     padding: 1.5rem 1rem;
     gap: 1.25rem;
   }
-  .tour-main { padding: 2.2rem 0.8rem 2rem; }
+  .tour-main { padding: 1.5rem 0.8rem 2rem; }
   .tour-intro { padding: 0 0.35rem 1.6rem; }
   .tour-domain-map {
     padding: 1rem;
@@ -1694,7 +1703,10 @@ body.admin { background: var(--parch-mid); }
     grid-template-columns: 42% minmax(0, 1fr);
   }
   .tour-domain-card-image { height: 100%; min-height: 105px; }
-  .tour-section { padding: 1.25rem 0.8rem 1.5rem; }
+  .tour-section {
+    padding: 1.25rem 0.8rem 1.5rem;
+    scroll-margin-top: 118px;
+  }
   .tour-section-heading {
     grid-template-columns: 1.7rem minmax(0, 1fr);
     gap: 0.65rem;
