@@ -66,6 +66,13 @@ services:
       - PORTUGUESE_BACKEND=http://host.docker.internal:8770
     ports:
       - "5001:5001"
+    volumes:
+      # Local credentials are intentionally gitignored. Bind them into the
+      # dev portal so rebuilding the image cannot silently remove sign-in.
+      - ./minimoi_portal/auth/users.json:/app/minimoi_portal/auth/users.json
+      - ./minimoi_portal/auth/guests.json:/app/minimoi_portal/auth/guests.json
+      - ./minimoi_portal/auth/pending.json:/app/minimoi_portal/auth/pending.json
+      - ./minimoi_portal/auth/reset_requests.json:/app/minimoi_portal/auth/reset_requests.json
     depends_on:
       - curator
       - german
