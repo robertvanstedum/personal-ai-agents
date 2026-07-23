@@ -8,7 +8,7 @@
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/portal.css?v=20260723-fit4">
+  <link rel="stylesheet" href="/static/portal.css?v=20260723-stable1">
 </head>
 <body class="landing{% if user %} landing-authenticated{% endif %}">
 
@@ -78,10 +78,10 @@
       <div class="front-actions">
         {% if user %}
           <a href="/dashboard" class="front-button front-button-primary">Open mini-moi</a>
-          <a href="/tour" class="front-button front-button-text">View public tour</a>
+          <a href="/tour" class="front-button front-button-text">A look inside</a>
           <span class="front-welcome">Welcome back, {{ user.display_name }}.</span>
         {% else %}
-          <a href="/tour" class="front-button front-button-text">View public tour</a>
+          <a href="/tour" class="front-button front-button-text">Preview →</a>
         {% endif %}
       </div>
     </div>
@@ -95,10 +95,10 @@
 
   <section class="front-explore" aria-labelledby="explore-heading">
     <div class="front-explore-copy">
-      <p class="front-eyebrow">A public view</p>
-      <h2 id="explore-heading">Public tour</h2>
-      <p>See real workflows across research, language immersion, and operations without signing in.</p>
-      <a href="/tour" class="front-button front-button-primary">View public tour</a>
+      <p class="front-eyebrow">Selected views</p>
+      <h2 id="explore-heading">A look inside</h2>
+      <p>Follow real workflows across research, language immersion, and operations without signing in.</p>
+      <a href="/tour" class="front-button front-button-text">Open the preview →</a>
     </div>
 
     <div class="front-teaser" aria-label="Selected mini-moi workspace previews">
@@ -125,7 +125,7 @@
 </main>
 
 <footer class="front-door-footer">
-  <a href="/tour">Public tour</a>
+  <a href="/tour">A look inside</a>
   <a href="https://github.com/robertvanstedum/personal-ai-agents"
      target="_blank" rel="noopener noreferrer">GitHub</a>
   <a href="https://www.linkedin.com/in/robert-van-stedum/"
