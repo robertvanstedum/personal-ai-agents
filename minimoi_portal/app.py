@@ -224,7 +224,7 @@ def preview(subpath=""):
         alt = preview_dir / f"{subpath}.html"
         if alt.is_file():
             return _send_file(str(alt))
-    return "Preview page not found — run tools/capture_snapshot.py to generate snapshots.", 404
+    return "Preview page not found — run scripts/tools/capture_snapshot.py to generate snapshots.", 404
 
 
 @app.route("/contact")

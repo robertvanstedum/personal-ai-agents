@@ -3,9 +3,9 @@
 Screenshot capture tool for mini-moi UI documentation.
 
 Usage:
-    python3 tools/capture_screenshots.py curator
-    python3 tools/capture_screenshots.py german
-    python3 tools/capture_screenshots.py all
+    python3 scripts/tools/capture_screenshots.py curator
+    python3 scripts/tools/capture_screenshots.py german
+    python3 scripts/tools/capture_screenshots.py all
 
 Run before/after UI commits to document the state of the UI.
 Archives previous current/ screenshots to archive/YYYY-MM-DD/ first.
@@ -27,7 +27,7 @@ import time
 
 # ── paths ──────────────────────────────────────────────────────────────────
 
-REPO_ROOT        = Path(__file__).parent.parent
+REPO_ROOT        = Path(__file__).parent.parent.parent
 DOCS_SCREENSHOTS = REPO_ROOT / "docs" / "screenshots"
 WORKING          = REPO_ROOT / "_working"
 

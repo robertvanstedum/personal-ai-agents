@@ -6,7 +6,7 @@ Run at the start of every session (especially after overnight / travel)
 to confirm the laptop services survived and are responding.
 
 Usage:
-    python3 tools/health_check.py
+    python3 scripts/tools/health_check.py
 """
 
 import sys
