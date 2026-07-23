@@ -22,13 +22,16 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 try:
-    import keyring
     import requests
 except ImportError as e:
-    print(f"Missing dependency: {e}. Run: pip install keyring requests")
+    print(f"Missing dependency: {e}. Run: pip install requests")
     sys.exit(1)
 
 ROOT = Path(__file__).resolve().parent.parent
+MAIN_PROJECT = ROOT.parent.parent
+
+sys.path.insert(0, str(MAIN_PROJECT))
+from core.get_secret import get_secret
 
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -222,7 +225,10 @@ def cmd_start(args, cfg):
     weekly     = totals["weekly"]
     running    = totals["running"]
 
-    token   = keyring.get_password("telegram", cfg["telegram_bot"])
+    try:
+        token = get_secret("TELEGRAM_BOT_TOKEN", "telegram", cfg["telegram_bot"])
+    except Exception:
+        token = None
     chat_id = cfg["chat_id"]
 
     def can_telegram():

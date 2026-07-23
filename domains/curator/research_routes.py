@@ -654,14 +654,18 @@ def api_research_run_session():
     # Launch non-blocking subprocess — research.py can run 1-35 min,
     # far too long to block a Flask worker.
     global _active_proc
+    log_dir = RESEARCH_ROOT / 'data' / 'session_logs'
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / f'{session_name}.log'
     try:
+        log_file = open(log_path, 'wb')
         proc = subprocess.Popen(
             [sys.executable, 'agent/research.py',
              '--topic', topic,
              '--session-name', session_name],
             cwd=str(RESEARCH_ROOT),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
         )
     except (OSError, subprocess.SubprocessError) as e:
         # Log to stderr for debugging via curator_server_stderr.log
@@ -713,16 +717,34 @@ def api_research_run_session_status():
     # Liveness check via proc.poll() (preferred) or os.kill fallback
     global _active_proc
     running = _is_proc_alive()
+    failed = False
+    error_excerpt = None
     if not running:
+        # proc.poll() returns the exit code once finished (None while running).
+        # A nonzero code means it crashed rather than completing -- surface
+        # that explicitly instead of silently reporting "not running", which
+        # looks identical to a normal completion from the UI's perspective.
+        if _active_proc is not None and _active_proc.poll() not in (None, 0):
+            failed = True
+            log_path = RESEARCH_ROOT / 'data' / 'session_logs' / f"{state.get('session_name')}.log"
+            if log_path.exists():
+                try:
+                    error_excerpt = log_path.read_text(errors='replace').strip()[-500:]
+                except OSError:
+                    pass
         _active_proc = None
         _RUN_STATE_PATH.unlink(missing_ok=True)
 
-    return jsonify({
+    resp = {
         "running":      running,
         "topic":        state.get('topic'),
         "session_name": state.get('session_name'),
         "started_at":   state.get('started_at'),
-    })
+    }
+    if failed:
+        resp["failed"] = True
+        resp["error"] = error_excerpt or "Session process exited with an error; no output captured."
+    return jsonify(resp)
 
 
 # ── API: Deeper Dive generation ───────────────────────────────────────────────

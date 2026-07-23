@@ -796,6 +796,9 @@
       const data = await res.json();
       if (!data.running) {
         document.querySelectorAll('.thread-row.running').forEach(r => r.classList.remove('running'));
+        if (data.failed) {
+          showToast('Session failed: ' + (data.error || 'unknown error').slice(0, 160), true);
+        }
         load(); // reload thread list with updated stats
         return;
       }
