@@ -26,7 +26,7 @@
          target="_blank" rel="noopener noreferrer"
          class="front-door-external nav-hide-compact">GitHub</a>
       {% if user %}
-        <a href="/" class="front-door-signin">Open mini-moi</a>
+        <a href="/dashboard" class="front-door-signin">Open mini-moi</a>
       {% else %}
         <a href="/login" class="front-door-signin">Sign in</a>
       {% endif %}
@@ -56,29 +56,51 @@
         </p>
       </div>
     </div>
+    <p class="tour-mobile-hint">Tap any image to open the full-size view.</p>
     <div class="tour-gallery tour-gallery-featured">
+      <figure class="tour-shot tour-shot-wide tour-shot-lead">
+        <a class="tour-shot-link" href="/static/tour/curator-landing.jpg"
+           target="_blank" rel="noopener" aria-label="View Curator landing full size">
+          <img src="/static/tour/curator-landing.jpg"
+               alt="Curator landing page"
+               width="1425" height="854" loading="eager">
+        </a>
+        <figcaption>Start here: Curator landing</figcaption>
+      </figure>
       <figure class="tour-shot tour-shot-wide">
-        <img src="/static/tour/curator-daily-briefing.jpg"
-             alt="Curator daily briefing"
-             width="1425" height="854" loading="eager">
+        <a class="tour-shot-link" href="/static/tour/curator-daily-briefing.jpg"
+           target="_blank" rel="noopener" aria-label="View Curator daily briefing full size">
+          <img src="/static/tour/curator-daily-briefing.jpg"
+               alt="Curator daily briefing"
+               width="1425" height="854" loading="lazy">
+        </a>
         <figcaption>Daily briefing</figcaption>
       </figure>
       <figure class="tour-shot">
-        <img src="/static/tour/curator-scan.jpg"
-             alt="Curator scan of a selected article"
-             width="1425" height="854" loading="lazy">
+        <a class="tour-shot-link" href="/static/tour/curator-scan.jpg"
+           target="_blank" rel="noopener" aria-label="View Curator scan full size">
+          <img src="/static/tour/curator-scan.jpg"
+               alt="Curator scan of a selected article"
+               width="1425" height="854" loading="lazy">
+        </a>
         <figcaption>Scan one issue</figcaption>
       </figure>
       <figure class="tour-shot">
-        <img src="/static/tour/curator-deeper-dive.jpg"
-             alt="Curator deeper-dive analysis"
-             width="1425" height="863" loading="lazy">
+        <a class="tour-shot-link" href="/static/tour/curator-deeper-dive.jpg"
+           target="_blank" rel="noopener" aria-label="View Curator deeper dive full size">
+          <img src="/static/tour/curator-deeper-dive.jpg"
+               alt="Curator deeper-dive analysis"
+               width="1425" height="863" loading="lazy">
+        </a>
         <figcaption>Choose the next depth</figcaption>
       </figure>
       <figure class="tour-shot tour-shot-wide">
-        <img src="/static/tour/curator-research-tools.jpg"
-             alt="Curator research tools"
-             width="1425" height="854" loading="lazy">
+        <a class="tour-shot-link" href="/static/tour/curator-research-tools.jpg"
+           target="_blank" rel="noopener" aria-label="View Curator research tools full size">
+          <img src="/static/tour/curator-research-tools.jpg"
+               alt="Curator research tools"
+               width="1425" height="854" loading="lazy">
+        </a>
         <figcaption>Continue into research</figcaption>
       </figure>
     </div>
@@ -102,15 +124,21 @@
     </div>
     <div class="tour-gallery tour-gallery-pair">
       <figure class="tour-shot">
-        <img src="/static/tour/german-landing.jpg"
-             alt="Mein Deutsch landing page"
-             width="1425" height="854" loading="lazy">
-        <figcaption>Choose how to practice</figcaption>
+        <a class="tour-shot-link" href="/static/tour/german-landing.jpg"
+           target="_blank" rel="noopener" aria-label="View Mein Deutsch landing full size">
+          <img src="/static/tour/german-landing.jpg"
+               alt="Mein Deutsch landing page"
+               width="1425" height="854" loading="lazy">
+        </a>
+        <figcaption>Start here: choose how to practice</figcaption>
       </figure>
       <figure class="tour-shot">
-        <img src="/static/tour/german-writing-correction.jpg"
-             alt="Mein Deutsch writing correction"
-             width="1425" height="854" loading="lazy">
+        <a class="tour-shot-link" href="/static/tour/german-writing-correction.jpg"
+           target="_blank" rel="noopener" aria-label="View Mein Deutsch writing correction full size">
+          <img src="/static/tour/german-writing-correction.jpg"
+               alt="Mein Deutsch writing correction"
+               width="1425" height="854" loading="lazy">
+        </a>
         <figcaption>Write in context and learn from corrections</figcaption>
       </figure>
     </div>
@@ -134,15 +162,21 @@
     </div>
     <div class="tour-gallery tour-gallery-pair">
       <figure class="tour-shot">
-        <img src="/static/tour/portuguese-landing.jpg"
-             alt="Meu Português landing page"
-             width="1425" height="854" loading="lazy">
-        <figcaption>Reading, conversation, writing, and vocabulary</figcaption>
+        <a class="tour-shot-link" href="/static/tour/portuguese-landing.jpg"
+           target="_blank" rel="noopener" aria-label="View Meu Português landing full size">
+          <img src="/static/tour/portuguese-landing.jpg"
+               alt="Meu Português landing page"
+               width="1425" height="854" loading="lazy">
+        </a>
+        <figcaption>Start here: reading, conversation, writing, and vocabulary</figcaption>
       </figure>
       <figure class="tour-shot">
-        <img src="/static/tour/portuguese-conversation.jpg"
-             alt="Meu Português conversation practice"
-             width="1425" height="854" loading="lazy">
+        <a class="tour-shot-link" href="/static/tour/portuguese-conversation.jpg"
+           target="_blank" rel="noopener" aria-label="View Meu Português conversation full size">
+          <img src="/static/tour/portuguese-conversation.jpg"
+               alt="Meu Português conversation practice"
+               width="1425" height="854" loading="lazy">
+        </a>
         <figcaption>Practice a real-world conversation</figcaption>
       </figure>
     </div>
@@ -164,12 +198,24 @@
         </p>
       </div>
     </div>
-    <div class="tour-gallery tour-gallery-single">
+    <div class="tour-gallery tour-gallery-pair">
       <figure class="tour-shot">
-        <img src="/static/tour/guild-landing.jpg"
-             alt="Guild build and operations landing page"
-             width="1440" height="863" loading="lazy">
-        <figcaption>Spec, build, operate, and improve</figcaption>
+        <a class="tour-shot-link" href="/static/tour/guild-landing.jpg"
+           target="_blank" rel="noopener" aria-label="View Guild landing full size">
+          <img src="/static/tour/guild-landing.jpg"
+               alt="Guild build and operations landing page"
+               width="1440" height="863" loading="lazy">
+        </a>
+        <figcaption>Start here: spec, build, operate, and improve</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/guild-build-queue.jpg"
+           target="_blank" rel="noopener" aria-label="View Guild build queue full size">
+          <img src="/static/tour/guild-build-queue.jpg"
+               alt="Guild build queue"
+               width="2436" height="1296" loading="lazy">
+        </a>
+        <figcaption>Follow work from spec ready through recently done</figcaption>
       </figure>
     </div>
     <nav class="tour-step-nav" aria-label="Guild tour navigation">

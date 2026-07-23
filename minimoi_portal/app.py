@@ -246,7 +246,7 @@ def tour():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if _current_user():
-        return redirect(url_for("landing"))
+        return redirect(url_for("dashboard"))
 
     error = None
     if request.method == "POST":
@@ -275,7 +275,7 @@ def login():
                     pass
             if _auth.check_must_change_password(user["username"]):
                 return redirect(url_for("account_password", forced=1))
-            next_url = request.args.get("next") or url_for("landing")
+            next_url = request.args.get("next") or url_for("dashboard")
             return redirect(next_url)
 
     return render_template("login.html", error=error)
@@ -284,7 +284,7 @@ def login():
 @app.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
     if _current_user():
-        return redirect(url_for("landing"))
+        return redirect(url_for("dashboard"))
     submitted = False
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
@@ -319,7 +319,7 @@ def logout():
 def login_by_token(token):
     """One-time login link for domain users (daughters). Token is 48h, single-use."""
     if _current_user():
-        return redirect(url_for("landing"))
+        return redirect(url_for("dashboard"))
     try:
         user = _dauth.consume_login_token(token)
     except Exception:
@@ -347,7 +347,7 @@ def _email_has_guest_account(email: str) -> bool:
 def request_access():
     """Domain-specific access request form (hidden domain field)."""
     if _current_user():
-        return redirect(url_for("landing"))
+        return redirect(url_for("dashboard"))
 
     domain = request.args.get("domain", "portuguese")
     error = None
@@ -404,7 +404,7 @@ def profile_password():
     user = _current_user()
     auth_id = user.get("auth_id")
     if not auth_id:
-        return redirect(url_for("landing"))
+        return redirect(url_for("dashboard"))
 
     error = None
     success = False
@@ -433,7 +433,7 @@ def register():
     Creates a pending account and notifies Robert via Telegram.
     """
     if _current_user():
-        return redirect(url_for("landing"))
+        return redirect(url_for("dashboard"))
 
     error = None
     if request.method == "POST":
@@ -485,7 +485,12 @@ def _notify_telegram_new_request(display_name: str, email: str, domain: str = "p
 @app.route("/dashboard")
 @_require_login
 def dashboard():
-    return redirect(url_for("landing"))
+    user = _current_user()
+    return render_template(
+        "dashboard.html",
+        user=user,
+        workspaces=workspace_navigation(user),
+    )
 
 
 # ── Curator proxy (owner + family only; guests get deep dive HTML only) ───────
@@ -1090,7 +1095,7 @@ def account_password():
 
     _auth.clear_must_change_password(user["username"])
     flash("Password updated.", "success")
-    return redirect(url_for("landing"))
+    return redirect(url_for("dashboard"))
 
 
 # ── Guild domain (owner-only) ─────────────────────────────────────────────────

@@ -42,6 +42,7 @@
          target="_blank" rel="noopener noreferrer"
          class="front-door-external nav-hide-compact">LinkedIn</a>
       {% if user %}
+        <a href="/dashboard" class="front-door-external">Home</a>
         <a href="/account/password" class="front-door-user">{{ user.display_name }}</a>
         <a href="/logout" class="front-door-signout">Sign out</a>
       {% else %}
@@ -70,7 +71,8 @@
 
       <div class="front-actions">
         {% if user %}
-          <a href="/tour" class="front-button front-button-primary">Explore mini-moi</a>
+          <a href="/dashboard" class="front-button front-button-primary">Open mini-moi</a>
+          <a href="/tour" class="front-button front-button-text">View the tour</a>
           <span class="front-welcome">Welcome back, {{ user.display_name }}.</span>
         {% else %}
           <a href="/login" class="front-button front-button-primary">Sign in</a>

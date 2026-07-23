@@ -3,112 +3,94 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard — mini-moi</title>
+  <meta name="description" content="Your mini-moi workspaces.">
+  <title>Home — mini-moi</title>
+  <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/portal.css">
 </head>
-<body class="dashboard">
+<body class="dashboard dashboard-home">
 
-<nav class="portal-nav">
-  <a href="/" class="portal-nav-brand">mini-moi</a>
-  <div class="portal-nav-links">
-    <span class="nav-user">{{ user.display_name }}</span>
-    {% if user.tier == 'owner' %}
-      <a href="/admin/guests" class="nav-link">Guests</a>
-    {% endif %}
-    <a href="/logout" class="nav-link">Sign out</a>
-  </div>
-</nav>
+<header class="front-door-header dashboard-header">
+  <nav class="front-door-nav" aria-label="mini-moi workspaces">
+    <a href="/dashboard" class="front-door-brand" aria-label="mini-moi home">mini-moi</a>
 
-<main class="dashboard-main">
+    <div class="workspace-nav">
+      {% for workspace in workspaces %}
+        <a href="{{ workspace.path }}" class="workspace-link">
+          {{ workspace.short_label or workspace.label }}
+        </a>
+      {% endfor %}
+    </div>
 
-  <h1 class="dashboard-greeting">
-    {% if user.tier == 'guest' %}
-      Welcome, {{ user.display_name }}
-    {% else %}
-      Dashboard
-    {% endif %}
-  </h1>
+    <div class="front-door-account">
+      <a href="/tour" class="front-door-external nav-hide-compact">Tour</a>
+      {% if user.tier == 'owner' %}
+        <a href="/admin/guests" class="front-door-external nav-hide-compact">Guests</a>
+      {% endif %}
+      <a href="/account/password" class="front-door-user">{{ user.display_name }}</a>
+      <a href="/logout" class="front-door-signout">Sign out</a>
+    </div>
+  </nav>
+</header>
 
-  <div class="tile-grid">
+<main class="dashboard-shell">
+  <section class="dashboard-home-hero" aria-labelledby="dashboard-title">
+    <div class="dashboard-home-copy">
+      <p class="front-eyebrow">Your mini-moi</p>
+      <h1 id="dashboard-title">Welcome back, {{ user.display_name }}.</h1>
+      <p>Choose a workspace and continue where you left off.</p>
+    </div>
+    <div class="dashboard-home-photo" aria-hidden="true">
+      <img src="/static/landing/coffee-cups.jpg"
+           alt=""
+           width="2016" height="1512">
+    </div>
+  </section>
 
-    <!-- Curator tile -->
-    <a href="/app/curator"
-       class="tile tile-curator">
-      <div class="tile-icon">📰</div>
-      <div class="tile-content">
-        <h2 class="tile-title">Curator</h2>
-        <p class="tile-desc">
-          {% if user.tier == 'guest' %}
-            Today's morning briefing
-          {% else %}
-            Morning briefing · archive · deep dives
-          {% endif %}
-        </p>
+  <section class="dashboard-workspaces" aria-labelledby="workspace-heading">
+    <header class="dashboard-section-heading">
+      <div>
+        <p class="front-eyebrow">In use</p>
+        <h2 id="workspace-heading">Workspaces</h2>
       </div>
-      <div class="tile-arrow">→</div>
-    </a>
+      <a href="/tour" class="dashboard-tour-link">View the public tour →</a>
+    </header>
 
-    <!-- Mein Deutsch tile -->
-    <a href="/app/german" class="tile tile-german">
-      <div class="tile-icon">🇦🇹</div>
-      <div class="tile-content">
-        <h2 class="tile-title">Mein Deutsch</h2>
-        <p class="tile-desc">
-          {% if user.tier == 'guest' %}
-            Lesen — Wiener Nachrichten
-          {% else %}
-            Lesen · Gespräche · Schreiben · Wörter
-          {% endif %}
-        </p>
-      </div>
-      <div class="tile-arrow">→</div>
-    </a>
-
-    {% if has_portuguese %}
-    <!-- Português tile -->
-    <a href="/app/portuguese" class="tile tile-portuguese">
-      <div class="tile-icon">🇧🇷</div>
-      <div class="tile-content">
-        <h2 class="tile-title">Meu Português</h2>
-        <p class="tile-desc">Leitura · Conversas · Escrita · Palavras</p>
-      </div>
-      <div class="tile-arrow">→</div>
-    </a>
-    {% endif %}
-
-    {% if user.tier == 'owner' %}
-    <!-- Guild tile — owner only -->
-    <a href="/guild" class="tile tile-guild">
-      <div class="tile-icon">⚙️</div>
-      <div class="tile-content">
-        <h2 class="tile-title">Guild</h2>
-        <p class="tile-desc">Build · Operations · Career Focus</p>
-      </div>
-      <div class="tile-arrow">→</div>
-    </a>
-
-    <!-- Chief of Staff tile — owner only -->
-    <a href="/app/cos" class="tile tile-cos">
-      <div class="tile-icon">🧭</div>
-      <div class="tile-content">
-        <h2 class="tile-title">Chief of Staff</h2>
-        <p class="tile-desc">Confer · Record · Agenda · Store</p>
-      </div>
-      <div class="tile-arrow">→</div>
-    </a>
-    {% endif %}
-
-  </div>
+    <div class="dashboard-workspace-grid">
+      {% for workspace in workspaces %}
+        <a href="{{ workspace.path }}"
+           class="dashboard-workspace-card dashboard-workspace-{{ workspace.key }}">
+          <div class="dashboard-card-visual">
+            {% if workspace.image %}
+              <img src="{{ workspace.image }}"
+                   alt=""
+                   width="1425" height="854"
+                   loading="lazy">
+            {% else %}
+              <div class="dashboard-card-monogram" aria-hidden="true">
+                <span>Chief</span>
+                <strong>of Staff</strong>
+              </div>
+            {% endif %}
+          </div>
+          <div class="dashboard-card-copy">
+            <p>{{ workspace.eyebrow }}</p>
+            <h3>{{ workspace.label }}</h3>
+            <span>{{ workspace.summary }}</span>
+          </div>
+          <span class="dashboard-card-arrow" aria-hidden="true">→</span>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
 
   {% if user.tier == 'guest' %}
     <p class="guest-notice">
-      Guest access — limited view.
-      Some features are not available.
+      Guest access is limited to the workspaces shared with you.
     </p>
   {% endif %}
-
 </main>
 
 </body>
