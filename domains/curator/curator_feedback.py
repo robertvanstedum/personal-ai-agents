@@ -21,16 +21,19 @@ from datetime import datetime
 from pathlib import Path
 from anthropic import Anthropic
 from dotenv import load_dotenv
+
+sys.path.insert(0, str(Path(__file__).parent))  # sibling import below (signal_store)
 from signal_store import get_session_id, log_feedback
 
 # Load environment variables
 load_dotenv()
 
 # File paths
-CURATOR_OUTPUT = Path(__file__).parent / "curator_output.txt"
+REPO_ROOT = Path(__file__).parent.parent.parent  # domains/curator -> domains -> repo root
+CURATOR_OUTPUT = REPO_ROOT / "curator_output.txt"
 # Canonical preferences location — shared with curator_server.py and curator_rss_v2.py.
 # Defaults to data/curator/ in the repo; override with CURATOR_DATA_DIR env var on EC2.
-_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator")))
+_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(REPO_ROOT / "data" / "curator")))
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
 PREFERENCES_FILE = _DATA_DIR / "curator_preferences.json"
 
@@ -155,8 +158,8 @@ def resolve_article_reference(ref):
     """
     from datetime import datetime, timedelta
     
-    history_file = Path(__file__).parent / "curator_history.json"
-    cache_dir = Path(__file__).parent / "curator_cache"
+    history_file = REPO_ROOT / "curator_history.json"
+    cache_dir = REPO_ROOT / "curator_cache"
     
     if not history_file.exists():
         print("❌ History file not found. Run curator first to build history.")
@@ -299,7 +302,7 @@ Write directly - no preamble."""
         # Create output path
         slug = re.sub(r'[^a-z0-9]+', '-', article_data['title'].lower())[:50].strip('-')
         today = datetime.now().strftime("%Y-%m-%d")
-        output_dir = Path(__file__).parent / "interests" / "2026" / "scans"
+        output_dir = REPO_ROOT / "interests" / "2026" / "scans"
         output_dir.mkdir(parents=True, exist_ok=True)
         
         output_path = output_dir / f"{hash_id}-{slug}.md"
@@ -354,7 +357,7 @@ Write directly - no preamble."""
 def regenerate_scans_index():
     """Regenerate scans/index.html after creating a new Scan (formerly regenerate_scans_index)"""
     from datetime import datetime
-    scans_dir = Path(__file__).parent / "interests" / "2026" / "scans"
+    scans_dir = REPO_ROOT / "interests" / "2026" / "scans"
 
     if not scans_dir.exists():
         return
@@ -389,7 +392,7 @@ def regenerate_scans_index():
     scans.sort(key=lambda x: x['date'], reverse=True)
 
     # ── Collect Dives (thread-level analyses) ────────────────────────────────
-    research_dd_dir = Path(__file__).parent / "_NewDomains" / "research-intelligence" / "data" / "dives"
+    research_dd_dir = REPO_ROOT / "_NewDomains" / "research-intelligence" / "data" / "dives"
     dives = []
 
     if research_dd_dir.exists():
@@ -1552,7 +1555,7 @@ def main():
             print(f"   💰 Cost: ${cost:.4f}")
             
             # Update history with bookmark flag
-            history_file = Path(__file__).parent / "curator_history.json"
+            history_file = REPO_ROOT / "curator_history.json"
             with open(history_file, 'r') as f:
                 history = json.load(f)
             

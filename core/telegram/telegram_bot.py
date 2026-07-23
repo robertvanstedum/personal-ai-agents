@@ -344,7 +344,7 @@ def record_feedback(action, rank, article_data):
     """Call repo's curator_feedback.py via venv Python to record feedback"""
     venv_python = BASE_DIR / 'venv' / 'bin' / 'python'
     python_bin = str(venv_python) if venv_python.exists() else 'python3'
-    feedback_script = BASE_DIR / 'curator_feedback.py'
+    feedback_script = BASE_DIR / 'domains' / 'curator' / 'curator_feedback.py'
 
     if not feedback_script.exists():
         return {'success': False, 'message': f'curator_feedback.py not found at {feedback_script}'}
@@ -495,7 +495,7 @@ def execute_voice_command(command, args, chat_id, token):
         send_message(token, chat_id, "🧪 Running dry run — no writes, preview only...")
         def _dry():
             subprocess.run(
-                ['python', 'curator_rss_v2.py', '--dry-run'],
+                ['python', 'domains/curator/curator_rss_v2.py', '--dry-run'],
                 capture_output=True, cwd=BASE_DIR, timeout=300
             )
             preview = BASE_DIR / 'curator_preview.txt'

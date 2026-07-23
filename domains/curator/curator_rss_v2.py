@@ -68,19 +68,26 @@ import os
 import json
 import hashlib
 from dotenv import load_dotenv
+
+import sys
+_BASE_DIR = Path(__file__).parent
+REPO_ROOT = _BASE_DIR.parent.parent  # domains/curator -> domains -> repo root
+sys.path.insert(0, str(_BASE_DIR))    # sibling imports below (curator_config, curator_utils)
+sys.path.insert(0, str(REPO_ROOT))    # utils.role import below
+
 from curator_config import ACTIVE_DOMAIN
 from curator_utils import get_telegram_token, send_telegram_alert
 from utils.role import is_production as _is_production
 
 # Curator user data directory — same convention as curator_server.py and curator_feedback.py.
 # Override with CURATOR_DATA_DIR env var on EC2.
-_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator")))
+_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(REPO_ROOT / "data" / "curator")))
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # Cost logger — persists per-run API costs for cost_report.py
 # ---------------------------------------------------------------------------
-_COST_LOG = Path(__file__).parent / 'curator_costs.json'
+_COST_LOG = REPO_ROOT / 'curator_costs.json'
 
 def log_curator_cost(model: str, use_type: str, input_tokens: int, output_tokens: int, cost_usd: float):
     """Append one cost record to the curator cost log."""
@@ -1117,7 +1124,7 @@ def load_active_interests():
     from pathlib import Path
     from datetime import datetime
     
-    interests_dir = Path(__file__).parent / "interests"
+    interests_dir = REPO_ROOT / "interests"
     
     if not interests_dir.exists():
         return {}

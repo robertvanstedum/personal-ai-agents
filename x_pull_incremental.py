@@ -20,7 +20,7 @@ from pathlib import Path
 
 import tweepy
 
-from curator_utils import (
+from domains.curator.curator_utils import (
     classify_source_type,
     extract_domain,
     extract_tco_urls,

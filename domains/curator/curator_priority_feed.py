@@ -17,9 +17,12 @@ import json
 import logging
 import requests
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # repo root, for core.get_secret import below
+sys.path.insert(0, str(Path(__file__).parent))  # sibling import below (curator_rss_v2)
 from core.get_secret import get_secret
 from datetime import datetime, timezone
-from pathlib import Path
 from urllib.parse import urlparse
 
 # ── Scoring functions imported from curator (do not duplicate) ──────────────

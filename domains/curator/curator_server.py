@@ -20,12 +20,13 @@ import re
 import html as _html
 
 BASE_DIR = Path(__file__).parent
+REPO_ROOT = BASE_DIR.parent.parent  # for the Mac-native venv/, not present in Docker
 
 # Curator user data directory — preferences, history, priorities.
 # Defaults to data/curator/ within the repo so data lives under version control
 # boundaries (but is gitignored as personal data).
 # Override with CURATOR_DATA_DIR env var on EC2 or any non-default layout.
-_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(BASE_DIR / "data" / "curator")))
+_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(REPO_ROOT / "data" / "curator")))
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__,
@@ -42,7 +43,7 @@ def _init_sentry():
         dsn = os.environ.get('SENTRY_DSN')
         if not dsn:
             try:
-                sys.path.insert(0, str(BASE_DIR))
+                sys.path.insert(0, str(REPO_ROOT))
                 from core.get_secret import get_secret
                 dsn = get_secret('SENTRY_DSN')
             except Exception:
@@ -102,7 +103,7 @@ def _load_briefing_articles():
     Returns (articles, day_str, date_str, model_display, briefing_date) or None
     if the JSON file does not exist.
     """
-    json_path = BASE_DIR / 'curator_latest.json'
+    json_path = REPO_ROOT / 'curator_latest.json'
     if not json_path.exists():
         return None
 
@@ -135,7 +136,7 @@ def _load_briefing_articles():
 
 def _load_radar_articles():
     """Load on-radar articles from curator_radar.json. Returns [] if missing or empty."""
-    radar_path = BASE_DIR / 'curator_radar.json'
+    radar_path = REPO_ROOT / 'curator_radar.json'
     if not radar_path.exists():
         return []
     try:
@@ -150,7 +151,7 @@ def _load_radar_articles():
 def _get_latest_briefing_date() -> str:
     """Return formatted date string from latest briefing JSON. Falls back to dash."""
     try:
-        raw = json.loads((BASE_DIR / 'curator_latest.json').read_text())
+        raw = json.loads((REPO_ROOT / 'curator_latest.json').read_text())
         if raw:
             d = raw[0].get('briefing_date') or raw[0].get('date', '')
             if d:
@@ -164,7 +165,7 @@ def _get_latest_briefing_date() -> str:
 def _get_latest_article_count() -> int:
     """Return count of articles in latest briefing. Falls back to 0."""
     try:
-        raw = json.loads((BASE_DIR / 'curator_latest.json').read_text())
+        raw = json.loads((REPO_ROOT / 'curator_latest.json').read_text())
         return len(raw)
     except Exception:
         return 0
@@ -172,7 +173,7 @@ def _get_latest_article_count() -> int:
 
 def _get_topics_summary() -> dict:
     """Count topics by status from threads directory. Falls back to all zeros."""
-    threads_dir = BASE_DIR / '_NewDomains' / 'research-intelligence' / 'data' / 'threads'
+    threads_dir = REPO_ROOT / '_NewDomains' / 'research-intelligence' / 'data' / 'threads'
     result = {'total': 0, 'active': 0, 'dormant': 0}
     try:
         for f in threads_dir.glob('*/thread.json'):
@@ -190,7 +191,7 @@ def _get_topics_summary() -> dict:
 
 def _get_leanings_summary() -> dict:
     """Count leanings by state from leanings.json. Falls back to all zeros."""
-    leanings_path = (BASE_DIR / '_NewDomains' / 'research-intelligence' /
+    leanings_path = (REPO_ROOT / '_NewDomains' / 'research-intelligence' /
                      'data' / 'leanings' / 'leanings.json')
     result = {'total': 0, 'question': 0, 'leaning': 0, 'hold': 0}
     try:
@@ -401,7 +402,7 @@ def api_library():
 
     # ── 3. Resolve deep_dive_url for each article ─────────────────────────────
     # Scan scans/ directory to catch dives not recorded in curator_history.json
-    scans_dir = BASE_DIR / 'interests' / '2026' / 'scans'
+    scans_dir = REPO_ROOT / 'interests' / '2026' / 'scans'
     dive_url_map = {}  # hash_id -> web URL
     if scans_dir.exists():
         for f in scans_dir.glob('*.md'):
@@ -999,7 +1000,7 @@ def briefing():
     result = _load_briefing_articles()
     if result is not None:
         articles, day_str, date_str, model_display, briefing_date = result
-        tips_file = BASE_DIR / 'config' / 'curator' / 'tips.json'
+        tips_file = REPO_ROOT / 'config' / 'curator' / 'tips.json'
         try:
             tips = json.loads(tips_file.read_text()) if tips_file.exists() else {}
         except Exception:
@@ -1023,7 +1024,7 @@ def briefing():
 @app.route('/curator_library.html')
 @app.route('/reading-room')
 def library_page():
-    tips_file = BASE_DIR / 'config' / 'curator' / 'tips.json'
+    tips_file = REPO_ROOT / 'config' / 'curator' / 'tips.json'
     try:
         tips = json.loads(tips_file.read_text()) if tips_file.exists() else {}
     except Exception:
@@ -1036,7 +1037,7 @@ def library_page():
 
 def _archive_daily_editions():
     """Sorted list of daily editions from curator_archive/. Most recent first."""
-    archive_dir = BASE_DIR / 'curator_archive'
+    archive_dir = REPO_ROOT / 'curator_archive'
     editions = []
     seen = set()
     try:
@@ -1062,7 +1063,7 @@ def _archive_daily_editions():
 
 def _archive_sources():
     """Bookmarked articles from curator_history.json. Most recent first."""
-    hist_path = BASE_DIR / 'curator_history.json'
+    hist_path = REPO_ROOT / 'curator_history.json'
     articles = []
     try:
         hist = json.loads(hist_path.read_text())
@@ -1095,7 +1096,7 @@ def _scan_md_meta(md_path):
 
 def _archive_scans():
     """Scan list read directly from interests/2026/scans/*.md files."""
-    scans_dir = BASE_DIR / 'interests' / '2026' / 'scans'
+    scans_dir = REPO_ROOT / 'interests' / '2026' / 'scans'
     scans = []
     try:
         raw = []
@@ -1115,7 +1116,7 @@ def _archive_scans():
 
 def _archive_dives():
     """Deeper-dive summaries from the dives data directory."""
-    dives_dir = BASE_DIR / '_NewDomains' / 'research-intelligence' / 'data' / 'dives'
+    dives_dir = REPO_ROOT / '_NewDomains' / 'research-intelligence' / 'data' / 'dives'
     dives = []
     try:
         for f in sorted(dives_dir.glob('*.md'), reverse=True):
@@ -1155,7 +1156,7 @@ def _archive_observations():
 @app.route('/archive')
 def archive_page():
     """Archive — live browse page (Phase 5)."""
-    tips_file = BASE_DIR / 'config' / 'curator' / 'tips.json'
+    tips_file = REPO_ROOT / 'config' / 'curator' / 'tips.json'
     try:
         tips = json.loads(tips_file.read_text()) if tips_file.exists() else {}
     except Exception:
@@ -1179,7 +1180,7 @@ def _scans_dives_data():
     scans, dives = [], []
 
     # ── Scans from interests/2026/scans/*.md ─────────────────────────────────
-    scans_dir = BASE_DIR / 'interests' / '2026' / 'scans'
+    scans_dir = REPO_ROOT / 'interests' / '2026' / 'scans'
     try:
         raw_scans = []
         for md in scans_dir.glob('*.md'):
@@ -1195,7 +1196,7 @@ def _scans_dives_data():
         pass
 
     # ── Dives from data/dives/*.md ────────────────────────────────────────────
-    dives_dir = BASE_DIR / '_NewDomains' / 'research-intelligence' / 'data' / 'dives'
+    dives_dir = REPO_ROOT / '_NewDomains' / 'research-intelligence' / 'data' / 'dives'
     try:
         raw_dives = []
         for f in dives_dir.glob('*.md'):
@@ -1227,7 +1228,7 @@ def _scans_dives_data():
 @app.route('/scans-dives')
 def scans_dives_page():
     """Scans & Dives — Flask-rendered page."""
-    tips_file = BASE_DIR / 'config' / 'curator' / 'tips.json'
+    tips_file = REPO_ROOT / 'config' / 'curator' / 'tips.json'
     try:
         tips = json.loads(tips_file.read_text()) if tips_file.exists() else {}
     except Exception:
@@ -1324,11 +1325,11 @@ def api_briefing():
 
     # Resolve which JSON file to read
     if req_date and req_date != today_str:
-        json_path = BASE_DIR / 'curator_archive' / f'curator_{req_date}.json'
+        json_path = REPO_ROOT / 'curator_archive' / f'curator_{req_date}.json'
         if not json_path.exists():
             return jsonify({'error': f'No archive for {req_date}'}), 404
     else:
-        json_path = BASE_DIR / 'curator_latest.json'
+        json_path = REPO_ROOT / 'curator_latest.json'
         req_date = today_str
 
     try:
@@ -1374,7 +1375,7 @@ def index_page():
 
 @app.route('/language')
 def language_coming():
-    return send_from_directory(BASE_DIR, 'language_coming.html')
+    return send_from_directory(REPO_ROOT, 'language_coming.html')
 
 @app.route('/jobs')
 def career_focus_redirect():
@@ -1393,19 +1394,19 @@ def redirect_old_scan(filename):
     if m:
         return redirect(f'/research/scan/{m.group(1)}', 301)
     # Non-HTML files (.md, etc.) — serve as-is
-    return send_from_directory(BASE_DIR / 'interests' / '2026' / 'scans', filename)
+    return send_from_directory(REPO_ROOT / 'interests' / '2026' / 'scans', filename)
 
 
 @app.route('/interests/<path:filepath>')
 def serve_interests(filepath):
     """Serve deep dive markdown and HTML files from interests directory"""
-    interests_dir = BASE_DIR / 'interests'
+    interests_dir = REPO_ROOT / 'interests'
     return send_from_directory(interests_dir, filepath)
 
 @app.route('/curator_archive/<path:filename>')
 def serve_archive(filename):
     """Serve archived briefing HTML files"""
-    archive_dir = BASE_DIR / 'curator_archive'
+    archive_dir = REPO_ROOT / 'curator_archive'
     return send_from_directory(archive_dir, filename)
 
 @app.route('/health')
@@ -1420,6 +1421,7 @@ def health():
 # ─────────────────────────────────────────────────────────────────────────────
 
 try:
+    sys.path.insert(0, str(BASE_DIR))  # ensure sibling import resolves whether run as a script or imported as a module
     from research_routes import research_bp
     app.register_blueprint(research_bp)
     print("✓ Research Intelligence routes loaded")
@@ -1445,7 +1447,7 @@ def record_feedback(action, rank, reason):
             return {'success': False, 'message': f'Unknown action: {action}'}
         
         # Run in virtual environment
-        venv_python = BASE_DIR / 'venv' / 'bin' / 'python'
+        venv_python = REPO_ROOT / 'venv' / 'bin' / 'python'
         if venv_python.exists():
             cmd[0] = str(venv_python)
         
@@ -1493,7 +1495,7 @@ def record_feedback_with_article(action, rank, article_data):
     
     try:
         # Use venv Python so workspace curator_feedback.py has access to anthropic + other deps
-        venv_python = BASE_DIR / 'venv' / 'bin' / 'python3'
+        venv_python = REPO_ROOT / 'venv' / 'bin' / 'python3'
         python_cmd = str(venv_python) if venv_python.exists() else 'python3'
 
         result = subprocess.run(
@@ -1535,7 +1537,7 @@ def trigger_deepdive(hash_id, interest, focus=''):
         cmd = ['python', 'curator_feedback.py', 'bookmark', hash_id]
         
         # Run in virtual environment
-        venv_python = BASE_DIR / 'venv' / 'bin' / 'python'
+        venv_python = REPO_ROOT / 'venv' / 'bin' / 'python'
         if venv_python.exists():
             cmd[0] = str(venv_python)
         

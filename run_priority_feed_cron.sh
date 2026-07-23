@@ -29,7 +29,7 @@ echo "🔎 Running priority feed pipeline at $(date)..."
 # Activate virtual environment
 source venv/bin/activate
 
-python curator_priority_feed.py
+python domains/curator/curator_priority_feed.py
 
 if [ $? -eq 0 ]; then
     echo "✅ Priority feed completed successfully at $(date)"

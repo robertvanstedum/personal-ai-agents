@@ -32,14 +32,16 @@ import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))  # sibling import below (curator_utils)
 from curator_utils import send_telegram_alert, extract_domain
 
 # ── Paths & constants ─────────────────────────────────────────────────────────
 
-HISTORY_PATH   = Path(__file__).parent / 'curator_history.json'
+REPO_ROOT      = Path(__file__).parent.parent.parent  # domains/curator -> domains -> repo root
+HISTORY_PATH   = REPO_ROOT / 'curator_history.json'
 SOURCES_PATH   = Path(__file__).parent / 'curator_sources.json'
-LATEST_PATH    = Path(__file__).parent / 'curator_latest.json'   # written by curator_rss_v2 (WS5 pre-condition)
-DATA_DIR       = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent / "data" / "curator")))
+LATEST_PATH    = REPO_ROOT / 'curator_latest.json'   # written by curator_rss_v2 (WS5 pre-condition)
+DATA_DIR       = Path(os.environ.get("CURATOR_DATA_DIR", str(REPO_ROOT / "data" / "curator")))
 PREFS_PATH     = DATA_DIR / "curator_preferences.json"
 OUTPUT_DIR     = DATA_DIR
 RESPONSES_PATH = DATA_DIR / "intelligence_responses.json"

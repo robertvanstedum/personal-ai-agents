@@ -74,7 +74,7 @@ def load_dive_ratings(max_examples: int = 3) -> str:
 
     max_examples: how many entries to show per tier (high / low)
     """
-    ratings_path = Path(__file__).parent / 'interests' / 'ratings.json'
+    ratings_path = Path(__file__).parent.parent.parent / 'interests' / 'ratings.json'
 
     try:
         with open(ratings_path) as f:
