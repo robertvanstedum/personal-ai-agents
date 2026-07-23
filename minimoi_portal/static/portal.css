@@ -277,8 +277,8 @@ body.tour {
 }
 
 .front-hero {
-  height: clamp(360px, 48svh, 480px);
-  min-height: 360px;
+  height: clamp(340px, 40svh, 410px);
+  min-height: 340px;
   display: grid;
   grid-template-columns: minmax(420px, 42%) minmax(0, 58%);
   border-bottom: 1px solid var(--front-line);
@@ -416,8 +416,8 @@ body.tour {
 }
 
 .front-explore {
-  margin: 1.25rem clamp(1.5rem, 3vw, 3rem);
-  padding: clamp(0.9rem, 1.5vw, 1.35rem);
+  margin: 1rem clamp(1.5rem, 3vw, 3rem) 1.25rem;
+  padding: clamp(0.85rem, 1.25vw, 1.15rem);
   display: grid;
   grid-template-columns: minmax(180px, 0.18fr) minmax(0, 1fr);
   gap: clamp(1.25rem, 2.5vw, 2.5rem);
@@ -1472,8 +1472,8 @@ body.admin { background: var(--parch-mid); }
     grid-row: 1;
   }
   .front-hero {
-    height: 440px;
-    min-height: 400px;
+    height: clamp(360px, 42svh, 410px);
+    min-height: 360px;
     grid-template-columns: minmax(360px, 46%) minmax(0, 54%);
   }
   .front-hero-copy {
