@@ -237,7 +237,7 @@ def test_public_tour_is_static_and_includes_privacy_safe_cos_view(client):
         "curator": "/static/tour/curator-landing.jpg",
         "german": "/static/tour/german-landing.jpg",
         "portuguese": "/static/tour/portuguese-landing.jpg",
-        "guild": "/static/tour/guild-landing.jpg",
+        "guild": "/static/tour/guild-landing.png",
         "cos": "/static/tour/cos-confer-private.png",
     }
     for section_id, expected_src in expected_first_images.items():

@@ -471,11 +471,20 @@ body.tour {
 }
 
 .tour-domain-card-guild .tour-domain-card-image img {
-  object-fit: cover;
-  object-position: center 64%;
+  object-fit: contain;
+  object-position: center;
+  background: var(--front-paper);
 }
 
+.tour-shot-guild-landing .tour-shot-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--front-paper);
+}
 .tour-shot-guild-landing img {
+  width: 100%;
+  height: auto;
   aspect-ratio: auto;
   object-fit: contain;
   object-position: center;
@@ -706,6 +715,58 @@ body.tour {
   outline: 3px solid var(--front-orange);
   outline-offset: -3px;
 }
+.tour-lightbox {
+  width: min(96vw, 1500px);
+  max-width: none;
+  max-height: 94vh;
+  margin: auto;
+  padding: 0;
+  overflow: visible;
+  border: 1px solid rgba(255, 252, 246, 0.42);
+  border-radius: 12px;
+  background: #1b1b18;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.42);
+}
+.tour-lightbox::backdrop {
+  background: rgba(8, 18, 15, 0.78);
+  backdrop-filter: blur(3px);
+}
+.tour-lightbox figure {
+  margin: 0;
+  display: grid;
+}
+.tour-lightbox img {
+  max-width: 100%;
+  max-height: 82vh;
+  display: block;
+  object-fit: contain;
+  border-radius: 11px 11px 0 0;
+}
+.tour-lightbox figcaption {
+  min-height: 42px;
+  padding: 0.65rem 1rem;
+  color: #f8efe2;
+  font-family: var(--font-serif);
+  font-size: 0.9rem;
+}
+.tour-lightbox-close {
+  position: absolute;
+  z-index: 2;
+  top: -14px;
+  right: -14px;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255, 252, 246, 0.72);
+  border-radius: 50%;
+  background: var(--front-green);
+  color: #fffaf1;
+  font-size: 1.55rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.tour-lightbox-close:hover {
+  background: var(--front-orange);
+}
 .tour-mobile-hint {
   display: none;
 }
@@ -747,6 +808,12 @@ body.tour {
 
 @media (min-width: 821px) {
   body.landing .front-door-footer { display: none; }
+}
+
+@media (min-width: 1500px) {
+  .front-hero-photo img {
+    object-position: 52% 38%;
+  }
 }
 
 /* ── Login ─────────────────────────────────────────────────────────────────── */
@@ -1700,6 +1767,17 @@ body.admin { background: var(--parch-mid); }
   .front-door-footer {
     padding: 1.5rem 1rem;
     gap: 1.25rem;
+  }
+  .tour-lightbox {
+    width: calc(100vw - 1rem);
+    max-height: 96vh;
+  }
+  .tour-lightbox img {
+    max-height: 82vh;
+  }
+  .tour-lightbox-close {
+    top: 8px;
+    right: 8px;
   }
   .tour-main { padding: 1.5rem 0.8rem 2rem; }
   .tour-intro { padding: 0 0.35rem 1.6rem; }
