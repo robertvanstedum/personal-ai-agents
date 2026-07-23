@@ -13,4 +13,4 @@ COPY . .
 
 ENV MINIMOI_ROLE=production
 
-CMD ["python", "telegram_system_bot.py"]
+CMD ["python", "core/telegram/telegram_system_bot.py"]

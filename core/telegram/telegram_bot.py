@@ -28,7 +28,7 @@ from datetime import datetime
 # german_domain.py lives at domains/german/ since the 2026-05-30 promotion.
 # A stale __pycache__/german_domain.cpython-*.pyc at repo root can shadow this
 # if not explicitly resolved first.
-_REPO_ROOT = Path(__file__).parent
+_REPO_ROOT = Path(__file__).parent.parent.parent
 _GERMAN_DOMAIN_DIR = _REPO_ROOT / "domains" / "german"
 if str(_GERMAN_DOMAIN_DIR) not in sys.path:
     sys.path.insert(0, str(_GERMAN_DOMAIN_DIR))
