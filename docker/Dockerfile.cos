@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Application code
 COPY utils/ utils/
-COPY get_secret.py .
+COPY core/ core/
 COPY domains/cos/ domains/cos/
 COPY domains/guild/ domains/guild/
 

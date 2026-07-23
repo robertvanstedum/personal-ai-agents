@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 from german_domain import _REVIEW_SYSTEM_PROMPT, _parse_transcript_turns
-from get_secret import get_secret
+from core.get_secret import get_secret
 
 # Persona prompt .txt files — same path as german_domain._PROMPTS_DIR
 _PROMPTS_DIR = Path(__file__).parent.parent / "data" / "config" / "prompts"

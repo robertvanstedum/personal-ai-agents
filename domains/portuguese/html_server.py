@@ -22,7 +22,7 @@ BASE_DIR  = Path(__file__).parent
 REPO_ROOT = BASE_DIR.parent.parent
 
 sys.path.insert(0, str(REPO_ROOT))
-from get_secret import get_secret
+from core.get_secret import get_secret
 from core.identity import resolve_user_id
 
 app = Flask(

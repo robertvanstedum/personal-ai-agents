@@ -43,7 +43,7 @@ def _init_sentry():
         if not dsn:
             try:
                 sys.path.insert(0, str(BASE_DIR))
-                from get_secret import get_secret
+                from core.get_secret import get_secret
                 dsn = get_secret('SENTRY_DSN')
             except Exception:
                 return

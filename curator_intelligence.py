@@ -66,7 +66,7 @@ US_DOMAINS = {
 def _haiku_client():
     """Return an Anthropic client using keychain credentials."""
     import anthropic
-    from get_secret import get_secret
+    from core.get_secret import get_secret
     api_key = get_secret("ANTHROPIC_API_KEY", "anthropic", "api_key")
     if not api_key:
         raise RuntimeError("Anthropic API key not configured (set ANTHROPIC_API_KEY or add to keyring)")

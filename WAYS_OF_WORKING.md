@@ -103,7 +103,7 @@ can be deleted. A way of working cannot.
 
 Every build phase follows this sequence:
 
-**Testing convention:** All build-phase test suites use test_reporter.py at repo root. Three-line setup: import TestReporter, instantiate with suite name, call runner.finish(). Results write to _working/ as dated markdown.
+**Testing convention:** All build-phase test suites use tests/test_reporter.py. Three-line setup: import TestReporter, instantiate with suite name, call runner.finish(). Results write to _working/ as dated markdown.
 
 **Testing Discipline (enforced from 2026-06-03)**
 

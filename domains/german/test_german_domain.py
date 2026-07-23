@@ -4,7 +4,7 @@ test_german_domain.py — Test suite for german_domain.py (Group A)
 Usage:
     python3 domains/german/test_german_domain.py
     python3 domains/german/test_german_domain.py --test D03
-    python3 test_reporter.py --stats --suite german_domain
+    python3 tests/test_reporter.py --stats --suite german_domain
 """
 
 import sys
@@ -13,6 +13,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "tests"))
 
 from test_reporter import TestReporter, print_stats
 from german_domain import (
