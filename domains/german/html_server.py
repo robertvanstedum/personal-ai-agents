@@ -589,30 +589,47 @@ def gesprache_speak():
         return jsonify({"error": "text required"}), 400
     if voice not in ("alloy", "echo", "fable", "nova", "onyx", "shimmer"):
         voice = "nova"
+    from openai import OpenAI as _OAI
+    from flask import Response as _Resp
+    api_key = get_secret("OPENAI_API_KEY", "openai", "api_key")
+    if not api_key:
+        print("[gesprache/speak] OpenAI API key not configured", flush=True)
+        return jsonify({"error": "OpenAI API key not configured"}), 500
+    client = _OAI(api_key=api_key, timeout=12.0)
+    import time as _t
+    _t0 = _t.time()
+
+    # Open the streaming request eagerly, outside the generator, so a real
+    # API failure (quota, auth, network) is caught here and returned as a
+    # clean JSON error with a logged traceback -- not leaked into the lazily
+    # -executed generator below, where Flask can no longer send an error
+    # status once the response has started.
     try:
-        from openai import OpenAI as _OAI
-        from flask import Response as _Resp
-        api_key = get_secret("OPENAI_API_KEY", "openai", "api_key")
-        if not api_key:
-            return jsonify({"error": "OpenAI API key not configured"}), 500
-        client = _OAI(api_key=api_key, timeout=12.0)
-        import time as _t
-        _t0 = _t.time()
-        _first = [True]
-        def _stream():
-            with client.audio.speech.with_streaming_response.create(
-                model="tts-1",
-                voice=voice,
-                input=text,
-            ) as r:
-                for chunk in r.iter_bytes(chunk_size=4096):
-                    if _first[0]:
-                        print(f"[TIMING] tts_ttfb_ms={int((_t.time()-_t0)*1000)} chars={len(text)}", flush=True)
-                        _first[0] = False
-                    yield chunk
-        return _Resp(_stream(), mimetype="audio/mpeg", direct_passthrough=True)
+        ctx = client.audio.speech.with_streaming_response.create(
+            model="tts-1",
+            voice=voice,
+            input=text,
+        )
+        r = ctx.__enter__()
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"[gesprache/speak] TTS request failed: {type(e).__name__}: {e}", flush=True)
+        return jsonify({"error": str(e)}), 502
+
+    _first = [True]
+
+    def _stream():
+        try:
+            for chunk in r.iter_bytes(chunk_size=4096):
+                if _first[0]:
+                    print(f"[TIMING] tts_ttfb_ms={int((_t.time()-_t0)*1000)} chars={len(text)}", flush=True)
+                    _first[0] = False
+                yield chunk
+        except Exception as e:
+            print(f"[gesprache/speak] TTS stream interrupted: {type(e).__name__}: {e}", flush=True)
+        finally:
+            ctx.__exit__(None, None, None)
+
+    return _Resp(_stream(), mimetype="audio/mpeg", direct_passthrough=True)
 
 
 @app.route("/api/round-action", methods=["POST"])
