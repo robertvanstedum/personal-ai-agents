@@ -134,6 +134,7 @@ from minimoi_portal import proxy as _proxy        # noqa: E402
 from minimoi_portal import guest_data as _gdata   # noqa: E402
 from minimoi_portal import domain_auth as _dauth  # noqa: E402
 from minimoi_portal.workspaces import (           # noqa: E402
+    WORKSPACES,
     can_access_workspace,
     workspace_navigation,
 )
@@ -240,7 +241,14 @@ def landing():
 @app.route("/tour")
 def tour():
     """Public, static screenshot tour. No production APIs or private data."""
-    return render_template("tour.html", user=_current_user())
+    public_workspaces = [
+        workspace for workspace in WORKSPACES if workspace["public_visible"]
+    ]
+    return render_template(
+        "tour.html",
+        user=_current_user(),
+        workspaces=public_workspaces,
+    )
 
 
 @app.route("/login", methods=["GET", "POST"])

@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="A public tour of mini-moi's research, language immersion, and operations workspaces.">
-  <title>Explore mini-moi</title>
+  <title>Public tour — mini-moi</title>
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/portal.css?v=20260723-fit2">
+  <link rel="stylesheet" href="/static/portal.css?v=20260723-fit3">
 </head>
 <body class="tour">
 
@@ -36,13 +36,42 @@
 
 <main class="tour-main">
   <header class="tour-intro">
-    <p class="front-eyebrow">A public view</p>
-    <h1>Explore mini-moi</h1>
+    <p class="front-eyebrow">Public tour</p>
+    <h1>See mini-moi in use</h1>
     <p>
-      A curated look at the real system. These are static screenshots:
-      no account, private data, or live production access is included.
+      Follow the actions through each domain. These are static views of the
+      real system: no account, private data, or live production access is included.
     </p>
   </header>
+
+  <section class="tour-domain-map" aria-labelledby="tour-domain-map-heading">
+    <div class="tour-domain-map-copy">
+      <p class="front-eyebrow">Start here</p>
+      <h2 id="tour-domain-map-heading">Choose a domain</h2>
+      <p>
+        The same domains organize the signed-in home. Choose one to follow its
+        real sequence from landing page to the work inside.
+      </p>
+    </div>
+    <div class="tour-domain-map-grid">
+      {% for workspace in workspaces %}
+        <a href="#{{ workspace.key }}"
+           class="tour-domain-card tour-domain-card-{{ workspace.key }}">
+          <div class="tour-domain-card-image">
+            <img src="{{ workspace.image }}"
+                 alt=""
+                 width="1425" height="854"
+                 {% if loop.first %}loading="eager"{% else %}loading="lazy"{% endif %}>
+          </div>
+          <div class="tour-domain-card-copy">
+            <p>{{ workspace.eyebrow }}</p>
+            <h3>{{ workspace.label }}</h3>
+            <span>Follow the flow ↓</span>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
 
   <section id="curator" class="tour-section tour-curator" aria-labelledby="curator-heading">
     <div class="tour-section-heading">
@@ -56,7 +85,14 @@
         </p>
       </div>
     </div>
-    <p class="tour-mobile-hint">Tap any image to open the full-size view.</p>
+    <ol class="tour-flow" aria-label="Curator use flow">
+      <li><span>👤</span> Open the daily briefing</li>
+      <li><span>📰</span> Choose an article</li>
+      <li><span>🔎</span> Scan the issue</li>
+      <li><span>↳</span> Choose the next depth</li>
+      <li><span>🧭</span> Continue the research</li>
+    </ol>
+    <p class="tour-mobile-hint">Swipe one full screen at a time. Tap to enlarge.</p>
     <div class="tour-gallery tour-gallery-featured">
       <figure class="tour-shot tour-shot-wide tour-shot-lead">
         <a class="tour-shot-link" href="/static/tour/curator-landing.jpg"
@@ -65,7 +101,7 @@
                alt="Curator landing page"
                width="1425" height="854" loading="eager">
         </a>
-        <figcaption>Start here: Curator landing</figcaption>
+        <figcaption><span>01</span> Start at the Curator landing</figcaption>
       </figure>
       <figure class="tour-shot tour-shot-wide">
         <a class="tour-shot-link" href="/static/tour/curator-daily-briefing.jpg"
@@ -74,7 +110,7 @@
                alt="Curator daily briefing"
                width="1425" height="854" loading="lazy">
         </a>
-        <figcaption>Daily briefing</figcaption>
+        <figcaption><span>02</span> Open the daily briefing</figcaption>
       </figure>
       <figure class="tour-shot">
         <a class="tour-shot-link" href="/static/tour/curator-scan.jpg"
@@ -83,7 +119,7 @@
                alt="Curator scan of a selected article"
                width="1425" height="854" loading="lazy">
         </a>
-        <figcaption>Scan one issue</figcaption>
+        <figcaption><span>03</span> Scan one issue</figcaption>
       </figure>
       <figure class="tour-shot">
         <a class="tour-shot-link" href="/static/tour/curator-deeper-dive.jpg"
@@ -92,7 +128,7 @@
                alt="Curator deeper-dive analysis"
                width="1425" height="863" loading="lazy">
         </a>
-        <figcaption>Choose the next depth</figcaption>
+        <figcaption><span>04</span> Choose the next depth</figcaption>
       </figure>
       <figure class="tour-shot tour-shot-wide">
         <a class="tour-shot-link" href="/static/tour/curator-research-tools.jpg"
@@ -101,7 +137,7 @@
                alt="Curator research tools"
                width="1425" height="854" loading="lazy">
         </a>
-        <figcaption>Continue into research</figcaption>
+        <figcaption><span>05</span> Continue into research</figcaption>
       </figure>
     </div>
     <nav class="tour-step-nav" aria-label="Curator tour navigation">
@@ -122,6 +158,12 @@
         </p>
       </div>
     </div>
+    <ol class="tour-flow" aria-label="Mein Deutsch use flow">
+      <li><span>👤</span> Choose a practice mode</li>
+      <li><span>🗣️</span> Rehearse a real situation</li>
+      <li><span>✍️</span> Write in context</li>
+      <li><span>✓</span> Learn from correction</li>
+    </ol>
     <div class="tour-gallery tour-gallery-pair">
       <figure class="tour-shot">
         <a class="tour-shot-link" href="/static/tour/german-landing.jpg"
@@ -130,7 +172,7 @@
                alt="Mein Deutsch landing page"
                width="1425" height="854" loading="lazy">
         </a>
-        <figcaption>Start here: choose how to practice</figcaption>
+        <figcaption><span>01</span> Choose how to practice</figcaption>
       </figure>
       <figure class="tour-shot">
         <a class="tour-shot-link" href="/static/tour/german-writing-correction.jpg"
@@ -139,7 +181,7 @@
                alt="Mein Deutsch writing correction"
                width="1425" height="854" loading="lazy">
         </a>
-        <figcaption>Write in context and learn from corrections</figcaption>
+        <figcaption><span>02</span> Write in context and learn from corrections</figcaption>
       </figure>
     </div>
     <nav class="tour-step-nav" aria-label="German tour navigation">
@@ -160,6 +202,12 @@
         </p>
       </div>
     </div>
+    <ol class="tour-flow" aria-label="Meu Português use flow">
+      <li><span>👤</span> Choose a practice mode</li>
+      <li><span>🎭</span> Select a persona</li>
+      <li><span>💬</span> Practice the situation</li>
+      <li><span>↻</span> Carry it into the next session</li>
+    </ol>
     <div class="tour-gallery tour-gallery-pair">
       <figure class="tour-shot">
         <a class="tour-shot-link" href="/static/tour/portuguese-landing.jpg"
@@ -168,7 +216,7 @@
                alt="Meu Português landing page"
                width="1425" height="854" loading="lazy">
         </a>
-        <figcaption>Start here: reading, conversation, writing, and vocabulary</figcaption>
+        <figcaption><span>01</span> Choose reading, conversation, writing, or vocabulary</figcaption>
       </figure>
       <figure class="tour-shot">
         <a class="tour-shot-link" href="/static/tour/portuguese-conversation.jpg"
@@ -177,7 +225,7 @@
                alt="Meu Português conversation practice"
                width="1425" height="854" loading="lazy">
         </a>
-        <figcaption>Practice a real-world conversation</figcaption>
+        <figcaption><span>02</span> Practice a real-world conversation</figcaption>
       </figure>
     </div>
     <nav class="tour-step-nav" aria-label="Portuguese tour navigation">
@@ -198,6 +246,12 @@
         </p>
       </div>
     </div>
+    <ol class="tour-flow" aria-label="Guild use flow">
+      <li><span>👤</span> Enter the operating domain</li>
+      <li><span>📋</span> Review the build queue</li>
+      <li><span>⚙️</span> Build and operate</li>
+      <li><span>↻</span> Feed lessons forward</li>
+    </ol>
     <div class="tour-gallery tour-gallery-pair">
       <figure class="tour-shot">
         <a class="tour-shot-link" href="/static/tour/guild-landing.jpg"
@@ -206,7 +260,7 @@
                alt="Guild build and operations landing page"
                width="1440" height="863" loading="lazy">
         </a>
-        <figcaption>Start here: spec, build, operate, and improve</figcaption>
+        <figcaption><span>01</span> Start with spec, build, operate, and improve</figcaption>
       </figure>
       <figure class="tour-shot">
         <a class="tour-shot-link" href="/static/tour/guild-build-queue.jpg"
@@ -215,7 +269,7 @@
                alt="Guild build queue"
                width="2436" height="1296" loading="lazy">
         </a>
-        <figcaption>Follow work from spec ready through recently done</figcaption>
+        <figcaption><span>02</span> Follow work from spec ready through recently done</figcaption>
       </figure>
     </div>
     <nav class="tour-step-nav" aria-label="Guild tour navigation">

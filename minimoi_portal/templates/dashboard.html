@@ -8,7 +8,7 @@
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/portal.css?v=20260723-fit2">
+  <link rel="stylesheet" href="/static/portal.css?v=20260723-fit3">
 </head>
 <body class="dashboard dashboard-home">
 
@@ -25,7 +25,7 @@
     </div>
 
     <div class="front-door-account">
-      <a href="/tour" class="front-door-external nav-hide-compact">Tour</a>
+      <a href="/tour" class="front-door-external nav-hide-compact">Public tour</a>
       {% if user.tier == 'owner' %}
         <a href="/admin/guests" class="front-door-external nav-hide-compact">Guests</a>
       {% endif %}
@@ -40,7 +40,7 @@
     <div class="dashboard-home-copy">
       <p class="front-eyebrow">Your mini-moi</p>
       <h1 id="dashboard-title">Welcome back, {{ user.display_name }}.</h1>
-      <p>Choose a workspace and continue where you left off.</p>
+      <p>Choose a domain and continue where you left off.</p>
     </div>
     <div class="dashboard-home-photo" aria-hidden="true">
       <img src="/static/landing/coffee-cups.jpg"
@@ -51,37 +51,42 @@
 
   <section class="dashboard-workspaces" aria-labelledby="workspace-heading">
     <header class="dashboard-section-heading">
-      <div>
-        <p class="front-eyebrow">In use</p>
-        <h2 id="workspace-heading">Workspaces</h2>
-      </div>
-      <a href="/tour" class="dashboard-tour-link">View the public tour →</a>
+      <h2 id="workspace-heading">Domains</h2>
     </header>
 
     <div class="dashboard-workspace-grid">
       {% for workspace in workspaces %}
-        <a href="{{ workspace.path }}"
-           class="dashboard-workspace-card dashboard-workspace-{{ workspace.key }}">
-          <div class="dashboard-card-visual">
-            {% if workspace.image %}
-              <img src="{{ workspace.image }}"
-                   alt=""
-                   width="1425" height="854"
-                   loading="lazy">
-            {% else %}
-              <div class="dashboard-card-monogram" aria-hidden="true">
-                <span>Chief</span>
-                <strong>of Staff</strong>
-              </div>
-            {% endif %}
-          </div>
-          <div class="dashboard-card-copy">
-            <p>{{ workspace.eyebrow }}</p>
-            <h3>{{ workspace.label }}</h3>
-            <span>{{ workspace.summary }}</span>
-          </div>
-          <span class="dashboard-card-arrow" aria-hidden="true">→</span>
-        </a>
+        <article class="dashboard-workspace-card dashboard-workspace-{{ workspace.key }}">
+          <a href="{{ workspace.path }}"
+             class="dashboard-domain-open"
+             aria-label="Open {{ workspace.label }}">
+            <div class="dashboard-card-visual">
+              {% if workspace.image %}
+                <img src="{{ workspace.image }}"
+                     alt=""
+                     width="1425" height="854"
+                     loading="lazy">
+              {% else %}
+                <div class="dashboard-card-monogram" aria-hidden="true">
+                  <span>Chief</span>
+                  <strong>of Staff</strong>
+                </div>
+              {% endif %}
+            </div>
+            <div class="dashboard-card-copy">
+              <p>{{ workspace.eyebrow }}</p>
+              <h3>{{ workspace.label }}</h3>
+              <span>{{ workspace.summary }}</span>
+            </div>
+            <span class="dashboard-card-arrow" aria-hidden="true">→</span>
+          </a>
+          {% if workspace.public_visible %}
+            <a href="/tour#{{ workspace.key }}"
+               class="dashboard-card-tour">See the flow</a>
+          {% else %}
+            <span class="dashboard-card-status">Private coordination</span>
+          {% endif %}
+        </article>
       {% endfor %}
     </div>
   </section>
