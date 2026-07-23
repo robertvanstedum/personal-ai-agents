@@ -49,7 +49,7 @@ docker exec minimoi-curator python curator_rss_v2.py \
   --model=grok-4.3 --fallback --temperature=0.7
 
 echo "$LOG_PREFIX Sending Telegram briefing (system bot)..."
-docker exec -e TELEGRAM_CHAT_ID=8379221702 minimoi-curator python telegram_bot.py --send
+docker exec -e TELEGRAM_CHAT_ID=8379221702 minimoi-curator python core/telegram/telegram_bot.py --send
 
 STATUS=$?
 

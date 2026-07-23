@@ -40,7 +40,7 @@ LOGS_DIR   = BASE_DIR / "logs"
 
 sys.path.insert(0, str(BASE_DIR))
 try:
-    from telegram_bot import send_message as _tg_send, get_token as _tg_token, get_chat_id as _tg_chat_id
+    from core.telegram.telegram_bot import send_message as _tg_send, get_token as _tg_token, get_chat_id as _tg_chat_id
     _TELEGRAM_AVAILABLE = True
 except ImportError:
     _TELEGRAM_AVAILABLE = False

@@ -879,9 +879,9 @@ def test_40():
 
 def test_41():
     """Phrase practice intercept fires before drill intercept."""
-    bot_path = PIPELINE_ROOT.parent.parent.parent / "telegram_bot.py"
+    bot_path = PIPELINE_ROOT.parent.parent.parent / "core" / "telegram" / "telegram_bot.py"
     if not bot_path.exists():
-        bot_path = PIPELINE_ROOT.parent.parent / "telegram_bot.py"
+        bot_path = PIPELINE_ROOT.parent.parent / "core" / "telegram" / "telegram_bot.py"
     if not bot_path.exists():
         report(41, "phrase practice intercept fires before drill intercept", None, "telegram_bot.py not found")
         return

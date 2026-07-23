@@ -91,17 +91,18 @@ def record_feedback(action, rank):
             return {'success': False, 'message': f'Unknown action: {action}'}
         
         # Use venv python
-        venv_python = Path(__file__).parent / 'venv' / 'bin' / 'python'
+        _repo_root = Path(__file__).parent.parent.parent
+        venv_python = _repo_root / 'venv' / 'bin' / 'python'
         if venv_python.exists():
             cmd[0] = str(venv_python)
-        
+
         # Execute with auto-response
         reason = f"{action}d from Telegram"
         result = subprocess.run(
             cmd,
             input=reason.encode(),
             capture_output=True,
-            cwd=Path(__file__).parent,
+            cwd=_repo_root,
             timeout=30
         )
         

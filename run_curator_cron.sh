@@ -40,7 +40,7 @@ python curator_rss_v2.py --model=grok-4.3 --fallback --temperature=0.7
 
 # Send briefing with inline buttons via system bot (role-aware token)
 export TELEGRAM_CHAT_ID="8379221702"
-python telegram_bot.py --send
+python core/telegram/telegram_bot.py --send
 
 if [ $? -eq 0 ]; then
     # Stamp briefing_date so idempotency check works regardless of article dates
