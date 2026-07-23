@@ -29,7 +29,7 @@ _REPO_ROOT  = _BASE_DIR.parent.parent        # repo root
 
 import sys as _sys
 _sys.path.insert(0, str(_REPO_ROOT))
-from get_secret import get_secret as _get_secret
+from core.get_secret import get_secret as _get_secret
 GERMAN_BASE = _BASE_DIR                      # domains/german/ (scripts run here)
 GERMAN_DIR  = _BASE_DIR / "data"             # domains/german/data/ (runtime data)
 # Subprocess interpreter. On the Mac the repo ships a venv/; in the AWS

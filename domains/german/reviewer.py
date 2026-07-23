@@ -81,7 +81,7 @@ def _get_anthropic_client():
     api_key = ""
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-        from get_secret import get_secret
+        from core.get_secret import get_secret
         api_key = get_secret("ANTHROPIC_API_KEY", "anthropic", "api_key") or ""
     except Exception:
         api_key = os.getenv("ANTHROPIC_API_KEY") or ""

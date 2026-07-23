@@ -21,7 +21,7 @@ import requests as _requests
 # Ensure repo root is on sys.path so `minimoi_portal` resolves as a package
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from get_secret import get_secret
+from core.get_secret import get_secret
 
 from flask import (
     Flask,

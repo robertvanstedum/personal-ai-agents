@@ -1130,7 +1130,7 @@ def ui_transcribe():
     audio_file = request.files["audio"]
     try:
         from openai import OpenAI as _OAI
-        from get_secret import get_secret
+        from core.get_secret import get_secret
         api_key = get_secret("OPENAI_API_KEY", "openai", "api_key")
         if not api_key:
             return jsonify({"error": "OPENAI_API_KEY not configured"}), 500

@@ -50,7 +50,7 @@ def _chat(text: str) -> str:
 def _transcribe_voice(audio_path: str) -> str:
     """Transcribe a voice file via OpenAI Whisper API. Returns transcript text."""
     from openai import OpenAI
-    from get_secret import get_secret
+    from core.get_secret import get_secret
     try:
         api_key = get_secret("OPENAI_API_KEY", "openai", "api_key")
     except Exception as e:

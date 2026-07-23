@@ -21,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from flask import Blueprint, jsonify, request, redirect, render_template_string
-from get_secret import get_secret
+from core.get_secret import get_secret
 
 # ── Blueprint ─────────────────────────────────────────────────────────────────
 

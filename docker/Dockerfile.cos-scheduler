@@ -5,7 +5,7 @@ WORKDIR /app
 COPY docker/requirements.cos-agent.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY get_secret.py .
+COPY core/ core/
 COPY utils/ utils/
 COPY domains/guild/ domains/guild/
 COPY domains/cos/ domains/cos/

@@ -7,7 +7,7 @@ On EC2 (production): reads env var first, then AWS SSM Parameter Store.
 SSM path convention: /minimoi/production/{key.lower()}
 
 Usage:
-    from get_secret import get_secret
+    from core.get_secret import get_secret
     token = get_secret("TELEGRAM_BOT_TOKEN", "telegram", "bot_token")
 """
 

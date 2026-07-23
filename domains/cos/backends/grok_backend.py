@@ -121,7 +121,7 @@ class GrokBackend:
         self._dispatch_tool = dispatch_tool
 
     def _get_client(self):
-        from get_secret import get_secret
+        from core.get_secret import get_secret
         try:
             api_key = get_secret("XAI_API_KEY", "xai", "api_key")
         except Exception as e:

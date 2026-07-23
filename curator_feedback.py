@@ -49,7 +49,7 @@ def get_anthropic_api_key():
         return api_key
 
     try:
-        from get_secret import get_secret
+        from core.get_secret import get_secret
         return get_secret("ANTHROPIC_API_KEY")
     except Exception:
         pass

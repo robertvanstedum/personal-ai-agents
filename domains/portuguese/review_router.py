@@ -12,7 +12,7 @@ from pathlib import Path
 # Reach repo root for get_secret
 _REPO_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
-from get_secret import get_secret
+from core.get_secret import get_secret
 
 _PERSONAS_DIR = Path(__file__).parent / "personas"
 

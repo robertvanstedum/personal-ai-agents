@@ -58,7 +58,7 @@ REPO_ROOT = BASE_DIR.parent.parent          # repo root
 
 import sys as _sys
 _sys.path.insert(0, str(REPO_ROOT))
-from get_secret import get_secret
+from core.get_secret import get_secret
 
 # ── Tutor / Whereby config ────────────────────────────────────────────────────
 # Guest URL — safe to show in UI and share with conversation partner
@@ -87,7 +87,7 @@ def _init_sentry():
             try:
                 import sys
                 sys.path.insert(0, str(BASE_DIR.parent.parent))
-                from get_secret import get_secret
+                from core.get_secret import get_secret
                 dsn = get_secret('SENTRY_DSN')
             except Exception:
                 return

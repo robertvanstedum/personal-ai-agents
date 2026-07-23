@@ -65,7 +65,7 @@ def _send_telegram(text: str) -> None:
 def _get_anthropic_client():
     try:
         import anthropic
-        from get_secret import get_secret
+        from core.get_secret import get_secret
         api_key = get_secret("ANTHROPIC_API_KEY", "anthropic", "api_key") or ""
         return anthropic.Anthropic(api_key=api_key)
     except Exception as e:

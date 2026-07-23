@@ -11,7 +11,7 @@ import os
 sys.path.insert(0, os.path.expanduser("~/Projects/personal-ai-agents"))
 
 try:
-    from track_usage import check_balance, BALANCE_THRESHOLDS
+    from core.track_usage import check_balance, BALANCE_THRESHOLDS
     
     balance, warning_level = check_balance()
     

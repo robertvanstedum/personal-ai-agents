@@ -17,7 +17,7 @@ import json
 import logging
 import requests
 import sys
-from get_secret import get_secret
+from core.get_secret import get_secret
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
