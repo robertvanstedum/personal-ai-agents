@@ -2,7 +2,7 @@
 
 The route decorators in ``app.py`` remain the security boundary.  These
 helpers centralize the same access decisions for presentation so the landing
-page, dashboard compatibility route, and injected navigation do not drift.
+page, signed-in home, and injected navigation do not drift.
 """
 
 from minimoi_portal import domain_auth
@@ -13,24 +13,36 @@ WORKSPACES = (
         "key": "curator",
         "label": "Curator",
         "path": "/app/curator",
+        "eyebrow": "Research and decisions",
+        "summary": "Daily briefings, scans, deeper dives, and continuing research.",
+        "image": "/static/tour/curator-landing.jpg",
         "public_visible": True,
     },
     {
         "key": "german",
         "label": "Mein Deutsch",
         "path": "/app/german",
+        "eyebrow": "Language immersion",
+        "summary": "Contemporary reading, conversation, writing, and correction.",
+        "image": "/static/tour/german-landing.jpg",
         "public_visible": True,
     },
     {
         "key": "portuguese",
         "label": "Meu Português",
         "path": "/app/portuguese",
+        "eyebrow": "Language immersion",
+        "summary": "Reading and real-world practice for a multilingual household.",
+        "image": "/static/tour/portuguese-landing.jpg",
         "public_visible": True,
     },
     {
         "key": "guild",
         "label": "Guild",
         "path": "/guild",
+        "eyebrow": "Build and operations",
+        "summary": "Specs, build work, operating status, and the next iteration.",
+        "image": "/static/tour/guild-landing.jpg",
         "public_visible": True,
     },
     {
@@ -38,6 +50,9 @@ WORKSPACES = (
         "label": "Chief of Staff",
         "short_label": "CoS",
         "path": "/app/cos",
+        "eyebrow": "Cross-domain coordination",
+        "summary": "Confer, record, track, and carry context across the system.",
+        "image": None,
         "public_visible": False,
     },
 )
