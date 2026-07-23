@@ -975,5 +975,16 @@
     "blocked_reason": "Future work. Phase 2A is read-only; no file move is authorized until Robert approves the dependency manifest and the first vertical slice.",
     "last_transition_at": "2026-07-21T00:00:00Z",
     "notes": "PR #102 completed the preliminary standalone script/test move. Remaining scope is the production application cluster, beginning with a full dependency map. One slice and one production verification at a time. Do not combine the pre-existing x_adapter.py defect without explicit approval."
+  },
+  {
+    "id": 142,
+    "spec_title": "Repository Root Consolidation",
+    "spec_file": "spec_repository_root_consolidation_2026-07-22.md",
+    "status": "done",
+    "github_issue": null,
+    "priority": "normal",
+    "blocked_reason": null,
+    "last_transition_at": "2026-07-23T02:31:54Z",
+    "notes": "Phases 1A/1B/1C complete, merged, and deployed: PR #107 (private material extraction to mini-moi-private + .env.ec2 untrack), PR #108 (archive/guild/journal/memory/reports consolidation into docs/ and data/, 4 dead files removed), PR #109 (tools/ -> scripts/tools/, launchd/+nginx/ -> infrastructure/). Root folder count 26 -> 17. Production verified after each merge. Repository Application Reorganization Phase 2 (id 140) is separate, unaffected, remains backlog. Credential rotation for .env.ec2 contents and the pre-existing malformed telegram-webhook.plist are separate follow-ups, not part of this closure."
   }
 ]
