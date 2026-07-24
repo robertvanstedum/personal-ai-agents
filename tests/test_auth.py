@@ -244,7 +244,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         "german": "/static/tour/german-landing.jpg",
         "portuguese": "/static/tour/portuguese-landing.jpg",
         "guild": "/static/tour/guild-landing.png",
-        "cos": "/static/tour/cos-landing.jpg",
+        "cos": "/static/tour/cos-landing.jpg?v=20260724-2",
     }
     for section_id, expected_src in expected_first_images.items():
         section = soup.select_one(f"section#{section_id}")
