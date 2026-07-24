@@ -193,7 +193,7 @@ def test_domain_guest_without_portuguese_grant_sees_no_active_workspace(client):
     assert not soup.select(".workspace-link[href]")
 
 
-def test_public_tour_is_static_and_includes_privacy_safe_cos_view(client):
+def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
     resp = client.get("/tour")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
@@ -202,6 +202,9 @@ def test_public_tour_is_static_and_includes_privacy_safe_cos_view(client):
     assert "Meu Português" in html
     assert "Guild" in html
     assert "Chief of Staff" in html
+    assert "cos-confer-private.png" not in html
+    assert "cos-confer.png" in html
+    assert "cos-landing.jpg" in html
     assert "/app/cos" not in html
     assert "<form" not in html
     soup = BeautifulSoup(html, "html.parser")
@@ -226,9 +229,12 @@ def test_public_tour_is_static_and_includes_privacy_safe_cos_view(client):
         img.get("src")
         for img in soup.select('.tour-shot img[src^="/static/tour/"]')
     ]
-    assert len(images) == 12
-    assert images.count("/static/tour/cos-confer-private.png") == 1
-    assert all((static_root / src.removeprefix("/static/")).is_file() for src in images)
+    assert len(images) == 20
+    assert "/static/tour/curator-research-tools.jpg" not in images
+    assert all(
+        (static_root / src.split("?", 1)[0].removeprefix("/static/")).is_file()
+        for src in images
+    )
     full_size_links = [
         link.get("href") for link in soup.select("a.tour-shot-link[href]")
     ]
@@ -238,11 +244,37 @@ def test_public_tour_is_static_and_includes_privacy_safe_cos_view(client):
         "german": "/static/tour/german-landing.jpg",
         "portuguese": "/static/tour/portuguese-landing.jpg",
         "guild": "/static/tour/guild-landing.png",
-        "cos": "/static/tour/cos-confer-private.png",
+        "cos": "/static/tour/cos-landing.jpg?v=20260724-2",
     }
     for section_id, expected_src in expected_first_images.items():
         section = soup.select_one(f"section#{section_id}")
         assert section.select_one("img").get("src") == expected_src
+    assert len(soup.select("section#curator .tour-shot")) == 4
+    assert len(soup.select("section#german .tour-shot")) == 6
+    assert len(soup.select("section#portuguese .tour-shot")) == 6
+    assert len(soup.select("section#guild .tour-shot")) == 2
+    assert len(soup.select("section#cos .tour-shot")) == 2
+    assert all(section.has_attr("hidden") for section in soup.select(".tour-section"))
+    assert not soup.select(".tour-step-nav")
+
+
+def test_owner_tour_uses_same_privacy_safe_cos_slides(client):
+    with client.session_transaction() as sess:
+        sess["user"] = {
+            "username": "robert",
+            "display_name": "Robert",
+            "tier": "owner",
+        }
+    resp = client.get("/tour")
+    assert resp.status_code == 200
+    soup = BeautifulSoup(resp.get_data(as_text=True), "html.parser")
+    section = soup.select_one("section#cos")
+    assert section is not None
+    images = [img.get("src") for img in section.select(".tour-shot img")]
+    assert images == [
+        "/static/tour/cos-landing.jpg?v=20260724-2",
+        "/static/tour/cos-confer.png",
+    ]
 
 
 @pytest.mark.parametrize(

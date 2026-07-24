@@ -8,7 +8,7 @@
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/portal.css?v=20260723-ui5">
+  <link rel="stylesheet" href="/static/portal.css?v=20260724-ui7">
 </head>
 <body class="tour">
 
@@ -67,33 +67,32 @@
           <div class="tour-domain-card-copy">
             <p>{{ workspace.eyebrow }}</p>
             <h3>{{ workspace.label }}</h3>
-            <span>Follow the flow ↓</span>
+            <span>Open the flow →</span>
           </div>
         </a>
       {% endfor %}
     </div>
   </section>
 
-  <section id="curator" class="tour-section tour-curator" aria-labelledby="curator-heading">
+  <section id="curator" class="tour-section tour-curator" aria-labelledby="curator-heading" hidden>
     <div class="tour-section-heading">
       <p class="tour-number">01</p>
       <div>
         <p class="front-eyebrow">Research and decisions</p>
         <h2 id="curator-heading">Curator</h2>
         <p>
-          Daily reading narrows into scans, deeper dives, research tools, and a
-          record of what deserves continued attention.
+          Daily reading narrows into scans and deeper dives, building a record
+          of what deserves continued attention.
         </p>
       </div>
     </div>
     <ol class="tour-flow" aria-label="Curator use flow">
-      <li><span>👤</span> Open the daily briefing</li>
-      <li><span>📰</span> Choose an article</li>
+      <li><span>👤</span> Start at the landing</li>
+      <li><span>📰</span> Open the daily briefing</li>
       <li><span>🔎</span> Scan the issue</li>
-      <li><span>↳</span> Choose the next depth</li>
-      <li><span>🧭</span> Continue the research</li>
+      <li><span>↳</span> Generate a Deeper Dive</li>
     </ol>
-    <p class="tour-mobile-hint">Swipe one full screen at a time. Tap to enlarge.</p>
+    <p class="tour-mobile-hint">Use the arrows to move through the flow. Tap to enlarge.</p>
     <div class="tour-gallery tour-gallery-featured">
       <figure class="tour-shot tour-shot-wide tour-shot-lead">
         <a class="tour-shot-link" href="/static/tour/curator-landing.jpg"
@@ -129,44 +128,31 @@
                alt="Curator deeper-dive analysis"
                width="1425" height="863" loading="lazy">
         </a>
-        <figcaption><span>04</span> Choose the next depth</figcaption>
-      </figure>
-      <figure class="tour-shot tour-shot-wide">
-        <a class="tour-shot-link" href="/static/tour/curator-research-tools.jpg"
-           aria-label="View Curator research tools full size">
-          <img src="/static/tour/curator-research-tools.jpg"
-               alt="Curator research tools"
-               width="1425" height="854" loading="lazy">
-        </a>
-        <figcaption><span>05</span> Continue into research</figcaption>
+        <figcaption><span>04</span> Generate a Deeper Dive</figcaption>
       </figure>
     </div>
-    <nav class="tour-step-nav" aria-label="Curator tour navigation">
-      <a href="/">← Home</a>
-      <a href="#german">Next: Mein Deutsch →</a>
-    </nav>
   </section>
 
-  <section id="german" class="tour-section tour-german" aria-labelledby="german-heading">
+  <section id="german" class="tour-section tour-german" aria-labelledby="german-heading" hidden>
     <div class="tour-section-heading">
       <p class="tour-number">02</p>
       <div>
         <p class="front-eyebrow">Language immersion</p>
         <h2 id="german-heading">Mein Deutsch</h2>
         <p>
-          Reading, writing, and voice conversation work together as one
-          immersion practice. Corrections and saved context carry into the next
-          session.
+          Reading, conversation, writing, vocabulary, and history reinforce
+          one another as one continuing immersion practice.
         </p>
       </div>
     </div>
     <ol class="tour-flow" aria-label="Mein Deutsch use flow">
-      <li><span>👤</span> Choose reading, speaking, or writing</li>
-      <li><span>🗣️</span> Practice with support</li>
-      <li><span>✓</span> Review corrections and recovery phrases</li>
-      <li><span>↻</span> Carry context into the next session</li>
+      <li><span>📰</span> Lesen</li>
+      <li><span>🗣️</span> Gespräche</li>
+      <li><span>✍️</span> Schreiben</li>
+      <li><span>🔤</span> Wörter</li>
+      <li><span>↻</span> Archiv</li>
     </ol>
-    <div class="tour-gallery tour-gallery-pair">
+    <div class="tour-gallery tour-gallery-featured">
       <figure class="tour-shot">
         <a class="tour-shot-link" href="/static/tour/german-landing.jpg"
            aria-label="View Mein Deutsch landing full size">
@@ -174,44 +160,77 @@
                alt="Mein Deutsch landing page"
                width="1425" height="854" loading="lazy">
         </a>
-        <figcaption><span>01</span> Choose how to practice</figcaption>
+        <figcaption><span>01</span> Start at the Mein Deutsch landing</figcaption>
       </figure>
       <figure class="tour-shot">
-        <a class="tour-shot-link" href="/static/tour/german-writing-correction.jpg"
-           aria-label="View Mein Deutsch writing correction full size">
-          <img src="/static/tour/german-writing-correction.jpg"
-               alt="Mein Deutsch writing correction"
-               width="1425" height="854" loading="lazy">
+        <a class="tour-shot-link" href="/static/tour/german-lesen.png"
+           aria-label="View Mein Deutsch Lesen full size">
+          <img src="/static/tour/german-lesen.png"
+               alt="Mein Deutsch Lesen"
+               width="1440" height="932" loading="lazy">
         </a>
-        <figcaption><span>02</span> Write in context and learn from corrections</figcaption>
+        <figcaption><span>02</span> Read current articles in Lesen</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/german-gespraeche.png"
+           aria-label="View Mein Deutsch Gespräche full size">
+          <img src="/static/tour/german-gespraeche.png"
+               alt="Mein Deutsch Gespräche"
+               width="1440" height="968" loading="lazy">
+        </a>
+        <figcaption><span>03</span> Practice supported conversation in Gespräche</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/german-schreiben.png"
+           aria-label="View Mein Deutsch Schreiben full size">
+          <img src="/static/tour/german-schreiben.png"
+               alt="Mein Deutsch Schreiben"
+               width="1440" height="968" loading="lazy">
+        </a>
+        <figcaption><span>04</span> Write in context and learn from corrections</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/german-woerter.png"
+           aria-label="View Mein Deutsch Wörter full size">
+          <img src="/static/tour/german-woerter.png"
+               alt="Mein Deutsch Wörter"
+               width="1440" height="968" loading="lazy">
+        </a>
+        <figcaption><span>05</span> Retain useful words and phrases in Wörter</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/german-archiv.png"
+           aria-label="View Mein Deutsch Archiv full size">
+          <img src="/static/tour/german-archiv.png"
+               alt="Mein Deutsch Archiv"
+               width="1440" height="968" loading="lazy">
+        </a>
+        <figcaption><span>06</span> Review reading, writing, and conversation in Archiv</figcaption>
       </figure>
     </div>
-    <nav class="tour-step-nav" aria-label="German tour navigation">
-      <a href="#curator">← Curator</a>
-      <a href="#portuguese">Next: Meu Português →</a>
-    </nav>
   </section>
 
-  <section id="portuguese" class="tour-section tour-portuguese" aria-labelledby="portuguese-heading">
+  <section id="portuguese" class="tour-section tour-portuguese" aria-labelledby="portuguese-heading" hidden>
     <div class="tour-section-heading">
       <p class="tour-number">03</p>
       <div>
         <p class="front-eyebrow">Language immersion</p>
         <h2 id="portuguese-heading">Meu Português</h2>
         <p>
-          Reading, writing, and voice conversation work together as the same
-          immersion practice. Separate user spaces keep each person's progress
-          and context distinct.
+          Reading, conversation, writing, vocabulary, and history reinforce
+          one another while separate user spaces keep each person's progress
+          distinct.
         </p>
       </div>
     </div>
     <ol class="tour-flow" aria-label="Meu Português use flow">
-      <li><span>👤</span> Choose reading, speaking, or writing</li>
-      <li><span>🗣️</span> Practice with support</li>
-      <li><span>✓</span> Review corrections and recovery phrases</li>
-      <li><span>↻</span> Carry context into the next session</li>
+      <li><span>📰</span> Leitura</li>
+      <li><span>🗣️</span> Conversas</li>
+      <li><span>✍️</span> Escrita</li>
+      <li><span>🔤</span> Palavras</li>
+      <li><span>↻</span> Arquivo</li>
     </ol>
-    <div class="tour-gallery tour-gallery-pair">
+    <div class="tour-gallery tour-gallery-featured">
       <figure class="tour-shot">
         <a class="tour-shot-link" href="/static/tour/portuguese-landing.jpg"
            aria-label="View Meu Português landing full size">
@@ -219,25 +238,57 @@
                alt="Meu Português landing page"
                width="1425" height="854" loading="lazy">
         </a>
-        <figcaption><span>01</span> Choose reading, conversation, writing, or vocabulary</figcaption>
+        <figcaption><span>01</span> Start at the Meu Português landing</figcaption>
       </figure>
       <figure class="tour-shot">
-        <a class="tour-shot-link" href="/static/tour/portuguese-conversation.jpg"
-           aria-label="View Meu Português conversation full size">
-          <img src="/static/tour/portuguese-conversation.jpg"
-               alt="Meu Português conversation practice"
-               width="1425" height="854" loading="lazy">
+        <a class="tour-shot-link" href="/static/tour/portuguese-leitura.png"
+           aria-label="View Meu Português Leitura full size">
+          <img src="/static/tour/portuguese-leitura.png"
+               alt="Meu Português Leitura"
+               width="1265" height="712" loading="lazy">
         </a>
-        <figcaption><span>02</span> Practice a real-world conversation</figcaption>
+        <figcaption><span>02</span> Read current articles in Leitura</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/portuguese-conversas.png"
+           aria-label="View Meu Português Conversas full size">
+          <img src="/static/tour/portuguese-conversas.png"
+               alt="Meu Português Conversas"
+               width="1265" height="712" loading="lazy">
+        </a>
+        <figcaption><span>03</span> Practice real-world conversation in Conversas</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/portuguese-escrita.png"
+           aria-label="View Meu Português Escrita full size">
+          <img src="/static/tour/portuguese-escrita.png"
+               alt="Meu Português Escrita"
+               width="1265" height="712" loading="lazy">
+        </a>
+        <figcaption><span>04</span> Write in context and learn from corrections</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/portuguese-palavras.png"
+           aria-label="View Meu Português Palavras full size">
+          <img src="/static/tour/portuguese-palavras.png"
+               alt="Meu Português Palavras"
+               width="1265" height="712" loading="lazy">
+        </a>
+        <figcaption><span>05</span> Retain useful words and phrases in Palavras</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/portuguese-arquivo.png"
+           aria-label="View Meu Português Arquivo full size">
+          <img src="/static/tour/portuguese-arquivo.png"
+               alt="Meu Português Arquivo"
+               width="1265" height="712" loading="lazy">
+        </a>
+        <figcaption><span>06</span> Review reading, writing, and conversation in Arquivo</figcaption>
       </figure>
     </div>
-    <nav class="tour-step-nav" aria-label="Portuguese tour navigation">
-      <a href="#german">← Mein Deutsch</a>
-      <a href="#guild">Next: Guild →</a>
-    </nav>
   </section>
 
-  <section id="guild" class="tour-section tour-guild" aria-labelledby="guild-heading">
+  <section id="guild" class="tour-section tour-guild" aria-labelledby="guild-heading" hidden>
     <div class="tour-section-heading">
       <p class="tour-number">04</p>
       <div>
@@ -275,13 +326,9 @@
         <figcaption><span>02</span> Follow work from spec ready through recently done</figcaption>
       </figure>
     </div>
-    <nav class="tour-step-nav" aria-label="Guild tour navigation">
-      <a href="#portuguese">← Meu Português</a>
-      <a href="#cos">Next: Chief of Staff →</a>
-    </nav>
   </section>
 
-  <section id="cos" class="tour-section tour-cos" aria-labelledby="cos-heading">
+  <section id="cos" class="tour-section tour-cos" aria-labelledby="cos-heading" hidden>
     <div class="tour-section-heading">
       <p class="tour-number">05</p>
       <div>
@@ -299,21 +346,26 @@
       <li><span>📝</span> Record what needs attention</li>
       <li><span>↻</span> Carry it to the right domain</li>
     </ol>
-    <div class="tour-gallery tour-gallery-single">
+    <div class="tour-gallery tour-gallery-pair">
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/cos-landing.jpg?v=20260724-2"
+           aria-label="View Chief of Staff landing full size">
+          <img src="/static/tour/cos-landing.jpg?v=20260724-2"
+               alt="Chief of Staff landing page"
+               width="1400" height="1050" loading="lazy">
+        </a>
+        <figcaption><span>01</span> Start at the Chief of Staff landing</figcaption>
+      </figure>
       <figure class="tour-shot tour-shot-wide">
-        <a class="tour-shot-link" href="/static/tour/cos-confer-private.png"
+        <a class="tour-shot-link" href="/static/tour/cos-confer.png"
            aria-label="View Chief of Staff Confer full size">
-          <img src="/static/tour/cos-confer-private.png"
+          <img src="/static/tour/cos-confer.png"
                alt="Chief of Staff Confer conversation"
                width="1573" height="1000" loading="lazy">
         </a>
-        <figcaption><span>01</span> Confer across the system</figcaption>
+        <figcaption><span>02</span> Bring a request to Confer and work through the response</figcaption>
       </figure>
     </div>
-    <nav class="tour-step-nav" aria-label="Chief of Staff tour navigation">
-      <a href="#guild">← Guild</a>
-      <a href="{% if user %}/dashboard{% else %}/{% endif %}">Return home →</a>
-    </nav>
   </section>
 </main>
 
@@ -322,8 +374,17 @@
   <button class="tour-lightbox-close" type="button"
           aria-label="Close image">×</button>
   <figure>
-    <img id="tour-lightbox-image" src="" alt="">
-    <figcaption id="tour-lightbox-caption"></figcaption>
+    <div class="tour-lightbox-stage">
+      <button class="tour-lightbox-arrow tour-lightbox-prev" type="button"
+              aria-label="Previous image">‹</button>
+      <img id="tour-lightbox-image" src="" alt="">
+      <button class="tour-lightbox-arrow tour-lightbox-next" type="button"
+              aria-label="Next image">›</button>
+    </div>
+    <figcaption>
+      <span id="tour-lightbox-caption"></span>
+      <span id="tour-lightbox-count" aria-live="polite"></span>
+    </figcaption>
   </figure>
 </dialog>
 
@@ -340,34 +401,128 @@
     const dialog = document.getElementById("tour-lightbox");
     const image = document.getElementById("tour-lightbox-image");
     const caption = document.getElementById("tour-lightbox-caption");
+    const count = document.getElementById("tour-lightbox-count");
     const close = dialog?.querySelector(".tour-lightbox-close");
+    const lightboxPrevious = dialog?.querySelector(".tour-lightbox-prev");
+    const lightboxNext = dialog?.querySelector(".tour-lightbox-next");
+    const domainMap = document.querySelector(".tour-domain-map");
+    let lightboxLinks = [];
+    let lightboxIndex = 0;
+    let activeTrigger = null;
 
-    if (!dialog || !image || !caption || !close ||
+    if (!dialog || !image || !caption || !count || !close ||
+        !lightboxPrevious || !lightboxNext ||
         typeof dialog.showModal !== "function") {
       return;
     }
 
+    function showLightboxImage(index) {
+      if (!lightboxLinks.length) return;
+      lightboxIndex =
+        (index + lightboxLinks.length) % lightboxLinks.length;
+      const link = lightboxLinks[lightboxIndex];
+      const thumbnail = link.querySelector("img");
+      const figureCaption = link.closest("figure")?.querySelector("figcaption");
+      image.src = link.href;
+      image.alt = thumbnail?.alt || "";
+      caption.textContent =
+        figureCaption?.textContent.trim() || thumbnail?.alt || "";
+      count.textContent =
+        `${lightboxIndex + 1} of ${lightboxLinks.length}`;
+      const hasMultipleSlides = lightboxLinks.length > 1;
+      lightboxPrevious.hidden = !hasMultipleSlides;
+      lightboxNext.hidden = !hasMultipleSlides;
+    }
+
+    function openDomain(domainKey, trigger = null) {
+      const section = document.getElementById(domainKey);
+      lightboxLinks = Array.from(
+        section?.querySelectorAll(".tour-shot-link") || []
+      );
+      if (!lightboxLinks.length) return;
+      activeTrigger = trigger;
+      showLightboxImage(0);
+      history.replaceState(null, "", `#${domainKey}`);
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+    }
+
+    document
+      .querySelectorAll(".tour-domain-card, .tour-domain-nav a[href^='#']")
+      .forEach((trigger) => {
+        trigger.addEventListener("click", (event) => {
+          const domainKey = trigger.getAttribute("href")?.slice(1);
+          if (!domainKey) return;
+          event.preventDefault();
+          openDomain(domainKey, trigger);
+        });
+      });
+
     document.querySelectorAll(".tour-shot-link").forEach((link) => {
       link.addEventListener("click", (event) => {
         event.preventDefault();
-        const thumbnail = link.querySelector("img");
-        const figureCaption = link.closest("figure")?.querySelector("figcaption");
-        image.src = link.href;
-        image.alt = thumbnail?.alt || "";
-        caption.textContent =
-          figureCaption?.textContent.trim() || thumbnail?.alt || "";
+        lightboxLinks = Array.from(
+          link.closest(".tour-gallery")?.querySelectorAll(".tour-shot-link") || [link]
+        );
+        lightboxIndex = lightboxLinks.indexOf(link);
+        showLightboxImage(lightboxIndex);
         dialog.showModal();
       });
     });
 
+    lightboxPrevious.addEventListener(
+      "click",
+      () => showLightboxImage(lightboxIndex - 1)
+    );
+    lightboxNext.addEventListener(
+      "click",
+      () => showLightboxImage(lightboxIndex + 1)
+    );
     close.addEventListener("click", () => dialog.close());
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) {
         dialog.close();
       }
     });
+    dialog.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        showLightboxImage(lightboxIndex - 1);
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        showLightboxImage(lightboxIndex + 1);
+      }
+    });
     dialog.addEventListener("close", () => {
       image.removeAttribute("src");
+      lightboxLinks = [];
+      lightboxIndex = 0;
+      history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${window.location.search}`
+      );
+      domainMap?.scrollIntoView({ block: "start" });
+      activeTrigger?.focus();
+      activeTrigger = null;
+    });
+
+    const initialDomain = window.location.hash.slice(1);
+    if (initialDomain) {
+      openDomain(
+        initialDomain,
+        document.querySelector(`.tour-domain-card[href="#${initialDomain}"]`)
+      );
+    }
+    window.addEventListener("hashchange", () => {
+      const domainKey = window.location.hash.slice(1);
+      if (domainKey) {
+        openDomain(
+          domainKey,
+          document.querySelector(`.tour-domain-card[href="#${domainKey}"]`)
+        );
+      }
     });
   })();
 </script>

@@ -136,6 +136,7 @@ from minimoi_portal import domain_auth as _dauth  # noqa: E402
 from minimoi_portal.workspaces import (           # noqa: E402
     WORKSPACES,
     can_access_workspace,
+    tour_navigation,
     workspace_navigation,
 )
 
@@ -235,17 +236,19 @@ def landing():
         "landing.html",
         user=user,
         workspaces=workspace_navigation(user),
-        tour_workspaces=WORKSPACES,
+        tour_workspaces=tour_navigation(user),
     )
 
 
 @app.route("/tour")
 def tour():
     """Public, static screenshot tour. No production APIs or private data."""
+    user = _current_user()
+    tour_workspaces = tour_navigation(user)
     return render_template(
         "tour.html",
-        user=_current_user(),
-        workspaces=WORKSPACES,
+        user=user,
+        workspaces=tour_workspaces,
     )
 
 

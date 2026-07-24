@@ -109,3 +109,20 @@ def workspace_navigation(user: dict | None) -> list[dict]:
             "locked": not bool(user),
         })
     return items
+
+
+def tour_navigation(user: dict | None) -> list[dict]:
+    """Return domains that may appear in the curated screenshot tour.
+
+    Every domain may be represented by privacy-safe static orientation
+    material. Access to the live domain and to any owner-only tour slides
+    remains governed separately by ``can_access_workspace``.
+    """
+    return [
+        {
+            **definition,
+            "allowed": can_access_workspace(user, definition["key"]),
+            "locked": not bool(user),
+        }
+        for definition in WORKSPACES
+    ]
