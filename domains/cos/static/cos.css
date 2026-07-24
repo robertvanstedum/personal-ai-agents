@@ -144,7 +144,7 @@ body.landing-mode .cos-header { position: sticky; top: 0; }
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(17, 17, 8, 0.18);
+  background: rgba(17, 17, 8, 0.12);
   pointer-events: none;
 }
 

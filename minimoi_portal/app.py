@@ -249,7 +249,6 @@ def tour():
         "tour.html",
         user=user,
         workspaces=tour_workspaces,
-        show_private_cos=can_access_workspace(user, "cos"),
     )
 
 

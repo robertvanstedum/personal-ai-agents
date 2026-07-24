@@ -101,8 +101,7 @@ body {
   flex-direction: column;
 }
 
-/* Background photo — landing page only, activated by body.landing-mode
-   Drop bg-primary.jpg into static/ (Rio photo, dark enough at 0.45 opacity) */
+/* Background photo — landing page only, activated by body.landing-mode. */
 body::before {
   content: '';
   position: fixed;
@@ -110,14 +109,15 @@ body::before {
   background-image: url('/static/bg-primary.jpg');
   background-size: cover;
   background-repeat: no-repeat;
-  background-position: center center;
+  background-position: 42% top;
   opacity: 0;
   z-index: -1;
   transition: opacity 0.2s;
 }
 
 body.landing-mode::before {
-  opacity: 0.55;
+  opacity: 1;
+  filter: none;
 }
 
 body.leitura-mode::before {

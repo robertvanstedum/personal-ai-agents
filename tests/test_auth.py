@@ -203,6 +203,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
     assert "Guild" in html
     assert "Chief of Staff" in html
     assert "cos-confer-private.png" not in html
+    assert "cos-confer.png" in html
     assert "cos-landing.jpg" in html
     assert "/app/cos" not in html
     assert "<form" not in html
@@ -228,7 +229,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         img.get("src")
         for img in soup.select('.tour-shot img[src^="/static/tour/"]')
     ]
-    assert len(images) == 19
+    assert len(images) == 20
     assert "/static/tour/curator-research-tools.jpg" not in images
     assert all((static_root / src.removeprefix("/static/")).is_file() for src in images)
     full_size_links = [
@@ -249,12 +250,12 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
     assert len(soup.select("section#german .tour-shot")) == 6
     assert len(soup.select("section#portuguese .tour-shot")) == 6
     assert len(soup.select("section#guild .tour-shot")) == 2
-    assert len(soup.select("section#cos .tour-shot")) == 1
+    assert len(soup.select("section#cos .tour-shot")) == 2
     assert all(section.has_attr("hidden") for section in soup.select(".tour-section"))
     assert not soup.select(".tour-step-nav")
 
 
-def test_owner_tour_includes_cos_landing_and_confer(client):
+def test_owner_tour_uses_same_privacy_safe_cos_slides(client):
     with client.session_transaction() as sess:
         sess["user"] = {
             "username": "robert",
@@ -269,7 +270,7 @@ def test_owner_tour_includes_cos_landing_and_confer(client):
     images = [img.get("src") for img in section.select(".tour-shot img")]
     assert images == [
         "/static/tour/cos-landing.jpg",
-        "/static/tour/cos-confer-private.png",
+        "/static/tour/cos-confer.png",
     ]
 
 
