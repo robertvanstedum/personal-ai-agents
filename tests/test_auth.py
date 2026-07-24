@@ -79,7 +79,6 @@ def test_signed_out_landing_shows_locked_public_workspaces(client):
         "/tour#german",
         "/tour#portuguese",
         "/tour#guild",
-        "/tour#cos",
     }
     assert soup.select_one('.front-actions a[href="/tour"]') is None
     assert soup.select_one('a[href="/login"]') is not None
@@ -193,7 +192,7 @@ def test_domain_guest_without_portuguese_grant_sees_no_active_workspace(client):
     assert not soup.select(".workspace-link[href]")
 
 
-def test_public_tour_is_static_and_includes_privacy_safe_cos_view(client):
+def test_public_tour_is_static_and_excludes_owner_only_cos(client):
     resp = client.get("/tour")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
@@ -201,7 +200,9 @@ def test_public_tour_is_static_and_includes_privacy_safe_cos_view(client):
     assert "Mein Deutsch" in html
     assert "Meu Português" in html
     assert "Guild" in html
-    assert "Chief of Staff" in html
+    assert "Chief of Staff" not in html
+    assert "cos-confer-private.png" not in html
+    assert "cos-landing.jpg" not in html
     assert "/app/cos" not in html
     assert "<form" not in html
     soup = BeautifulSoup(html, "html.parser")
@@ -213,21 +214,20 @@ def test_public_tour_is_static_and_includes_privacy_safe_cos_view(client):
         "#german",
         "#portuguese",
         "#guild",
-        "#cos",
     }
     static_root = Path(__file__).parents[1] / "minimoi_portal" / "static"
     map_images = [
         img.get("src")
         for img in soup.select('.tour-domain-map img[src^="/static/tour/"]')
     ]
-    assert len(map_images) == 5
+    assert len(map_images) == 4
     assert all((static_root / src.removeprefix("/static/")).is_file() for src in map_images)
     images = [
         img.get("src")
         for img in soup.select('.tour-shot img[src^="/static/tour/"]')
     ]
-    assert len(images) == 12
-    assert images.count("/static/tour/cos-confer-private.png") == 1
+    assert len(images) == 16
+    assert "/static/tour/curator-research-tools.jpg" not in images
     assert all((static_root / src.removeprefix("/static/")).is_file() for src in images)
     full_size_links = [
         link.get("href") for link in soup.select("a.tour-shot-link[href]")
@@ -235,14 +235,37 @@ def test_public_tour_is_static_and_includes_privacy_safe_cos_view(client):
     assert full_size_links == images
     expected_first_images = {
         "curator": "/static/tour/curator-landing.jpg",
-        "german": "/static/tour/german-landing.jpg",
-        "portuguese": "/static/tour/portuguese-landing.jpg",
+        "german": "/static/tour/german-lesen.png",
+        "portuguese": "/static/tour/portuguese-leitura.png",
         "guild": "/static/tour/guild-landing.png",
-        "cos": "/static/tour/cos-confer-private.png",
     }
     for section_id, expected_src in expected_first_images.items():
         section = soup.select_one(f"section#{section_id}")
         assert section.select_one("img").get("src") == expected_src
+    assert len(soup.select("section#curator .tour-shot")) == 4
+    assert len(soup.select("section#german .tour-shot")) == 5
+    assert len(soup.select("section#portuguese .tour-shot")) == 5
+    assert not soup.select("section#cos")
+    assert not soup.select(".tour-step-nav")
+
+
+def test_owner_tour_includes_cos_landing_and_confer(client):
+    with client.session_transaction() as sess:
+        sess["user"] = {
+            "username": "robert",
+            "display_name": "Robert",
+            "tier": "owner",
+        }
+    resp = client.get("/tour")
+    assert resp.status_code == 200
+    soup = BeautifulSoup(resp.get_data(as_text=True), "html.parser")
+    section = soup.select_one("section#cos")
+    assert section is not None
+    images = [img.get("src") for img in section.select(".tour-shot img")]
+    assert images == [
+        "/static/tour/cos-landing.jpg",
+        "/static/tour/cos-confer-private.png",
+    ]
 
 
 @pytest.mark.parametrize(
