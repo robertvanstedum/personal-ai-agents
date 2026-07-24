@@ -231,7 +231,10 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
     ]
     assert len(images) == 20
     assert "/static/tour/curator-research-tools.jpg" not in images
-    assert all((static_root / src.removeprefix("/static/")).is_file() for src in images)
+    assert all(
+        (static_root / src.split("?", 1)[0].removeprefix("/static/")).is_file()
+        for src in images
+    )
     full_size_links = [
         link.get("href") for link in soup.select("a.tour-shot-link[href]")
     ]
@@ -269,7 +272,7 @@ def test_owner_tour_uses_same_privacy_safe_cos_slides(client):
     assert section is not None
     images = [img.get("src") for img in section.select(".tour-shot img")]
     assert images == [
-        "/static/tour/cos-landing.jpg",
+        "/static/tour/cos-landing.jpg?v=20260724-2",
         "/static/tour/cos-confer.png",
     ]
 
