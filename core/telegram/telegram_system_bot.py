@@ -24,6 +24,11 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+# Ensure repo root is on path so utils.telegram imports resolve correctly
+_REPO_ROOT = Path(__file__).parent.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 _IN_DOCKER = os.path.exists('/.dockerenv')
 _CURATOR_URL = "http://curator:8766" if _IN_DOCKER else "http://localhost:8766"
 _GERMAN_URL  = "http://german:8767"  if _IN_DOCKER else "http://localhost:8767"
