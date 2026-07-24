@@ -50,15 +50,8 @@ def test_authenticated_dashboard_renders_signed_in_home(client):
         "/guild",
         "/app/cos",
     }.issubset(cards)
-    tour_links = {
-        a.get("href") for a in soup.select(".dashboard-card-tour[href]")
-    }
-    assert tour_links == {
-        "/tour#curator",
-        "/tour#german",
-        "/tour#portuguese",
-        "/tour#guild",
-    }
+    assert not soup.select(".dashboard-card-tour")
+    assert soup.select_one('.front-door-account a[href="/tour"]') is not None
 
 
 def test_signed_out_landing_shows_locked_public_workspaces(client):
