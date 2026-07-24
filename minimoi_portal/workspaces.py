@@ -114,9 +114,9 @@ def workspace_navigation(user: dict | None) -> list[dict]:
 def tour_navigation(user: dict | None) -> list[dict]:
     """Return domains that may appear in the curated screenshot tour.
 
-    The four public domains remain available to everyone as static,
-    non-interactive orientation. Owner-only domains may be added only when
-    the current user can already open them.
+    Every domain may be represented by privacy-safe static orientation
+    material. Access to the live domain and to any owner-only tour slides
+    remains governed separately by ``can_access_workspace``.
     """
     return [
         {
@@ -125,6 +125,4 @@ def tour_navigation(user: dict | None) -> list[dict]:
             "locked": not bool(user),
         }
         for definition in WORKSPACES
-        if definition["public_visible"]
-        or can_access_workspace(user, definition["key"])
     ]

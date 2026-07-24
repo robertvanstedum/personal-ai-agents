@@ -627,6 +627,7 @@ body.tour {
   box-shadow: 0 12px 32px rgba(65, 43, 24, 0.05);
   scroll-margin-top: 132px;
 }
+.tour-section[hidden] { display: none !important; }
 .tour-section-heading {
   max-width: 1000px;
   margin-bottom: 1rem;
