@@ -79,12 +79,6 @@
             </div>
             <span class="dashboard-card-arrow" aria-hidden="true">→</span>
           </a>
-          {% if workspace.public_visible %}
-            <a href="/tour#{{ workspace.key }}"
-               class="dashboard-card-tour">See the flow</a>
-          {% else %}
-            <span class="dashboard-card-status">Private coordination</span>
-          {% endif %}
         </article>
       {% endfor %}
     </div>
