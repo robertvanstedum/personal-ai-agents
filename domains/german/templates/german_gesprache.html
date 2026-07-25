@@ -1029,6 +1029,39 @@ document.body.classList.add('parch-mode');
     return div;
   }
 
+  async function parseBackendResponse(response, operation) {
+    let data = {};
+    try {
+      data = await response.json();
+    } catch (parseError) {
+      const error = new Error(`${operation} returned an unreadable response`);
+      error.status = response.status;
+      error.backendDetail = 'invalid JSON response';
+      throw error;
+    }
+
+    if (!response.ok || data.ok === false || data.error) {
+      const error = new Error(`${operation} failed`);
+      error.status = response.status;
+      error.backendDetail = data.error || `HTTP ${response.status}`;
+      throw error;
+    }
+    return data;
+  }
+
+  function reportBackendError(operation, error, userMessage) {
+    console.error('[Gespräche] Backend request failed', {
+      operation,
+      status: error && error.status ? error.status : null,
+      detail: error && error.backendDetail ? error.backendDetail : String(error),
+    });
+    const statusEl = document.getElementById('session-listen-status');
+    if (statusEl) {
+      statusEl.textContent = `⚠ ${userMessage}`;
+      statusEl.className = 'session-listen-status listening-error';
+    }
+  }
+
   async function sendTurn(userText) {
     const p = personas[selectedIdx];
     if (!p) return;
@@ -1059,27 +1092,37 @@ document.body.classList.add('parch-mode');
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ history: sessionHistory, persona, scene, model, user_turn: userText }),
       });
-      const data = await res.json();
+      const data = await parseBackendResponse(res, 'ai_turn');
       ai_ms = Date.now() - t0_ai;
       const reply = (data.response || '').trim();
+      if (!reply) {
+        const error = new Error('ai_turn returned an empty response');
+        error.status = res.status;
+        error.backendDetail = 'empty AI response';
+        throw error;
+      }
 
       if (thinkingEl) thinkingEl.remove();
-      if (reply) {
-        sessionHistory.push({ role: 'assistant', content: reply });
-        sessionTranscript.push(personaName + ': ' + reply);
-        appendChatMessage(personaName, reply, true);
-        const t0_tts = Date.now();
-        await speakPersona(reply);
-        tts_ms = Date.now() - t0_tts;
-      }
+      sessionHistory.push({ role: 'assistant', content: reply });
+      sessionTranscript.push(personaName + ': ' + reply);
+      appendChatMessage(personaName, reply, true);
+      const t0_tts = Date.now();
+      await speakPersona(reply);
+      tts_ms = Date.now() - t0_tts;
     } catch (err) {
       if (thinkingEl) thinkingEl.remove();
+      reportBackendError(
+        'ai_turn',
+        err,
+        'Backend-Fehler — bitte später erneut versuchen.'
+      );
+      return { ok: false, ai_ms, tts_ms };
     }
     finally {
       if (_modelLbl) _modelLbl.textContent = _modelOrig;
       sessionSendBtn.disabled = false;
     }
-    return { ai_ms, tts_ms };
+    return { ok: true, ai_ms, tts_ms };
   }
 
   startSessionBtn.addEventListener('click', async () => {
@@ -1138,7 +1181,14 @@ document.body.classList.add('parch-mode');
       speechSynthesis.speak(_utter);
     } catch (_) {}
 
-    await sendTurn('');
+    const openingTurn = await sendTurn('');
+    if (!openingTurn.ok) {
+      sessionActive = false;
+      startSessionBtn.style.display = '';
+      startSessionBtn.disabled = false;
+      document.getElementById('persona-detail').classList.remove('session-active');
+      return;
+    }
     // Opening turn done — start continuous listening loop
     if (window._sessionListenStart) window._sessionListenStart();
   });
@@ -1350,13 +1400,19 @@ document.body.classList.add('parch-mode');
           formData.append('audio', blob, `turn.${ext}`);
           const t0_transcribe = Date.now();
           const res  = await fetch('/api/transcribe', { method: 'POST', body: formData });
-          const data = await res.json();
+          const data = await parseBackendResponse(res, 'transcribe');
           const transcribe_ms = Date.now() - t0_transcribe;
           if (data.transcript) {
             const text = data.transcript.trim();
             if (text && sessionActive) {
               setListenStatus('denkt nach…', 'listening-processing');
-              const { ai_ms, tts_ms } = await sendTurn(text);
+              const turnResult = await sendTurn(text);
+              if (!turnResult.ok) {
+                loopRunning = false;
+                turnInFlight = false;
+                break;
+              }
+              const { ai_ms, tts_ms } = turnResult;
               const total_ms = Date.now() - t_turn_start;
               console.log(`[turn] transcribe:${transcribe_ms}ms  ai:${ai_ms}ms  tts:${tts_ms}ms  total:${total_ms}ms`);
               // Wait for TTS to finish before re-listening
@@ -1364,8 +1420,12 @@ document.body.classList.add('parch-mode');
             }
           }
         } catch (e) {
-          setListenStatus('⚠ Transkription fehlgeschlagen — API-Schlüssel prüfen', 'listening-error');
-          await new Promise(r => setTimeout(r, 3000));
+          reportBackendError(
+            'transcribe',
+            e,
+            'Transkription nicht verfügbar — bitte später erneut versuchen.'
+          );
+          loopRunning = false;
         }
         turnInFlight = false;
 
