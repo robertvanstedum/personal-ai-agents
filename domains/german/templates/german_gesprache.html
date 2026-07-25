@@ -1898,7 +1898,7 @@ document.body.classList.add('parch-mode');
 // Reads current persona/scene from the DOM rather than the existing
 // IIFE's closure variables above -- decoupled on purpose, so this beta
 // wiring can't accidentally break the existing session flow's state.
-import { RealtimeVoiceController } from "/static/realtime-voice/realtime-voice-controller.js";
+import { RealtimeVoiceController } from "./static/realtime-voice/realtime-voice-controller.js";
 
 const startBtn = document.getElementById('realtime-voice-start-btn');
 const endBtn = document.getElementById('realtime-voice-end-btn');
@@ -1925,7 +1925,7 @@ async function finalizeAndSave(result) {
   const personaEl = document.querySelector('.persona-list-item.active');
   const sceneEl = document.querySelector('.scene-btn.active');
   try {
-    const resp = await fetch('/api/review', {
+    const resp = await fetch('./api/review', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1959,7 +1959,7 @@ startBtn?.addEventListener('click', async () => {
   if (transcriptEl) transcriptEl.textContent = '';
 
   controller = new RealtimeVoiceController({
-    bootstrapUrl: '/api/realtime-voice/bootstrap',
+    bootstrapUrl: './api/realtime-voice/bootstrap',
     onStateChange(state) {
       setStatus(`Status: ${state}`);
       startBtn.style.display = (state === 'idle' || state === 'ended') ? '' : 'none';

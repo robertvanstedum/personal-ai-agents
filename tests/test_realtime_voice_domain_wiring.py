@@ -62,3 +62,20 @@ def test_german_dev_ui_makes_realtime_primary(monkeypatch, german_client):
     assert "Die Persona spricht zuerst" in page
     assert "Ältere Sitzung als Fallback" in page
     assert "realtime-transcript" in page
+    # These URLs must remain relative. Absolute /static and /api paths bypass
+    # the portal's /app/german proxy prefix, leaving the Start button inert.
+    assert 'from "./static/realtime-voice/realtime-voice-controller.js"' in page
+    assert "bootstrapUrl: './api/realtime-voice/bootstrap'" in page
+    assert "fetch('./api/review'" in page
+    assert 'from "/static/realtime-voice/realtime-voice-controller.js"' not in page
+
+
+def test_portuguese_realtime_ui_uses_proxy_safe_relative_urls(portuguese_client):
+    resp = portuguese_client.get("/conversas?realtime_voice=1")
+    page = resp.get_data(as_text=True)
+
+    assert resp.status_code == 200
+    assert 'from "./static/realtime-voice/realtime-voice-controller.js"' in page
+    assert "bootstrapUrl: './api/realtime-voice/bootstrap'" in page
+    assert "fetch('./api/pt/review'" in page
+    assert 'from "/static/realtime-voice/realtime-voice-controller.js"' not in page
