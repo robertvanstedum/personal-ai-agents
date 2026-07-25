@@ -44,6 +44,8 @@ services:
     container_name: minimoi-german
     restart: unless-stopped
     env_file: .env
+    environment:
+      - VOICE_REALTIME_UI_ENABLED=${VOICE_REALTIME_UI_ENABLED:-1}
     ports:
       - "8767:8767"
     volumes:
