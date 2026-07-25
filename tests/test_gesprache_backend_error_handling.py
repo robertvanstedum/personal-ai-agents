@@ -37,3 +37,12 @@ def test_transcription_failure_stops_the_listening_loop():
     assert "await parseBackendResponse(res, 'transcribe')" in source
     assert "Transkription nicht verfügbar — bitte später erneut versuchen." in source
     assert "loopRunning = false;" in source
+
+
+def test_session_start_does_not_wait_for_browser_audio_unlock():
+    source = _template_source()
+
+    assert "_ac.resume().catch(() => {});" in source
+    assert "await _ac.resume();" not in source
+    assert "_sil.play().catch(() => {});" in source
+    assert "await _sil.play().catch(() => {});" not in source
