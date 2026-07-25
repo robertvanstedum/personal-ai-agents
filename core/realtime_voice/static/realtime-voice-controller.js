@@ -25,6 +25,8 @@ import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js";
 import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
+const OPENING_INSTRUCTION =
+  "Begin the scene now in character. Speak first with a natural opening line. Do not wait for the learner.";
 
 export class RealtimeVoiceController {
   constructor({ bootstrapUrl, onStateChange, onWarning, onStop, onFatalError, onFinalize }) {
@@ -97,6 +99,7 @@ export class RealtimeVoiceController {
       this._setState("active");
       this._startedAt = Date.now();
       this._startDurationWatch();
+      this._adapter.sendContinuationInstruction(OPENING_INSTRUCTION);
     });
     this._adapter.on("input_transcript", (evt) => this._recordTranscriptEvent("user", evt));
     this._adapter.on("output_transcript", (evt) => this._recordTranscriptEvent("assistant", evt));

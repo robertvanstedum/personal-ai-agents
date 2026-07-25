@@ -2643,6 +2643,41 @@ body.reading-mode nav {
   color: var(--text);
   cursor: pointer;
 }
+.realtime-session-launch {
+  margin: 0.9rem 0;
+  padding: 1rem;
+  border: 1px solid var(--md-accent);
+  border-radius: 10px;
+  background: rgba(197, 132, 82, 0.08);
+}
+.realtime-session-heading {
+  color: var(--md-text);
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.realtime-session-note {
+  margin: 0.25rem 0 0.75rem;
+  color: var(--md-text-secondary);
+  font-size: 0.86rem;
+}
+.realtime-session-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.realtime-session-status {
+  margin: 0.65rem 0 0;
+}
+.legacy-session-fallback {
+  margin: 0.75rem 0;
+  color: var(--md-text-secondary);
+  font-size: 0.84rem;
+}
+.legacy-session-fallback > summary {
+  cursor: pointer;
+}
 .gesprache-voice-row {
   display: flex;
   align-items: center;

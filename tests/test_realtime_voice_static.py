@@ -27,3 +27,12 @@ def test_german_serves_xai_adapter(german_client):
     resp = german_client.get("/static/realtime-voice/adapters/xai-websocket-adapter.js")
     assert resp.status_code == 200
     assert b"XAIWebSocketAdapter" in resp.data
+
+
+def test_shared_controller_starts_with_persona_and_hides_live_transcript(german_client):
+    resp = german_client.get("/static/realtime-voice/realtime-voice-controller.js")
+    source = resp.get_data(as_text=True)
+
+    assert "Speak first with a natural opening line" in source
+    assert "sendContinuationInstruction(OPENING_INSTRUCTION)" in source
+    assert "never surfaced to the UI while active" in source

@@ -34,3 +34,31 @@ def test_portuguese_endpoint_registered_and_backed_by_shared_module(portuguese_c
         if "bootstrap" in name
     )
     assert view_fn.__module__ == "core.realtime_voice.bootstrap"
+
+
+def test_german_personas_have_explicit_legacy_and_realtime_voices():
+    from domains.german.html_server import _PERSONA_VOICES
+
+    expected = {
+        "Maria", "Frau Berger", "Herr Fischer", "Dr. Huber", "Stefan",
+        "Frau Novak", "Klaus", "Georg", "Anna",
+    }
+    assert set(_PERSONA_VOICES) == expected
+    assert all(set(profile) == {"legacy", "openai", "xai"}
+               for profile in _PERSONA_VOICES.values())
+    assert _PERSONA_VOICES["Stefan"] == {
+        "legacy": "onyx", "openai": "cedar", "xai": "rex",
+    }
+
+
+def test_german_dev_ui_makes_realtime_primary(monkeypatch, german_client):
+    monkeypatch.setenv("VOICE_REALTIME_UI_ENABLED", "1")
+
+    resp = german_client.get("/gesprache")
+    page = resp.get_data(as_text=True)
+
+    assert resp.status_code == 200
+    assert "Realtime-Gespräch" in page
+    assert "Die Persona spricht zuerst" in page
+    assert "Ältere Sitzung als Fallback" in page
+    assert "realtime-transcript" in page

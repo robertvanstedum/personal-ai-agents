@@ -65,9 +65,36 @@
               <summary class="prompt-details-summary">Prompt anzeigen</summary>
               <div class="prompt-text" id="prompt-text" contenteditable="true"></div>
             </details>
-            <!-- Model selector — visible before session starts -->
+            {% if realtime_voice_enabled %}
+            <div class="realtime-session-launch">
+              <div class="realtime-session-heading">Realtime-Gespräch</div>
+              <p class="realtime-session-note">
+                Die Persona spricht zuerst. Das Transkript erscheint erst nach dem Ende.
+              </p>
+              <div class="realtime-session-controls">
+                <label for="realtime-voice-provider" class="gesprache-model-label">Anbieter</label>
+                <select id="realtime-voice-provider" class="gesprache-model-select">
+                  <option value="openai" selected>OpenAI Realtime</option>
+                  <option value="xai">Grok Voice</option>
+                </select>
+                <button class="btn-session-start" id="realtime-voice-start-btn">
+                  🎙️ Sitzung starten
+                </button>
+                <button class="btn-delivery" id="realtime-voice-end-btn" style="display:none">
+                  ⏹ Beenden
+                </button>
+              </div>
+              <div id="realtime-voice-status" class="detail-description realtime-session-status"></div>
+              <details id="realtime-transcript" class="prompt-details-block" style="display:none">
+                <summary class="prompt-details-summary">Transkript</summary>
+                <pre id="realtime-transcript-text" class="prompt-text"></pre>
+              </details>
+            </div>
+            <details class="legacy-session-fallback">
+              <summary>Ältere Sitzung als Fallback</summary>
+            {% endif %}
             <div class="gesprache-model-row" style="margin-bottom:0.75rem">
-              <label class="gesprache-model-label">Modell</label>
+              <label class="gesprache-model-label">Textmodell</label>
               <select id="gesprache-model" class="gesprache-model-select">
                 <option value="grok" selected>Grok</option>
                 <option value="openai">OpenAI</option>
@@ -76,26 +103,9 @@
             </div>
             <div class="prompt-actions">
               <button class="btn-session-start" id="start-session-btn"
-                      title="Start AI session directly in the browser">
-                ▶ Sitzung starten
+                      title="Start the older request-based session">
+                ▶ Ältere Sitzung starten
               </button>
-              {% if request.args.get('realtime_voice') %}
-              <!-- Beta: provider-swappable realtime voice session. Feature-
-                   flagged via ?realtime_voice=1, not the default entry
-                   point yet -- old pipeline above is unaffected. -->
-              <select id="realtime-voice-provider" class="gesprache-model-select">
-                <option value="">Realtime-Anbieter…</option>
-                <option value="openai">OpenAI (WebRTC)</option>
-                <option value="xai">xAI Grok (WebSocket)</option>
-              </select>
-              <button class="btn-session-start" id="realtime-voice-start-btn">
-                🎙️ Realtime testen (Beta)
-              </button>
-              <button class="btn-delivery" id="realtime-voice-end-btn" style="display:none">
-                ⏹ Beenden
-              </button>
-              <div id="realtime-voice-status" class="detail-description" style="margin-top:0.5rem"></div>
-              {% endif %}
               <button class="btn-delivery" id="btn-copy"
                       title="Copy prompt to clipboard — no app switching">
                 📋 Prompt kopieren
@@ -111,6 +121,9 @@
                 💾 Als .txt
               </button>
             </div>
+            {% if realtime_voice_enabled %}
+            </details>
+            {% endif %}
             <div class="prompt-toast" id="prompt-toast" style="display:none"></div>
             {% if tip %}<div class="gesprache-inline-tip"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="vertical-align:middle;margin-right:4px"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7z"/></svg>{{ tip }}</div>{% endif %}
           </div>
@@ -765,16 +778,7 @@ document.body.classList.add('parch-mode');
   let _currentObjUrl  = null;  // active object URL so we can revoke it on stop
 
   function _personaVoice(p) {
-    // Pick OpenAI TTS voice by persona gender.
-    // Female: nova (bright, warm — good for café/pharmacy/Airbnb personas)
-    // Male:   onyx (deep, warm — good for hotel/formal personas)
-    if (!p) return 'nova';
-    const n = (p.name || '').toLowerCase();
-    if (n.includes('herr') || n.includes('fischer') || n.includes('huber') ||
-        n.includes('dr.') || n.includes('hans') || n.includes('klaus')) {
-      return 'onyx';
-    }
-    return 'nova';
+    return p?.voices?.legacy || 'alloy';
   }
 
   async function speakPersona(text, p) {
@@ -1888,7 +1892,7 @@ document.body.classList.add('parch-mode');
 
 })();
 </script>
-{% if request.args.get('realtime_voice') %}
+{% if realtime_voice_enabled %}
 <script type="module">
 // Beta: provider-swappable realtime voice session (build spec Section 5).
 // Reads current persona/scene from the DOM rather than the existing
@@ -1900,6 +1904,8 @@ const startBtn = document.getElementById('realtime-voice-start-btn');
 const endBtn = document.getElementById('realtime-voice-end-btn');
 const providerSelect = document.getElementById('realtime-voice-provider');
 const statusEl = document.getElementById('realtime-voice-status');
+const transcriptWrap = document.getElementById('realtime-transcript');
+const transcriptEl = document.getElementById('realtime-transcript-text');
 
 let controller = null;
 
@@ -1914,6 +1920,8 @@ async function finalizeAndSave(result) {
       : 'Sitzung beendet. Speichere Transkript…'
   );
   const transcriptText = result.turns.map(t => `${t.speaker}: ${t.text}`).join('\n');
+  if (transcriptEl) transcriptEl.textContent = transcriptText || 'Kein Transkript empfangen.';
+  if (transcriptWrap) transcriptWrap.style.display = '';
   const personaEl = document.querySelector('.persona-list-item.active');
   const sceneEl = document.querySelector('.scene-btn.active');
   try {
@@ -1947,6 +1955,8 @@ startBtn?.addEventListener('click', async () => {
     setStatus('Bitte zuerst Persona und Szene wählen.');
     return;
   }
+  if (transcriptWrap) transcriptWrap.style.display = 'none';
+  if (transcriptEl) transcriptEl.textContent = '';
 
   controller = new RealtimeVoiceController({
     bootstrapUrl: '/api/realtime-voice/bootstrap',

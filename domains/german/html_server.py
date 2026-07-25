@@ -71,6 +71,26 @@ WHEREBY_HOST_URL  = os.environ.get("WHEREBY_HOST_URL", "")
 # Where tutor brief tokens are persisted (readable/writable by html_server.py)
 PORTAL_AUTH_DIR   = REPO_ROOT / "minimoi_portal" / "auth"
 
+_PERSONA_VOICES = {
+    "Maria":        {"legacy": "nova",  "openai": "marin", "xai": "ara"},
+    "Frau Berger":  {"legacy": "nova",  "openai": "marin", "xai": "ara"},
+    "Herr Fischer": {"legacy": "onyx",  "openai": "cedar", "xai": "rex"},
+    "Dr. Huber":    {"legacy": "onyx",  "openai": "cedar", "xai": "rex"},
+    "Stefan":       {"legacy": "onyx",  "openai": "cedar", "xai": "rex"},
+    "Frau Novak":   {"legacy": "nova",  "openai": "marin", "xai": "ara"},
+    "Klaus":        {"legacy": "onyx",  "openai": "cedar", "xai": "rex"},
+    "Georg":        {"legacy": "onyx",  "openai": "cedar", "xai": "rex"},
+    "Anna":         {"legacy": "nova",  "openai": "marin", "xai": "ara"},
+}
+
+
+def _persona_voices(name: str) -> dict:
+    return dict(_PERSONA_VOICES.get(
+        name,
+        {"legacy": "alloy", "openai": "alloy", "xai": "sal"},
+    ))
+
+
 app = Flask(
     __name__,
     template_folder=str(BASE_DIR / "templates"),
@@ -100,6 +120,7 @@ def _get_realtime_persona(persona_slug: str):
         "name": persona["name"],
         "prompt_txt": prompt_txt,
         "scenes": persona.get("speaking_prompts", {}),
+        "voices": _persona_voices(persona["name"]),
     }
 
 
@@ -237,12 +258,19 @@ def gesprache():
     for p in personas:
         slug = persona_to_slug(p["name"])
         p["slug"] = slug
+        p["voices"] = _persona_voices(p["name"])
         p["memory"] = get_persona_memory(user_key, slug, create=user_id is not None)
     sessions = get_gesprache_sessions(limit=5, user_id=user_id)
+    realtime_voice_enabled = (
+        os.environ.get("VOICE_REALTIME_UI_ENABLED", "").lower()
+        in {"1", "true", "yes", "on"}
+        or bool(request.args.get("realtime_voice"))
+    )
     return render_template("german_gesprache.html", active="gesprache",
                            personas=personas, sessions=sessions,
                            whereby_room_url=WHEREBY_ROOM_URL,
                            whereby_host_available=bool(WHEREBY_HOST_URL),
+                           realtime_voice_enabled=realtime_voice_enabled,
                            is_guest=_de_is_guest(),
                            tip=_load_tip("german.gesprache"))
 
