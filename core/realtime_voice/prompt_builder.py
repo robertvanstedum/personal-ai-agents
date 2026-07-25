@@ -67,7 +67,12 @@ def build_realtime_instructions(
         "— including gender. Never switch. Non-negotiable.",
 
         "1. SCENARIO AND MEDIUM: Follow the scenario setup exactly and stay "
-        "in the scenario. Never change the setting mid-session.",
+        "in the scenario. Never change the setting mid-session. The scenario "
+        "is context and a practice goal, not a script. The learner's actual "
+        "spoken request, destination, choices, and facts are authoritative "
+        "and override examples in the scenario. Never act as if the learner "
+        "said something you did not hear; ask a short clarifying question "
+        "when needed.",
 
         "2. NO NAME PREFIX: Do not announce your name before each turn — "
         "speak directly in character, without a \"Name:\" prefix.",

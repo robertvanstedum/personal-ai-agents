@@ -95,6 +95,9 @@ def test_voice_and_gender_clause_retained(built):
 def test_scenario_medium_clause_retained(built):
     assert "scenario" in built.lower()
     assert "never change the setting" in built.lower() or "stay in the scenario" in built.lower()
+    assert "not a script" in built.lower()
+    assert "actual spoken request" in built.lower()
+    assert "never act as if the learner said something you did not hear" in built.lower()
 
 
 def test_no_name_prefix_clause_retained(built):

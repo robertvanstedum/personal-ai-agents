@@ -11,7 +11,10 @@ from unittest.mock import patch
 import pytest
 from flask import Flask
 
-from core.realtime_voice.bootstrap import create_bootstrap_blueprint
+from core.realtime_voice.bootstrap import (
+    _default_turn_detection,
+    create_bootstrap_blueprint,
+)
 
 
 def _fake_persona_lookup(name):
@@ -93,6 +96,14 @@ def test_authenticated_request_with_mocked_provider_succeeds(client):
     data = resp.get_json()
     assert data["ok"] is True
     assert data["provider"] == "openai"
+
+
+def test_openai_uses_predictable_learner_friendly_silence_detection():
+    assert _default_turn_detection("openai") == {
+        "type": "server_vad",
+        "prefix_padding_ms": 300,
+        "silence_duration_ms": 1200,
+    }
 
 
 # ── No long-lived key exposure ───────────────────────────────────────────────

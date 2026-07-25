@@ -145,10 +145,14 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
 
 def _default_turn_detection(provider: str) -> dict:
     if provider == "openai":
-        # Semantic VAD at conservative/low eagerness for a language
-        # learner (Section 9) -- gives extra time to speak without
-        # interruption.
-        return {"type": "semantic_vad", "eagerness": "low"}
+        # A predictable silence boundary is easier for a language learner
+        # than low-eagerness semantic VAD, which can wait a long time before
+        # deciding that a hesitant but complete utterance has ended.
+        return {
+            "type": "server_vad",
+            "prefix_padding_ms": 300,
+            "silence_duration_ms": 1200,
+        }
     # xAI: server VAD with a longer-than-default silence threshold suitable
     # for a learner (Section 9). xAI's default silence_duration_ms is not
     # documented; this is an explicit, recorded choice, not an assumption

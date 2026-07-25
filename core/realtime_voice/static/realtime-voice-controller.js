@@ -26,12 +26,18 @@ import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
 const OPENING_INSTRUCTION =
-  "Begin the scene now in character. Speak first with a natural opening line. Do not wait for the learner.";
+  "Begin in character with one short, natural greeting and one brief question " +
+  "inviting the learner to say what they need. Do not give directions, suggest " +
+  "a destination, or advance the scenario before hearing the learner.";
 
 export class RealtimeVoiceController {
-  constructor({ bootstrapUrl, onStateChange, onWarning, onStop, onFatalError, onFinalize }) {
+  constructor({
+    bootstrapUrl, onStateChange, onInputState, onWarning, onStop,
+    onFatalError, onFinalize,
+  }) {
     this._bootstrapUrl = bootstrapUrl;
     this._onStateChange = onStateChange || (() => {});
+    this._onInputState = onInputState || (() => {});
     this._onWarning = onWarning || (() => {});
     this._onStop = onStop || (() => {});
     this._onFatalError = onFatalError || (() => {});
@@ -101,7 +107,12 @@ export class RealtimeVoiceController {
       this._startDurationWatch();
       this._adapter.sendContinuationInstruction(OPENING_INSTRUCTION);
     });
-    this._adapter.on("input_transcript", (evt) => this._recordTranscriptEvent("user", evt));
+    this._adapter.on("speech_started", () => this._onInputState("speech_started"));
+    this._adapter.on("speech_stopped", () => this._onInputState("speech_stopped"));
+    this._adapter.on("input_transcript", (evt) => {
+      this._recordTranscriptEvent("user", evt);
+      if (evt.completed) this._onInputState("understood");
+    });
     this._adapter.on("output_transcript", (evt) => this._recordTranscriptEvent("assistant", evt));
     this._adapter.on("interrupted", () => {
       // Barge-in must leave conversation state consistent (Section 9) --
@@ -116,6 +127,8 @@ export class RealtimeVoiceController {
     });
     this._adapter.on("fatal_error", (info) => {
       this._onFatalError(info);
+      this._setState("ending");
+      this._adapter?.end("fatal_error");
       this._finalizeAndEnd("fatal_error");
     });
     this._adapter.on("closed", () => {
@@ -191,6 +204,7 @@ export class RealtimeVoiceController {
   }
 
   _finalizeAndEnd(reason) {
+    if (this._state === "ended") return;
     clearInterval(this._durationTimer);
     const partial = reason !== "user_ended" && reason !== "normal_end";
     const turns = [...this._items.entries()]

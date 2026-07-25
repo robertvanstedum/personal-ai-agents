@@ -1671,6 +1671,14 @@ startBtn?.addEventListener('click', async () => {
       startBtn.style.display = (state === 'idle' || state === 'ended') ? '' : 'none';
       endBtn.style.display = (state === 'idle' || state === 'ended') ? 'none' : '';
     },
+    onInputState(state) {
+      const labels = {
+        speech_started: 'Ouvindo você …',
+        speech_stopped: 'Processando sua resposta …',
+        understood: 'Entendido — respondendo …',
+      };
+      setStatus(labels[state] || `Status: ${state}`);
+    },
     onWarning(elapsedSeconds) {
       setStatus(`⚠️ ${Math.round(elapsedSeconds / 60)} min — a sessão terminará em breve.`);
     },

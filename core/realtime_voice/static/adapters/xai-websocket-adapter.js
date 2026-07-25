@@ -28,6 +28,8 @@ export class XAIWebSocketAdapter {
     this._processor = null;
     this._muted = false;
     this._playbackQueueTime = 0;
+    this._connected = false;
+    this._connectTimer = null;
   }
 
   on(eventName, handler) {
@@ -47,6 +49,10 @@ export class XAIWebSocketAdapter {
     // bootstrap response. Browsers cannot set WebSocket headers, so the
     // token travels as a Sec-WebSocket-Protocol entry
     // ("xai-client-secret." prefix), per xAI's documented browser pattern.
+    let micError = null;
+    const micPromise = this._startMicCapture().catch((err) => {
+      micError = err;
+    });
     const protocol = `xai-client-secret.${credentials.ephemeral_token}`;
     this._ws = new WebSocket(
       `wss://api.x.ai/v1/realtime?model=${encodeURIComponent(credentials.model)}`,
@@ -54,28 +60,54 @@ export class XAIWebSocketAdapter {
     );
 
     this._ws.addEventListener("open", async () => {
+      clearTimeout(this._connectTimer);
       this._ws.send(JSON.stringify({
         type: "session.update",
         session: credentials.session_config || this._sessionConfig,
       }));
-      await this._startMicCapture();
-      this._emit("connected", { provider: "xai" });
+      try {
+        await micPromise;
+        if (micError) throw micError;
+        this._connected = true;
+        this._emit("connected", { provider: "xai" });
+      } catch (err) {
+        this._emit("fatal_error", {
+          reason: "microphone_unavailable",
+          detail: String(err),
+        });
+        this._ws.close();
+      }
     });
 
     this._ws.addEventListener("message", (event) => this._handleServerEvent(JSON.parse(event.data)));
-    this._ws.addEventListener("error", (event) => this._emit("recoverable_error", { detail: String(event) }));
+    this._ws.addEventListener("error", (event) => {
+      const info = { reason: "websocket_error", detail: String(event) };
+      this._emit(this._connected ? "recoverable_error" : "fatal_error", info);
+    });
     this._ws.addEventListener("close", () => this._emit("closed", { reason: "connection_closed" }));
+    this._connectTimer = setTimeout(() => {
+      if (this._connected) return;
+      this._emit("fatal_error", {
+        reason: "connection_timeout",
+        detail: "Grok Voice did not connect within 12 seconds.",
+      });
+      this._stopMic();
+      this._ws.close();
+    }, 12000);
   }
 
   async _startMicCapture() {
     try {
       this._micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
-      this._emit("fatal_error", { reason: "microphone_denied", detail: String(err) });
-      return;
+      throw new Error(`microphone_denied: ${err}`);
     }
 
     this._audioContext = new AudioContext({ sampleRate: 24000 });
+    await this._audioContext.resume();
+    if (this._audioContext.state !== "running") {
+      throw new Error(`audio_context_${this._audioContext.state}`);
+    }
     const source = this._audioContext.createMediaStreamSource(this._micStream);
     // ScriptProcessorNode is deprecated in favor of AudioWorklet; kept here
     // for a first working version per the API docs' own example -- a
@@ -109,11 +141,19 @@ export class XAIWebSocketAdapter {
   }
 
   end(reason) {
+    clearTimeout(this._connectTimer);
+    this._stopMic();
+    this._ws?.close();
+    this._emit("closed", { reason });
+  }
+
+  _stopMic() {
     for (const track of this._micStream?.getAudioTracks() || []) track.stop();
     this._processor?.disconnect();
     this._audioContext?.close();
-    this._ws?.close();
-    this._emit("closed", { reason });
+    this._micStream = null;
+    this._processor = null;
+    this._audioContext = null;
   }
 
   sendContinuationInstruction(text) {
@@ -139,7 +179,7 @@ export class XAIWebSocketAdapter {
         this._emit("speech_stopped", {});
         break;
       case "response.output_audio.delta":
-        this._playAudioChunk(event.audio);
+        this._playAudioChunk(event.delta || event.audio);
         this._emit("assistant_started", {});
         break;
       case "response.done":
@@ -154,6 +194,12 @@ export class XAIWebSocketAdapter {
           completed: !!event.completed, provider_event_id: event.event_id,
         });
         break;
+      case "conversation.item.input_audio_transcription.completed":
+        this._emit("input_transcript", {
+          item_id: event.item_id, text: event.transcript, is_delta: false,
+          completed: true, provider_event_id: event.event_id,
+        });
+        break;
       case "session.created":
         break;
       default:
@@ -162,7 +208,7 @@ export class XAIWebSocketAdapter {
   }
 
   _playAudioChunk(base64Audio) {
-    if (!this._audioContext) return;
+    if (!this._audioContext || !base64Audio) return;
     const float32 = _base64PCM16ToFloat32(base64Audio);
     const buffer = this._audioContext.createBuffer(1, float32.length, 24000);
     buffer.copyToChannel(float32, 0);

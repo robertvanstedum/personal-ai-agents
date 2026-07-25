@@ -1965,6 +1965,14 @@ startBtn?.addEventListener('click', async () => {
       startBtn.style.display = (state === 'idle' || state === 'ended') ? '' : 'none';
       endBtn.style.display = (state === 'idle' || state === 'ended') ? 'none' : '';
     },
+    onInputState(state) {
+      const labels = {
+        speech_started: 'Hört Sie …',
+        speech_stopped: 'Verarbeitet Ihre Antwort …',
+        understood: 'Verstanden — antwortet …',
+      };
+      setStatus(labels[state] || `Status: ${state}`);
+    },
     onWarning(elapsedSeconds) {
       setStatus(`⚠️ ${Math.round(elapsedSeconds / 60)} Min. — Sitzung endet bald automatisch.`);
     },
