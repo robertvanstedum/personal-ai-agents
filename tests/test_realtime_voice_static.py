@@ -38,6 +38,8 @@ def test_shared_controller_starts_with_persona_and_hides_live_transcript(german_
     assert "sendContinuationInstruction(OPENING_INSTRUCTION)" in source
     assert 'this._onInputState("speech_started")' in source
     assert "never surfaced to the UI while active" in source
+    assert "openai-webrtc-adapter.js?v=20260725-transcript1" in source
+    assert "xai-websocket-adapter.js?v=20260725-transcript1" in source
 
 
 def test_xai_adapter_handles_current_audio_delta_and_connection_failures(german_client):
@@ -47,3 +49,18 @@ def test_xai_adapter_handles_current_audio_delta_and_connection_failures(german_
     assert "event.delta || event.audio" in source
     assert "connection_timeout" in source
     assert "microphone_unavailable" in source
+    assert 'case "session.updated"' in source
+    assert "this._sessionReady &&" in source
+    assert 'case "error"' in source
+    assert 'reason: "provider_error"' in source
+    assert 'case "conversation.item.input_audio_transcription.updated"' in source
+    assert 'case "conversation.item.input_audio_transcription.completed"' in source
+
+
+def test_openai_adapter_captures_learner_transcription(german_client):
+    resp = german_client.get("/static/realtime-voice/adapters/openai-webrtc-adapter.js")
+    source = resp.get_data(as_text=True)
+
+    assert 'case "conversation.item.input_audio_transcription.delta"' in source
+    assert 'case "conversation.item.input_audio_transcription.completed"' in source
+    assert 'case "conversation.item.input_audio_transcription.failed"' in source

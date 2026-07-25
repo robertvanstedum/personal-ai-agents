@@ -21,8 +21,8 @@
  *   await controller.startSession({provider, persona, scene, learner_name});
  *   controller.endSession("user_ended");
  */
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js";
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20260725-transcript1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260725-transcript1";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
 const OPENING_INSTRUCTION =
@@ -106,6 +106,9 @@ export class RealtimeVoiceController {
       this._startedAt = Date.now();
       this._startDurationWatch();
       this._adapter.sendContinuationInstruction(OPENING_INSTRUCTION);
+    });
+    this._adapter.on("provider_phase", (evt) => {
+      this._onInputState(evt.phase);
     });
     this._adapter.on("speech_started", () => this._onInputState("speech_started"));
     this._adapter.on("speech_stopped", () => this._onInputState("speech_stopped"));

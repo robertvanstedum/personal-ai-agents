@@ -180,6 +180,8 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
     }
     if user:
         fwd_headers["X-Minimoi-User-Tier"] = user.get("tier", "guest")
+        if user.get("display_name"):
+            fwd_headers["X-Minimoi-Display-Name"] = user["display_name"]
         if user.get("auth_id"):
             fwd_headers["X-Minimoi-Auth-Id"] = str(user["auth_id"])
         if user.get("username"):

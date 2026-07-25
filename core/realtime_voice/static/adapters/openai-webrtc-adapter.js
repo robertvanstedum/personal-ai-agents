@@ -157,6 +157,18 @@ export class OpenAIWebRTCAdapter {
           provider_event_id: event.event_id,
         });
         break;
+      case "conversation.item.input_audio_transcription.delta":
+        this._emit("input_transcript", {
+          item_id: event.item_id, text: event.delta, is_delta: true, completed: false,
+          provider_event_id: event.event_id,
+        });
+        break;
+      case "conversation.item.input_audio_transcription.failed":
+        this._emit("recoverable_error", {
+          reason: "input_transcription_failed",
+          detail: event.error?.message || event.error?.code || "Input transcription failed",
+        });
+        break;
       case "response.cancelled":
         this._emit("interrupted", {});
         break;

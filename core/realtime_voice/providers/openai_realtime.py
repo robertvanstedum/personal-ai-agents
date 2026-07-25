@@ -28,6 +28,7 @@ def mint_ephemeral_credential(
     instructions: str,
     voice: str,
     turn_detection: dict,
+    transcription_language: str,
     user_id_for_safety_identifier: str,
 ) -> dict:
     """Requests a short-lived client secret from OpenAI, with the session's
@@ -49,7 +50,13 @@ def mint_ephemeral_credential(
             "instructions": instructions,
             "audio": {
                 "output": {"voice": voice},
-                "input": {"turn_detection": turn_detection},
+                "input": {
+                    "turn_detection": turn_detection,
+                    "transcription": {
+                        "model": "gpt-4o-transcribe",
+                        "language": transcription_language,
+                    },
+                },
             },
         }
     }

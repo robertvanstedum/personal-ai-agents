@@ -8,7 +8,7 @@ Chat functions return the AI response string.
 import json
 from pathlib import Path
 
-from german_domain import _REVIEW_SYSTEM_PROMPT, _parse_transcript_turns
+from german_domain import build_review_system_prompt, _parse_transcript_turns
 from core.get_secret import get_secret
 
 # Persona prompt .txt files — same path as german_domain._PROMPTS_DIR
@@ -30,19 +30,22 @@ def _provider_key(env_name: str, service: str) -> str:
         return ""
 
 
-def run_review(transcript: str, persona: str, scene: str, model: str) -> dict:
+def run_review(
+    transcript: str, persona: str, scene: str, model: str,
+    learner_name: str = "Learner",
+) -> dict:
     """
     Routes transcript review to the correct provider.
     Raises ProviderError on failure — no silent fallback.
     """
     if model == "grok":
-        return _review_grok(transcript, persona, scene)
+        return _review_grok(transcript, persona, scene, learner_name)
     elif model == "openai":
-        return _review_openai(transcript, persona, scene)
+        return _review_openai(transcript, persona, scene, learner_name)
     elif model == "gemini":
-        return _review_gemini(transcript, persona, scene)
+        return _review_gemini(transcript, persona, scene, learner_name)
     elif model == "claude":
-        return _review_claude(transcript, persona, scene)
+        return _review_claude(transcript, persona, scene, learner_name)
     else:
         raise ProviderError(f"Unknown model: {model}")
 
@@ -78,7 +81,7 @@ def _parse_feedback(raw: str) -> dict:
     }
 
 
-def _review_grok(transcript: str, persona: str, scene: str) -> dict:
+def _review_grok(transcript: str, persona: str, scene: str, learner_name: str) -> dict:
     from openai import OpenAI
     api_key = _provider_key("XAI_API_KEY", "xai")
     if not api_key:
@@ -89,7 +92,7 @@ def _review_grok(transcript: str, persona: str, scene: str) -> dict:
         max_tokens=2000,
         temperature=0.3,
         messages=[
-            {"role": "system", "content": _REVIEW_SYSTEM_PROMPT},
+            {"role": "system", "content": build_review_system_prompt(learner_name)},
             {"role": "user",   "content": _build_user_prompt(transcript, persona, scene)},
         ],
     )
@@ -100,7 +103,7 @@ def _review_grok(transcript: str, persona: str, scene: str) -> dict:
         raise ProviderError(f"Grok response parse error: {e}\nRaw: {raw[:200]}")
 
 
-def _review_openai(transcript: str, persona: str, scene: str) -> dict:
+def _review_openai(transcript: str, persona: str, scene: str, learner_name: str) -> dict:
     from openai import OpenAI
     api_key = _provider_key("OPENAI_API_KEY", "openai")
     if not api_key:
@@ -111,7 +114,7 @@ def _review_openai(transcript: str, persona: str, scene: str) -> dict:
         max_tokens=2000,
         temperature=0.3,
         messages=[
-            {"role": "system", "content": _REVIEW_SYSTEM_PROMPT},
+            {"role": "system", "content": build_review_system_prompt(learner_name)},
             {"role": "user",   "content": _build_user_prompt(transcript, persona, scene)},
         ],
     )
@@ -122,11 +125,11 @@ def _review_openai(transcript: str, persona: str, scene: str) -> dict:
         raise ProviderError(f"OpenAI response parse error: {e}\nRaw: {raw[:200]}")
 
 
-def _review_gemini(transcript: str, persona: str, scene: str) -> dict:
+def _review_gemini(transcript: str, persona: str, scene: str, learner_name: str) -> dict:
     raise ProviderError("Gemini not configured — add gemini API key to keyring first")
 
 
-def _review_claude(transcript: str, persona: str, scene: str) -> dict:
+def _review_claude(transcript: str, persona: str, scene: str, learner_name: str) -> dict:
     import anthropic
     api_key = _provider_key("ANTHROPIC_API_KEY", "anthropic")
     if not api_key:
@@ -135,7 +138,7 @@ def _review_claude(transcript: str, persona: str, scene: str) -> dict:
     resp = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=2000,
-        system=_REVIEW_SYSTEM_PROMPT,
+        system=build_review_system_prompt(learner_name),
         messages=[{"role": "user", "content": _build_user_prompt(transcript, persona, scene)}],
     )
     raw = resp.content[0].text.strip()
@@ -148,7 +151,9 @@ def _review_claude(transcript: str, persona: str, scene: str) -> dict:
 # ── KI-Sitzung: turn-by-turn chat ────────────────────────────────────────────
 
 
-def build_chat_system_prompt(persona_slug: str, scene: str) -> str:
+def build_chat_system_prompt(
+    persona_slug: str, scene: str, learner_name: str = "Learner"
+) -> str:
     """Builds a chat-appropriate system prompt for in-page KI-Sitzung.
 
     Uses the persona .txt file (same source as assemble_session_prompt) but
@@ -174,10 +179,10 @@ def build_chat_system_prompt(persona_slug: str, scene: str) -> str:
     scene_text = persona.get("speaking_prompts", {}).get(scene, "")
 
     parts = [
-        f"Du spielst {persona_name} in einer Deutsch-Übungssitzung mit Robert. "
+        f"Du spielst {persona_name} in einer Deutsch-Übungssitzung mit {learner_name}. "
         f"Bleib die gesamte Sitzung in der Rolle von {persona_name}. "
         f"Antworte ausschließlich auf Deutsch. "
-        f"Wenn Robert einen Grammatikfehler macht, verwende natürlich die korrekte Form — "
+        f"Wenn {learner_name} einen Grammatikfehler macht, verwende natürlich die korrekte Form — "
         f"verlasse nicht die Rolle. Schreibe keine Namenspräfixe vor deinen Antworten.",
         persona_txt,
     ]
@@ -187,7 +192,8 @@ def build_chat_system_prompt(persona_slug: str, scene: str) -> str:
 
 
 def run_chat_turn(
-    history: list, persona: str, scene: str, user_turn: str, model: str
+    history: list, persona: str, scene: str, user_turn: str, model: str,
+    learner_name: str = "Learner",
 ) -> str:
     """Routes a single conversation turn to the correct provider.
 
@@ -195,7 +201,7 @@ def run_chat_turn(
     Subsequent turns: history has previous turns, user_turn already pushed to history.
     Returns the AI response string.
     """
-    system_prompt = build_chat_system_prompt(persona, scene)
+    system_prompt = build_chat_system_prompt(persona, scene, learner_name)
     if model == "grok":
         return _chat_grok(system_prompt, history, user_turn)
     elif model == "openai":

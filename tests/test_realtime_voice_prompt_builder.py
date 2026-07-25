@@ -100,6 +100,14 @@ def test_scenario_medium_clause_retained(built):
     assert "never act as if the learner said something you did not hear" in built.lower()
 
 
+def test_live_conversation_priority_follows_scenario(built):
+    scenario_at = built.index("=== SCENARIO FOR THIS SESSION ===")
+    priority_at = built.index("=== LIVE CONVERSATION PRIORITY ===")
+    assert priority_at > scenario_at
+    assert "Do not assume the learner chose" in built
+    assert "First listen to the learner's actual words" in built
+
+
 def test_no_name_prefix_clause_retained(built):
     assert "do not announce your name" in built.lower() or "no name prefix" in built.lower()
 
@@ -147,6 +155,34 @@ def test_no_reference_to_robert_by_name_leaks_into_shared_instructions(built):
     )
     assert "Isabella" in built_other_learner
     assert "Robert" not in built_other_learner
+
+
+def test_application_name_is_not_used_as_stranger_familiarity(built):
+    assert "use it only for internal context and transcript attribution" in built
+    assert "Do not address the learner by name unless" in built
+
+
+def test_stefan_realtime_prompt_is_concise_and_stranger_appropriate():
+    from pathlib import Path
+
+    prompt = Path(
+        "domains/german/data/config/prompts/stefan_ubahn.txt"
+    ).read_text(encoding="utf-8")
+    assert "slightly measured pace" in prompt
+    assert "Never call the tourist by name unless" in prompt
+    assert "one or two essential direction steps at a time" in prompt
+    assert "Do not volunteer alternate routes" in prompt
+
+
+def test_german_review_prompt_rejects_likely_speech_recognition_errors():
+    from pathlib import Path
+
+    source = Path("domains/german/german_domain.py").read_text(encoding="utf-8")
+    assert "speech-recognition artifacts" in source
+    assert '"Uh, oh, vier" or "Ufer"' in source
+    assert 'omit the item from "errors"' in source
+    assert "statement-versus-question intent" in source
+    assert "verb-first word order may already be correct for a question" in source
 
 
 # ── Continuation instruction (Section 9) ─────────────────────────────────────

@@ -40,7 +40,7 @@ from pathlib import Path
 ERROR_TYPES = ["gender", "word_order", "missing_article", "verb_conjugation", "vocabulary", "register"]
 
 SYSTEM_PROMPT = """\
-You are a German language tutor reviewing a voice practice session between a student (Robert) and an AI persona.
+You are a German language tutor reviewing a voice practice session between a learner and an AI persona.
 Analyze the transcript and return a single JSON object — no markdown, no explanation, just the JSON.
 
 Required schema:
@@ -49,7 +49,7 @@ Required schema:
   "errors": [
     {
       "type": "gender|word_order|missing_article|verb_conjugation|vocabulary|register",
-      "original": "what Robert said",
+      "original": "what the learner said",
       "correction": "correct form",
       "explanation": "one sentence why",
       "context": "full sentence from transcript"
@@ -66,7 +66,7 @@ Required schema:
   "vocabulary_highlights": [
     { "german": "word or phrase", "english": "translation", "note": "used correctly / new this session / needs practice", "tags": ["optional", "anki", "tags"] }
   ],
-  "strengths": ["specific things Robert did well"],
+  "strengths": ["specific things the learner did well"],
   "next_focus": "one concrete grammar or vocabulary focus for the next session"
 }\
 """
@@ -165,23 +165,35 @@ def _save_reviewer_output(session: dict, session_path: Path, reviewer_output: di
 
 # ── Step 2b: Scaffold tracking ───────────────────────────────────────────────
 
-def _robert_text(session: dict) -> str:
-    """Concatenate all of Robert's turns, lowercased."""
+def _learner_text(session: dict) -> str:
+    """Concatenate learner turns without assuming a particular account name."""
+    persona = str(session.get("persona", "")).casefold()
+    explicit_name = str(session.get("learner_name", "")).casefold()
+    known_learner_labels = {
+        "learner", "student", "user", "you", "sie", "você", "robert",
+    }
     return " ".join(
         t["text"] for t in session.get("raw_transcript", [])
-        if t.get("speaker", "").lower() == "robert"
+        if (
+            (speaker := str(t.get("speaker", "")).casefold())
+            and (
+                speaker == explicit_name
+                or speaker in known_learner_labels
+                or (persona and speaker != persona)
+            )
+        )
     ).lower()
 
 
-def _phrase_matched(phrase: str, robert_lower: str, min_root_len: int) -> bool:
-    """Return True if phrase is found in Robert's text (exact or word-root match)."""
-    if phrase.lower() in robert_lower:
+def _phrase_matched(phrase: str, learner_lower: str, min_root_len: int) -> bool:
+    """Return True if phrase is found in learner text (exact or word-root match)."""
+    if phrase.lower() in learner_lower:
         return True
     # Word-by-word root match: each content word ≥ min_root_len chars
     for word in re.sub(r'[^\w\s]', '', phrase).split():
         if len(word) >= min_root_len:
             root = word[:min_root_len].lower()
-            if any(w.startswith(root) for w in robert_lower.split()):
+            if any(w.startswith(root) for w in learner_lower.split()):
                 return True
     return False
 
@@ -201,11 +213,11 @@ def _scaffold_analysis(session: dict, session_path: Path, sessions_dir: Path,
         return
 
     min_root = domain_cfg.get("drill", {}).get("root_match_min_length", 6)
-    robert = _robert_text(session)
+    learner = _learner_text(session)
 
     used, avoided = [], []
     for phrase in delivered:
-        (used if _phrase_matched(phrase, robert, min_root) else avoided).append(phrase)
+        (used if _phrase_matched(phrase, learner, min_root) else avoided).append(phrase)
 
     session["scaffold_used"] = used
     session["scaffold_avoided"] = avoided

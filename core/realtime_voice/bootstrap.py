@@ -20,7 +20,7 @@ import time
 
 from flask import Blueprint, jsonify, request
 
-from core.identity import resolve_user_id
+from core.identity import resolve_user_display_name, resolve_user_id
 from core.realtime_voice import config as rv_config
 from core.realtime_voice.duration_guard import DurationGuard
 from core.realtime_voice.prompt_builder import build_realtime_instructions
@@ -35,6 +35,10 @@ _RATE_LIMIT_WINDOW_SECONDS = 60
 _rate_limit_state: dict[str, list[float]] = {}
 
 _DEFAULT_VOICE = {"openai": "marin", "xai": "eve"}
+_TRANSCRIPTION_LANGUAGE = {
+    "openai": {"de-AT": "de", "pt-BR": "pt"},
+    "xai": {"de-AT": "de", "pt-BR": "pt-BR"},
+}
 
 
 def _check_rate_limit(user_id: str) -> bool:
@@ -73,7 +77,7 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         explicit_provider = body.get("provider")
         persona_name = body.get("persona", "")
         scene = body.get("scene", "")
-        learner_name = body.get("learner_name", "")
+        learner_name = resolve_user_display_name(request)
 
         production = is_production()
         dev_override = request.args.get("provider") if not production else None
@@ -108,10 +112,11 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
             persona_name=persona["name"],
             persona_txt=persona["prompt_txt"],
             scene_text=scene_text,
-            learner_name=learner_name or "the learner",
+            learner_name=learner_name,
         )
         voice = persona.get("voices", {}).get(provider) or _DEFAULT_VOICE[provider]
         turn_detection = _default_turn_detection(provider)
+        transcription_language = _TRANSCRIPTION_LANGUAGE[provider][locale]
 
         try:
             if provider == "openai":
@@ -119,6 +124,7 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
                     instructions=instructions,
                     voice=voice,
                     turn_detection=turn_detection,
+                    transcription_language=transcription_language,
                     user_id_for_safety_identifier=str(user_id),
                 )
             else:
@@ -126,6 +132,7 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
                     instructions=instructions,
                     voice=voice,
                     turn_detection=turn_detection,
+                    transcription_language=transcription_language,
                 )
         except (openai_realtime.OpenAIRealtimeError, xai_voice.XAIVoiceError) as e:
             _log_outcome(domain, user_id, provider, None, "provider_error")

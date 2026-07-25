@@ -16,28 +16,55 @@ from core.get_secret import get_secret
 
 _PERSONAS_DIR = Path(__file__).parent / "personas"
 
-PORTUGUESE_REVIEW_PROMPT = """You are an experienced Brazilian Portuguese teacher reviewing a conversation transcript.
+PORTUGUESE_REVIEW_PROMPT = """You are an experienced Brazilian Portuguese teacher reviewing a conversation transcript for LEARNER_NAME.
 
-IMPORTANT: Analyze ONLY the student's lines (labeled "Robert" or "User"). Do NOT analyze the persona's Portuguese — only the student's.
+IMPORTANT: Analyze ONLY LEARNER_NAME's lines (labeled "LEARNER_NAME", "User", or "Você"). Do NOT analyze the persona's Portuguese. Refer to the learner as LEARNER_NAME, not as "the student", in summaries and strengths.
+
+Every explanation must account for every material change between the original
+and correction. Do not describe only word order when the correction also
+changes an article, preposition, pronoun, conjugation, or vocabulary.
+
+Spoken transcripts may contain speech-recognition artifacts. Do not report a
+phonetic rendering, filler, punctuation difference, or likely homophone as a
+student error when the surrounding exchange shows that the intended expression
+was understood correctly. If the evidence is ambiguous, omit the item from
+"errors" rather than inventing a correction. Do not infer
+statement-versus-question intent from transcript punctuation alone: speech
+recognition may supply the punctuation, and verb-first word order may already
+be correct for a question.
+
+Realtime transcripts may also contain clipped turns when one speaker
+interrupts another. Never judge conversational appropriateness from a response
+to an incomplete preceding turn. Do not replace a short response such as
+"Sim" with an unrelated speech act such as a greeting when the preceding
+question is clipped or ambiguous. Ignore isolated fragments such as "Ouve"
+when a nearby complete turn makes them likely recognition noise. A correction
+must identify an independently clear language error; for example, in a payment
+context, "carta" can validly be corrected to "cartão".
 
 Return ONLY a valid JSON object with this exact structure:
 {
-  "overall_summary": "1-2 sentence summary of the student's performance in English",
+  "overall_summary": "1-2 sentence summary of LEARNER_NAME's performance in English",
   "errors": [
-    {"original": "student's exact text", "correction": "corrected form", "explanation": "brief explanation in English"}
+    {"original": "LEARNER_NAME's exact text", "correction": "corrected form", "explanation": "brief explanation in English"}
   ],
   "strengths": ["strength 1 in English", "strength 2 in English"],
-  "next_focus": "one thing for the student to practice next session",
+  "next_focus": "one thing for LEARNER_NAME to practice next session",
   "topics": ["topic 1", "topic 2"],
   "vocabulary": []
 }
 
 Focus:
-1. Important grammar or vocabulary errors in the student's lines (skip very minor issues)
-2. What the student did well
-3. One clear priority for next session
+1. Important grammar or vocabulary errors in LEARNER_NAME's lines (skip very minor issues)
+2. What LEARNER_NAME did well
+3. One clear priority for next session, based only on confirmed errors or
+   clearly observed opportunities in the transcript
 
 Be encouraging but honest. Write all feedback in English."""
+
+
+def build_review_prompt(learner_name: str) -> str:
+    return PORTUGUESE_REVIEW_PROMPT.replace("LEARNER_NAME", learner_name)
 
 
 class ProviderError(Exception):
@@ -66,7 +93,9 @@ def _parse_transcript_turns(transcript: str) -> list:
     return turns
 
 
-def _build_user_prompt(transcript: str, persona: str, scene: str) -> str:
+def _build_user_prompt(
+    transcript: str, persona: str, scene: str, learner_name: str
+) -> str:
     import datetime
     turns = _parse_transcript_turns(transcript)
     date_str = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -75,7 +104,7 @@ def _build_user_prompt(transcript: str, persona: str, scene: str) -> str:
         f"Scene: {scene}",
         f"Date: {date_str}",
         "",
-        "Transcript (analyze ONLY the student's lines — Robert or User):",
+        f"Transcript (analyze ONLY {learner_name}'s lines):",
     ] + [f"{t['speaker']}: {t['text']}" for t in turns]
     return "\n".join(lines)
 
@@ -99,18 +128,21 @@ def _parse_feedback(raw: str) -> dict:
 
 # ── Review (transcript analysis) ─────────────────────────────────────────────
 
-def run_review(transcript: str, persona: str, scene: str, model: str) -> dict:
+def run_review(
+    transcript: str, persona: str, scene: str, model: str,
+    learner_name: str = "Learner",
+) -> dict:
     if model == "grok":
-        return _review_grok(transcript, persona, scene)
+        return _review_grok(transcript, persona, scene, learner_name)
     elif model == "openai":
-        return _review_openai(transcript, persona, scene)
+        return _review_openai(transcript, persona, scene, learner_name)
     elif model == "claude":
-        return _review_claude(transcript, persona, scene)
+        return _review_claude(transcript, persona, scene, learner_name)
     else:
         raise ProviderError(f"Unknown model: {model}")
 
 
-def _review_grok(transcript: str, persona: str, scene: str) -> dict:
+def _review_grok(transcript: str, persona: str, scene: str, learner_name: str) -> dict:
     from openai import OpenAI
     api_key = _provider_key("XAI_API_KEY", "xai")
     if not api_key:
@@ -121,8 +153,8 @@ def _review_grok(transcript: str, persona: str, scene: str) -> dict:
         max_tokens=2000,
         temperature=0.3,
         messages=[
-            {"role": "system", "content": PORTUGUESE_REVIEW_PROMPT},
-            {"role": "user",   "content": _build_user_prompt(transcript, persona, scene)},
+            {"role": "system", "content": build_review_prompt(learner_name)},
+            {"role": "user",   "content": _build_user_prompt(transcript, persona, scene, learner_name)},
         ],
     )
     raw = resp.choices[0].message.content or ""
@@ -132,7 +164,7 @@ def _review_grok(transcript: str, persona: str, scene: str) -> dict:
         raise ProviderError(f"Grok parse error: {e}\nRaw: {raw[:200]}")
 
 
-def _review_openai(transcript: str, persona: str, scene: str) -> dict:
+def _review_openai(transcript: str, persona: str, scene: str, learner_name: str) -> dict:
     from openai import OpenAI
     api_key = _provider_key("OPENAI_API_KEY", "openai")
     if not api_key:
@@ -143,8 +175,8 @@ def _review_openai(transcript: str, persona: str, scene: str) -> dict:
         max_tokens=2000,
         temperature=0.3,
         messages=[
-            {"role": "system", "content": PORTUGUESE_REVIEW_PROMPT},
-            {"role": "user",   "content": _build_user_prompt(transcript, persona, scene)},
+            {"role": "system", "content": build_review_prompt(learner_name)},
+            {"role": "user",   "content": _build_user_prompt(transcript, persona, scene, learner_name)},
         ],
     )
     raw = resp.choices[0].message.content or ""
@@ -154,7 +186,7 @@ def _review_openai(transcript: str, persona: str, scene: str) -> dict:
         raise ProviderError(f"OpenAI parse error: {e}\nRaw: {raw[:200]}")
 
 
-def _review_claude(transcript: str, persona: str, scene: str) -> dict:
+def _review_claude(transcript: str, persona: str, scene: str, learner_name: str) -> dict:
     import anthropic
     api_key = _provider_key("ANTHROPIC_API_KEY", "anthropic")
     if not api_key:
@@ -163,8 +195,8 @@ def _review_claude(transcript: str, persona: str, scene: str) -> dict:
     resp = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=2000,
-        system=PORTUGUESE_REVIEW_PROMPT,
-        messages=[{"role": "user", "content": _build_user_prompt(transcript, persona, scene)}],
+        system=build_review_prompt(learner_name),
+        messages=[{"role": "user", "content": _build_user_prompt(transcript, persona, scene, learner_name)}],
     )
     raw = resp.content[0].text.strip()
     try:
@@ -182,7 +214,10 @@ def _load_persona_txt(slug: str, persona_data: dict) -> str:
     return persona_data.get("description", f"Você é {persona_data.get('name', slug)}.")
 
 
-def build_chat_system_prompt(persona_slug: str, scene: str, personas: list) -> str:
+def build_chat_system_prompt(
+    persona_slug: str, scene: str, personas: list,
+    learner_name: str = "Learner",
+) -> str:
     persona = next((p for p in personas if _name_to_slug(p["name"]) == persona_slug), None)
     if not persona:
         raise ProviderError(f"Persona not found: {persona_slug}")
@@ -192,7 +227,7 @@ def build_chat_system_prompt(persona_slug: str, scene: str, personas: list) -> s
     scene_text = persona.get("speaking_prompts", {}).get(scene, "")
 
     parts = [
-        f"Você é {persona_name} em uma sessão de prática de português com o usuário. "
+        f"Você é {persona_name} em uma sessão de prática de português com {learner_name}. "
         f"Mantenha sempre o papel de {persona_name}. "
         f"Responda exclusivamente em português brasileiro. "
         f"Se o usuário cometer erros gramaticais, use naturalmente a forma correta sem sair do papel. "
@@ -215,9 +250,12 @@ def _build_chat_messages(history: list) -> list:
 
 
 def run_chat_turn(
-    history: list, persona: str, scene: str, user_turn: str, model: str, personas: list
+    history: list, persona: str, scene: str, user_turn: str, model: str,
+    personas: list, learner_name: str = "Learner",
 ) -> str:
-    system_prompt = build_chat_system_prompt(persona, scene, personas)
+    system_prompt = build_chat_system_prompt(
+        persona, scene, personas, learner_name
+    )
     if model == "grok":
         return _chat_grok(system_prompt, history)
     elif model == "openai":

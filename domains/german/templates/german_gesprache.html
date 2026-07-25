@@ -158,7 +158,7 @@
             <pre class="session-brief-text" id="session-brief-text"></pre>
           </details>
 
-          <!-- Session cards — auto-saved on Beenden from KI-Sitzung -->
+          <!-- Temporary session cards — persisted only after Analysieren -->
           <div id="session-cards-list"></div>
 
           <details class="nach-sitzung-details" id="transcript-details" open>
@@ -874,12 +874,12 @@ document.body.classList.add('parch-mode');
       `<div class="session-saved-meta">✓ ${session.personaName} · Runde ${session.round} · ${session.turns} Züge · ${dur}</div>` +
       sceneLine +
       `<div class="session-saved-actions">` +
-        `<button class="btn-session-card-transcript">Transkript ▾</button>` +
+        `<button class="btn-session-card-transcript">Transkript ▲</button>` +
         teilenBtn +
         `<button class="btn-session-card-delete" title="Delete session">✕</button>` +
         `<button class="btn-session-card-analyse">Analysieren →</button>` +
       `</div>` +
-      `<div class="session-card-transcript-wrap" style="display:none">` +
+      `<div class="session-card-transcript-wrap">` +
         `<pre class="session-card-transcript-text">${session.transcript}</pre>` +
       `</div>`;
 
@@ -932,7 +932,7 @@ document.body.classList.add('parch-mode');
           persona_name: session.personaName,
           scene: session.scene,
           model: session.model,
-          source: 'ki_sitzung',
+          source: session.source || 'ki_sitzung',
         }),
       });
       const data = await res.json();
@@ -959,9 +959,9 @@ document.body.classList.add('parch-mode');
         `<div class="session-saved-meta session-saved-analysiert">` +
           `${analysedLabel} — ${session.personaName} · ${formatDuration(session.durationMs)}` +
           ` <button class="btn-session-card-anzeigen">Feedback</button>` +
-          ` <button class="btn-session-card-anzeigen btn-session-card-transcript-post">Transkript ▾</button>` +
+          ` <button class="btn-session-card-anzeigen btn-session-card-transcript-post">Transkript ▲</button>` +
         `</div>` +
-        `<div class="session-card-transcript-wrap" style="display:none">` +
+        `<div class="session-card-transcript-wrap">` +
           `<pre class="session-card-transcript-text">${session.transcript}</pre>` +
         `</div>`;
       card.querySelector('.btn-session-card-transcript-post').addEventListener('click', () => {
@@ -1890,6 +1890,25 @@ document.body.classList.add('parch-mode');
     } catch (_) {}
   });
 
+  window.addEventListener('gesprache:realtime-session-ended', (event) => {
+    const session = event.detail;
+    if (!session?.transcript) return;
+    savedSessions.push(session);
+    renderSessionCard(session);
+    requestAnimationFrame(() => {
+      const panel = document.getElementById('persona-detail');
+      const cards = document.getElementById('session-cards-list');
+      if (!cards) return;
+      if (panel) {
+        const panelRect = panel.getBoundingClientRect();
+        const cardsRect = cards.getBoundingClientRect();
+        panel.scrollBy({ top: cardsRect.top - panelRect.top, behavior: 'smooth' });
+      } else {
+        cards.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
 })();
 </script>
 {% if realtime_voice_enabled %}
@@ -1898,7 +1917,7 @@ document.body.classList.add('parch-mode');
 // Reads current persona/scene from the DOM rather than the existing
 // IIFE's closure variables above -- decoupled on purpose, so this beta
 // wiring can't accidentally break the existing session flow's state.
-import { RealtimeVoiceController } from "./static/realtime-voice/realtime-voice-controller.js";
+import { RealtimeVoiceController } from "./static/realtime-voice/realtime-voice-controller.js?v=20260725-transcript1";
 
 const startBtn = document.getElementById('realtime-voice-start-btn');
 const endBtn = document.getElementById('realtime-voice-end-btn');
@@ -1906,6 +1925,7 @@ const providerSelect = document.getElementById('realtime-voice-provider');
 const statusEl = document.getElementById('realtime-voice-status');
 const transcriptWrap = document.getElementById('realtime-transcript');
 const transcriptEl = document.getElementById('realtime-transcript-text');
+const learnerName = {{ learner_name|tojson }};
 
 let controller = null;
 
@@ -1916,31 +1936,46 @@ function setStatus(text) {
 async function finalizeAndSave(result) {
   setStatus(
     result.partial
-      ? `Sitzung beendet (unvollständig: ${result.partial_reason}). Speichere Transkript…`
-      : 'Sitzung beendet. Speichere Transkript…'
+      ? `Sitzung beendet (unvollständig: ${result.partial_reason}). Bereite Transkript vor…`
+      : 'Sitzung beendet. Bereite Transkript vor…'
   );
-  const transcriptText = result.turns.map(t => `${t.speaker}: ${t.text}`).join('\n');
-  if (transcriptEl) transcriptEl.textContent = transcriptText || 'Kein Transkript empfangen.';
-  if (transcriptWrap) transcriptWrap.style.display = '';
   const personaEl = document.querySelector('.persona-list-item.active');
   const sceneEl = document.querySelector('.scene-btn.active');
-  try {
-    const resp = await fetch('./api/review', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        transcript: transcriptText,
-        model: result.provider, // review model selection is a separate, existing concern -- provider here just tags the source
-        persona_name: personaEl ? personaEl.dataset.name : '',
-        scene: sceneEl ? sceneEl.dataset.key : '',
-        source: 'realtime_voice',
-      }),
-    });
-    const data = await resp.json();
-    setStatus(data.ok ? 'Gespeichert. Siehe Verlauf.' : `Fehler beim Speichern: ${data.error || 'unbekannt'}`);
-  } catch (err) {
-    setStatus(`Fehler beim Speichern: ${err}`);
+  const personaName = personaEl ? personaEl.dataset.name : 'Persona';
+  const completeTurns = result.turns.filter(t => t.text && t.text.trim());
+  const transcriptText = completeTurns.map(t => {
+    const speaker = t.speaker === 'user' ? learnerName : personaName;
+    return `${speaker}: ${t.text.trim()}`;
+  }).join('\n\n');
+
+  const hasLearnerSpeech = completeTurns.some(t => t.speaker === 'user');
+  const hasPersonaSpeech = completeTurns.some(t => t.speaker === 'assistant');
+  if (!hasLearnerSpeech || !hasPersonaSpeech) {
+    if (transcriptEl) transcriptEl.textContent = transcriptText || 'Kein Transkript empfangen.';
+    if (transcriptWrap) transcriptWrap.style.display = '';
+    setStatus(
+      'Transkript unvollständig: Ihre Beiträge oder die Persona wurden nicht erfasst. '
+      + 'Die Sitzung wurde nicht analysiert.'
+    );
+    return;
   }
+
+  if (transcriptWrap) transcriptWrap.style.display = 'none';
+  window.dispatchEvent(new CustomEvent('gesprache:realtime-session-ended', {
+    detail: {
+      id: Date.now(),
+      round: 1,
+      personaName,
+      scene: sceneEl ? sceneEl.dataset.key.replace(/_/g, ' ') : '',
+      turns: completeTurns.filter(t => t.speaker === 'user').length,
+      durationMs: Math.round((result.duration_seconds || 0) * 1000),
+      transcript: transcriptText,
+      model: result.provider === 'xai' ? 'grok' : result.provider,
+      source: 'realtime_voice',
+      feedbackData: null,
+    },
+  }));
+  setStatus('Transkript bereit. „Analysieren“ speichert die Sitzung; ✕ verwirft sie.');
 }
 
 startBtn?.addEventListener('click', async () => {
@@ -1967,6 +2002,7 @@ startBtn?.addEventListener('click', async () => {
     },
     onInputState(state) {
       const labels = {
+        session_ready: 'Anbieter bereit — Mikrofon wird verbunden …',
         speech_started: 'Hört Sie …',
         speech_stopped: 'Verarbeitet Ihre Antwort …',
         understood: 'Verstanden — antwortet …',
@@ -1990,7 +2026,6 @@ startBtn?.addEventListener('click', async () => {
     provider,
     persona: personaEl.dataset.slug,
     scene: sceneEl.dataset.key,
-    learner_name: 'Robert',
   });
 });
 

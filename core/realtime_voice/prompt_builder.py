@@ -89,9 +89,12 @@ def build_realtime_instructions(
     ])
 
     role_anchor = (
-        f"ROLES: You are {persona_name}. The learner you are speaking with "
-        f"is {learner_name}. Stay in character as {persona_name} for the "
-        f"entire session."
+        f"ROLES: You are {persona_name}. The learner's application display "
+        f"name is {learner_name}; use it only for internal context and "
+        f"transcript attribution. Do not address the learner by name unless "
+        f"they introduce themselves during this session or the scenario "
+        f"clearly establishes that you already know one another. Stay in "
+        f"character as {persona_name} for the entire session."
     )
 
     parts = [
@@ -102,5 +105,17 @@ def build_realtime_instructions(
     ]
     if scene_text:
         parts.append(f"=== SCENARIO FOR THIS SESSION ===\n\n{scene_text}")
+
+    # Keep this final so a concrete example in the scene cannot outweigh the
+    # learner's live words merely because the example appears later in the
+    # assembled prompt.
+    parts.append(
+        "=== LIVE CONVERSATION PRIORITY ===\n\n"
+        "The scene above establishes only the setting and practice goal. "
+        "Do not assume the learner chose, requested, or said any example "
+        "destination or detail in it. First listen to the learner's actual "
+        "words, then answer those words. If they are unclear, ask one short "
+        "clarifying question instead of completing the example scenario."
+    )
 
     return "\n\n".join(parts)

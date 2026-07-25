@@ -123,18 +123,18 @@
     "name": "Stefan",
     "emoji": "🚇",
     "role": "U-Bahn Stranger",
-    "description": "Relaxed local, early 30s. Willing to help a tourist but speaks at normal speed. Tests directional vocabulary and city navigation.",
+    "description": "Relaxed local, early 30s. Willing to help a tourist and speaks naturally at a slightly measured pace. Tests directional vocabulary and city navigation.",
     "scenarios": [
       "ask_directions",
       "transit_help",
       "confirm_stop"
     ],
     "speaking_prompts": {
-      "ask_directions": "You're on the street near the Stephansdom and you're not sure which way to walk. Ask Stefan how to get to the Belvedere. He'll tell you — confirm you understood the route.",
-      "transit_help": "You're at a U-Bahn station and confused about which line to take. Ask Stefan which line goes to Schönbrunn and where to change. He'll explain — repeat back to confirm.",
+      "ask_directions": "You're on the street near the Stephansdom and you're not sure which way to walk. Ask Stefan how to get to the destination you choose. He gives only the first essential direction or two, then waits for you to confirm or ask a follow-up question.",
+      "transit_help": "You're at a U-Bahn station and confused about which line to take. Ask Stefan about the destination you choose. He gives the line and only the essential change, then waits for you to repeat it back or ask a follow-up question.",
       "confirm_stop": "You're on the U4 and unsure if you've missed your stop. Ask the person next to you (Stefan) whether Karlsplatz is the next stop. He'll help you figure it out."
     },
-    "style": "casual, normal speed, colloquial",
+    "style": "casual, natural but slightly measured, concise, colloquial",
     "register": "formal_sie",
     "difficulty": "intermediate",
     "warm_up_variants": [

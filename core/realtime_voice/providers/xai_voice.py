@@ -36,6 +36,7 @@ def mint_ephemeral_credential(
     instructions: str,
     voice: str,
     turn_detection: dict,
+    transcription_language: str,
 ) -> dict:
     """Requests a short-lived token from xAI. Returns the minimum
     connection material the browser adapter needs, plus the session config
@@ -77,7 +78,13 @@ def mint_ephemeral_credential(
             "instructions": instructions,
             "turn_detection": turn_detection,
             "audio": {
-                "input": {"format": {"type": "audio/pcm", "rate": 24000}},
+                "input": {
+                    "format": {"type": "audio/pcm", "rate": 24000},
+                    "transcription": {
+                        "model": "grok-transcribe",
+                        "language_hint": transcription_language,
+                    },
+                },
                 "output": {"format": {"type": "audio/pcm", "rate": 24000}},
             },
         },

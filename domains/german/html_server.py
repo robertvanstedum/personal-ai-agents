@@ -15,7 +15,7 @@ from flask import Flask, render_template, redirect, request, jsonify, session
 from flask_cors import CORS
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from core.identity import resolve_user_id
+from core.identity import resolve_user_display_name, resolve_user_id
 from core.realtime_voice.bootstrap import create_bootstrap_blueprint
 
 from german_domain import (
@@ -266,11 +266,13 @@ def gesprache():
         in {"1", "true", "yes", "on"}
         or bool(request.args.get("realtime_voice"))
     )
+    learner_name = resolve_user_display_name(request)
     return render_template("german_gesprache.html", active="gesprache",
                            personas=personas, sessions=sessions,
                            whereby_room_url=WHEREBY_ROOM_URL,
                            whereby_host_available=bool(WHEREBY_HOST_URL),
                            realtime_voice_enabled=realtime_voice_enabled,
+                           learner_name=learner_name,
                            is_guest=_de_is_guest(),
                            tip=_load_tip("german.gesprache"))
 
@@ -548,7 +550,13 @@ def api_analyse_transcript():
     user_id = _de_numeric_user_id()
     if user_id is None:
         return _identity_required_response()
-    result = analyse_session(transcript, persona_name, scene, user_id=user_id)
+    result = analyse_session(
+        transcript,
+        persona_name,
+        scene,
+        user_id=user_id,
+        learner_name=resolve_user_display_name(request),
+    )
     return jsonify({"ok": True, "saved": True, **result})
 
 
@@ -603,7 +611,13 @@ def api_review():
 
     try:
         from providers.review_router import run_review
-        result = run_review(transcript, persona_name, scene, model)
+        result = run_review(
+            transcript,
+            persona_name,
+            scene,
+            model,
+            learner_name=resolve_user_display_name(request),
+        )
     except Exception as e:
         return jsonify({"ok": False, "error": str(e), "model": model}), 502
 
@@ -651,7 +665,14 @@ def gesprache_ai_turn():
         sys.path.insert(0, os.path.dirname(__file__))
         from providers.review_router import run_chat_turn, ProviderError
         _t0 = _t.time()
-        response = run_chat_turn(history, persona, scene, user_turn, model)
+        response = run_chat_turn(
+            history,
+            persona,
+            scene,
+            user_turn,
+            model,
+            learner_name=resolve_user_display_name(request),
+        )
         print(f"[TIMING] ai_turn_ms={int((_t.time()-_t0)*1000)} model={model}", flush=True)
         return jsonify({"ok": True, "response": response, "model": model})
     except Exception as e:

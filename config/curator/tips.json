@@ -33,7 +33,7 @@
   },
   "portuguese.conversas": {
     "active": true,
-    "text": "For the best voice experience, copy the prompt and use it in Grok, Claude, Gemini, or ChatGPT on your phone \u2014 native apps have faster, more natural voice. In-app voice works but has more latency due to API calls."
+    "text": "Start a realtime conversation here for natural voice practice. When the session ends, review the temporary transcript: analyze it to save the session, or discard it."
   },
   "portuguese.escrita": {
     "active": true,
@@ -61,7 +61,7 @@
   },
   "german.gesprache": {
     "active": true,
-    "text": "For the best voice experience, copy the prompt and use it in Grok, Claude, Gemini, or ChatGPT on your phone \u2014 native apps have faster, more natural voice. In-app voice works but has more latency due to API calls."
+    "text": "Start a realtime conversation here for natural voice practice. When the session ends, review the temporary transcript: analyze it to save the session, or discard it."
   },
   "german.schreiben": {
     "active": true,

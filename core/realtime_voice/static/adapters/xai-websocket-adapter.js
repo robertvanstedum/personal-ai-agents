@@ -30,6 +30,9 @@ export class XAIWebSocketAdapter {
     this._playbackQueueTime = 0;
     this._connected = false;
     this._connectTimer = null;
+    this._sessionReady = false;
+    this._micReady = false;
+    this._connectedEmitted = false;
   }
 
   on(eventName, handler) {
@@ -53,30 +56,29 @@ export class XAIWebSocketAdapter {
     const micPromise = this._startMicCapture().catch((err) => {
       micError = err;
     });
+    micPromise.then(() => {
+      if (!micError) this._micReady = true;
+      this._maybeMarkConnected();
+    });
     const protocol = `xai-client-secret.${credentials.ephemeral_token}`;
     this._ws = new WebSocket(
       `wss://api.x.ai/v1/realtime?model=${encodeURIComponent(credentials.model)}`,
       [protocol]
     );
 
-    this._ws.addEventListener("open", async () => {
-      clearTimeout(this._connectTimer);
+    this._ws.addEventListener("open", () => {
       this._ws.send(JSON.stringify({
         type: "session.update",
         session: credentials.session_config || this._sessionConfig,
       }));
-      try {
-        await micPromise;
-        if (micError) throw micError;
-        this._connected = true;
-        this._emit("connected", { provider: "xai" });
-      } catch (err) {
+      micPromise.then(() => {
+        if (!micError) return;
         this._emit("fatal_error", {
           reason: "microphone_unavailable",
-          detail: String(err),
+          detail: String(micError),
         });
         this._ws.close();
-      }
+      });
     });
 
     this._ws.addEventListener("message", (event) => this._handleServerEvent(JSON.parse(event.data)));
@@ -94,6 +96,17 @@ export class XAIWebSocketAdapter {
       this._stopMic();
       this._ws.close();
     }, 12000);
+  }
+
+  _maybeMarkConnected() {
+    if (
+      this._connectedEmitted || !this._sessionReady || !this._micReady ||
+      this._ws?.readyState !== WebSocket.OPEN
+    ) return;
+    clearTimeout(this._connectTimer);
+    this._connected = true;
+    this._connectedEmitted = true;
+    this._emit("connected", { provider: "xai" });
   }
 
   async _startMicCapture() {
@@ -120,7 +133,7 @@ export class XAIWebSocketAdapter {
       const input = event.inputBuffer.getChannelData(0);
       const pcm16 = _float32ToPCM16(input);
       const base64 = _arrayBufferToBase64(pcm16.buffer);
-      this._ws?.readyState === WebSocket.OPEN &&
+      this._sessionReady && this._ws?.readyState === WebSocket.OPEN &&
         this._ws.send(JSON.stringify({ type: "input_audio_buffer.append", audio: base64 }));
     };
     source.connect(this._processor);
@@ -166,6 +179,11 @@ export class XAIWebSocketAdapter {
 
   _handleServerEvent(event) {
     switch (event.type) {
+      case "session.updated":
+        this._sessionReady = true;
+        this._emit("provider_phase", { phase: "session_ready" });
+        this._maybeMarkConnected();
+        break;
       case "input_audio_buffer.speech_started":
         // Manual barge-in: xAI's WebSocket transport does not
         // auto-truncate playback the way OpenAI's WebRTC transport does
@@ -200,6 +218,26 @@ export class XAIWebSocketAdapter {
           completed: true, provider_event_id: event.event_id,
         });
         break;
+      case "response.output_audio_transcript.delta":
+        this._emit("output_transcript", {
+          item_id: event.item_id, text: event.delta, is_delta: true,
+          completed: false, provider_event_id: event.event_id,
+        });
+        break;
+      case "response.output_audio_transcript.done":
+        this._emit("output_transcript", {
+          item_id: event.item_id, text: event.transcript, is_delta: false,
+          completed: true, provider_event_id: event.event_id,
+        });
+        break;
+      case "error": {
+        const detail = event.error?.message || event.error?.code || JSON.stringify(event.error || event);
+        this._emit(this._connected ? "recoverable_error" : "fatal_error", {
+          reason: "provider_error",
+          detail,
+        });
+        break;
+      }
       case "session.created":
         break;
       default:
