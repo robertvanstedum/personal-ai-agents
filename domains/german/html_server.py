@@ -16,6 +16,7 @@ from flask_cors import CORS
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from core.identity import resolve_user_id
+from core.realtime_voice.bootstrap import create_bootstrap_blueprint
 
 from german_domain import (
     GERMAN_DIR,
@@ -51,6 +52,7 @@ from german_domain import (
     build_tutor_brief,
     get_last_human_session_suggestion,
     ROBERT_CHAT_ID,
+    _find_persona_prompt_file,
 )
 
 BASE_DIR  = Path(__file__).parent           # domains/german/
@@ -76,6 +78,49 @@ app = Flask(
 )
 CORS(app)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400  # cache static files for 1 day
+
+
+def _get_realtime_persona(persona_slug: str):
+    """get_persona() callback for the shared realtime-voice bootstrap
+    endpoint -- this function IS the allow-list of permitted personas and
+    scenes for German (build spec Section 5)."""
+    persona = next(
+        (p for p in get_personas() if persona_to_slug(p["name"]) == persona_slug),
+        None,
+    )
+    if not persona:
+        return None
+    prompt_file = _find_persona_prompt_file(persona["name"])
+    prompt_txt = (
+        prompt_file.read_text(encoding="utf-8").strip()
+        if prompt_file and prompt_file.exists()
+        else persona.get("description", f"You are {persona['name']}.")
+    )
+    return {
+        "name": persona["name"],
+        "prompt_txt": prompt_txt,
+        "scenes": persona.get("speaking_prompts", {}),
+    }
+
+
+app.register_blueprint(create_bootstrap_blueprint(
+    domain="german",
+    locale="de-AT",
+    get_persona=_get_realtime_persona,
+    is_production=lambda: os.environ.get("MINIMOI_ROLE") != "development",
+))
+
+_REALTIME_VOICE_STATIC_DIR = REPO_ROOT / "core" / "realtime_voice" / "static"
+
+
+@app.route("/static/realtime-voice/<path:filename>")
+def realtime_voice_static(filename):
+    """Serves the shared realtime-voice JS controller/adapters -- one
+    source of truth in core/realtime_voice/static/, not duplicated per
+    domain. Portuguese registers the identical route (see
+    domains/portuguese/html_server.py)."""
+    from flask import send_from_directory
+    return send_from_directory(_REALTIME_VOICE_STATIC_DIR, filename)
 
 
 def _init_sentry():

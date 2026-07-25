@@ -24,6 +24,7 @@ REPO_ROOT = BASE_DIR.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 from core.get_secret import get_secret
 from core.identity import resolve_user_id
+from core.realtime_voice.bootstrap import create_bootstrap_blueprint
 
 app = Flask(
     __name__,
@@ -32,6 +33,55 @@ app = Flask(
 )
 CORS(app)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400
+
+
+def _get_realtime_persona(persona_slug: str):
+    """get_persona() callback for the shared realtime-voice bootstrap
+    endpoint -- this function IS the allow-list of permitted personas and
+    scenes for Portuguese (build spec Section 5)."""
+    persona = next(
+        (p for p in _load_personas() if _name_to_slug(p["name"]) == persona_slug),
+        None,
+    )
+    if not persona:
+        return None
+    persona_name = persona.get("name", "")
+    matches = list((BASE_DIR / "personas").glob(f"{persona_slug}*.txt"))
+    prompt_txt = (
+        matches[0].read_text(encoding="utf-8").strip()
+        if matches
+        else persona.get("description", f"Você é {persona_name}.")
+    )
+    return {
+        "name": persona_name,
+        "prompt_txt": prompt_txt,
+        "scenes": persona.get("speaking_prompts", {}),
+        # xAI voice intentionally not set here -- no verified per-persona
+        # xAI voice catalog with gender mapping as of this build (only
+        # "eve" is confirmed from xAI's own docs example); falls through
+        # to the shared bootstrap default rather than guessing a name.
+        "voices": {"openai": _persona_voice(persona)},
+    }
+
+
+app.register_blueprint(create_bootstrap_blueprint(
+    domain="portuguese",
+    locale="pt-BR",
+    get_persona=_get_realtime_persona,
+    is_production=lambda: os.environ.get("MINIMOI_ROLE") != "development",
+))
+
+_REALTIME_VOICE_STATIC_DIR = REPO_ROOT / "core" / "realtime_voice" / "static"
+
+
+@app.route("/static/realtime-voice/<path:filename>")
+def realtime_voice_static(filename):
+    """Serves the shared realtime-voice JS controller/adapters -- one
+    source of truth in core/realtime_voice/static/, not duplicated per
+    domain. German registers the identical route (see
+    domains/german/html_server.py)."""
+    from flask import send_from_directory
+    return send_from_directory(_REALTIME_VOICE_STATIC_DIR, filename)
 
 
 def _init_sentry():

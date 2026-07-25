@@ -93,6 +93,23 @@
                       title="Start AI session directly in the browser">
                 ▶ Iniciar sessão
               </button>
+              {% if request.args.get('realtime_voice') %}
+              <!-- Beta: provider-swappable realtime voice session. Feature-
+                   flagged via ?realtime_voice=1, not the default entry
+                   point yet -- old pipeline above is unaffected. -->
+              <select id="realtime-voice-provider" class="gesprache-model-select">
+                <option value="">Provedor em tempo real…</option>
+                <option value="openai">OpenAI (WebRTC)</option>
+                <option value="xai">xAI Grok (WebSocket)</option>
+              </select>
+              <button class="btn-session-start" id="realtime-voice-start-btn">
+                🎙️ Testar tempo real (Beta)
+              </button>
+              <button class="btn-delivery" id="realtime-voice-end-btn" style="display:none">
+                ⏹ Encerrar
+              </button>
+              <div id="realtime-voice-status" class="detail-description" style="margin-top:0.5rem"></div>
+              {% endif %}
               <button class="btn-delivery" id="btn-copy"
                       title="Copy prompt to clipboard">
                 📋 Copiar prompt
@@ -1587,4 +1604,97 @@ document.getElementById('advance-modal').addEventListener('click', e => {
   }
 });
 </script>
+{% if request.args.get('realtime_voice') %}
+<script type="module">
+// Beta: provider-swappable realtime voice session (build spec Section 5).
+// Reads current persona/scene from the DOM rather than this page's own
+// script-level state above -- decoupled on purpose, so this beta wiring
+// can't accidentally break the existing session flow's state.
+import { RealtimeVoiceController } from "/static/realtime-voice/realtime-voice-controller.js";
+
+const startBtn = document.getElementById('realtime-voice-start-btn');
+const endBtn = document.getElementById('realtime-voice-end-btn');
+const providerSelect = document.getElementById('realtime-voice-provider');
+const statusEl = document.getElementById('realtime-voice-status');
+
+let controller = null;
+
+function setStatus(text) {
+  if (statusEl) statusEl.textContent = text;
+}
+
+async function finalizeAndSave(result) {
+  setStatus(
+    result.partial
+      ? `Sessão encerrada (parcial: ${result.partial_reason}). Salvando transcrição…`
+      : 'Sessão encerrada. Salvando transcrição…'
+  );
+  const transcriptText = result.turns.map(t => `${t.speaker}: ${t.text}`).join('\n');
+  const personaEl = document.querySelector('.persona-list-item.active');
+  const sceneEl = document.querySelector('.scene-btn.active');
+  try {
+    const resp = await fetch('/api/pt/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        transcript: transcriptText,
+        model: result.provider,
+        persona_name: personaEl ? personaEl.dataset.name : '',
+        scene: sceneEl ? sceneEl.dataset.key : '',
+        source: 'realtime_voice',
+      }),
+    });
+    const data = await resp.json();
+    setStatus(data.ok ? 'Salvo. Veja o histórico.' : `Erro ao salvar: ${data.error || 'desconhecido'}`);
+  } catch (err) {
+    setStatus(`Erro ao salvar: ${err}`);
+  }
+}
+
+startBtn?.addEventListener('click', async () => {
+  const provider = providerSelect?.value;
+  if (!provider) {
+    setStatus('Selecione um provedor.');
+    return;
+  }
+  const personaEl = document.querySelector('.persona-list-item.active');
+  const sceneEl = document.querySelector('.scene-btn.active');
+  if (!personaEl || !sceneEl) {
+    setStatus('Selecione uma persona e uma cena primeiro.');
+    return;
+  }
+
+  controller = new RealtimeVoiceController({
+    bootstrapUrl: '/api/realtime-voice/bootstrap',
+    onStateChange(state) {
+      setStatus(`Status: ${state}`);
+      startBtn.style.display = (state === 'idle' || state === 'ended') ? '' : 'none';
+      endBtn.style.display = (state === 'idle' || state === 'ended') ? 'none' : '';
+    },
+    onWarning(elapsedSeconds) {
+      setStatus(`⚠️ ${Math.round(elapsedSeconds / 60)} min — a sessão terminará em breve.`);
+    },
+    onStop() {
+      setStatus('⏹ Limite de tempo atingido — encerrando sessão.');
+    },
+    onFatalError(info) {
+      setStatus(`Erro: ${info.reason} — ${info.detail || ''}`);
+    },
+    onFinalize: finalizeAndSave,
+  });
+
+  setStatus('Conectando…');
+  await controller.startSession({
+    provider,
+    persona: personaEl.dataset.slug,
+    scene: sceneEl.dataset.key,
+    learner_name: 'Robert',
+  });
+});
+
+endBtn?.addEventListener('click', () => {
+  controller?.endSession('user_ended');
+});
+</script>
+{% endif %}
 {% endblock %}
