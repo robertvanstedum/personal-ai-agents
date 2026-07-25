@@ -1115,12 +1115,12 @@ document.body.classList.add('parch-mode');
       return;
     }
 
-    // Unlock browser autoplay NOW, while we're still inside the user gesture.
-    // By the time AI + TTS fetches complete (2-4s total), the gesture context
-    // will have expired — this silent play keeps the permission alive.
+    // Ask the browser to unlock audio while the user gesture is active, but do
+    // not block session startup on it. Some browsers leave resume() pending
+    // indefinitely; conversation must still start even when audio cannot.
     try {
       const _ac = new (window.AudioContext || window.webkitAudioContext)();
-      await _ac.resume();
+      _ac.resume().catch(() => {});
       const buf = _ac.createBuffer(1, 1, 22050);
       const src = _ac.createBufferSource();
       src.buffer = buf;
@@ -1133,7 +1133,7 @@ document.body.classList.add('parch-mode');
     // in speakPersona() we avoid the autoplay block that fires after the async fetch.
     try {
       const _sil = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
-      await _sil.play().catch(() => {});
+      _sil.play().catch(() => {});
       _gestureAudio = _sil;  // reuse this unlocked element for all TTS in this session
     } catch (_) {}
 
