@@ -23,7 +23,8 @@ REPO_ROOT = BASE_DIR.parent.parent
 
 sys.path.insert(0, str(REPO_ROOT))
 from core.get_secret import get_secret
-from core.identity import resolve_user_id
+from core.identity import resolve_user_display_name, resolve_user_id
+from core.realtime_voice.bootstrap import create_bootstrap_blueprint
 
 app = Flask(
     __name__,
@@ -32,6 +33,65 @@ app = Flask(
 )
 CORS(app)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400
+
+_PERSONA_VOICES = {
+    "Maria":    {"legacy": "nova", "openai": "marin", "xai": "ara"},
+    "Carlos":   {"legacy": "onyx", "openai": "cedar", "xai": "rex"},
+    "Lucas":    {"legacy": "onyx", "openai": "cedar", "xai": "rex"},
+    "Juliana":  {"legacy": "nova", "openai": "marin", "xai": "ara"},
+}
+
+
+def _persona_voices(name: str) -> dict:
+    return dict(_PERSONA_VOICES.get(
+        name,
+        {"legacy": "alloy", "openai": "alloy", "xai": "sal"},
+    ))
+
+
+def _get_realtime_persona(persona_slug: str):
+    """get_persona() callback for the shared realtime-voice bootstrap
+    endpoint -- this function IS the allow-list of permitted personas and
+    scenes for Portuguese (build spec Section 5)."""
+    persona = next(
+        (p for p in _load_personas() if _name_to_slug(p["name"]) == persona_slug),
+        None,
+    )
+    if not persona:
+        return None
+    persona_name = persona.get("name", "")
+    matches = list((BASE_DIR / "personas").glob(f"{persona_slug}*.txt"))
+    prompt_txt = (
+        matches[0].read_text(encoding="utf-8").strip()
+        if matches
+        else persona.get("description", f"Você é {persona_name}.")
+    )
+    return {
+        "name": persona_name,
+        "prompt_txt": prompt_txt,
+        "scenes": persona.get("speaking_prompts", {}),
+        "voices": _persona_voices(persona_name),
+    }
+
+
+app.register_blueprint(create_bootstrap_blueprint(
+    domain="portuguese",
+    locale="pt-BR",
+    get_persona=_get_realtime_persona,
+    is_production=lambda: os.environ.get("MINIMOI_ROLE") != "development",
+))
+
+_REALTIME_VOICE_STATIC_DIR = REPO_ROOT / "core" / "realtime_voice" / "static"
+
+
+@app.route("/static/realtime-voice/<path:filename>")
+def realtime_voice_static(filename):
+    """Serves the shared realtime-voice JS controller/adapters -- one
+    source of truth in core/realtime_voice/static/, not duplicated per
+    domain. German registers the identical route (see
+    domains/german/html_server.py)."""
+    from flask import send_from_directory
+    return send_from_directory(_REALTIME_VOICE_STATIC_DIR, filename)
 
 
 def _init_sentry():
@@ -59,7 +119,9 @@ _init_sentry()
 
 import datetime as _dt
 
-_PT_DATA_DIR = BASE_DIR / "data"
+_PT_DATA_DIR = Path(
+    os.environ.get("PORTUGUESE_DATA_DIR", str(BASE_DIR / "data"))
+).expanduser()
 
 _PT_UNIVERSAL_HEADER = """\
 === SESSION INSTRUCTIONS — READ BEFORE STARTING ===
@@ -90,7 +152,7 @@ _PT_UNIVERSAL_FOOTER = """\
 PREFERRED: Stop voice mode yourself first, then type "End session. Give me the transcript."
 This prevents the transcript from being read aloud.
 
-VOICE TRIGGER: If Robert says "end session" or "encerrar sessão" while in voice mode —
+VOICE TRIGGER: If the learner says "end session" or "encerrar sessão" while in voice mode —
 1. Stop speaking immediately. Do not say anything else.
 2. Exit voice mode silently.
 3. Output the transcript block below in text only. Do not read it aloud.
@@ -105,7 +167,7 @@ Duration: [number only — e.g. 12]
 Mode: voice
 
 [Character name]: [their exact words]
-Robert: [your exact words]
+[Learner name]: [the learner's exact words]
 [continue alternating turns in order...]
 ---END---
 
@@ -317,10 +379,8 @@ def _name_to_slug(name: str) -> str:
 
 
 def _persona_voice(persona: dict) -> str:
-    name = persona.get("name", "").lower()
-    if name in ("carlos", "lucas") or "masc" in persona.get("style", ""):
-        return "onyx"
-    return "nova"
+    """Legacy TTS compatibility; realtime uses _persona_voices()."""
+    return _persona_voices(persona.get("name", ""))["legacy"]
 
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
@@ -676,6 +736,12 @@ def conversas():
         p["slug"] = _name_to_slug(p["name"])
     sessions = _pt_get_conversas_sessions(user_id, limit=5)
     persona_progress = _get_persona_progress(user_id)
+    realtime_voice_enabled = (
+        os.environ.get("VOICE_REALTIME_UI_ENABLED", "").lower()
+        in {"1", "true", "yes", "on"}
+        or bool(request.args.get("realtime_voice"))
+    )
+    learner_name = resolve_user_display_name(request)
     return render_template(
         "portuguese_conversas.html",
         active="conversas",
@@ -683,6 +749,8 @@ def conversas():
         sessions=sessions,
         persona_progress=persona_progress,
         sessions_per_round=SESSIONS_PER_ROUND,
+        realtime_voice_enabled=realtime_voice_enabled,
+        learner_name=learner_name,
         tip=_load_tip("portuguese.conversas"),
     )
 
@@ -1023,7 +1091,13 @@ def api_pt_review():
         return jsonify({"ok": False, "error": "transcript required"}), 400
     try:
         from review_router import run_review, ProviderError
-        result = run_review(transcript, persona_name, scene, model)
+        result = run_review(
+            transcript,
+            persona_name,
+            scene,
+            model,
+            learner_name=resolve_user_display_name(request),
+        )
 
         date_str = _dt.datetime.now().strftime("%Y-%m-%d")
         duration_min = max(1, len(transcript) // 300)
@@ -1087,7 +1161,15 @@ def api_pt_chat():
         for p in personas:
             p["slug"] = _name_to_slug(p["name"])
         _t0 = _t.time()
-        response = run_chat_turn(history, persona, scene, user_turn, model, personas)
+        response = run_chat_turn(
+            history,
+            persona,
+            scene,
+            user_turn,
+            model,
+            personas,
+            learner_name=resolve_user_display_name(request),
+        )
         print(f"[TIMING] pt_ai_turn_ms={int((_t.time()-_t0)*1000)} model={model}", flush=True)
         return jsonify({"ok": True, "response": response, "model": model})
     except Exception as e:
@@ -1156,7 +1238,7 @@ def api_pt_persona_prompt():
 
     role_anchor = (
         f"ROLES: You are {persona_name}. "
-        f"The learner you are speaking with is Robert. "
+        f"The learner you are speaking with is {resolve_user_display_name(request)}. "
         f"Stay in character as {persona_name} for the entire session."
     )
 

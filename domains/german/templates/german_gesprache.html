@@ -65,9 +65,36 @@
               <summary class="prompt-details-summary">Prompt anzeigen</summary>
               <div class="prompt-text" id="prompt-text" contenteditable="true"></div>
             </details>
-            <!-- Model selector — visible before session starts -->
+            {% if realtime_voice_enabled %}
+            <div class="realtime-session-launch">
+              <div class="realtime-session-heading">Realtime-Gespräch</div>
+              <p class="realtime-session-note">
+                Die Persona spricht zuerst. Das Transkript erscheint erst nach dem Ende.
+              </p>
+              <div class="realtime-session-controls">
+                <label for="realtime-voice-provider" class="gesprache-model-label">Anbieter</label>
+                <select id="realtime-voice-provider" class="gesprache-model-select">
+                  <option value="openai" selected>OpenAI Realtime</option>
+                  <option value="xai">Grok Voice</option>
+                </select>
+                <button class="btn-session-start" id="realtime-voice-start-btn">
+                  🎙️ Sitzung starten
+                </button>
+                <button class="btn-delivery" id="realtime-voice-end-btn" style="display:none">
+                  ⏹ Beenden
+                </button>
+              </div>
+              <div id="realtime-voice-status" class="detail-description realtime-session-status"></div>
+              <details id="realtime-transcript" class="prompt-details-block" style="display:none">
+                <summary class="prompt-details-summary">Transkript</summary>
+                <pre id="realtime-transcript-text" class="prompt-text"></pre>
+              </details>
+            </div>
+            <details class="legacy-session-fallback">
+              <summary>Ältere Sitzung als Fallback</summary>
+            {% endif %}
             <div class="gesprache-model-row" style="margin-bottom:0.75rem">
-              <label class="gesprache-model-label">Modell</label>
+              <label class="gesprache-model-label">Textmodell</label>
               <select id="gesprache-model" class="gesprache-model-select">
                 <option value="grok" selected>Grok</option>
                 <option value="openai">OpenAI</option>
@@ -76,8 +103,8 @@
             </div>
             <div class="prompt-actions">
               <button class="btn-session-start" id="start-session-btn"
-                      title="Start AI session directly in the browser">
-                ▶ Sitzung starten
+                      title="Start the older request-based session">
+                ▶ Ältere Sitzung starten
               </button>
               <button class="btn-delivery" id="btn-copy"
                       title="Copy prompt to clipboard — no app switching">
@@ -94,6 +121,9 @@
                 💾 Als .txt
               </button>
             </div>
+            {% if realtime_voice_enabled %}
+            </details>
+            {% endif %}
             <div class="prompt-toast" id="prompt-toast" style="display:none"></div>
             {% if tip %}<div class="gesprache-inline-tip"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="vertical-align:middle;margin-right:4px"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7z"/></svg>{{ tip }}</div>{% endif %}
           </div>
@@ -128,7 +158,7 @@
             <pre class="session-brief-text" id="session-brief-text"></pre>
           </details>
 
-          <!-- Session cards — auto-saved on Beenden from KI-Sitzung -->
+          <!-- Temporary session cards — persisted only after Analysieren -->
           <div id="session-cards-list"></div>
 
           <details class="nach-sitzung-details" id="transcript-details" open>
@@ -748,16 +778,7 @@ document.body.classList.add('parch-mode');
   let _currentObjUrl  = null;  // active object URL so we can revoke it on stop
 
   function _personaVoice(p) {
-    // Pick OpenAI TTS voice by persona gender.
-    // Female: nova (bright, warm — good for café/pharmacy/Airbnb personas)
-    // Male:   onyx (deep, warm — good for hotel/formal personas)
-    if (!p) return 'nova';
-    const n = (p.name || '').toLowerCase();
-    if (n.includes('herr') || n.includes('fischer') || n.includes('huber') ||
-        n.includes('dr.') || n.includes('hans') || n.includes('klaus')) {
-      return 'onyx';
-    }
-    return 'nova';
+    return p?.voices?.legacy || 'alloy';
   }
 
   async function speakPersona(text, p) {
@@ -853,12 +874,12 @@ document.body.classList.add('parch-mode');
       `<div class="session-saved-meta">✓ ${session.personaName} · Runde ${session.round} · ${session.turns} Züge · ${dur}</div>` +
       sceneLine +
       `<div class="session-saved-actions">` +
-        `<button class="btn-session-card-transcript">Transkript ▾</button>` +
+        `<button class="btn-session-card-transcript">Transkript ▲</button>` +
         teilenBtn +
         `<button class="btn-session-card-delete" title="Delete session">✕</button>` +
         `<button class="btn-session-card-analyse">Analysieren →</button>` +
       `</div>` +
-      `<div class="session-card-transcript-wrap" style="display:none">` +
+      `<div class="session-card-transcript-wrap">` +
         `<pre class="session-card-transcript-text">${session.transcript}</pre>` +
       `</div>`;
 
@@ -911,7 +932,7 @@ document.body.classList.add('parch-mode');
           persona_name: session.personaName,
           scene: session.scene,
           model: session.model,
-          source: 'ki_sitzung',
+          source: session.source || 'ki_sitzung',
         }),
       });
       const data = await res.json();
@@ -938,9 +959,9 @@ document.body.classList.add('parch-mode');
         `<div class="session-saved-meta session-saved-analysiert">` +
           `${analysedLabel} — ${session.personaName} · ${formatDuration(session.durationMs)}` +
           ` <button class="btn-session-card-anzeigen">Feedback</button>` +
-          ` <button class="btn-session-card-anzeigen btn-session-card-transcript-post">Transkript ▾</button>` +
+          ` <button class="btn-session-card-anzeigen btn-session-card-transcript-post">Transkript ▲</button>` +
         `</div>` +
-        `<div class="session-card-transcript-wrap" style="display:none">` +
+        `<div class="session-card-transcript-wrap">` +
           `<pre class="session-card-transcript-text">${session.transcript}</pre>` +
         `</div>`;
       card.querySelector('.btn-session-card-transcript-post').addEventListener('click', () => {
@@ -1012,6 +1033,39 @@ document.body.classList.add('parch-mode');
     return div;
   }
 
+  async function parseBackendResponse(response, operation) {
+    let data = {};
+    try {
+      data = await response.json();
+    } catch (parseError) {
+      const error = new Error(`${operation} returned an unreadable response`);
+      error.status = response.status;
+      error.backendDetail = 'invalid JSON response';
+      throw error;
+    }
+
+    if (!response.ok || data.ok === false || data.error) {
+      const error = new Error(`${operation} failed`);
+      error.status = response.status;
+      error.backendDetail = data.error || `HTTP ${response.status}`;
+      throw error;
+    }
+    return data;
+  }
+
+  function reportBackendError(operation, error, userMessage) {
+    console.error('[Gespräche] Backend request failed', {
+      operation,
+      status: error && error.status ? error.status : null,
+      detail: error && error.backendDetail ? error.backendDetail : String(error),
+    });
+    const statusEl = document.getElementById('session-listen-status');
+    if (statusEl) {
+      statusEl.textContent = `⚠ ${userMessage}`;
+      statusEl.className = 'session-listen-status listening-error';
+    }
+  }
+
   async function sendTurn(userText) {
     const p = personas[selectedIdx];
     if (!p) return;
@@ -1042,27 +1096,37 @@ document.body.classList.add('parch-mode');
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ history: sessionHistory, persona, scene, model, user_turn: userText }),
       });
-      const data = await res.json();
+      const data = await parseBackendResponse(res, 'ai_turn');
       ai_ms = Date.now() - t0_ai;
       const reply = (data.response || '').trim();
+      if (!reply) {
+        const error = new Error('ai_turn returned an empty response');
+        error.status = res.status;
+        error.backendDetail = 'empty AI response';
+        throw error;
+      }
 
       if (thinkingEl) thinkingEl.remove();
-      if (reply) {
-        sessionHistory.push({ role: 'assistant', content: reply });
-        sessionTranscript.push(personaName + ': ' + reply);
-        appendChatMessage(personaName, reply, true);
-        const t0_tts = Date.now();
-        await speakPersona(reply);
-        tts_ms = Date.now() - t0_tts;
-      }
+      sessionHistory.push({ role: 'assistant', content: reply });
+      sessionTranscript.push(personaName + ': ' + reply);
+      appendChatMessage(personaName, reply, true);
+      const t0_tts = Date.now();
+      await speakPersona(reply);
+      tts_ms = Date.now() - t0_tts;
     } catch (err) {
       if (thinkingEl) thinkingEl.remove();
+      reportBackendError(
+        'ai_turn',
+        err,
+        'Backend-Fehler — bitte später erneut versuchen.'
+      );
+      return { ok: false, ai_ms, tts_ms };
     }
     finally {
       if (_modelLbl) _modelLbl.textContent = _modelOrig;
       sessionSendBtn.disabled = false;
     }
-    return { ai_ms, tts_ms };
+    return { ok: true, ai_ms, tts_ms };
   }
 
   startSessionBtn.addEventListener('click', async () => {
@@ -1072,12 +1136,12 @@ document.body.classList.add('parch-mode');
       return;
     }
 
-    // Unlock browser autoplay NOW, while we're still inside the user gesture.
-    // By the time AI + TTS fetches complete (2-4s total), the gesture context
-    // will have expired — this silent play keeps the permission alive.
+    // Ask the browser to unlock audio while the user gesture is active, but do
+    // not block session startup on it. Some browsers leave resume() pending
+    // indefinitely; conversation must still start even when audio cannot.
     try {
       const _ac = new (window.AudioContext || window.webkitAudioContext)();
-      await _ac.resume();
+      _ac.resume().catch(() => {});
       const buf = _ac.createBuffer(1, 1, 22050);
       const src = _ac.createBufferSource();
       src.buffer = buf;
@@ -1090,7 +1154,7 @@ document.body.classList.add('parch-mode');
     // in speakPersona() we avoid the autoplay block that fires after the async fetch.
     try {
       const _sil = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
-      await _sil.play().catch(() => {});
+      _sil.play().catch(() => {});
       _gestureAudio = _sil;  // reuse this unlocked element for all TTS in this session
     } catch (_) {}
 
@@ -1121,7 +1185,14 @@ document.body.classList.add('parch-mode');
       speechSynthesis.speak(_utter);
     } catch (_) {}
 
-    await sendTurn('');
+    const openingTurn = await sendTurn('');
+    if (!openingTurn.ok) {
+      sessionActive = false;
+      startSessionBtn.style.display = '';
+      startSessionBtn.disabled = false;
+      document.getElementById('persona-detail').classList.remove('session-active');
+      return;
+    }
     // Opening turn done — start continuous listening loop
     if (window._sessionListenStart) window._sessionListenStart();
   });
@@ -1333,13 +1404,19 @@ document.body.classList.add('parch-mode');
           formData.append('audio', blob, `turn.${ext}`);
           const t0_transcribe = Date.now();
           const res  = await fetch('/api/transcribe', { method: 'POST', body: formData });
-          const data = await res.json();
+          const data = await parseBackendResponse(res, 'transcribe');
           const transcribe_ms = Date.now() - t0_transcribe;
           if (data.transcript) {
             const text = data.transcript.trim();
             if (text && sessionActive) {
               setListenStatus('denkt nach…', 'listening-processing');
-              const { ai_ms, tts_ms } = await sendTurn(text);
+              const turnResult = await sendTurn(text);
+              if (!turnResult.ok) {
+                loopRunning = false;
+                turnInFlight = false;
+                break;
+              }
+              const { ai_ms, tts_ms } = turnResult;
               const total_ms = Date.now() - t_turn_start;
               console.log(`[turn] transcribe:${transcribe_ms}ms  ai:${ai_ms}ms  tts:${tts_ms}ms  total:${total_ms}ms`);
               // Wait for TTS to finish before re-listening
@@ -1347,8 +1424,12 @@ document.body.classList.add('parch-mode');
             }
           }
         } catch (e) {
-          setListenStatus('⚠ Transkription fehlgeschlagen — API-Schlüssel prüfen', 'listening-error');
-          await new Promise(r => setTimeout(r, 3000));
+          reportBackendError(
+            'transcribe',
+            e,
+            'Transkription nicht verfügbar — bitte später erneut versuchen.'
+          );
+          loopRunning = false;
         }
         turnInFlight = false;
 
@@ -1809,6 +1890,148 @@ document.body.classList.add('parch-mode');
     } catch (_) {}
   });
 
+  window.addEventListener('gesprache:realtime-session-ended', (event) => {
+    const session = event.detail;
+    if (!session?.transcript) return;
+    savedSessions.push(session);
+    renderSessionCard(session);
+    requestAnimationFrame(() => {
+      const panel = document.getElementById('persona-detail');
+      const cards = document.getElementById('session-cards-list');
+      if (!cards) return;
+      if (panel) {
+        const panelRect = panel.getBoundingClientRect();
+        const cardsRect = cards.getBoundingClientRect();
+        panel.scrollBy({ top: cardsRect.top - panelRect.top, behavior: 'smooth' });
+      } else {
+        cards.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
 })();
 </script>
+{% if realtime_voice_enabled %}
+<script type="module">
+// Beta: provider-swappable realtime voice session (build spec Section 5).
+// Reads current persona/scene from the DOM rather than the existing
+// IIFE's closure variables above -- decoupled on purpose, so this beta
+// wiring can't accidentally break the existing session flow's state.
+import { RealtimeVoiceController } from "./static/realtime-voice/realtime-voice-controller.js?v=20260725-transcript1";
+
+const startBtn = document.getElementById('realtime-voice-start-btn');
+const endBtn = document.getElementById('realtime-voice-end-btn');
+const providerSelect = document.getElementById('realtime-voice-provider');
+const statusEl = document.getElementById('realtime-voice-status');
+const transcriptWrap = document.getElementById('realtime-transcript');
+const transcriptEl = document.getElementById('realtime-transcript-text');
+const learnerName = {{ learner_name|tojson }};
+
+let controller = null;
+
+function setStatus(text) {
+  if (statusEl) statusEl.textContent = text;
+}
+
+async function finalizeAndSave(result) {
+  setStatus(
+    result.partial
+      ? `Sitzung beendet (unvollständig: ${result.partial_reason}). Bereite Transkript vor…`
+      : 'Sitzung beendet. Bereite Transkript vor…'
+  );
+  const personaEl = document.querySelector('.persona-list-item.active');
+  const sceneEl = document.querySelector('.scene-btn.active');
+  const personaName = personaEl ? personaEl.dataset.name : 'Persona';
+  const completeTurns = result.turns.filter(t => t.text && t.text.trim());
+  const transcriptText = completeTurns.map(t => {
+    const speaker = t.speaker === 'user' ? learnerName : personaName;
+    return `${speaker}: ${t.text.trim()}`;
+  }).join('\n\n');
+
+  const hasLearnerSpeech = completeTurns.some(t => t.speaker === 'user');
+  const hasPersonaSpeech = completeTurns.some(t => t.speaker === 'assistant');
+  if (!hasLearnerSpeech || !hasPersonaSpeech) {
+    if (transcriptEl) transcriptEl.textContent = transcriptText || 'Kein Transkript empfangen.';
+    if (transcriptWrap) transcriptWrap.style.display = '';
+    setStatus(
+      'Transkript unvollständig: Ihre Beiträge oder die Persona wurden nicht erfasst. '
+      + 'Die Sitzung wurde nicht analysiert.'
+    );
+    return;
+  }
+
+  if (transcriptWrap) transcriptWrap.style.display = 'none';
+  window.dispatchEvent(new CustomEvent('gesprache:realtime-session-ended', {
+    detail: {
+      id: Date.now(),
+      round: 1,
+      personaName,
+      scene: sceneEl ? sceneEl.dataset.key.replace(/_/g, ' ') : '',
+      turns: completeTurns.filter(t => t.speaker === 'user').length,
+      durationMs: Math.round((result.duration_seconds || 0) * 1000),
+      transcript: transcriptText,
+      model: result.provider === 'xai' ? 'grok' : result.provider,
+      source: 'realtime_voice',
+      feedbackData: null,
+    },
+  }));
+  setStatus('Transkript bereit. „Analysieren“ speichert die Sitzung; ✕ verwirft sie.');
+}
+
+startBtn?.addEventListener('click', async () => {
+  const provider = providerSelect?.value;
+  if (!provider) {
+    setStatus('Bitte einen Anbieter wählen.');
+    return;
+  }
+  const personaEl = document.querySelector('.persona-list-item.active');
+  const sceneEl = document.querySelector('.scene-btn.active');
+  if (!personaEl || !sceneEl) {
+    setStatus('Bitte zuerst Persona und Szene wählen.');
+    return;
+  }
+  if (transcriptWrap) transcriptWrap.style.display = 'none';
+  if (transcriptEl) transcriptEl.textContent = '';
+
+  controller = new RealtimeVoiceController({
+    bootstrapUrl: './api/realtime-voice/bootstrap',
+    onStateChange(state) {
+      setStatus(`Status: ${state}`);
+      startBtn.style.display = (state === 'idle' || state === 'ended') ? '' : 'none';
+      endBtn.style.display = (state === 'idle' || state === 'ended') ? 'none' : '';
+    },
+    onInputState(state) {
+      const labels = {
+        session_ready: 'Anbieter bereit — Mikrofon wird verbunden …',
+        speech_started: 'Hört Sie …',
+        speech_stopped: 'Verarbeitet Ihre Antwort …',
+        understood: 'Verstanden — antwortet …',
+      };
+      setStatus(labels[state] || `Status: ${state}`);
+    },
+    onWarning(elapsedSeconds) {
+      setStatus(`⚠️ ${Math.round(elapsedSeconds / 60)} Min. — Sitzung endet bald automatisch.`);
+    },
+    onStop() {
+      setStatus('⏹ Zeitlimit erreicht — Sitzung wird beendet.');
+    },
+    onFatalError(info) {
+      setStatus(`Fehler: ${info.reason} — ${info.detail || ''}`);
+    },
+    onFinalize: finalizeAndSave,
+  });
+
+  setStatus('Verbinde…');
+  await controller.startSession({
+    provider,
+    persona: personaEl.dataset.slug,
+    scene: sceneEl.dataset.key,
+  });
+});
+
+endBtn?.addEventListener('click', () => {
+  controller?.endSession('user_ended');
+});
+</script>
+{% endif %}
 {% endblock %}

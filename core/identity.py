@@ -34,3 +34,23 @@ def resolve_user_id(request: Request) -> int | str | None:
             pass
     username = request.headers.get("X-Minimoi-Username")
     return username if username else None
+
+
+def resolve_user_display_name(request: Request, default: str = "Learner") -> str:
+    """Return a prompt-safe display name forwarded by the authenticated portal.
+
+    The portal strips all client-supplied ``X-Minimoi-*`` headers before adding
+    its own values. Domain apps still validate the value here because display
+    names appear in transcripts and model instructions.
+    """
+    raw = (
+        request.headers.get("X-Minimoi-Display-Name")
+        or request.headers.get("X-Minimoi-Username")
+        or ""
+    ).strip()
+    cleaned = "".join(
+        ch for ch in raw
+        if ch.isalnum() or ch in {" ", "-", "'", "’"}
+    )
+    cleaned = " ".join(cleaned.split())[:80].strip()
+    return cleaned or default

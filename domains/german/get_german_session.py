@@ -317,7 +317,7 @@ Duration: [number only — e.g. 12]
 Mode: voice
 
 [Character name]: [their exact words]
-Robert: [your exact words]
+[Learner name]: [the learner's exact words]
 [continue alternating turns in order...]
 ---END---
 

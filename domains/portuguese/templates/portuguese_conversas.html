@@ -79,9 +79,36 @@
               <summary class="prompt-details-summary">Ver prompt</summary>
               <div class="prompt-text" id="prompt-text" contenteditable="true"></div>
             </details>
-            <!-- Model selector -->
+            {% if realtime_voice_enabled %}
+            <div class="realtime-session-launch">
+              <div class="realtime-session-heading">Conversa em tempo real</div>
+              <p class="realtime-session-note">
+                A persona fala primeiro. A transcrição aparece somente depois do fim.
+              </p>
+              <div class="realtime-session-controls">
+                <label for="realtime-voice-provider" class="gesprache-model-label">Provedor</label>
+                <select id="realtime-voice-provider" class="gesprache-model-select">
+                  <option value="openai" selected>OpenAI Realtime</option>
+                  <option value="xai">Grok Voice</option>
+                </select>
+                <button class="btn-session-start" id="realtime-voice-start-btn">
+                  🎙️ Iniciar sessão
+                </button>
+                <button class="btn-delivery" id="realtime-voice-end-btn" style="display:none">
+                  ⏹ Encerrar
+                </button>
+              </div>
+              <div id="realtime-voice-status" class="detail-description realtime-session-status"></div>
+              <details id="realtime-transcript" class="prompt-details-block" style="display:none">
+                <summary class="prompt-details-summary">Transcrição</summary>
+                <pre id="realtime-transcript-text" class="prompt-text"></pre>
+              </details>
+            </div>
+            <details class="legacy-session-fallback">
+              <summary>Sessão anterior como alternativa</summary>
+            {% endif %}
             <div class="gesprache-model-row" style="margin-bottom:0.75rem">
-              <label class="gesprache-model-label">Modelo</label>
+              <label class="gesprache-model-label">Modelo de texto</label>
               <select id="conversas-model" class="gesprache-model-select">
                 <option value="claude" selected>Claude</option>
                 <option value="grok">Grok</option>
@@ -91,7 +118,7 @@
             <div class="prompt-actions">
               <button class="btn-session-start" id="start-session-btn"
                       title="Start AI session directly in the browser">
-                ▶ Iniciar sessão
+                ▶ Iniciar sessão anterior
               </button>
               <button class="btn-delivery" id="btn-copy"
                       title="Copy prompt to clipboard">
@@ -106,6 +133,9 @@
                 💾 Como .txt
               </button>
             </div>
+            {% if realtime_voice_enabled %}
+            </details>
+            {% endif %}
             <div class="prompt-toast" id="prompt-toast" style="display:none"></div>
             {% if tip %}<div class="conversas-inline-tip">💡 {{ tip }}</div>{% endif %}
           </div>
@@ -140,7 +170,7 @@
             <pre class="session-brief-text" id="session-brief-text"></pre>
           </details>
 
-          <!-- Session cards — auto-saved on Encerrar from KI-Sessão -->
+          <!-- Temporary session cards — persisted only after Analisar -->
           <div id="session-cards-list"></div>
 
           <details class="nach-sitzung-details" id="transcript-details" open>
@@ -717,12 +747,12 @@ document.body.classList.add('parch-mode');
       `<div class="session-saved-meta">✓ ${session.personaName} · Rodada ${session.round} · ${session.turns} turnos · ${dur}</div>` +
       sceneLine +
       `<div class="session-saved-actions">` +
-        `<button class="btn-session-card-transcript">Transcrição ▾</button>` +
+        `<button class="btn-session-card-transcript">Transcrição ▲</button>` +
         teilenBtn +
         `<button class="btn-session-card-delete" title="Delete session">✕</button>` +
         `<button class="btn-session-card-analyse">Analisar →</button>` +
       `</div>` +
-      `<div class="session-card-transcript-wrap" style="display:none">` +
+      `<div class="session-card-transcript-wrap">` +
         `<pre class="session-card-transcript-text">${session.transcript}</pre>` +
       `</div>`;
 
@@ -775,7 +805,7 @@ document.body.classList.add('parch-mode');
           persona_name: session.personaName,
           scene: session.scene,
           model: session.model,
-          source: 'ki_sessao',
+          source: session.source || 'ki_sessao',
         }),
       });
       const data = await res.json();
@@ -797,9 +827,9 @@ document.body.classList.add('parch-mode');
         `<div class="session-saved-meta session-saved-analysiert">` +
           `✓ Analisado — ${session.personaName} · ${formatDuration(session.durationMs)}` +
           ` <button class="btn-session-card-anzeigen">Feedback</button>` +
-          ` <button class="btn-session-card-anzeigen btn-session-card-transcript-post">Transcrição ▾</button>` +
+          ` <button class="btn-session-card-anzeigen btn-session-card-transcript-post">Transcrição ▲</button>` +
         `</div>` +
-        `<div class="session-card-transcript-wrap" style="display:none">` +
+        `<div class="session-card-transcript-wrap">` +
           `<pre class="session-card-transcript-text">${session.transcript}</pre>` +
         `</div>`;
       card.querySelector('.btn-session-card-transcript-post').addEventListener('click', () => {
@@ -1544,6 +1574,17 @@ document.body.classList.add('parch-mode');
   // ── Init ─────────────────────────────────────────────────────────────────────
   if (personas.length > 0) selectPersona(0, { scroll: false });
 
+  window.addEventListener('conversas:realtime-session-ended', (event) => {
+    const session = event.detail;
+    if (!session?.transcript) return;
+    savedSessions.push(session);
+    renderSessionCard(session);
+    requestAnimationFrame(() => {
+      const cards = document.getElementById('session-cards-list');
+      if (cards) cards.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
 })();
 
 // ── Round management ──────────────────────────────────────────────────────────
@@ -1587,4 +1628,127 @@ document.getElementById('advance-modal').addEventListener('click', e => {
   }
 });
 </script>
+{% if realtime_voice_enabled %}
+<script type="module">
+// Provider-swappable realtime voice session (build spec Section 5).
+// Reads current persona/scene from the DOM rather than this page's own
+// script-level state above -- decoupled on purpose, so this beta wiring
+// can't accidentally break the existing session flow's state.
+import { RealtimeVoiceController } from "./static/realtime-voice/realtime-voice-controller.js?v=20260725-transcript1";
+
+const startBtn = document.getElementById('realtime-voice-start-btn');
+const endBtn = document.getElementById('realtime-voice-end-btn');
+const providerSelect = document.getElementById('realtime-voice-provider');
+const statusEl = document.getElementById('realtime-voice-status');
+const transcriptWrap = document.getElementById('realtime-transcript');
+const transcriptEl = document.getElementById('realtime-transcript-text');
+const learnerName = {{ learner_name|tojson }};
+
+let controller = null;
+
+function setStatus(text) {
+  if (statusEl) statusEl.textContent = text;
+}
+
+async function finalizeAndSave(result) {
+  setStatus(
+    result.partial
+      ? `Sessão encerrada (parcial: ${result.partial_reason}). Preparando transcrição…`
+      : 'Sessão encerrada. Preparando transcrição…'
+  );
+  const personaEl = document.querySelector('.persona-list-item.active');
+  const sceneEl = document.querySelector('.scene-btn.active');
+  const personaName = personaEl ? personaEl.dataset.name : 'Persona';
+  const completeTurns = result.turns.filter(t => t.text && t.text.trim());
+  const transcriptText = completeTurns.map(t => {
+    const speaker = t.speaker === 'user' ? learnerName : personaName;
+    return `${speaker}: ${t.text.trim()}`;
+  }).join('\n\n');
+
+  const hasLearnerSpeech = completeTurns.some(t => t.speaker === 'user');
+  const hasPersonaSpeech = completeTurns.some(t => t.speaker === 'assistant');
+  if (!hasLearnerSpeech || !hasPersonaSpeech) {
+    if (transcriptEl) transcriptEl.textContent = transcriptText || 'Nenhuma transcrição recebida.';
+    if (transcriptWrap) transcriptWrap.style.display = '';
+    setStatus(
+      'Transcrição incompleta: sua fala ou a fala da persona não foi capturada. '
+      + 'A sessão não foi analisada.'
+    );
+    return;
+  }
+
+  if (transcriptWrap) transcriptWrap.style.display = 'none';
+  window.dispatchEvent(new CustomEvent('conversas:realtime-session-ended', {
+    detail: {
+      id: Date.now(),
+      round: 1,
+      personaName,
+      scene: sceneEl ? sceneEl.dataset.key.replace(/_/g, ' ') : '',
+      turns: completeTurns.filter(t => t.speaker === 'user').length,
+      durationMs: Math.round((result.duration_seconds || 0) * 1000),
+      transcript: transcriptText,
+      model: result.provider === 'xai' ? 'grok' : result.provider,
+      source: 'realtime_voice',
+      feedbackData: null,
+    },
+  }));
+  setStatus('Transcrição pronta. “Analisar” salva a sessão; ✕ descarta.');
+}
+
+startBtn?.addEventListener('click', async () => {
+  const provider = providerSelect?.value;
+  if (!provider) {
+    setStatus('Selecione um provedor.');
+    return;
+  }
+  const personaEl = document.querySelector('.persona-list-item.active');
+  const sceneEl = document.querySelector('.scene-btn.active');
+  if (!personaEl || !sceneEl) {
+    setStatus('Selecione uma persona e uma cena primeiro.');
+    return;
+  }
+  if (transcriptWrap) transcriptWrap.style.display = 'none';
+  if (transcriptEl) transcriptEl.textContent = '';
+
+  controller = new RealtimeVoiceController({
+    bootstrapUrl: './api/realtime-voice/bootstrap',
+    onStateChange(state) {
+      setStatus(`Status: ${state}`);
+      startBtn.style.display = (state === 'idle' || state === 'ended') ? '' : 'none';
+      endBtn.style.display = (state === 'idle' || state === 'ended') ? 'none' : '';
+    },
+    onInputState(state) {
+      const labels = {
+        session_ready: 'Provedor pronto — conectando o microfone …',
+        speech_started: 'Ouvindo você …',
+        speech_stopped: 'Processando sua resposta …',
+        understood: 'Entendido — respondendo …',
+      };
+      setStatus(labels[state] || `Status: ${state}`);
+    },
+    onWarning(elapsedSeconds) {
+      setStatus(`⚠️ ${Math.round(elapsedSeconds / 60)} min — a sessão terminará em breve.`);
+    },
+    onStop() {
+      setStatus('⏹ Limite de tempo atingido — encerrando sessão.');
+    },
+    onFatalError(info) {
+      setStatus(`Erro: ${info.reason} — ${info.detail || ''}`);
+    },
+    onFinalize: finalizeAndSave,
+  });
+
+  setStatus('Conectando…');
+  await controller.startSession({
+    provider,
+    persona: personaEl.dataset.slug,
+    scene: sceneEl.dataset.key,
+  });
+});
+
+endBtn?.addEventListener('click', () => {
+  controller?.endSession('user_ended');
+});
+</script>
+{% endif %}
 {% endblock %}

@@ -15,7 +15,8 @@ from flask import Flask, render_template, redirect, request, jsonify, session
 from flask_cors import CORS
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from core.identity import resolve_user_id
+from core.identity import resolve_user_display_name, resolve_user_id
+from core.realtime_voice.bootstrap import create_bootstrap_blueprint
 
 from german_domain import (
     GERMAN_DIR,
@@ -51,6 +52,7 @@ from german_domain import (
     build_tutor_brief,
     get_last_human_session_suggestion,
     ROBERT_CHAT_ID,
+    _find_persona_prompt_file,
 )
 
 BASE_DIR  = Path(__file__).parent           # domains/german/
@@ -69,6 +71,26 @@ WHEREBY_HOST_URL  = os.environ.get("WHEREBY_HOST_URL", "")
 # Where tutor brief tokens are persisted (readable/writable by html_server.py)
 PORTAL_AUTH_DIR   = REPO_ROOT / "minimoi_portal" / "auth"
 
+_PERSONA_VOICES = {
+    "Maria":        {"legacy": "nova",  "openai": "marin", "xai": "ara"},
+    "Frau Berger":  {"legacy": "nova",  "openai": "marin", "xai": "ara"},
+    "Herr Fischer": {"legacy": "onyx",  "openai": "cedar", "xai": "rex"},
+    "Dr. Huber":    {"legacy": "onyx",  "openai": "cedar", "xai": "rex"},
+    "Stefan":       {"legacy": "onyx",  "openai": "cedar", "xai": "rex"},
+    "Frau Novak":   {"legacy": "nova",  "openai": "marin", "xai": "ara"},
+    "Klaus":        {"legacy": "onyx",  "openai": "cedar", "xai": "rex"},
+    "Georg":        {"legacy": "onyx",  "openai": "cedar", "xai": "rex"},
+    "Anna":         {"legacy": "nova",  "openai": "marin", "xai": "ara"},
+}
+
+
+def _persona_voices(name: str) -> dict:
+    return dict(_PERSONA_VOICES.get(
+        name,
+        {"legacy": "alloy", "openai": "alloy", "xai": "sal"},
+    ))
+
+
 app = Flask(
     __name__,
     template_folder=str(BASE_DIR / "templates"),
@@ -76,6 +98,50 @@ app = Flask(
 )
 CORS(app)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400  # cache static files for 1 day
+
+
+def _get_realtime_persona(persona_slug: str):
+    """get_persona() callback for the shared realtime-voice bootstrap
+    endpoint -- this function IS the allow-list of permitted personas and
+    scenes for German (build spec Section 5)."""
+    persona = next(
+        (p for p in get_personas() if persona_to_slug(p["name"]) == persona_slug),
+        None,
+    )
+    if not persona:
+        return None
+    prompt_file = _find_persona_prompt_file(persona["name"])
+    prompt_txt = (
+        prompt_file.read_text(encoding="utf-8").strip()
+        if prompt_file and prompt_file.exists()
+        else persona.get("description", f"You are {persona['name']}.")
+    )
+    return {
+        "name": persona["name"],
+        "prompt_txt": prompt_txt,
+        "scenes": persona.get("speaking_prompts", {}),
+        "voices": _persona_voices(persona["name"]),
+    }
+
+
+app.register_blueprint(create_bootstrap_blueprint(
+    domain="german",
+    locale="de-AT",
+    get_persona=_get_realtime_persona,
+    is_production=lambda: os.environ.get("MINIMOI_ROLE") != "development",
+))
+
+_REALTIME_VOICE_STATIC_DIR = REPO_ROOT / "core" / "realtime_voice" / "static"
+
+
+@app.route("/static/realtime-voice/<path:filename>")
+def realtime_voice_static(filename):
+    """Serves the shared realtime-voice JS controller/adapters -- one
+    source of truth in core/realtime_voice/static/, not duplicated per
+    domain. Portuguese registers the identical route (see
+    domains/portuguese/html_server.py)."""
+    from flask import send_from_directory
+    return send_from_directory(_REALTIME_VOICE_STATIC_DIR, filename)
 
 
 def _init_sentry():
@@ -192,12 +258,21 @@ def gesprache():
     for p in personas:
         slug = persona_to_slug(p["name"])
         p["slug"] = slug
+        p["voices"] = _persona_voices(p["name"])
         p["memory"] = get_persona_memory(user_key, slug, create=user_id is not None)
     sessions = get_gesprache_sessions(limit=5, user_id=user_id)
+    realtime_voice_enabled = (
+        os.environ.get("VOICE_REALTIME_UI_ENABLED", "").lower()
+        in {"1", "true", "yes", "on"}
+        or bool(request.args.get("realtime_voice"))
+    )
+    learner_name = resolve_user_display_name(request)
     return render_template("german_gesprache.html", active="gesprache",
                            personas=personas, sessions=sessions,
                            whereby_room_url=WHEREBY_ROOM_URL,
                            whereby_host_available=bool(WHEREBY_HOST_URL),
+                           realtime_voice_enabled=realtime_voice_enabled,
+                           learner_name=learner_name,
                            is_guest=_de_is_guest(),
                            tip=_load_tip("german.gesprache"))
 
@@ -475,7 +550,13 @@ def api_analyse_transcript():
     user_id = _de_numeric_user_id()
     if user_id is None:
         return _identity_required_response()
-    result = analyse_session(transcript, persona_name, scene, user_id=user_id)
+    result = analyse_session(
+        transcript,
+        persona_name,
+        scene,
+        user_id=user_id,
+        learner_name=resolve_user_display_name(request),
+    )
     return jsonify({"ok": True, "saved": True, **result})
 
 
@@ -504,6 +585,11 @@ def api_transcribe():
         print(f"[TIMING] transcribe_ms={int((_t.time()-_t0)*1000)}", flush=True)
         return jsonify({"transcript": response})
     except Exception as e:
+        app.logger.error(
+            "German transcription failed: error_type=%s error=%s",
+            type(e).__name__,
+            e,
+        )
         return jsonify({"error": str(e)}), 500
 
 
@@ -525,7 +611,13 @@ def api_review():
 
     try:
         from providers.review_router import run_review
-        result = run_review(transcript, persona_name, scene, model)
+        result = run_review(
+            transcript,
+            persona_name,
+            scene,
+            model,
+            learner_name=resolve_user_display_name(request),
+        )
     except Exception as e:
         return jsonify({"ok": False, "error": str(e), "model": model}), 502
 
@@ -573,10 +665,23 @@ def gesprache_ai_turn():
         sys.path.insert(0, os.path.dirname(__file__))
         from providers.review_router import run_chat_turn, ProviderError
         _t0 = _t.time()
-        response = run_chat_turn(history, persona, scene, user_turn, model)
+        response = run_chat_turn(
+            history,
+            persona,
+            scene,
+            user_turn,
+            model,
+            learner_name=resolve_user_display_name(request),
+        )
         print(f"[TIMING] ai_turn_ms={int((_t.time()-_t0)*1000)} model={model}", flush=True)
         return jsonify({"ok": True, "response": response, "model": model})
     except Exception as e:
+        app.logger.error(
+            "German AI turn failed: model=%s error_type=%s error=%s",
+            model,
+            type(e).__name__,
+            e,
+        )
         return jsonify({"ok": False, "error": str(e), "model": model}), 502
 
 

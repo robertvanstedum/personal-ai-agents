@@ -1933,7 +1933,7 @@ _UNIVERSAL_FOOTER = """\
 PREFERRED: Stop voice mode yourself first, then type "End session. Give me the transcript."
 This prevents the transcript from being read aloud.
 
-VOICE TRIGGER: If Robert says "end session" while in voice mode —
+VOICE TRIGGER: If the learner says "end session" while in voice mode —
 1. Stop speaking immediately. Do not say anything else.
 2. Exit voice mode silently.
 3. Output the transcript block below in text only. Do not read it aloud.
@@ -1948,7 +1948,7 @@ Duration: [number only — e.g. 12]
 Mode: voice
 
 [Character name]: [their exact words]
-Robert: [your exact words]
+[Learner name]: [the learner's exact words]
 [continue alternating turns in order...]
 ---END---
 
@@ -2105,8 +2105,32 @@ def get_last_human_session_suggestion() -> str:
 _SESSIONS_DIR = GERMAN_DIR / "sessions"
 
 _REVIEW_SYSTEM_PROMPT = """\
-You are a German language tutor reviewing a voice practice session between a student (Robert) and an AI persona.
+You are a German language tutor reviewing a voice practice session between LEARNER_NAME and an AI persona.
 Analyze the transcript and return a single JSON object — no markdown, no explanation, just the JSON.
+
+Review LEARNER_NAME's turns for errors, not the persona's turns. Refer to the
+learner as LEARNER_NAME, not as "the student", in summaries and strengths.
+Every explanation
+must account for every material change between the original and correction.
+For example, if both verb conjugation and the subject pronoun change, explain
+both; do not label the issue as only word order when the word order is already
+correct.
+
+Spoken transcripts may contain speech-recognition artifacts. Do not report a
+phonetic rendering, filler, punctuation difference, or likely homophone as a
+learner error when the surrounding exchange shows that the intended expression
+was understood correctly. For example, "Uh, oh, vier" or "Ufer" may be a
+transcription of the subway line "U4" when the persona immediately responds
+about the U4. If the evidence is ambiguous, omit the item from "errors" rather
+than inventing a correction. Do not infer statement-versus-question intent from
+transcript punctuation alone: speech recognition may supply the punctuation,
+and verb-first word order may already be correct for a question.
+
+Realtime transcripts may contain clipped turns when one speaker interrupts
+another. Never judge conversational appropriateness from a response to an
+incomplete preceding turn, and ignore isolated fragments when a nearby complete
+turn makes them likely recognition noise. Every correction and the next-focus
+recommendation must be grounded in independently clear transcript evidence.
 
 Required schema:
 {
@@ -2114,17 +2138,21 @@ Required schema:
   "errors": [
     {
       "type": "gender|word_order|missing_article|verb_conjugation|vocabulary|register",
-      "original": "what Robert said",
+      "original": "what LEARNER_NAME said",
       "correction": "correct form",
       "explanation": "one sentence why",
       "context": "full sentence from transcript"
     }
   ],
-  "strengths": ["specific things Robert did well"],
+  "strengths": ["specific things LEARNER_NAME did well"],
   "next_focus": "one concrete grammar or vocabulary focus for the next session",
   "topics": ["main topics or themes discussed (e.g. food, weather, directions)"],
   "vocabulary": ["notable German words or phrases used or introduced in the session"]
 }"""
+
+
+def build_review_system_prompt(learner_name: str) -> str:
+    return _REVIEW_SYSTEM_PROMPT.replace("LEARNER_NAME", learner_name)
 
 
 def _parse_transcript_turns(text: str) -> list:
@@ -2162,7 +2190,13 @@ def _next_session_filename(date_str: str) -> str:
     return f"{date_str}_{n:03d}"
 
 
-def analyse_session(transcript: str, persona_name: str, scene: str, user_id=None) -> dict:
+def analyse_session(
+    transcript: str,
+    persona_name: str,
+    scene: str,
+    user_id=None,
+    learner_name: str = "Learner",
+) -> dict:
     """Analyse a pasted Grok Voice transcript. Returns {session_id, feedback}."""
     user_id = _require_numeric_user_id(user_id)
 
@@ -2193,7 +2227,7 @@ def analyse_session(transcript: str, persona_name: str, scene: str, user_id=None
             resp = client.messages.create(
                 model="claude-sonnet-4-6",
                 max_tokens=2000,
-                system=_REVIEW_SYSTEM_PROMPT,
+                system=build_review_system_prompt(learner_name),
                 messages=[{"role": "user", "content": user_prompt}],
             )
             raw_text = resp.content[0].text.strip()
