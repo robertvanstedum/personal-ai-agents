@@ -504,6 +504,11 @@ def api_transcribe():
         print(f"[TIMING] transcribe_ms={int((_t.time()-_t0)*1000)}", flush=True)
         return jsonify({"transcript": response})
     except Exception as e:
+        app.logger.error(
+            "German transcription failed: error_type=%s error=%s",
+            type(e).__name__,
+            e,
+        )
         return jsonify({"error": str(e)}), 500
 
 
@@ -577,6 +582,12 @@ def gesprache_ai_turn():
         print(f"[TIMING] ai_turn_ms={int((_t.time()-_t0)*1000)} model={model}", flush=True)
         return jsonify({"ok": True, "response": response, "model": model})
     except Exception as e:
+        app.logger.error(
+            "German AI turn failed: model=%s error_type=%s error=%s",
+            model,
+            type(e).__name__,
+            e,
+        )
         return jsonify({"ok": False, "error": str(e), "model": model}), 502
 
 
