@@ -6,7 +6,7 @@ Loads OAuth 1.0a credentials and makes a simple API call
 to confirm authentication works before building bootstrap logic.
 
 Usage:
-    python x_auth.py
+    python scripts/x/x_auth.py
 """
 
 import keyring

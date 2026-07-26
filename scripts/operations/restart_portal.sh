@@ -1,6 +1,6 @@
 #!/bin/bash
 # restart_portal.sh — Stop and restart the minimoi portal launchd agent.
-# Usage: ./restart_portal.sh
+# Usage: ./scripts/operations/restart_portal.sh
 
 LABEL="com.vanstedum.minimoi-portal"
 PLIST="$HOME/Library/LaunchAgents/${LABEL}.plist"
