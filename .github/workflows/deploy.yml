@@ -145,6 +145,7 @@ jobs:
               "curl -sf https://raw.githubusercontent.com/robertvanstedum/personal-ai-agents/main/data/guild/build_queue.json -o /opt/minimoi/data/guild/build_queue.json",
               "cd /opt/minimoi",
               "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 332704997792.dkr.ecr.us-east-1.amazonaws.com",
+              "export MINIMOI_IMAGE_TAG=${{ needs.build-push.outputs.image_tag }}",
               "docker-compose -f /opt/minimoi/docker-compose.prod.yml pull",
               "docker-compose -f /opt/minimoi/docker-compose.prod.yml up -d --remove-orphans",
               "sleep 15",

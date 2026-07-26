@@ -1,5 +1,7 @@
 # Production docker-compose — EC2 deployment
-# Uses ECR images; data files must exist under /opt/minimoi/data/ on the host.
+# Uses one immutable ECR commit tag per release. CI exports MINIMOI_IMAGE_TAG;
+# manual use defaults to latest unless scripts/deploy.sh receives a tag.
+# Data files must exist under /opt/minimoi/data/ on the host.
 # Run: docker-compose -f docker-compose.prod.yml up -d
 # Update images: scripts/deploy.sh
 
@@ -17,7 +19,7 @@ services:
       - "127.0.0.1:5432:5432"
 
   curator:
-    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/curator:latest
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/curator:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-curator
     restart: unless-stopped
     env_file: /opt/minimoi/.env
@@ -42,7 +44,7 @@ services:
       - postgres
 
   german:
-    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/mein-deutsch:latest
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/mein-deutsch:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-german
     restart: unless-stopped
     env_file: /opt/minimoi/.env
@@ -58,7 +60,7 @@ services:
       - "127.0.0.1:8767:8767"
 
   portuguese:
-    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portuguese:latest
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portuguese:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-portuguese
     restart: unless-stopped
     env_file: /opt/minimoi/.env
@@ -75,7 +77,7 @@ services:
       - postgres
 
   portal:
-    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:latest
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-portal
     restart: unless-stopped
     env_file: /opt/minimoi/.env
@@ -98,7 +100,7 @@ services:
       - postgres
 
   system-bot:
-    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/system-bot:latest
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/system-bot:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-system-bot
     restart: unless-stopped
     env_file: /opt/minimoi/.env
@@ -115,7 +117,7 @@ services:
       - german
 
   cos-bot:
-    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-bot:latest
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-bot:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-cos-bot
     restart: unless-stopped
     env_file: /opt/minimoi/.env
@@ -129,7 +131,7 @@ services:
       - cos-scheduler
 
   cos-scheduler:
-    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:latest
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-cos-scheduler
     restart: unless-stopped
     env_file: /opt/minimoi/.env
