@@ -222,7 +222,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         img.get("src")
         for img in soup.select('.tour-shot img[src^="/static/tour/"]')
     ]
-    assert len(images) == 19
+    assert len(images) == 24
     assert "/static/tour/curator-research-tools.jpg" not in images
     assert all(
         (static_root / src.split("?", 1)[0].removeprefix("/static/")).is_file()
@@ -243,15 +243,20 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         section = soup.select_one(f"section#{section_id}")
         assert section.select_one("img").get("src") == expected_src
     assert len(soup.select("section#curator .tour-shot")) == 4
-    assert len(soup.select("section#german .tour-shot")) == 5
+    assert len(soup.select("section#german .tour-shot")) == 10
     assert [
         img.get("src") for img in soup.select("section#german .tour-shot img")
     ] == [
         "/static/tour/german-landing.jpg",
         "/static/tour/german-lesen-choices.jpg",
+        "/static/tour/german-lesen-wien.png",
         "/static/tour/german-lesen-article.jpg",
         "/static/tour/german-lesen-translation.jpg",
         "/static/tour/german-lesen-correction.jpg",
+        "/static/tour/german-gespraeche-current.jpg",
+        "/static/tour/german-schreiben-current.jpg",
+        "/static/tour/german-woerter-current.jpg",
+        "/static/tour/german-archiv-current.jpg",
     ]
     assert len(soup.select("section#portuguese .tour-shot")) == 6
     assert len(soup.select("section#guild .tour-shot")) == 2
