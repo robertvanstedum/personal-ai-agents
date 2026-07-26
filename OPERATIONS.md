@@ -334,7 +334,7 @@ is the fully verified picture (live `launchctl`/`docker`/`crontab`/`lsof` inspec
 | German | 8767 | launchd `com.vanstedum.german-html-server` | Plus hourly time-gated `com.vanstedum.lesen-refresh` |
 | System bot (Mac-local standby) | — | launchd `com.vanstedum.system-bot` | **Distinct from the EC2 system-bot container** — code implements a deliberate standby/production token switch so the two never collide on the same Telegram token |
 | cloudflared, Colima | — | launchd | Tunnel + Docker runtime |
-| Usage report | cron 08:00 + 10:00 | `track_usage_wrapper.sh` | Same script twice — likely retry redundancy, not two different jobs |
+| Usage report | cron 08:00 + 10:00 | `scripts/track_usage_wrapper.sh` | No matching crontab entry was present on the Mac when checked 2026-07-26; restore deliberately if this report is still wanted |
 
 Dev-only by design, never migrating: Ollama (local models, `gemma3:1b`), the OpenClaw
 gateway, and the nightly private-repo sync (`scripts/sync_private_repo.sh`, 02:00
