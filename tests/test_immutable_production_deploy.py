@@ -1,8 +1,7 @@
 """Production must deploy the image set built for the triggering commit."""
 
 from pathlib import Path
-
-import yaml
+import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,12 +18,16 @@ APP_SERVICES = (
 
 
 def test_production_app_images_share_one_configurable_commit_tag():
-    compose = yaml.safe_load(
-        (ROOT / "docker-compose.prod.yml").read_text(encoding="utf-8")
-    )
+    compose = (ROOT / "docker-compose.prod.yml").read_text(encoding="utf-8")
 
     for service in APP_SERVICES:
-        image = compose["services"][service]["image"]
+        match = re.search(
+            rf"(?ms)^  {re.escape(service)}:\n"
+            rf".*?^    image:\s*(\S+)\s*$",
+            compose,
+        )
+        assert match is not None
+        image = match.group(1)
         assert image.startswith(f"{REGISTRY}/")
         assert image.endswith(":${MINIMOI_IMAGE_TAG:-latest}")
 
