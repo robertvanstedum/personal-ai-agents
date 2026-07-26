@@ -47,3 +47,28 @@ def test_main_workflow_exports_built_tag_before_pull_and_up():
 
     assert export in workflow
     assert workflow.index(export) < workflow.index(pull) < workflow.index(up)
+
+
+def test_main_workflow_waits_for_compose_sync_before_deploying():
+    workflow = (ROOT / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
+    sync_step = workflow[
+        workflow.index("- name: Push docker-compose.prod.yml to EC2") :
+        workflow.index("- name: Deploy on EC2")
+    ]
+
+    assert "--query 'Command.CommandId'" in sync_step
+    assert "aws ssm get-command-invocation" in sync_step
+    assert 'if [ "$STATUS" != "Success" ]' in sync_step
+    assert "brief wait is sufficient" not in sync_step
+
+
+def test_remote_deploy_stops_on_failure_and_manages_unused_images():
+    workflow = (ROOT / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
+    deploy_step = workflow[workflow.index("- name: Deploy on EC2") :]
+
+    assert '"set -e",' in deploy_step
+    assert '"docker image prune -af",' in deploy_step
+    assert deploy_step.index('"docker image prune -af",') < deploy_step.index(
+        '"docker-compose -f /opt/minimoi/docker-compose.prod.yml pull",'
+    )
+    assert "docker inspect --format={{.Config.Image}}" in deploy_step
