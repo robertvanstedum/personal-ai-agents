@@ -80,9 +80,60 @@ const html = `<!doctype html>
           "https://github.com/robertvanstedum/personal-ai-agents/blob/main/"
         ).href;
       }
+      const isVisualBlock = (element) =>
+        element.matches("table, figure, .mermaid") ||
+        element.querySelector("img, svg");
+      for (const heading of [
+        ...document.querySelectorAll("h1, h2, h3, h4"),
+      ]) {
+        const blocks = [heading];
+        let cursor = heading.nextElementSibling;
+        let foundVisual = false;
+        while (
+          cursor &&
+          !cursor.matches("h1, h2, h3, h4") &&
+          blocks.length < 4
+        ) {
+          blocks.push(cursor);
+          if (isVisualBlock(cursor)) {
+            foundVisual = true;
+            break;
+          }
+          cursor = cursor.nextElementSibling;
+        }
+        if (!foundVisual && blocks.length > 2) {
+          blocks.splice(2);
+        }
+        if (blocks.length < 2) continue;
+        const group = document.createElement("section");
+        group.className = "keep-section-start";
+        heading.before(group);
+        for (const block of blocks) group.append(block);
+      }
+      for (const label of [...document.querySelectorAll("p")]) {
+        if (label.closest(".keep-section-start")) continue;
+        const meaningfulNodes = [...label.childNodes].filter(
+          (node) => node.nodeType !== Node.TEXT_NODE || node.textContent.trim()
+        );
+        const onlyNode = meaningfulNodes[0];
+        if (
+          meaningfulNodes.length !== 1 ||
+          onlyNode.nodeType !== Node.ELEMENT_NODE ||
+          onlyNode.tagName !== "STRONG"
+        ) {
+          continue;
+        }
+        const visual = label.nextElementSibling;
+        if (!visual || !isVisualBlock(visual)) continue;
+        const group = document.createElement("section");
+        group.className = "keep-section-start";
+        label.before(group);
+        group.append(label, visual);
+      }
       window.__PDF_RENDER_RESULT__ = {
         ok: true,
-        diagrams: document.querySelectorAll(".mermaid svg").length
+        diagrams: document.querySelectorAll(".mermaid svg").length,
+        keptSectionStarts: document.querySelectorAll(".keep-section-start").length
       };
     } catch (error) {
       window.__PDF_RENDER_RESULT__ = {
