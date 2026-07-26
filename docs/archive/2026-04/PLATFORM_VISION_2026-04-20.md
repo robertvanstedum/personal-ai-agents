@@ -1,3 +1,9 @@
+> **Historical design record — April 20, 2026.** This document captures the
+> platform thinking when German became mini-moi's second domain. It remains
+> useful context, but it is not the current platform vision. See
+> [README.md](../../../README.md), [ARCHITECTURE.md](../../../ARCHITECTURE.md),
+> and [ROADMAP.md](../../../ROADMAP.md) for the current description.
+
 # Mini-moi — Platform Vision
 ## The Personal Growth Intelligence System
 **Version:** 1.2  

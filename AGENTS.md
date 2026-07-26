@@ -1,8 +1,8 @@
 # Ways of working — personal-ai-agents
 
-Live document. Founding original: [WAYS_OF_WORKING.md](WAYS_OF_WORKING.md) —
+Live document. Founding original: [WAYS_OF_WORKING.md](docs/WAYS_OF_WORKING.md) —
 this file is the current, maintained practice; the founding document records
-where it came from and why. Kept at root, not archived, since it's still
+where it came from and why. Kept in `docs/`, not archived, since it's still
 referenced as the origin of current practice.
 
 Read `_NewDomains/PROJECT_STATE.md` first before starting any work.
@@ -42,8 +42,9 @@ The roles are durable even as which agent fills them changes:
 ## Protected files
 
 Do not modify without explicit instruction from Robert:
-`README.md`, `CHANGELOG.md`, `OPERATIONS.md`, `ARCHITECTURE.md`,
-`ROADMAP.md`, `WHITEBOARD.md`, `docs/*`.
+`README.md`, `OPERATIONS.md`, `ARCHITECTURE.md`, `ROADMAP.md`, `CLAUDE.md`,
+`docs/*` (covers `CHANGELOG.md`, `DECISIONS.md`, `WAYS_OF_WORKING.md`, and
+the other docs consolidated there — see repo-root-cleanup, item 140).
 
 ## Signal Store State (as of 2026-03-12)
 

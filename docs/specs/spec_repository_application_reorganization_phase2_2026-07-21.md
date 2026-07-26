@@ -214,7 +214,9 @@ git-tracked source copy in `infrastructure/launchd/`. Still worth
 correcting the path for whenever it's next installed, but there is no live
 schedule to break today.
 
-**What moves beyond the original manifest:** `VISION.md`,
+**What moves beyond the original manifest:** `VISION.md` (retained as the
+historical `docs/archive/2026-04/PLATFORM_VISION_2026-04-20.md`, with a
+discoverable archive/index link rather than presented as current),
 `WAYS_OF_WORKING.md`, `BACKLOG.md`, `CHANGELOG.md`, `DECISIONS.md`,
 `PROJECT_STATE.md`, `CREDENTIALS_SETUP.md` → `docs/` (if a root document is
 loaded by the application today, update the application to load its new
