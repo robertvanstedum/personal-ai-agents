@@ -182,6 +182,81 @@ with the concrete order for this manifest):
 File the separate `telegram_bot.py` → `run_curator_cron.sh` broken-reference
 issue at any point; it does not block or get blocked by any slice above.
 
+### Revised scope — 2026-07-26, after Codex review
+
+Codex reviewed the manifest above (PR #134) and Robert clarified the actual
+goal: a visitor-facing clean root, not a perfectly-organized one on the
+first pass. This **widens** scope beyond the original 12-file/3-directory
+list — essentially all remaining root documentation moves too, not just the
+9 files originally scoped — while keeping the same bounded-slice safety
+discipline (identify callers, back up data-bearing items, move and update
+callers together, test, keep rollback).
+
+**Target root, per this revision:**
+`README.md`, `ARCHITECTURE.md`, `OPERATIONS.md`, `ROADMAP.md`, plus
+standard repository metadata that must or conventionally should stay —
+`LICENSE`, `.gitignore`, `AGENTS.md`.
+
+**One correction to Codex's list, from Claude Code:** `CLAUDE.md` must also
+stay at root, not move. It's omitted from Codex's kept-list, but Claude
+Code's own harness auto-loads project instructions from `CLAUDE.md` at the
+repo root by convention — moving it silently breaks automatic
+project-context loading for every future Claude Code session. This isn't a
+cosmetic preference; it's a functional dependency the harness itself has on
+this exact path, not discoverable by grepping application code. Confirmed
+and agreed by Robert.
+
+**One risk downgraded, from Claude Code:** the telegram-webhook launchd job
+flagged earlier as needing careful, atomic plist updates is **not
+currently installed/loaded** — `launchctl list` shows nothing for it, and
+no plist exists at `~/Library/LaunchAgents/` on this Mac, only the
+git-tracked source copy in `infrastructure/launchd/`. Still worth
+correcting the path for whenever it's next installed, but there is no live
+schedule to break today.
+
+**What moves beyond the original manifest:** `VISION.md`,
+`WAYS_OF_WORKING.md`, `BACKLOG.md`, `CHANGELOG.md`, `DECISIONS.md`,
+`PROJECT_STATE.md`, `CREDENTIALS_SETUP.md` → `docs/` (if a root document is
+loaded by the application today, update the application to load its new
+path in the same commit and test that screen — none of these 7 were found
+to be application-loaded during Phase 2A, but re-verify per Codex's rule
+before each moves).
+
+**Where things land, per Codex's revised guidance (broad folders now,
+perfect taxonomy later):**
+- Root shell scripts → `scripts/operations/` (not `scripts/ops/` as
+  originally proposed — aligning with Codex's exact wording).
+- Root Python utilities → `scripts/`, `tools/`, or an existing application
+  package.
+- Runtime state, caches, memory files, historical data → a dedicated
+  ignored and mounted location such as `data/runtime/<domain>/` — never
+  casually renamed or deleted, backup before move.
+- `config/` splits only as much as safety requires: live configuration
+  stays deployable, documentation moves to `docs/`, templates move to an
+  operational/configuration folder.
+- `static/` moves to an archive folder first (not deleted), pending
+  confirmation it isn't an active Cloudflare Pages/hosting source — this
+  was not checked during Phase 2A and must be confirmed before this slice.
+
+**Revised slice order (supersedes the 8-slice order above):**
+1. Low-risk supporting Markdown → `docs/`, preserving the 6 core
+   root documents (README, ARCHITECTURE, OPERATIONS, ROADMAP, AGENTS,
+   CLAUDE).
+2. Stateless utilities and genuinely unused files.
+3. Operational scripts, with launchd/crontab updates and compatibility
+   wrappers only where an external scheduler can't be changed atomically.
+4. X/Curator code and its state, moved together.
+5. Live runtime data/cache paths, through mounted storage, with backup,
+   parity checks, and rollback.
+6. Archive superseded static content, after the external-hosting check.
+7. Re-run a root inventory; confirm no scripts, caches, memory files, or
+   historical data remain at the visitor-facing root.
+
+Acceptance test: a visitor opening the repository sees the README and the
+core architecture/operations/roadmap material; implementation and runtime
+artifacts are organized behind folders; production behavior and retained
+data are unchanged.
+
 ## Phase 2B: Approved vertical migrations
 
 The dependency map determines the final order. The expected sequence is:
