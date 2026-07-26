@@ -969,12 +969,12 @@
     "id": 140,
     "spec_title": "Repository Application Reorganization Phase 2",
     "spec_file": "spec_repository_application_reorganization_phase2_2026-07-21.md",
-    "status": "backlog",
+    "status": "in_build",
     "github_issue": null,
     "priority": "normal",
-    "blocked_reason": "Future work. Phase 2A is read-only; no file move is authorized until Robert approves the dependency manifest and the first vertical slice.",
-    "last_transition_at": "2026-07-21T00:00:00Z",
-    "notes": "PR #102 completed the preliminary standalone script/test move. Remaining scope is the production application cluster, beginning with a full dependency map. One slice and one production verification at a time. Do not combine the pre-existing x_adapter.py defect without explicit approval."
+    "blocked_reason": null,
+    "last_transition_at": "2026-07-26T00:00:00Z",
+    "notes": "Phase 2A dependency map delivered 2026-07-26 -- see updated spec docs/specs/spec_repository_application_reorganization_phase2_2026-07-21.md and _working/PLAN_repo_root_cleanup_2026-07-26.md for full manifest. Handed to Codex for independent review before Phase 2B vertical-slice implementation begins. One slice and one production verification at a time per the spec's proposed slice order."
   },
   {
     "id": 143,
