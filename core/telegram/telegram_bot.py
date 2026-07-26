@@ -65,6 +65,8 @@ from german_domain import (
 )
 
 BASE_DIR = Path(__file__).parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+CURATOR_CRON_SCRIPT = PROJECT_ROOT / "scripts" / "operations" / "run_curator_cron.sh"
 processed_callbacks = set()
 
 # ─── Voice command patterns ───────────────────────────────────────────────────
@@ -371,9 +373,9 @@ async def cmd_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await update.message.reply_text("⏳ Running curator now, this takes a few minutes...")
     out, err, rc = await _arun(
-        [str(BASE_DIR / 'run_curator_cron.sh')],
+        [str(CURATOR_CRON_SCRIPT)],
         timeout=600,
-        cwd=str(BASE_DIR),
+        cwd=str(PROJECT_ROOT),
     )
     if rc == 0:
         await update.message.reply_text("✅ Curator run complete. Sending briefing...")
@@ -481,8 +483,8 @@ def execute_voice_command(command, args, chat_id, token):
         send_message(token, chat_id, "⏳ Running curator — this takes a few minutes...")
         def _run():
             r = subprocess.run(
-                [str(BASE_DIR / 'run_curator_cron.sh')],
-                capture_output=True, cwd=BASE_DIR, timeout=600
+                [str(CURATOR_CRON_SCRIPT)],
+                capture_output=True, cwd=PROJECT_ROOT, timeout=600
             )
             if r.returncode == 0:
                 send_message(token, chat_id, "✅ Curator run complete. Sending briefing...")
@@ -2357,9 +2359,9 @@ def handle_webhook_command(message, token):
     elif text == '/run':
         send_message(token, str(chat_id), "⏳ Running curator now, this takes a few minutes...")
         result = subprocess.run(
-            [str(BASE_DIR / 'run_curator_cron.sh')],
+            [str(CURATOR_CRON_SCRIPT)],
             capture_output=True,
-            cwd=BASE_DIR,
+            cwd=PROJECT_ROOT,
             timeout=600
         )
         if result.returncode == 0:
