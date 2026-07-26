@@ -13,6 +13,14 @@ not on a fixed schedule.
   [Architecture](../../ARCHITECTURE.md), and
   [Roadmap](../../ROADMAP.md).
 
+## February 2026 Curator briefings
+
+- **[Early Curator briefing snapshots](2026-02/curator-briefings/)** — four
+  static HTML editions from February 10–13, 2026, retained as historical
+  examples. These are not the production Curator archive. Production
+  briefings live in the separately mounted runtime archive and are not
+  changed by this documentation move.
+
 ## 2026-07-21
 
 - **[ROADMAP.md](2026-07/ROADMAP.md)** — superseded by the root
