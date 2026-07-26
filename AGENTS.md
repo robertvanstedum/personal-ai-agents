@@ -54,11 +54,11 @@ Ground truth for `curator_signals.json`. Do not modify historical signals.
 - **Tweet-only signals** (no destination URL): `destination_text` intentionally absent — nothing to fetch, not a bug
 - **URL signals**: `destination_text` populated, `destination_text_source` set
 - **Backfill complete.** Treat all 398 historical signals as read-only.
-- `x_pull_incremental.py` handles all new signals going forward
+- `scripts/x/x_pull_incremental.py` handles all new signals going forward
 - `x_pull_state.json` is the authoritative pull tracker — `last_pull_at: 2026-03-13T01:53:39Z`
 
 ### Implementation decisions — do not "fix" without production data
 
-- **50-char minimum filter in `x_to_article.py`**: Intentional. Filters noise from very short tweet text. Do not tighten without observing production false-positive rate.
+- **50-char minimum filter in `scripts/x/x_to_article.py`**: Intentional. Filters noise from very short tweet text. Do not tighten without observing production false-positive rate.
 - **`[:200]` truncation on tweet text in summary field**: Intentional cap. Keeps scoring prompt size predictable. Do not remove without benchmarking token cost impact.
 - **`--limit=N` does not advance `last_pull_at`**: Intentional. Prevents test runs from poisoning the production early-stop marker. Production cron always runs without `--limit`.

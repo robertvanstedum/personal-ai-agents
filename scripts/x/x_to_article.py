@@ -26,9 +26,9 @@ Output schema (matches fetch_feed() in curator_rss_v2.py):
     content_type — 'x_bookmark' (identifies origin for dedup and tracking)
 
 Usage:
-    python x_to_article.py               # summary + 3 sample articles
-    python x_to_article.py --show=10     # more samples
-    python x_to_article.py --json        # full JSON dump of all articles
+    python -m scripts.x.x_to_article               # summary + 3 sample articles
+    python -m scripts.x.x_to_article --show=10     # more samples
+    python -m scripts.x.x_to_article --json        # full JSON dump of all articles
 """
 
 import argparse
@@ -39,7 +39,7 @@ from typing import Optional
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-PROJECT_DIR  = Path(__file__).parent
+PROJECT_DIR  = Path(__file__).resolve().parents[2]
 SIGNALS_FILE = PROJECT_DIR / 'data' / 'curator' / 'curator_signals.json'
 
 # Minimum tweet text length to include a tweet-only signal in the scoring pool.

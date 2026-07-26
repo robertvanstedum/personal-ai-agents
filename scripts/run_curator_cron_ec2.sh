@@ -40,8 +40,8 @@ echo "$LOG_PREFIX Starting briefing at $(date -u)"
 
 # ── Pull new X bookmarks ──────────────────────────────────────────────────────
 echo "$LOG_PREFIX Pulling X bookmarks..."
-docker exec minimoi-curator python x_pull_incremental.py 2>&1 || \
-  echo "$LOG_PREFIX x_pull_incremental.py failed — continuing with existing signals"
+docker exec minimoi-curator python -m scripts.x.x_pull_incremental 2>&1 || \
+  echo "$LOG_PREFIX scripts.x.x_pull_incremental failed — continuing with existing signals"
 
 # ── Run curator pipeline, then send briefing with inline buttons ──────────────
 echo "$LOG_PREFIX Running RSS curation (grok-4.3)..."

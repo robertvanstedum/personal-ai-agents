@@ -33,7 +33,7 @@ source venv/bin/activate
 # Phase 3C.7: Pull new X bookmarks before curating.
 # Failure is isolated — log and continue, never block the briefing.
 echo "🔖 Pulling new X bookmarks..."
-python x_pull_incremental.py 2>&1 || echo "⚠️  x_pull_incremental.py failed — continuing with existing signals"
+python -m scripts.x.x_pull_incremental 2>&1 || echo "⚠️  scripts.x.x_pull_incremental failed — continuing with existing signals"
 
 # Generate briefing
 python domains/curator/curator_rss_v2.py --model=grok-4.3 --fallback --temperature=0.7

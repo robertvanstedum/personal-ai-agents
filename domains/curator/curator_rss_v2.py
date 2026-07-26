@@ -1736,7 +1736,7 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
     # Merge X bookmark articles into candidate pool (Phase 3C.6)
     # Dedup by hash_id (MD5 of URL) — RSS articles take precedence on collision
     # Apply account blacklist: aggregators, redundant, anonymous commentary (v1.1)
-    from x_to_article import load_x_bookmark_articles
+    from scripts.x.x_to_article import load_x_bookmark_articles
     seen_hashes = {e['hash_id'] for e in all_entries if e.get('hash_id')}
     x_raw = load_x_bookmark_articles()
     x_after_dedup = [a for a in x_raw if a['hash_id'] not in seen_hashes]

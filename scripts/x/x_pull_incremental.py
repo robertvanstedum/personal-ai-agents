@@ -6,9 +6,9 @@ Fetches bookmarks added since the last pull, enriches each with destination
 text where possible, and appends new signals to curator_signals.json.
 
 Usage:
-    python x_pull_incremental.py              # real run, all new bookmarks
-    python x_pull_incremental.py --dry-run    # print what would be fetched, touch nothing
-    python x_pull_incremental.py --limit=5    # real run, cap at 5 new signals
+    python -m scripts.x.x_pull_incremental              # real run, all new bookmarks
+    python -m scripts.x.x_pull_incremental --dry-run    # print what would be fetched, touch nothing
+    python -m scripts.x.x_pull_incremental --limit=5    # real run, cap at 5 new signals
 """
 
 import argparse
@@ -28,12 +28,15 @@ from domains.curator.curator_utils import (
     fetch_url_metadata,
     follow_redirect,
 )
-from x_oauth2_authorize import get_valid_token
+from scripts.x_oauth2_authorize import get_valid_token
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
-SIGNALS_FILE = Path(__file__).parent / 'data' / 'curator' / 'curator_signals.json'
-STATE_FILE   = Path(__file__).parent / 'x_pull_state.json'
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+SIGNALS_FILE = PROJECT_ROOT / 'data' / 'curator' / 'curator_signals.json'
+# Preserve the existing runtime location in this structural slice. Moving the
+# state file into mounted storage is a separate persistence migration.
+STATE_FILE   = PROJECT_ROOT / 'x_pull_state.json'
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
