@@ -1375,7 +1375,7 @@ def index_page():
 
 @app.route('/language')
 def language_coming():
-    return send_from_directory(REPO_ROOT, 'language_coming.html')
+    return send_from_directory(BASE_DIR / 'templates', 'language_coming.html')
 
 @app.route('/jobs')
 def career_focus_redirect():
