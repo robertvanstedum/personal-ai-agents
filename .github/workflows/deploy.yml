@@ -124,10 +124,11 @@ jobs:
       - name: Push docker-compose.prod.yml to EC2
         run: |
           COMPOSE=$(base64 -w 0 docker-compose.prod.yml)
+          LESEN_CRON=$(base64 -w 0 scripts/operations/install_lesen_refresh_cron.sh)
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
             --document-name "AWS-RunShellScript" \
-            --parameters "commands=[\"echo $COMPOSE | base64 -d > /opt/minimoi/docker-compose.prod.yml\"]" \
+            --parameters "commands=[\"mkdir -p /opt/minimoi/scripts\",\"echo $COMPOSE | base64 -d > /opt/minimoi/docker-compose.prod.yml\",\"echo $LESEN_CRON | base64 -d > /opt/minimoi/scripts/install_lesen_refresh_cron.sh\",\"chmod +x /opt/minimoi/scripts/install_lesen_refresh_cron.sh\"]" \
             --query 'Command.CommandId' \
             --output text)
 
@@ -180,7 +181,8 @@ jobs:
               "curl -sf http://localhost:5001/health || exit 1",
               "curl -sf http://localhost:8766/health || exit 1",
               "curl -sf http://localhost:8767/health || exit 1",
-              "curl -sf http://localhost:8770/health || exit 1"
+              "curl -sf http://localhost:8770/health || exit 1",
+              "/opt/minimoi/scripts/install_lesen_refresh_cron.sh"
             ]' \
             --query 'Command.CommandId' \
             --output text)
