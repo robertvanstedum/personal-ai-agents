@@ -164,6 +164,7 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --timeout-seconds 600 \
             --parameters 'commands=[
+              "set -e",
               "mkdir -p /opt/minimoi/data/portuguese",
               "mkdir -p /opt/minimoi/data/german",
               "mkdir -p /opt/minimoi/data/guild",
@@ -171,9 +172,11 @@ jobs:
               "cd /opt/minimoi",
               "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 332704997792.dkr.ecr.us-east-1.amazonaws.com",
               "export MINIMOI_IMAGE_TAG=${{ needs.build-push.outputs.image_tag }}",
+              "docker image prune -af",
               "docker-compose -f /opt/minimoi/docker-compose.prod.yml pull",
               "docker-compose -f /opt/minimoi/docker-compose.prod.yml up -d --remove-orphans",
               "sleep 15",
+              "for c in minimoi-curator minimoi-german minimoi-portuguese minimoi-portal minimoi-system-bot minimoi-cos-bot minimoi-cos-scheduler; do test \\\"$(docker inspect --format={{.Config.Image}} $c)\\\" = \\\"332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/$(case $c in minimoi-german) echo mein-deutsch;; minimoi-*) echo ${c#minimoi-};; esac):${{ needs.build-push.outputs.image_tag }}\\\" || exit 1; done",
               "curl -sf http://localhost:5001/health || exit 1",
               "curl -sf http://localhost:8766/health || exit 1",
               "curl -sf http://localhost:8767/health || exit 1",
