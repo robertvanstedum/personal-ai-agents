@@ -229,7 +229,7 @@ Commits: see docs/BUILD_{...}.md for full record
 - Bullet per carry-forward item
 ```
 
-**Location:** `CHANGELOG.md` in repo root
+**Location:** `docs/CHANGELOG.md`
 
 ---
 
@@ -304,8 +304,8 @@ When PDFs appear in `~/.openclaw/workspace/`:
 | Portfolio write-ups, case studies | `docs/portfolio/` |
 | Test reports | `docs/test-reports/` |
 | Sprint plan and workstream status | `SPRINT_*.md` (repo root) |
-| Running changelog | `CHANGELOG.md` (repo root, append only) |
-| Architectural decisions (non-obvious, deliberate) | `DECISIONS.md` (repo root) |
+| Running changelog | `docs/CHANGELOG.md` (append only) |
+| Architectural decisions (non-obvious, deliberate) | `docs/DECISIONS.md` |
 | Agent orientation | `CLAUDE.md` (repo root, protected) |
 | Private design docs | `_NewDomains/` (gitignored) |
 | Operational state files | `~/.openclaw/workspace/` — never in repo |

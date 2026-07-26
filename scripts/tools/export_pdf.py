@@ -31,7 +31,7 @@ BUNDLES = {
         ("ARCHITECTURE.md",  "ARCHITECTURE.pdf"),
         ("OPERATIONS.md",    "OPERATIONS.pdf"),
         ("ROADMAP.md",       "ROADMAP.pdf"),
-        ("VISION.md",        "VISION.pdf"),
+        ("docs/VISION.md",   "VISION.pdf"),
     ],
     "german": [
         ("docs/archive/legacy-repository/german-build-2026/GERMAN_USER_GUIDE.md", "GERMAN_USER_GUIDE.pdf"),

@@ -18,7 +18,7 @@ Corrections from original spec:
   - research.py invoked with --session-name (not --session)
   - Log messages updated to match actual output strings in research.py
   - Drift check parenthesis fixed (syntax error in original)
-  - Backlog check reads BACKLOG.md at repo root (not memory/bugs/ which doesn't exist)
+  - Backlog check reads docs/BACKLOG.md (not memory/bugs/ which doesn't exist)
 """
 
 import subprocess
@@ -39,7 +39,7 @@ SESSION_BASE = 'uat-100'                      # high name to avoid collisions
 THREAD_JSON  = os.path.join(RI_DIR, 'data', 'threads', TOPIC, 'thread.json')
 SEEN_URLS    = os.path.join(RI_DIR, 'data', 'seen_urls', f'{TOPIC}.json')
 SESSION_LOG  = os.path.join(RI_DIR, 'library', 'session-log.md')
-BACKLOG_MD   = os.path.join(REPO_DIR, 'BACKLOG.md')
+BACKLOG_MD   = os.path.join(REPO_DIR, 'docs', 'BACKLOG.md')
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
