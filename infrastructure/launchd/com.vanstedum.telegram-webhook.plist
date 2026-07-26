@@ -21,7 +21,7 @@
     
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/vanstedum/Projects/personal-ai-agents/start_telegram_webhook.sh</string>
+        <string>/Users/vanstedum/Projects/personal-ai-agents/scripts/start_telegram_webhook.sh</string>
     </array>
     
     <key>RunAtLoad</key>
