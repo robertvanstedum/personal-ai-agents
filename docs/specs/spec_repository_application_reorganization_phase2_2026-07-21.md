@@ -2,7 +2,8 @@
 
 **File:** `docs/specs/spec_repository_application_reorganization_phase2_2026-07-21.md`
 **Date:** July 21, 2026
-**Status:** Backlog; future work; not approved to build
+**Status:** In build. Phase 2A dependency map delivered 2026-07-26; Codex
+review of that manifest pending before Phase 2B slices begin.
 **Priority:** Normal
 **Owner:** Robert
 **Implementation agent:** Claude Code after a separately approved build handoff
@@ -128,6 +129,134 @@ Return the complete manifest and a proposed series of vertical moves. Report
 ambiguous files instead of guessing. Robert must approve the dependency map and
 each proposed slice before implementation begins.
 
+### Phase 2A deliverable — completed 2026-07-26
+
+Full manifest below, verified against actual code (file:line citations, not
+proposal wording) — not the same as taking a proposal on faith. Source
+investigation: Codex's initial proposal (2026-07-26) plus independent
+verification by Claude Code, including one dedicated caller-mapping pass.
+Full working notes: `_working/PLAN_repo_root_cleanup_2026-07-26.md`.
+
+| File/dir | Classification | Callers found | Proposed destination | Compatibility launcher needed? |
+|---|---|---|---|---|
+| `restart_portal.sh` | Operational command | None found in repo | `scripts/ops/` | No |
+| `run_intelligence_cron.sh` | Operational command | None found in repo (doc mentions only) | `scripts/ops/` | No |
+| `run_lesen_refresh.sh` | Operational command | None found in repo | `scripts/ops/` | No |
+| `run_priority_feed_cron.sh` | Operational command | None found in repo | `scripts/ops/` | No |
+| `track_usage_wrapper.sh` | Operational command | Runs via macOS `cron`, not a repo-committed plist (`OPERATIONS.md:335`) | `scripts/ops/` | No |
+| `run_curator_cron.sh` | Operational command | `core/telegram/telegram_bot.py:374,484,2360` (**already broken today**, see below); invokes `x_pull_incremental.py` via `cd "$PROJECT_DIR"`; mirrored by `scripts/run_curator_cron_ec2.sh` | `scripts/ops/` | Move together with `x_pull_incremental.py`/`x_to_article.py` in the same slice |
+| `start_telegram_webhook.sh` | Compatibility path (already a 2-line shim to `scripts/start_telegram_webhook.sh`) | `infrastructure/launchd/com.vanstedum.telegram-webhook.plist:24` — **absolute path** | Update the plist; shim itself may then be removable | Plist must be updated in the same change, not after |
+| `credential_manager.py` | Development utility | Loads `.env` via `Path(__file__).parent / ".env"` (line 55) — self-referential, no external caller by path | `scripts/credentials/` | No, but verify `.env` still resolves correctly post-move |
+| `x_auth.py` | Curator domain application (feeds Curator's X ingestion) | None found — uses `keyring`/`tweepy` only, no path math | `scripts/x/` | No |
+| `x_pull_incremental.py` | Curator domain application | `x_pull_incremental.py:35-36` computes `SIGNALS_FILE`/`STATE_FILE` via `Path(__file__).parent`; invoked by `run_curator_cron.sh` and `scripts/run_curator_cron_ec2.sh` | `scripts/x/` | Move with `run_curator_cron.sh` in the same slice |
+| `x_to_article.py` | Curator domain application | `x_to_article.py:42-43`, same `Path(__file__).parent`-relative pattern | `scripts/x/` | Move with the above |
+| `language_coming.html` | Curator domain application | `domains/curator/curator_server.py:1378` — `REPO_ROOT` already computed independent of location; only the filename literal needs updating | Curator templates/static area | No |
+| `static/` | **Historical candidate requiring a separate decision** | None found anywhere — grepped every distinctive filename inside it (`portal.css`, background images, `static/public/index.html`, etc.), zero hits. Portal's own `static_folder` points at `minimoi_portal/static`, a different directory entirely. | Not proposed — needs Robert's explicit decision (archive vs. delete vs. confirm live use I missed) before Phase 2B touches it | N/A pending decision |
+| `config/` | Proven shared platform component (thin) | Referenced only in docstrings/comments (`domains/cos/backends/grok_backend.py`, `openclaw_backend.py`) and doc cross-links — never loaded by runtime code | `docs/` or `docs/design/` | No — comment-text updates only |
+| `curator_archive/` (4 stale Feb 2026 `.html` files) | Live archive/runtime dependency — **but not actually live**: already excluded via `.dockerignore`, never reaches the built image. Production's real archive is a separate volume mount (`/opt/minimoi/data/curator_archive`), unrelated to this git-tracked directory. | None | Archive location alongside other historical docs | No |
+| `curator_url_cache.json` | Live archive/runtime dependency — **data-safety flag** | `scripts/enrich_signals.py:53` — `PROJECT_DIR / 'curator_url_cache.json'`, `PROJECT_DIR = Path(__file__).parent.parent` (repo root, independent of the file's own location) | `data/curator/` | Not a launcher issue — a **persistence** issue: this file is not volume-mounted in either `docker-compose.yml` or `docker-compose.prod.yml` today. If genuinely written to at runtime in production, every deploy already wipes it (same class of bug as the old issue #93). Must resolve the mount question as part of this move, not just relocate the file. The code comment citing "decision #5" does not correspond to anything in current `DECISIONS.md` — stale or never written down. |
+| Docs (`ARCHITECTURE.md`, `BACKLOG.md`, `CREDENTIALS_SETUP.md`, `DECISIONS.md`, `OPERATIONS.md`, `PROJECT_STATE.md`, `ROADMAP.md`, `VISION.md`, `WAYS_OF_WORKING.md`) | Canonical documents (in scope per this spec's Goal 3, "leave only... at the root") | Referenced by README and archived docs via root-relative links (not individually re-verified per file; expect broad link repair) | `docs/` | No — link repair required across README and archived docs |
+
+**Known adjacent issue confirmed, not folded into this spec's scope:**
+`core/telegram/telegram_bot.py` (lines 374, 484, 2360) computes
+`BASE_DIR / 'run_curator_cron.sh'` where `BASE_DIR = Path(__file__).parent`
+resolves to `core/telegram/` — this reference is **already broken today**,
+a leftover from the Phase 2 Slice 2 telegram move (commit `5a3f2ac`),
+independent of this cleanup. Moving `run_curator_cron.sh` does not make it
+worse. Per this spec's own "Known adjacent issue" precedent (the
+`x_adapter.py` case above), this gets its own issue, not silent scope
+absorption here.
+
+**Proposed slice order** (supersedes the generic Phase 2B sequence below
+with the concrete order for this manifest):
+
+1. Docs move + link repair (`ARCHITECTURE.md` through `WAYS_OF_WORKING.md`) + `config/` (comment-only updates) + `curator_archive/` (dead weight, no callers).
+2. `static/` — pending Robert's explicit decision, not auto-included in slice 1.
+3. The five no-dependency scripts + `x_auth.py` (zero caller updates).
+4. `run_curator_cron.sh` + `x_pull_incremental.py` + `x_to_article.py` together, updating `scripts/run_curator_cron_ec2.sh` in the same PR.
+5. `start_telegram_webhook.sh` + the launchd plist absolute-path update, together.
+6. `credential_manager.py`, with `.env` resolution re-verified post-move.
+7. `language_coming.html`, with the one literal in `curator_server.py` updated.
+8. `curator_url_cache.json` — gated on resolving the missing-volume-mount question first; full backup/dry-run/rollback per this spec's existing Phase 2B item 4 and the original Codex proposal's caution.
+
+File the separate `telegram_bot.py` → `run_curator_cron.sh` broken-reference
+issue at any point; it does not block or get blocked by any slice above.
+
+### Revised scope — 2026-07-26, after Codex review
+
+Codex reviewed the manifest above (PR #134) and Robert clarified the actual
+goal: a visitor-facing clean root, not a perfectly-organized one on the
+first pass. This **widens** scope beyond the original 12-file/3-directory
+list — essentially all remaining root documentation moves too, not just the
+9 files originally scoped — while keeping the same bounded-slice safety
+discipline (identify callers, back up data-bearing items, move and update
+callers together, test, keep rollback).
+
+**Target root, per this revision:**
+`README.md`, `ARCHITECTURE.md`, `OPERATIONS.md`, `ROADMAP.md`, plus
+standard repository metadata that must or conventionally should stay —
+`LICENSE`, `.gitignore`, `AGENTS.md`.
+
+**One correction to Codex's list, from Claude Code:** `CLAUDE.md` must also
+stay at root, not move. It's omitted from Codex's kept-list, but Claude
+Code's own harness auto-loads project instructions from `CLAUDE.md` at the
+repo root by convention — moving it silently breaks automatic
+project-context loading for every future Claude Code session. This isn't a
+cosmetic preference; it's a functional dependency the harness itself has on
+this exact path, not discoverable by grepping application code. Confirmed
+and agreed by Robert.
+
+**One risk downgraded, from Claude Code:** the telegram-webhook launchd job
+flagged earlier as needing careful, atomic plist updates is **not
+currently installed/loaded** — `launchctl list` shows nothing for it, and
+no plist exists at `~/Library/LaunchAgents/` on this Mac, only the
+git-tracked source copy in `infrastructure/launchd/`. Still worth
+correcting the path for whenever it's next installed, but there is no live
+schedule to break today.
+
+**What moves beyond the original manifest:** `VISION.md`,
+`WAYS_OF_WORKING.md`, `BACKLOG.md`, `CHANGELOG.md`, `DECISIONS.md`,
+`PROJECT_STATE.md`, `CREDENTIALS_SETUP.md` → `docs/` (if a root document is
+loaded by the application today, update the application to load its new
+path in the same commit and test that screen — none of these 7 were found
+to be application-loaded during Phase 2A, but re-verify per Codex's rule
+before each moves).
+
+**Where things land, per Codex's revised guidance (broad folders now,
+perfect taxonomy later):**
+- Root shell scripts → `scripts/operations/` (not `scripts/ops/` as
+  originally proposed — aligning with Codex's exact wording).
+- Root Python utilities → `scripts/`, `tools/`, or an existing application
+  package.
+- Runtime state, caches, memory files, historical data → a dedicated
+  ignored and mounted location such as `data/runtime/<domain>/` — never
+  casually renamed or deleted, backup before move.
+- `config/` splits only as much as safety requires: live configuration
+  stays deployable, documentation moves to `docs/`, templates move to an
+  operational/configuration folder.
+- `static/` moves to an archive folder first (not deleted), pending
+  confirmation it isn't an active Cloudflare Pages/hosting source — this
+  was not checked during Phase 2A and must be confirmed before this slice.
+
+**Revised slice order (supersedes the 8-slice order above):**
+1. Low-risk supporting Markdown → `docs/`, preserving the 6 core
+   root documents (README, ARCHITECTURE, OPERATIONS, ROADMAP, AGENTS,
+   CLAUDE).
+2. Stateless utilities and genuinely unused files.
+3. Operational scripts, with launchd/crontab updates and compatibility
+   wrappers only where an external scheduler can't be changed atomically.
+4. X/Curator code and its state, moved together.
+5. Live runtime data/cache paths, through mounted storage, with backup,
+   parity checks, and rollback.
+6. Archive superseded static content, after the external-hosting check.
+7. Re-run a root inventory; confirm no scripts, caches, memory files, or
+   historical data remain at the visitor-facing root.
+
+Acceptance test: a visitor opening the repository sees the README and the
+core architecture/operations/roadmap material; implementation and runtime
+artifacts are organized behind folders; production behavior and retained
+data are unchanged.
+
 ## Phase 2B: Approved vertical migrations
 
 The dependency map determines the final order. The expected sequence is:
@@ -215,13 +344,16 @@ The initiative is complete when:
 Register this as:
 
 - **Title:** Repository Application Reorganization Phase 2
-- **Status:** `backlog`
+- **Status:** `in_build`
 - **Priority:** `normal`
 - **GitHub issue:** `null`
-- **Blocked reason:** Future work. Phase 2A is read-only; no file move is
-  authorized until Robert approves the dependency manifest and the first
-  vertical slice.
+- **Blocked reason:** None currently. Phase 2A dependency map delivered
+  2026-07-26 (see manifest above). Handed to Codex for independent review
+  before Phase 2B slices begin implementation.
 - **Notes:** PR #102 completed the preliminary standalone script/test move.
-  Remaining scope is the production application cluster, beginning with a full
-  dependency map. One slice and one production verification at a time. Do not
-  combine the pre-existing `x_adapter.py` defect without explicit approval.
+  Phase 2A manifest complete as of 2026-07-26 — see table above and
+  `_working/PLAN_repo_root_cleanup_2026-07-26.md` for full working notes.
+  One slice and one production verification at a time, per the proposed
+  slice order above. Do not combine the pre-existing `x_adapter.py` defect
+  or the newly-found `telegram_bot.py` → `run_curator_cron.sh` broken
+  reference without explicit approval — both get their own issue.
