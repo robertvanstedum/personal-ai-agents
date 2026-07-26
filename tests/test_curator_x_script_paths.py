@@ -1,17 +1,17 @@
 from pathlib import Path
 
-from scripts.x import x_pull_incremental, x_to_article
+from scripts.x import paths, x_to_article
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_x_scripts_keep_existing_data_and_state_locations():
-    assert x_pull_incremental.PROJECT_ROOT == ROOT
-    assert x_pull_incremental.SIGNALS_FILE == ROOT / "data" / "curator" / "curator_signals.json"
-    assert x_pull_incremental.STATE_FILE == ROOT / "x_pull_state.json"
+    assert paths.PROJECT_ROOT == ROOT
+    assert paths.SIGNALS_FILE == ROOT / "data" / "curator" / "curator_signals.json"
+    assert paths.STATE_FILE == ROOT / "x_pull_state.json"
     assert x_to_article.PROJECT_DIR == ROOT
-    assert x_to_article.SIGNALS_FILE == x_pull_incremental.SIGNALS_FILE
+    assert x_to_article.SIGNALS_FILE == paths.SIGNALS_FILE
 
 
 def test_x_article_loader_runs_from_its_package_location():

@@ -34,13 +34,12 @@ Usage:
 import argparse
 import hashlib
 import json
-from pathlib import Path
 from typing import Optional
+from scripts.x.paths import PROJECT_ROOT, SIGNALS_FILE
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-PROJECT_DIR  = Path(__file__).resolve().parents[2]
-SIGNALS_FILE = PROJECT_DIR / 'data' / 'curator' / 'curator_signals.json'
+PROJECT_DIR = PROJECT_ROOT
 
 # Minimum tweet text length to include a tweet-only signal in the scoring pool.
 # ~23-char signals are bare t.co URLs not resolved at ingest.

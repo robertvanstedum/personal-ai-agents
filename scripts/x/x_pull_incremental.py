@@ -16,7 +16,6 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 
 import tweepy
 
@@ -29,14 +28,9 @@ from domains.curator.curator_utils import (
     follow_redirect,
 )
 from scripts.x_oauth2_authorize import get_valid_token
+from scripts.x.paths import PROJECT_ROOT, SIGNALS_FILE, STATE_FILE
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SIGNALS_FILE = PROJECT_ROOT / 'data' / 'curator' / 'curator_signals.json'
-# Preserve the existing runtime location in this structural slice. Moving the
-# state file into mounted storage is a separate persistence migration.
-STATE_FILE   = PROJECT_ROOT / 'x_pull_state.json'
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
