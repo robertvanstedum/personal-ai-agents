@@ -1588,10 +1588,18 @@ body.reading-mode nav {
 .lesen-stale-notice {
   font-size: 0.72rem;
   color: var(--md-text-muted, #888);
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
   padding: 0.3rem 0 0;
   letter-spacing: 0.01em;
   opacity: 0.8;
+}
+
+.lesen-stale-notice .strip-action-btn {
+  height: 1.8rem;
+  font-size: 0.68rem;
 }
 
 /* ══════════════════════════════════════════════════════════════

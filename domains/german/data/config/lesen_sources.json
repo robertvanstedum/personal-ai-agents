@@ -6,9 +6,9 @@
     {"name": "Standard Kultur",       "url": "https://www.derstandard.at/rss/kultur",           "active": true,  "category": "kultur"},
     {"name": "ORF Sport",             "url": "https://rss.orf.at/sport.xml",                    "active": true,  "category": "alltag"},
     {"name": "Wiener Bezirksblätter", "url": "https://www.meinbezirk.at/rss",                  "active": true,  "category": "alltag"},
-    {"name": "ORF Kultur",            "url": "https://rss.orf.at/kultur.xml",                   "active": true,  "category": "kultur"},
+    {"name": "ORF Kultur",            "url": "https://rss.orf.at/kultur.xml",                   "active": false, "category": "kultur", "inactive_reason": "HTTP 404 confirmed 2026-07-20 and 2026-07-26"},
     {"name": "ORF News",              "url": "https://rss.orf.at/news.xml",                     "active": true,  "category": "nachrichten"},
-    {"name": "Heute",                 "url": "https://www.heute.at/rss",                        "active": true,  "category": "alltag"}
+    {"name": "Heute",                 "url": "https://www.heute.at/rss",                        "active": false, "category": "alltag", "inactive_reason": "HTTP 404 confirmed 2026-07-20 and 2026-07-26"}
   ],
   "article_selection": {
     "max_per_category": 10,

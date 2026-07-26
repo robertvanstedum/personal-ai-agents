@@ -27,7 +27,11 @@
   </div>
 
   <!-- Staleness notice (shown when pool is older than yesterday) -->
-  <div id="lesen-stale-notice" class="lesen-stale-notice" style="display:none"></div>
+  <div id="lesen-stale-notice" class="lesen-stale-notice" style="display:none">
+    <span id="lesen-stale-text"></span>
+    <button class="strip-action-btn" id="btn-artikel-laden"
+            title="Refresh article feed">Aktualisieren ↻</button>
+  </div>
 
   <!-- Category cards -->
   <div class="lesen-cat-row">
@@ -84,8 +88,6 @@
   <!-- Empty / refresh state -->
   <div class="strip-empty" id="lesen-empty-state" style="display:none">
     <span class="strip-empty-text">Keine Artikel geladen.</span>
-    <button class="strip-action-btn" id="btn-artikel-laden"
-            title="Refresh article feed">Artikel laden ↻</button>
   </div>
 
 </div>
@@ -279,18 +281,20 @@
 
     // Staleness notice — show if newest article is older than yesterday
     const staleNotice = document.getElementById('lesen-stale-notice');
+    const staleText = document.getElementById('lesen-stale-text');
     if (staleNotice) {
       if (heuteDate) {
         const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
         if (heuteDate < yesterday) {
           const days = Math.round((Date.now() - new Date(heuteDate)) / 864e5);
-          staleNotice.textContent = `Letzte Aktualisierung vor ${days} Tag${days === 1 ? '' : 'en'} — tippe auf ↻ um zu aktualisieren`;
+          staleText.textContent = `Letzte Aktualisierung vor ${days} Tag${days === 1 ? '' : 'en'}`;
           staleNotice.style.display = '';
         } else {
           staleNotice.style.display = 'none';
         }
       } else {
-        staleNotice.style.display = 'none';
+        staleText.textContent = 'Keine Artikel geladen.';
+        staleNotice.style.display = '';
       }
     }
   }
