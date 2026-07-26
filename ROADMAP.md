@@ -1,5 +1,7 @@
 # Roadmap — Mini-moi
 
+[Download the formatted PDF](ROADMAP.pdf)
+
 *Maintained baseline — reviewed through 2026-07-21. This replaces the former root
 roadmap; the separate Guild roadmap view remains temporarily in place until the
 Baseline document flow replaces it. Companion to ARCHITECTURE.md (what the system is
