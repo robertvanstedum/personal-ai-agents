@@ -22,7 +22,12 @@ jobs:
           python-version: '3.11'
 
       - name: Install test dependencies
-        run: pip install -r requirements.test.txt
+        run: |
+          pip install -r requirements.test.txt
+          pip install -r scripts/docs/requirements.txt
+
+      - name: Verify maintained document PDFs are current
+        run: python3 scripts/docs/publish_key_docs.py --check
 
       - name: Run regression tests
         run: pytest tests/ -v --junit-xml=data/reports/junit.xml --ignore=tests/smoke

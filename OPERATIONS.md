@@ -1,5 +1,7 @@
 # Operations — Mini-moi
 
+[Download the formatted PDF](OPERATIONS.pdf)
+
 *Maintained baseline — reviewed through 2026-07-21. The production topology and
 scheduled-job inventory were verified against the running system on 2026-07-18;
 the German identity and Lesen refresh updates were verified in production on

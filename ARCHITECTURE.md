@@ -1,5 +1,7 @@
 # Architecture: Mini-moi
 
+[Download the formatted PDF](ARCHITECTURE.pdf)
+
 *Maintained baseline, reviewed through 2026-07-21. This document separates the
 design principles that have held since inception from the current implementation.
 It identifies where real growth has caused drift and ties each gap to follow-up work.*

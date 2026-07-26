@@ -171,3 +171,4 @@ _NewDomains/guild/new-ventures/job-search/**
 !_NewDomains/guild/new-ventures/job-search/.gitkeep
 domains/guild/data/linkedin_connections.csv
 data/curator/
+node_modules/
