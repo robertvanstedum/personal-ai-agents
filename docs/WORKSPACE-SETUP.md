@@ -186,7 +186,7 @@ keyring.set_password("anthropic", "api_key", "sk-ant-...")
 api_key = keyring.get_password("anthropic", "api_key")
 ```
 
-**See:** [CREDENTIALS_SETUP.md](../CREDENTIALS_SETUP.md) in the main repo
+**See:** [CREDENTIALS_SETUP.md](CREDENTIALS_SETUP.md) in the main repo
 
 ---
 

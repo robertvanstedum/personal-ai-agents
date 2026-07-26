@@ -3,6 +3,16 @@
 What's here and why. Updated only when something moves into this folder —
 not on a fixed schedule.
 
+## 2026-04-20
+
+- **[Platform Vision](2026-04/PLATFORM_VISION_2026-04-20.md)** — historical
+  design record from the point when German became mini-moi's second domain.
+  It preserves the reasoning that established the multi-domain pattern, but
+  it is not the current platform vision. Current direction is maintained in
+  the root [README](../../README.md),
+  [Architecture](../../ARCHITECTURE.md), and
+  [Roadmap](../../ROADMAP.md).
+
 ## 2026-07-21
 
 - **[ROADMAP.md](2026-07/ROADMAP.md)** — superseded by the root

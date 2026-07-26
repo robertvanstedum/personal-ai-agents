@@ -383,6 +383,8 @@ refresh can be added without overwriting this one.
 
 ## More detail
 
+- [docs/README.md](docs/README.md) is the guide to working references and
+  historical context, including the April 2026 platform vision.
 - [docs/journal/](docs/journal/) is the tracked home for the public build narrative.
   Its publishing conventions are present; dated sprint notes, plans, and records
   of how the project changed are still being populated.

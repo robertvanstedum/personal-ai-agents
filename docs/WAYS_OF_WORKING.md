@@ -1,8 +1,8 @@
 # Ways of Working — Principles & Conventions
 
-> Founding document, established March 15, 2026. [AGENTS.md](AGENTS.md) is the
-> live, maintained version of these practices — this file stays at root as the
-> original record, not archived.
+> Founding document, established March 15, 2026. [AGENTS.md](../AGENTS.md) is the
+> live, maintained version of these practices — this file stays accessible in
+> `docs/` as the original record, not archived.
 
 **Mini-moi Personal AI Curator**
 **Established:** March 15, 2026
@@ -245,10 +245,10 @@ Types: feat | fix | refactor | docs | chore
 **What gets committed:**
 - Source code
 - `docs/` (PLAN and BUILD docs)
-- `CHANGELOG.md`
+- `docs/CHANGELOG.md`
 - `SPRINT_*.md`
-- `WAYS_OF_WORKING.md`
-- `CLAUDE.md`, `PROJECT_STATE.md`, other orientation docs
+- `docs/WAYS_OF_WORKING.md`
+- `CLAUDE.md`, `docs/PROJECT_STATE.md`, other orientation docs
 
 **What does not get committed:**
 - Operational data: `curator_history.json`, `curator_signals.json`,
@@ -264,7 +264,7 @@ Types: feat | fix | refactor | docs | chore
 At the start of every session, before touching any file:
 
 1. Read `CLAUDE.md` — agent orientation and protected file list
-2. Read `WAYS_OF_WORKING.md` — this document
+2. Read `docs/WAYS_OF_WORKING.md` — this document
 3. Read the current PLAN doc for this phase (Robert will specify which one)
 4. Read the BUILD doc if one exists for prior phases of this workstream
 5. Confirm with Robert which step to start on
@@ -281,10 +281,10 @@ When Robert says "pass to Memory Agent" or shares a build summary:
 1. Review for missing pre-conditions (refactors, file moves, schema changes)
 2. Add "Pre-conditions Completed" section with anything missing
 3. Save as `docs/BUILD_{WS}_{Feature}_{YYYY-MM-DD}.md`
-4. Append entry to `CHANGELOG.md`
+4. Append entry to `docs/CHANGELOG.md`
 5. Confirm: "Saved. [Any conflicts or notes.]"
 6. Provide the exact git commit command:
-   `git add docs/BUILD_{...}.md CHANGELOG.md && git commit -m "docs: {description}"`
+   `git add docs/BUILD_{...}.md docs/CHANGELOG.md && git commit -m "docs: {description}"`
 
 When PDFs appear in `~/.openclaw/workspace/`:
 
@@ -309,7 +309,7 @@ When PDFs appear in `~/.openclaw/workspace/`:
 | Agent orientation | `CLAUDE.md` (repo root, protected) |
 | Private design docs | `_NewDomains/` (gitignored) |
 | Operational state files | `~/.openclaw/workspace/` — never in repo |
-| Superseded docs | `archive/` (repo root) |
+| Superseded docs | `docs/archive/` |
 | Superseded screenshots / visual artifacts | `docs/screenshots/archive/` |
 
 ## Archive Policy
@@ -317,7 +317,7 @@ When PDFs appear in `~/.openclaw/workspace/`:
 **Archive, don't delete.** The build journey is part of the project.
 
 Superseded documents, old drafts, replaced READMEs, and stale specs move to
-`archive/` rather than being deleted. Old screenshots and visual artifacts move
+`docs/archive/` rather than being deleted. Old screenshots and visual artifacts move
 to `docs/screenshots/archive/`. Both remain in git history and are visible on
 GitHub.
 
