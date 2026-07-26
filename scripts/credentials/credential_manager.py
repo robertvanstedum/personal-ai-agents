@@ -8,7 +8,7 @@ Security layers:
 3. Never store in code or git
 
 Usage:
-    from credential_manager import get_credentials
+    from scripts.credentials.credential_manager import get_credentials
     
     creds = get_credentials("geopolitical_futures")
     username = creds["username"]
@@ -19,6 +19,9 @@ import os
 import sys
 from pathlib import Path
 from typing import Dict, Optional
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 
 def get_credentials(service: str) -> Dict[str, str]:
     """
@@ -52,7 +55,7 @@ def get_credentials(service: str) -> Dict[str, str]:
         from dotenv import load_dotenv
         
         # Find .env in project root
-        env_path = Path(__file__).parent / ".env"
+        env_path = PROJECT_ROOT / ".env"
         if env_path.exists():
             load_dotenv(env_path)
             
@@ -76,7 +79,7 @@ def get_credentials(service: str) -> Dict[str, str]:
     raise ValueError(
         f"Credentials for '{service}' not found!\n\n"
         f"Setup options:\n"
-        f"1. Store in keychain: python credential_manager.py store {service}\n"
+        f"1. Store in keychain: python scripts/credentials/credential_manager.py store {service}\n"
         f"2. Create .env file with {service.upper()}_USERNAME and {service.upper()}_PASSWORD"
     )
 
@@ -123,12 +126,12 @@ if __name__ == "__main__":
     
     if len(sys.argv) < 3:
         print("Usage:")
-        print("  Store:   python credential_manager.py store <service>")
-        print("  Test:    python credential_manager.py test <service>")
-        print("  Delete:  python credential_manager.py delete <service>")
+        print("  Store:   python scripts/credentials/credential_manager.py store <service>")
+        print("  Test:    python scripts/credentials/credential_manager.py test <service>")
+        print("  Delete:  python scripts/credentials/credential_manager.py delete <service>")
         print()
         print("Example:")
-        print("  python credential_manager.py store geopolitical_futures")
+        print("  python scripts/credentials/credential_manager.py store geopolitical_futures")
         sys.exit(1)
     
     command = sys.argv[1]

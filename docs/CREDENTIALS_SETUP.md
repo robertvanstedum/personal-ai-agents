@@ -22,7 +22,7 @@ pip install keyring python-dotenv
 **Option A: Keychain (Recommended)**
 
 ```bash
-python credential_manager.py store geopolitical_futures
+python scripts/credentials/credential_manager.py store geopolitical_futures
 ```
 
 It will prompt:
@@ -56,7 +56,7 @@ Save and exit (Ctrl+X, Y, Enter)
 ### Step 3: Test It Works
 
 ```bash
-python credential_manager.py test geopolitical_futures
+python scripts/credentials/credential_manager.py test geopolitical_futures
 ```
 
 Should output:
@@ -138,7 +138,7 @@ Already enabled on most modern Macs (check System Preferences → Security)
 
 **Keychain:**
 ```bash
-python credential_manager.py store chicago_tribune
+python scripts/credentials/credential_manager.py store chicago_tribune
 ```
 
 **.env:**
@@ -150,7 +150,7 @@ CHICAGO_TRIBUNE_PASSWORD=your_password
 
 **In your code:**
 ```python
-from credential_manager import get_credentials
+from scripts.credentials.credential_manager import get_credentials
 
 creds = get_credentials("chicago_tribune")
 ```
@@ -164,10 +164,10 @@ If you need to change a password:
 **Keychain:**
 ```bash
 # Delete old
-python credential_manager.py delete geopolitical_futures
+python scripts/credentials/credential_manager.py delete geopolitical_futures
 
 # Store new
-python credential_manager.py store geopolitical_futures
+python scripts/credentials/credential_manager.py store geopolitical_futures
 ```
 
 **.env:**
@@ -220,7 +220,7 @@ In this session, yes (you're about to give them to me). In code/git, no (never s
 Production migrated to AWS EC2 in June 2026. Keychain is dev-only; production
 credentials live in SSM Parameter Store under `/minimoi/production/*` — see
 [OPERATIONS.md § Credentials & Third Parties](OPERATIONS.md#credentials--third-parties)
-for the full inventory. `credential_manager.py`'s keychain-then-fallback
+for the full inventory. `scripts/credentials/credential_manager.py`'s keychain-then-fallback
 design anticipated this and needed no code changes.
 
 ---

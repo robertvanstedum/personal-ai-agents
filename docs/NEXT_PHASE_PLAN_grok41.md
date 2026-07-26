@@ -21,7 +21,7 @@
 - **Implementation steps**:
   1. Verify exact model name against xAI API model list (`GET /v1/models`)
   2. Update model selector in `curator_rss_v2.py` (or `curator_config.py`) to support `"grok-4-1-fast-reasoning"`
-  3. Add xAI API key handling (use `credential_manager.py` pattern)
+  3. Add xAI API key handling (use `scripts/credentials/credential_manager.py` pattern)
   4. Test with `--dry-run` and `--model=grok-4-1-fast-reasoning`
   5. Monitor costs via `cost_report.py` — expect similar or slightly higher than grok-3-mini
   6. If using OpenClaw: Set provider=`xai`, model=`grok-4-1-fast-reasoning` for scoring tasks
