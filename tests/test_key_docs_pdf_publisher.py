@@ -24,3 +24,14 @@ def test_each_source_links_to_its_matching_pdf():
     for stem in ("README", "ARCHITECTURE", "OPERATIONS", "ROADMAP"):
         source = (REPO_ROOT / f"{stem}.md").read_text(encoding="utf-8")
         assert f"]({stem}.pdf)" in source
+
+
+def test_renderer_keeps_section_headings_with_their_first_visual():
+    renderer = (SCRIPT_DIR / "render_key_doc.mjs").read_text(encoding="utf-8")
+    stylesheet = (SCRIPT_DIR / "key-docs.css").read_text(encoding="utf-8")
+
+    assert 'group.className = "keep-section-start"' in renderer
+    assert 'element.matches("table, figure, .mermaid")' in renderer
+    assert 'onlyNode.tagName !== "STRONG"' in renderer
+    assert ".keep-section-start {" in stylesheet
+    assert "break-inside: avoid-page;" in stylesheet

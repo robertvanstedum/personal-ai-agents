@@ -36,6 +36,11 @@ main {
   max-width: 100%;
 }
 
+.keep-section-start {
+  break-inside: avoid-page;
+  page-break-inside: avoid;
+}
+
 h1,
 h2,
 h3,
