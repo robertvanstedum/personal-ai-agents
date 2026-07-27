@@ -2049,7 +2049,7 @@ body.admin { background: var(--parch-mid); }
     touch-action: pan-x pan-y pinch-zoom;
   }
   .tour-lightbox.is-detail-view img {
-    width: max(760px, 190vw);
+    width: max(680px, 175vw);
     max-width: none;
     max-height: none;
     margin: 0 auto;

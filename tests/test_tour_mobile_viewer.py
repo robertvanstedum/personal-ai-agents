@@ -14,6 +14,10 @@ def test_tour_exposes_mobile_fit_and_detail_control():
     assert 'id="tour-lightbox-zoom"' in template
     assert 'aria-pressed="false"' in template
     assert 'dialog.classList.toggle("is-detail-view", enabled)' in template
+    assert "function shouldStartInDetailView()" in template
+    assert '"(max-width: 600px) and (orientation: portrait)"' in template
+    assert "setDetailView(shouldStartInDetailView())" in template
+    assert 'image.addEventListener("load", centerDetailView)' in template
     assert 'zoom.textContent = enabled ? "Fit slide" : "View details"' in template
 
 

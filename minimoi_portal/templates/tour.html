@@ -8,7 +8,7 @@
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/portal.css?v=20260726-ui9">
+  <link rel="stylesheet" href="/static/portal.css?v=20260727-ui10">
 </head>
 <body class="tour">
 
@@ -452,15 +452,32 @@
     const close = dialog?.querySelector(".tour-lightbox-close");
     const lightboxPrevious = dialog?.querySelector(".tour-lightbox-prev");
     const lightboxNext = dialog?.querySelector(".tour-lightbox-next");
+    const lightboxStage = dialog?.querySelector(".tour-lightbox-stage");
     const domainMap = document.querySelector(".tour-domain-map");
     let lightboxLinks = [];
     let lightboxIndex = 0;
     let activeTrigger = null;
 
     if (!dialog || !image || !caption || !count || !zoom || !close ||
-        !lightboxPrevious || !lightboxNext ||
+        !lightboxPrevious || !lightboxNext || !lightboxStage ||
         typeof dialog.showModal !== "function") {
       return;
+    }
+
+    function shouldStartInDetailView() {
+      return window.matchMedia(
+        "(max-width: 600px) and (orientation: portrait)"
+      ).matches;
+    }
+
+    function centerDetailView() {
+      if (!dialog.classList.contains("is-detail-view")) return;
+      requestAnimationFrame(() => {
+        lightboxStage.scrollLeft =
+          Math.max(0, (lightboxStage.scrollWidth -
+            lightboxStage.clientWidth) / 2);
+        lightboxStage.scrollTop = 0;
+      });
     }
 
     function showLightboxImage(index) {
@@ -479,7 +496,7 @@
       const hasMultipleSlides = lightboxLinks.length > 1;
       lightboxPrevious.hidden = !hasMultipleSlides;
       lightboxNext.hidden = !hasMultipleSlides;
-      setDetailView(false);
+      setDetailView(shouldStartInDetailView());
     }
 
     function setDetailView(enabled) {
@@ -488,6 +505,7 @@
       zoom.textContent = enabled ? "Fit slide" : "View details";
       image.alt = image.alt.replace(/ \(detail view\)$/, "") +
         (enabled ? " (detail view)" : "");
+      if (enabled) centerDetailView();
     }
 
     function openDomain(domainKey, trigger = null) {
@@ -541,6 +559,7 @@
     image.addEventListener("dblclick", () => {
       setDetailView(!dialog.classList.contains("is-detail-view"));
     });
+    image.addEventListener("load", centerDetailView);
     close.addEventListener("click", () => dialog.close());
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) {
