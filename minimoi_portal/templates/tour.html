@@ -8,7 +8,7 @@
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/portal.css?v=20260726-ui8">
+  <link rel="stylesheet" href="/static/portal.css?v=20260726-ui9">
 </head>
 <body class="tour">
 
@@ -425,7 +425,11 @@
     </div>
     <figcaption>
       <span id="tour-lightbox-caption"></span>
-      <span id="tour-lightbox-count" aria-live="polite"></span>
+      <span class="tour-lightbox-meta">
+        <button class="tour-lightbox-zoom" id="tour-lightbox-zoom"
+                type="button" aria-pressed="false">View details</button>
+        <span id="tour-lightbox-count" aria-live="polite"></span>
+      </span>
     </figcaption>
   </figure>
 </dialog>
@@ -444,6 +448,7 @@
     const image = document.getElementById("tour-lightbox-image");
     const caption = document.getElementById("tour-lightbox-caption");
     const count = document.getElementById("tour-lightbox-count");
+    const zoom = document.getElementById("tour-lightbox-zoom");
     const close = dialog?.querySelector(".tour-lightbox-close");
     const lightboxPrevious = dialog?.querySelector(".tour-lightbox-prev");
     const lightboxNext = dialog?.querySelector(".tour-lightbox-next");
@@ -452,7 +457,7 @@
     let lightboxIndex = 0;
     let activeTrigger = null;
 
-    if (!dialog || !image || !caption || !count || !close ||
+    if (!dialog || !image || !caption || !count || !zoom || !close ||
         !lightboxPrevious || !lightboxNext ||
         typeof dialog.showModal !== "function") {
       return;
@@ -474,6 +479,15 @@
       const hasMultipleSlides = lightboxLinks.length > 1;
       lightboxPrevious.hidden = !hasMultipleSlides;
       lightboxNext.hidden = !hasMultipleSlides;
+      setDetailView(false);
+    }
+
+    function setDetailView(enabled) {
+      dialog.classList.toggle("is-detail-view", enabled);
+      zoom.setAttribute("aria-pressed", String(enabled));
+      zoom.textContent = enabled ? "Fit slide" : "View details";
+      image.alt = image.alt.replace(/ \(detail view\)$/, "") +
+        (enabled ? " (detail view)" : "");
     }
 
     function openDomain(domainKey, trigger = null) {
@@ -521,6 +535,12 @@
       "click",
       () => showLightboxImage(lightboxIndex + 1)
     );
+    zoom.addEventListener("click", () => {
+      setDetailView(!dialog.classList.contains("is-detail-view"));
+    });
+    image.addEventListener("dblclick", () => {
+      setDetailView(!dialog.classList.contains("is-detail-view"));
+    });
     close.addEventListener("click", () => dialog.close());
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) {
@@ -537,6 +557,7 @@
       }
     });
     dialog.addEventListener("close", () => {
+      setDetailView(false);
       image.removeAttribute("src");
       lightboxLinks = [];
       lightboxIndex = 0;

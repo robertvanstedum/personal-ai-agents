@@ -771,6 +771,23 @@ body.tour {
   background: #fffaf1;
   border-radius: 0 0 11px 11px;
 }
+.tour-lightbox-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  white-space: nowrap;
+}
+.tour-lightbox-zoom {
+  display: none;
+  min-height: 34px;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid rgba(18, 59, 48, 0.24);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--front-green);
+  font: 600 0.75rem/1 var(--font-sans);
+  cursor: pointer;
+}
 .tour-lightbox-close {
   position: absolute;
   z-index: 2;
@@ -1946,4 +1963,111 @@ body.admin { background: var(--parch-mid); }
   }
   .dashboard-workspace-grid { grid-template-columns: 1fr; }
   .dashboard-domain-open { grid-template-rows: 145px 1fr; }
+}
+
+/* Phone-first slide viewer: portrait and landscape phones share one
+   full-viewport presentation, with an intentional detail mode for desktop
+   screenshots whose text cannot remain legible when fully fitted. */
+@media (max-width: 900px) {
+  .tour-lightbox {
+    width: 100vw;
+    height: 100dvh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    background: #eee3d2;
+  }
+  .tour-lightbox figure {
+    width: 100%;
+    height: 100%;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .tour-lightbox-stage {
+    min-height: 0;
+    padding:
+      max(0.75rem, env(safe-area-inset-top))
+      0.5rem
+      0.5rem;
+    overflow: hidden;
+  }
+  .tour-lightbox img {
+    width: auto;
+    height: auto;
+    max-width: calc(100% - 1rem);
+    max-height: 100%;
+    border-radius: 4px;
+    cursor: zoom-in;
+  }
+  .tour-lightbox figcaption {
+    min-height: 64px;
+    padding:
+      0.65rem
+      max(0.85rem, env(safe-area-inset-right))
+      max(0.65rem, env(safe-area-inset-bottom))
+      max(0.85rem, env(safe-area-inset-left));
+    align-items: center;
+    font-size: 0.82rem;
+    line-height: 1.25;
+    border-radius: 0;
+  }
+  .tour-lightbox-meta {
+    gap: 0.55rem;
+  }
+  .tour-lightbox-zoom {
+    display: inline-flex;
+    align-items: center;
+  }
+  .tour-lightbox-close {
+    position: fixed;
+    top: max(0.65rem, env(safe-area-inset-top));
+    right: max(0.65rem, env(safe-area-inset-right));
+    width: 44px;
+    height: 44px;
+    border: 2px solid rgba(255, 252, 246, 0.88);
+  }
+  .tour-lightbox-arrow {
+    position: fixed;
+    top: calc(50% - 32px);
+    width: 44px;
+    height: 44px;
+    font-size: 2rem;
+  }
+  .tour-lightbox-prev {
+    left: max(0.4rem, env(safe-area-inset-left));
+  }
+  .tour-lightbox-next {
+    right: max(0.4rem, env(safe-area-inset-right));
+  }
+  .tour-lightbox.is-detail-view .tour-lightbox-stage {
+    display: block;
+    padding:
+      max(4rem, calc(env(safe-area-inset-top) + 3.25rem))
+      0.75rem
+      1rem;
+    overflow: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-x pan-y pinch-zoom;
+  }
+  .tour-lightbox.is-detail-view img {
+    width: max(760px, 190vw);
+    max-width: none;
+    max-height: none;
+    margin: 0 auto;
+    cursor: zoom-out;
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape) {
+  .tour-lightbox figcaption {
+    min-height: 52px;
+    padding-top: 0.45rem;
+    padding-bottom: max(0.45rem, env(safe-area-inset-bottom));
+  }
+  .tour-lightbox img {
+    max-width: calc(100% - 7rem);
+  }
+  .tour-lightbox.is-detail-view img {
+    width: max(900px, 140vw);
+    max-width: none;
+  }
 }
