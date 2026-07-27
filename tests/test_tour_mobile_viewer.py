@@ -12,6 +12,7 @@ def test_tour_exposes_mobile_fit_and_detail_control():
     )
 
     assert 'id="tour-lightbox-zoom"' in template
+    assert 'class="tour-lightbox-media"' in template
     assert 'aria-pressed="false"' in template
     assert 'dialog.classList.toggle("is-detail-view", enabled)' in template
     assert "function shouldStartInDetailView()" in template

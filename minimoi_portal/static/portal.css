@@ -720,9 +720,10 @@ body.tour {
   outline-offset: -3px;
 }
 .tour-lightbox {
-  width: min(96vw, 1500px);
+  width: min(98vw, 1800px);
+  height: min(96vh, 1100px);
   max-width: none;
-  max-height: 94vh;
+  max-height: none;
   margin: auto;
   padding: 0;
   overflow: visible;
@@ -736,23 +737,34 @@ body.tour {
   backdrop-filter: blur(3px);
 }
 .tour-lightbox figure {
+  width: 100%;
+  height: 100%;
   margin: 0;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
 }
 .tour-lightbox-stage {
-  min-height: min(78vh, 900px);
+  min-height: 0;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0.9rem 1rem 0.75rem;
   overflow: hidden;
+}
+.tour-lightbox-media {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .tour-lightbox img {
   width: auto;
   height: auto;
-  max-width: calc(100% - 8rem);
-  max-height: 78vh;
+  max-width: 100%;
+  max-height: 100%;
   margin: auto;
   display: block;
   object-fit: contain;
@@ -760,8 +772,8 @@ body.tour {
   box-shadow: 0 10px 38px rgba(65, 43, 24, 0.16);
 }
 .tour-lightbox figcaption {
-  min-height: 42px;
-  padding: 0.65rem 1rem;
+  min-height: 48px;
+  padding: 0.7rem 1.15rem;
   display: flex;
   justify-content: space-between;
   gap: 1rem;
@@ -790,14 +802,14 @@ body.tour {
 }
 .tour-lightbox-close {
   position: absolute;
-  z-index: 2;
-  top: -14px;
-  right: -14px;
-  width: 42px;
-  height: 42px;
-  border: 1px solid rgba(255, 252, 246, 0.72);
+  z-index: 3;
+  top: 1.25rem;
+  right: 1.25rem;
+  width: 46px;
+  height: 46px;
+  border: 2px solid rgba(255, 252, 246, 0.84);
   border-radius: 50%;
-  background: var(--front-green);
+  background: rgba(12, 61, 49, 0.92);
   color: #fffaf1;
   font-size: 1.55rem;
   line-height: 1;
@@ -819,17 +831,19 @@ body.tour {
 }
 .tour-lightbox-arrow {
   position: absolute;
-  z-index: 1;
+  z-index: 2;
   top: 50%;
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   transform: translateY(-50%);
+  border: 2px solid rgba(18, 59, 48, 0.3);
+  box-shadow: 0 5px 20px rgba(31, 22, 14, 0.16);
   font-family: var(--font-serif);
   font-size: 2.2rem;
   line-height: 1;
 }
-.tour-lightbox-prev { left: 1rem; }
-.tour-lightbox-next { right: 1rem; }
+.tour-lightbox-prev { left: 0.8rem; }
+.tour-lightbox-next { right: 0.8rem; }
 .tour-lightbox-arrow:hover,
 .tour-carousel-arrow:hover {
   border-color: var(--front-orange);
@@ -1990,6 +2004,10 @@ body.admin { background: var(--parch-mid); }
       0.5rem;
     overflow: hidden;
   }
+  .tour-lightbox-media {
+    min-width: 0;
+    min-height: 0;
+  }
   .tour-lightbox img {
     width: auto;
     height: auto;
@@ -2047,6 +2065,11 @@ body.admin { background: var(--parch-mid); }
     overflow: auto;
     overscroll-behavior: contain;
     touch-action: pan-x pan-y pinch-zoom;
+  }
+  .tour-lightbox.is-detail-view .tour-lightbox-media {
+    width: max-content;
+    height: max-content;
+    min-width: 100%;
   }
   .tour-lightbox.is-detail-view img {
     width: max(680px, 175vw);
