@@ -8,7 +8,7 @@
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/portal.css?v=20260727-ui11">
+  <link rel="stylesheet" href="/static/portal.css?v=20260727-ui12">
 </head>
 <body class="tour">
 
@@ -161,6 +161,7 @@
     <div class="tour-gallery tour-gallery-featured">
       <figure class="tour-shot">
         <a class="tour-shot-link" href="/static/tour/german-landing.jpg"
+           data-mobile-src="/static/tour/german-landing-mobile.png"
            aria-label="View Mein Deutsch landing full size">
           <img src="/static/tour/german-landing.jpg"
                alt="Mein Deutsch landing page"
@@ -428,6 +429,13 @@
     <figcaption>
       <span id="tour-lightbox-caption"></span>
       <span class="tour-lightbox-meta">
+        <span class="tour-lightbox-format" id="tour-lightbox-format"
+              role="group" aria-label="Screenshot format" hidden>
+          <button type="button" data-format="desktop"
+                  aria-pressed="true">Desktop</button>
+          <button type="button" data-format="mobile"
+                  aria-pressed="false">Mobile</button>
+        </span>
         <button class="tour-lightbox-zoom" id="tour-lightbox-zoom"
                 type="button" aria-pressed="false">View details</button>
         <span id="tour-lightbox-count" aria-live="polite"></span>
@@ -451,17 +459,25 @@
     const caption = document.getElementById("tour-lightbox-caption");
     const count = document.getElementById("tour-lightbox-count");
     const zoom = document.getElementById("tour-lightbox-zoom");
+    const format = document.getElementById("tour-lightbox-format");
+    const formatButtons = Array.from(
+      format?.querySelectorAll("[data-format]") || []
+    );
     const close = dialog?.querySelector(".tour-lightbox-close");
     const lightboxPrevious = dialog?.querySelector(".tour-lightbox-prev");
     const lightboxNext = dialog?.querySelector(".tour-lightbox-next");
     const lightboxStage = dialog?.querySelector(".tour-lightbox-stage");
+    const lightboxMedia = dialog?.querySelector(".tour-lightbox-media");
     const domainMap = document.querySelector(".tour-domain-map");
     let lightboxLinks = [];
     let lightboxIndex = 0;
     let activeTrigger = null;
+    let activeLink = null;
 
-    if (!dialog || !image || !caption || !count || !zoom || !close ||
+    if (!dialog || !image || !caption || !count || !zoom || !format ||
+        formatButtons.length !== 2 || !close ||
         !lightboxPrevious || !lightboxNext || !lightboxStage ||
+        !lightboxMedia ||
         typeof dialog.showModal !== "function") {
       return;
     }
@@ -482,6 +498,53 @@
       });
     }
 
+    function alignArrowsToImage() {
+      if (!image.complete || !image.naturalWidth) return;
+      requestAnimationFrame(() => {
+        const mediaRect = lightboxMedia.getBoundingClientRect();
+        const imageRect = image.getBoundingClientRect();
+        const inset = 10;
+        lightboxPrevious.style.left =
+          `${Math.max(4, imageRect.left - mediaRect.left + inset)}px`;
+        lightboxNext.style.right =
+          `${Math.max(4, mediaRect.right - imageRect.right + inset)}px`;
+      });
+    }
+
+    function shouldStartInMobileView() {
+      return window.matchMedia(
+        "(max-width: 900px) and (orientation: portrait)"
+      ).matches;
+    }
+
+    function setFormatView(requestedFormat) {
+      if (!activeLink) return;
+      const mobileSrc = activeLink.dataset.mobileSrc;
+      const hasMobileView = Boolean(mobileSrc);
+      const selectedFormat =
+        requestedFormat === "mobile" && hasMobileView ? "mobile" : "desktop";
+      const thumbnail = activeLink.querySelector("img");
+      const source =
+        selectedFormat === "mobile" ? mobileSrc : activeLink.href;
+
+      dialog.classList.toggle("has-mobile-view", hasMobileView);
+      dialog.classList.toggle(
+        "is-mobile-format",
+        selectedFormat === "mobile"
+      );
+      format.hidden = !hasMobileView;
+      zoom.hidden = hasMobileView;
+      formatButtons.forEach((button) => {
+        button.setAttribute(
+          "aria-pressed",
+          String(button.dataset.format === selectedFormat)
+        );
+      });
+      setDetailView(false);
+      image.src = source;
+      image.alt = `${thumbnail?.alt || ""} (${selectedFormat} view)`;
+    }
+
     function showLightboxImage(index) {
       if (!lightboxLinks.length) return;
       lightboxIndex =
@@ -489,8 +552,7 @@
       const link = lightboxLinks[lightboxIndex];
       const thumbnail = link.querySelector("img");
       const figureCaption = link.closest("figure")?.querySelector("figcaption");
-      image.src = link.href;
-      image.alt = thumbnail?.alt || "";
+      activeLink = link;
       caption.textContent =
         figureCaption?.textContent.trim() || thumbnail?.alt || "";
       count.textContent =
@@ -498,7 +560,13 @@
       const hasMultipleSlides = lightboxLinks.length > 1;
       lightboxPrevious.hidden = !hasMultipleSlides;
       lightboxNext.hidden = !hasMultipleSlides;
-      setDetailView(shouldStartInDetailView());
+      const hasMobileView = Boolean(link.dataset.mobileSrc);
+      setFormatView(
+        hasMobileView && shouldStartInMobileView() ? "mobile" : "desktop"
+      );
+      if (!hasMobileView) {
+        setDetailView(shouldStartInDetailView());
+      }
     }
 
     function setDetailView(enabled) {
@@ -558,10 +626,21 @@
     zoom.addEventListener("click", () => {
       setDetailView(!dialog.classList.contains("is-detail-view"));
     });
+    formatButtons.forEach((button) => {
+      button.addEventListener(
+        "click",
+        () => setFormatView(button.dataset.format)
+      );
+    });
     image.addEventListener("dblclick", () => {
+      if (dialog.classList.contains("has-mobile-view")) return;
       setDetailView(!dialog.classList.contains("is-detail-view"));
     });
-    image.addEventListener("load", centerDetailView);
+    image.addEventListener("load", () => {
+      centerDetailView();
+      alignArrowsToImage();
+    });
+    window.addEventListener("resize", alignArrowsToImage);
     close.addEventListener("click", () => dialog.close());
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) {
@@ -582,6 +661,7 @@
       image.removeAttribute("src");
       lightboxLinks = [];
       lightboxIndex = 0;
+      activeLink = null;
       history.replaceState(
         null,
         "",

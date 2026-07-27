@@ -258,6 +258,14 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         "/static/tour/german-woerter-current.jpg",
         "/static/tour/german-archiv-current.jpg",
     ]
+    german_landing_link = soup.select_one(
+        'section#german .tour-shot-link[href="/static/tour/german-landing.jpg"]'
+    )
+    assert german_landing_link is not None
+    assert (
+        german_landing_link.get("data-mobile-src")
+        == "/static/tour/german-landing-mobile.png"
+    )
     assert len(soup.select("section#portuguese .tour-shot")) == 6
     assert len(soup.select("section#guild .tour-shot")) == 2
     assert len(soup.select("section#cos .tour-shot")) == 2
