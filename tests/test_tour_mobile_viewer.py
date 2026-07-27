@@ -18,7 +18,8 @@ def test_tour_exposes_mobile_fit_and_detail_control():
     assert "function shouldStartInDetailView()" in template
     assert '"(max-width: 600px) and (orientation: portrait)"' in template
     assert "setDetailView(shouldStartInDetailView())" in template
-    assert 'image.addEventListener("load", centerDetailView)' in template
+    assert 'image.addEventListener("load", () =>' in template
+    assert "centerDetailView();" in template
     assert 'zoom.textContent = enabled ? "Fit slide" : "View details"' in template
 
 
@@ -50,6 +51,8 @@ def test_tour_supports_real_desktop_and_mobile_screenshot_pairs():
     assert 'data-format="mobile"' in template
     assert "function setFormatView(requestedFormat)" in template
     assert "function shouldStartInMobileView()" in template
+    assert "function alignArrowsToImage()" in template
+    assert 'window.addEventListener("resize", alignArrowsToImage)' in template
     assert 'zoom.hidden = hasMobileView' in template
     assert ".tour-lightbox-format button" in css
     assert ".tour-lightbox.is-mobile-format img" in css

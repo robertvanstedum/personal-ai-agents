@@ -467,6 +467,7 @@
     const lightboxPrevious = dialog?.querySelector(".tour-lightbox-prev");
     const lightboxNext = dialog?.querySelector(".tour-lightbox-next");
     const lightboxStage = dialog?.querySelector(".tour-lightbox-stage");
+    const lightboxMedia = dialog?.querySelector(".tour-lightbox-media");
     const domainMap = document.querySelector(".tour-domain-map");
     let lightboxLinks = [];
     let lightboxIndex = 0;
@@ -476,6 +477,7 @@
     if (!dialog || !image || !caption || !count || !zoom || !format ||
         formatButtons.length !== 2 || !close ||
         !lightboxPrevious || !lightboxNext || !lightboxStage ||
+        !lightboxMedia ||
         typeof dialog.showModal !== "function") {
       return;
     }
@@ -493,6 +495,19 @@
           Math.max(0, (lightboxStage.scrollWidth -
             lightboxStage.clientWidth) / 2);
         lightboxStage.scrollTop = 0;
+      });
+    }
+
+    function alignArrowsToImage() {
+      if (!image.complete || !image.naturalWidth) return;
+      requestAnimationFrame(() => {
+        const mediaRect = lightboxMedia.getBoundingClientRect();
+        const imageRect = image.getBoundingClientRect();
+        const inset = 10;
+        lightboxPrevious.style.left =
+          `${Math.max(4, imageRect.left - mediaRect.left + inset)}px`;
+        lightboxNext.style.right =
+          `${Math.max(4, mediaRect.right - imageRect.right + inset)}px`;
       });
     }
 
@@ -621,7 +636,11 @@
       if (dialog.classList.contains("has-mobile-view")) return;
       setDetailView(!dialog.classList.contains("is-detail-view"));
     });
-    image.addEventListener("load", centerDetailView);
+    image.addEventListener("load", () => {
+      centerDetailView();
+      alignArrowsToImage();
+    });
+    window.addEventListener("resize", alignArrowsToImage);
     close.addEventListener("click", () => dialog.close());
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) {
