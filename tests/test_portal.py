@@ -49,3 +49,17 @@ def test_proxy_nav_shows_owner_workspaces_to_owner():
     )
     assert 'href="/guild"' in html
     assert 'href="/app/cos"' in html
+
+
+def test_proxy_nav_has_mobile_safe_workspace_scroller():
+    from minimoi_portal.proxy import _portal_nav_html
+
+    html = _portal_nav_html(
+        {"tier": "owner", "display_name": "Robert"},
+        "/app/german",
+    )
+    assert 'id="portal-nav-workspaces"' in html
+    assert 'class="portal-workspace-link"' in html
+    assert "@media (max-width:768px)" in html
+    assert "overflow-x:auto" in html
+    assert ".portal-nav-account, .portal-nav-signout { display:none; }" in html

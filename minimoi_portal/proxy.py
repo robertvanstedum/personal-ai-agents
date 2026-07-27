@@ -108,10 +108,10 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
     nav_links = []
     for workspace in workspace_navigation(user):
         label = workspace.get("short_label", workspace["label"])
-        margin = "" if workspace["key"] == "cos" else "margin-right:14px;"
         nav_links.append(
             f'<a href="{workspace["path"]}" '
-            f'style="color:#C68A5E;text-decoration:none;{margin}'
+            f'class="portal-workspace-link" '
+            f'style="color:#C68A5E;text-decoration:none;'
             f'{active_styles[workspace["key"]]}">{label}</a>'
         )
     workspace_links = "".join(nav_links)
@@ -133,7 +133,32 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
         offset_css = "body{padding-top:38px!important;}"
 
     return f"""
-<style id="portal-offset-css">{offset_css}</style>
+<style id="portal-offset-css">
+  {offset_css}
+  #portal-nav-bar, #portal-nav-bar * {{ box-sizing:border-box; }}
+  #portal-nav-workspaces {{
+    min-width:0;display:flex;align-items:center;gap:14px;
+    white-space:nowrap;
+  }}
+  @media (max-width:768px) {{
+    #portal-nav-bar {{ padding:0 10px!important; }}
+    #portal-nav-brand {{
+      flex:0 0 auto;margin-right:10px!important;white-space:nowrap;
+    }}
+    #portal-nav-divider {{ display:none; }}
+    #portal-nav-workspaces {{
+      flex:1 1 auto;overflow-x:auto;overflow-y:hidden;
+      gap:16px;padding:0 4px;
+      scrollbar-width:none;-webkit-overflow-scrolling:touch;
+      overscroll-behavior-x:contain;
+    }}
+    #portal-nav-workspaces::-webkit-scrollbar {{ display:none; }}
+    .portal-workspace-link {{
+      flex:0 0 auto;margin-right:0!important;white-space:nowrap;
+    }}
+    .portal-nav-account, .portal-nav-signout {{ display:none; }}
+  }}
+</style>
 <div id="portal-nav-bar" style="
   position:fixed;top:0;left:0;right:0;z-index:999999;
   height:38px;background:#12122a;color:#e8e8e8;
@@ -142,11 +167,11 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
   font-size:13px;border-bottom:1px solid rgba(255,255,255,0.12);
   box-shadow:0 1px 8px rgba(0,0,0,0.4);
 ">
-  <a href="/dashboard" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
-  <span style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
-  {workspace_links}
-  <a href="/account/password" style="color:rgba(255,255,255,0.45);text-decoration:none;margin-left:auto;margin-right:12px;">{display_name}</a>
-  <a href="/logout" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;">Sign out</a>
+  <a id="portal-nav-brand" href="/dashboard" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
+  <span id="portal-nav-divider" style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
+  <span id="portal-nav-workspaces">{workspace_links}</span>
+  <a class="portal-nav-account" href="/account/password" style="color:rgba(255,255,255,0.45);text-decoration:none;margin-left:auto;margin-right:12px;">{display_name}</a>
+  <a class="portal-nav-signout" href="/logout" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;">Sign out</a>
 </div>
 """
 
