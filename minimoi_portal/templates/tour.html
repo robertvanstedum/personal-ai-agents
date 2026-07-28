@@ -8,7 +8,7 @@
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/portal.css?v=20260727-ui12">
+  <link rel="stylesheet" href="/static/portal.css?v=20260727-ui13">
 </head>
 <body class="tour">
 
@@ -38,7 +38,7 @@
 <main class="tour-main">
   <header class="tour-intro">
     <p class="front-eyebrow">A look inside</p>
-    <h1>mini-moi in use</h1>
+    <h1>mini-moi — personal AI agent platform</h1>
     <p>
       Follow the actions through each domain. These are static views of the
       real system: no account, private data, or live production access is included.
@@ -161,7 +161,6 @@
     <div class="tour-gallery tour-gallery-featured">
       <figure class="tour-shot">
         <a class="tour-shot-link" href="/static/tour/german-landing.jpg"
-           data-mobile-src="/static/tour/german-landing-mobile.png"
            aria-label="View Mein Deutsch landing full size">
           <img src="/static/tour/german-landing.jpg"
                alt="Mein Deutsch landing page"
@@ -250,6 +249,60 @@
         </a>
         <figcaption><span>10</span> Return to conversation, writing, and reading history in Archiv</figcaption>
       </figure>
+    </div>
+    <div class="tour-mobile-gallery" hidden aria-hidden="true">
+      <a class="tour-mobile-shot-link"
+         href="/static/tour/german-mobile-01-landing.webp"
+         data-caption="01 Start at Mein Deutsch"
+         data-alt="Mein Deutsch mobile landing page"></a>
+      <a class="tour-mobile-shot-link"
+         href="/static/tour/german-mobile-02-lesen.webp"
+         data-caption="02 Choose Lesen and an area of interest"
+         data-alt="Mobile Lesen page with four reading areas"></a>
+      <a class="tour-mobile-shot-link"
+         href="/static/tour/german-mobile-03-lesen-translate.webp"
+         data-caption="03 Read a current article and translate in place"
+         data-alt="German article with an in-place English translation"></a>
+      <a class="tour-mobile-shot-link"
+         href="/static/tour/german-mobile-04-lesen-note.webp"
+         data-caption="04 Respond in German to what you read"
+         data-alt="Writing a German note about the selected article"></a>
+      <a class="tour-mobile-shot-link"
+         href="/static/tour/german-mobile-05-lesen-correction.webp"
+         data-caption="05 Review correction and explanation"
+         data-alt="German writing correction with English explanation"></a>
+      <a class="tour-mobile-shot-link"
+         href="/static/tour/german-mobile-06-lesen-source.webp"
+         data-caption="06 Continue to the original article when useful"
+         data-alt="Original German news article on its source website"></a>
+      <a class="tour-mobile-shot-link"
+         href="/static/tour/german-mobile-07-lesen-archive.webp"
+         data-caption="07 Find saved reading and correction in Archiv"
+         data-alt="Saved German reading note and correction in Archiv"></a>
+      <a class="tour-mobile-shot-link"
+         href="/static/tour/german-mobile-08-gespraeche-persona.webp"
+         data-caption="08 Choose a conversation persona"
+         data-alt="German conversation persona selection on mobile"></a>
+      <a class="tour-mobile-shot-link"
+         href="/static/tour/german-mobile-09-gespraeche-setup.webp"
+         data-caption="09 Review the scenario and select a realtime provider"
+         data-alt="Stefan scenario with realtime voice provider selection"></a>
+      <a class="tour-mobile-shot-link"
+         href="/static/tour/german-mobile-10-gespraeche-active.webp"
+         data-caption="10 Speak naturally while the transcript remains hidden"
+         data-alt="Active realtime German voice session on mobile"></a>
+      <a class="tour-mobile-shot-link"
+         href="/static/tour/german-mobile-11-gespraeche-transcript.webp"
+         data-caption="11 End the session and review the transcript"
+         data-alt="Completed German conversation transcript ready for analysis"></a>
+      <a class="tour-mobile-shot-link"
+         href="/static/tour/german-mobile-12-gespraeche-feedback.webp"
+         data-caption="12 Analyze corrections, strengths, and next focus"
+         data-alt="German conversation feedback with corrections and next focus"></a>
+      <a class="tour-mobile-shot-link"
+         href="/static/tour/german-mobile-13-gespraeche-archive.webp"
+         data-caption="13 Return to the retained conversation in Archiv"
+         data-alt="Saved German conversation transcript in Archiv"></a>
     </div>
   </section>
 
@@ -469,8 +522,11 @@
     const lightboxStage = dialog?.querySelector(".tour-lightbox-stage");
     const lightboxMedia = dialog?.querySelector(".tour-lightbox-media");
     const domainMap = document.querySelector(".tour-domain-map");
+    let desktopLightboxLinks = [];
+    let mobileLightboxLinks = [];
     let lightboxLinks = [];
     let lightboxIndex = 0;
+    let lightboxFormat = "desktop";
     let activeTrigger = null;
     let activeLink = null;
 
@@ -517,56 +573,65 @@
       ).matches;
     }
 
-    function setFormatView(requestedFormat) {
-      if (!activeLink) return;
-      const mobileSrc = activeLink.dataset.mobileSrc;
-      const hasMobileView = Boolean(mobileSrc);
-      const selectedFormat =
+    function linkAlt(link) {
+      return link.dataset.alt || link.querySelector("img")?.alt || "";
+    }
+
+    function linkCaption(link) {
+      return link.dataset.caption ||
+        link.closest("figure")?.querySelector("figcaption")?.textContent.trim() ||
+        linkAlt(link);
+    }
+
+    function setFormatView(requestedFormat, requestedIndex = 0) {
+      const hasMobileView = mobileLightboxLinks.length > 0;
+      lightboxFormat =
         requestedFormat === "mobile" && hasMobileView ? "mobile" : "desktop";
-      const thumbnail = activeLink.querySelector("img");
-      const source =
-        selectedFormat === "mobile" ? mobileSrc : activeLink.href;
+      lightboxLinks =
+        lightboxFormat === "mobile"
+          ? mobileLightboxLinks
+          : desktopLightboxLinks;
+      if (!lightboxLinks.length) return;
 
       dialog.classList.toggle("has-mobile-view", hasMobileView);
       dialog.classList.toggle(
         "is-mobile-format",
-        selectedFormat === "mobile"
+        lightboxFormat === "mobile"
       );
       format.hidden = !hasMobileView;
-      zoom.hidden = hasMobileView;
+      zoom.hidden = lightboxFormat === "mobile";
       formatButtons.forEach((button) => {
         button.setAttribute(
           "aria-pressed",
-          String(button.dataset.format === selectedFormat)
+          String(button.dataset.format === lightboxFormat)
         );
       });
       setDetailView(false);
-      image.src = source;
-      image.alt = `${thumbnail?.alt || ""} (${selectedFormat} view)`;
+      renderLightboxImage(requestedIndex);
     }
 
-    function showLightboxImage(index) {
+    function renderLightboxImage(index) {
       if (!lightboxLinks.length) return;
       lightboxIndex =
         (index + lightboxLinks.length) % lightboxLinks.length;
       const link = lightboxLinks[lightboxIndex];
-      const thumbnail = link.querySelector("img");
-      const figureCaption = link.closest("figure")?.querySelector("figcaption");
       activeLink = link;
-      caption.textContent =
-        figureCaption?.textContent.trim() || thumbnail?.alt || "";
+      caption.textContent = linkCaption(link);
       count.textContent =
         `${lightboxIndex + 1} of ${lightboxLinks.length}`;
       const hasMultipleSlides = lightboxLinks.length > 1;
       lightboxPrevious.hidden = !hasMultipleSlides;
       lightboxNext.hidden = !hasMultipleSlides;
-      const hasMobileView = Boolean(link.dataset.mobileSrc);
-      setFormatView(
-        hasMobileView && shouldStartInMobileView() ? "mobile" : "desktop"
-      );
-      if (!hasMobileView) {
+      image.src = link.href;
+      image.alt = `${linkAlt(link)} (${lightboxFormat} view)`;
+      setDetailView(false);
+      if (lightboxFormat === "desktop") {
         setDetailView(shouldStartInDetailView());
       }
+    }
+
+    function showLightboxImage(index) {
+      renderLightboxImage(index);
     }
 
     function setDetailView(enabled) {
@@ -580,12 +645,22 @@
 
     function openDomain(domainKey, trigger = null) {
       const section = document.getElementById(domainKey);
-      lightboxLinks = Array.from(
-        section?.querySelectorAll(".tour-shot-link") || []
+      desktopLightboxLinks = Array.from(
+        section?.querySelectorAll(".tour-gallery .tour-shot-link") || []
       );
-      if (!lightboxLinks.length) return;
+      mobileLightboxLinks = Array.from(
+        section?.querySelectorAll(
+          ".tour-mobile-gallery .tour-mobile-shot-link"
+        ) || []
+      );
+      if (!desktopLightboxLinks.length) return;
       activeTrigger = trigger;
-      showLightboxImage(0);
+      setFormatView(
+        mobileLightboxLinks.length && shouldStartInMobileView()
+          ? "mobile"
+          : "desktop",
+        0
+      );
       history.replaceState(null, "", `#${domainKey}`);
       if (!dialog.open) {
         dialog.showModal();
@@ -606,11 +681,24 @@
     document.querySelectorAll(".tour-shot-link").forEach((link) => {
       link.addEventListener("click", (event) => {
         event.preventDefault();
-        lightboxLinks = Array.from(
-          link.closest(".tour-gallery")?.querySelectorAll(".tour-shot-link") || [link]
+        const section = link.closest(".tour-section");
+        desktopLightboxLinks = Array.from(
+          section?.querySelectorAll(".tour-gallery .tour-shot-link") || [link]
         );
-        lightboxIndex = lightboxLinks.indexOf(link);
-        showLightboxImage(lightboxIndex);
+        mobileLightboxLinks = Array.from(
+          section?.querySelectorAll(
+            ".tour-mobile-gallery .tour-mobile-shot-link"
+          ) || []
+        );
+        const desktopIndex = desktopLightboxLinks.indexOf(link);
+        setFormatView(
+          mobileLightboxLinks.length && shouldStartInMobileView()
+            ? "mobile"
+            : "desktop",
+          mobileLightboxLinks.length && shouldStartInMobileView()
+            ? 0
+            : desktopIndex
+        );
         dialog.showModal();
       });
     });
@@ -629,11 +717,11 @@
     formatButtons.forEach((button) => {
       button.addEventListener(
         "click",
-        () => setFormatView(button.dataset.format)
+        () => setFormatView(button.dataset.format, 0)
       );
     });
     image.addEventListener("dblclick", () => {
-      if (dialog.classList.contains("has-mobile-view")) return;
+      if (dialog.classList.contains("is-mobile-format")) return;
       setDetailView(!dialog.classList.contains("is-detail-view"));
     });
     image.addEventListener("load", () => {
@@ -659,8 +747,11 @@
     dialog.addEventListener("close", () => {
       setDetailView(false);
       image.removeAttribute("src");
+      desktopLightboxLinks = [];
+      mobileLightboxLinks = [];
       lightboxLinks = [];
       lightboxIndex = 0;
+      lightboxFormat = "desktop";
       activeLink = null;
       history.replaceState(
         null,

@@ -33,27 +33,46 @@ def test_tour_mobile_viewer_covers_portrait_and_landscape():
     assert "@media (max-width: 900px) and (orientation: landscape)" in css
 
 
-def test_tour_supports_real_desktop_and_mobile_screenshot_pairs():
+def test_tour_supports_distinct_desktop_and_mobile_story_collections():
     template = (ROOT / "minimoi_portal/templates/tour.html").read_text(
         encoding="utf-8"
     )
     css = (ROOT / "minimoi_portal/static/portal.css").read_text(encoding="utf-8")
-    mobile_asset = (
-        ROOT / "minimoi_portal/static/tour/german-landing-mobile.png"
-    )
+    mobile_assets = [
+        "german-mobile-01-landing.webp",
+        "german-mobile-02-lesen.webp",
+        "german-mobile-03-lesen-translate.webp",
+        "german-mobile-04-lesen-note.webp",
+        "german-mobile-05-lesen-correction.webp",
+        "german-mobile-06-lesen-source.webp",
+        "german-mobile-07-lesen-archive.webp",
+        "german-mobile-08-gespraeche-persona.webp",
+        "german-mobile-09-gespraeche-setup.webp",
+        "german-mobile-10-gespraeche-active.webp",
+        "german-mobile-11-gespraeche-transcript.webp",
+        "german-mobile-12-gespraeche-feedback.webp",
+        "german-mobile-13-gespraeche-archive.webp",
+    ]
 
-    assert (
-        'data-mobile-src="/static/tour/german-landing-mobile.png"'
-        in template
-    )
+    assert 'class="tour-mobile-gallery"' in template
+    assert template.count('class="tour-mobile-shot-link"') == len(mobile_assets)
+    for mobile_asset in mobile_assets:
+        assert f"/static/tour/{mobile_asset}" in template
+        assert (
+            ROOT / "minimoi_portal/static/tour" / mobile_asset
+        ).is_file()
+
     assert 'id="tour-lightbox-format"' in template
     assert 'data-format="desktop"' in template
     assert 'data-format="mobile"' in template
-    assert "function setFormatView(requestedFormat)" in template
+    assert "let mobileLightboxLinks = [];" in template
+    assert "function setFormatView(requestedFormat, requestedIndex = 0)" in template
+    assert "function renderLightboxImage(index)" in template
     assert "function shouldStartInMobileView()" in template
     assert "function alignArrowsToImage()" in template
     assert 'window.addEventListener("resize", alignArrowsToImage)' in template
-    assert 'zoom.hidden = hasMobileView' in template
+    assert 'zoom.hidden = lightboxFormat === "mobile";' in template
     assert ".tour-lightbox-format button" in css
+    assert ".tour-lightbox.is-mobile-format .tour-lightbox-stage" in css
     assert ".tour-lightbox.is-mobile-format img" in css
-    assert mobile_asset.is_file()
+    assert ".tour-lightbox.is-mobile-format .tour-lightbox-zoom" in css
