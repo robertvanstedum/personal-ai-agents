@@ -258,14 +258,29 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         "/static/tour/german-woerter-current.jpg",
         "/static/tour/german-archiv-current.jpg",
     ]
-    german_landing_link = soup.select_one(
-        'section#german .tour-shot-link[href="/static/tour/german-landing.jpg"]'
-    )
-    assert german_landing_link is not None
-    assert (
-        german_landing_link.get("data-mobile-src")
-        == "/static/tour/german-landing-mobile.png"
-    )
+    german_mobile_hrefs = [
+        link.get("href")
+        for link in soup.select("section#german .tour-mobile-shot-link")
+    ]
+    assert german_mobile_hrefs == [
+        "/static/tour/german-mobile-01-landing.webp",
+        "/static/tour/german-mobile-02-lesen.webp",
+        "/static/tour/german-mobile-03-lesen-translate.webp",
+        "/static/tour/german-mobile-04-lesen-note.webp",
+        "/static/tour/german-mobile-05-lesen-correction.webp",
+        "/static/tour/german-mobile-06-lesen-source.webp",
+        "/static/tour/german-mobile-07-lesen-archive.webp",
+        "/static/tour/german-mobile-08-gespraeche-persona.webp",
+        "/static/tour/german-mobile-09-gespraeche-setup.webp",
+        "/static/tour/german-mobile-10-gespraeche-active.webp",
+        "/static/tour/german-mobile-11-gespraeche-transcript.webp",
+        "/static/tour/german-mobile-12-gespraeche-feedback.webp",
+        "/static/tour/german-mobile-13-gespraeche-archive.webp",
+    ]
+    for href in german_mobile_hrefs:
+        assert (
+            static_root / href.removeprefix("/static/")
+        ).is_file()
     assert len(soup.select("section#portuguese .tour-shot")) == 6
     assert len(soup.select("section#guild .tour-shot")) == 2
     assert len(soup.select("section#cos .tour-shot")) == 2
