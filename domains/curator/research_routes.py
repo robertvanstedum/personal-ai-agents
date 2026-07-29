@@ -565,6 +565,12 @@ _DD_STATE_PATH = RESEARCH_ROOT / 'data' / 'dd_run_state.json'
 _DD_STATE_MAX_AGE_MINUTES = 120   # Opus calls can take 2–5 min; generous ceiling
 _dd_proc: subprocess.Popen | None = None
 
+# Article-level Scan generation follows the same non-blocking pattern. The
+# request returns after the job is durable; the browser polls the status route.
+_SCAN_STATE_PATH = RESEARCH_ROOT / 'data' / 'scan_run_state.json'
+_SCAN_STATE_MAX_AGE_MINUTES = 15
+_scan_proc: subprocess.Popen | None = None
+
 
 def _is_proc_alive() -> bool:
     """Check liveness using proc.poll() if we have the object, else fall back to os.kill."""
@@ -763,6 +769,156 @@ def _dd_state_active() -> bool:
     except Exception:
         return False
     return True
+
+
+def _scan_state_active() -> bool:
+    """Return True while the current article-level Scan process is alive."""
+    global _scan_proc
+    if not _SCAN_STATE_PATH.exists():
+        return False
+    try:
+        state = json.loads(_SCAN_STATE_PATH.read_text())
+        started = datetime.fromisoformat(state.get('started_at', ''))
+        if datetime.now(timezone.utc) - started > timedelta(minutes=_SCAN_STATE_MAX_AGE_MINUTES):
+            return False
+        if _scan_proc is not None:
+            return _scan_proc.poll() is None
+        os.kill(int(state['pid']), 0)
+        return True
+    except (OSError, ValueError, KeyError, json.JSONDecodeError):
+        return False
+
+
+def _scan_error_excerpt(state: dict) -> str:
+    log_path = Path(state.get('log_path', ''))
+    if log_path.exists():
+        try:
+            text = log_path.read_text(errors='replace').strip()
+            if text:
+                return text[-500:]
+        except OSError:
+            pass
+    return "Scan generation failed. Please try again."
+
+
+@research_bp.route('/api/research/generate-scan', methods=['POST'])
+def api_research_generate_scan():
+    """Start a non-blocking article-level Scan from submitted article data."""
+    global _scan_proc
+
+    body = request.get_json() or {}
+    hash_id = str(body.get('hash_id', '')).strip().lower()
+    interest = str(body.get('interest', '')).strip()
+    focus = str(body.get('focus', '')).strip()
+    raw_article = body.get('article') or {}
+
+    if not _re.match(r'^[a-f0-9]{5}$', hash_id):
+        return jsonify({"ok": False, "error": "invalid article ID"}), 400
+    if not interest:
+        return jsonify({"ok": False, "error": "interest is required"}), 400
+
+    article = {
+        "hash_id": hash_id,
+        "title": str(raw_article.get('title', '')).strip(),
+        "url": str(raw_article.get('url') or raw_article.get('link') or '').strip(),
+        "source": str(raw_article.get('source', '')).strip(),
+        "category": str(raw_article.get('category', 'other')).strip() or 'other',
+        "published": raw_article.get('published', ''),
+        "summary": raw_article.get('summary', ''),
+    }
+    if not article["title"] or not article["url"]:
+        return jsonify({"ok": False, "error": "article title and URL are required"}), 400
+
+    existing = _find_dd_md(hash_id)
+    if existing:
+        return jsonify({
+            "ok": True,
+            "running": False,
+            "view_url": f"/research/scan/{hash_id}",
+        })
+
+    if _scan_state_active():
+        state = json.loads(_SCAN_STATE_PATH.read_text())
+        return jsonify({
+            "ok": False,
+            "error": f"A Scan is already running for '{state.get('title', 'another article')}'.",
+        }), 409
+
+    jobs_dir = RESEARCH_ROOT / 'data' / 'scan_jobs'
+    jobs_dir.mkdir(parents=True, exist_ok=True)
+    payload_path = jobs_dir / f'{hash_id}.json'
+    log_path = jobs_dir / f'{hash_id}.log'
+    payload_path.write_text(json.dumps({
+        "hash_id": hash_id,
+        "article": article,
+        "interest": interest,
+        "focus": focus,
+    }, indent=2))
+
+    script = _REPO_ROOT / 'domains' / 'curator' / 'scan_job.py'
+    try:
+        with open(log_path, 'wb') as log_file:
+            _scan_proc = subprocess.Popen(
+                [sys.executable, str(script), '--payload', str(payload_path)],
+                cwd=str(_REPO_ROOT),
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+            )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return jsonify({"ok": False, "error": f"failed to start Scan: {exc}"}), 500
+
+    state = {
+        "hash_id": hash_id,
+        "title": article["title"],
+        "pid": _scan_proc.pid,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "payload_path": str(payload_path),
+        "log_path": str(log_path),
+    }
+    _SCAN_STATE_PATH.write_text(json.dumps(state, indent=2))
+    return jsonify({"ok": True, "running": True, "hash_id": hash_id})
+
+
+@research_bp.route('/api/research/generate-scan/status')
+def api_research_generate_scan_status():
+    """Poll the current article-level Scan job."""
+    global _scan_proc
+
+    hash_id = request.args.get('hash_id', '').strip().lower()
+    if not _re.match(r'^[a-f0-9]{5}$', hash_id):
+        return jsonify({"ok": False, "error": "invalid article ID"}), 400
+
+    if _find_dd_md(hash_id):
+        _scan_proc = None
+        _SCAN_STATE_PATH.unlink(missing_ok=True)
+        return jsonify({
+            "ok": True,
+            "running": False,
+            "view_url": f"/research/scan/{hash_id}",
+        })
+
+    if not _SCAN_STATE_PATH.exists():
+        return jsonify({"ok": False, "running": False, "error": "Scan job not found"}), 404
+
+    try:
+        state = json.loads(_SCAN_STATE_PATH.read_text())
+    except (OSError, json.JSONDecodeError):
+        return jsonify({"ok": False, "running": False, "error": "Scan status is unavailable"}), 500
+
+    if state.get('hash_id') != hash_id:
+        return jsonify({"ok": False, "running": False, "error": "A different Scan job is active"}), 409
+
+    if _scan_state_active():
+        return jsonify({"ok": True, "running": True, "started_at": state.get('started_at')})
+
+    failed = _scan_proc is None or _scan_proc.poll() not in (None, 0)
+    _scan_proc = None
+    return jsonify({
+        "ok": False,
+        "running": False,
+        "failed": failed,
+        "error": _scan_error_excerpt(state),
+    }), 500
 
 
 def _next_dive_output_path(topic: str) -> Path:

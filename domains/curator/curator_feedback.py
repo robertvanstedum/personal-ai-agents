@@ -17,6 +17,7 @@ import json
 import sys
 import re
 import os
+import threading
 from datetime import datetime
 from pathlib import Path
 from anthropic import Anthropic
@@ -36,6 +37,7 @@ CURATOR_OUTPUT = REPO_ROOT / "curator_output.txt"
 _DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(REPO_ROOT / "data" / "curator")))
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
 PREFERENCES_FILE = _DATA_DIR / "curator_preferences.json"
+_FEEDBACK_LOCK = threading.RLock()
 
 def get_anthropic_api_key():
     """Get Anthropic API key from keychain, env, or SSM"""
@@ -78,9 +80,11 @@ def load_preferences():
     }
 
 def save_preferences(prefs):
-    """Save preferences to JSON"""
-    with open(PREFERENCES_FILE, 'w') as f:
+    """Save preferences atomically so a failed write cannot corrupt feedback."""
+    tmp_path = PREFERENCES_FILE.with_suffix('.json.tmp')
+    with open(tmp_path, 'w') as f:
         json.dump(prefs, f, indent=2)
+    tmp_path.replace(PREFERENCES_FILE)
     print(f"💾 Preferences saved to {PREFERENCES_FILE}")
 
 def parse_curator_output():
@@ -1263,7 +1267,34 @@ Return ONLY valid JSON, no explanation."""
             "signals": []
         }
 
-def record_feedback(rank, feedback_type, user_words, article, channel='cli'):
+def _deterministic_metadata(article):
+    """Metadata available without an LLM call.
+
+    Web buttons provide only a generic action, not an explanation to interpret.
+    Source/domain learning remains useful, while content/style inference is
+    intentionally left empty until the user supplies actual written feedback.
+    """
+    return {
+        "content_type": [],
+        "appeal": [],
+        "style": [],
+        "themes": [],
+        "depth": "unknown",
+        "signals": [],
+        "source": article.get("source", ""),
+        "url": article.get("url", ""),
+    }
+
+
+def record_feedback(
+    rank,
+    feedback_type,
+    user_words,
+    article,
+    channel='cli',
+    *,
+    analyze_metadata=True,
+):
     """Record feedback and update learned patterns
     
     Args:
@@ -1273,20 +1304,19 @@ def record_feedback(rank, feedback_type, user_words, article, channel='cli'):
         article: Article data dict
         channel: Source of feedback (cli, web_ui, telegram)
     """
-    prefs = load_preferences()
-    today = datetime.now().strftime("%Y-%m-%d")
-    
-    # Ensure today's entry exists
-    if today not in prefs['feedback_history']:
-        prefs['feedback_history'][today] = {
-            'liked': [],
-            'disliked': [],
-            'saved': []
-        }
-    
-    # Extract metadata using Claude
-    print("🧠 Analyzing your feedback...")
-    metadata = extract_metadata(article, user_words, feedback_type)
+    if feedback_type not in {"liked", "disliked", "saved"}:
+        raise ValueError(f"Unsupported feedback type: {feedback_type}")
+
+    required = ("title", "source", "category", "url")
+    missing = [key for key in required if not article.get(key)]
+    if missing:
+        raise ValueError(f"Article is missing: {', '.join(missing)}")
+
+    if analyze_metadata:
+        print("🧠 Analyzing your feedback...")
+        metadata = extract_metadata(article, user_words, feedback_type)
+    else:
+        metadata = _deterministic_metadata(article)
 
     # Inject source and URL into metadata so update_learned_patterns can track them
     if article.get('source'):
@@ -1294,10 +1324,13 @@ def record_feedback(rank, feedback_type, user_words, article, channel='cli'):
     if article.get('url'):
         metadata['url'] = article['url']
 
-    # Create feedback entry
+    today = datetime.now().strftime("%Y-%m-%d")
+    article_id = article.get('hash_id') or (
+        f"fallback-{article['source'].lower().replace(' ', '-')}-{today}-{rank}"
+    )
     feedback_entry = {
         'rank': rank,
-        'article_id': article.get('hash_id', f"fallback-{article['source'].lower().replace(' ', '-')}-{today}-{rank}"),
+        'article_id': article_id,
         'url': article['url'],
         'title': article['title'],
         'source': article['source'],
@@ -1306,28 +1339,48 @@ def record_feedback(rank, feedback_type, user_words, article, channel='cli'):
         'your_words': user_words,
         'extracted_signals': metadata
     }
-    
-    # Log to Signal Store
-    log_feedback(
-        article_id=feedback_entry['article_id'],
-        action=feedback_type,
-        channel=channel,
-        title=article['title'],
-        source=article['source'],
-        category=article['category'],
-        rank=rank,
-        reason=user_words,
-        metadata=metadata
-    )
-    
-    # Add to appropriate list
-    prefs['feedback_history'][today][feedback_type].append(feedback_entry)
-    
-    # Update learned patterns
-    update_learned_patterns(prefs, metadata, feedback_type)
-    
-    # Save
-    save_preferences(prefs)
+
+    with _FEEDBACK_LOCK:
+        prefs = load_preferences()
+        day_feedback = prefs['feedback_history'].setdefault(today, {
+            'liked': [],
+            'disliked': [],
+            'saved': []
+        })
+
+        # Browser retries should not double-count the same action.
+        existing = next(
+            (
+                item for item in day_feedback[feedback_type]
+                if item.get('article_id') == article_id
+                or (item.get('url') and item.get('url') == article['url'])
+            ),
+            None,
+        )
+        if existing:
+            return {"entry": existing, "duplicate": True}
+
+        day_feedback[feedback_type].append(feedback_entry)
+        update_learned_patterns(prefs, metadata, feedback_type)
+        save_preferences(prefs)
+
+        # Append the secondary event only after the canonical durable write.
+        # A telemetry failure must not turn a successful user action into an
+        # error response.
+        try:
+            log_feedback(
+                article_id=feedback_entry['article_id'],
+                action=feedback_type,
+                channel=channel,
+                title=article['title'],
+                source=article['source'],
+                category=article['category'],
+                rank=rank,
+                reason=user_words,
+                metadata=metadata
+            )
+        except Exception as exc:
+            print(f"⚠️  Signal Store append skipped: {exc}")
     
     # Show what was detected
     print(f"\n✅ Feedback recorded for article #{rank}")
@@ -1337,6 +1390,7 @@ def record_feedback(rank, feedback_type, user_words, article, channel='cli'):
     print(f"   Style: {', '.join(metadata.get('style', []))}")
     if metadata.get('themes'):
         print(f"   Themes: {', '.join(metadata['themes'])}")
+    return {"entry": feedback_entry, "duplicate": False}
 
 def update_learned_patterns(prefs, metadata, feedback_type):
     """Update aggregate patterns based on new feedback.

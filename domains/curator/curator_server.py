@@ -113,12 +113,22 @@ def _load_briefing_articles():
         return None
 
     now = datetime.now(timezone.utc)
-    today = datetime.now()
-    day_str = today.strftime('%A')
-    date_str = today.strftime('%B %d, %Y')
 
-    # Derive briefing_date and model_display from first article if available
-    briefing_date = raw[0].get('briefing_date', today.strftime('%Y-%m-%d')) if raw else today.strftime('%Y-%m-%d')
+    # Prefer explicit generation metadata. Older files did not include it, so
+    # their modification date is a truthful fallback; never label stale data
+    # with the server's current date.
+    candidate = (
+        (raw[0].get('briefing_date') or raw[0].get('date'))
+        if raw else None
+    )
+    try:
+        briefing_dt = datetime.strptime(str(candidate)[:10], '%Y-%m-%d')
+    except (TypeError, ValueError):
+        briefing_dt = datetime.fromtimestamp(json_path.stat().st_mtime, timezone.utc)
+    briefing_date = briefing_dt.strftime('%Y-%m-%d')
+    day_str = briefing_dt.strftime('%A')
+    date_str = briefing_dt.strftime('%B %d, %Y')
+
     model_display = raw[0].get('briefing_model', 'grok-4-1') if raw else 'grok-4-1'
 
     articles = []
@@ -149,14 +159,17 @@ def _load_radar_articles():
 # ── Landing page data helpers ─────────────────────────────────────────────────
 
 def _get_latest_briefing_date() -> str:
-    """Return formatted date string from latest briefing JSON. Falls back to dash."""
+    """Return the persisted briefing date without claiming stale data is today."""
+    latest_path = _DATA_DIR / 'curator_latest.json'
     try:
-        raw = json.loads((_DATA_DIR / 'curator_latest.json').read_text())
+        raw = json.loads(latest_path.read_text())
         if raw:
             d = raw[0].get('briefing_date') or raw[0].get('date', '')
             if d:
                 from datetime import datetime as _dt
                 return _dt.strptime(d[:10], '%Y-%m-%d').strftime('%A, %B %-d, %Y')
+            fallback = datetime.fromtimestamp(latest_path.stat().st_mtime, timezone.utc)
+            return fallback.strftime('%A, %B %-d, %Y')
     except Exception:
         pass
     return '—'
@@ -227,7 +240,7 @@ def feedback():
     
     # New POST endpoint with article data
     if request.method == 'POST':
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         action = data.get('action', '')
         rank = data.get('rank', '')
         article_data = data.get('article', {})
@@ -1421,8 +1434,11 @@ def health():
 # ─────────────────────────────────────────────────────────────────────────────
 
 try:
-    sys.path.insert(0, str(BASE_DIR))  # ensure sibling import resolves whether run as a script or imported as a module
-    from research_routes import research_bp
+    # Use the package-qualified module so tests and the running server share
+    # one set of background-job state instead of importing research_routes
+    # twice under different names.
+    sys.path.insert(0, str(REPO_ROOT))
+    from domains.curator.research_routes import research_bp
     app.register_blueprint(research_bp)
     print("✓ Research Intelligence routes loaded")
 except Exception as _research_import_err:
@@ -1481,53 +1497,52 @@ def record_feedback(action, rank, reason):
 
 
 def record_feedback_with_article(action, rank, article_data):
-    """Call curator_feedback.py in workspace with full article metadata (new POST endpoint)"""
-    feedback_script = BASE_DIR / 'curator_feedback.py'
-    
-    if not feedback_script.exists():
-        return {'success': False, 'message': f'curator_feedback.py not found at {feedback_script}'}
-    
-    # Prepare JSON payload with article data
-    payload = {
-        'article': article_data,
-        'your_words': f'{action}d from web UI'
-    }
-    
-    try:
-        # Use venv Python so workspace curator_feedback.py has access to anthropic + other deps
-        venv_python = REPO_ROOT / 'venv' / 'bin' / 'python3'
-        python_cmd = str(venv_python) if venv_python.exists() else 'python3'
+    """Persist web feedback directly from the article payload.
 
-        result = subprocess.run(
-            [python_cmd, str(feedback_script), action, str(rank), '--channel', 'web_ui'],
-            input=json.dumps(payload).encode(),
-            capture_output=True,
-            cwd=BASE_DIR,
-            env={**os.environ, 'PYTHONPATH': str(BASE_DIR)},
-            timeout=30
+    The old subprocess ignored this payload and reparsed curator_output.txt,
+    which is intentionally not mounted in production. Generic button actions
+    also do not contain enough written context to justify an LLM call.
+    """
+    action_config = {
+        'like':    ('liked', 'Liked from Daily briefing', 'liked'),
+        'dislike': ('disliked', 'Passed from Daily briefing', 'passed'),
+        'save':    ('saved', 'Saved from Daily briefing', 'saved'),
+    }
+    if action not in action_config:
+        return {'success': False, 'message': 'Unknown feedback action'}
+
+    feedback_type, note, past_tense = action_config[action]
+    normalized = {
+        'hash_id': article_data.get('hash_id') or article_data.get('id'),
+        'title': article_data.get('title', '').strip(),
+        'url': (article_data.get('url') or article_data.get('link') or '').strip(),
+        'source': article_data.get('source', '').strip(),
+        'category': article_data.get('category', 'other').strip() or 'other',
+    }
+    if not normalized['title'] or not normalized['url'] or normalized['url'] == '#':
+        return {'success': False, 'message': 'This article is missing its title or link'}
+
+    try:
+        from domains.curator.curator_feedback import record_feedback as persist_feedback
+        result = persist_feedback(
+            int(rank),
+            feedback_type,
+            note,
+            normalized,
+            channel='web_ui',
+            analyze_metadata=False,
         )
-        
-        if result.returncode == 0:
-            print(f"✅ Feedback recorded to workspace preferences")
-            return {
-                'success': True,
-                'message': f'Article #{rank} {action}d!'
-            }
-        else:
-            stdout = result.stdout.decode()
-            stderr = result.stderr.decode()
-            print(f"❌ Subprocess failed with return code {result.returncode}")
-            print(f"   stdout: {stdout}")
-            print(f"   stderr: {stderr}")
-            return {
-                'success': False,
-                'message': f'Error (code {result.returncode}): {stderr[:100] or stdout[:100] or "No output"}'
-            }
-    
-    except subprocess.TimeoutExpired:
-        return {'success': False, 'message': 'Timeout waiting for feedback script'}
+        duplicate = bool(result.get('duplicate'))
+        message = (
+            f'Article #{rank} was already {past_tense}'
+            if duplicate
+            else f'Article #{rank} {past_tense}'
+        )
+        print(f"✅ Feedback recorded directly: {feedback_type} article #{rank}")
+        return {'success': True, 'message': message, 'duplicate': duplicate}
     except Exception as e:
-        return {'success': False, 'message': f'Error: {str(e)}'}
+        print(f"❌ Direct feedback write failed: {e}", file=sys.stderr)
+        return {'success': False, 'message': 'Could not record that action. Please try again.'}
 
 
 def trigger_deepdive(hash_id, interest, focus=''):

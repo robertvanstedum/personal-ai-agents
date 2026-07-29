@@ -505,10 +505,15 @@ function esc(s) {
 function showFeedback(button, action, rank) {
     var row = button.closest('.article-card');
     var hashId = row.dataset.hashId || ('row-' + rank);
+    var allBtns = row.querySelectorAll('.action-btn');
+    var originalText = button.textContent;
+    var progressText = {like:'Liking…', dislike:'Passing…', save:'Saving…'}[action] || 'Saving…';
 
-    button.style.opacity = '0.3';
-    button.style.cursor  = 'not-allowed';
-    button.disabled = true;
+    allBtns.forEach(function(btn) {
+        btn.disabled = true;
+        btn.style.cursor = 'not-allowed';
+    });
+    button.textContent = progressText;
 
     var fetchPromise;
     if (IS_GUEST) {
@@ -519,9 +524,9 @@ function showFeedback(button, action, rank) {
         });
     } else {
         var articleData = {
-            id:       hashId,
+            hash_id:  hashId,
             title:    row.dataset.title  || 'Unknown',
-            link:     row.dataset.url    || '#',
+            url:      row.dataset.url    || '#',
             source:   row.dataset.source || 'Unknown',
             category: row.dataset.category || 'other'
         };
@@ -536,12 +541,11 @@ function showFeedback(button, action, rank) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.success) {
-            var allBtns = row.querySelectorAll('.action-btn');
             allBtns.forEach(function(btn) {
                 btn.disabled = true;
                 btn.style.cursor = 'not-allowed';
                 if (btn === button) {
-                    btn.innerHTML = btn.textContent + ' ✓';
+                    btn.textContent = originalText + ' ✓';
                     btn.style.opacity    = '1';
                     btn.style.fontWeight = '700';
                     btn.style.boxShadow  = '0 0 0 2px currentColor';
@@ -555,18 +559,22 @@ function showFeedback(button, action, rank) {
                 addInvestigateButton(rank, hashId);
             }
         } else {
-            button.style.opacity = '1';
-            button.style.cursor  = 'pointer';
-            button.disabled = false;
+            button.textContent = originalText;
+            allBtns.forEach(function(btn) {
+                btn.disabled = false;
+                btn.style.cursor = 'pointer';
+            });
             showToast(data.message || 'Error saving feedback', 'error');
         }
     })
     .catch(function(error) {
         console.error('Feedback error:', error);
-        button.style.opacity = '1';
-        button.style.cursor  = 'pointer';
-        button.disabled = false;
-        showToast('Server error — is curator_server.py running?', 'error');
+        button.textContent = originalText;
+        allBtns.forEach(function(btn) {
+            btn.disabled = false;
+            btn.style.cursor = 'pointer';
+        });
+        showToast('Could not record that action. Please try again.', 'error');
     });
 }
 
@@ -592,10 +600,17 @@ function showToast(message, type) {
 }
 
 // ── Investigate modal ────────────────────────────────────────────────────────
-var _inv = { hashId: '', title: '', url: '', source: '', btn: null };
+var _inv = { hashId: '', title: '', url: '', source: '', category: '', btn: null };
 
-function openInvestigateModal(hashId, title, url, source, btn) {
-    _inv = { hashId: hashId, title: title, url: url, source: source, btn: btn };
+function openInvestigateModal(hashId, title, url, source, category, btn) {
+    _inv = {
+        hashId: hashId,
+        title: title,
+        url: url,
+        source: source,
+        category: category,
+        btn: btn
+    };
     document.getElementById('inv-article-title').textContent  = title;
     document.getElementById('inv-article-source').textContent = source || '';
     switchInvTab('scan');
@@ -635,34 +650,80 @@ function runScan() {
     closeInvestigateModal();
     var btn = _inv.btn;
     btn.disabled    = true;
-    btn.textContent = '⏳ Scanning…';
+    btn.textContent = 'Starting Scan…';
 
-    var url = '/deepdive?hash_id=' + _inv.hashId + '&interest=' + encodeURIComponent(interest);
-    if (focus) url += '&focus=' + encodeURIComponent(focus);
-
-    fetch(url)
-    .then(function(r) { return r.json(); })
+    fetch('/api/research/generate-scan', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+            hash_id: _inv.hashId,
+            interest: interest,
+            focus: focus,
+            article: {
+                hash_id: _inv.hashId,
+                title: _inv.title,
+                url: _inv.url,
+                source: _inv.source,
+                category: _inv.category || 'other'
+            }
+        })
+    })
+    .then(function(r) { return r.json().then(function(data) {
+        if (!r.ok || !data.ok) throw new Error(data.error || 'Could not start Scan');
+        return data;
+    }); })
     .then(function(data) {
-        if (data.success && data.html_path) {
-            var link = document.createElement('a');
-            link.href = data.html_path.replace(/^\//, '');
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            link.className = 'action-btn btn-investigate';
-            link.textContent = '✅ View Scan →';
-            btn.parentNode.replaceChild(link, btn);
-            showToast('Scan complete — click View Scan to open', 'success');
+        if (data.view_url) {
+            finishScan(btn, data.view_url);
         } else {
-            btn.textContent = '✅ Done';
-            btn.disabled = false;
-            showToast(data.message || 'Scan complete!', 'success');
+            btn.textContent = 'Scanning…';
+            pollScan(btn, _inv.hashId, 0);
         }
     })
     .catch(function(e) {
-        btn.textContent = '❌ Failed';
+        btn.textContent = '🔍 Investigate →';
         btn.disabled = false;
         showToast('Scan failed: ' + e.message, 'error');
     });
+}
+
+function pollScan(btn, hashId, attempt) {
+    if (attempt >= 120) {
+        btn.textContent = '🔍 Investigate →';
+        btn.disabled = false;
+        showToast('Scan is still running. Check Scans & Dives shortly.', 'error');
+        return;
+    }
+    setTimeout(function() {
+        fetch('/api/research/generate-scan/status?hash_id=' + encodeURIComponent(hashId))
+        .then(function(r) { return r.json().then(function(data) {
+            if (!r.ok || (!data.ok && !data.running)) throw new Error(data.error || 'Scan failed');
+            return data;
+        }); })
+        .then(function(data) {
+            if (data.running) {
+                pollScan(btn, hashId, attempt + 1);
+            } else if (data.view_url) {
+                finishScan(btn, data.view_url);
+            }
+        })
+        .catch(function(e) {
+            btn.textContent = '🔍 Investigate →';
+            btn.disabled = false;
+            showToast('Scan failed: ' + e.message, 'error');
+        });
+    }, 2000);
+}
+
+function finishScan(btn, viewUrl) {
+    var link = document.createElement('a');
+    link.href = viewUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.className = 'action-btn btn-investigate';
+    link.textContent = 'View Scan →';
+    btn.parentNode.replaceChild(link, btn);
+    showToast('Scan complete — click View Scan to open', 'success');
 }
 
 // Tab 2: Track as Topic
@@ -794,9 +855,10 @@ function addInvestigateButton(rank, hashId) {
                 var t = card.dataset.title  || '';
                 var u = card.dataset.url    || '';
                 var s = card.dataset.source || '';
-                btn.onclick = (function(h, ti, ur, so, b) {
-                    return function() { openInvestigateModal(h, ti, ur, so, b); };
-                })(hashId, t, u, s, btn);
+                var c = card.dataset.category || 'other';
+                btn.onclick = (function(h, ti, ur, so, ca, b) {
+                    return function() { openInvestigateModal(h, ti, ur, so, ca, b); };
+                })(hashId, t, u, s, c, btn);
             }
             btn.style.animation = 'fadeIn 0.3s ease';
             cardActions.insertBefore(btn, cardActions.firstChild);

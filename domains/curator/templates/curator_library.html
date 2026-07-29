@@ -636,10 +636,10 @@
 </head>
 <body>
 
-<!-- ── Deep Dive Modal ── -->
+<!-- ── Scan Modal ── -->
 <div class="modal-overlay" id="dive-modal" onclick="closeDiveModal(event)">
   <div class="modal">
-    <div class="modal-title">✨ Start Deep Dive</div>
+    <div class="modal-title">Create Scan</div>
     <div class="modal-article-title" id="modal-article-title"></div>
 
     <div class="modal-field">
@@ -666,7 +666,7 @@
 
     <div class="modal-actions">
       <button class="modal-btn cancel" onclick="closeDiveModal()">Cancel</button>
-      <button class="modal-btn execute" id="dive-execute-btn" onclick="executeDive()">Execute Deep Dive</button>
+      <button class="modal-btn execute" id="dive-execute-btn" onclick="executeScan()">Create Scan</button>
     </div>
   </div>
 </div>
@@ -895,7 +895,7 @@ function render() {
     if (a.deep_dive_url) {
       diveBtn = `<a class="arch-link" href="${escHtml(a.deep_dive_url)}" target="_blank">View scan →</a>`;
     } else if (a.hash_id) {
-      diveBtn = `<button class="arch-link" data-hash-id="${escHtml(a.hash_id||'')}">Start dive →</button>`;
+      diveBtn = `<button class="arch-link" data-hash-id="${escHtml(a.hash_id||'')}">Create scan →</button>`;
     }
 
     return `<tr style="animation-delay:${Math.min(i*20,300)}ms" onclick="window.open('${escHtml(a.url)}','_blank')">
@@ -946,7 +946,7 @@ function openDiveModal(event, article) {
   document.getElementById('modal-status').className = 'modal-status';
   document.getElementById('modal-status').textContent = '';
   document.getElementById('dive-execute-btn').disabled = false;
-  document.getElementById('dive-execute-btn').textContent = 'Execute Deep Dive';
+  document.getElementById('dive-execute-btn').textContent = 'Create Scan';
   document.getElementById('dive-modal').classList.add('open');
   setTimeout(() => document.getElementById('dive-interest').focus(), 100);
 }
@@ -958,7 +958,7 @@ function closeDiveModal(event) {
   diveArticle = null;
 }
 
-async function executeDive() {
+async function executeScan() {
   if (!diveArticle) return;
 
   const interest = document.getElementById('dive-interest').value.trim();
@@ -977,45 +977,63 @@ async function executeDive() {
   btn.disabled = true;
   btn.textContent = 'Running…';
   status.className = 'modal-status running';
-  status.textContent = '⏳ Deep dive in progress — this may take a minute…';
+  status.textContent = 'Starting Scan…';
 
   try {
-    const params = new URLSearchParams({
-      hash_id:  diveArticle.hash_id,
-      interest: interest,
-      focus:    focus
+    const res = await fetch('/api/research/generate-scan', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        hash_id: diveArticle.hash_id,
+        interest,
+        focus,
+        article: diveArticle,
+      }),
     });
-
-    const res = await fetch(`/deepdive?${params.toString()}`);
-
-    if (res.ok) {
-      status.className = 'modal-status success';
-      status.textContent = '✅ Deep dive complete! Reloading library…';
-      btn.textContent = 'Done';
-
-      // Mark article as having a deep dive locally so button updates
-      const article = allArticles.find(a => a.hash_id === diveArticle.hash_id);
-      if (article) article.deep_dive_path = 'completed';
-      render();
-
-      setTimeout(() => {
-        document.getElementById('dive-modal').classList.remove('open');
-        diveArticle = null;
-        loadData(); // reload to get fresh state
-      }, 2000);
-    } else {
-      const text = await res.text();
-      status.className = 'modal-status error';
-      status.textContent = `❌ Error: ${text.substring(0,120)}`;
-      btn.disabled = false;
-      btn.textContent = 'Retry';
-    }
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Could not start Scan');
+    if (data.view_url) return finishLibraryScan(data.view_url);
+    status.textContent = 'Scan in progress — you can leave this page safely.';
+    pollLibraryScan(diveArticle.hash_id, 0);
   } catch (err) {
     status.className = 'modal-status error';
-    status.textContent = `❌ Network error: ${err.message}`;
+    status.textContent = `Could not create Scan: ${err.message}`;
     btn.disabled = false;
     btn.textContent = 'Retry';
   }
+}
+
+async function pollLibraryScan(hashId, attempt) {
+  if (attempt >= 120) {
+    const status = document.getElementById('modal-status');
+    status.className = 'modal-status error';
+    status.textContent = 'Scan is still running. Check Scans & Dives shortly.';
+    document.getElementById('dive-execute-btn').disabled = false;
+    return;
+  }
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  try {
+    const res = await fetch(`/api/research/generate-scan/status?hash_id=${encodeURIComponent(hashId)}`);
+    const data = await res.json();
+    if (!res.ok || (!data.ok && !data.running)) throw new Error(data.error || 'Scan failed');
+    if (data.running) return pollLibraryScan(hashId, attempt + 1);
+    if (data.view_url) finishLibraryScan(data.view_url);
+  } catch (err) {
+    const status = document.getElementById('modal-status');
+    status.className = 'modal-status error';
+    status.textContent = `Could not create Scan: ${err.message}`;
+    const btn = document.getElementById('dive-execute-btn');
+    btn.disabled = false;
+    btn.textContent = 'Retry';
+  }
+}
+
+function finishLibraryScan(viewUrl) {
+  const status = document.getElementById('modal-status');
+  status.className = 'modal-status success';
+  status.textContent = 'Scan complete — opening it now…';
+  document.getElementById('dive-execute-btn').textContent = 'Done';
+  setTimeout(() => { window.location.href = viewUrl; }, 700);
 }
 
 // Close modal on Escape

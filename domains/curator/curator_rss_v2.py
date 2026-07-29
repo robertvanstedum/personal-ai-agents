@@ -3592,6 +3592,11 @@ def main():
         try:
             if top_articles:
                 top_articles[0]['briefing_model'] = xai_model_variant if model == 'grok-4-1' else model
+                # Persist the generation date with the briefing itself. Host
+                # wrappers may still stamp it for compatibility, but the web UI
+                # and AI Observations must not depend on a later Telegram step.
+                from datetime import timezone as _timezone
+                top_articles[0]['briefing_date'] = datetime.now(_timezone.utc).date().isoformat()
             with open(_DATA_DIR / 'curator_latest.json', 'w') as f:
                 json.dump(top_articles, f, indent=2, default=str)
             print(f"💾 Wrote {len(top_articles)} articles to curator_latest.json")
