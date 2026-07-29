@@ -1,6 +1,8 @@
 import importlib
 import json
 import os
+import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -195,3 +197,21 @@ def test_production_deploy_refreshes_host_curator_cron_scripts():
     assert "python -m scripts.x.x_pull_incremental" in curator_cron
     assert "python domains/curator/curator_rss_v2.py" in curator_cron
     assert "python core/telegram/telegram_bot.py --send" in curator_cron
+
+
+def test_intelligence_script_exposes_repo_root_when_launched_by_file_path(tmp_path):
+    script = ROOT / "domains/curator/curator_intelligence.py"
+    check = (
+        "import importlib.util, runpy; "
+        f"runpy.run_path({str(script)!r}); "
+        "assert importlib.util.find_spec('core.get_secret') is not None"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", check],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr

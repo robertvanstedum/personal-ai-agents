@@ -32,12 +32,17 @@ import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))  # sibling import below (curator_utils)
+CURATOR_DIR = Path(__file__).resolve().parent
+REPO_ROOT = CURATOR_DIR.parent.parent
+for import_root in (REPO_ROOT, CURATOR_DIR):
+    import_root_str = str(import_root)
+    if import_root_str not in sys.path:
+        sys.path.insert(0, import_root_str)
+
 from curator_utils import send_telegram_alert, extract_domain
 
 # ── Paths & constants ─────────────────────────────────────────────────────────
 
-REPO_ROOT      = Path(__file__).parent.parent.parent  # domains/curator -> domains -> repo root
 DATA_DIR       = Path(os.environ.get("CURATOR_DATA_DIR", str(REPO_ROOT / "data" / "curator")))
 HISTORY_PATH   = REPO_ROOT / 'curator_history.json'
 SOURCES_PATH   = Path(__file__).parent / 'curator_sources.json'
