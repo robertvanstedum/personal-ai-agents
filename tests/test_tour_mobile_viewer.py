@@ -67,7 +67,37 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
         "german-mobile-12-gespraeche-feedback.webp",
         "german-mobile-13-gespraeche-archive.webp",
     ]
-    mobile_assets = curator_mobile_assets + german_mobile_assets
+    portuguese_mobile_assets = [
+        "portuguese-mobile-landing.webp",
+        "portuguese-reading-categories.webp",
+        "portuguese-reading-list.webp",
+        "portuguese-reading-article.webp",
+        "portuguese-reading-correction.webp",
+        "portuguese-conversation-choice.webp",
+        "portuguese-voice-transcript.webp",
+        "portuguese-voice-coaching.webp",
+        "portuguese-learning-archive.webp",
+    ]
+    guild_mobile_assets = [
+        "guild-mobile-landing.webp",
+        "guild-operate-improve-mobile.webp",
+        "guild-build-queue-landscape.webp",
+        "guild-build-log-mobile.webp",
+        "guild-roadmap-committed.webp",
+        "guild-roadmap-released.webp",
+    ]
+    cos_mobile_assets = [
+        "cos-mobile-landing.webp",
+        "cos-confer-mobile.webp",
+        "cos-track-mobile.webp",
+    ]
+    mobile_assets = (
+        curator_mobile_assets
+        + german_mobile_assets
+        + portuguese_mobile_assets
+        + guild_mobile_assets
+        + cos_mobile_assets
+    )
 
     assert 'class="tour-mobile-gallery"' in template
     assert template.count('class="tour-mobile-shot-link"') == len(mobile_assets)
