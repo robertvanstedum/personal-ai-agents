@@ -196,8 +196,8 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
     assert "Guild" in html
     assert "Chief of Staff" in html
     assert "cos-confer-private.png" not in html
-    assert "cos-confer.png" in html
-    assert "cos-landing.jpg" in html
+    assert "cos-confer-mobile.webp" in html
+    assert "cos-mobile-landing.webp" in html
     assert "/app/cos" not in html
     assert "<form" not in html
     soup = BeautifulSoup(html, "html.parser")
@@ -222,7 +222,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         img.get("src")
         for img in soup.select('.tour-shot img[src^="/static/tour/"]')
     ]
-    assert len(images) == 24
+    assert len(images) == 32
     assert "/static/tour/curator-research-tools.jpg" not in images
     assert all(
         (static_root / src.split("?", 1)[0].removeprefix("/static/")).is_file()
@@ -235,9 +235,9 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
     expected_first_images = {
         "curator": "/static/tour/curator-landing.jpg",
         "german": "/static/tour/german-landing.jpg",
-        "portuguese": "/static/tour/portuguese-landing.jpg",
-        "guild": "/static/tour/guild-landing.png",
-        "cos": "/static/tour/cos-landing.jpg?v=20260724-2",
+        "portuguese": "/static/tour/portuguese-mobile-landing.webp",
+        "guild": "/static/tour/guild-mobile-landing.webp",
+        "cos": "/static/tour/cos-mobile-landing.webp",
     }
     for section_id, expected_src in expected_first_images.items():
         section = soup.select_one(f"section#{section_id}")
@@ -303,9 +303,9 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         assert (
             static_root / href.removeprefix("/static/")
         ).is_file()
-    assert len(soup.select("section#portuguese .tour-shot")) == 6
-    assert len(soup.select("section#guild .tour-shot")) == 2
-    assert len(soup.select("section#cos .tour-shot")) == 2
+    assert len(soup.select("section#portuguese .tour-shot")) == 9
+    assert len(soup.select("section#guild .tour-shot")) == 6
+    assert len(soup.select("section#cos .tour-shot")) == 3
     assert all(section.has_attr("hidden") for section in soup.select(".tour-section"))
     assert not soup.select(".tour-step-nav")
 
@@ -324,8 +324,9 @@ def test_owner_tour_uses_same_privacy_safe_cos_slides(client):
     assert section is not None
     images = [img.get("src") for img in section.select(".tour-shot img")]
     assert images == [
-        "/static/tour/cos-landing.jpg?v=20260724-2",
-        "/static/tour/cos-confer.png",
+        "/static/tour/cos-mobile-landing.webp",
+        "/static/tour/cos-confer-mobile.webp",
+        "/static/tour/cos-track-mobile.webp",
     ]
 
 
