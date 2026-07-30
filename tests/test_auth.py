@@ -222,7 +222,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         img.get("src")
         for img in soup.select('.tour-shot img[src^="/static/tour/"]')
     ]
-    assert len(images) == 32
+    assert len(images) == 24
     assert "/static/tour/curator-research-tools.jpg" not in images
     assert all(
         (static_root / src.split("?", 1)[0].removeprefix("/static/")).is_file()
@@ -235,9 +235,9 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
     expected_first_images = {
         "curator": "/static/tour/curator-landing.jpg",
         "german": "/static/tour/german-landing.jpg",
-        "portuguese": "/static/tour/portuguese-mobile-landing.webp",
-        "guild": "/static/tour/guild-mobile-landing.webp",
-        "cos": "/static/tour/cos-mobile-landing.webp",
+        "portuguese": "/static/tour/portuguese-landing.jpg",
+        "guild": "/static/tour/guild-landing.png",
+        "cos": "/static/tour/cos-landing.jpg?v=20260724-2",
     }
     for section_id, expected_src in expected_first_images.items():
         section = soup.select_one(f"section#{section_id}")
@@ -303,9 +303,47 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         assert (
             static_root / href.removeprefix("/static/")
         ).is_file()
-    assert len(soup.select("section#portuguese .tour-shot")) == 9
-    assert len(soup.select("section#guild .tour-shot")) == 6
-    assert len(soup.select("section#cos .tour-shot")) == 3
+    assert len(soup.select("section#portuguese .tour-shot")) == 6
+    assert len(soup.select("section#guild .tour-shot")) == 2
+    assert len(soup.select("section#cos .tour-shot")) == 2
+    expected_mobile_hrefs = {
+        "portuguese": [
+            "/static/tour/portuguese-mobile-landing.webp",
+            "/static/tour/portuguese-reading-categories.webp",
+            "/static/tour/portuguese-reading-list.webp",
+            "/static/tour/portuguese-reading-article.webp",
+            "/static/tour/portuguese-reading-correction.webp",
+            "/static/tour/portuguese-conversation-choice.webp",
+            "/static/tour/portuguese-voice-transcript.webp",
+            "/static/tour/portuguese-voice-coaching.webp",
+            "/static/tour/portuguese-learning-archive.webp",
+        ],
+        "guild": [
+            "/static/tour/guild-mobile-landing.webp",
+            "/static/tour/guild-operate-improve-mobile.webp",
+            "/static/tour/guild-build-queue-landscape.webp",
+            "/static/tour/guild-build-log-mobile.webp",
+            "/static/tour/guild-roadmap-committed.webp",
+            "/static/tour/guild-roadmap-released.webp",
+        ],
+        "cos": [
+            "/static/tour/cos-mobile-landing.webp",
+            "/static/tour/cos-confer-mobile.webp",
+            "/static/tour/cos-track-mobile.webp",
+        ],
+    }
+    for section_id, expected_hrefs in expected_mobile_hrefs.items():
+        mobile_hrefs = [
+            link.get("href")
+            for link in soup.select(
+                f"section#{section_id} .tour-mobile-shot-link"
+            )
+        ]
+        assert mobile_hrefs == expected_hrefs
+        assert all(
+            (static_root / href.removeprefix("/static/")).is_file()
+            for href in mobile_hrefs
+        )
     assert all(section.has_attr("hidden") for section in soup.select(".tour-section"))
     assert not soup.select(".tour-step-nav")
 
@@ -322,8 +360,18 @@ def test_owner_tour_uses_same_privacy_safe_cos_slides(client):
     soup = BeautifulSoup(resp.get_data(as_text=True), "html.parser")
     section = soup.select_one("section#cos")
     assert section is not None
-    images = [img.get("src") for img in section.select(".tour-shot img")]
-    assert images == [
+    desktop_images = [
+        img.get("src") for img in section.select(".tour-shot img")
+    ]
+    assert desktop_images == [
+        "/static/tour/cos-landing.jpg?v=20260724-2",
+        "/static/tour/cos-confer.png",
+    ]
+    mobile_images = [
+        link.get("href")
+        for link in section.select(".tour-mobile-shot-link")
+    ]
+    assert mobile_images == [
         "/static/tour/cos-mobile-landing.webp",
         "/static/tour/cos-confer-mobile.webp",
         "/static/tour/cos-track-mobile.webp",
