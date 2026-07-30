@@ -33,7 +33,7 @@ WORKSPACES = (
         "path": "/app/portuguese",
         "eyebrow": "Language immersion",
         "summary": "Reading and real-world practice for a multilingual household.",
-        "image": "/static/tour/portuguese-landing.jpg",
+        "image": "/static/tour/portuguese-mobile-landing.webp",
         "public_visible": True,
     },
     {
@@ -42,7 +42,7 @@ WORKSPACES = (
         "path": "/guild",
         "eyebrow": "Build and operations",
         "summary": "Specs, build work, operating status, and the next iteration.",
-        "image": "/static/tour/guild-landing.png",
+        "image": "/static/tour/guild-mobile-landing.webp",
         "public_visible": True,
     },
     {
@@ -52,7 +52,7 @@ WORKSPACES = (
         "path": "/app/cos",
         "eyebrow": "Cross-domain coordination",
         "summary": "Confer, record, track, and carry context across the system.",
-        "image": "/static/tour/cos-landing.jpg",
+        "image": "/static/tour/cos-mobile-landing.webp",
         "public_visible": False,
     },
 )

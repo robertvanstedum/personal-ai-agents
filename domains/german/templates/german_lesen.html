@@ -459,20 +459,39 @@
 
   const readingTextEl = document.getElementById('reading-text');
   let selectionTimer = null;
-  document.addEventListener('mouseup', () => {
+
+  function selectedReadingRange() {
     const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !readingTextEl) return;
+    if (!sel || sel.isCollapsed || !sel.rangeCount || !readingTextEl) return null;
     try {
       const range = sel.getRangeAt(0);
-      if (!readingTextEl.contains(range.commonAncestorContainer)) return;
-    } catch { return; }
+      if (!readingTextEl.contains(range.commonAncestorContainer)) return null;
+      const phrase = sel.toString().trim();
+      if (!phrase || phrase.length < 2 || phrase.length > 300) return null;
+      return { range, phrase };
+    } catch {
+      return null;
+    }
+  }
+
+  function scheduleReadingSelection(delay = 300) {
     clearTimeout(selectionTimer);
-    selectionTimer = setTimeout(handleSelection, 300);
-  });
+    if (!selectedReadingRange()) return;
+    selectionTimer = setTimeout(handleSelection, delay);
+  }
+
+  document.addEventListener('mouseup', () => scheduleReadingSelection(300));
+  document.addEventListener('touchend', e => {
+    if (!popover.contains(e.target)) scheduleReadingSelection(180);
+  }, { passive: true });
+  document.addEventListener('selectionchange', () => scheduleReadingSelection(350));
 
   document.addEventListener('mousedown', e => {
     if (!popover.contains(e.target)) hidePopover();
   });
+  document.addEventListener('touchstart', e => {
+    if (!popover.contains(e.target)) hidePopover();
+  }, { passive: true });
 
   btnClose.addEventListener('click', hidePopover);
 
@@ -518,12 +537,13 @@
   document.addEventListener('touchend', _endDrag);
 
   function handleSelection() {
-    const sel = window.getSelection();
-    const phrase = sel ? sel.toString().trim() : '';
-    if (!phrase || phrase.length < 2 || phrase.length > 300) return;
+    selectionTimer = null;
+    const selected = selectedReadingRange();
+    if (!selected) return;
+    const { range, phrase } = selected;
     currentPhrase = phrase;
     currentTranslation = '';
-    const rect = sel.getRangeAt(0).getBoundingClientRect();
+    const rect = range.getBoundingClientRect();
     popPhrase.textContent = phrase;
     popTrans.textContent = 'Übersetzung…';
     popTiming.textContent = '';
@@ -531,6 +551,12 @@
     btnSave.textContent = '＋ In Bibliothek';
     showPopover(rect);
     fetchTranslation(phrase);
+    setTimeout(() => {
+      const activeSelection = window.getSelection();
+      if (activeSelection && activeSelection.toString().trim() === phrase) {
+        activeSelection.removeAllRanges();
+      }
+    }, 0);
   }
 
   let _translateAbort = null;
