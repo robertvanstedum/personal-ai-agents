@@ -37,6 +37,10 @@ log = logging.getLogger("challenger")
 
 BASE_DIR    = Path(__file__).resolve().parents[3]
 CONFIG_PATH = BASE_DIR / "domains/guild/config/challenger_config.json"
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
+from core.get_secret import get_secret
 
 
 # ── Result dataclass ──────────────────────────────────────────────────────────
@@ -203,9 +207,8 @@ class ChallengerService:
 
     def _call_xai(self, model: str, prompt: str) -> str:
         """Round 2: Grok via xAI (challenger pass)."""
-        import keyring
         from openai import OpenAI
-        api_key = keyring.get_password("xai", "api_key")
+        api_key = get_secret("XAI_API_KEY", "xai", "api_key")
         client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
         resp = client.chat.completions.create(
             model=model,
@@ -217,9 +220,8 @@ class ChallengerService:
 
     def _call_anthropic(self, model: str, prompt: str, max_tokens: int = 4000) -> str:
         """Round 3: Claude via Anthropic (final review)."""
-        import keyring
         import anthropic
-        api_key = keyring.get_password("anthropic", "api_key")
+        api_key = get_secret("ANTHROPIC_API_KEY", "anthropic", "api_key")
         client = anthropic.Anthropic(api_key=api_key)
         msg = client.messages.create(
             model=model,

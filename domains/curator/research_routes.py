@@ -327,16 +327,22 @@ def _get_topic_sessions(topic: str) -> list:
 
     Returns list of session ID strings (stem, no .md extension), unsorted.
     """
-    topic_dir = RESEARCH_ROOT / 'topics' / topic
-    if not topic_dir.exists():
-        return []
-    return [
-        p.stem
-        for p in topic_dir.iterdir()
-        if p.is_file()
-        and _SESSION_FILE_RE.match(p.name)
-        and not any(p.name.startswith(pfx) for pfx in _NON_SESSION_PREFIXES)
+    topic_dirs = [
+        RESEARCH_ROOT / 'topics' / topic,
+        RESEARCH_ROOT / 'data' / 'threads' / topic / 'sessions',
     ]
+    sessions = set()
+    for topic_dir in topic_dirs:
+        if not topic_dir.exists():
+            continue
+        sessions.update(
+            p.stem
+            for p in topic_dir.iterdir()
+            if p.is_file()
+            and _SESSION_FILE_RE.match(p.name)
+            and not any(p.name.startswith(pfx) for pfx in _NON_SESSION_PREFIXES)
+        )
+    return sorted(sessions)
 
 
 def _parse_session_log() -> dict:
@@ -460,6 +466,15 @@ def api_research_dashboard():
     cfg = json.loads(config_path.read_text())
 
     topics       = list(cfg.get('session_searches', {}).keys())
+    threads_dir  = RESEARCH_ROOT / 'data' / 'threads'
+    if threads_dir.exists():
+        topics.extend(
+            path.name
+            for path in threads_dir.iterdir()
+            if path.is_dir()
+            and (path / 'thread.json').exists()
+            and path.name not in topics
+        )
     budget_total = cfg.get('budget', {}).get('total_limit', 20.0)
     budget_warn  = cfg.get('budget', {}).get('total_warn',  18.0)
 
@@ -607,9 +622,14 @@ def _run_state_active() -> bool:
 def _next_session_name(topic: str) -> str:
     """Auto-generate the next session name as {topic}-NNN."""
     import re as _re2
-    topic_dir = RESEARCH_ROOT / 'topics' / topic
     max_n = 0
-    if topic_dir.exists():
+    topic_dirs = [
+        RESEARCH_ROOT / 'topics' / topic,
+        RESEARCH_ROOT / 'data' / 'threads' / topic / 'sessions',
+    ]
+    for topic_dir in topic_dirs:
+        if not topic_dir.exists():
+            continue
         pat = _re2.compile(rf'^{_re2.escape(topic)}-(\d+)\.md$')
         for f in topic_dir.glob('*.md'):
             m = pat.match(f.name)
@@ -640,7 +660,15 @@ def api_research_run_session():
     except Exception as e:
         return jsonify({"ok": False, "error": f"could not read config: {e}"}), 500
 
-    if topic not in config.get('session_searches', {}):
+    dynamic_searches = []
+    try:
+        from agent.threads import load_thread
+        thread = load_thread(topic)
+        dynamic_searches = thread.session_searches if thread else []
+    except Exception:
+        pass
+
+    if topic not in config.get('session_searches', {}) and not dynamic_searches:
         return jsonify({"ok": False, "error": f"topic '{topic}' not found in config"}), 400
 
     # Reject if a session is already running
@@ -756,7 +784,8 @@ def api_research_run_session_status():
 # ── API: Deeper Dive generation ───────────────────────────────────────────────
 
 def _dd_state_active() -> bool:
-    """Return True if a Deeper Dive generation is currently running (not stale)."""
+    """Return True while the current Deeper Dive subprocess is alive."""
+    global _dd_proc
     if not _DD_STATE_PATH.exists():
         return False
     try:
@@ -766,9 +795,25 @@ def _dd_state_active() -> bool:
         if age > _DD_STATE_MAX_AGE_MINUTES:
             _DD_STATE_PATH.unlink(missing_ok=True)
             return False
-    except Exception:
+        if _dd_proc is not None:
+            return _dd_proc.poll() is None
+        os.kill(int(state['pid']), 0)
+        return True
+    except (OSError, ValueError, KeyError, json.JSONDecodeError):
         return False
-    return True
+
+
+def _dive_error_excerpt(state: dict) -> str:
+    """Return a safe, bounded excerpt from a failed Dive job log."""
+    log_path = Path(state.get('log_path', ''))
+    if log_path.exists():
+        try:
+            text = log_path.read_text(errors='replace').strip()
+            if text:
+                return text[-500:]
+        except OSError:
+            pass
+    return "Deeper Dive generation failed. Please try again."
 
 
 def _scan_state_active() -> bool:
@@ -935,6 +980,28 @@ def _next_dive_output_path(topic: str) -> Path:
             nums.append(int(m.group(1)))
     n = (max(nums) + 1) if nums else 1
     return dd_dir / f'{topic}-dive-{n:03d}.md'
+
+
+def _start_dive_job(topic: str, out_path: Path) -> tuple[subprocess.Popen, Path]:
+    """Start a Dive and persist its output so failures remain diagnosable."""
+    script = RESEARCH_ROOT / 'scripts' / 'generate_dive.py'
+    log_dir = RESEARCH_ROOT / 'data' / 'dive_jobs'
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / f'{out_path.stem}.log'
+    log_file = open(log_path, 'wb')
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, str(script),
+             '--topic', topic,
+             '--output-path', str(out_path)],
+            cwd=str(RESEARCH_ROOT),
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+        )
+    except Exception:
+        log_file.close()
+        raise
+    return proc, log_path
 
 
 def _build_challenger_html(ch: dict) -> str:
@@ -1214,17 +1281,9 @@ def api_research_generate_dive():
         }), 409
 
     out_path = _next_dive_output_path(topic)
-    script   = RESEARCH_ROOT / 'scripts' / 'generate_dive.py'
 
     try:
-        proc = subprocess.Popen(
-            [sys.executable, str(script),
-             '--topic', topic,
-             '--output-path', str(out_path)],
-            cwd=str(RESEARCH_ROOT),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-        )
+        proc, log_path = _start_dive_job(topic, out_path)
     except (OSError, subprocess.SubprocessError) as e:
         print(f"[generate-dive] OSError: {e}", file=sys.stderr)
         return jsonify({"ok": False, "error": f"failed to launch: {e}"}), 500
@@ -1234,6 +1293,7 @@ def api_research_generate_dive():
     state = {
         "topic":       topic,
         "output_path": str(out_path),
+        "log_path":    str(log_path),
         "pid":         proc.pid,
         "started_at":  datetime.now(timezone.utc).isoformat(),
         "status":      "running",
@@ -1260,25 +1320,25 @@ def api_research_generate_dive_status():
     except Exception:
         return jsonify({"running": False})
 
-    # Liveness check
+    # Liveness check. If the Flask process restarted, use the persisted PID.
     running = False
+    return_code = None
     if _dd_proc is not None:
-        running = (_dd_proc.poll() is None)
+        return_code = _dd_proc.poll()
+        running = return_code is None
     else:
-        # Fallback after server restart: check age
         try:
-            started = datetime.fromisoformat(state.get('started_at', ''))
-            age = (datetime.now(timezone.utc) - started).total_seconds() / 60
-            running = age < _DD_STATE_MAX_AGE_MINUTES
-        except Exception:
+            os.kill(int(state['pid']), 0)
+            running = True
+        except (OSError, ValueError, KeyError):
             running = False
 
     if not running:
         _dd_proc = None
-        # Generation finished — update thread.json
         topic      = state.get('topic', '')
         out_path   = state.get('output_path', '')
-        if topic and out_path and Path(out_path).exists():
+        output_exists = bool(out_path and Path(out_path).exists())
+        if topic and output_exists:
             try:
                 from agent.threads import load_thread, save_thread
                 thread = load_thread(topic)
@@ -1290,10 +1350,22 @@ def api_research_generate_dive_status():
                 print(f"[dd-status] failed to update thread.json: {e}", file=sys.stderr)
 
         _DD_STATE_PATH.unlink(missing_ok=True)
+        if not output_exists:
+            return jsonify({
+                "running":     False,
+                "failed":      True,
+                "topic":       topic,
+                "output_path": out_path,
+                "return_code": return_code,
+                "error":       _dive_error_excerpt(state),
+            }), 500
+
         return jsonify({
             "running":     False,
+            "failed":      False,
             "topic":       topic,
             "output_path": out_path,
+            "view_url":    f"/research/dive-result/{Path(out_path).stem}",
         })
 
     return jsonify({
@@ -1315,7 +1387,7 @@ def api_research_scan_to_dive():
     /api/research/generate-dive/status for completion.
     """
     global _dd_proc
-    from agent.threads import cmd_create
+    from agent.threads import cmd_create, load_thread, save_thread
 
     body    = request.get_json() or {}
     hash_id = body.get('hash_id', '').strip()
@@ -1353,9 +1425,16 @@ def api_research_scan_to_dive():
         config = json.loads(config_path.read_text())
     except Exception:
         config = {}
+    thread_root = RESEARCH_ROOT / 'data' / 'threads'
+    existing_topics = set(config.get('session_searches', {}))
+    if thread_root.exists():
+        existing_topics.update(
+            path.name for path in thread_root.iterdir() if path.is_dir()
+        )
+
     topic  = base_slug
     suffix = 1
-    while topic in config.get('session_searches', {}):
+    while topic in existing_topics:
         topic = f"{base_slug}-{suffix}"
         suffix += 1
 
@@ -1364,12 +1443,17 @@ def api_research_scan_to_dive():
     # Create thread record
     cmd_create(topic, motivation or "Explore this article", "")
 
-    # Add a placeholder query so session_searches entry exists
-    config.setdefault('session_searches', {})[topic] = [dd['title'][:80]]
-    config_path.write_text(json.dumps(config, indent=2))
+    # Seed follow-on research in the durable thread record so container
+    # replacement cannot erase the generated topic configuration.
+    searches, targets = _scan_research_directions(dd)
+    thread = load_thread(topic)
+    if thread:
+        thread.session_searches = searches
+        thread.triage_targets = targets
+        save_thread(topic, thread)
 
-    # Write synthetic session file
-    topics_dir = RESEARCH_ROOT / 'topics' / topic
+    # Web-created sessions live in mounted data, not the container filesystem.
+    topics_dir = RESEARCH_ROOT / 'data' / 'threads' / topic / 'sessions'
     topics_dir.mkdir(parents=True, exist_ok=True)
     session_md   = _build_session_from_scan(dd, hash_id, topic)
     session_path = topics_dir / f'{topic}-001.md'
@@ -1377,16 +1461,8 @@ def api_research_scan_to_dive():
 
     # Fire generate_dive.py subprocess (identical to api_research_generate_dive)
     out_path = _next_dive_output_path(topic)
-    script   = RESEARCH_ROOT / 'scripts' / 'generate_dive.py'
     try:
-        proc = subprocess.Popen(
-            [sys.executable, str(script),
-             '--topic', topic,
-             '--output-path', str(out_path)],
-            cwd=str(RESEARCH_ROOT),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-        )
+        proc, log_path = _start_dive_job(topic, out_path)
     except (OSError, subprocess.SubprocessError) as e:
         return jsonify({"ok": False, "error": f"failed to launch: {e}"}), 500
 
@@ -1394,6 +1470,7 @@ def api_research_scan_to_dive():
     _DD_STATE_PATH.write_text(json.dumps({
         "topic":       topic,
         "output_path": str(out_path),
+        "log_path":    str(log_path),
         "pid":         proc.pid,
         "started_at":  datetime.now(timezone.utc).isoformat(),
         "status":      "running",
@@ -1506,13 +1583,13 @@ def api_research_spawn_thread():
 
     config_path = RESEARCH_ROOT / 'agent' / 'config.json'
     config      = json.loads(config_path.read_text())
+    thread_root = RESEARCH_ROOT / 'data' / 'threads'
 
-    if topic in config.get('session_searches', {}):
+    if (
+        topic in config.get('session_searches', {})
+        or (thread_root / topic / 'thread.json').exists()
+    ):
         return jsonify({"ok": False, "error": f"topic '{topic}' already exists"}), 409
-
-    # Add queries to config
-    config.setdefault('session_searches', {})[topic] = [q.strip() for q in queries if q.strip()]
-    config_path.write_text(json.dumps(config, indent=2))
 
     # Create thread record (reuse existing cmd_create)
     cmd_create(topic, motivation or "To be written", "")
@@ -1520,12 +1597,15 @@ def api_research_spawn_thread():
     # Persist duration_days + expires (cmd_create doesn't accept these fields)
     thread = load_thread(topic)
     if thread:
+        thread.session_searches = [q.strip() for q in queries if q.strip()]
+        thread.triage_targets = [motivation] if motivation else []
         thread.duration_days = duration_days
         thread.expires = (_date.today() + timedelta(days=duration_days)).isoformat()
         save_thread(topic, thread)
 
-    # Ensure topics/<topic>/ directory exists so sessions page sidebar shows it
-    (RESEARCH_ROOT / 'topics' / topic).mkdir(parents=True, exist_ok=True)
+    # Web-created sessions live in mounted data so container replacement
+    # cannot erase the thread.
+    (thread_root / topic / 'sessions').mkdir(parents=True, exist_ok=True)
 
     return jsonify({
         "ok": True,
@@ -1942,7 +2022,7 @@ def _parse_scan_md(md_path: Path) -> dict:
     # Also extract ## Your Interest section (multi-line, common format)
     if 'interest' not in metadata or not metadata['interest']:
         interest_m = _re.search(
-            r'##\s+Your Interest\s*\n(.*?)(?=\n---|\n## |\Z)',
+            r'##\s+Your Interest\s*\n(.*?)(?=\n\*\*Focus:\*\*|\n---|\n## |\Z)',
             text, _re.DOTALL | _re.IGNORECASE
         )
         if interest_m:
@@ -2068,6 +2148,49 @@ Analysis of scan {hash_id}: {dd['title']}
 
 *Generated from scan {hash_id} on {today}*
 """
+
+
+def _scan_research_directions(dd: dict) -> tuple[list[str], list[str]]:
+    """Derive topic-specific searches and triage targets from a Scan."""
+    from bs4 import BeautifulSoup as _BS
+
+    title = (dd.get('title') or 'Untitled scan').strip()
+    motivation = (dd.get('metadata') or {}).get('interest', '').strip()
+    focus = (dd.get('metadata') or {}).get('focus', '').strip()
+    soup = _BS(dd.get('analysis_html', ''), 'html.parser')
+    questions: list[str] = []
+
+    for heading in soup.find_all(['h2', 'h3']):
+        if 'next question' not in heading.get_text(' ', strip=True).lower():
+            continue
+        sibling = heading.find_next_sibling()
+        while sibling and sibling.name not in ('h2', 'h3'):
+            if sibling.name in ('ul', 'ol'):
+                questions.extend(
+                    item.get_text(' ', strip=True)
+                    for item in sibling.find_all('li', recursive=False)
+                    if item.get_text(' ', strip=True)
+                )
+            elif sibling.name == 'li':
+                text = sibling.get_text(' ', strip=True)
+                if text:
+                    questions.append(text)
+            sibling = sibling.find_next_sibling()
+
+    # Preserve order while removing duplicates and blank entries.
+    questions = list(dict.fromkeys(q.strip() for q in questions if q.strip()))
+    if not questions:
+        questions = [
+            f"What primary evidence supports or challenges the claims in {title}?",
+            f"What mechanisms explain the central outcome discussed in {title}?",
+            f"What historical or empirical comparisons best test the argument in {title}?",
+        ]
+
+    searches = list(dict.fromkeys([title, *questions]))[:8]
+    targets = list(dict.fromkeys(
+        [item for item in (motivation, focus, *questions) if item]
+    ))[:6]
+    return searches, targets
 
 
 def _find_dd_md(hash_id: str):
@@ -2404,8 +2527,22 @@ def research_scan_view(hash_id: str):
       }});
       const data = await res.json();
       if (data.ok) {{
-        status.textContent = 'Dive started — redirecting to Desk…';
-        setTimeout(() => {{ window.location.href = '/research/dashboard'; }}, 1000);
+        status.textContent = 'Deeper Dive is running…';
+        while (true) {{
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          const poll = await fetch('/api/research/generate-dive/status');
+          const result = await poll.json();
+          if (result.running) continue;
+          if (!poll.ok || result.failed) {{
+            throw new Error(result.error || 'Deeper Dive generation failed.');
+          }}
+          if (result.view_url) {{
+            status.textContent = 'Deeper Dive complete — opening…';
+            window.location.href = result.view_url;
+            return;
+          }}
+          throw new Error('Deeper Dive finished without an output.');
+        }}
       }} else {{
         status.textContent = data.error || 'Failed to start dive.';
         status.className = 'err';
@@ -2413,7 +2550,7 @@ def research_scan_view(hash_id: str):
         btn.textContent = 'Generate Deeper Dive';
       }}
     }} catch (e) {{
-      status.textContent = 'Network error — please try again.';
+      status.textContent = e.message || 'Network error — please try again.';
       status.className = 'err';
       btn.disabled = false;
       btn.textContent = 'Generate Deeper Dive';
@@ -2542,6 +2679,7 @@ def api_research_inbox_add():
         return jsonify({"ok": False, "error": "title or raw required"}), 400
 
     candidates_path = RESEARCH_ROOT / 'data' / 'feedback' / 'query_candidates.json'
+    candidates_path.parent.mkdir(parents=True, exist_ok=True)
     records = json.loads(candidates_path.read_text()) if candidates_path.exists() else []
 
     new_id = secrets.token_hex(4)   # 8 hex chars
@@ -2692,22 +2830,29 @@ def api_topics_status():
                 except Exception:
                     pass
 
-            # Session count from topics/ directory
-            topics_dir = RESEARCH_ROOT / 'topics' / slug
-            session_count = 0
-            last_session  = None
-            if topics_dir.exists():
-                sessions = [
-                    p for p in topics_dir.iterdir()
-                    if p.is_file()
-                    and _sess_re.match(p.name)
-                    and p.name not in _static
-                    and not p.name.startswith("sources-candidates-")
-                ]
-                session_count = len(sessions)
-                if sessions:
-                    newest = max(sessions, key=lambda p: p.stat().st_mtime)
-                    last_session = datetime.fromtimestamp(newest.stat().st_mtime).strftime("%Y-%m-%d")
+            # Count static and web-created durable sessions.
+            session_dirs = [
+                RESEARCH_ROOT / 'topics' / slug,
+                topic_dir / 'sessions',
+            ]
+            sessions_by_name = {}
+            for sessions_dir in session_dirs:
+                if not sessions_dir.exists():
+                    continue
+                for path in sessions_dir.iterdir():
+                    if (
+                        path.is_file()
+                        and _sess_re.match(path.name)
+                        and path.name not in _static
+                        and not path.name.startswith("sources-candidates-")
+                    ):
+                        sessions_by_name[path.name] = path
+            sessions = list(sessions_by_name.values())
+            session_count = len(sessions)
+            last_session = None
+            if sessions:
+                newest = max(sessions, key=lambda p: p.stat().st_mtime)
+                last_session = datetime.fromtimestamp(newest.stat().st_mtime).strftime("%Y-%m-%d")
 
             topics.append({
                 "slug":           slug,

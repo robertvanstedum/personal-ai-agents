@@ -53,12 +53,23 @@ from core.get_secret import get_secret
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
-def load_config():
+def load_config(topic: str | None = None):
     config_path = ROOT / "agent" / "config.json"
     if not config_path.exists():
         print(f"ERROR: config not found at {config_path}")
         sys.exit(1)
-    return json.loads(config_path.read_text())
+    config = json.loads(config_path.read_text())
+    if topic:
+        thread_path = ROOT / "data" / "threads" / topic / "thread.json"
+        if thread_path.exists():
+            thread = json.loads(thread_path.read_text())
+            searches = thread.get("session_searches") or []
+            targets = thread.get("triage_targets") or []
+            if searches:
+                config.setdefault("session_searches", {}).setdefault(topic, searches)
+            if targets:
+                config.setdefault("triage_targets", {}).setdefault(topic, targets)
+    return config
 
 
 def load_env():
@@ -467,11 +478,14 @@ def main():
         print("ABORT: estimated cost would breach a limit.")
         sys.exit(2)
 
-    cfg = load_config()
+    cfg = load_config(topic)
     env = load_env()
 
-    # Resolve topic directory — no library/ prefix
-    topic_dir = ROOT / "topics" / topic
+    # Repository topics are static; web-created thread sessions live under the
+    # mounted data tree so container replacement cannot erase them.
+    static_topic_dir = ROOT / "topics" / topic
+    durable_topic_dir = ROOT / "data" / "threads" / topic / "sessions"
+    topic_dir = static_topic_dir if static_topic_dir.exists() else durable_topic_dir
     if not topic_dir.exists():
         print(f"ERROR: topic directory not found: {topic_dir}")
         subprocess.run([sys.executable, str(run_py), "end",
