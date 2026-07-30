@@ -38,7 +38,21 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
         encoding="utf-8"
     )
     css = (ROOT / "minimoi_portal/static/portal.css").read_text(encoding="utf-8")
-    mobile_assets = [
+    curator_mobile_assets = [
+        "curator-mobile-01-curator-landing.webp",
+        "curator-mobile-02-daily-briefing.webp",
+        "curator-mobile-03-investigate-article.webp",
+        "curator-mobile-04-personalize-scan.webp",
+        "curator-mobile-05-scan-analysis.webp",
+        "curator-mobile-06-next-questions-and-sources.webp",
+        "curator-mobile-07-choose-research-depth.webp",
+        "curator-mobile-08-deeper-dive-report.webp",
+        "curator-mobile-09-challenger-review.webp",
+        "curator-mobile-10-leanings.webp",
+        "curator-mobile-11-ai-observations.webp",
+        "curator-mobile-12-archive.webp",
+    ]
+    german_mobile_assets = [
         "german-mobile-01-landing.webp",
         "german-mobile-02-lesen.webp",
         "german-mobile-03-lesen-articles.webp",
@@ -53,6 +67,7 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
         "german-mobile-12-gespraeche-feedback.webp",
         "german-mobile-13-gespraeche-archive.webp",
     ]
+    mobile_assets = curator_mobile_assets + german_mobile_assets
 
     assert 'class="tour-mobile-gallery"' in template
     assert template.count('class="tour-mobile-shot-link"') == len(mobile_assets)
@@ -61,6 +76,11 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
         assert (
             ROOT / "minimoi_portal/static/tour" / mobile_asset
         ).is_file()
+    curator_mobile_positions = [
+        template.index(f"/static/tour/{mobile_asset}")
+        for mobile_asset in curator_mobile_assets
+    ]
+    assert curator_mobile_positions == sorted(curator_mobile_positions)
 
     assert 'id="tour-lightbox-format"' in template
     assert 'data-format="desktop"' in template

@@ -243,6 +243,28 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         section = soup.select_one(f"section#{section_id}")
         assert section.select_one("img").get("src") == expected_src
     assert len(soup.select("section#curator .tour-shot")) == 4
+    curator_mobile_hrefs = [
+        link.get("href")
+        for link in soup.select("section#curator .tour-mobile-shot-link")
+    ]
+    assert curator_mobile_hrefs == [
+        "/static/tour/curator-mobile-01-curator-landing.webp",
+        "/static/tour/curator-mobile-02-daily-briefing.webp",
+        "/static/tour/curator-mobile-03-investigate-article.webp",
+        "/static/tour/curator-mobile-04-personalize-scan.webp",
+        "/static/tour/curator-mobile-05-scan-analysis.webp",
+        "/static/tour/curator-mobile-06-next-questions-and-sources.webp",
+        "/static/tour/curator-mobile-07-choose-research-depth.webp",
+        "/static/tour/curator-mobile-08-deeper-dive-report.webp",
+        "/static/tour/curator-mobile-09-challenger-review.webp",
+        "/static/tour/curator-mobile-10-leanings.webp",
+        "/static/tour/curator-mobile-11-ai-observations.webp",
+        "/static/tour/curator-mobile-12-archive.webp",
+    ]
+    for href in curator_mobile_hrefs:
+        assert (
+            static_root / href.removeprefix("/static/")
+        ).is_file()
     assert len(soup.select("section#german .tour-shot")) == 10
     assert [
         img.get("src") for img in soup.select("section#german .tour-shot img")
