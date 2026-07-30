@@ -68,6 +68,8 @@ class ThreadRecord(BaseModel):
     links_from:             list[str] = []
     motivation:             str
     prior_belief:           str
+    session_searches:       list[str] = []
+    triage_targets:         list[str] = []
     wrap_up:                Optional[str] = None
     retired_reason:         Optional[str] = None
     created_by:             str = "robert"
@@ -152,16 +154,20 @@ def _count_sessions(topic: str) -> tuple[int, Optional[str]]:
     Excludes: sources-candidates-*, CONTEXT.md, ORIGIN.md, README.md, etc.
     Source of truth: directory contents, not session-log.md.
     """
-    topic_dir = TOPICS / topic
-    if not topic_dir.exists():
-        return 0, None
-    session_files = [
-        p for p in topic_dir.iterdir()
-        if p.is_file()
-        and SESSION_RE.match(p.name)
-        and p.name not in STATIC_FILES
-        and not p.name.startswith("sources-candidates-")
-    ]
+    session_dirs = [TOPICS / topic, THREADS / topic / "sessions"]
+    session_files_by_name = {}
+    for topic_dir in session_dirs:
+        if not topic_dir.exists():
+            continue
+        for path in topic_dir.iterdir():
+            if (
+                path.is_file()
+                and SESSION_RE.match(path.name)
+                and path.name not in STATIC_FILES
+                and not path.name.startswith("sources-candidates-")
+            ):
+                session_files_by_name[path.name] = path
+    session_files = list(session_files_by_name.values())
     if not session_files:
         return 0, None
     newest = max(session_files, key=lambda p: p.stat().st_mtime)

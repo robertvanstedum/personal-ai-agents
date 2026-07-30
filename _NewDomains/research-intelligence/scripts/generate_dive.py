@@ -30,6 +30,8 @@ REPO_ROOT    = ROOT.parent.parent                       # personal-ai-agents/
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from core.get_secret import get_secret
+
 TOPICS_DIR   = ROOT / 'topics'
 THREADS_DIR  = ROOT / 'data' / 'threads'
 ANNOTATIONS_DIR = ROOT / 'data' / 'annotations' / 'research'
@@ -129,18 +131,27 @@ def load_thread_data(topic: str) -> dict:
         motivation = td.get('motivation', '').strip()
 
     # Sessions
-    topic_dir = TOPICS_DIR / topic
-    if not topic_dir.exists():
+    topic_dirs = [
+        TOPICS_DIR / topic,
+        THREADS_DIR / topic / 'sessions',
+    ]
+    if not any(path.exists() for path in topic_dirs):
         print(f"Error: topics/{topic}/ directory not found. Has a session been run for this topic?")
         sys.exit(1)
 
     EXCLUDED_STEMS = {'CONTEXT', 'ORIGIN', 'STORY_FOR_CLAUDE_AI'}
-    session_files = sorted([
-        f for f in topic_dir.glob('*.md')
-        if not f.name.startswith('sources-')
-        and f.stem not in EXCLUDED_STEMS
-        and not f.stem.isupper()
-    ])
+    session_files_by_name = {}
+    for topic_dir in topic_dirs:
+        if not topic_dir.exists():
+            continue
+        for path in topic_dir.glob('*.md'):
+            if (
+                not path.name.startswith('sources-')
+                and path.stem not in EXCLUDED_STEMS
+                and not path.stem.isupper()
+            ):
+                session_files_by_name[path.name] = path
+    session_files = sorted(session_files_by_name.values())
 
     sessions = []
     for f in session_files:
@@ -269,18 +280,11 @@ Your job:
 # ── API calls ─────────────────────────────────────────────────────────────────
 
 def get_anthropic_client():
-    """Get Anthropic client using keyring then env fallback (mirrors curator_feedback.py)."""
-    api_key = None
+    """Get the Anthropic client through the repository's shared secret lookup."""
     try:
-        import keyring as kr
-        api_key = kr.get_password('anthropic', 'api_key')
-    except Exception:
-        pass
-    if not api_key:
-        import os
-        api_key = os.getenv('ANTHROPIC_API_KEY')
-    if not api_key:
-        print("Error: Anthropic API key not found. Set via keyring or ANTHROPIC_API_KEY env var.")
+        api_key = get_secret("ANTHROPIC_API_KEY", "anthropic", "api_key")
+    except Exception as exc:
+        print(f"Error: Anthropic API key not found: {exc}")
         sys.exit(1)
     from anthropic import Anthropic
     return Anthropic(api_key=api_key)
