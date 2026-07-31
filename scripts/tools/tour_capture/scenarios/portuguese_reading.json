@@ -1,0 +1,93 @@
+{
+  "id": "portuguese-reading",
+  "domain": "portuguese",
+  "device_profile": "mobile",
+  "auth_profile": "owner_session",
+  "locale": "pt-BR",
+  "start_path": "/app/portuguese",
+  "steps": [
+    {
+      "goto": "/app/portuguese"
+    },
+    {
+      "wait_for": "[data-tour-capture='pt-landing']"
+    },
+    {
+      "screenshot": "landing",
+      "title": "Enter the Portuguese immersion space",
+      "description": "Start in the personal Portuguese immersion workspace.",
+      "alt": "Meu Português landing page in a mobile viewport"
+    },
+    {
+      "click": "[data-tour-capture='pt-landing'] a[href$='/leitura']"
+    },
+    {
+      "wait_for": "[data-tour-capture='reading-categories']"
+    },
+    {
+      "screenshot": "reading-categories",
+      "title": "Choose a reading category",
+      "description": "Browse current reading by everyday life, culture, news, or Rio.",
+      "alt": "Portuguese reading categories in a mobile viewport"
+    },
+    {
+      "operator": "Choose a current category containing a suitable general-interest article. Leave the article list visible."
+    },
+    {
+      "wait_for": {
+        "selector": "[data-tour-capture='article-list'] [data-tour-capture='article-row']",
+        "absent": [".lesen-loading"]
+      }
+    },
+    {
+      "screenshot": "reading-list",
+      "title": "Choose a current article",
+      "description": "Choose a current general-interest article for the session.",
+      "alt": "Current Portuguese article list in a mobile viewport"
+    },
+    {
+      "operator": "Open a current, public-safe general-interest article."
+    },
+    {
+      "wait_for": {
+        "selector": "[data-tour-capture='article-body'] #reading-text[data-tour-ready='complete']",
+        "text_selector": "#reading-text",
+        "text_not_in": ["Carregando…"]
+      }
+    },
+    {
+      "record_current_article": {
+        "title_selector": "#reading-headline",
+        "url_selector": "#btn-art-open"
+      }
+    },
+    {
+      "screenshot": "reading-article",
+      "title": "Read the selected article",
+      "description": "Read the article in context before practicing with it.",
+      "alt": "Selected Portuguese article open for reading in a mobile viewport"
+    },
+    {
+      "operator": "Select a useful phrase in the article and wait for its English translation."
+    },
+    {
+      "assert_current_article": {
+        "title_selector": "#reading-headline",
+        "url_selector": "#btn-art-open"
+      }
+    },
+    {
+      "wait_for": {
+        "selector": "[data-tour-capture='translation-result']",
+        "text_selector": "#popover-translation",
+        "text_not_in": ["Tradução…", "(erro)", "(sem tradução)"]
+      }
+    },
+    {
+      "screenshot": "translation",
+      "title": "Translate a phrase in context",
+      "description": "Select a phrase to reveal its English meaning without leaving the article.",
+      "alt": "English translation shown beside a selected Portuguese phrase"
+    }
+  ]
+}
