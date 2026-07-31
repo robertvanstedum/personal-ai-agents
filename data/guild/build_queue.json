@@ -997,5 +997,16 @@
     "blocked_reason": null,
     "last_transition_at": "2026-07-24T00:00:00Z",
     "notes": "Direct outcome of the 2026-07-24 voice-pause investigation. Replaces the current MediaRecorder + polling-VAD + three-sequential-HTTP-call pipeline in Mein Deutsch Gespraeche and Meu Portugues Conversas with a true realtime speech-to-speech architecture, swappable between OpenAI and Grok via a single config change (Claude has no public realtime voice API, stays on post-session review). Cost note: xAI Grok Voice Agent API is $3/hour for speech-to-speech -- surface to Robert before regular/extended use. Full findings in _working/INVESTIGATION_voice_session_pauses_2026-07-24.md and _working/FIXPLAN_voice_session_pauses_2026-07-24.md."
+  },
+  {
+    "id": 147,
+    "spec_title": "Guest Tour Repeatable Screenshot Capture",
+    "spec_file": "spec_guest_tour_interaction_capture_2026-07-30.md",
+    "status": "spec_ready",
+    "github_issue": null,
+    "priority": "normal",
+    "blocked_reason": null,
+    "last_transition_at": "2026-07-31T04:07:24Z",
+    "notes": "Approved capture approach: one readable scenario opens the real dev application and saves high-resolution stills at named checkpoints. Phase 1 is a Portuguese reading flow using a Robert-approved general-interest, nonpolitical article. Output includes lossless sources, optimized WebP images, a scene manifest, contact sheet, and review page. No public video, voice recording, event recorder, production capture, or manual per-image cropping. Current tour stays in place until the generated image set and implementation diff are separately approved."
   }
 ]
