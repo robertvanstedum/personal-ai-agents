@@ -1002,11 +1002,11 @@
     "id": 147,
     "spec_title": "Guest Tour Repeatable Screenshot Capture",
     "spec_file": "spec_guest_tour_interaction_capture_2026-07-30.md",
-    "status": "spec_ready",
+    "status": "in_build",
     "github_issue": null,
     "priority": "normal",
     "blocked_reason": null,
-    "last_transition_at": "2026-07-31T04:07:24Z",
-    "notes": "Approved capture approach: one readable scenario opens the real dev application and saves high-resolution stills at named checkpoints. Phase 1 is a Portuguese reading flow using a Robert-approved general-interest, nonpolitical article. Output includes lossless sources, optimized WebP images, a scene manifest, contact sheet, and review page. No public video, voice recording, event recorder, production capture, or manual per-image cropping. Current tour stays in place until the generated image set and implementation diff are separately approved."
+    "last_transition_at": "2026-07-31T14:14:26Z",
+    "notes": "Build authorized 2026-07-31. Phase 1 implements a shared Playwright capture and image-production pipeline, proven first with a Portuguese mobile reading flow. Robert may choose current content and perform authentic actions through declared operator pauses; validation, screenshots, filenames, PNG/WebP output, manifest, contact sheet, review page, reporting, and diagnostics are repeatable and automatic. Portuguese/German may use a guest profile; Curator, Guild, and Chief of Staff require an owner-session profile in later rollout. No article pinning, production capture, public viewer changes, video, or voice recording. Current tour remains until generated assets and the implementation diff are separately approved."
   }
 ]
