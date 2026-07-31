@@ -1,7 +1,7 @@
-# Guest Tour Repeatable Screenshot Capture
+# Look Inside Repeatable Screenshot Capture
 
 - **File:** `docs/specs/spec_guest_tour_interaction_capture_2026-07-30.md`
-- **Version:** v1.2
+- **Version:** v1.3
 - **Date:** July 31, 2026
 - **Status:** Working draft incorporating Robert's post-review decisions
 - **Scope:** Repeatable high-quality screenshots for the public `/tour`
@@ -28,7 +28,7 @@ The first implementation is intentionally limited:
 
 The utility itself must not be Portuguese-specific. The planned rollout covers
 Portuguese, German, Curator, Guild, and Chief of Staff. Each domain supplies its
-own scenario, authentication profile, and named checkpoints while sharing the
+own scenario and named checkpoints while sharing the owner authentication,
 same capture, validation, optimization, manifest, contact-sheet, and review
 pipeline.
 
@@ -65,25 +65,17 @@ The visitor sees their own browser interface when viewing the tour. Removing a
 second, captured browser frame gives the application more room and avoids the
 current browser-inside-browser effect.
 
-### Authentication profiles
+### Authentication profile
 
-Authentication is scenario-specific; one guest account cannot represent every
-domain:
-
-| Profile | Intended domains | Mechanism |
-|---|---|---|
-| `language_guest` | Portuguese and German | Optional dedicated dev guest created with the portal's existing `create_guest()` mechanism |
-| `owner_session` | Curator, Guild, Chief of Staff, and optionally either language domain | Real portal owner login with ignored local Playwright session state |
-
-No new account tier, token bypass, or domain-specific authentication is
+Every scenario uses the `owner_session` profile and Robert's real portal owner
+login. This applies to Portuguese, German, Curator, Guild, and Chief of Staff so
+the tour examples show the domains as they are actually used. No guest capture
+account, new account tier, token bypass, or domain-specific authentication is
 introduced.
 
-- Guest creation is a one-time manual/scripted dev setup step. Its expiry is
-  bounded and renewable; no commit or capture run writes portal runtime account
-  data.
-- Credentials use profile-specific environment or Keychain secrets, never
+- Credentials use owner-specific environment or Keychain secrets, never
   scenario files or Git.
-- Playwright may create one ignored local authentication-state file per profile,
+- Playwright may create one ignored local authentication-state file,
   outside deployed/static directories.
 - An invalid or expired session triggers one fresh login attempt. If login or
   authorization still fails, the run stops before capturing any checkpoint.
@@ -149,33 +141,38 @@ structure:
 
 ```json
 {
-  "id": "portuguese-reading-general-interest",
+  "id": "portuguese-reading",
   "domain": "portuguese",
-  "device": "mobile",
-  "auth_profile": "language_guest",
-  "start_url": "/app/portuguese",
+  "device_profile": "mobile",
+  "auth_profile": "owner_session",
+  "locale": "pt-BR",
+  "start_path": "/app/portuguese",
   "steps": [
-    {"open": "landing"},
-    {"screenshot": "01-portuguese-landing"},
-    {"click": "Leitura"},
-    {"wait_for": "reading-categories"},
-    {"screenshot": "02-portuguese-reading-categories"},
+    {"goto": "/app/portuguese"},
+    {"wait_for": "[data-tour-capture='pt-landing']"},
     {
-      "operator": "Choose a current category with a suitable article, then press Enter"
+      "screenshot": "landing",
+      "title": "Enter the Portuguese immersion space",
+      "description": "Start in the personal Portuguese immersion workspace.",
+      "alt": "Meu Português landing page in a mobile viewport"
     },
-    {"wait_for": "article-list"},
-    {"screenshot": "03-portuguese-reading-list"},
+    {"click": "[data-tour-capture='pt-landing'] a[href$='/leitura']"},
+    {"wait_for": "[data-tour-capture='reading-categories']"},
     {
-      "operator": "Open a current general-interest article, then press Enter"
+      "screenshot": "reading-categories",
+      "title": "Choose a reading category",
+      "description": "Browse current reading by everyday life, culture, news, or Rio.",
+      "alt": "Portuguese reading categories in a mobile viewport"
     },
-    {"record_current_article": true},
-    {"wait_for": "article-body"},
-    {"screenshot": "04-portuguese-reading-article"},
     {
-      "operator": "Select a useful phrase and request its translation, then press Enter"
+      "operator": "Choose a current category containing a suitable general-interest article. Leave the article list visible."
     },
-    {"wait_for": "translation-result"},
-    {"screenshot": "05-portuguese-translation"}
+    {
+      "record_current_article": {
+        "title_selector": "#reading-headline",
+        "url_selector": "#btn-art-open"
+      }
+    }
   ]
 }
 ```
@@ -440,11 +437,11 @@ Playwright browser:
   ratio without stretching.
 - Small checked-in fixture images exercise conversion and metadata validation.
 
-### Dev-only smoke test
+### Dev-only acceptance run
 
-The end-to-end capture is an explicitly named manual/dev smoke test excluded
-from default test collection. It requires the dev portal, an authentication
-profile appropriate to the scenario, and installed Chromium. It verifies:
+The implemented capture command is also the manual dev acceptance run. It is
+not part of default test collection and requires the dev portal, the local
+owner authentication secret, and installed Chromium. It verifies:
 
 - Real portal login and the proxied domain route succeed.
 - Operator pauses resume cleanly and the selected article identity remains
@@ -457,9 +454,9 @@ profile appropriate to the scenario, and installed Chromium. It verifies:
   scenario profile.
 - No incomplete spinner, toast, blocking modal, or error banner is visible.
 
-The README documents the separate smoke-test command and its prerequisites.
-CI must not silently skip a test presented as end-to-end; the smoke test is
-openly classified as a local acceptance gate.
+The README documents the capture command and its prerequisites. CI must not
+present this live acceptance run as an automated end-to-end test; it remains an
+explicit local gate.
 
 ### Manual review
 
@@ -486,8 +483,8 @@ Manual review of the smoke-test output confirms:
 ### Phase 2 — All-domain mobile rollout
 
 - Add German, Curator, Guild, and Chief of Staff mobile scenarios.
-- Use `language_guest` where the real guest experience is appropriate and
-  `owner_session` where the domain is owner-only.
+- Use `owner_session` for every domain so the captured examples match Robert's
+  normal use.
 - Allow declared operator pauses for current content, comments, corrections,
   and other authentic state preparation.
 - Generate one consistent review package across all five domains.
@@ -556,9 +553,8 @@ image production should become smooth and repeatable.
 
 ### Decisions changed after review
 
-- Authentication is not one universal capture guest. Portuguese and German may
-  use a guest profile; Curator, Guild, and Chief of Staff require an owner
-  profile.
+- Authentication uses Robert's real owner profile for every domain; there is no
+  separate capture guest.
 - The runner does not pin, seed, or preserve an article in Postgres. Robert
   chooses a current article during the run.
 - Real comments, interests, writing errors/corrections, and later voice sessions
