@@ -308,15 +308,15 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
     assert len(soup.select("section#cos .tour-shot")) == 2
     expected_mobile_hrefs = {
         "portuguese": [
-            "/static/tour/portuguese-mobile-landing.webp",
-            "/static/tour/portuguese-reading-categories.webp",
-            "/static/tour/portuguese-reading-list.webp",
-            "/static/tour/portuguese-reading-article.webp",
-            "/static/tour/portuguese-reading-correction.webp",
-            "/static/tour/portuguese-conversation-choice.webp",
-            "/static/tour/portuguese-voice-transcript.webp",
-            "/static/tour/portuguese-voice-coaching.webp",
-            "/static/tour/portuguese-learning-archive.webp",
+            "/static/tour/portuguese-mobile-landing.webp?v=20260730-trim2",
+            "/static/tour/portuguese-reading-categories.webp?v=20260730-trim2",
+            "/static/tour/portuguese-reading-list.webp?v=20260730-trim2",
+            "/static/tour/portuguese-reading-article.webp?v=20260730-trim2",
+            "/static/tour/portuguese-reading-correction.webp?v=20260730-trim2",
+            "/static/tour/portuguese-conversation-choice.webp?v=20260730-trim2",
+            "/static/tour/portuguese-voice-transcript.webp?v=20260730-trim2",
+            "/static/tour/portuguese-voice-coaching.webp?v=20260730-trim2",
+            "/static/tour/portuguese-learning-archive.webp?v=20260730-trim2",
         ],
         "guild": [
             "/static/tour/guild-mobile-landing.webp",
@@ -341,7 +341,10 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         ]
         assert mobile_hrefs == expected_hrefs
         assert all(
-            (static_root / href.removeprefix("/static/")).is_file()
+            (
+                static_root
+                / href.split("?", 1)[0].removeprefix("/static/")
+            ).is_file()
             for href in mobile_hrefs
         )
     assert all(section.has_attr("hidden") for section in soup.select(".tour-section"))

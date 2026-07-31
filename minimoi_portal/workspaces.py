@@ -33,7 +33,7 @@ WORKSPACES = (
         "path": "/app/portuguese",
         "eyebrow": "Language immersion",
         "summary": "Reading and real-world practice for a multilingual household.",
-        "image": "/static/tour/portuguese-mobile-landing.webp",
+        "image": "/static/tour/portuguese-landing.jpg",
         "public_visible": True,
     },
     {
@@ -42,7 +42,7 @@ WORKSPACES = (
         "path": "/guild",
         "eyebrow": "Build and operations",
         "summary": "Specs, build work, operating status, and the next iteration.",
-        "image": "/static/tour/guild-mobile-landing.webp",
+        "image": "/static/tour/guild-landing.png",
         "public_visible": True,
     },
     {
