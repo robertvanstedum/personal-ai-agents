@@ -16,7 +16,8 @@
 </div>
 
 <!-- ── Parchment content area ─────────────────────────────────── -->
-<div id="lesen-content-area" class="no-selection">
+<div id="lesen-content-area" class="no-selection"
+     data-tour-capture="reading-categories">
   <div class="day-toggle" id="day-toggle" style="display:none">
     <button class="day-btn active" data-day="hoje">Hoje</button>
     <button class="day-btn" data-day="ontem">Ontem</button>
@@ -73,7 +74,7 @@
 
   </div>
 
-  <div id="lesen-article-list"></div>
+  <div id="lesen-article-list" data-tour-capture="article-list"></div>
 
   <div class="strip-empty" id="lesen-empty-state" style="display:none">
     <span class="strip-empty-text">Nenhum artigo carregado.</span>
@@ -84,7 +85,8 @@
 </div>
 
 <!-- ── Reading state ──────────────────────────────────────────── -->
-<div id="reading-state" class="lesen-state-hidden">
+<div id="reading-state" class="lesen-state-hidden"
+     data-tour-capture="article-body">
   <div class="wien-banner">
     <span class="wien-banner-label" id="leitura-banner-label">Leitura</span>
   </div>
@@ -158,7 +160,8 @@
 </div>
 
 <!-- ── Word capture popover ───────────────────────────────────── -->
-<div class="word-popover" id="word-popover" style="display:none">
+<div class="word-popover" id="word-popover" style="display:none"
+     data-tour-capture="translation-result">
   <div class="popover-phrase" id="popover-phrase"></div>
   <div class="popover-translation" id="popover-translation">Tradução…</div>
   <div class="popover-timing" id="popover-timing"></div>
@@ -291,6 +294,7 @@ document.body.classList.add('parch-mode');
       const row = document.createElement('div');
       row.className = 'lesen-article-row';
       row.dataset.id = art.id;
+      row.dataset.tourCapture = 'article-row';
       row.innerHTML =
         `<span class="lesen-source-tag">${escapeHtml(art.source)}</span>` +
         `<span class="lesen-dot">·</span>` +
@@ -323,6 +327,7 @@ document.body.classList.add('parch-mode');
     const openLink = document.getElementById('btn-art-open');
     openLink.href = art.url || '#';
     const textEl = document.getElementById('reading-text');
+    textEl.dataset.tourReady = 'loading';
     renderArticleBody(textEl, art.summary || 'Carregando…');
     textTruncated = true; applyTruncation();
     const btnM = document.getElementById('btn-merken');
@@ -335,13 +340,16 @@ document.body.classList.add('parch-mode');
       if (data.ok && data.text) {
         art.summary = data.text;
         renderArticleBody(textEl, data.text);
+        textEl.dataset.tourReady = 'complete';
       } else {
         textEl.innerHTML = `<p class="fetch-failed-msg">Não foi possível carregar o artigo completo.</p>
           <a href="${escHtml(art.url)}" target="_blank" rel="noopener" class="reading-art-open">
             Abrir artigo na fonte ↗</a>`;
+        textEl.dataset.tourReady = 'failed';
       }
     } catch {
       renderArticleBody(textEl, art.summary || 'Leia o artigo completo na fonte.');
+      textEl.dataset.tourReady = 'fallback';
     }
   }
 

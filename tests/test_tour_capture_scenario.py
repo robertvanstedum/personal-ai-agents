@@ -1,0 +1,100 @@
+import copy
+from pathlib import Path
+
+import pytest
+
+from scripts.tools.tour_capture.runner import CaptureRunError, validate_base_url
+from scripts.tools.tour_capture.scenario import (
+    ScenarioValidationError,
+    load_scenario,
+    output_filename,
+    validate_scenario,
+)
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SCENARIO = ROOT / "scripts" / "tools" / "tour_capture" / "scenarios" / "portuguese_reading.json"
+
+
+def test_portuguese_scenario_is_valid_and_operator_assisted():
+    scenario = load_scenario(SCENARIO)
+    assert scenario["auth_profile"] == "owner_session"
+    assert scenario["_summary"] == {"screenshots": 5, "operator_pauses": 3}
+
+
+def test_portuguese_templates_expose_additive_capture_selectors():
+    template_dir = ROOT / "domains" / "portuguese" / "templates"
+    landing = (template_dir / "portuguese_landing.html").read_text()
+    reading = (template_dir / "portuguese_leitura.html").read_text()
+
+    assert 'data-tour-capture="pt-landing"' in landing
+    for selector in (
+        'data-tour-capture="reading-categories"',
+        'data-tour-capture="article-list"',
+        'data-tour-capture="article-body"',
+        'data-tour-capture="translation-result"',
+        "row.dataset.tourCapture = 'article-row'",
+        "textEl.dataset.tourReady = 'complete'",
+    ):
+        assert selector in reading
+
+    scenario = load_scenario(SCENARIO)
+    article_wait = next(
+        step["wait_for"]
+        for step in scenario["steps"]
+        if isinstance(step.get("wait_for"), dict)
+        and "data-tour-ready='complete'" in step["wait_for"]["selector"]
+    )
+    assert article_wait["text_selector"] == "#reading-text"
+
+
+def test_filename_maps_directly_to_scene_order():
+    assert output_filename(1, "portuguese", "landing", "mobile", "png") == (
+        "01-portuguese-landing-mobile.png"
+    )
+    assert output_filename(5, "portuguese", "translation", "mobile", ".webp") == (
+        "05-portuguese-translation-mobile.webp"
+    )
+
+
+def test_duplicate_scene_is_rejected():
+    scenario = load_scenario(SCENARIO)
+    clean = {key: value for key, value in scenario.items() if not key.startswith("_")}
+    duplicate = copy.deepcopy(clean)
+    screenshot = next(step for step in duplicate["steps"] if "screenshot" in step)
+    duplicate["steps"].append(copy.deepcopy(screenshot))
+    with pytest.raises(ScenarioValidationError, match="duplicate screenshot"):
+        validate_scenario(duplicate)
+
+
+def test_screenshot_without_description_is_rejected():
+    scenario = load_scenario(SCENARIO)
+    clean = {key: value for key, value in scenario.items() if not key.startswith("_")}
+    missing_description = copy.deepcopy(clean)
+    screenshot = next(step for step in missing_description["steps"] if "screenshot" in step)
+    screenshot.pop("description")
+
+    with pytest.raises(ScenarioValidationError, match="requires non-empty description"):
+        validate_scenario(missing_description)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://minimoi.ai",
+        "https://www.minimoi.ai",
+        "https://example.com",
+        "http://dev.minimoi.ai",
+    ],
+)
+def test_production_or_unknown_capture_origins_are_rejected(url):
+    with pytest.raises(CaptureRunError, match="production capture is refused"):
+        validate_base_url(url)
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["https://dev.minimoi.ai", "http://localhost:8000", "http://127.0.0.1:5000"],
+)
+def test_dev_and_local_capture_origins_are_allowed(url):
+    assert validate_base_url(url) == url
