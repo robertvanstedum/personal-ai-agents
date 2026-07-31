@@ -2063,7 +2063,7 @@ body.admin { background: var(--parch-mid); }
     padding:
       0.65rem
       max(0.85rem, env(safe-area-inset-right))
-      max(0.65rem, env(safe-area-inset-bottom))
+      0.55rem
       max(0.85rem, env(safe-area-inset-left));
     align-items: center;
     font-size: 0.82rem;
