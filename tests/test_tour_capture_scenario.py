@@ -14,6 +14,7 @@ from scripts.tools.tour_capture.scenario import (
 
 ROOT = Path(__file__).resolve().parents[1]
 SCENARIO = ROOT / "scripts" / "tools" / "tour_capture" / "scenarios" / "portuguese_reading.json"
+GUILD_SCENARIO = ROOT / "scripts" / "tools" / "tour_capture" / "scenarios" / "guild_pilot.json"
 
 
 def test_portuguese_scenario_is_valid_and_operator_assisted():
@@ -46,6 +47,38 @@ def test_portuguese_templates_expose_additive_capture_selectors():
         and "data-tour-ready='complete'" in step["wait_for"]["selector"]
     )
     assert article_wait["text_selector"] == "#reading-text"
+
+
+def test_guild_pilot_is_valid_and_fully_automatic():
+    scenario = load_scenario(GUILD_SCENARIO)
+    assert scenario["start_path"] == "/guild"
+    assert scenario["auth_profile"] == "owner_session"
+    assert scenario["_summary"] == {"screenshots": 2, "operator_pauses": 0}
+
+
+def test_guild_templates_expose_additive_capture_selectors():
+    template_dir = ROOT / "minimoi_portal" / "templates" / "guild"
+    expected = {
+        "guild_landing.html": (
+            'data-tour-capture="guild-landing"',
+            'data-tour-capture="guild-domain-cards"',
+        ),
+        "build_log.html": (
+            'data-tour-capture="guild-build-log"',
+            'data-tour-capture="guild-build-log-table"',
+        ),
+    }
+    for filename, selectors in expected.items():
+        template = (template_dir / filename).read_text()
+        assert all(selector in template for selector in selectors)
+
+
+@pytest.mark.parametrize("path", ["/guild", "/guild/build"])
+def test_owner_only_guild_start_paths_are_allowed(path):
+    scenario = load_scenario(GUILD_SCENARIO)
+    clean = {key: value for key, value in scenario.items() if not key.startswith("_")}
+    clean["start_path"] = path
+    assert validate_scenario(clean)["start_path"] == path
 
 
 def test_filename_maps_directly_to_scene_order():

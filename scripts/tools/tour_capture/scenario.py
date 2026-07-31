@@ -89,8 +89,14 @@ def validate_scenario(data: dict[str, Any]) -> dict[str, Any]:
         raise ScenarioValidationError(f"unknown device profile: {data['device_profile']!r}")
     if data["auth_profile"] not in AUTH_PROFILES:
         raise ScenarioValidationError(f"unknown auth profile: {data['auth_profile']!r}")
-    if not isinstance(data["start_path"], str) or not data["start_path"].startswith("/app/"):
-        raise ScenarioValidationError("start_path must be a portal-proxied /app/... path")
+    if not isinstance(data["start_path"], str) or not (
+        data["start_path"].startswith("/app/")
+        or data["start_path"] == "/guild"
+        or data["start_path"].startswith("/guild/")
+    ):
+        raise ScenarioValidationError(
+            "start_path must be a portal-proxied /app/... path or an owner-only /guild path"
+        )
     if not isinstance(data["steps"], list) or not data["steps"]:
         raise ScenarioValidationError("scenario steps must be a non-empty list")
 

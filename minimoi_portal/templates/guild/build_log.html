@@ -244,7 +244,7 @@
   </div>
 </nav>
 
-<div class="page-header">
+<div class="page-header" data-tour-capture="guild-build-log">
   <h1 class="page-title">Build Log</h1>
   <span class="page-meta">{{ items | length }} spec{{ 's' if items | length != 1 else '' }}</span>
   <div class="header-actions">
@@ -303,7 +303,7 @@
   <a href="/guild/build?status=deferred"   class="filter-btn {% if status_filter == 'deferred' %}active{% endif %}">Deferred</a>
 </form>
 
-<div class="table-wrap">
+<div class="table-wrap" data-tour-capture="guild-build-log-table">
   {% if items %}
   <table>
     <thead>
