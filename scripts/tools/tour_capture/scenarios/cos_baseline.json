@@ -1,0 +1,34 @@
+{
+  "id": "cos-baseline",
+  "domain": "cos",
+  "device_profile": "mobile",
+  "auth_profile": "owner_session",
+  "locale": "en-US",
+  "start_path": "/app/cos",
+  "steps": [
+    {
+      "goto": "/app/cos"
+    },
+    {
+      "wait_for": ".cos-landing"
+    },
+    {
+      "screenshot": "landing",
+      "title": "Enter the coordination space",
+      "description": "Start where conversation, records, actions, and retained context meet.",
+      "alt": "Chief of Staff landing page in a mobile viewport"
+    },
+    {
+      "goto": "/app/cos/ui/confer"
+    },
+    {
+      "wait_for": "#tab-confer.active #chat-log"
+    },
+    {
+      "screenshot": "confer",
+      "title": "Open Confer",
+      "description": "Open the cross-domain conversation space before beginning a new request.",
+      "alt": "Chief of Staff Confer page in a mobile viewport"
+    }
+  ]
+}

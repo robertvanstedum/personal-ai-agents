@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from scripts.tools.tour_capture.runner import CaptureRunError, validate_base_url
+from scripts.tools.tour_capture.cli import scenario_names
 from scripts.tools.tour_capture.scenario import (
     ScenarioValidationError,
     load_scenario,
@@ -15,6 +16,10 @@ from scripts.tools.tour_capture.scenario import (
 ROOT = Path(__file__).resolve().parents[1]
 SCENARIO = ROOT / "scripts" / "tools" / "tour_capture" / "scenarios" / "portuguese_reading.json"
 GUILD_SCENARIO = ROOT / "scripts" / "tools" / "tour_capture" / "scenarios" / "guild_pilot.json"
+BASELINE_SCENARIOS = tuple(
+    ROOT / "scripts" / "tools" / "tour_capture" / "scenarios" / f"{name.replace('-', '_')}.json"
+    for name in scenario_names("domain-baseline")
+)
 
 
 def test_portuguese_scenario_is_valid_and_operator_assisted():
@@ -54,6 +59,22 @@ def test_guild_pilot_is_valid_and_fully_automatic():
     assert scenario["start_path"] == "/guild"
     assert scenario["auth_profile"] == "owner_session"
     assert scenario["_summary"] == {"screenshots": 2, "operator_pauses": 0}
+
+
+def test_domain_baseline_covers_every_domain_with_two_automatic_scenes():
+    scenarios = [load_scenario(path) for path in BASELINE_SCENARIOS]
+
+    assert [scenario["domain"] for scenario in scenarios] == [
+        "curator",
+        "german",
+        "portuguese",
+        "guild",
+        "cos",
+    ]
+    assert all(
+        scenario["_summary"] == {"screenshots": 2, "operator_pauses": 0}
+        for scenario in scenarios
+    )
 
 
 def test_guild_templates_expose_additive_capture_selectors():

@@ -2042,18 +2042,29 @@ body.admin { background: var(--parch-mid); }
     cursor: zoom-in;
   }
   .tour-lightbox.is-mobile-format img {
-    width: auto;
-    height: 100%;
+    width: 100%;
+    height: auto;
     max-width: 100%;
-    max-height: 100%;
+    max-height: none;
     object-fit: contain;
     cursor: default;
   }
   .tour-lightbox.is-mobile-format .tour-lightbox-stage {
+    display: block;
     padding:
       max(0.35rem, env(safe-area-inset-top))
       0.25rem
       0.25rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+  .tour-lightbox.is-mobile-format .tour-lightbox-media {
+    width: 100%;
+    height: auto;
+    min-height: 100%;
+    align-items: flex-start;
   }
   .tour-lightbox.is-mobile-format .tour-lightbox-zoom {
     display: none;
@@ -2076,6 +2087,9 @@ body.admin { background: var(--parch-mid); }
   .tour-lightbox-format button {
     min-height: 34px;
     padding-inline: 0.7rem;
+  }
+  .tour-lightbox.is-mobile-format .tour-lightbox-format {
+    display: none;
   }
   .tour-lightbox-zoom {
     display: inline-flex;

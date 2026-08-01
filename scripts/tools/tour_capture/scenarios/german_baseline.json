@@ -1,0 +1,34 @@
+{
+  "id": "german-baseline",
+  "domain": "german",
+  "device_profile": "mobile",
+  "auth_profile": "owner_session",
+  "locale": "de-DE",
+  "start_path": "/app/german",
+  "steps": [
+    {
+      "goto": "/app/german"
+    },
+    {
+      "wait_for": ".landing-hero"
+    },
+    {
+      "screenshot": "landing",
+      "title": "Enter the German immersion space",
+      "description": "Start in the personal German language workspace.",
+      "alt": "Mein Deutsch landing page in a mobile viewport"
+    },
+    {
+      "goto": "/app/german/lesen"
+    },
+    {
+      "wait_for": ".lesen-cat-row .lesen-cat-card"
+    },
+    {
+      "screenshot": "reading-categories",
+      "title": "Choose a reading path",
+      "description": "Choose an area of interest before selecting a current German article.",
+      "alt": "Mein Deutsch reading categories in a mobile viewport"
+    }
+  ]
+}

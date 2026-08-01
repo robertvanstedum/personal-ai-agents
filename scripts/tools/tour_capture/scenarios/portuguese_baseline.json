@@ -1,0 +1,34 @@
+{
+  "id": "portuguese-baseline",
+  "domain": "portuguese",
+  "device_profile": "mobile",
+  "auth_profile": "owner_session",
+  "locale": "pt-BR",
+  "start_path": "/app/portuguese",
+  "steps": [
+    {
+      "goto": "/app/portuguese"
+    },
+    {
+      "wait_for": "[data-tour-capture='pt-landing']"
+    },
+    {
+      "screenshot": "landing",
+      "title": "Enter the Portuguese immersion space",
+      "description": "Start in the personal Portuguese language workspace.",
+      "alt": "Meu Português landing page in a mobile viewport"
+    },
+    {
+      "goto": "/app/portuguese/leitura"
+    },
+    {
+      "wait_for": "[data-tour-capture='reading-categories']"
+    },
+    {
+      "screenshot": "reading-categories",
+      "title": "Choose a reading path",
+      "description": "Choose an area of interest before selecting a current Portuguese article.",
+      "alt": "Meu Português reading categories in a mobile viewport"
+    }
+  ]
+}

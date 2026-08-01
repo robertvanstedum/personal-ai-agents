@@ -1,0 +1,34 @@
+{
+  "id": "curator-baseline",
+  "domain": "curator",
+  "device_profile": "mobile",
+  "auth_profile": "owner_session",
+  "locale": "en-US",
+  "start_path": "/app/curator",
+  "steps": [
+    {
+      "goto": "/app/curator"
+    },
+    {
+      "wait_for": ".card-catalog .drawer"
+    },
+    {
+      "screenshot": "landing",
+      "title": "Enter the Curator workspace",
+      "description": "Start where daily reading, research, leanings, and the archive connect.",
+      "alt": "Curator landing page in a mobile viewport"
+    },
+    {
+      "goto": "/app/curator/briefing"
+    },
+    {
+      "wait_for": ".article-list .article-card"
+    },
+    {
+      "screenshot": "daily-briefing",
+      "title": "Open the daily briefing",
+      "description": "Review the current ranked briefing before choosing an issue to investigate.",
+      "alt": "Curator daily briefing in a mobile viewport"
+    }
+  ]
+}

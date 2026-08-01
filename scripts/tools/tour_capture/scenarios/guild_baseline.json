@@ -1,0 +1,34 @@
+{
+  "id": "guild-baseline",
+  "domain": "guild",
+  "device_profile": "mobile",
+  "auth_profile": "owner_session",
+  "locale": "en-US",
+  "start_path": "/guild",
+  "steps": [
+    {
+      "goto": "/guild"
+    },
+    {
+      "wait_for": "[data-tour-capture='guild-domain-cards']"
+    },
+    {
+      "screenshot": "landing",
+      "title": "Enter the Guild workspace",
+      "description": "Start where build, operate, and improve stay connected.",
+      "alt": "Guild landing page in a mobile viewport"
+    },
+    {
+      "goto": "/guild/build"
+    },
+    {
+      "wait_for": "[data-tour-capture='guild-build-log-table']"
+    },
+    {
+      "screenshot": "build-log",
+      "title": "Open the build record",
+      "description": "See specifications and delivery status before opening a particular build.",
+      "alt": "Guild build log in a mobile viewport"
+    }
+  ]
+}
