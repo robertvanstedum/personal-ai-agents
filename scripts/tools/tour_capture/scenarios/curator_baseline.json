@@ -25,10 +25,13 @@
       "wait_for": ".article-list .article-card"
     },
     {
+      "operator": "Choose a current article and click Like, Pass, or Save. Wait for the action to finish, then press Enter."
+    },
+    {
       "screenshot": "daily-briefing",
-      "title": "Open the daily briefing",
-      "description": "Review the current ranked briefing before choosing an issue to investigate.",
-      "alt": "Curator daily briefing in a mobile viewport"
+      "title": "Take action on the daily briefing",
+      "description": "Like, pass, or save a current story from the ranked briefing.",
+      "alt": "Curator daily briefing in a mobile viewport after taking a real action on an article"
     }
   ]
 }

@@ -61,20 +61,29 @@ def test_guild_pilot_is_valid_and_fully_automatic():
     assert scenario["_summary"] == {"screenshots": 2, "operator_pauses": 0}
 
 
-def test_domain_baseline_covers_every_domain_with_two_automatic_scenes():
-    scenarios = [load_scenario(path) for path in BASELINE_SCENARIOS]
+def test_domain_baseline_covers_every_domain():
+    scenarios = {scenario["domain"]: scenario for scenario in (
+        load_scenario(path) for path in BASELINE_SCENARIOS
+    )}
 
-    assert [scenario["domain"] for scenario in scenarios] == [
-        "curator",
-        "german",
-        "portuguese",
-        "guild",
-        "cos",
-    ]
-    assert all(
-        scenario["_summary"] == {"screenshots": 2, "operator_pauses": 0}
-        for scenario in scenarios
-    )
+    assert set(scenarios) == {"curator", "german", "portuguese", "guild", "cos"}
+
+    # Landing is always automatic. Later scenes are operator-assisted where an
+    # authentic action (save an article, ask CoS a real question, navigate
+    # Guild to whatever's worth showing next) matters more than an automatic
+    # snapshot of whatever is live.
+    expected_summary = {
+        "curator": {"screenshots": 2, "operator_pauses": 1},
+        "german": {"screenshots": 2, "operator_pauses": 0},
+        "portuguese": {"screenshots": 2, "operator_pauses": 0},
+        # Guild's second scene is an open-ended free_capture loop: the
+        # declared count only reflects the fixed landing+build-log shots,
+        # since the operator can capture as many further scenes as they want.
+        "guild": {"screenshots": 2, "operator_pauses": 1},
+        "cos": {"screenshots": 2, "operator_pauses": 1},
+    }
+    for domain, scenario in scenarios.items():
+        assert scenario["_summary"] == expected_summary[domain], domain
 
 
 def test_guild_templates_expose_additive_capture_selectors():
@@ -119,6 +128,57 @@ def test_duplicate_scene_is_rejected():
     duplicate["steps"].append(copy.deepcopy(screenshot))
     with pytest.raises(ScenarioValidationError, match="duplicate screenshot"):
         validate_scenario(duplicate)
+
+
+def test_free_capture_step_is_valid_and_counts_as_an_operator_pause():
+    scenario = validate_scenario({
+        "id": "loop-example",
+        "domain": "guild",
+        "device_profile": "mobile",
+        "auth_profile": "owner_session",
+        "start_path": "/guild",
+        "steps": [
+            {"goto": "/guild"},
+            {"screenshot": "landing", "title": "t", "description": "d", "alt": "a"},
+            {"free_capture": {"prefix": "explore"}},
+        ],
+    })
+    assert scenario["_summary"] == {"screenshots": 1, "operator_pauses": 1}
+
+
+def test_free_capture_requires_a_slug_prefix():
+    with pytest.raises(ScenarioValidationError, match="prefix"):
+        validate_scenario({
+            "id": "loop-example",
+            "domain": "guild",
+            "device_profile": "mobile",
+            "auth_profile": "owner_session",
+            "start_path": "/guild",
+            "steps": [{"free_capture": {"prefix": "Not A Slug"}}],
+        })
+
+
+def test_free_capture_prefix_cannot_collide_with_a_declared_screenshot():
+    with pytest.raises(ScenarioValidationError, match="collides"):
+        validate_scenario({
+            "id": "loop-example",
+            "domain": "guild",
+            "device_profile": "mobile",
+            "auth_profile": "owner_session",
+            "start_path": "/guild",
+            "steps": [
+                {"screenshot": "explore", "title": "t", "description": "d", "alt": "a"},
+                {"free_capture": {"prefix": "explore"}},
+            ],
+        })
+
+
+def test_guild_baseline_scenario_uses_free_capture_for_open_ended_browsing():
+    scenario = load_scenario(
+        ROOT / "scripts" / "tools" / "tour_capture" / "scenarios" / "guild_baseline.json"
+    )
+    assert scenario["_summary"] == {"screenshots": 2, "operator_pauses": 1}
+    assert any("free_capture" in step for step in scenario["steps"])
 
 
 def test_screenshot_without_description_is_rejected():

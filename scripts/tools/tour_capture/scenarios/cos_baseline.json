@@ -25,10 +25,13 @@
       "wait_for": "#tab-confer.active #chat-log"
     },
     {
+      "operator": "Type a real request or question to CoS and send it. Wait for the reply to finish, then press Enter."
+    },
+    {
       "screenshot": "confer",
-      "title": "Open Confer",
-      "description": "Open the cross-domain conversation space before beginning a new request.",
-      "alt": "Chief of Staff Confer page in a mobile viewport"
+      "title": "Confer across the system",
+      "description": "Ask a real cross-domain question and see the response.",
+      "alt": "Chief of Staff Confer page in a mobile viewport with a real request and reply"
     }
   ]
 }

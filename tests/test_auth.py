@@ -293,6 +293,11 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         "guild": [
             "/static/tour/01-guild-landing-mobile.webp?v=20260731-baseline1",
             "/static/tour/02-guild-build-log-mobile.webp?v=20260731-baseline1",
+            "/static/tour/03-guild-spec-mobile.webp?v=20260801-guildflow1",
+            "/static/tour/04-guild-roadmap-mobile.webp?v=20260801-guildflow1",
+            "/static/tour/05-guild-github-issues-mobile.webp?v=20260801-guildflow1",
+            "/static/tour/06-guild-operate-mobile.webp?v=20260801-guildflow1",
+            "/static/tour/07-guild-improve-mobile.webp?v=20260801-guildflow1",
         ],
         "cos": [
             "/static/tour/01-cos-landing-mobile.webp?v=20260731-baseline1",

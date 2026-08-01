@@ -29,6 +29,15 @@
       "title": "Open the build record",
       "description": "See specifications and delivery status before opening a particular build.",
       "alt": "Guild build log in a mobile viewport"
+    },
+    {
+      "free_capture": {
+        "prefix": "explore",
+        "title": "Explore Guild",
+        "description": "Captured while browsing Guild naturally.",
+        "alt": "Guild in a mobile viewport",
+        "instructions": "Browse anywhere you want (e.g. open a spec). Press Enter to capture a shot, or type 'done' to finish."
+      }
     }
   ]
 }

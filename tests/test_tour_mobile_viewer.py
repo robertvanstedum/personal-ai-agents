@@ -77,6 +77,11 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
     guild_mobile_assets = [
         "01-guild-landing-mobile.webp",
         "02-guild-build-log-mobile.webp",
+        "03-guild-spec-mobile.webp",
+        "04-guild-roadmap-mobile.webp",
+        "05-guild-github-issues-mobile.webp",
+        "06-guild-operate-mobile.webp",
+        "07-guild-improve-mobile.webp",
     ]
     cos_mobile_assets = [
         "01-cos-landing-mobile.webp",
