@@ -25,10 +25,13 @@
       "wait_for": "[data-tour-capture='reading-categories']"
     },
     {
-      "screenshot": "reading-categories",
-      "title": "Choose a reading path",
-      "description": "Choose an area of interest before selecting a current Portuguese article.",
-      "alt": "Meu Português reading categories in a mobile viewport"
+      "free_capture": {
+        "prefix": "explore",
+        "title": "Explore Meu Português",
+        "description": "Captured while browsing Meu Português naturally.",
+        "alt": "Meu Português in a mobile viewport",
+        "instructions": "Browse anywhere you want (a reading category, an article, Conversas, Escrita, Palavras, Arquivo). Press Enter to capture every open tab, or type 'done' to finish."
+      }
     }
   ]
 }

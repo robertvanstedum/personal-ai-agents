@@ -25,13 +25,13 @@
       "wait_for": "#tab-confer.active #chat-log"
     },
     {
-      "operator": "Type a real request or question to CoS and send it. Wait for the reply to finish, then press Enter."
-    },
-    {
-      "screenshot": "confer",
-      "title": "Confer across the system",
-      "description": "Ask a real cross-domain question and see the response.",
-      "alt": "Chief of Staff Confer page in a mobile viewport with a real request and reply"
+      "free_capture": {
+        "prefix": "explore",
+        "title": "Explore Chief of Staff",
+        "description": "Captured while browsing Chief of Staff naturally.",
+        "alt": "Chief of Staff in a mobile viewport",
+        "instructions": "Browse anywhere you want (ask CoS a real question in Confer, open Record, Track, Store). Press Enter to capture every open tab, or type 'done' to finish."
+      }
     }
   ]
 }

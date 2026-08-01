@@ -72,15 +72,16 @@ def test_domain_baseline_covers_every_domain():
     # authentic action (save an article, ask CoS a real question, navigate
     # Guild to whatever's worth showing next) matters more than an automatic
     # snapshot of whatever is live.
+    # Every domain now ends with an open-ended free_capture loop: the
+    # declared screenshot count only reflects the fixed automatic shots
+    # before it, since the operator can capture as many further scenes as
+    # they want from there.
     expected_summary = {
-        "curator": {"screenshots": 2, "operator_pauses": 1},
-        "german": {"screenshots": 2, "operator_pauses": 0},
-        "portuguese": {"screenshots": 2, "operator_pauses": 0},
-        # Guild's second scene is an open-ended free_capture loop: the
-        # declared count only reflects the fixed landing+build-log shots,
-        # since the operator can capture as many further scenes as they want.
+        "curator": {"screenshots": 1, "operator_pauses": 1},
+        "german": {"screenshots": 1, "operator_pauses": 1},
+        "portuguese": {"screenshots": 1, "operator_pauses": 1},
         "guild": {"screenshots": 3, "operator_pauses": 1},
-        "cos": {"screenshots": 2, "operator_pauses": 1},
+        "cos": {"screenshots": 1, "operator_pauses": 1},
     }
     for domain, scenario in scenarios.items():
         assert scenario["_summary"] == expected_summary[domain], domain

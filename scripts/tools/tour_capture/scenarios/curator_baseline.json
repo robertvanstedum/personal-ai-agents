@@ -25,13 +25,13 @@
       "wait_for": ".article-list .article-card"
     },
     {
-      "operator": "Choose a current article and click Like, Pass, or Save. Wait for the action to finish, then press Enter."
-    },
-    {
-      "screenshot": "daily-briefing",
-      "title": "Take action on the daily briefing",
-      "description": "Like, pass, or save a current story from the ranked briefing.",
-      "alt": "Curator daily briefing in a mobile viewport after taking a real action on an article"
+      "free_capture": {
+        "prefix": "explore",
+        "title": "Explore Curator",
+        "description": "Captured while browsing Curator naturally.",
+        "alt": "Curator in a mobile viewport",
+        "instructions": "Browse anywhere you want (scroll, take an action on an article, open Reading Room, Scans & Dives, Leanings, whatever tells the story). Press Enter to capture every open tab, or type 'done' to finish."
+      }
     }
   ]
 }

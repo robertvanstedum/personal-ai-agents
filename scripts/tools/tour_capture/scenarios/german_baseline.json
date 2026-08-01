@@ -25,10 +25,13 @@
       "wait_for": ".lesen-cat-row .lesen-cat-card"
     },
     {
-      "screenshot": "reading-categories",
-      "title": "Choose a reading path",
-      "description": "Choose an area of interest before selecting a current German article.",
-      "alt": "Mein Deutsch reading categories in a mobile viewport"
+      "free_capture": {
+        "prefix": "explore",
+        "title": "Explore Mein Deutsch",
+        "description": "Captured while browsing Mein Deutsch naturally.",
+        "alt": "Mein Deutsch in a mobile viewport",
+        "instructions": "Browse anywhere you want (a reading category, an article, Gespräche, Schreiben, Wörter, Archiv). Press Enter to capture every open tab, or type 'done' to finish."
+      }
     }
   ]
 }
