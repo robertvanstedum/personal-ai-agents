@@ -19,6 +19,15 @@
       "alt": "Guild landing page in a mobile viewport"
     },
     {
+      "scroll_to": ".guild-card-row .guild-card:last-child"
+    },
+    {
+      "screenshot": "landing-partners",
+      "title": "Build has two partners: Operate and Improve",
+      "description": "Even early, Operate and Improve are part of the same cycle — not afterthoughts.",
+      "alt": "Guild landing page scrolled to show the Operate and Improve cards"
+    },
+    {
       "goto": "/guild/build"
     },
     {

@@ -79,7 +79,7 @@ def test_domain_baseline_covers_every_domain():
         # Guild's second scene is an open-ended free_capture loop: the
         # declared count only reflects the fixed landing+build-log shots,
         # since the operator can capture as many further scenes as they want.
-        "guild": {"screenshots": 2, "operator_pauses": 1},
+        "guild": {"screenshots": 3, "operator_pauses": 1},
         "cos": {"screenshots": 2, "operator_pauses": 1},
     }
     for domain, scenario in scenarios.items():
@@ -146,6 +146,21 @@ def test_free_capture_step_is_valid_and_counts_as_an_operator_pause():
     assert scenario["_summary"] == {"screenshots": 1, "operator_pauses": 1}
 
 
+def test_scroll_to_requires_a_non_empty_selector():
+    with pytest.raises(ScenarioValidationError, match="scroll_to"):
+        validate_scenario({
+            "id": "loop-example",
+            "domain": "guild",
+            "device_profile": "mobile",
+            "auth_profile": "owner_session",
+            "start_path": "/guild",
+            "steps": [
+                {"scroll_to": "   "},
+                {"screenshot": "s", "title": "t", "description": "d", "alt": "a"},
+            ],
+        })
+
+
 def test_free_capture_requires_a_slug_prefix():
     with pytest.raises(ScenarioValidationError, match="prefix"):
         validate_scenario({
@@ -177,8 +192,9 @@ def test_guild_baseline_scenario_uses_free_capture_for_open_ended_browsing():
     scenario = load_scenario(
         ROOT / "scripts" / "tools" / "tour_capture" / "scenarios" / "guild_baseline.json"
     )
-    assert scenario["_summary"] == {"screenshots": 2, "operator_pauses": 1}
+    assert scenario["_summary"] == {"screenshots": 3, "operator_pauses": 1}
     assert any("free_capture" in step for step in scenario["steps"])
+    assert any("scroll_to" in step for step in scenario["steps"])
 
 
 def test_screenshot_without_description_is_rejected():

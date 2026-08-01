@@ -285,6 +285,11 @@ class CaptureRunner:
                             )
                         elif action == "click":
                             page.locator(value).first.click(timeout=self.timeout_ms)
+                        elif action == "scroll_to":
+                            page.locator(value).first.scroll_into_view_if_needed(
+                                timeout=self.timeout_ms
+                            )
+                            page.wait_for_timeout(150)
                         elif action == "wait_for":
                             wait_for_checkpoint(page, value, self.timeout_ms)
                         elif action == "operator":

@@ -14,6 +14,7 @@ SUPPORTED_ACTIONS = {
     "goto",
     "click",
     "wait_for",
+    "scroll_to",
     "operator",
     "record_current_article",
     "assert_current_article",
@@ -112,7 +113,7 @@ def validate_scenario(data: dict[str, Any]) -> dict[str, Any]:
         action = _action_key(step, index)
         value = step[action]
 
-        if action in {"goto", "click", "operator"}:
+        if action in {"goto", "click", "operator", "scroll_to"}:
             if not isinstance(value, str) or not value.strip():
                 raise ScenarioValidationError(f"step {index} {action} must be a non-empty string")
         elif action == "wait_for":
