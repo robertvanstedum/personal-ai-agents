@@ -239,23 +239,28 @@ def generate_scan(hash_id, article_data, initial_interest, dive_focus=None):
 
     Returns: (markdown_content, cost, output_path) or (None, None, None) on error
     """
-    from datetime import datetime
-    
+    from datetime import datetime, timezone
+
     api_key = get_anthropic_api_key()
     if not api_key:
         print("❌ No Anthropic API key found")
         return None, None, None
-    
+
     client = Anthropic(api_key=api_key)
-    
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
     # Build prompt
     context_parts = [f"Your initial interest: \"{initial_interest}\""]
     if dive_focus:
         context_parts.append(f"Deep dive focus: \"{dive_focus}\"")
-    
+
     context = "\n".join(context_parts)
-    
-    prompt = f"""Provide a concise deep dive analysis of this article. This is a point of departure for further research, not a complete explanation.
+
+    prompt = f"""Current date: {today_utc} (UTC). The article below and its metadata are authoritative and already live in a real, current news feed. Do not reject, doubt, or decline to analyze it merely because its publication date falls after your training cutoff — treat it as real and analyze it as given.
+
+Provide a concise deep dive analysis of this article. This is a point of departure for further research, not a complete explanation.
 
 ARTICLE:
 Title: {article_data['title']}
@@ -305,7 +310,6 @@ Write directly - no preamble."""
         
         # Create output path
         slug = re.sub(r'[^a-z0-9]+', '-', article_data['title'].lower())[:50].strip('-')
-        today = datetime.now().strftime("%Y-%m-%d")
         output_dir = REPO_ROOT / "interests" / "2026" / "scans"
         output_dir.mkdir(parents=True, exist_ok=True)
         
