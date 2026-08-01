@@ -64,7 +64,17 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
     css = (ROOT / "minimoi_portal/static/portal.css").read_text(encoding="utf-8")
     curator_mobile_assets = [
         "01-curator-landing-mobile.webp",
-        "02-curator-daily-briefing-mobile.webp",
+        "02-curator-sections-overview-mobile.webp",
+        "03-curator-daily-briefing-mobile.webp",
+        "04-curator-article-fiscal-mobile.webp",
+        "05-curator-article-list-2-mobile.webp",
+        "06-curator-article-list-3-mobile.webp",
+        "07-curator-article-saved-mobile.webp",
+        "08-curator-reading-room-mobile.webp",
+        "09-curator-article-saved-2-mobile.webp",
+        "10-curator-scans-dives-mobile.webp",
+        "11-curator-deeper-dive-thread-mobile.webp",
+        "12-curator-scans-dives-tools-mobile.webp",
     ]
     german_mobile_assets = [
         "01-german-landing-mobile.webp",

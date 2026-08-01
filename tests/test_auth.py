@@ -248,8 +248,18 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         for link in soup.select("section#curator .tour-mobile-shot-link")
     ]
     assert curator_mobile_hrefs == [
-        "/static/tour/01-curator-landing-mobile.webp?v=20260731-baseline1",
-        "/static/tour/02-curator-daily-briefing-mobile.webp?v=20260731-baseline1",
+        "/static/tour/01-curator-landing-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/02-curator-sections-overview-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/03-curator-daily-briefing-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/04-curator-article-fiscal-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/05-curator-article-list-2-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/06-curator-article-list-3-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/07-curator-article-saved-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/08-curator-reading-room-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/09-curator-article-saved-2-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/10-curator-scans-dives-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/11-curator-deeper-dive-thread-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/12-curator-scans-dives-tools-mobile.webp?v=20260801-curatorflow1",
     ]
     for href in curator_mobile_hrefs:
         assert (
