@@ -140,6 +140,11 @@ from minimoi_portal.workspaces import (           # noqa: E402
     workspace_navigation,
 )
 
+# Guild pages render in-process (not proxied) but share the same portal nav bar
+# used by every proxied domain — call the one implementation instead of a
+# hand-maintained duplicate, so nav fixes apply everywhere at once.
+app.jinja_env.globals['portal_nav_html'] = _proxy._portal_nav_html
+
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 

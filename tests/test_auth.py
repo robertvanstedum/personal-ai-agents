@@ -248,22 +248,25 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         for link in soup.select("section#curator .tour-mobile-shot-link")
     ]
     assert curator_mobile_hrefs == [
-        "/static/tour/curator-mobile-01-curator-landing.webp",
-        "/static/tour/curator-mobile-02-daily-briefing.webp",
-        "/static/tour/curator-mobile-03-investigate-article.webp",
-        "/static/tour/curator-mobile-04-personalize-scan.webp",
-        "/static/tour/curator-mobile-05-scan-analysis.webp",
-        "/static/tour/curator-mobile-06-next-questions-and-sources.webp",
-        "/static/tour/curator-mobile-07-choose-research-depth.webp",
-        "/static/tour/curator-mobile-08-deeper-dive-report.webp",
-        "/static/tour/curator-mobile-09-challenger-review.webp",
-        "/static/tour/curator-mobile-10-leanings.webp",
-        "/static/tour/curator-mobile-11-ai-observations.webp",
-        "/static/tour/curator-mobile-12-archive.webp",
+        "/static/tour/01-curator-landing-mobile.webp?v=20260801-curatorflow2",
+        "/static/tour/02-curator-breadth-mobile.webp?v=20260801-curatorflow2",
+        "/static/tour/03-curator-daily-briefing-mobile.webp?v=20260801-curatorflow2",
+        "/static/tour/04-curator-choose-article-mobile.webp?v=20260801-curatorflow2",
+        "/static/tour/05-curator-original-source-mobile.webp?v=20260801-curatorflow2",
+        "/static/tour/06-curator-investigate-save-mobile.webp?v=20260801-curatorflow2",
+        "/static/tour/07-curator-research-question-mobile.webp?v=20260801-curatorflow2",
+        "/static/tour/08-curator-scan-analysis-mobile.webp?v=20260801-curatorflow2",
+        "/static/tour/09-curator-deeper-dive-running-mobile.webp?v=20260801-curatorflow2",
+        "/static/tour/10-curator-deeper-dive-opening-mobile.webp?v=20260801-curatorflow2",
+        "/static/tour/11-curator-confirming-evidence-mobile.webp?v=20260801-curatorflow2",
+        "/static/tour/12-curator-gaps-uncertainty-mobile.webp?v=20260801-curatorflow2",
+        "/static/tour/13-curator-analytical-challenge-mobile.webp?v=20260801-curatorflow2",
+        "/static/tour/14-curator-alternative-interpretations-mobile.webp?v=20260801-curatorflow2",
+        "/static/tour/15-curator-challenger-provenance-mobile.webp?v=20260801-curatorflow2",
     ]
     for href in curator_mobile_hrefs:
         assert (
-            static_root / href.removeprefix("/static/")
+            static_root / href.split("?", 1)[0].removeprefix("/static/")
         ).is_file()
     assert len(soup.select("section#german .tour-shot")) == 10
     assert [
@@ -319,17 +322,18 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
             "/static/tour/portuguese-learning-archive.webp?v=20260730-trim2",
         ],
         "guild": [
-            "/static/tour/guild-mobile-landing.webp",
-            "/static/tour/guild-operate-improve-mobile.webp",
-            "/static/tour/guild-build-queue-landscape.webp",
-            "/static/tour/guild-build-log-mobile.webp",
-            "/static/tour/guild-roadmap-committed.webp",
-            "/static/tour/guild-roadmap-released.webp",
+            "/static/tour/01-guild-landing-mobile.webp?v=20260801-guildflow2",
+            "/static/tour/02-guild-landing-partners-mobile.webp?v=20260801-guildflow2",
+            "/static/tour/03-guild-build-log-mobile.webp?v=20260801-guildflow2",
+            "/static/tour/04-guild-spec-mobile.webp?v=20260801-guildflow2",
+            "/static/tour/05-guild-roadmap-mobile.webp?v=20260801-guildflow2",
+            "/static/tour/06-guild-github-issues-mobile.webp?v=20260801-guildflow2",
+            "/static/tour/07-guild-operate-mobile.webp?v=20260801-guildflow2",
+            "/static/tour/08-guild-improve-mobile.webp?v=20260801-guildflow2",
         ],
         "cos": [
-            "/static/tour/cos-mobile-landing.webp",
-            "/static/tour/cos-confer-mobile.webp",
-            "/static/tour/cos-track-mobile.webp",
+            "/static/tour/01-cos-landing-mobile.webp?v=20260731-baseline1",
+            "/static/tour/02-cos-confer-mobile.webp?v=20260731-baseline1",
         ],
     }
     for section_id, expected_hrefs in expected_mobile_hrefs.items():
@@ -375,9 +379,8 @@ def test_owner_tour_uses_same_privacy_safe_cos_slides(client):
         for link in section.select(".tour-mobile-shot-link")
     ]
     assert mobile_images == [
-        "/static/tour/cos-mobile-landing.webp",
-        "/static/tour/cos-confer-mobile.webp",
-        "/static/tour/cos-track-mobile.webp",
+        "/static/tour/01-cos-landing-mobile.webp?v=20260731-baseline1",
+        "/static/tour/02-cos-confer-mobile.webp?v=20260731-baseline1",
     ]
 
 
