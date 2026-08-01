@@ -14,10 +14,21 @@ Usage:
 import os
 
 
+# Canonical platform secret names may temporarily resolve older production
+# names while credentials are migrated. Callers should always request the
+# canonical name; aliases belong here rather than in individual domains.
+SECRET_ALIASES = {
+    "XAI_API_KEY": ("GROK_API_KEY",),
+}
+
+
 def get_secret(key: str, keyring_service: str = None, keyring_account: str = None) -> str:
-    value = os.environ.get(key)
-    if value:
-        return value
+    candidate_keys = (key, *SECRET_ALIASES.get(key, ()))
+
+    for candidate_key in candidate_keys:
+        value = os.environ.get(candidate_key)
+        if value:
+            return value
 
     if keyring_service and keyring_account:
         try:
@@ -31,9 +42,15 @@ def get_secret(key: str, keyring_service: str = None, keyring_account: str = Non
     try:
         import boto3
         ssm = boto3.client("ssm", region_name="us-east-1")
-        param_name = f"/minimoi/production/{key.lower()}"
-        response = ssm.get_parameter(Name=param_name, WithDecryption=True)
-        return response["Parameter"]["Value"]
+        last_error = None
+        for candidate_key in candidate_keys:
+            param_name = f"/minimoi/production/{candidate_key.lower()}"
+            try:
+                response = ssm.get_parameter(Name=param_name, WithDecryption=True)
+                return response["Parameter"]["Value"]
+            except Exception as e:
+                last_error = e
+        raise last_error
     except Exception as e:
         raise RuntimeError(
             f"Could not retrieve secret '{key}' from env, keyring, or SSM "

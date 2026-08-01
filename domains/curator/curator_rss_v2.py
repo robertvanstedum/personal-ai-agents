@@ -18,7 +18,7 @@ MODES:
 
 COST COMPARISON:
 - ollama: $0/month (free, local Ollama/phi)
-- xai: $0.18/day ($5.40/month, grok-3-mini)
+- xai: depends on the model configured in CURATOR_XAI_MODEL
 - sonnet: $0.90/day ($27/month, claude-sonnet-4, premium quality)
 
 USAGE:
@@ -26,7 +26,7 @@ USAGE:
 
   Options:
     --model=ollama       Use local Ollama/phi (default: FREE)
-    --model=xai          Use xAI grok-3-mini ($0.18/day - RECOMMENDED)
+    --model=xai          Use the xAI model configured in CURATOR_XAI_MODEL
     --model=sonnet       Use Anthropic claude-sonnet-4 (premium, $0.90/day)
     
     --dry-run            Preview without saving (output to curator_preview.html)
@@ -42,7 +42,7 @@ USAGE:
     # Free local test (dry run)
     python curator_rss_v2.py --dry-run --model=ollama
     
-    # Production default (xAI grok-3-mini)
+    # Production xAI run (concrete model comes from CURATOR_XAI_MODEL)
     python curator_rss_v2.py --model=xai --telegram
     
     # Evaluate Sonnet quality (dry run)
@@ -439,27 +439,29 @@ def get_anthropic_api_key() -> str:
 def get_xai_api_key() -> str:
     """
     Get xAI API key from (in priority order):
-    1. macOS Keychain (via keyring)
-    2. Environment variable XAI_API_KEY
-    3. .env file
+    1. Environment variable XAI_API_KEY (including values loaded from .env)
+    2. macOS Keychain
+    3. AWS SSM Parameter Store
     
     Returns empty string if not found.
     """
-    # Try keychain first (most secure)
+    from core.get_secret import get_secret
+
     try:
-        import keyring
-        api_key = keyring.get_password("xai", "api_key")
-        if api_key:
-            return api_key
-    except Exception as e:
-        pass  # Keychain not available or error
-    
-    # Try environment variable (from .env or shell)
-    api_key = os.environ.get('XAI_API_KEY')
-    if api_key:
-        return api_key
-    
-    return ""
+        return get_secret("XAI_API_KEY", "xai", "api_key")
+    except Exception:
+        return ""
+
+
+def get_xai_model(explicit_model: str = "") -> str:
+    """Resolve the concrete xAI model without embedding a model choice in code."""
+    model = (explicit_model or os.environ.get("CURATOR_XAI_MODEL", "")).strip()
+    if not model:
+        raise ValueError(
+            "xAI model not configured; set CURATOR_XAI_MODEL or pass a concrete "
+            "xAI model with --model=<model-id>"
+        )
+    return model
 
 def log_error(error_type: str, error_msg: str, context: str = ""):
     """
@@ -951,7 +953,7 @@ ARTICLES:
             raise
 
 
-def score_entries_xai(entries: List[Dict], fallback_on_error: bool = False, user_profile: str = "", model: str = "grok-4-1-fast-reasoning", temperature: float = 0.0) -> List[Dict]:
+def score_entries_xai(entries: List[Dict], fallback_on_error: bool = False, user_profile: str = "", model: str = "", temperature: float = 0.0) -> List[Dict]:
     """
     Score all entries using xAI Grok (batch processing)
     
@@ -959,28 +961,22 @@ def score_entries_xai(entries: List[Dict], fallback_on_error: bool = False, user
         entries: List of article entries
         fallback_on_error: If True, silently fall back to mechanical on API errors
         user_profile: User preference profile text
-        model: xAI model to use (grok-3-mini or grok-4-1-fast-reasoning)
+        model: Concrete xAI model ID. When omitted, CURATOR_XAI_MODEL is used.
     
     Returns list of dicts with 'score', 'category', 'method' = 'xai'
     """
     from openai import OpenAI
     import json
     
-    # Get xAI API key from auth profiles
-    api_key = None
-    try:
-        with open(os.path.expanduser('~/.openclaw/agents/main/agent/auth-profiles.json'), 'r') as f:
-            config = json.load(f)
-            api_key = config['profiles']['xai:default']['key']
-    except Exception as e:
+    # Resolve application credentials independently of OpenClaw's agent files.
+    api_key = get_xai_api_key()
+    if not api_key:
         error_msg = f"""
-❌ xAI API key not found in OpenClaw auth profiles!
-
-Error: {e}
+❌ xAI API key not found!
 
 To fix:
-  Check ~/.openclaw/agents/main/agent/auth-profiles.json
-  Ensure 'xai:default' profile exists with valid key
+  Set XAI_API_KEY, store xai/api_key in macOS Keychain,
+  or configure /minimoi/production/xai_api_key in AWS SSM.
 
 To test with mechanical mode instead:
   python curator_rss_v2.py --model=ollama
@@ -991,6 +987,14 @@ To test with mechanical mode instead:
         else:
             print(error_msg)
             raise ValueError("xAI API key not found")
+
+    try:
+        model = get_xai_model(model)
+    except ValueError as exc:
+        if fallback_on_error:
+            print(f"⚠️  {exc}; falling back to mechanical")
+            return [score_entry_mechanical(e) for e in entries]
+        raise
     
     client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
 
@@ -1696,7 +1700,7 @@ def find_radar_articles(pool: List[Dict], top_ids: set, topic_tags: dict,
 
 
 def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanical',
-           fallback_on_error: bool = False, xai_model: str = 'grok-4-1-fast-reasoning',
+           fallback_on_error: bool = False, xai_model: str = '',
            temperature: float = 0.0, return_pool: bool = False):
     """
     Fetch all feeds, score, rank, return top N.
@@ -1708,7 +1712,7 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
         fallback_on_error: Auto-fallback to mechanical if API fails
         return_pool: If True, return (top_articles, all_scored_entries) tuple
                      instead of just top_articles. Used by dormant-section routing.
-        xai_model: Which xAI model to use ('grok-3-mini' or 'grok-4-1-fast-reasoning')
+        xai_model: Concrete xAI model ID. When omitted, CURATOR_XAI_MODEL is used.
     
     MODES:
     - mechanical: Fast, free, keyword-based
@@ -1818,7 +1822,7 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
             entry["method"] = results[i]['method']
             entry["raw_score"] = results[i].get('raw_score', entry["score"])  # AI doesn't have raw_score
     elif mode == 'xai':
-        # Single-stage xAI Grok scoring (grok-3-mini or grok-4-1-fast-reasoning)
+        # Single-stage xAI scoring using the runtime-configured model.
         results = score_entries_xai(all_entries, fallback_on_error=fallback_on_error, user_profile=user_profile, model=xai_model, temperature=temperature)
         for i, entry in enumerate(all_entries):
             entry["score"] = results[i]['score']
@@ -2101,7 +2105,6 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
     # Map model names to display names
     model_display_map = {
         'ollama': 'ollama/phi',
-        'xai': 'grok-3-mini',
         'sonnet': 'claude-sonnet-4'
     }
     model_display = model_display_map.get(model, model)
@@ -3345,17 +3348,18 @@ def main():
     # Map --model= flag to internal scoring mode
     mode_map = {
         'ollama': 'mechanical',   # Free local, keyword-based
-        'xai':    'xai',          # xAI Grok-4-1-fast-reasoning (~$0.15/day) — production default
-        'grok-4-1': 'xai',        # xAI Grok-4-1-fast-reasoning (NEW - faster, better reasoning)
+        'xai':    'xai',          # Concrete model comes from CURATOR_XAI_MODEL
         'haiku':  'ai',           # Anthropic Haiku (~$0.20/day) — single-stage
         'sonnet': 'ai-two-stage', # Anthropic Haiku pre-filter + Sonnet ranking (~$0.90/day)
     }
     mode = mode_map.get(model, 'xai')  # Default: xai
     
-    # For grok-4-1, we need to track which xAI model variant to use
-    xai_model_variant = 'grok-4-1-fast-reasoning'  # default
-    if model == 'grok-4-1':
-        xai_model_variant = 'grok-4-1-fast-reasoning'
+    # Provider aliases select a scoring mode. Any other value is treated as an
+    # explicit xAI model ID for backwards-compatible manual runs.
+    xai_model_variant = ''
+    if model not in mode_map:
+        mode = 'xai'
+        xai_model_variant = model
 
     # Temperature setting (default: 0 for deterministic production runs)
     # Temperature 1.0 — wider selection, A/B test vs 0.7 (week of Mar 11, 2026)
@@ -3389,6 +3393,19 @@ def main():
         print(f"\n💥 Curation failed: {e}")
         print("\nTip: Run with --model=ollama to test everything except API")
         sys.exit(1)
+
+    methods_used = {article.get("method") for article in top_articles if article.get("method")}
+    if mode == "xai" and methods_used == {"mechanical"}:
+        effective_model = "mechanical-fallback"
+    elif mode == "xai":
+        try:
+            effective_model = get_xai_model(xai_model_variant)
+        except ValueError:
+            if not fallback_on_error:
+                raise
+            effective_model = "mechanical-fallback"
+    else:
+        effective_model = model
     
     # Log scored articles to Signal Store (production only)
     if not dry_run:
@@ -3401,7 +3418,7 @@ def main():
                 source=article["source"],
                 category=article.get("category", "other"),
                 score=article["score"],
-                model=model,
+                model=effective_model,
                 url=article.get("link"),
                 rank=rank,
                 metadata={
@@ -3468,7 +3485,7 @@ def main():
         print(f"📡 On Radar: {len(radar_articles)} article(s) matching active Topics")
     # ─────────────────────────────────────────────────────────────────────────
 
-    html_content = format_html(top_articles, model=model, run_mode=run_mode,
+    html_content = format_html(top_articles, model=effective_model, run_mode=run_mode,
                                radar_articles=radar_articles or None)
     
     # Create dated archive (skip in dry run)
@@ -3591,7 +3608,7 @@ def main():
     if not dry_run:
         try:
             if top_articles:
-                top_articles[0]['briefing_model'] = xai_model_variant if model == 'grok-4-1' else model
+                top_articles[0]['briefing_model'] = effective_model
                 # Persist the generation date with the briefing itself. Host
                 # wrappers may still stamp it for compatibility, but the web UI
                 # and AI Observations must not depend on a later Telegram step.

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Curator cron job - generates briefing + sends to Telegram automatically
-# Model: xAI grok-4.3 (--model=grok-4.3) ~$0.30/day — fallback to mechanical if API down
+# Model: configured through CURATOR_XAI_MODEL — fallback to mechanical if API down
 # Runs hourly via launchd StartInterval=3600, with idempotency check (6AM–6PM window).
 # Handles Mac sleep/wake — runs as soon as machine is online if briefing was missed.
 
@@ -36,7 +36,7 @@ echo "🔖 Pulling new X bookmarks..."
 python -m scripts.x.x_pull_incremental 2>&1 || echo "⚠️  scripts.x.x_pull_incremental failed — continuing with existing signals"
 
 # Generate briefing
-python domains/curator/curator_rss_v2.py --model=grok-4.3 --fallback --temperature=0.7
+python domains/curator/curator_rss_v2.py --model=xai --fallback --temperature=0.7
 
 # Send briefing with inline buttons via system bot (role-aware token)
 export TELEGRAM_CHAT_ID="8379221702"

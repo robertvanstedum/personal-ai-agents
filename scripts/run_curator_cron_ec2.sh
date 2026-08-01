@@ -44,9 +44,9 @@ docker exec minimoi-curator python -m scripts.x.x_pull_incremental 2>&1 || \
   echo "$LOG_PREFIX scripts.x.x_pull_incremental failed — continuing with existing signals"
 
 # ── Run curator pipeline, then send briefing with inline buttons ──────────────
-echo "$LOG_PREFIX Running RSS curation (grok-4.3)..."
+echo "$LOG_PREFIX Running RSS curation (configured xAI model)..."
 docker exec minimoi-curator python domains/curator/curator_rss_v2.py \
-  --model=grok-4.3 --fallback --temperature=0.7
+  --model=xai --fallback --temperature=0.7
 
 echo "$LOG_PREFIX Sending Telegram briefing (system bot)..."
 docker exec -e TELEGRAM_CHAT_ID=8379221702 minimoi-curator python core/telegram/telegram_bot.py --send
