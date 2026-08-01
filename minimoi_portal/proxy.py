@@ -122,7 +122,10 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
     if portal_prefix == "/app/curator":
         offset_css = (
             "body{padding-top:38px!important;}"
-            "nav.curator-subnav{top:38px!important;}"
+            "nav.curator-subnav{top:38px!important;max-width:100%;overflow-x:auto;"
+            "overflow-y:hidden;scrollbar-width:none;}"
+            "nav.curator-subnav::-webkit-scrollbar{display:none;}"
+            "nav.curator-subnav .subnav-tab{flex:0 0 auto;}"
         )
     elif portal_prefix in ("/app/german", "/app/portuguese"):
         offset_css = (
@@ -265,6 +268,18 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
                 if new_style != style_val:
                     tag["style"] = new_style
 
+        # Rewrite absolute asset URLs declared inside inline <style> blocks.
+        # Attribute-level rewriting above cannot see CSS rules such as
+        # body::before { background: url('/static/...') }.
+        for style in soup.find_all("style"):
+            if not style.string or "url(" not in style.string:
+                continue
+            style.string = re.sub(
+                r"""(url\s*\(\s*['"]?)(/[^/'")?#])""",
+                lambda m: m.group(1) + portal_prefix + m.group(2),
+                style.string,
+            )
+
         # Rewrite inline <script> blocks
         for script in soup.find_all("script"):
             if script.string:
@@ -287,7 +302,10 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
         if portal_prefix == "/app/curator":
             offset_css = (
                 "body{padding-top:38px!important;}"
-                "nav.curator-subnav{top:38px!important;}"
+                "nav.curator-subnav{top:38px!important;max-width:100%;overflow-x:auto;"
+                "overflow-y:hidden;scrollbar-width:none;}"
+                "nav.curator-subnav::-webkit-scrollbar{display:none;}"
+                "nav.curator-subnav .subnav-tab{flex:0 0 auto;}"
             )
             style_tag = soup.new_tag("style")
             style_tag.string = offset_css

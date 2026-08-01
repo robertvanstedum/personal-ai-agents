@@ -24,13 +24,37 @@ def test_tour_exposes_mobile_fit_and_detail_control():
 
 
 def test_tour_mobile_viewer_covers_portrait_and_landscape():
+    template = (ROOT / "minimoi_portal/templates/tour.html").read_text(
+        encoding="utf-8"
+    )
     css = (ROOT / "minimoi_portal/static/portal.css").read_text(encoding="utf-8")
 
+    assert 'window.matchMedia("(max-width: 900px)").matches' in template
+    assert '"(max-width: 900px) and (orientation: portrait)"' not in template
     assert "@media (max-width: 900px)" in css
     assert "height: 100dvh;" in css
     assert ".tour-lightbox.is-detail-view .tour-lightbox-stage" in css
     assert "touch-action: pan-x pan-y pinch-zoom;" in css
     assert "@media (max-width: 900px) and (orientation: landscape)" in css
+    assert ".tour-lightbox.is-mobile-format .tour-lightbox-media" in css
+    assert "overflow-y: auto;" in css
+    assert "touch-action: pan-y;" in css
+    assert ".tour-lightbox.is-mobile-format .tour-lightbox-format" in css
+
+
+def test_tour_resets_scroll_position_when_a_slide_changes():
+    template = (ROOT / "minimoi_portal/templates/tour.html").read_text(
+        encoding="utf-8"
+    )
+
+    reset_function = template.index("function resetLightboxScroll()")
+    render_function = template.index("function renderLightboxImage(index)")
+    reset_call = template.index("resetLightboxScroll();", render_function)
+    link_render = template.index("const link = lightboxLinks[lightboxIndex];")
+
+    assert reset_function < render_function
+    assert render_function < reset_call < link_render
+    assert template.count("lightboxStage.scrollTop = 0;") >= 3
 
 
 def test_tour_supports_distinct_desktop_and_mobile_story_collections():
@@ -39,18 +63,21 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
     )
     css = (ROOT / "minimoi_portal/static/portal.css").read_text(encoding="utf-8")
     curator_mobile_assets = [
-        "curator-mobile-01-curator-landing.webp",
-        "curator-mobile-02-daily-briefing.webp",
-        "curator-mobile-03-investigate-article.webp",
-        "curator-mobile-04-personalize-scan.webp",
-        "curator-mobile-05-scan-analysis.webp",
-        "curator-mobile-06-next-questions-and-sources.webp",
-        "curator-mobile-07-choose-research-depth.webp",
-        "curator-mobile-08-deeper-dive-report.webp",
-        "curator-mobile-09-challenger-review.webp",
-        "curator-mobile-10-leanings.webp",
-        "curator-mobile-11-ai-observations.webp",
-        "curator-mobile-12-archive.webp",
+        "01-curator-landing-mobile.webp",
+        "02-curator-breadth-mobile.webp",
+        "03-curator-daily-briefing-mobile.webp",
+        "04-curator-choose-article-mobile.webp",
+        "05-curator-original-source-mobile.webp",
+        "06-curator-investigate-save-mobile.webp",
+        "07-curator-research-question-mobile.webp",
+        "08-curator-scan-analysis-mobile.webp",
+        "09-curator-deeper-dive-running-mobile.webp",
+        "10-curator-deeper-dive-opening-mobile.webp",
+        "11-curator-confirming-evidence-mobile.webp",
+        "12-curator-gaps-uncertainty-mobile.webp",
+        "13-curator-analytical-challenge-mobile.webp",
+        "14-curator-alternative-interpretations-mobile.webp",
+        "15-curator-challenger-provenance-mobile.webp",
     ]
     german_mobile_assets = [
         "german-mobile-01-landing.webp",
@@ -79,17 +106,18 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
         "portuguese-learning-archive.webp",
     ]
     guild_mobile_assets = [
-        "guild-mobile-landing.webp",
-        "guild-operate-improve-mobile.webp",
-        "guild-build-queue-landscape.webp",
-        "guild-build-log-mobile.webp",
-        "guild-roadmap-committed.webp",
-        "guild-roadmap-released.webp",
+        "01-guild-landing-mobile.webp",
+        "02-guild-landing-partners-mobile.webp",
+        "03-guild-build-log-mobile.webp",
+        "04-guild-spec-mobile.webp",
+        "05-guild-roadmap-mobile.webp",
+        "06-guild-github-issues-mobile.webp",
+        "07-guild-operate-mobile.webp",
+        "08-guild-improve-mobile.webp",
     ]
     cos_mobile_assets = [
-        "cos-mobile-landing.webp",
-        "cos-confer-mobile.webp",
-        "cos-track-mobile.webp",
+        "01-cos-landing-mobile.webp",
+        "02-cos-confer-mobile.webp",
     ]
     mobile_assets = (
         curator_mobile_assets
