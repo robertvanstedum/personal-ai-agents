@@ -965,9 +965,8 @@ def score_entries_xai(entries: List[Dict], fallback_on_error: bool = False, user
     
     Returns list of dicts with 'score', 'category', 'method' = 'xai'
     """
-    from openai import OpenAI
     import json
-    
+
     # Resolve application credentials independently of OpenClaw's agent files.
     api_key = get_xai_api_key()
     if not api_key:
@@ -995,7 +994,11 @@ To test with mechanical mode instead:
             print(f"⚠️  {exc}; falling back to mechanical")
             return [score_entry_mechanical(e) for e in entries]
         raise
-    
+
+    # Imported only once we're actually about to make a real API call, so
+    # fallback tests (missing key/model) never require the optional SDK.
+    from openai import OpenAI
+
     client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
 
     # Build prompt with Grok's optimized instructions
