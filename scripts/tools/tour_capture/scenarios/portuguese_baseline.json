@@ -1,0 +1,37 @@
+{
+  "id": "portuguese-baseline",
+  "domain": "portuguese",
+  "device_profile": "mobile",
+  "auth_profile": "owner_session",
+  "locale": "pt-BR",
+  "start_path": "/app/portuguese",
+  "steps": [
+    {
+      "goto": "/app/portuguese"
+    },
+    {
+      "wait_for": "[data-tour-capture='pt-landing']"
+    },
+    {
+      "screenshot": "landing",
+      "title": "Enter the Portuguese immersion space",
+      "description": "Start in the personal Portuguese language workspace.",
+      "alt": "Meu Português landing page in a mobile viewport"
+    },
+    {
+      "goto": "/app/portuguese/leitura"
+    },
+    {
+      "wait_for": "[data-tour-capture='reading-categories']"
+    },
+    {
+      "free_capture": {
+        "prefix": "explore",
+        "title": "Explore Meu Português",
+        "description": "Captured while browsing Meu Português naturally.",
+        "alt": "Meu Português in a mobile viewport",
+        "instructions": "Browse anywhere you want (a reading category, an article, Conversas, Escrita, Palavras, Arquivo). Press Enter to capture every open tab, or type 'done' to finish."
+      }
+    }
+  ]
+}

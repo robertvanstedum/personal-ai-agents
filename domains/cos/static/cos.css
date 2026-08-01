@@ -223,6 +223,24 @@ body.landing-mode .cos-header { position: sticky; top: 0; }
 .tab-photo.active { display: block; }
 
 @media (max-width: 768px) {
+  .cos-header {
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .header-nav {
+    max-width: 100%;
+    padding: 0 12px;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .header-nav::-webkit-scrollbar { display: none; }
+  .brand,
+  .tab-nav,
+  .dev-badge,
+  .backend-badge { flex: 0 0 auto; }
+  .tab-btn { padding: 0 12px; }
   .tab-layout-split { grid-template-columns: 1fr; }
   .tab-panel-photo  { display: none; }
   .tab-content      { height: auto; padding: 1.5rem 1.25rem; }

@@ -13,7 +13,7 @@ from .auth import ensure_authenticated, storage_state_path
 from .imaging import build_contact_sheet, optimize_png
 from .manifest import CapturedScene, write_manifest, write_report, write_review_page
 from .readiness import wait_for_checkpoint
-from .scenario import DEVICE_PROFILES, output_filename
+from .scenario import DEVICE_PROFILES, SUPPORTED_ACTIONS, DeviceProfile, output_filename
 
 
 ALLOWED_CAPTURE_HOSTS = {"localhost", "127.0.0.1", "dev.minimoi.ai"}
@@ -111,6 +111,120 @@ class CaptureRunner:
         if actual_title != expected["title"] or actual_url != expected["url"]:
             raise CaptureRunError("the open article changed after operator selection")
 
+    def _take_screenshot(self, page, raw_path: Path) -> None:
+        page.screenshot(
+            path=str(raw_path),
+            full_page=False,
+            animations="disabled",
+            scale="device",
+            style=CAPTURE_STYLE,
+        )
+
+    def _alive_pages(self, context) -> list:
+        alive = []
+        for page in context.pages:
+            try:
+                page.title()
+                alive.append(page)
+            except Exception:
+                continue  # closed between opening and this check
+        return alive
+
+    def _run_free_capture_loop(
+        self,
+        context,
+        spec: dict,
+        order: int,
+        profile: DeviceProfile,
+        raw_dir: Path,
+        captured_specs: list[tuple[int, dict, Path]],
+    ) -> int:
+        """Capture every currently open tab, every time the operator presses
+        Enter.
+
+        Guild (and other domains) open some links with target="_blank" —
+        clicking one creates a new tab rather than navigating the original
+        page. Three different ways of guessing which single tab is "the
+        active one" (creation order, document.visibilityState, an explicit
+        numbered prompt re-checked after input) all failed in real use —
+        either the heuristic was wrong, or the operator's mental model of
+        "which tab am I on" didn't line up with what had to be typed and
+        when. Capturing every open tab removes the guess entirely: nothing
+        can be "the wrong tab" if everything gets captured. The operator
+        already reviews and picks favorites from duplicates afterward
+        anyway (this is exactly how prior sessions in this project were
+        actually used) — this leans into that instead of fighting it.
+        """
+        prefix = spec["prefix"]
+        default_title = spec.get("title", "Captured moment")
+        default_description = spec.get(
+            "description", "Freely captured while browsing naturally."
+        )
+        default_alt = spec.get("alt", default_title)
+        print(f"\nFREE CAPTURE — {spec.get('instructions', 'Browse naturally.')}")
+        print(
+            "Press Enter to capture EVERY currently open tab in one go — "
+            "open as many as you want first (Build Log, a spec, GitHub, "
+            "whatever), then press Enter once. An optional caption applies "
+            "to all of them this round. Type 'done' to finish.\n"
+        )
+        count = 0
+        while True:
+            self.last_action = f"free_capture:{prefix} (round {count + 1} pending)"
+            caption = input("> ").strip()
+            if caption.lower() == "done":
+                break
+
+            pages = self._alive_pages(context)
+            if not pages:
+                raise CaptureRunError("no open browser tab is available to capture")
+
+            captured_this_round = 0
+            for page in pages:
+                count += 1
+                order += 1
+                scene_name = f"{prefix}-{count}"
+                step = {
+                    "screenshot": scene_name,
+                    "title": caption or f"{default_title} {count}",
+                    "description": default_description,
+                    "alt": caption or f"{default_alt} {count}",
+                }
+                filename = output_filename(
+                    order, self.scenario["domain"], scene_name, profile.name, "png"
+                )
+                raw_path = raw_dir / filename
+                # bring_to_front() is required for a correct capture: a
+                # background tab that was never actually visually activated
+                # doesn't get painted by Chromium's compositor, so
+                # page.screenshot() against it can return another tab's
+                # last-rendered frame even though page.url correctly reports
+                # the right address (confirmed in real use — the printed
+                # captured-from URL was correct while the image was not).
+                # This only happens after the operator's input for this
+                # round has already been read, so it cannot interfere with
+                # what they just typed — worst case they need to click back
+                # onto the terminal before the next round.
+                with suppress(Exception):
+                    page.bring_to_front()
+                    page.wait_for_timeout(150)
+                try:
+                    self._take_screenshot(page, raw_path)
+                except Exception as exc:
+                    print(f"  Skipped a tab that closed mid-capture ({exc}).")
+                    order -= 1
+                    count -= 1
+                    continue
+                captured_specs.append((order, step, raw_path))
+                captured_this_round += 1
+                with suppress(Exception):
+                    print(f"  [{scene_name}] {page.url}")
+            print(
+                f"Captured {captured_this_round} tab(s) this round. "
+                "Press Enter for another round, or type 'done' to finish."
+            )
+        return order
+
     def run(self) -> Path:
         if self.headless and self.scenario["_summary"]["operator_pauses"]:
             raise CaptureRunError("operator-assisted scenarios cannot run headless")
@@ -160,10 +274,7 @@ class CaptureRunner:
 
                     order = 0
                     for index, step in enumerate(self.scenario["steps"], start=1):
-                        action = next(key for key in step if key in {
-                            "goto", "click", "wait_for", "operator",
-                            "record_current_article", "assert_current_article", "screenshot"
-                        })
+                        action = next(key for key in step if key in SUPPORTED_ACTIONS)
                         self.last_action = f"step {index}: {action}"
                         value = step[action]
                         if action == "goto":
@@ -174,6 +285,11 @@ class CaptureRunner:
                             )
                         elif action == "click":
                             page.locator(value).first.click(timeout=self.timeout_ms)
+                        elif action == "scroll_to":
+                            page.locator(value).first.scroll_into_view_if_needed(
+                                timeout=self.timeout_ms
+                            )
+                            page.wait_for_timeout(150)
                         elif action == "wait_for":
                             wait_for_checkpoint(page, value, self.timeout_ms)
                         elif action == "operator":
@@ -183,6 +299,10 @@ class CaptureRunner:
                             self._record_article(page, value)
                         elif action == "assert_current_article":
                             self._assert_article(page, value)
+                        elif action == "free_capture":
+                            order = self._run_free_capture_loop(
+                                context, value, order, profile, raw_dir, captured_specs
+                            )
                         elif action == "screenshot":
                             order += 1
                             filename = output_filename(
@@ -193,13 +313,7 @@ class CaptureRunner:
                                 "png",
                             )
                             raw_path = raw_dir / filename
-                            page.screenshot(
-                                path=str(raw_path),
-                                full_page=False,
-                                animations="disabled",
-                                scale="device",
-                                style=CAPTURE_STYLE,
-                            )
+                            self._take_screenshot(page, raw_path)
                             captured_specs.append((order, step, raw_path))
                     current_url = page.url
                 except Exception:

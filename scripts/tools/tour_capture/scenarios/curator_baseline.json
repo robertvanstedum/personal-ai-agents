@@ -1,0 +1,37 @@
+{
+  "id": "curator-baseline",
+  "domain": "curator",
+  "device_profile": "mobile",
+  "auth_profile": "owner_session",
+  "locale": "en-US",
+  "start_path": "/app/curator",
+  "steps": [
+    {
+      "goto": "/app/curator"
+    },
+    {
+      "wait_for": ".card-catalog .drawer"
+    },
+    {
+      "screenshot": "landing",
+      "title": "Enter the Curator workspace",
+      "description": "Start where daily reading, research, leanings, and the archive connect.",
+      "alt": "Curator landing page in a mobile viewport"
+    },
+    {
+      "goto": "/app/curator/briefing"
+    },
+    {
+      "wait_for": ".article-list .article-card"
+    },
+    {
+      "free_capture": {
+        "prefix": "explore",
+        "title": "Explore Curator",
+        "description": "Captured while browsing Curator naturally.",
+        "alt": "Curator in a mobile viewport",
+        "instructions": "Browse anywhere you want (scroll, take an action on an article, open Reading Room, Scans & Dives, Leanings, whatever tells the story). Press Enter to capture every open tab, or type 'done' to finish."
+      }
+    }
+  ]
+}

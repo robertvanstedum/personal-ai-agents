@@ -248,22 +248,22 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         for link in soup.select("section#curator .tour-mobile-shot-link")
     ]
     assert curator_mobile_hrefs == [
-        "/static/tour/curator-mobile-01-curator-landing.webp",
-        "/static/tour/curator-mobile-02-daily-briefing.webp",
-        "/static/tour/curator-mobile-03-investigate-article.webp",
-        "/static/tour/curator-mobile-04-personalize-scan.webp",
-        "/static/tour/curator-mobile-05-scan-analysis.webp",
-        "/static/tour/curator-mobile-06-next-questions-and-sources.webp",
-        "/static/tour/curator-mobile-07-choose-research-depth.webp",
-        "/static/tour/curator-mobile-08-deeper-dive-report.webp",
-        "/static/tour/curator-mobile-09-challenger-review.webp",
-        "/static/tour/curator-mobile-10-leanings.webp",
-        "/static/tour/curator-mobile-11-ai-observations.webp",
-        "/static/tour/curator-mobile-12-archive.webp",
+        "/static/tour/01-curator-landing-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/02-curator-sections-overview-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/03-curator-daily-briefing-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/04-curator-article-fiscal-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/05-curator-article-list-2-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/06-curator-article-list-3-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/07-curator-article-saved-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/08-curator-reading-room-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/09-curator-article-saved-2-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/10-curator-scans-dives-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/11-curator-deeper-dive-thread-mobile.webp?v=20260801-curatorflow1",
+        "/static/tour/12-curator-scans-dives-tools-mobile.webp?v=20260801-curatorflow1",
     ]
     for href in curator_mobile_hrefs:
         assert (
-            static_root / href.removeprefix("/static/")
+            static_root / href.split("?", 1)[0].removeprefix("/static/")
         ).is_file()
     assert len(soup.select("section#german .tour-shot")) == 10
     assert [
@@ -285,51 +285,34 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         for link in soup.select("section#german .tour-mobile-shot-link")
     ]
     assert german_mobile_hrefs == [
-        "/static/tour/german-mobile-01-landing.webp",
-        "/static/tour/german-mobile-02-lesen.webp",
-        "/static/tour/german-mobile-03-lesen-articles.webp",
-        "/static/tour/german-mobile-04-lesen-translate.webp",
-        "/static/tour/german-mobile-05-lesen-note.webp",
-        "/static/tour/german-mobile-06-lesen-correction.webp",
-        "/static/tour/german-mobile-07-lesen-source.webp",
-        "/static/tour/german-mobile-08-gespraeche-persona.webp",
-        "/static/tour/german-mobile-09-gespraeche-setup.webp",
-        "/static/tour/german-mobile-10-gespraeche-active.webp",
-        "/static/tour/german-mobile-11-gespraeche-transcript.webp",
-        "/static/tour/german-mobile-12-gespraeche-feedback.webp",
-        "/static/tour/german-mobile-13-gespraeche-archive.webp",
+        "/static/tour/01-german-landing-mobile.webp?v=20260731-baseline1",
+        "/static/tour/02-german-reading-categories-mobile.webp?v=20260731-baseline1",
     ]
     for href in german_mobile_hrefs:
         assert (
-            static_root / href.removeprefix("/static/")
+            static_root / href.split("?", 1)[0].removeprefix("/static/")
         ).is_file()
     assert len(soup.select("section#portuguese .tour-shot")) == 6
     assert len(soup.select("section#guild .tour-shot")) == 2
     assert len(soup.select("section#cos .tour-shot")) == 2
     expected_mobile_hrefs = {
         "portuguese": [
-            "/static/tour/portuguese-mobile-landing.webp?v=20260730-trim2",
-            "/static/tour/portuguese-reading-categories.webp?v=20260730-trim2",
-            "/static/tour/portuguese-reading-list.webp?v=20260730-trim2",
-            "/static/tour/portuguese-reading-article.webp?v=20260730-trim2",
-            "/static/tour/portuguese-reading-correction.webp?v=20260730-trim2",
-            "/static/tour/portuguese-conversation-choice.webp?v=20260730-trim2",
-            "/static/tour/portuguese-voice-transcript.webp?v=20260730-trim2",
-            "/static/tour/portuguese-voice-coaching.webp?v=20260730-trim2",
-            "/static/tour/portuguese-learning-archive.webp?v=20260730-trim2",
+            "/static/tour/01-portuguese-landing-mobile.webp?v=20260731-baseline1",
+            "/static/tour/02-portuguese-reading-categories-mobile.webp?v=20260731-baseline1",
         ],
         "guild": [
-            "/static/tour/guild-mobile-landing.webp",
-            "/static/tour/guild-operate-improve-mobile.webp",
-            "/static/tour/guild-build-queue-landscape.webp",
-            "/static/tour/guild-build-log-mobile.webp",
-            "/static/tour/guild-roadmap-committed.webp",
-            "/static/tour/guild-roadmap-released.webp",
+            "/static/tour/01-guild-landing-mobile.webp?v=20260801-guildflow2",
+            "/static/tour/02-guild-landing-partners-mobile.webp?v=20260801-guildflow2",
+            "/static/tour/03-guild-build-log-mobile.webp?v=20260801-guildflow2",
+            "/static/tour/04-guild-spec-mobile.webp?v=20260801-guildflow2",
+            "/static/tour/05-guild-roadmap-mobile.webp?v=20260801-guildflow2",
+            "/static/tour/06-guild-github-issues-mobile.webp?v=20260801-guildflow2",
+            "/static/tour/07-guild-operate-mobile.webp?v=20260801-guildflow2",
+            "/static/tour/08-guild-improve-mobile.webp?v=20260801-guildflow2",
         ],
         "cos": [
-            "/static/tour/cos-mobile-landing.webp",
-            "/static/tour/cos-confer-mobile.webp",
-            "/static/tour/cos-track-mobile.webp",
+            "/static/tour/01-cos-landing-mobile.webp?v=20260731-baseline1",
+            "/static/tour/02-cos-confer-mobile.webp?v=20260731-baseline1",
         ],
     }
     for section_id, expected_hrefs in expected_mobile_hrefs.items():
@@ -375,9 +358,8 @@ def test_owner_tour_uses_same_privacy_safe_cos_slides(client):
         for link in section.select(".tour-mobile-shot-link")
     ]
     assert mobile_images == [
-        "/static/tour/cos-mobile-landing.webp",
-        "/static/tour/cos-confer-mobile.webp",
-        "/static/tour/cos-track-mobile.webp",
+        "/static/tour/01-cos-landing-mobile.webp?v=20260731-baseline1",
+        "/static/tour/02-cos-confer-mobile.webp?v=20260731-baseline1",
     ]
 
 

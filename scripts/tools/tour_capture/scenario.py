@@ -14,10 +14,12 @@ SUPPORTED_ACTIONS = {
     "goto",
     "click",
     "wait_for",
+    "scroll_to",
     "operator",
     "record_current_article",
     "assert_current_article",
     "screenshot",
+    "free_capture",
 }
 AUTH_PROFILES = {"owner_session"}
 
@@ -89,8 +91,14 @@ def validate_scenario(data: dict[str, Any]) -> dict[str, Any]:
         raise ScenarioValidationError(f"unknown device profile: {data['device_profile']!r}")
     if data["auth_profile"] not in AUTH_PROFILES:
         raise ScenarioValidationError(f"unknown auth profile: {data['auth_profile']!r}")
-    if not isinstance(data["start_path"], str) or not data["start_path"].startswith("/app/"):
-        raise ScenarioValidationError("start_path must be a portal-proxied /app/... path")
+    if not isinstance(data["start_path"], str) or not (
+        data["start_path"].startswith("/app/")
+        or data["start_path"] == "/guild"
+        or data["start_path"].startswith("/guild/")
+    ):
+        raise ScenarioValidationError(
+            "start_path must be a portal-proxied /app/... path or an owner-only /guild path"
+        )
     if not isinstance(data["steps"], list) or not data["steps"]:
         raise ScenarioValidationError("scenario steps must be a non-empty list")
 
@@ -98,13 +106,14 @@ def validate_scenario(data: dict[str, Any]) -> dict[str, Any]:
     seen_screenshot_names: set[str] = set()
     screenshot_count = 0
     operator_count = 0
+    has_free_capture = False
     for index, step in enumerate(data["steps"], start=1):
         if not isinstance(step, dict):
             raise ScenarioValidationError(f"step {index} must be an object")
         action = _action_key(step, index)
         value = step[action]
 
-        if action in {"goto", "click", "operator"}:
+        if action in {"goto", "click", "operator", "scroll_to"}:
             if not isinstance(value, str) or not value.strip():
                 raise ScenarioValidationError(f"step {index} {action} must be a non-empty string")
         elif action == "wait_for":
@@ -156,21 +165,45 @@ def validate_scenario(data: dict[str, Any]) -> dict[str, Any]:
                         f"step {index} screenshot requires non-empty {text_key}"
                     )
 
-        if action == "operator":
+        elif action == "free_capture":
+            if not isinstance(value, dict):
+                raise ScenarioValidationError(f"step {index} free_capture must be an object")
+            if not isinstance(value.get("prefix"), str) or not SLUG_RE.fullmatch(value["prefix"]):
+                raise ScenarioValidationError(
+                    f"step {index} free_capture requires a lowercase hyphenated prefix"
+                )
+            if value["prefix"] in seen_screenshot_names:
+                raise ScenarioValidationError(
+                    f"step {index} free_capture prefix collides with a declared screenshot scene"
+                )
+            for text_key in ("title", "description", "alt", "instructions"):
+                if text_key in value and (
+                    not isinstance(value[text_key], str) or not value[text_key].strip()
+                ):
+                    raise ScenarioValidationError(
+                        f"step {index} free_capture {text_key} must be a non-empty string if present"
+                    )
+            has_free_capture = True
+
+        if action in {"operator", "free_capture"}:
             operator_count += 1
 
-    if screenshot_count == 0:
+    if screenshot_count == 0 and not has_free_capture:
         raise ScenarioValidationError("scenario must contain at least one screenshot")
 
     profile = data["device_profile"]
     domain = data["domain"]
-    expected = {
-        output_filename(order, domain, scene, profile, extension)
-        for order, scene in enumerate(screenshot_names, start=1)
-        for extension in ("png", "webp")
-    }
-    if len(expected) != screenshot_count * 2:
-        raise ScenarioValidationError("scenario produces duplicate output filenames")
+    if not has_free_capture:
+        # free_capture produces an unbounded number of scenes chosen live, so
+        # the full output-filename set can't be known ahead of time — only
+        # scenarios without it can be exhaustively pre-validated this way.
+        expected = {
+            output_filename(order, domain, scene, profile, extension)
+            for order, scene in enumerate(screenshot_names, start=1)
+            for extension in ("png", "webp")
+        }
+        if len(expected) != screenshot_count * 2:
+            raise ScenarioValidationError("scenario produces duplicate output filenames")
 
     data["_summary"] = {
         "screenshots": screenshot_count,

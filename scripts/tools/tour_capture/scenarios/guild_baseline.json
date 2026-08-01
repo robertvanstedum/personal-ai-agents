@@ -1,0 +1,52 @@
+{
+  "id": "guild-baseline",
+  "domain": "guild",
+  "device_profile": "mobile",
+  "auth_profile": "owner_session",
+  "locale": "en-US",
+  "start_path": "/guild",
+  "steps": [
+    {
+      "goto": "/guild"
+    },
+    {
+      "wait_for": "[data-tour-capture='guild-domain-cards']"
+    },
+    {
+      "screenshot": "landing",
+      "title": "Enter the Guild workspace",
+      "description": "Start where build, operate, and improve stay connected.",
+      "alt": "Guild landing page in a mobile viewport"
+    },
+    {
+      "scroll_to": ".guild-card-row .guild-card:last-child"
+    },
+    {
+      "screenshot": "landing-partners",
+      "title": "Build has two partners: Operate and Improve",
+      "description": "Even early, Operate and Improve are part of the same cycle — not afterthoughts.",
+      "alt": "Guild landing page scrolled to show the Operate and Improve cards"
+    },
+    {
+      "goto": "/guild/build"
+    },
+    {
+      "wait_for": "[data-tour-capture='guild-build-log-table']"
+    },
+    {
+      "screenshot": "build-log",
+      "title": "Open the build record",
+      "description": "See specifications and delivery status before opening a particular build.",
+      "alt": "Guild build log in a mobile viewport"
+    },
+    {
+      "free_capture": {
+        "prefix": "explore",
+        "title": "Explore Guild",
+        "description": "Captured while browsing Guild naturally.",
+        "alt": "Guild in a mobile viewport",
+        "instructions": "Browse anywhere you want (e.g. open a spec). Press Enter to capture a shot, or type 'done' to finish."
+      }
+    }
+  ]
+}

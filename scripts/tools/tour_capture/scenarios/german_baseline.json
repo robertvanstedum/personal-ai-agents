@@ -1,0 +1,37 @@
+{
+  "id": "german-baseline",
+  "domain": "german",
+  "device_profile": "mobile",
+  "auth_profile": "owner_session",
+  "locale": "de-DE",
+  "start_path": "/app/german",
+  "steps": [
+    {
+      "goto": "/app/german"
+    },
+    {
+      "wait_for": ".landing-hero"
+    },
+    {
+      "screenshot": "landing",
+      "title": "Enter the German immersion space",
+      "description": "Start in the personal German language workspace.",
+      "alt": "Mein Deutsch landing page in a mobile viewport"
+    },
+    {
+      "goto": "/app/german/lesen"
+    },
+    {
+      "wait_for": ".lesen-cat-row .lesen-cat-card"
+    },
+    {
+      "free_capture": {
+        "prefix": "explore",
+        "title": "Explore Mein Deutsch",
+        "description": "Captured while browsing Mein Deutsch naturally.",
+        "alt": "Mein Deutsch in a mobile viewport",
+        "instructions": "Browse anywhere you want (a reading category, an article, Gespräche, Schreiben, Wörter, Archiv). Press Enter to capture every open tab, or type 'done' to finish."
+      }
+    }
+  ]
+}
