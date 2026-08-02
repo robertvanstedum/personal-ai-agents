@@ -1,0 +1,20 @@
+{
+  "id": "german-desktop",
+  "domain": "german",
+  "device_profile": "desktop",
+  "auth_profile": "owner_session",
+  "locale": "de-DE",
+  "start_path": "/app/german",
+  "steps": [
+    {"goto": "/app/german"},
+    {
+      "free_capture": {
+        "prefix": "german",
+        "title": "Mein Deutsch",
+        "description": "Captured manually from Mein Deutsch in dev.",
+        "alt": "Mein Deutsch on desktop",
+        "instructions": "Mein Deutsch is open in dev. Browse and click normally. Each Enter captures only the browser tab you used most recently. Type 'done' when finished."
+      }
+    }
+  ]
+}

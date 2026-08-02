@@ -79,6 +79,20 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
         "14-curator-alternative-interpretations-mobile.webp",
         "15-curator-challenger-provenance-mobile.webp",
     ]
+    curator_desktop_assets = [
+        "01-curator-landing-desktop.webp",
+        "02-curator-daily-briefing-desktop.webp",
+        "03-curator-choose-article-desktop.webp",
+        "04-curator-original-source-desktop.webp",
+        "05-curator-scans-dives-desktop.webp",
+        "06-curator-scan-opening-desktop.webp",
+        "07-curator-scan-connections-desktop.webp",
+        "08-curator-scan-sources-desktop.webp",
+        "09-curator-deeper-synthesis-desktop.webp",
+        "10-curator-deeper-evidence-desktop.webp",
+        "11-curator-deeper-challenge-desktop.webp",
+        "12-curator-leanings-desktop.webp",
+    ]
     german_mobile_assets = [
         "german-mobile-01-landing.webp",
         "german-mobile-02-lesen.webp",
@@ -126,6 +140,10 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
         + guild_mobile_assets
         + cos_mobile_assets
     )
+
+    for asset in curator_desktop_assets:
+        assert asset in template
+        assert (ROOT / "minimoi_portal/static/tour" / asset).is_file()
 
     assert 'class="tour-mobile-gallery"' in template
     assert template.count('class="tour-mobile-shot-link"') == len(mobile_assets)

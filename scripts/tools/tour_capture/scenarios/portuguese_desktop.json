@@ -1,0 +1,20 @@
+{
+  "id": "portuguese-desktop",
+  "domain": "portuguese",
+  "device_profile": "desktop",
+  "auth_profile": "owner_session",
+  "locale": "pt-BR",
+  "start_path": "/app/portuguese",
+  "steps": [
+    {"goto": "/app/portuguese"},
+    {
+      "free_capture": {
+        "prefix": "portuguese",
+        "title": "Meu Português",
+        "description": "Captured manually from Meu Português in dev.",
+        "alt": "Meu Português on desktop",
+        "instructions": "Meu Português is open in dev. Browse and click normally. Each Enter captures only the browser tab you used most recently. Type 'done' when finished."
+      }
+    }
+  ]
+}
