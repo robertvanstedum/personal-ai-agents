@@ -7,8 +7,8 @@ Freeform fallback: if no ---SESSION--- delimiter is present, treats the entire
 input as raw turns and defaults header fields from domain.json.
 
 Usage:
-  python3 parse_transcript.py --input path/to/transcript.txt --base-dir language/german/
-  python3 parse_transcript.py --stdin --base-dir language/german/
+  python3 parse_transcript.py --input path/to/transcript.txt   # uses GERMAN_STATE_DIR
+  python3 parse_transcript.py --stdin                           # uses GERMAN_STATE_DIR
 """
 import argparse
 import json
@@ -16,6 +16,9 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from german_domain import GERMAN_DIR, GERMAN_STATE_DIR
 
 START_TRIGGER = "---SESSION---"
 START_TRIGGER_ALT = "\u2014SESSION\u2014"  # iPhone auto-corrects --- to em-dash
@@ -110,7 +113,9 @@ def _parse_turns(lines: list) -> list:
 
 
 def _load_domain_defaults(sessions_dir: Path) -> dict:
-    cfg = sessions_dir.parent / 'config/domain.json'
+    # Config, not state: domain.json always follows the reviewed code via
+    # GERMAN_DIR, regardless of which sessions_dir (state) is in play.
+    cfg = GERMAN_DIR / "config" / "domain.json"
     if cfg.exists():
         return json.loads(cfg.read_text())
     return {}
@@ -297,7 +302,11 @@ def main():
     src = parser.add_mutually_exclusive_group(required=True)
     src.add_argument("--input", help="Path to raw transcript text file")
     src.add_argument("--stdin", action="store_true", help="Read from stdin")
-    parser.add_argument("--base-dir", required=True, help="Path to language/german/ directory")
+    parser.add_argument(
+        "--base-dir", default=str(GERMAN_STATE_DIR),
+        help="Path to the German STATE directory (sessions) -- defaults "
+             "to GERMAN_STATE_DIR, the same resolver html_server.py uses.",
+    )
     args = parser.parse_args()
 
     base = Path(args.base_dir)

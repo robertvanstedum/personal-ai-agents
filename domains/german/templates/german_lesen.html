@@ -210,7 +210,16 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    return res.json();
+    const data = await res.json().catch(() => ({}));
+    // A non-2xx (e.g. 401 when identity couldn't be resolved) or an
+    // explicit {ok: false} body used to be treated as success here — the
+    // caller's try block would complete normally and show "Gespeichert"
+    // for a save that never happened. Throw so every caller's existing
+    // catch block shows its real "Fehler" state instead.
+    if (!res.ok || data.ok === false) {
+      throw new Error(data.error || `request failed (${res.status})`);
+    }
+    return data;
   }
 
   // ── State switching ──────────────────────────────────────────────────

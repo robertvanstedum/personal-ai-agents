@@ -39,7 +39,7 @@ from telegram.ext import filters
 from telegram.error import NetworkError, TimedOut
 from german_domain import (
     # Group A — constants and pure functions
-    ROBERT_CHAT_ID, GERMAN_BASE, GERMAN_DIR, VENV_PYTHON,
+    ROBERT_CHAT_ID, GERMAN_BASE, GERMAN_DIR, GERMAN_STATE_DIR, VENV_PYTHON,
     _WRITING_RE, _SESSION_RE, _CONJUGATE_RE,
     _DRILL_RE, _DRILL_L2_RE, _DRILL_CTL_RE, _DRILL_AGAIN_RE,
     _DRILL_LIST_RE, _DRILL_MORE_RE, _SKIP_LESSON_RE, _AGAIN_RE,
@@ -621,7 +621,7 @@ async def _arun(cmd, timeout=120, **kwargs):
 
 async def _handle_german_transcript(update: Update, text: str):
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    inbox = GERMAN_DIR / "sessions" / "inbox"
+    inbox = GERMAN_STATE_DIR / "sessions" / "inbox"
     inbox.mkdir(parents=True, exist_ok=True)
     raw_path = inbox / f"raw_{ts}.txt"
     raw_path.write_text(text)
@@ -686,7 +686,7 @@ async def _handle_german_command(update: Update, text: str):
         await update.message.reply_text(f"<pre>{escape(reply)}</pre>", parse_mode="HTML")
 
     elif cmd == "progress":
-        p = GERMAN_DIR / "progress.json"
+        p = GERMAN_STATE_DIR / "progress.json"
         if not p.exists():
             await update.message.reply_text("No progress.json yet — run a session first.")
             return
@@ -808,7 +808,7 @@ async def _handle_german_command(update: Update, text: str):
             await update.message.reply_text(f"⚠️ Verb '{verb}' not found in pool.")
 
     elif cmd == "anki":
-        anki_dir = GERMAN_DIR / "anki"
+        anki_dir = GERMAN_STATE_DIR / "anki"
         csvs = sorted(anki_dir.glob("*.csv")) if anki_dir.exists() else []
         if csvs:
             await update.message.reply_text(f"Latest Anki CSV: {csvs[-1]}")
@@ -817,11 +817,11 @@ async def _handle_german_command(update: Update, text: str):
 
     elif cmd == "debug":
         lines = []
-        inbox = GERMAN_DIR / "sessions" / "inbox"
+        inbox = GERMAN_STATE_DIR / "sessions" / "inbox"
         inboxfiles = sorted(inbox.glob("*.txt")) if inbox.exists() else []
         if inboxfiles:
             lines.append(f"Last inbox file: {inboxfiles[-1].name}")
-        sessions_dir = GERMAN_DIR / "sessions"
+        sessions_dir = GERMAN_STATE_DIR / "sessions"
         sessions = sorted(sessions_dir.glob("*.json")) if sessions_dir.exists() else []
         if sessions:
             data = json.loads(sessions[-1].read_text())
@@ -849,7 +849,7 @@ async def _handle_german_command(update: Update, text: str):
             )
             return
 
-        pool_path = GERMAN_DIR / "config" / "drill_pool.json"
+        pool_path = GERMAN_STATE_DIR / "config" / "drill_pool.json"
         pool = json.loads(pool_path.read_text())
 
         if verb:

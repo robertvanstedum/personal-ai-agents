@@ -1065,9 +1065,54 @@ def api_google_latest_transcript():
     return jsonify({"ok": True, "text": text, "file_name": file_name})
 
 
+def _deployed_commit_sha() -> str | None:
+    """Best-effort git SHA of the worktree this process is actually
+    running from, so /health can make dev/prod code drift visible instead
+    of silently assumed. Never raises -- a missing git binary or a
+    checkout with no .git (e.g. a stripped container image) just omits
+    the field rather than breaking health checks."""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(Path(__file__).resolve().parents[2]),
+            capture_output=True, text=True, timeout=2,
+        )
+        return result.stdout.strip() if result.returncode == 0 else None
+    except Exception:
+        return None
+
+
+def _deployed_commit_is_dirty() -> bool | None:
+    """True if the running worktree has uncommitted changes -- reporting a
+    commit SHA next to a dirty tree is actively misleading (the SHA names
+    a state the process isn't fully running). None only if git itself
+    couldn't answer (e.g. no .git present); that case already has no SHA
+    to be misleading about."""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(Path(__file__).resolve().parents[2]),
+            capture_output=True, text=True, timeout=2,
+        )
+        return bool(result.stdout.strip()) if result.returncode == 0 else None
+    except Exception:
+        return None
+
+
+_DEPLOYED_COMMIT_SHA = _deployed_commit_sha()
+_DEPLOYED_COMMIT_DIRTY = _deployed_commit_is_dirty()
+
+
 @app.route("/health")
 def health():
-    return {"status": "ok", "service": "german"}
+    return {
+        "status": "ok",
+        "service": "german",
+        "commit": _DEPLOYED_COMMIT_SHA,
+        "dirty": _DEPLOYED_COMMIT_DIRTY,
+    }
 
 
 @app.route("/api/personas")

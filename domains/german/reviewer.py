@@ -25,8 +25,8 @@ Four steps, in order:
     Merge new strengths. Set last_updated. Create file if first session.
 
 Usage:
-  python3 reviewer.py --session language/german/sessions/2026-04-19_001.json --base-dir language/german/
-  python3 reviewer.py --latest --base-dir language/german/
+  python3 reviewer.py --session <session.json>   # uses GERMAN_STATE_DIR
+  python3 reviewer.py --latest                   # uses GERMAN_STATE_DIR
 """
 import argparse
 import csv
@@ -36,6 +36,9 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from german_domain import GERMAN_DIR, GERMAN_STATE_DIR
 
 ERROR_TYPES = ["gender", "word_order", "missing_article", "verb_conjugation", "vocabulary", "register"]
 
@@ -478,7 +481,14 @@ def main():
     src = parser.add_mutually_exclusive_group(required=True)
     src.add_argument("--session", help="Path to session JSON file")
     src.add_argument("--latest", action="store_true", help="Process most recent unreviewed session")
-    parser.add_argument("--base-dir", required=True, help="Path to language/german/ directory")
+    parser.add_argument(
+        "--base-dir", default=str(GERMAN_STATE_DIR),
+        help="Path to the German STATE directory (sessions/anki/lessons/"
+             "progress/drill_pool) -- defaults to GERMAN_STATE_DIR, the "
+             "same resolver html_server.py uses. Application config "
+             "(personas.json, domain.json) always follows the code, "
+             "resolved via GERMAN_DIR, and is not affected by this flag.",
+    )
     args = parser.parse_args()
 
     base = Path(args.base_dir)
@@ -486,9 +496,11 @@ def main():
     anki_dir = base / "anki"
     lessons_dir = base / "lessons"
     progress_path = base / "progress.json"
-    domain_cfg_path = base / "config" / "domain.json"
-    personas_path = base / "config" / "personas.json"
     drill_pool_path = base / "config" / "drill_pool.json"
+    # Config, not state: always follows the reviewed code, never the
+    # (possibly test-isolated) --base-dir override above.
+    domain_cfg_path = GERMAN_DIR / "config" / "domain.json"
+    personas_path = GERMAN_DIR / "config" / "personas.json"
 
     for d in (anki_dir, lessons_dir):
         d.mkdir(parents=True, exist_ok=True)

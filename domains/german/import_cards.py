@@ -10,15 +10,19 @@ Requires Anki to be open with AnkiConnect add-on running on port 8765.
 """
 import csv
 import json
+import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from german_domain import GERMAN_STATE_DIR
+
 ANKI_URL   = "http://localhost:8765"
 DECK_NAME  = "German"
 MODEL_NAME = "Basic"
-ANKI_DIR   = Path(__file__).parent / "language/german/anki"
-TRACKER    = Path(__file__).parent / "imported_files.txt"
+ANKI_DIR   = GERMAN_STATE_DIR / "anki"
+TRACKER    = GERMAN_STATE_DIR / "imported_files.txt"
 
 
 def clean_back(raw: str) -> str:

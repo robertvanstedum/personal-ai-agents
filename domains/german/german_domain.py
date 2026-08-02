@@ -31,7 +31,19 @@ import sys as _sys
 _sys.path.insert(0, str(_REPO_ROOT))
 from core.get_secret import get_secret as _get_secret
 GERMAN_BASE = _BASE_DIR                      # domains/german/ (scripts run here)
-GERMAN_DIR  = _BASE_DIR / "data"             # domains/german/data/ (runtime data)
+GERMAN_DIR  = _BASE_DIR / "data"             # domains/german/data/ (bundled app config: prompts, personas, source lists -- ships with the reviewed code)
+
+# GERMAN_STATE_DIR — personal/runtime state: sessions, vocabulary
+# (phrasebook), persona memory, progress, Lesen articles/archive/feedback,
+# writing sessions, Lesen notes, and drills. Unset (the default, matching
+# every environment before this variable existed, including production)
+# falls back to GERMAN_DIR so nothing changes unless explicitly opted in.
+# The point of separating this from GERMAN_DIR: a dev checkout can move to
+# a fresh worktree, or track a different commit, without ever splitting or
+# losing history — state lives outside the code entirely, referenced by
+# one path, not scattered across whatever `data/` happens to exist wherever
+# the code was checked out.
+GERMAN_STATE_DIR = Path(os.environ.get("GERMAN_STATE_DIR", str(GERMAN_DIR)))
 # Subprocess interpreter. On the Mac the repo ships a venv/; in the AWS
 # containers there is no venv/, so fall back to the running interpreter
 # (the fat system-bot image installs every dependency the scripts need).
@@ -347,11 +359,18 @@ def safe_write_json(path: Path, data) -> None:
         raise
 
 
-_PHRASEBOOK_FILE       = GERMAN_DIR / "config" / "phrasebook.json"
+_PHRASEBOOK_FILE       = GERMAN_STATE_DIR / "config" / "phrasebook.json"
+# _DRILL_STATE_FILE / _DRILL_LIST_STATE_FILE deliberately stay on _BASE_DIR,
+# not GERMAN_STATE_DIR: ephemeral in-progress-drill UI scratch state, not
+# the durable personal history (sessions/vocabulary/persona
+# memory/progress/articles/writing/drills) this variable exists to
+# protect. Redirecting them would also silently relocate their default
+# (unset GERMAN_STATE_DIR) path, a behavior change production never asked
+# for.
 _DRILL_STATE_FILE      = _BASE_DIR / "_active_drill_state.json"
 _DRILL_LIST_STATE_FILE = _BASE_DIR / "_drill_list_state.json"
-_PERSONA_MEMORY_FILE   = GERMAN_DIR / "config" / "persona_memory.json"
-_PROGRESS_FILE         = GERMAN_DIR / "progress.json"
+_PERSONA_MEMORY_FILE   = GERMAN_STATE_DIR / "config" / "persona_memory.json"
+_PROGRESS_FILE         = GERMAN_STATE_DIR / "progress.json"
 _KEYWORD_MAP_FILE      = GERMAN_DIR / "config" / "keyword_map.json"
 _PROMPTS_DIR           = GERMAN_DIR / "config" / "prompts"
 
@@ -374,7 +393,7 @@ def _load_keyword_map_bot() -> dict:
 
 def _last_session_persona() -> str | None:
     """Return persona name from the most recent session JSON, or None."""
-    sessions_dir = GERMAN_DIR / "sessions"
+    sessions_dir = GERMAN_STATE_DIR / "sessions"
     if not sessions_dir.exists():
         return None
     sessions = sorted(sessions_dir.glob("*.json"))
@@ -417,7 +436,7 @@ def _phrase_next_id(phrases: list, today: str) -> str:
 
 
 def _load_drill_pool() -> dict:
-    pool_path = GERMAN_DIR / "config" / "drill_pool.json"
+    pool_path = GERMAN_STATE_DIR / "config" / "drill_pool.json"
     if pool_path.exists():
         try:
             return json.loads(pool_path.read_text())
@@ -427,7 +446,7 @@ def _load_drill_pool() -> dict:
 
 
 def _save_drill_pool(pool: dict) -> None:
-    pool_path = GERMAN_DIR / "config" / "drill_pool.json"
+    pool_path = GERMAN_STATE_DIR / "config" / "drill_pool.json"
     pool_path.write_text(json.dumps(pool, indent=2, ensure_ascii=False))
 
 
@@ -443,7 +462,7 @@ def _save_phrasebook(data: dict) -> None:
 def _write_drill_anki(state: dict) -> int:
     """Append friction items from completed drill to vienna_deck.csv. Returns card count written."""
     import csv as _csv
-    vienna_csv = GERMAN_DIR / "anki" / "vienna_deck.csv"
+    vienna_csv = GERMAN_STATE_DIR / "anki" / "vienna_deck.csv"
     items = state.get("items", [])
     friction = [it for it in items if it["result"] != "drill-clean"]
     if not friction:
@@ -716,13 +735,13 @@ import feedparser
 import datetime
 from bs4 import BeautifulSoup
 
-_LESEN_ARTICLES_FILE = GERMAN_DIR / "config" / "lesen_articles.json"
-_LESEN_FEEDBACK_FILE = GERMAN_DIR / "config" / "lesen_feedback.json"
+_LESEN_ARTICLES_FILE = GERMAN_STATE_DIR / "config" / "lesen_articles.json"
+_LESEN_FEEDBACK_FILE = GERMAN_STATE_DIR / "config" / "lesen_feedback.json"
 _LESEN_SOURCES_FILE  = GERMAN_DIR / "config" / "lesen_sources.json"
 _LESEN_FILTERS_FILE  = GERMAN_DIR / "config" / "lesen_filters.json"
-_LESEN_ARCHIV_FILE   = GERMAN_DIR / "config" / "lesen_archiv.json"
-_LESEN_MUTATION_LOCK_FILE = GERMAN_DIR / "config" / ".lesen_articles.lock"
-_LESEN_REFRESH_LOCK_FILE = GERMAN_DIR / "config" / ".lesen_refresh.lock"
+_LESEN_ARCHIV_FILE   = GERMAN_STATE_DIR / "config" / "lesen_archiv.json"
+_LESEN_MUTATION_LOCK_FILE = GERMAN_STATE_DIR / "config" / ".lesen_articles.lock"
+_LESEN_REFRESH_LOCK_FILE = GERMAN_STATE_DIR / "config" / ".lesen_refresh.lock"
 _LESEN_TIMEZONE = ZoneInfo("America/Chicago")
 
 
@@ -1377,12 +1396,12 @@ _NOTES_FILE            = GERMAN_DIR / "config" / "notes.json"               # le
 
 def _writing_sessions_path(user_id) -> Path:
     key = str(user_id) if user_id is not None else "anonymous"
-    return GERMAN_DIR / "writing_sessions" / f"user_{key}.json"
+    return GERMAN_STATE_DIR / "writing_sessions" / f"user_{key}.json"
 
 
 def _lesen_notes_path(user_id) -> Path:
     key = str(user_id) if user_id is not None else "anonymous"
-    return GERMAN_DIR / "lesen_notes" / f"user_{key}.json"
+    return GERMAN_STATE_DIR / "lesen_notes" / f"user_{key}.json"
 
 _TAGEBUCH_PROMPTS = [
     "Was hast du heute in Wien gesehen?",
@@ -1472,7 +1491,7 @@ def get_lesen_notes(user_id=None, limit: int = 50) -> list:
 
 # ─── Lesen — writing drill ────────────────────────────────────────────────────
 
-_LESEN_DRILLS_DIR = GERMAN_DIR / "lesen_drills"
+_LESEN_DRILLS_DIR = GERMAN_STATE_DIR / "lesen_drills"
 
 _GERMAN_MARKERS = set("äöüÄÖÜß")
 _COMMON_GERMAN  = {
@@ -2076,7 +2095,7 @@ def get_last_human_session_suggestion() -> str:
     Looks for the newest session file in _SESSIONS_DIR where scenario == 'human_session'.
     Returns next_focus from reviewer output if available, else top error, else ''.
     """
-    sessions_dir = GERMAN_DIR / "sessions"
+    sessions_dir = GERMAN_STATE_DIR / "sessions"
     if not sessions_dir.exists():
         return ""
 
@@ -2102,7 +2121,7 @@ def get_last_human_session_suggestion() -> str:
 
 # ─── Gespräche — transcript analysis (HTML interface) ────────────────────────
 
-_SESSIONS_DIR = GERMAN_DIR / "sessions"
+_SESSIONS_DIR = GERMAN_STATE_DIR / "sessions"
 
 _REVIEW_SYSTEM_PROMPT = """\
 You are a German language tutor reviewing a voice practice session between LEARNER_NAME and an AI persona.

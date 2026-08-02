@@ -6,11 +6,16 @@ Reads: progress.json, most recent session JSON, most recent lesson JSON.
 Degrades gracefully at every level — safe to run before any sessions exist.
 
 Usage:
-  python3 status.py --base-dir language/german/
+  python3 status.py                          # uses GERMAN_STATE_DIR
+  python3 status.py --base-dir /some/path     # explicit override
 """
 import argparse
 import json
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from german_domain import GERMAN_STATE_DIR
 
 
 def _load_json(path: Path):
@@ -57,7 +62,11 @@ def _divider(width: int = 55):
 
 def main():
     parser = argparse.ArgumentParser(description="German practice status readout.")
-    parser.add_argument("--base-dir", required=True, help="Path to language/german/ directory")
+    parser.add_argument(
+        "--base-dir", default=str(GERMAN_STATE_DIR),
+        help="Path to German state directory (defaults to GERMAN_STATE_DIR, "
+             "the same resolver html_server.py uses -- override only for tests)",
+    )
     args = parser.parse_args()
 
     base = Path(args.base_dir)

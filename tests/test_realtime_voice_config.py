@@ -54,6 +54,19 @@ def test_application_default_used_when_nothing_else_set(monkeypatch):
     assert result in ALLOWED_PROVIDERS  # a real, defined application default
 
 
+def test_application_default_is_specifically_openai(monkeypatch):
+    """Pinned per the German dev-drift fix (2026-08-02): the dev-drift
+    report specifically calls out 'OpenAI Realtime default' as part of
+    what production already has and dev must match. The looser
+    'in ALLOWED_PROVIDERS' check above would still pass if this were ever
+    accidentally flipped to xai."""
+    monkeypatch.delenv("VOICE_REALTIME_PROVIDER_DEFAULT", raising=False)
+    result = resolve_provider(
+        explicit=None, saved_preference=None, is_production=True
+    )
+    assert result == "openai"
+
+
 def test_invalid_explicit_provider_rejected():
     with pytest.raises(InvalidProviderError):
         resolve_provider(explicit="claude", saved_preference=None, is_production=True)

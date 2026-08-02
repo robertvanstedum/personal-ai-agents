@@ -2,12 +2,12 @@
 """
 get_german_session.py — Assemble and deliver today's German practice session package.
 
-Usage:
-  python get_german_session.py --base-dir language/german/
-  python get_german_session.py --base-dir language/german/ --send
-  python get_german_session.py --base-dir language/german/ --dropbox --send
-  python get_german_session.py --base-dir language/german/ --drill 3 --dropbox --send
-  python get_german_session.py --base-dir language/german/ --drill 3 --drill-session 2 --dropbox
+Usage (all default to GERMAN_STATE_DIR; pass --base-dir to override):
+  python get_german_session.py
+  python get_german_session.py --send
+  python get_german_session.py --dropbox --send
+  python get_german_session.py --drill 3 --dropbox --send
+  python get_german_session.py --drill 3 --drill-session 2 --dropbox
 """
 import argparse
 import json
@@ -21,6 +21,9 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from german_domain import GERMAN_DIR, GERMAN_STATE_DIR
 
 try:
     import keyring
@@ -123,8 +126,10 @@ def _hard_fail_length(persona_name: str, limit: int) -> None:
 
 
 def _load_sync_config() -> dict:
-    here = Path(__file__).parent
-    cfg_path = here / "language/german/config/sync_config.json"
+    # Config, not state: sync_config.json always follows the reviewed code
+    # via GERMAN_DIR. (Previously pointed at a "language/german/" path
+    # that no longer exists in this repo layout.)
+    cfg_path = GERMAN_DIR / "config" / "sync_config.json"
     if cfg_path.exists():
         return json.loads(cfg_path.read_text(encoding="utf-8"))
     return {}
@@ -425,7 +430,14 @@ def _build_package(date_str: str, persona_name: str, persona_role: str,
 
 def main():
     parser = argparse.ArgumentParser(description="Assemble today's German practice session package.")
-    parser.add_argument('--base-dir', default='language/german/', help='Path to language/german/ directory')
+    parser.add_argument(
+        '--base-dir', default=str(GERMAN_STATE_DIR),
+        help='Path to the German STATE directory (sessions/lessons/progress) '
+             '-- defaults to GERMAN_STATE_DIR, the same resolver '
+             'html_server.py uses. Application config (personas.json, '
+             'domain.json, keyword_map.json, prompts/) always follows the '
+             'code via GERMAN_DIR, and is not affected by this flag.',
+    )
     parser.add_argument('--date', help='Override date (YYYY-MM-DD, for testing)')
     parser.add_argument('--dry-run', action='store_true', help='Print output without writing or sending')
     parser.add_argument('--send', action='store_true', help='Send session package to Telegram')
@@ -440,7 +452,9 @@ def main():
     args = parser.parse_args()
 
     base = Path(args.base_dir)
-    config_dir = base / 'config'
+    # Config, not state: always follows the reviewed code via GERMAN_DIR,
+    # never the (possibly test-isolated) --base-dir override above.
+    config_dir = GERMAN_DIR / 'config'
     prompts_dir = config_dir / 'prompts'
     lessons_dir = base / 'lessons'
 
@@ -564,7 +578,7 @@ def main():
     persona_prompt = prompt_file.read_text(encoding='utf-8').strip()
     carry = _carry_forward(lesson or {}, progress)
 
-    keyword_map = _load_keyword_map(base)
+    keyword_map = _load_keyword_map(GERMAN_DIR)  # config, not state
     # Repeat sessions: scaffold shown but rotation index not advanced
     pf_for_scaffold = None if (args.dry_run or args.repeat) else progress_file
     scaffold = _scaffold_block(persona_name, keyword_map, progress, pf_for_scaffold)

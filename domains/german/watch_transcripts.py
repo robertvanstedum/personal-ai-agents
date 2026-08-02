@@ -26,10 +26,17 @@ from pathlib import Path
 HERE = Path(__file__).parent
 PROJECT_ROOT = HERE.parent.parent
 
+sys.path.insert(0, str(HERE.resolve()))
+from german_domain import GERMAN_DIR, GERMAN_STATE_DIR
+
 # ─── Config ──────────────────────────────────────────────────────────────────
 
 def _load_config() -> dict:
-    cfg_path = HERE / "language/german/config/sync_config.json"
+    # Config, not state: sync_config.json always follows the reviewed code
+    # via GERMAN_DIR. (Previously pointed at a "language/german/" path
+    # that no longer exists in this repo layout -- this script could not
+    # have started at all before this fix.)
+    cfg_path = GERMAN_DIR / "config" / "sync_config.json"
     return json.loads(cfg_path.read_text(encoding="utf-8"))
 
 CFG = _load_config()
@@ -118,10 +125,11 @@ def _process(path: Path) -> None:
 
     cwd = HERE
 
-    # Step 1 — parse
+    # Step 1 — parse (no --base-dir: the child script's own default is
+    # GERMAN_STATE_DIR, the same resolver every German tool now shares)
     out, err, rc = _run(
         [str(VENV_PYTHON), "parse_transcript.py",
-         "--input", str(path), "--base-dir", "language/german/"],
+         "--input", str(path)],
         cwd=cwd,
     )
     if rc != 0:
@@ -130,7 +138,7 @@ def _process(path: Path) -> None:
 
     # Step 2 — review
     out, err, rc = _run(
-        [str(VENV_PYTHON), "reviewer.py", "--latest", "--base-dir", "language/german/"],
+        [str(VENV_PYTHON), "reviewer.py", "--latest"],
         cwd=cwd,
     )
     if rc != 0:
@@ -145,7 +153,7 @@ def _process(path: Path) -> None:
         logging.info(f"  anki OK: {out.strip()}")
 
     # Step 4 — check drill mode (read latest session JSON)
-    sessions_dir = HERE / "language/german/sessions"
+    sessions_dir = GERMAN_STATE_DIR / "sessions"
     session_files = sorted(sessions_dir.glob("*.json"))
     drill_mode = False
     drill_session = 0
@@ -165,7 +173,7 @@ def _process(path: Path) -> None:
     if not drill_mode or is_final_drill:
         out, err, rc = _run(
             [str(VENV_PYTHON), "get_german_session.py",
-             "--base-dir", "language/german/", "--dropbox", "--send"],
+             "--dropbox", "--send"],
             cwd=cwd,
         )
         if rc != 0:
