@@ -222,7 +222,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         img.get("src")
         for img in soup.select('.tour-shot img[src^="/static/tour/"]')
     ]
-    assert len(images) == 24
+    assert len(images) == 32
     assert "/static/tour/curator-research-tools.jpg" not in images
     assert all(
         (static_root / src.split("?", 1)[0].removeprefix("/static/")).is_file()
@@ -233,7 +233,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
     ]
     assert full_size_links == images
     expected_first_images = {
-        "curator": "/static/tour/curator-landing.jpg",
+        "curator": "/static/tour/01-curator-landing-desktop.webp?v=20260802-curatordesktop1",
         "german": "/static/tour/german-landing.jpg",
         "portuguese": "/static/tour/portuguese-landing.jpg",
         "guild": "/static/tour/guild-landing.png",
@@ -242,7 +242,26 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
     for section_id, expected_src in expected_first_images.items():
         section = soup.select_one(f"section#{section_id}")
         assert section.select_one("img").get("src") == expected_src
-    assert len(soup.select("section#curator .tour-shot")) == 4
+    curator_desktop_srcs = [
+        img.get("src") for img in soup.select("section#curator .tour-shot img")
+    ]
+    assert curator_desktop_srcs == [
+        f"/static/tour/{name}?v=20260802-curatordesktop1"
+        for name in (
+            "01-curator-landing-desktop.webp",
+            "02-curator-daily-briefing-desktop.webp",
+            "03-curator-choose-article-desktop.webp",
+            "04-curator-original-source-desktop.webp",
+            "05-curator-scans-dives-desktop.webp",
+            "06-curator-scan-opening-desktop.webp",
+            "07-curator-scan-connections-desktop.webp",
+            "08-curator-scan-sources-desktop.webp",
+            "09-curator-deeper-synthesis-desktop.webp",
+            "10-curator-deeper-evidence-desktop.webp",
+            "11-curator-deeper-challenge-desktop.webp",
+            "12-curator-leanings-desktop.webp",
+        )
+    ]
     curator_mobile_hrefs = [
         link.get("href")
         for link in soup.select("section#curator .tour-mobile-shot-link")

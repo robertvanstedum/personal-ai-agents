@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 from datetime import datetime, timezone
+from hashlib import sha256
 import json
 from pathlib import Path
 from shutil import copy2
@@ -13,13 +14,27 @@ from .auth import ensure_authenticated, storage_state_path
 from .imaging import build_contact_sheet, optimize_png
 from .manifest import CapturedScene, write_manifest, write_report, write_review_page
 from .readiness import wait_for_checkpoint
-from .scenario import DEVICE_PROFILES, output_filename
+from .scenario import DEVICE_PROFILES, SUPPORTED_ACTIONS, DeviceProfile, output_filename
 
 
 ALLOWED_CAPTURE_HOSTS = {"localhost", "127.0.0.1", "dev.minimoi.ai"}
 CAPTURE_STYLE = """
 html { scrollbar-width: none !important; }
 ::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+"""
+FOCUS_TRACKER = """
+(() => {
+  if (window.__minimoiTourCaptureFocusInstalled) return;
+  window.__minimoiTourCaptureFocusInstalled = true;
+  const mark = () => { window.__minimoiTourCaptureLastInteraction = Date.now(); };
+  window.addEventListener('focus', mark, true);
+  document.addEventListener('pointerdown', mark, true);
+  document.addEventListener('keydown', mark, true);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) mark();
+  });
+  mark();
+})();
 """
 
 
@@ -111,6 +126,139 @@ class CaptureRunner:
         if actual_title != expected["title"] or actual_url != expected["url"]:
             raise CaptureRunError("the open article changed after operator selection")
 
+    def _take_screenshot(self, page, raw_path: Path) -> None:
+        page.screenshot(
+            path=str(raw_path),
+            full_page=False,
+            animations="disabled",
+            scale="device",
+            style=CAPTURE_STYLE,
+        )
+
+    def _alive_pages(self, context) -> list:
+        alive = []
+        for page in context.pages:
+            try:
+                page.title()
+                alive.append(page)
+            except Exception:
+                continue  # closed between opening and this check
+        return alive
+
+    def _last_interacted_page(self, context, preferred_page=None):
+        """Return the currently selected browser tab."""
+        pages = self._alive_pages(context)
+        if not pages:
+            raise CaptureRunError("no open browser tab is available to capture")
+
+        ranked = []
+        visible_pages = []
+        for index, page in enumerate(pages):
+            with suppress(Exception):
+                page.evaluate(FOCUS_TRACKER)
+            with suppress(Exception):
+                if page.evaluate("() => document.visibilityState") == "visible":
+                    visible_pages.append(page)
+            timestamp = 0
+            with suppress(Exception):
+                timestamp = int(
+                    page.evaluate(
+                        "() => window.__minimoiTourCaptureLastInteraction || 0"
+                    )
+                    or 0
+                )
+            ranked.append((timestamp, index, page))
+
+        if len(visible_pages) == 1:
+            return visible_pages[0]
+        if visible_pages:
+            visible_set = set(visible_pages)
+            visible_ranked = [item for item in ranked if item[2] in visible_set]
+            return max(visible_ranked, key=lambda item: (item[0], item[1]))[2]
+        if any(timestamp for timestamp, _index, _page in ranked):
+            return max(ranked, key=lambda item: (item[0], item[1]))[2]
+        if preferred_page in pages:
+            return preferred_page
+        return pages[-1]
+
+    @staticmethod
+    def _capture_digest(path: Path) -> str:
+        return sha256(path.read_bytes()).hexdigest()
+
+    def _run_free_capture_loop(
+        self,
+        context,
+        spec: dict,
+        order: int,
+        profile: DeviceProfile,
+        raw_dir: Path,
+        captured_specs: list[tuple[int, dict, Path]],
+        preferred_page=None,
+    ) -> int:
+        """Capture one operator-selected browser tab per Enter press."""
+        prefix = spec["prefix"]
+        default_title = spec.get("title", "Captured moment")
+        default_description = spec.get(
+            "description", "Freely captured while browsing naturally."
+        )
+        default_alt = spec.get("alt", default_title)
+        print(f"\nFREE CAPTURE — {spec.get('instructions', 'Browse naturally.')}")
+        print(
+            "Click the browser tab/page you want, then press Enter here to "
+            "capture that one view. Type an optional caption instead, or "
+            "type 'done' to finish. Identical captures are skipped.\n"
+        )
+        count = 0
+        seen_digests = {
+            self._capture_digest(raw_path)
+            for _order, _step, raw_path in captured_specs
+            if raw_path.exists()
+        }
+        while True:
+            self.last_action = f"free_capture:{prefix} (round {count + 1} pending)"
+            caption = input("> ").strip()
+            if caption.lower() == "done":
+                break
+
+            page = self._last_interacted_page(context, preferred_page)
+            pending_path = raw_dir / ".pending-capture.png"
+            with suppress(Exception):
+                page.bring_to_front()
+                page.wait_for_timeout(150)
+            try:
+                self._take_screenshot(page, pending_path)
+            except Exception as exc:
+                pending_path.unlink(missing_ok=True)
+                print(f"  Capture skipped because the selected tab closed ({exc}).")
+                continue
+
+            digest = self._capture_digest(pending_path)
+            if digest in seen_digests:
+                pending_path.unlink(missing_ok=True)
+                print("  Duplicate skipped. Change the page, then press Enter again.")
+                continue
+
+            seen_digests.add(digest)
+            count += 1
+            order += 1
+            scene_name = f"{prefix}-{count}"
+            step = {
+                "screenshot": scene_name,
+                "title": caption or f"{default_title} {count}",
+                "description": default_description,
+                "alt": caption or f"{default_alt} {count}",
+            }
+            filename = output_filename(
+                order, self.scenario["domain"], scene_name, profile.name, "png"
+            )
+            raw_path = raw_dir / filename
+            pending_path.replace(raw_path)
+            captured_specs.append((order, step, raw_path))
+            with suppress(Exception):
+                print(f"  [{scene_name}] {page.url}")
+            print("Captured 1 view. Press Enter again, or type 'done' to finish.")
+        return order
+
     def run(self) -> Path:
         if self.headless and self.scenario["_summary"]["operator_pauses"]:
             raise CaptureRunError("operator-assisted scenarios cannot run headless")
@@ -146,6 +294,7 @@ class CaptureRunner:
                     state_path.chmod(0o600)
                     context_args["storage_state"] = str(state_path)
                 context = browser.new_context(**context_args)
+                context.add_init_script(FOCUS_TRACKER)
                 page = context.new_page()
                 page.set_default_timeout(self.timeout_ms)
                 try:
@@ -160,10 +309,7 @@ class CaptureRunner:
 
                     order = 0
                     for index, step in enumerate(self.scenario["steps"], start=1):
-                        action = next(key for key in step if key in {
-                            "goto", "click", "wait_for", "operator",
-                            "record_current_article", "assert_current_article", "screenshot"
-                        })
+                        action = next(key for key in step if key in SUPPORTED_ACTIONS)
                         self.last_action = f"step {index}: {action}"
                         value = step[action]
                         if action == "goto":
@@ -174,6 +320,11 @@ class CaptureRunner:
                             )
                         elif action == "click":
                             page.locator(value).first.click(timeout=self.timeout_ms)
+                        elif action == "scroll_to":
+                            page.locator(value).first.scroll_into_view_if_needed(
+                                timeout=self.timeout_ms
+                            )
+                            page.wait_for_timeout(150)
                         elif action == "wait_for":
                             wait_for_checkpoint(page, value, self.timeout_ms)
                         elif action == "operator":
@@ -183,6 +334,16 @@ class CaptureRunner:
                             self._record_article(page, value)
                         elif action == "assert_current_article":
                             self._assert_article(page, value)
+                        elif action == "free_capture":
+                            order = self._run_free_capture_loop(
+                                context,
+                                value,
+                                order,
+                                profile,
+                                raw_dir,
+                                captured_specs,
+                                preferred_page=page,
+                            )
                         elif action == "screenshot":
                             order += 1
                             filename = output_filename(
@@ -193,13 +354,7 @@ class CaptureRunner:
                                 "png",
                             )
                             raw_path = raw_dir / filename
-                            page.screenshot(
-                                path=str(raw_path),
-                                full_page=False,
-                                animations="disabled",
-                                scale="device",
-                                style=CAPTURE_STYLE,
-                            )
+                            self._take_screenshot(page, raw_path)
                             captured_specs.append((order, step, raw_path))
                     current_url = page.url
                 except Exception:
