@@ -1,0 +1,20 @@
+{
+  "id": "curator-desktop",
+  "domain": "curator",
+  "device_profile": "desktop",
+  "auth_profile": "owner_session",
+  "locale": "en-US",
+  "start_path": "/app/curator",
+  "steps": [
+    {"goto": "/app/curator"},
+    {
+      "free_capture": {
+        "prefix": "curator",
+        "title": "Curator",
+        "description": "Captured manually from Curator in dev.",
+        "alt": "Curator on desktop",
+        "instructions": "Curator is open in dev. Browse and click normally. Each Enter captures only the browser tab you used most recently. Type 'done' when finished."
+      }
+    }
+  ]
+}
