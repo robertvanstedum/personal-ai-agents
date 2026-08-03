@@ -50,6 +50,7 @@ services:
     env_file: /opt/minimoi/.env
     environment:
       - FLASK_ENV=production
+      - MINIMOI_ROLE=production
       - PORT=8767
       # Realtime voice is the released default. Set to 0 in /opt/minimoi/.env
       # only for an explicit rollback to the older session UI.
@@ -66,6 +67,7 @@ services:
     env_file: /opt/minimoi/.env
     environment:
       - FLASK_ENV=production
+      - MINIMOI_ROLE=production
       - PORT=8770
       # Keep Portuguese on the same shared voice layer and release state.
       - VOICE_REALTIME_UI_ENABLED=${VOICE_REALTIME_UI_ENABLED:-1}

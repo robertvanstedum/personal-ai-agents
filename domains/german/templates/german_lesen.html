@@ -578,13 +578,11 @@
     if (translationCache.has(key)) {
       currentTranslation = translationCache.get(key);
       popTrans.textContent = currentTranslation || '(keine Übersetzung)';
-      popTiming.textContent = 'cache';
       btnSave.disabled = !currentTranslation;
       return;
     }
     const controller = new AbortController();
     _translateAbort = controller;
-    const t0 = performance.now();
     try {
       const res = await fetch('/api/translate', {
         method: 'POST',
@@ -594,21 +592,13 @@
       });
       const data = await res.json();
       _translateAbort = null;
-      const roundTrip = Math.round(performance.now() - t0);
       currentTranslation = data.translation || '';
       translationCache.set(key, currentTranslation);
       popTrans.textContent = currentTranslation || '(keine Übersetzung)';
       btnSave.disabled = !currentTranslation;
-      const t = data.timing || {};
-      const parts = [`${roundTrip}ms`];
-      if (t.deepl_ms) parts.push(`DeepL ${t.deepl_ms}ms`);
-      else if (t.llm_ms) parts.push(`LLM ${t.llm_ms}ms`);
-      if (t.total_ms) parts.push(`server ${t.total_ms}ms`);
-      popTiming.textContent = parts.join(' · ');
     } catch (e) {
       if (e.name === 'AbortError') return;
       popTrans.textContent = '(Fehler)';
-      popTiming.textContent = '';
     }
   }
 

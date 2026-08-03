@@ -930,6 +930,39 @@ body.arquivo-mode .page {
 .prompt-details-summary::before { content: '▾ '; font-size: 0.75rem; }
 .prompt-details-block[open] .prompt-details-summary::before { content: '▴ '; }
 
+/* Realtime session launch card -- mirrors German's .realtime-session-launch
+   (domains/german/static/german.css) so both domains present the same
+   design for the same feature. Portuguese's templates already used these
+   class names; only the CSS itself was missing, so the card rendered as
+   plain unstyled text in both dev and production. */
+.realtime-session-launch {
+  margin: 0.9rem 0;
+  padding: 1rem;
+  border: 1px solid var(--pt-accent);
+  border-radius: 10px;
+  background: rgba(196, 96, 58, 0.08);
+}
+.realtime-session-heading {
+  color: var(--pt-text-heading);
+  font-family: var(--font-head);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.realtime-session-note {
+  margin: 0.25rem 0 0.75rem;
+  color: var(--pt-text-secondary);
+  font-size: 0.86rem;
+}
+.realtime-session-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.realtime-session-status {
+  margin: 0.65rem 0 0;
+}
+
 .prompt-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
 
 .btn-delivery {

@@ -518,13 +518,11 @@ document.body.classList.add('parch-mode');
     if (translationCache.has(key)) {
       currentTranslation = translationCache.get(key);
       popTrans.textContent = currentTranslation || '(sem tradução)';
-      popTiming.textContent = 'cache';
       btnSave.disabled = !currentTranslation;
       return;
     }
     const controller = new AbortController();
     _translateAbort = controller;
-    const t0 = performance.now();
     try {
       const res = await fetch('/api/pt/translate', {
         method: 'POST',
@@ -538,8 +536,6 @@ document.body.classList.add('parch-mode');
       translationCache.set(key, currentTranslation);
       popTrans.textContent = currentTranslation || '(sem tradução)';
       btnSave.disabled = !currentTranslation;
-      const ms = Math.round(performance.now() - t0);
-      popTiming.textContent = `${ms}ms`;
     } catch (e) {
       if (e.name === 'AbortError') return;
       popTrans.textContent = '(erro)';
