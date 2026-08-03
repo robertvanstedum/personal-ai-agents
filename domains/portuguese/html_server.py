@@ -386,14 +386,14 @@ def _persona_voice(persona: dict) -> str:
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
 def _db_conn():
+    # No hardcoded fallback: dev and production point at different
+    # databases with different passwords (rotated 2026-07-16/17), so a
+    # stale default here silently connecting to the wrong database -- or
+    # to a dead password -- is exactly how this class of bug reaches
+    # production undetected. environment_scoped=True also means this can
+    # never fall through to production's SSM parameter from a dev Mac.
     import psycopg2
-    db_url = os.environ.get("DATABASE_URL")
-    if not db_url:
-        try:
-            db_url = get_secret("DATABASE_URL")
-        except Exception:
-            db_url = None
-    db_url = db_url or "postgresql://postgres:simple123@localhost:5432/personal_agents"
+    db_url = get_secret("DATABASE_URL", "minimoi-dev-db", "database_url", environment_scoped=True)
     return psycopg2.connect(db_url)
 
 
@@ -587,6 +587,14 @@ def _run_correction(text: str) -> dict:
 
 # ── Vocabulary helpers ────────────────────────────────────────────────────────
 
+class VocabularyUnavailable(RuntimeError):
+    """The vocabulary store couldn't be reached -- distinct from a
+    resolved, successful query that legitimately found zero rows.
+    Conflating the two (returning [] either way) is exactly how a broken
+    DATABASE_URL produced a silently-empty Palavras page instead of a
+    visible error."""
+
+
 def _get_vocabulary(user_id, source=None, status=None, limit=100) -> list:
     # Fail closed: no resolved user_id means no proven identity, so no
     # vocabulary is returned — never fall back to an unfiltered query.
@@ -622,8 +630,8 @@ def _get_vocabulary(user_id, source=None, status=None, limit=100) -> list:
             for r in rows
         ]
     except Exception as e:
-        print(f"[portuguese] vocabulary fetch error: {e}", flush=True)
-        return []
+        print(f"[portuguese] vocabulary fetch error: {type(e).__name__}", flush=True)
+        raise VocabularyUnavailable(str(type(e).__name__)) from e
 
 
 
@@ -767,13 +775,22 @@ def escrita():
 @app.route("/palavras")
 def palavras():
     user_id = _request_user_id()
-    entries = _get_vocabulary(user_id, limit=100)
-    drill_pool = (
-        _get_vocabulary(user_id, status="praticando", limit=50)
-        + _get_vocabulary(user_id, status="pronto_para_testar", limit=50)
-    )
+    vocabulary_unavailable = False
+    try:
+        entries = _get_vocabulary(user_id, limit=100)
+        drill_pool = (
+            _get_vocabulary(user_id, status="praticando", limit=50)
+            + _get_vocabulary(user_id, status="pronto_para_testar", limit=50)
+        )
+    except VocabularyUnavailable:
+        # Visible, not silent: a DB-connection failure used to render the
+        # exact same empty page as "you have no vocabulary yet". The
+        # template must be able to tell these apart.
+        entries, drill_pool = [], []
+        vocabulary_unavailable = True
     return render_template("portuguese_palavras.html", active="palavras",
                            entries=entries, drill_pool=drill_pool,
+                           vocabulary_unavailable=vocabulary_unavailable,
                            tip=_load_tip("portuguese.palavras"))
 
 
@@ -795,9 +812,53 @@ def admin():
     return render_template("portuguese_admin.html", active="admin")
 
 
+def _deployed_commit_sha() -> str | None:
+    """Best-effort git SHA of the worktree this process is actually
+    running from, so /health can make dev/prod code drift visible instead
+    of silently assumed. Never raises -- a missing git binary or a
+    checkout with no .git (e.g. a stripped container image) just omits
+    the field rather than breaking health checks."""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(Path(__file__).resolve().parents[2]),
+            capture_output=True, text=True, timeout=2,
+        )
+        return result.stdout.strip() if result.returncode == 0 else None
+    except Exception:
+        return None
+
+
+def _deployed_commit_is_dirty() -> bool | None:
+    """True if the running worktree has uncommitted changes -- reporting a
+    commit SHA next to a dirty tree is actively misleading (the SHA names
+    a state the process isn't fully running). None only if git itself
+    couldn't answer; that case already has no SHA to be misleading about."""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(Path(__file__).resolve().parents[2]),
+            capture_output=True, text=True, timeout=2,
+        )
+        return bool(result.stdout.strip()) if result.returncode == 0 else None
+    except Exception:
+        return None
+
+
+_DEPLOYED_COMMIT_SHA = _deployed_commit_sha()
+_DEPLOYED_COMMIT_DIRTY = _deployed_commit_is_dirty()
+
+
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok", "service": "portuguese"})
+    return jsonify({
+        "status": "ok",
+        "service": "portuguese",
+        "commit": _DEPLOYED_COMMIT_SHA,
+        "dirty": _DEPLOYED_COMMIT_DIRTY,
+    })
 
 
 # ── API: Leitura stubs ───────────────────────────────────────────────────────
@@ -949,8 +1010,11 @@ def api_pt_save_phrase():
             )
         return jsonify({"ok": True})
     except Exception as e:
-        print(f"[portuguese] save-phrase error: {e}", flush=True)
-        return jsonify({"ok": False, "error": str(e)}), 500
+        # Log only the exception type to stdout, never str(e) -- a
+        # psycopg2 connection error can otherwise leak a DSN or partial
+        # credential, and returning it to the client is worse still.
+        print(f"[portuguese] save-phrase error: {type(e).__name__}", flush=True)
+        return jsonify({"ok": False, "error": "save failed"}), 500
 
 
 @app.route("/api/pt/note-save", methods=["POST"])

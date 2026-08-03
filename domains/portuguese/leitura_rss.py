@@ -11,12 +11,18 @@ import json
 import logging
 import os
 import re
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import feedparser
 import psycopg2
 import requests
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+from core.get_secret import get_secret
 
 log = logging.getLogger(__name__)
 
@@ -70,10 +76,8 @@ def validate_sources(config: dict) -> bool:
 
 
 def _db_conn():
-    db_url = os.environ.get(
-        "DATABASE_URL",
-        "postgresql://postgres:simple123@localhost:5432/personal_agents",
-    )
+    # No hardcoded fallback -- see html_server.py's _db_conn() for why.
+    db_url = get_secret("DATABASE_URL", "minimoi-dev-db", "database_url", environment_scoped=True)
     return psycopg2.connect(db_url)
 
 

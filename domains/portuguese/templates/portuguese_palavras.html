@@ -10,6 +10,13 @@
       <p class="tab-description">Vocabulário salvo — da Leitura, das Conversas e da Escrita.</p>
     </div>
 
+    {% if vocabulary_unavailable %}
+    <div class="identity-degraded-banner" role="alert" style="background:#5c2e1a;color:#f5e3d3;padding:12px 20px;font-size:14px;border-radius:6px;margin:0 0 16px;">
+      Vocabulário indisponível no momento — não foi possível conectar ao banco de dados.
+      Isso não significa que suas palavras foram perdidas. Tente novamente em instantes.
+    </div>
+    {% endif %}
+
 <!-- ── Subnav ────────────────────────────────────────────────────── -->
 <div class="ueben-subnav">
   <button class="ueben-subnav-btn active" data-section="vocabulario">Vocabulário</button>

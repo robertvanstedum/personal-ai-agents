@@ -516,7 +516,7 @@ function showSaveToast() {
     if (!currentPhrase || !currentTranslation) return;
     btnSave.textContent = 'Salvando…'; btnSave.disabled = true;
     try {
-      await fetch('/api/pt/save-phrase', {
+      const res = await fetch('/api/pt/save-phrase', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -526,6 +526,10 @@ function showSaveToast() {
           source: 'escrita',
         }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error || `request failed (${res.status})`);
+      }
       btnSave.textContent = '✓ Salvo';
       setTimeout(hidePopover, 700);
     } catch {

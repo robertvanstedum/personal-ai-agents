@@ -201,7 +201,16 @@ document.body.classList.add('parch-mode');
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    return res.json();
+    const data = await res.json().catch(() => ({}));
+    // A non-2xx (e.g. a DB-connection failure) or an explicit {ok: false}
+    // body used to be treated as success here — the caller's try block
+    // would complete normally and show a success state for a save that
+    // never happened. Throw so every caller's existing catch block shows
+    // its real failure state instead.
+    if (!res.ok || data.ok === false) {
+      throw new Error(data.error || `request failed (${res.status})`);
+    }
+    return data;
   }
 
   function enterBrowse() {
