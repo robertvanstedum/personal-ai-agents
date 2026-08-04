@@ -22,6 +22,46 @@ The missing step was an upfront statement that the proposal effectively meant
 building hundreds of lines of software to load a small number of records. That
 tradeoff must be visible before implementation begins.
 
+## Live validation: issue #176
+
+The first catch-up completed safely, but its post-load check proved only that
+the production phrasebook file contained the expected number of records. It
+did not prove that the signed-in user could see them. After one additional
+production save, the file contained 39 records while the authenticated Wörter
+page showed only 10.
+
+[Issue #176](https://github.com/robertvanstedum/personal-ai-agents/issues/176)
+identified the cause: 29 older records still had a legacy `user` value of
+`"robert"` or no owner value, while the application correctly filtered the
+page to production user `"3"`.
+
+The follow-up was handled as a Tier 2 data repair rather than another
+migration:
+
+- 39 records examined; 29 records required one field change
+- One existing JSON file; no additions, deletions, or schema changes
+- Dry run against the live file before approval
+- Timestamped backup, atomic replacement, ownership and mode preservation,
+  and automatic restore on failure
+- Brief service stop, guaranteed restart, and health verification
+- Final verification through both the stored data and the authenticated UI
+
+The repair retained 39 records, assigned all 39 to production user `"3"`,
+preserved `root:root` ownership and mode `0600`, and made all 39 entries visible
+in Wörter. Once the task was classified and scoped correctly, the production
+repair was completed in roughly 15–20 minutes using the safety primitives
+already developed for the earlier load.
+
+This closes the operational-learning loop: proportional process reduced the
+work without reducing production safeguards. It also added one important
+acceptance rule—aggregate counts are insufficient for identity-scoped data.
+Verification must include the count and content visible to the intended user.
+
+The repair script grew beyond its initial line-count estimate even though the
+work remained quick. Future Tier 2 tasks must pause again if actual
+implementation crosses an approval threshold, not only when the initial
+estimate predicts that it will.
+
 ## Required upfront estimate
 
 Before any Tier 2 data-load tooling is built, report:
@@ -46,13 +86,14 @@ fewer:
 
 1. Export only the proposed additions into a human-reviewable file.
 2. Resolve and verify the production user identity independently.
-3. Show duplicates and conflicts before writing.
+3. Show ownership distribution, duplicates, and conflicts before writing.
 4. Back up the destination and verify its checksum.
 5. Briefly stop the service if it can write the same data concurrently.
 6. Load through a narrow backend utility that preserves ownership and
    permissions and writes atomically.
 7. Restore automatically if any write or verification fails.
-8. Restart and verify counts plus one real save-and-refresh action.
+8. Restart and verify aggregate counts, identity-scoped visible counts, and
+   one real save-and-refresh action.
 
 Do not edit live production files interactively when a small reviewed loader
 can make the same change safely and repeatably.
