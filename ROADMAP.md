@@ -19,17 +19,18 @@ being able to revisit.*
 
 ## Where This Is Going — A System That Learns With You
 
-The objective is personal and plain: make the person at the center of this a better
-decision maker and a better learner. The system accumulates context — what was
-read, what was practiced, what was decided and why, what went wrong — and uses it
-so that every next session starts smarter than the last. Frontier models bring
-capability; the accumulated personal layer brings continuity. The analogy of a
-long-tenured colleague briefing outside experts is fine as far as it goes, but it
-isn't the point. The point is that the person gets better. And that's also exactly
-what transfers conceptually to a broader setting: the same pattern, applied to a
-team, is about making the team better and its members better — not extracting
-knowledge from them. That transfer is part of the intent. The personal version
-comes first.
+The objective is personal and practical: build a durable partnership in which
+people and agents improve together — developing better judgment, deeper shared
+context, and more effective ways of working over time, without depending on any
+single model or platform. The system accumulates shared context — what was read,
+what was practiced, what was decided and why, what went wrong — so each session
+starts from a stronger foundation than the last. Frontier models bring
+capability; the privately controlled context layer brings continuity and
+resilience as models and platforms change. The first implementation centers on
+one person; the same pattern extends naturally to a family, a team, a department,
+or an enterprise. The aim is not to extract knowledge from people, but to help
+people and their agent partners become more capable together in their particular
+context and toward their particular goals.
 
 The learning happens in **four bounded loops** — one per domain family,
 deliberately, so nothing drifts:
