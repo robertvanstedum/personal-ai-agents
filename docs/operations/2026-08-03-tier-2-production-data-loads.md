@@ -19,8 +19,8 @@ and rollback protection. The implementation nevertheless grew into a
 German-specific program of roughly 600 lines.
 
 The missing step was an upfront statement that the proposal effectively meant
-building hundreds of lines of software to load a small number of records.
-Robert wants that tradeoff visible before implementation begins.
+building hundreds of lines of software to load a small number of records. That
+tradeoff must be visible before implementation begins.
 
 ## Required upfront estimate
 
@@ -35,7 +35,7 @@ Before any Tier 2 data-load tooling is built, report:
 - Failure impact and the simplest credible rollback
 - Recommendation: narrow load, reusable utility, or formal migration
 
-Pause for Robert's approval before implementation if the proposal is expected
+Pause for explicit owner approval before implementation if the proposal is expected
 to exceed **150 lines of new operational code**, **one hour of build effort**,
 or the effort required to review the data itself.
 
@@ -69,5 +69,5 @@ record catch-up is a **data load** or **data repair**.
 ## Ownership
 
 This is a Tier 2 daily operations pattern. An implementer may prepare the
-reviewed export and narrow loader, but Robert remains the approval point for
-the exact data, the reviewed tooling, and the production write.
+reviewed export and narrow loader, but the project owner remains the approval
+point for the exact data, the reviewed tooling, and the production write.

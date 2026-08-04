@@ -42,14 +42,14 @@ The roles are durable even as which agent fills them changes:
 ## Tier 2 production-support data loads
 
 Small, one-time corrections to existing production records are **production
-support**, not feature development. Before building tooling, give Robert a
+support**, not feature development. Before building tooling, give the project owner a
 proportionality estimate: records affected, destination stores, manual-load
 effort, proposed code/test size, failure impact, and rollback method.
 
 For an additive repair involving a few files or tables and roughly 100 records
 or fewer, default to a reviewed export plus a narrow backend loader. If the
 proposal exceeds about 150 lines of new operational code or one hour of build
-effort, stop and obtain Robert's approval before implementation. Production
+effort, stop and obtain explicit owner approval before implementation. Production
 caution still applies: exact-record review, identity verification, backup,
 duplicate/conflict refusal, ownership preservation, rollback, and post-load
 verification. See
