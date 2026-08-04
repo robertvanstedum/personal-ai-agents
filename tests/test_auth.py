@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import pytest
 from bs4 import BeautifulSoup
+from PIL import Image
 
 
 @pytest.fixture
@@ -222,7 +223,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         img.get("src")
         for img in soup.select('.tour-shot img[src^="/static/tour/"]')
     ]
-    assert len(images) == 32
+    assert len(images) == 40
     assert "/static/tour/curator-research-tools.jpg" not in images
     assert all(
         (static_root / src.split("?", 1)[0].removeprefix("/static/")).is_file()
@@ -235,7 +236,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
     expected_first_images = {
         "curator": "/static/tour/01-curator-landing-desktop.webp?v=20260802-curatordesktop1",
         "german": "/static/tour/german-landing.jpg",
-        "portuguese": "/static/tour/portuguese-landing.jpg",
+        "portuguese": "/static/tour/01-portuguese-landing-desktop.webp?v=20260804-portuguesedesktop1",
         "guild": "/static/tour/guild-landing.png",
         "cos": "/static/tour/cos-landing.jpg?v=20260724-2",
     }
@@ -325,7 +326,31 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         assert (
             static_root / href.removeprefix("/static/")
         ).is_file()
-    assert len(soup.select("section#portuguese .tour-shot")) == 6
+    portuguese_desktop_assets = [
+        "01-portuguese-landing-desktop.webp",
+        "02-portuguese-reading-list-desktop.webp",
+        "03-portuguese-title-translation-desktop.webp",
+        "04-portuguese-original-source-desktop.webp",
+        "05-portuguese-article-translation-desktop.webp",
+        "06-portuguese-reading-correction-desktop.webp",
+        "07-portuguese-vocabulary-desktop.webp",
+        "08-portuguese-conversation-choice-desktop.webp",
+        "09-portuguese-conversation-transcript-desktop.webp",
+        "10-portuguese-speaking-feedback-desktop.webp",
+        "11-portuguese-writing-desktop.webp",
+        "12-portuguese-writing-correction-desktop.webp",
+        "13-portuguese-archive-desktop.webp",
+        "14-portuguese-admin-desktop.webp",
+    ]
+    assert [
+        img.get("src").split("?", 1)[0].rsplit("/", 1)[-1]
+        for img in soup.select("section#portuguese .tour-shot img")
+    ] == portuguese_desktop_assets
+    for asset in portuguese_desktop_assets:
+        asset_path = static_root / "tour" / asset
+        assert asset_path.is_file()
+        with Image.open(asset_path) as screenshot:
+            assert screenshot.size == (2880, 1800)
     assert len(soup.select("section#guild .tour-shot")) == 2
     assert len(soup.select("section#cos .tour-shot")) == 2
     expected_mobile_hrefs = {
