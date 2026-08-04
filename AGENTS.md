@@ -39,6 +39,22 @@ The roles are durable even as which agent fills them changes:
 - **One agent active on the repo at a time** — not simultaneous editing.
 - **Working cycle:** spec → approve → build → confirm → ship.
 
+## Tier 2 production-support data loads
+
+Small, one-time corrections to existing production records are **production
+support**, not feature development. Before building tooling, give Robert a
+proportionality estimate: records affected, destination stores, manual-load
+effort, proposed code/test size, failure impact, and rollback method.
+
+For an additive repair involving a few files or tables and roughly 100 records
+or fewer, default to a reviewed export plus a narrow backend loader. If the
+proposal exceeds about 150 lines of new operational code or one hour of build
+effort, stop and obtain Robert's approval before implementation. Production
+caution still applies: exact-record review, identity verification, backup,
+duplicate/conflict refusal, ownership preservation, rollback, and post-load
+verification. See
+[`docs/operations/2026-08-03-tier-2-production-data-loads.md`](docs/operations/2026-08-03-tier-2-production-data-loads.md).
+
 ## Protected files
 
 Do not modify without explicit instruction from Robert:
