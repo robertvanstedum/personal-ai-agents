@@ -760,6 +760,12 @@ body.tour {
   align-items: center;
   justify-content: center;
 }
+@media (min-width: 901px) {
+  .tour-lightbox-media {
+    box-sizing: border-box;
+    padding-inline: 4.25rem;
+  }
+}
 .tour-lightbox img {
   width: auto;
   height: auto;
@@ -879,6 +885,7 @@ body.tour {
   border-color: var(--front-orange);
   color: var(--front-orange);
 }
+
 .tour-mobile-hint {
   display: none;
 }
@@ -890,7 +897,8 @@ body.tour {
   align-items: baseline;
   gap: 0.45rem;
   font-family: var(--font-serif);
-  font-size: 0.88rem;
+  font-size: 1rem;
+  font-weight: 600;
   color: var(--front-green);
 }
 .tour-shot figcaption span {

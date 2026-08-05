@@ -223,7 +223,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         img.get("src")
         for img in soup.select('.tour-shot img[src^="/static/tour/"]')
     ]
-    assert len(images) == 40
+    assert len(images) == 60
     assert "/static/tour/curator-research-tools.jpg" not in images
     assert all(
         (static_root / src.split("?", 1)[0].removeprefix("/static/")).is_file()
@@ -235,10 +235,10 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
     assert full_size_links == images
     expected_first_images = {
         "curator": "/static/tour/01-curator-landing-desktop.webp?v=20260802-curatordesktop1",
-        "german": "/static/tour/german-landing.jpg",
+        "german": "/static/tour/01-german-landing-desktop.webp?v=20260804-germandesktop1",
         "portuguese": "/static/tour/01-portuguese-landing-desktop.webp?v=20260804-portuguesedesktop1",
-        "guild": "/static/tour/guild-landing.png",
-        "cos": "/static/tour/cos-landing.jpg?v=20260724-2",
+        "guild": "/static/tour/01-guild-landing-desktop.webp?v=20260804-guilddesktop2",
+        "cos": "/static/tour/01-cos-landing-desktop.webp?v=20260804-cosdesktop1",
     }
     for section_id, expected_src in expected_first_images.items():
         section = soup.select_one(f"section#{section_id}")
@@ -288,20 +288,30 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         assert (
             static_root / href.split("?", 1)[0].removeprefix("/static/")
         ).is_file()
-    assert len(soup.select("section#german .tour-shot")) == 10
+    assert len(soup.select("section#german .tour-shot")) == 17
     assert [
         img.get("src") for img in soup.select("section#german .tour-shot img")
     ] == [
-        "/static/tour/german-landing.jpg",
-        "/static/tour/german-lesen-choices.jpg",
-        "/static/tour/german-lesen-wien.png",
-        "/static/tour/german-lesen-article.jpg",
-        "/static/tour/german-lesen-translation.jpg",
-        "/static/tour/german-lesen-correction.jpg",
-        "/static/tour/german-gespraeche-current.jpg",
-        "/static/tour/german-schreiben-current.jpg",
-        "/static/tour/german-woerter-current.jpg",
-        "/static/tour/german-archiv-current.jpg",
+        f"/static/tour/{name}?v=20260804-germandesktop1"
+        for name in (
+            "01-german-landing-desktop.webp",
+            "02-german-reading-topics-desktop.webp",
+            "03-german-current-article-desktop.webp",
+            "04-german-translate-save-desktop.webp",
+            "05-german-original-source-desktop.webp",
+            "06-german-reading-note-desktop.webp",
+            "07-german-reading-correction-desktop.webp",
+            "08-german-vocabulary-desktop.webp",
+            "09-german-conversation-choice-desktop.webp",
+            "10-german-conversation-prepare-desktop.webp",
+            "11-german-conversation-transcript-desktop.webp",
+            "12-german-speaking-feedback-desktop.webp",
+            "13-german-writing-desktop.webp",
+            "14-german-writing-feedback-desktop.webp",
+            "15-german-conversation-history-desktop.webp",
+            "16-german-reopen-conversation-desktop.webp",
+            "17-german-archived-writing-desktop.webp",
+        )
     ]
     german_mobile_hrefs = [
         link.get("href")
@@ -351,8 +361,27 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         assert asset_path.is_file()
         with Image.open(asset_path) as screenshot:
             assert screenshot.size == (2880, 1800)
-    assert len(soup.select("section#guild .tour-shot")) == 2
-    assert len(soup.select("section#cos .tour-shot")) == 2
+    guild_desktop_assets = (
+            "01-guild-landing-desktop.webp",
+            "02-guild-build-queue-desktop.webp",
+            "03-guild-specification-desktop.webp",
+            "04-guild-spec-evaluation-desktop.webp",
+            "05-guild-build-log-desktop.webp",
+            "06-guild-roadmap-desktop.webp",
+            "07-guild-docs-desktop.webp",
+            "01-guild-landing-desktop.webp",
+            "08-guild-operate-desktop.webp",
+            "01-guild-landing-desktop.webp",
+            "09-guild-improve-desktop.webp",
+    )
+    assert [
+        img.get("src") for img in soup.select("section#guild .tour-shot img")
+    ] == [
+        f"/static/tour/{name}?v="
+        f"{'20260804-guildimprove2' if name == '09-guild-improve-desktop.webp' else '20260804-guilddesktop2'}"
+        for name in guild_desktop_assets
+    ]
+    assert len(soup.select("section#cos .tour-shot")) == 6
     expected_mobile_hrefs = {
         "portuguese": [
             "/static/tour/portuguese-mobile-landing.webp?v=20260730-trim2",
@@ -415,8 +444,15 @@ def test_owner_tour_uses_same_privacy_safe_cos_slides(client):
         img.get("src") for img in section.select(".tour-shot img")
     ]
     assert desktop_images == [
-        "/static/tour/cos-landing.jpg?v=20260724-2",
-        "/static/tour/cos-confer.png",
+        f"/static/tour/{name}?v=20260804-cosdesktop1"
+        for name in (
+            "01-cos-landing-desktop.webp",
+            "02-cos-confer-direction-desktop.webp",
+            "03-cos-confirm-decision-desktop.webp",
+            "04-cos-record-desktop.webp",
+            "05-cos-track-desktop.webp",
+            "06-cos-store-desktop.webp",
+        )
     ]
     mobile_images = [
         link.get("href")

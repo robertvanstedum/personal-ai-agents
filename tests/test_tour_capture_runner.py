@@ -1,7 +1,13 @@
 import builtins
 from pathlib import Path
 
-from scripts.tools.tour_capture.runner import CaptureRunner, _retain_last_capture_diagnostic
+from scripts.tools.tour_capture.runner import (
+    CAPTURE_STYLE,
+    CLEAN_WEB_STYLE,
+    CaptureRunner,
+    _clean_web_route_patterns,
+    _retain_last_capture_diagnostic,
+)
 from scripts.tools.tour_capture.scenario import DEVICE_PROFILES
 
 
@@ -26,15 +32,18 @@ class _FakePage:
         interaction_at=0,
         repeat_identical=False,
         visibility="hidden",
+        focused=False,
     ):
         self.name = name
         self.url = url
         self.interaction_at = interaction_at
         self.repeat_identical = repeat_identical
         self.visibility = visibility
+        self.focused = focused
         self.closed = False
         self.screenshot_calls: list[str] = []
         self.brought_to_front_before_last_screenshot = False
+        self.last_screenshot_kwargs = {}
         self._front = False
 
     def _check_alive(self):
@@ -56,6 +65,8 @@ class _FakePage:
         self._check_alive()
         if "document.visibilityState" in expression:
             return self.visibility
+        if "document.hasFocus()" in expression:
+            return self.focused
         if "__minimoiTourCaptureLastInteraction || 0" in expression:
             return self.interaction_at
         return None
@@ -64,6 +75,7 @@ class _FakePage:
         self._check_alive()
         self.brought_to_front_before_last_screenshot = self._front
         self.screenshot_calls.append(path)
+        self.last_screenshot_kwargs = kwargs
         suffix = 1 if self.repeat_identical else len(self.screenshot_calls)
         Path(path).write_bytes(f"fake png:{self.name}:{suffix}".encode())
 
@@ -119,7 +131,7 @@ def test_free_capture_loop_captures_only_last_interacted_tab(tmp_path, monkeypat
     raw_dir.mkdir()
     captured_specs = []
 
-    responses = iter(["current", "done"])
+    responses = iter(["current", "2", "done"])
     monkeypatch.setattr(builtins, "input", lambda *_args: next(responses))
     final_order = runner._run_free_capture_loop(
         context,
@@ -145,7 +157,7 @@ def test_free_capture_prefers_visible_new_tab(tmp_path, monkeypatch):
     raw_dir.mkdir()
     captured_specs = []
 
-    responses = iter(["", "done"])
+    responses = iter(["", "2", "done"])
     monkeypatch.setattr(builtins, "input", lambda *_args: next(responses))
     runner._run_free_capture_loop(
         context,
@@ -159,6 +171,76 @@ def test_free_capture_prefers_visible_new_tab(tmp_path, monkeypatch):
 
     assert original.screenshot_calls == []
     assert len(new_tab.screenshot_calls) == 1
+
+
+def test_free_capture_prefers_focused_popup_over_original_tab(tmp_path, monkeypatch):
+    runner = _make_runner(tmp_path)
+    original = _FakePage(
+        "original",
+        interaction_at=100,
+        visibility="visible",
+        focused=False,
+    )
+    popup = _FakePage(
+        "source",
+        url="https://rollingstone.com/article",
+        interaction_at=10,
+        visibility="visible",
+        focused=True,
+    )
+    context = _FakeContext([original, popup])
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    captured_specs = []
+
+    responses = iter(["", "2", "done"])
+    monkeypatch.setattr(builtins, "input", lambda *_args: next(responses))
+    runner._run_free_capture_loop(
+        context,
+        {"prefix": "explore", "instructions": "Browse naturally."},
+        0,
+        DEVICE_PROFILES["desktop"],
+        raw_dir,
+        captured_specs,
+        preferred_page=original,
+    )
+
+    assert original.screenshot_calls == []
+    assert len(popup.screenshot_calls) == 1
+
+
+def test_free_capture_can_override_wrong_tab_suggestion(tmp_path, monkeypatch):
+    runner = _make_runner(tmp_path)
+    internal = _FakePage(
+        "Leitura",
+        interaction_at=100,
+        visibility="visible",
+    )
+    external = _FakePage(
+        "Rolling Stone",
+        url="https://rollingstone.com/article",
+        interaction_at=10,
+        visibility="visible",
+    )
+    context = _FakeContext([internal, external])
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    captured_specs = []
+
+    responses = iter(["", "2", "done"])
+    monkeypatch.setattr(builtins, "input", lambda *_args: next(responses))
+    runner._run_free_capture_loop(
+        context,
+        {"prefix": "explore", "instructions": "Browse naturally."},
+        0,
+        DEVICE_PROFILES["desktop"],
+        raw_dir,
+        captured_specs,
+        preferred_page=internal,
+    )
+
+    assert internal.screenshot_calls == []
+    assert len(external.screenshot_calls) == 1
 
 
 def test_free_capture_skips_identical_capture(tmp_path, monkeypatch):
@@ -209,3 +291,37 @@ def test_free_capture_ignores_closed_tab(tmp_path, monkeypatch):
 
     assert len(open_tab.screenshot_calls) == 1
     assert closed_tab.screenshot_calls == []
+
+
+def test_clean_web_request_patterns_only_target_ad_hosts():
+    patterns = _clean_web_route_patterns()
+
+    assert "**://doubleclick.net/**" in patterns
+    assert "**://*.doubleclick.net/**" in patterns
+    assert "**://googlesyndication.com/**" in patterns
+    assert "**://*.googlesyndication.com/**" in patterns
+    assert "**/*" not in patterns
+    assert all("rollingstone.com" not in pattern for pattern in patterns)
+
+
+def test_clean_web_style_only_applies_to_external_pages(tmp_path, monkeypatch):
+    runner = CaptureRunner(
+        scenario={
+            "id": "portuguese-desktop",
+            "domain": "portuguese",
+            "device_profile": "desktop",
+        },
+        base_url="https://dev.minimoi.ai",
+        output_root=tmp_path,
+        clean_web=True,
+    )
+    monkeypatch.setattr(runner, "_prepare_clean_web", lambda _page: None)
+
+    internal = _FakePage("internal", url="https://dev.minimoi.ai/app/portuguese")
+    external = _FakePage("external", url="https://rollingstone.com/article")
+    runner._take_screenshot(internal, tmp_path / "internal.png")
+    runner._take_screenshot(external, tmp_path / "external.png")
+
+    assert internal.last_screenshot_kwargs["style"] == CAPTURE_STYLE
+    assert CLEAN_WEB_STYLE not in internal.last_screenshot_kwargs["style"]
+    assert CLEAN_WEB_STYLE in external.last_screenshot_kwargs["style"]

@@ -108,6 +108,25 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
         "german-mobile-12-gespraeche-feedback.webp",
         "german-mobile-13-gespraeche-archive.webp",
     ]
+    german_desktop_assets = [
+        "01-german-landing-desktop.webp",
+        "02-german-reading-topics-desktop.webp",
+        "03-german-current-article-desktop.webp",
+        "04-german-translate-save-desktop.webp",
+        "05-german-original-source-desktop.webp",
+        "06-german-reading-note-desktop.webp",
+        "07-german-reading-correction-desktop.webp",
+        "08-german-vocabulary-desktop.webp",
+        "09-german-conversation-choice-desktop.webp",
+        "10-german-conversation-prepare-desktop.webp",
+        "11-german-conversation-transcript-desktop.webp",
+        "12-german-speaking-feedback-desktop.webp",
+        "13-german-writing-desktop.webp",
+        "14-german-writing-feedback-desktop.webp",
+        "15-german-conversation-history-desktop.webp",
+        "16-german-reopen-conversation-desktop.webp",
+        "17-german-archived-writing-desktop.webp",
+    ]
     portuguese_mobile_assets = [
         "portuguese-mobile-landing.webp",
         "portuguese-reading-categories.webp",
@@ -118,6 +137,25 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
         "portuguese-voice-transcript.webp",
         "portuguese-voice-coaching.webp",
         "portuguese-learning-archive.webp",
+    ]
+    guild_desktop_assets = [
+        "01-guild-landing-desktop.webp",
+        "02-guild-build-queue-desktop.webp",
+        "03-guild-specification-desktop.webp",
+        "04-guild-spec-evaluation-desktop.webp",
+        "05-guild-build-log-desktop.webp",
+        "06-guild-roadmap-desktop.webp",
+        "07-guild-docs-desktop.webp",
+        "08-guild-operate-desktop.webp",
+        "09-guild-improve-desktop.webp",
+    ]
+    cos_desktop_assets = [
+        "01-cos-landing-desktop.webp",
+        "02-cos-confer-direction-desktop.webp",
+        "03-cos-confirm-decision-desktop.webp",
+        "04-cos-record-desktop.webp",
+        "05-cos-track-desktop.webp",
+        "06-cos-store-desktop.webp",
     ]
     guild_mobile_assets = [
         "01-guild-landing-mobile.webp",
@@ -144,6 +182,9 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
     for asset in curator_desktop_assets:
         assert asset in template
         assert (ROOT / "minimoi_portal/static/tour" / asset).is_file()
+    for asset in german_desktop_assets + guild_desktop_assets + cos_desktop_assets:
+        assert asset in template
+        assert (ROOT / "minimoi_portal/static/tour" / asset).is_file()
 
     assert 'class="tour-mobile-gallery"' in template
     assert template.count('class="tour-mobile-shot-link"') == len(mobile_assets)
@@ -167,6 +208,7 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
     assert "function shouldStartInMobileView()" in template
     assert "function alignArrowsToImage()" in template
     assert 'window.addEventListener("resize", alignArrowsToImage)' in template
+    assert "padding-inline: 4.25rem" in css
     assert 'zoom.hidden = lightboxFormat === "mobile";' in template
     assert ".tour-lightbox-format button" in css
     assert ".tour-lightbox.is-mobile-format .tour-lightbox-stage" in css

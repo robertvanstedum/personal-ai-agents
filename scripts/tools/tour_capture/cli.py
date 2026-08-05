@@ -67,6 +67,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="validate the scenario without opening a browser",
     )
+    parser.add_argument(
+        "--clean-web",
+        action="store_true",
+        help=(
+            "for external-source captures, block common ad requests and hide "
+            "cookie/ad overlays; mini-moi pages are not visually altered"
+        ),
+    )
     return parser
 
 
@@ -92,6 +100,7 @@ def main(argv: list[str] | None = None) -> int:
             args.base_url,
             args.output_root,
             headless=args.headless,
+            clean_web=args.clean_web,
         ).run()
         print(f"capture complete: {review_path.resolve()}")
         return 0
