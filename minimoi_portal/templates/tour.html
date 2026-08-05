@@ -8,7 +8,7 @@
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/portal.css?v=20260730-ui14">
+  <link rel="stylesheet" href="/static/portal.css?v=20260805-cards1">
 </head>
 <body class="tour">
 
@@ -23,9 +23,6 @@
       <a href="#cos">CoS</a>
     </div>
     <div class="front-door-account">
-      <a href="https://github.com/robertvanstedum/personal-ai-agents"
-         target="_blank" rel="noopener noreferrer"
-         class="front-door-external nav-hide-compact">GitHub</a>
       {% if user %}
         <a href="/dashboard" class="front-door-signin">Home</a>
       {% else %}
@@ -294,96 +291,35 @@
       other areas reinforce the same language practice.
     </p>
     <div class="tour-gallery tour-gallery-featured">
+      {% set german_desktop_slides = [
+        ("01-german-landing-desktop.webp", "Enter Mein Deutsch", "Mein Deutsch landing page"),
+        ("02-german-reading-topics-desktop.webp", "Explore reading topics", "Reading topics in Lesen"),
+        ("03-german-current-article-desktop.webp", "Choose a current article", "Current local articles in Lesen"),
+        ("04-german-translate-save-desktop.webp", "Translate and save in place", "Contextual German translation and vocabulary save"),
+        ("05-german-original-source-desktop.webp", "Continue to the original source", "Original German article source"),
+        ("06-german-reading-note-desktop.webp", "Write a personal note", "Personal German note about a reading"),
+        ("07-german-reading-correction-desktop.webp", "Review the reading correction", "German reading correction and explanation"),
+        ("08-german-vocabulary-desktop.webp", "Build a personal vocabulary", "Saved German vocabulary and phrases"),
+        ("09-german-conversation-choice-desktop.webp", "Choose a conversation", "German conversation persona choices"),
+        ("10-german-conversation-prepare-desktop.webp", "Prepare the conversation", "German realtime conversation preparation"),
+        ("11-german-conversation-transcript-desktop.webp", "Review the transcript", "Completed German conversation transcript"),
+        ("12-german-speaking-feedback-desktop.webp", "Review speaking feedback", "German speaking feedback and coaching"),
+        ("13-german-writing-desktop.webp", "Practice in writing", "German writing practice"),
+        ("14-german-writing-feedback-desktop.webp", "Review writing feedback", "German writing correction and feedback"),
+        ("15-german-conversation-history-desktop.webp", "Browse conversation history", "German conversation history in Archiv"),
+        ("16-german-reopen-conversation-desktop.webp", "Reopen a past conversation", "Archived German conversation detail"),
+        ("17-german-archived-writing-desktop.webp", "Return to archived writing", "Archived German writing detail")
+      ] %}
+      {% for filename, label, alt in german_desktop_slides %}
       <figure class="tour-shot">
-        <a class="tour-shot-link" href="/static/tour/german-landing.jpg"
-           aria-label="View Mein Deutsch landing full size">
-          <img src="/static/tour/german-landing.jpg"
-               alt="Mein Deutsch landing page"
-               width="1800" height="1079" loading="lazy">
+        <a class="tour-shot-link" href="/static/tour/{{ filename }}?v=20260804-germandesktop1"
+           aria-label="View {{ label }} full size">
+          <img src="/static/tour/{{ filename }}?v=20260804-germandesktop1"
+               alt="{{ alt }}" width="2880" height="1800" loading="lazy">
         </a>
-        <figcaption><span>01</span> Start at the Mein Deutsch landing</figcaption>
+        <figcaption><span>{{ "%02d"|format(loop.index) }}</span> {{ label }}</figcaption>
       </figure>
-      <figure class="tour-shot">
-        <a class="tour-shot-link" href="/static/tour/german-lesen-choices.jpg"
-           aria-label="View Lesen reading topics full size">
-          <img src="/static/tour/german-lesen-choices.jpg"
-               alt="Reading topics in Lesen"
-               width="1800" height="1079" loading="lazy">
-        </a>
-        <figcaption><span>02</span> Choose an area of interest in Lesen</figcaption>
-      </figure>
-      <figure class="tour-shot">
-        <a class="tour-shot-link" href="/static/tour/german-lesen-wien.png"
-           aria-label="View the selected Wien reading list full size">
-          <img src="/static/tour/german-lesen-wien.png"
-               alt="Wien selected in Lesen with current local articles"
-               width="2940" height="1912" loading="lazy">
-        </a>
-        <figcaption><span>03</span> Select Wien and choose a current local article</figcaption>
-      </figure>
-      <figure class="tour-shot">
-        <a class="tour-shot-link" href="/static/tour/german-lesen-article.jpg"
-           aria-label="View a selected Lesen article full size">
-          <img src="/static/tour/german-lesen-article.jpg"
-               alt="A selected German article with space for notes"
-               width="1800" height="1079" loading="lazy">
-        </a>
-        <figcaption><span>04</span> Read the excerpt or continue to the original source</figcaption>
-      </figure>
-      <figure class="tour-shot">
-        <a class="tour-shot-link" href="/static/tour/german-lesen-translation.jpg"
-           aria-label="View contextual translation help full size">
-          <img src="/static/tour/german-lesen-translation.jpg"
-               alt="Contextual translation for a selected German phrase"
-               width="1800" height="1079" loading="lazy">
-        </a>
-        <figcaption><span>05</span> Translate unfamiliar words or phrases in place</figcaption>
-      </figure>
-      <figure class="tour-shot">
-        <a class="tour-shot-link" href="/static/tour/german-lesen-correction.jpg"
-           aria-label="View contextual writing correction full size">
-          <img src="/static/tour/german-lesen-correction.jpg"
-               alt="A German response with contextual correction and explanation"
-               width="1800" height="1079" loading="lazy">
-        </a>
-        <figcaption><span>06</span> Write about the reading and review the correction</figcaption>
-      </figure>
-      <figure class="tour-shot">
-        <a class="tour-shot-link" href="/static/tour/german-gespraeche-current.jpg"
-           aria-label="View realtime German conversation practice full size">
-          <img src="/static/tour/german-gespraeche-current.jpg"
-               alt="Realtime German conversation practice with selectable AI voice provider"
-               width="1265" height="712" loading="lazy">
-        </a>
-        <figcaption><span>07</span> Reinforce speaking and listening in Gespräche</figcaption>
-      </figure>
-      <figure class="tour-shot">
-        <a class="tour-shot-link" href="/static/tour/german-schreiben-current.jpg"
-           aria-label="View German writing practice full size">
-          <img src="/static/tour/german-schreiben-current.jpg"
-               alt="German writing practice with correction"
-               width="1265" height="712" loading="lazy">
-        </a>
-        <figcaption><span>08</span> Continue deliberate practice in Schreiben</figcaption>
-      </figure>
-      <figure class="tour-shot">
-        <a class="tour-shot-link" href="/static/tour/german-woerter-current.jpg"
-           aria-label="View retained German vocabulary full size">
-          <img src="/static/tour/german-woerter-current.jpg"
-               alt="Saved German vocabulary and phrases"
-               width="1265" height="712" loading="lazy">
-        </a>
-        <figcaption><span>09</span> Keep useful words and phrases in Wörter</figcaption>
-      </figure>
-      <figure class="tour-shot">
-        <a class="tour-shot-link" href="/static/tour/german-archiv-current.jpg"
-           aria-label="View German practice history full size">
-          <img src="/static/tour/german-archiv-current.jpg"
-               alt="German conversation, writing, and reading history"
-               width="1265" height="712" loading="lazy">
-        </a>
-        <figcaption><span>10</span> Return to conversation, writing, and reading history in Archiv</figcaption>
-      </figure>
+      {% endfor %}
     </div>
     <div class="tour-mobile-gallery" hidden aria-hidden="true">
       <a class="tour-mobile-shot-link"
@@ -648,22 +584,112 @@
     </ol>
     <div class="tour-gallery tour-gallery-pair">
       <figure class="tour-shot tour-shot-guild-landing">
-        <a class="tour-shot-link" href="/static/tour/guild-landing.png"
+        <a class="tour-shot-link" href="/static/tour/01-guild-landing-desktop.webp?v=20260805-guildissues1"
            aria-label="View Guild landing full size">
-          <img src="/static/tour/guild-landing.png"
+          <img src="/static/tour/01-guild-landing-desktop.webp?v=20260805-guildissues1"
                alt="Guild build and operations landing page"
-               width="1550" height="1222" loading="lazy">
+               width="2880" height="1800" loading="lazy">
         </a>
         <figcaption><span>01</span> Start with spec, build, operate, and improve</figcaption>
       </figure>
       <figure class="tour-shot">
-        <a class="tour-shot-link" href="/static/tour/guild-build-queue.jpg"
+        <a class="tour-shot-link" href="/static/tour/02-guild-build-queue-desktop.webp?v=20260805-guildissues1"
            aria-label="View Guild build queue full size">
-          <img src="/static/tour/guild-build-queue.jpg"
+          <img src="/static/tour/02-guild-build-queue-desktop.webp?v=20260805-guildissues1"
                alt="Guild build queue"
-               width="2436" height="1296" loading="lazy">
+               width="2880" height="1800" loading="lazy">
         </a>
         <figcaption><span>02</span> Follow work from spec ready through recently done</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/03-guild-specification-desktop.webp?v=20260805-guildissues1"
+           aria-label="View Guild specification full size">
+          <img src="/static/tour/03-guild-specification-desktop.webp?v=20260805-guildissues1"
+               alt="Guild specification detail"
+               width="2880" height="1800" loading="lazy">
+        </a>
+        <figcaption><span>03</span> Open the specification behind the work</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/04-guild-spec-evaluation-desktop.webp?v=20260805-guildissues1"
+           aria-label="View Guild specification evaluation full size">
+          <img src="/static/tour/04-guild-spec-evaluation-desktop.webp?v=20260805-guildissues1"
+               alt="Guild specification evaluation and requirements"
+               width="2880" height="1800" loading="lazy">
+        </a>
+        <figcaption><span>04</span> Review requirements and evaluation detail</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/05-guild-build-log-desktop.webp?v=20260805-guildissues1"
+           aria-label="View Guild build log full size">
+          <img src="/static/tour/05-guild-build-log-desktop.webp?v=20260805-guildissues1"
+               alt="Guild build log"
+               width="2880" height="1800" loading="lazy">
+        </a>
+        <figcaption><span>05</span> Follow completed work through the Build Log</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/06-guild-issues-desktop.webp?v=20260805-guildissues1"
+           aria-label="View Guild GitHub issues full size">
+          <img src="/static/tour/06-guild-issues-desktop.webp?v=20260805-guildissues1"
+               alt="Open GitHub issues for the personal-ai-agents repository"
+               width="2880" height="1800" loading="lazy">
+        </a>
+        <figcaption><span>06</span> Track active engineering work on GitHub</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/07-guild-issue-context-desktop.webp?v=20260805-guildissues1"
+           aria-label="View a Guild GitHub issue full size">
+          <img src="/static/tour/07-guild-issue-context-desktop.webp?v=20260805-guildissues1"
+               alt="GitHub issue showing context, scope, and reference implementations"
+               width="2880" height="1800" loading="lazy">
+        </a>
+        <figcaption><span>07</span> Open a real issue with context, scope, and references</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/08-guild-issue-acceptance-desktop.webp?v=20260805-guildissues1"
+           aria-label="View Guild issue acceptance criteria full size">
+          <img src="/static/tour/08-guild-issue-acceptance-desktop.webp?v=20260805-guildissues1"
+               alt="GitHub issue showing reference implementations and acceptance criteria"
+               width="2880" height="1800" loading="lazy">
+        </a>
+        <figcaption><span>08</span> Define acceptance criteria before the work is done</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/09-guild-roadmap-desktop.webp?v=20260805-guildroadmap2"
+           aria-label="View Guild roadmap full size">
+          <img src="/static/tour/09-guild-roadmap-desktop.webp?v=20260805-guildroadmap2"
+               alt="mini-moi roadmap and shared human-agent direction"
+               width="2880" height="1800" loading="lazy">
+        </a>
+        <figcaption><span>09</span> Keep the work aligned to a shared roadmap</figcaption>
+      </figure>
+      <figure class="tour-shot tour-shot-guild-transition">
+        <a class="tour-shot-link" href="/static/tour/10-guild-transition-desktop.webp?v=20260805-guildflow3"
+           aria-label="View Guild transition to Operate and Improve full size">
+          <img src="/static/tour/10-guild-transition-desktop.webp?v=20260805-guildflow3"
+               alt="Guild landing page showing Operate and Improve in redesign"
+               width="2880" height="1800" loading="lazy">
+        </a>
+        <figcaption><span>10</span> Follow Operate and Improve through redesign</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/11-guild-operate-desktop.webp?v=20260805-guildflow5"
+           aria-label="View Guild Operations full size">
+          <img src="/static/tour/11-guild-operate-desktop.webp?v=20260805-guildflow5"
+               alt="Guild Operations system status and access management with private email domains obscured"
+               width="2880" height="1800" loading="lazy">
+        </a>
+        <figcaption><span>11</span> Monitor system health and access</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/12-guild-improve-desktop.webp?v=20260805-guildissues1"
+           aria-label="View Guild Improve full size">
+          <img src="/static/tour/12-guild-improve-desktop.webp?v=20260805-guildissues1"
+               alt="Guild Improve page for exploration, experiments, and improvement"
+               width="2880" height="1800" loading="lazy">
+        </a>
+        <figcaption><span>12</span> Explore, experiment, and improve</figcaption>
       </figure>
     </div>
     <div class="tour-mobile-gallery" hidden>
@@ -692,12 +718,8 @@
          data-caption="06 Track issues on GitHub"
          data-alt="GitHub Issues for the personal-ai-agents repository"></a>
       <a class="tour-mobile-shot-link"
-         href="/static/tour/07-guild-operate-mobile.webp?v=20260801-guildflow2"
-         data-caption="07 Operate — system status and guest access"
-         data-alt="Guild Operate page showing system status and guest access"></a>
-      <a class="tour-mobile-shot-link"
-         href="/static/tour/08-guild-improve-mobile.webp?v=20260801-guildflow2"
-         data-caption="08 Improve — retrospectives and craft-levelling"
+         href="/static/tour/07-guild-improve-mobile.webp?v=20260805-guildprivacy1"
+         data-caption="07 Improve — retrospectives and craft-levelling"
          data-alt="Guild Improve page"></a>
     </div>
   </section>
@@ -722,22 +744,58 @@
     </ol>
     <div class="tour-gallery tour-gallery-pair">
       <figure class="tour-shot">
-        <a class="tour-shot-link" href="/static/tour/cos-landing.jpg?v=20260724-2"
+        <a class="tour-shot-link" href="/static/tour/01-cos-landing-desktop.webp?v=20260804-cosdesktop1"
            aria-label="View Chief of Staff landing full size">
-          <img src="/static/tour/cos-landing.jpg?v=20260724-2"
+          <img src="/static/tour/01-cos-landing-desktop.webp?v=20260804-cosdesktop1"
                alt="Chief of Staff landing page"
-               width="1400" height="1050" loading="lazy">
+               width="2880" height="1800" loading="lazy">
         </a>
         <figcaption><span>01</span> Start at the Chief of Staff landing</figcaption>
       </figure>
       <figure class="tour-shot tour-shot-wide">
-        <a class="tour-shot-link" href="/static/tour/cos-confer.png"
+        <a class="tour-shot-link" href="/static/tour/cos-confer.png?v=20260805-cosrestore1"
            aria-label="View Chief of Staff Confer full size">
-          <img src="/static/tour/cos-confer.png"
+          <img src="/static/tour/cos-confer.png?v=20260805-cosrestore1"
                alt="Chief of Staff Confer conversation"
-               width="1573" height="1000" loading="lazy">
+               width="2900" height="1602" loading="lazy">
         </a>
-        <figcaption><span>02</span> Bring a request to Confer and work through the response</figcaption>
+        <figcaption><span>02</span> Confer on direction and priorities</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/03-cos-confirm-decision-desktop.webp?v=20260804-cosdesktop1"
+           aria-label="View Chief of Staff decision confirmation full size">
+          <img src="/static/tour/03-cos-confirm-decision-desktop.webp?v=20260804-cosdesktop1"
+               alt="Chief of Staff decision confirmation"
+               width="2880" height="1800" loading="lazy">
+        </a>
+        <figcaption><span>03</span> Confirm a decision and make it actionable</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/04-cos-record-desktop.webp?v=20260804-cosdesktop1"
+           aria-label="View Chief of Staff Record full size">
+          <img src="/static/tour/04-cos-record-desktop.webp?v=20260804-cosdesktop1"
+               alt="Chief of Staff durable context and standing notes"
+               width="2880" height="1800" loading="lazy">
+        </a>
+        <figcaption><span>04</span> Record durable context and standing notes</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/05-cos-track-desktop.webp?v=20260804-cosdesktop1"
+           aria-label="View Chief of Staff Track full size">
+          <img src="/static/tour/05-cos-track-desktop.webp?v=20260804-cosdesktop1"
+               alt="Chief of Staff recommendations and emerging connections"
+               width="2880" height="1800" loading="lazy">
+        </a>
+        <figcaption><span>05</span> Track recommendations and emerging connections</figcaption>
+      </figure>
+      <figure class="tour-shot">
+        <a class="tour-shot-link" href="/static/tour/06-cos-store-desktop.webp?v=20260804-cosdesktop1"
+           aria-label="View Chief of Staff Store full size">
+          <img src="/static/tour/06-cos-store-desktop.webp?v=20260804-cosdesktop1"
+               alt="Chief of Staff handoffs and working artifacts"
+               width="2880" height="1800" loading="lazy">
+        </a>
+        <figcaption><span>06</span> Store handoffs and working artifacts</figcaption>
       </figure>
     </div>
     <div class="tour-mobile-gallery" hidden>
@@ -786,7 +844,8 @@
 </dialog>
 
 <footer class="front-door-footer tour-footer">
-  <a href="/">mini-moi home</a>
+  <span class="front-footer-label">Learn more</span>
+  <a href="/about">About</a>
   <a href="https://github.com/robertvanstedum/personal-ai-agents"
      target="_blank" rel="noopener noreferrer">GitHub</a>
   <a href="https://www.linkedin.com/in/robert-van-stedum/"
@@ -852,15 +911,22 @@
     }
 
     function alignArrowsToImage() {
+      if (window.matchMedia("(max-width: 900px)").matches) {
+        lightboxPrevious.style.removeProperty("left");
+        lightboxNext.style.removeProperty("right");
+        return;
+      }
       if (!image.complete || !image.naturalWidth) return;
       requestAnimationFrame(() => {
         const mediaRect = lightboxMedia.getBoundingClientRect();
         const imageRect = image.getBoundingClientRect();
-        const inset = 10;
+        const gap = 10;
+        const previousWidth = lightboxPrevious.getBoundingClientRect().width;
+        const nextWidth = lightboxNext.getBoundingClientRect().width;
         lightboxPrevious.style.left =
-          `${Math.max(4, imageRect.left - mediaRect.left + inset)}px`;
+          `${Math.max(4, imageRect.left - mediaRect.left - previousWidth - gap)}px`;
         lightboxNext.style.right =
-          `${Math.max(4, mediaRect.right - imageRect.right + inset)}px`;
+          `${Math.max(4, mediaRect.right - imageRect.right - nextWidth - gap)}px`;
       });
     }
 

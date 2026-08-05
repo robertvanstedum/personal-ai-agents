@@ -42,7 +42,7 @@ WORKSPACES = (
         "path": "/guild",
         "eyebrow": "Build and operations",
         "summary": "Specs, build work, operating status, and the next iteration.",
-        "image": "/static/tour/guild-landing.png",
+        "image": "/static/tour/01-guild-landing-desktop.webp",
         "public_visible": True,
     },
     {
@@ -52,7 +52,7 @@ WORKSPACES = (
         "path": "/app/cos",
         "eyebrow": "Cross-domain coordination",
         "summary": "Confer, record, track, and carry context across the system.",
-        "image": "/static/tour/cos-mobile-landing.webp",
+        "image": "/static/tour/01-cos-landing-desktop.webp",
         "public_visible": False,
     },
 )

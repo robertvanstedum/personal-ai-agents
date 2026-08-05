@@ -27,7 +27,8 @@
   font-size: var(--guild-subnav-size);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: rgba(198,138,94,0.7);
+  color: #C9AB85;
+  font-weight: 500;
   text-decoration: none;
   padding: 0 12px;
   height: 36px;
@@ -35,8 +36,8 @@
   align-items: center;
   border-bottom: 2px solid transparent;
 }
-.subnav-link:hover { color: #C68A5E; }
-.subnav-link.subnav-active { color: #C68A5E; border-bottom-color: #C68A5E; font-weight: 700; }
+.subnav-link:hover { color: #F5EDE0; }
+.subnav-link.subnav-active { color: #F5EDE0; border-bottom-color: #D49A6A; font-weight: 700; }
 .subnav-dot { color: rgba(198,138,94,0.3); font-size: 9px; }
 .subnav-back {
   font-family: 'DM Mono', monospace;

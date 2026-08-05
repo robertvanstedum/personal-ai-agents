@@ -1,6 +1,6 @@
 # Roadmap — Mini-moi
 
-[Download the formatted PDF](ROADMAP.pdf)
+<div><a name="overview"></a></div>
 
 *Maintained baseline — reviewed through 2026-07-21. This replaces the former root
 roadmap; the separate Guild roadmap view remains temporarily in place until the
