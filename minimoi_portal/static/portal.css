@@ -760,6 +760,12 @@ body.tour {
   align-items: center;
   justify-content: center;
 }
+@media (min-width: 901px) {
+  .tour-lightbox-media {
+    box-sizing: border-box;
+    padding-inline: 4.25rem;
+  }
+}
 .tour-lightbox img {
   width: auto;
   height: auto;
@@ -782,6 +788,11 @@ body.tour {
   font-size: 0.9rem;
   background: #fffaf1;
   border-radius: 0 0 11px 11px;
+}
+#tour-lightbox-caption {
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.3;
 }
 .tour-lightbox-meta {
   display: inline-flex;
@@ -874,6 +885,7 @@ body.tour {
   border-color: var(--front-orange);
   color: var(--front-orange);
 }
+
 .tour-mobile-hint {
   display: none;
 }
@@ -885,7 +897,8 @@ body.tour {
   align-items: baseline;
   gap: 0.45rem;
   font-family: var(--font-serif);
-  font-size: 0.88rem;
+  font-size: 1rem;
+  font-weight: 600;
   color: var(--front-green);
 }
 .tour-shot figcaption span {
@@ -2080,6 +2093,10 @@ body.admin { background: var(--parch-mid); }
     font-size: 0.82rem;
     line-height: 1.25;
     border-radius: 0;
+  }
+  #tour-lightbox-caption {
+    font-size: 0.95rem;
+    font-weight: 700;
   }
   .tour-lightbox-meta {
     gap: 0.55rem;

@@ -1,0 +1,20 @@
+{
+  "id": "guild-desktop",
+  "domain": "guild",
+  "device_profile": "desktop",
+  "auth_profile": "owner_session",
+  "locale": "en-US",
+  "start_path": "/guild",
+  "steps": [
+    {"goto": "/guild"},
+    {
+      "free_capture": {
+        "prefix": "guild",
+        "title": "Guild",
+        "description": "Captured manually from Guild in dev.",
+        "alt": "Guild on desktop",
+        "instructions": "Guild is open in dev. Browse and click normally. Each Enter captures only the browser tab you used most recently. Type 'done' when finished."
+      }
+    }
+  ]
+}

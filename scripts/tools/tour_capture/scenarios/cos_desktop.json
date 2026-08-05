@@ -1,0 +1,20 @@
+{
+  "id": "cos-desktop",
+  "domain": "cos",
+  "device_profile": "desktop",
+  "auth_profile": "owner_session",
+  "locale": "en-US",
+  "start_path": "/app/cos",
+  "steps": [
+    {"goto": "/app/cos"},
+    {
+      "free_capture": {
+        "prefix": "cos",
+        "title": "Chief of Staff",
+        "description": "Captured manually from Chief of Staff in dev.",
+        "alt": "Chief of Staff on desktop",
+        "instructions": "Chief of Staff is open in dev. Browse and click normally. Each Enter captures only the browser tab you used most recently. Type 'done' when finished."
+      }
+    }
+  ]
+}
