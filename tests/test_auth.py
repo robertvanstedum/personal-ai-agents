@@ -198,7 +198,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
     assert "Chief of Staff" in html
     assert "cos-confer-private.png" not in html
     assert "cos-confer-mobile.webp" in html
-    assert "cos-mobile-landing.webp" in html
+    assert "01-cos-landing-desktop.webp" in html
     assert "/app/cos" not in html
     assert "<form" not in html
     soup = BeautifulSoup(html, "html.parser")
@@ -223,7 +223,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         img.get("src")
         for img in soup.select('.tour-shot img[src^="/static/tour/"]')
     ]
-    assert len(images) == 60
+    assert len(images) == 61
     assert "/static/tour/curator-research-tools.jpg" not in images
     assert all(
         (static_root / src.split("?", 1)[0].removeprefix("/static/")).is_file()
@@ -237,7 +237,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         "curator": "/static/tour/01-curator-landing-desktop.webp?v=20260802-curatordesktop1",
         "german": "/static/tour/01-german-landing-desktop.webp?v=20260804-germandesktop1",
         "portuguese": "/static/tour/01-portuguese-landing-desktop.webp?v=20260804-portuguesedesktop1",
-        "guild": "/static/tour/01-guild-landing-desktop.webp?v=20260804-guilddesktop2",
+        "guild": "/static/tour/01-guild-landing-desktop.webp?v=20260805-guildissues1",
         "cos": "/static/tour/01-cos-landing-desktop.webp?v=20260804-cosdesktop1",
     }
     for section_id, expected_src in expected_first_images.items():
@@ -361,25 +361,36 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         assert asset_path.is_file()
         with Image.open(asset_path) as screenshot:
             assert screenshot.size == (2880, 1800)
-    guild_desktop_assets = (
+    assert [
+        img.get("src") for img in soup.select("section#guild .tour-shot img")
+    ] == [
+        (
+            f"/static/tour/{name}?v=20260805-guildroadmap2"
+            if name == "09-guild-roadmap-desktop.webp"
+            else (
+                f"/static/tour/{name}?v=20260805-guildflow3"
+                if name == "10-guild-transition-desktop.webp"
+                else (
+                    f"/static/tour/{name}?v=20260805-guildflow5"
+                    if name == "11-guild-operate-desktop.webp"
+                    else f"/static/tour/{name}?v=20260805-guildissues1"
+                )
+            )
+        )
+        for name in (
             "01-guild-landing-desktop.webp",
             "02-guild-build-queue-desktop.webp",
             "03-guild-specification-desktop.webp",
             "04-guild-spec-evaluation-desktop.webp",
             "05-guild-build-log-desktop.webp",
-            "06-guild-roadmap-desktop.webp",
-            "07-guild-docs-desktop.webp",
-            "01-guild-landing-desktop.webp",
-            "08-guild-operate-desktop.webp",
-            "01-guild-landing-desktop.webp",
-            "09-guild-improve-desktop.webp",
-    )
-    assert [
-        img.get("src") for img in soup.select("section#guild .tour-shot img")
-    ] == [
-        f"/static/tour/{name}?v="
-        f"{'20260804-guildimprove2' if name == '09-guild-improve-desktop.webp' else '20260804-guilddesktop2'}"
-        for name in guild_desktop_assets
+            "06-guild-issues-desktop.webp",
+            "07-guild-issue-context-desktop.webp",
+            "08-guild-issue-acceptance-desktop.webp",
+            "09-guild-roadmap-desktop.webp",
+            "10-guild-transition-desktop.webp",
+            "11-guild-operate-desktop.webp",
+            "12-guild-improve-desktop.webp",
+        )
     ]
     assert len(soup.select("section#cos .tour-shot")) == 6
     expected_mobile_hrefs = {
@@ -401,8 +412,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
             "/static/tour/04-guild-spec-mobile.webp?v=20260801-guildflow2",
             "/static/tour/05-guild-roadmap-mobile.webp?v=20260801-guildflow2",
             "/static/tour/06-guild-github-issues-mobile.webp?v=20260801-guildflow2",
-            "/static/tour/07-guild-operate-mobile.webp?v=20260801-guildflow2",
-            "/static/tour/08-guild-improve-mobile.webp?v=20260801-guildflow2",
+            "/static/tour/07-guild-improve-mobile.webp?v=20260805-guildprivacy1",
         ],
         "cos": [
             "/static/tour/01-cos-landing-mobile.webp?v=20260731-baseline1",
@@ -444,15 +454,12 @@ def test_owner_tour_uses_same_privacy_safe_cos_slides(client):
         img.get("src") for img in section.select(".tour-shot img")
     ]
     assert desktop_images == [
-        f"/static/tour/{name}?v=20260804-cosdesktop1"
-        for name in (
-            "01-cos-landing-desktop.webp",
-            "02-cos-confer-direction-desktop.webp",
-            "03-cos-confirm-decision-desktop.webp",
-            "04-cos-record-desktop.webp",
-            "05-cos-track-desktop.webp",
-            "06-cos-store-desktop.webp",
-        )
+        "/static/tour/01-cos-landing-desktop.webp?v=20260804-cosdesktop1",
+        "/static/tour/cos-confer.png?v=20260805-cosrestore1",
+        "/static/tour/03-cos-confirm-decision-desktop.webp?v=20260804-cosdesktop1",
+        "/static/tour/04-cos-record-desktop.webp?v=20260804-cosdesktop1",
+        "/static/tour/05-cos-track-desktop.webp?v=20260804-cosdesktop1",
+        "/static/tour/06-cos-store-desktop.webp?v=20260804-cosdesktop1",
     ]
     mobile_images = [
         link.get("href")

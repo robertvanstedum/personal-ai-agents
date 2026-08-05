@@ -20,10 +20,16 @@ def test_publisher_dependencies_are_version_pinned():
     assert "pypdf==6.10.0" in requirements
 
 
-def test_each_source_links_to_its_matching_pdf():
-    for stem in ("README", "ARCHITECTURE", "OPERATIONS", "ROADMAP"):
+def test_reference_sources_link_to_their_matching_pdf():
+    for stem in ("ARCHITECTURE", "OPERATIONS"):
         source = (REPO_ROOT / f"{stem}.md").read_text(encoding="utf-8")
         assert f"]({stem}.pdf)" in source
+
+
+def test_public_overview_sources_do_not_link_to_their_own_pdf():
+    for stem in ("README", "ROADMAP"):
+        source = (REPO_ROOT / f"{stem}.md").read_text(encoding="utf-8")
+        assert f"]({stem}.pdf)" not in source
 
 
 def test_renderer_keeps_section_headings_with_their_first_visual():

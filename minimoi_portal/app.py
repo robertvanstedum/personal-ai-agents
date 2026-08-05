@@ -31,6 +31,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     session,
     url_for,
 )
@@ -232,6 +233,23 @@ def preview(subpath=""):
 def contact():
     """Public contact / guest access request page."""
     return render_template("contact.html", user=_current_user())
+
+
+@app.route("/about")
+def about():
+    """Public project story, adapted from the README introduction."""
+    return render_template("about.html", user=_current_user())
+
+
+@app.route("/about/readme.pdf")
+def about_readme_pdf():
+    """Download the maintained, formatted project README."""
+    return send_file(
+        REPO_DIR / "README.pdf",
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name="mini-moi-README.pdf",
+    )
 
 
 @app.route("/")

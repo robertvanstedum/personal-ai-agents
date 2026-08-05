@@ -15,9 +15,9 @@
   --accent-dark: #A06030;
 
   --nav-bg:      #111108;
-  --nav-text:    #D8CEB4;
-  --nav-dim:     #665A46;
-  --nav-active:  #C68A5E;
+  --nav-text:    #F5EDE0;
+  --nav-dim:     #C9AB85;
+  --nav-active:  #D49A6A;
 
   --user-label:  #4A6A8A;
   --cos-label:   #7A5A36;
@@ -87,12 +87,14 @@ html, body {
   font-family: Georgia, serif;
   font-size: 0.82rem;
   letter-spacing: 0.04em;
+  font-weight: 500;
   transition: color 0.12s, border-color 0.12s;
 }
 .tab-btn:hover { color: var(--nav-text); }
 .tab-btn.active {
   color: var(--nav-text);
   border-bottom-color: var(--nav-active);
+  font-weight: 600;
 }
 
 /* ── In-build badge ────────────────────────────────────────────────────────── */

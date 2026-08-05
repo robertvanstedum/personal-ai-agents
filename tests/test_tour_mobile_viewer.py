@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from PIL import Image
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -144,14 +146,17 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
         "03-guild-specification-desktop.webp",
         "04-guild-spec-evaluation-desktop.webp",
         "05-guild-build-log-desktop.webp",
-        "06-guild-roadmap-desktop.webp",
-        "07-guild-docs-desktop.webp",
-        "08-guild-operate-desktop.webp",
-        "09-guild-improve-desktop.webp",
+        "06-guild-issues-desktop.webp",
+        "07-guild-issue-context-desktop.webp",
+        "08-guild-issue-acceptance-desktop.webp",
+        "09-guild-roadmap-desktop.webp",
+        "10-guild-transition-desktop.webp",
+        "11-guild-operate-desktop.webp",
+        "12-guild-improve-desktop.webp",
     ]
     cos_desktop_assets = [
         "01-cos-landing-desktop.webp",
-        "02-cos-confer-direction-desktop.webp",
+        "cos-confer.png",
         "03-cos-confirm-decision-desktop.webp",
         "04-cos-record-desktop.webp",
         "05-cos-track-desktop.webp",
@@ -164,8 +169,7 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
         "04-guild-spec-mobile.webp",
         "05-guild-roadmap-mobile.webp",
         "06-guild-github-issues-mobile.webp",
-        "07-guild-operate-mobile.webp",
-        "08-guild-improve-mobile.webp",
+        "07-guild-improve-mobile.webp",
     ]
     cos_mobile_assets = [
         "01-cos-landing-mobile.webp",
@@ -185,6 +189,9 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
     for asset in german_desktop_assets + guild_desktop_assets + cos_desktop_assets:
         assert asset in template
         assert (ROOT / "minimoi_portal/static/tour" / asset).is_file()
+    for asset in guild_desktop_assets:
+        with Image.open(ROOT / "minimoi_portal/static/tour" / asset) as screenshot:
+            assert screenshot.size == (2880, 1800)
 
     assert 'class="tour-mobile-gallery"' in template
     assert template.count('class="tour-mobile-shot-link"') == len(mobile_assets)

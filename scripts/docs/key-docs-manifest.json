@@ -1,17 +1,17 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-26T17:21:36.066453+00:00",
+  "generated_at": "2026-08-05T23:31:55.648903+00:00",
   "publisher": "python3 scripts/docs/publish_key_docs.py",
   "documents": [
     {
       "source": "README.md",
       "pdf": "README.pdf",
-      "source_sha256": "c3face1fd53d2fb36aaaca36f354aa25075e5a74bff7fcb1f91f1e09fbfdb470",
+      "source_sha256": "0c88a66c5559c0183ccacbc2ed0e45d610304d94eb0093e6acf993645c42d300",
       "renderer_sha256": "a5ad09b15079c2234b1cc19c4e7548d36bbf358db057e4981d63cba53f06fe67",
-      "pdf_sha256": "bf0a1723d6e8faa25aec0b1aaad8a2950c92b332ea33db7d97615feeab32afb2",
+      "pdf_sha256": "4fee52ca5e095446bd22710a7788f480b786e82256d03d5f3bffd939de968864",
       "mermaid_diagrams": 5,
       "pages": 10,
-      "extractable_text_characters": 16936,
+      "extractable_text_characters": 16909,
       "title": "mini-moi"
     },
     {
@@ -39,12 +39,12 @@
     {
       "source": "ROADMAP.md",
       "pdf": "ROADMAP.pdf",
-      "source_sha256": "3080c2c72c19ac97b07bcc9a57fddadf0f7e0fd663217a25249fda789373bccd",
+      "source_sha256": "c462860d0b0d9468f01ea58b15939caa3672a2def062065fc7e742bda1395308",
       "renderer_sha256": "a5ad09b15079c2234b1cc19c4e7548d36bbf358db057e4981d63cba53f06fe67",
-      "pdf_sha256": "a90ab102231bba1f5a21b176b87999be50d61777cf5a93c79576cde4c48a8888",
+      "pdf_sha256": "4f079b091178af1abbceca60b1d61b1dffb7b555dcf872b62128e198988cfc10",
       "mermaid_diagrams": 3,
       "pages": 8,
-      "extractable_text_characters": 20162,
+      "extractable_text_characters": 20224,
       "title": "mini-moi Roadmap"
     }
   ]

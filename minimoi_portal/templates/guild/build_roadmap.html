@@ -131,6 +131,29 @@
     }
     .roadmap-content a { color: var(--accent); }
     .roadmap-content a:hover { text-decoration: underline; }
+    .roadmap-content .mermaid {
+      margin: 12px 0 18px;
+      padding: 14px;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fffdf8;
+      text-align: center;
+    }
+    .roadmap-content .mermaid svg {
+      display: block;
+      width: 100%;
+      max-width: 760px;
+      height: auto;
+      margin: 0 auto;
+    }
+    @media (max-width: 720px) {
+      .roadmap-content .mermaid svg {
+        width: 680px;
+        min-width: 680px;
+        max-width: none;
+      }
+    }
 
     /* ── Domain cards ── */
     .roadmap-domain {
@@ -248,6 +271,42 @@
     {{ content | safe }}
   </div>
 </div>
+
+<script src="/static/vendor/mermaid-11.16.0.min.js"></script>
+<script>
+  const diagramBlocks = [...document.querySelectorAll(
+    ".roadmap-content pre > code.language-mermaid"
+  )];
+  const diagrams = diagramBlocks.map((code) => {
+    const host = document.createElement("div");
+    host.className = "mermaid";
+    host.textContent = code.textContent;
+    code.parentElement.replaceWith(host);
+    return host;
+  });
+
+  if (diagrams.length) {
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      flowchart: { useMaxWidth: true, htmlLabels: true, curve: "basis" },
+      themeVariables: {
+        fontFamily: "Source Sans 3, sans-serif",
+        fontSize: "14px",
+        primaryColor: "#f0ebe0",
+        primaryTextColor: "#2a2418",
+        primaryBorderColor: "#8b5e2a",
+        lineColor: "#8b5e2a",
+        secondaryColor: "#f5f0e8",
+        tertiaryColor: "#fffdf8"
+      }
+    });
+    mermaid.run({ nodes: diagrams }).catch((error) => {
+      console.error("Roadmap diagram rendering failed", error);
+    });
+  }
+</script>
 
 </body>
 </html>

@@ -1,6 +1,6 @@
 # mini-moi
 
-[Download the formatted PDF](README.pdf)
+<div><a name="overview"></a></div>
 
 mini-moi is a personal AI agent platform. It carries
 context across reading and research, language learning, and the work of building
