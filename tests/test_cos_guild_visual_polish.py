@@ -13,6 +13,15 @@ APPROVED_CONFER_PHOTO_SHA256 = (
 APPROVED_CONFER_SLIDE_SHA256 = (
     "8c7176a124a28320cdebd4ca5eb3fbc66a6cff4f417f2f0b0c21b19747db0521"
 )
+APPROVED_GUILD_LANDING_SHA256 = (
+    "59768e40f85604fe03d284d2ccd4be03a599f6f26f503dc599431c0fc2ba9b1d"
+)
+APPROVED_GUILD_TRANSITION_SHA256 = (
+    "b50312c92914d0216d1f8c6cf56c2301b9ef7d4ec884a2c5f61dff2b0bd7b390"
+)
+APPROVED_GUILD_OPERATE_SHA256 = (
+    "3c834fe758f1faa62dc29da3016cb6eae7751dc44c7afd28b98c31034b197227"
+)
 
 
 def _sha256(path: Path) -> str:
@@ -62,7 +71,7 @@ def test_public_cos_confer_slide_restores_photo_version():
 def test_guild_and_cos_cards_use_full_landscape_captures():
     workspaces = {workspace["key"]: workspace for workspace in WORKSPACES}
     expected = {
-        "guild": "/static/tour/01-guild-landing-desktop.webp",
+        "guild": "/static/tour/01-guild-landing-desktop.webp?v=20260805-guildrefresh1",
         "cos": "/static/tour/01-cos-landing-desktop.webp",
     }
 
@@ -71,8 +80,22 @@ def test_guild_and_cos_cards_use_full_landscape_captures():
         asset = (
             ROOT
             / "minimoi_portal/static"
-            / public_path.removeprefix("/static/")
+            / public_path.split("?", 1)[0].removeprefix("/static/")
         )
+        with Image.open(asset) as image:
+            assert image.size == (2880, 1800)
+
+
+def test_guild_public_slides_are_the_approved_privacy_safe_refresh():
+    expected = {
+        "01-guild-landing-desktop.webp": APPROVED_GUILD_LANDING_SHA256,
+        "10-guild-transition-desktop.webp": APPROVED_GUILD_TRANSITION_SHA256,
+        "11-guild-operate-desktop.webp": APPROVED_GUILD_OPERATE_SHA256,
+    }
+
+    for name, approved_hash in expected.items():
+        asset = ROOT / "minimoi_portal/static/tour" / name
+        assert _sha256(asset) == approved_hash
         with Image.open(asset) as image:
             assert image.size == (2880, 1800)
 

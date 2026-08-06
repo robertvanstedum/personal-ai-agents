@@ -218,7 +218,13 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         for img in soup.select('.tour-domain-map img[src^="/static/tour/"]')
     ]
     assert len(map_images) == 5
-    assert all((static_root / src.removeprefix("/static/")).is_file() for src in map_images)
+    assert all(
+        (
+            static_root
+            / src.split("?", 1)[0].removeprefix("/static/")
+        ).is_file()
+        for src in map_images
+    )
     images = [
         img.get("src")
         for img in soup.select('.tour-shot img[src^="/static/tour/"]')
@@ -237,7 +243,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         "curator": "/static/tour/01-curator-landing-desktop.webp?v=20260802-curatordesktop1",
         "german": "/static/tour/01-german-landing-desktop.webp?v=20260804-germandesktop1",
         "portuguese": "/static/tour/01-portuguese-landing-desktop.webp?v=20260804-portuguesedesktop1",
-        "guild": "/static/tour/01-guild-landing-desktop.webp?v=20260805-guildissues1",
+        "guild": "/static/tour/01-guild-landing-desktop.webp?v=20260805-guildrefresh1",
         "cos": "/static/tour/01-cos-landing-desktop.webp?v=20260804-cosdesktop1",
     }
     for section_id, expected_src in expected_first_images.items():
@@ -364,19 +370,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
     assert [
         img.get("src") for img in soup.select("section#guild .tour-shot img")
     ] == [
-        (
-            f"/static/tour/{name}?v=20260805-guildroadmap2"
-            if name == "09-guild-roadmap-desktop.webp"
-            else (
-                f"/static/tour/{name}?v=20260805-guildflow3"
-                if name == "10-guild-transition-desktop.webp"
-                else (
-                    f"/static/tour/{name}?v=20260805-guildflow5"
-                    if name == "11-guild-operate-desktop.webp"
-                    else f"/static/tour/{name}?v=20260805-guildissues1"
-                )
-            )
-        )
+        f"/static/tour/{name}?v=20260805-guildrefresh1"
         for name in (
             "01-guild-landing-desktop.webp",
             "02-guild-build-queue-desktop.webp",
