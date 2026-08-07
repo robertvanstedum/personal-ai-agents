@@ -18,7 +18,15 @@ import json
 import threading
 import subprocess
 from functools import partial
-import keyring
+try:
+    import keyring
+except ImportError:
+    # Not installed in the curator container (Mac-only dependency, since
+    # containers have no Keychain to read from) — every call site already
+    # wraps keyring.get_password(...) in try/except and falls through to an
+    # env var, but that fallback was unreachable because the unconditional
+    # top-level import crashed the whole script before any function ran.
+    keyring = None
 import requests
 import argparse
 from pathlib import Path

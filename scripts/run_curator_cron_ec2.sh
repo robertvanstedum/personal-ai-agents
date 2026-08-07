@@ -22,11 +22,17 @@ fi
 
 # ── Idempotency: skip if briefing already ran today ───────────────────────────
 TODAY=$(date -u +%Y-%m-%d)
+# Only briefing_date counts as "sent today" — d[0]['date'] is the top
+# article's own publish date, which is almost always today for freshly
+# curated news, so falling back to it here always looked like "already
+# sent" even when the Telegram send itself had failed and briefing_date
+# was never stamped, permanently masking a failed send for the rest of
+# the day's hourly retry window (issue #35).
 FILE_DATE=$(docker exec minimoi-curator python3 -c "
 import json
 try:
     d = json.load(open('data/curator/curator_latest.json'))
-    print(d[0].get('briefing_date', d[0].get('date', ''))[:10])
+    print(d[0].get('briefing_date', '')[:10])
 except Exception:
     print('')
 " 2>/dev/null || true)
@@ -65,6 +71,9 @@ with open('data/curator/curator_latest.json', 'w') as f:
 " 2>/dev/null || true
   echo "$LOG_PREFIX Briefing complete at $(date -u)"
 else
-  echo "$LOG_PREFIX ERROR: curator_rss_v2.py exited with status $STATUS"
+  # STATUS is telegram_bot.py --send's exit code (captured immediately
+  # above), not curator_rss_v2.py's — the message previously blamed the
+  # wrong command, which cost real time diagnosing this.
+  echo "$LOG_PREFIX ERROR: telegram_bot.py --send exited with status $STATUS"
   exit 1
 fi
