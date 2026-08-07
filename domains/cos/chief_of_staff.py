@@ -1209,15 +1209,23 @@ def receive_event():
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def main():
+PORT = int(os.environ.get("PORT", 8769))
+
+
+def _start_cos():
+    """Runs unconditionally at module import — not gated behind
+    `if __name__ == "__main__"` — so Gunicorn (which imports this module
+    rather than executing it as a script) still starts the Telegram poll
+    thread and, critically, the APScheduler background jobs (loop_a-h,
+    including the EC2 health check). Only the dev-server `app.run(...)`
+    call stays under the __main__ guard below; Gunicorn serves `app` itself.
+    """
     if str(BASE_DIR) not in sys.path:
         sys.path.insert(0, str(BASE_DIR))
     from utils.role import role_label, is_production
     _role = role_label()
     print(f"[chief_of_staff] Starting as {_role} — "
           f"{'all loops + Telegram active' if is_production() else 'Telegram suppressed on standby'}")
-
-    PORT = int(os.environ.get("PORT", 8769))
 
     print(f"""
 💼  Chief of Staff starting on port {PORT}…
@@ -1323,9 +1331,11 @@ def main():
         _state["state"] = "running"
     print(f"   State: running\n")
 
-    # 7. Serve
-    app.run(host="0.0.0.0", port=PORT, debug=False)
+
+_start_cos()
 
 
 if __name__ == "__main__":
-    main()
+    # Only reached when run directly (`python chief_of_staff.py`), not under
+    # Gunicorn — _start_cos() above already ran at import time either way.
+    app.run(host="0.0.0.0", port=PORT, debug=False)
