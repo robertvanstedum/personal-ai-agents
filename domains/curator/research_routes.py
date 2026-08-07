@@ -2539,7 +2539,7 @@ def api_topics_status():
             # Session count from topics/ directory
             topics_dir = RESEARCH_ROOT / 'topics' / slug
             session_count = 0
-            last_session  = None
+            last_run  = None
             if topics_dir.exists():
                 sessions = [
                     p for p in topics_dir.iterdir()
@@ -2551,7 +2551,7 @@ def api_topics_status():
                 session_count = len(sessions)
                 if sessions:
                     newest = max(sessions, key=lambda p: p.stat().st_mtime)
-                    last_session = datetime.fromtimestamp(newest.stat().st_mtime).strftime("%Y-%m-%d")
+                    last_run = datetime.fromtimestamp(newest.stat().st_mtime).strftime("%Y-%m-%d")
 
             topics.append({
                 "slug":           slug,
@@ -2560,7 +2560,11 @@ def api_topics_status():
                 "days_remaining": days_remaining,
                 "duration_days":  t.get('duration_days'),
                 "session_count":  session_count,
-                "last_session":   last_session,
+                # Field name matches dashboard.html's t.last_run and the
+                # other thread-status endpoint's convention in this file —
+                # was "last_session" here, which the dashboard never read,
+                # so it always showed "never run" regardless of activity.
+                "last_run":       last_run,
                 "motivation":     (t.get('motivation') or '')[:100],
             })
 

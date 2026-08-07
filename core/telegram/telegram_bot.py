@@ -105,6 +105,12 @@ def get_polling_token():
     return os.environ.get('TELEGRAM_POLLING_BOT_TOKEN')
 
 def get_chat_id():
+    try:
+        chat_id = keyring.get_password("telegram", "chat_id")
+        if chat_id:
+            return chat_id
+    except Exception:
+        pass
     return os.environ.get('TELEGRAM_CHAT_ID')
 
 # ─── Sending ──────────────────────────────────────────────────────────────────
