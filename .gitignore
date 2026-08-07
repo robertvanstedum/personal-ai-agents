@@ -172,3 +172,4 @@ _NewDomains/guild/new-ventures/job-search/**
 domains/guild/data/linkedin_connections.csv
 data/curator/
 node_modules/
+scripts/.curator_dev_cron_on
