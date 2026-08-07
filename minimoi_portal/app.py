@@ -277,8 +277,17 @@ def login():
                     db_user = _dauth.get_user_by_email(user["email"])
                     if db_user:
                         session["user"]["auth_id"] = db_user["id"]
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # Login still succeeds (graceful degradation to
+                    # username-based identity), but a Postgres outage here
+                    # used to be invisible — log only the exception type,
+                    # never str(exc), since a psycopg2 connection error can
+                    # leak a DSN or partial credential into logs.
+                    app.logger.error(
+                        "owner/admin auth_id lookup failed at login (%s) — "
+                        "session falls back to username-based identity",
+                        type(exc).__name__,
+                    )
             if _auth.check_must_change_password(user["username"]):
                 return redirect(url_for("account_password", forced=1))
             next_url = request.args.get("next") or url_for("dashboard")
