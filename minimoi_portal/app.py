@@ -889,8 +889,8 @@ def admin_reset_request_dismiss(req_id):
 def admin_guests_approve(token):
     guest = _auth.approve_pending(token)
     if guest:
-        _notify_telegram_approved(guest)
-        _send_approval_email(guest)
+        email_sent = _send_approval_email(guest)
+        _notify_telegram_approved(guest, email_sent=email_sent)
     return redirect(url_for("admin_guests"))
 
 
@@ -919,17 +919,33 @@ def _notify_telegram_reset_request(display_name: str, email: str) -> None:
         print(f"⚠️  Telegram reset notification failed: {e}")
 
 
-def _notify_telegram_approved(guest: dict) -> None:
-    """Fire a Telegram reminder to Robert when he approves a guest."""
+def _notify_telegram_approved(guest: dict, email_sent: bool = True, temp_password: str = "") -> None:
+    """Fire a Telegram reminder to Robert when he approves a guest.
+
+    email_sent reflects what actually happened — this message used to
+    unconditionally claim "Approval email sent" even when the SMTP send
+    had failed, giving Robert false confidence the guest could log in
+    rather than no signal at all. When it failed and a temp password
+    exists (Guild Grant path), include it so Robert can share it directly.
+    """
     try:
         token   = get_secret("TELEGRAM_BOT_TOKEN", "telegram", "polling_bot_token")
         chat_id = 8379221702
         name    = guest.get("display_name", "Guest")
         email   = guest.get("email", "(no email)")
+        if email_sent:
+            status_line = "Approval email sent — they can now sign in at minimoi.ai"
+        elif temp_password:
+            status_line = (
+                f"⚠️ Approval email FAILED to send — share this temporary "
+                f"password with them directly: <code>{temp_password}</code>"
+            )
+        else:
+            status_line = "⚠️ Approval email FAILED to send — let them know their access was approved another way"
         text = (
             f"✅ <b>Guest approved: {name}</b>\n\n"
             f"<b>Email:</b> {email}\n\n"
-            f"Approval email sent — they can now sign in at minimoi.ai"
+            f"{status_line}"
         )
         _requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
@@ -940,8 +956,15 @@ def _notify_telegram_approved(guest: dict) -> None:
         print(f"⚠️  Telegram approval notification failed: {e}")
 
 
-def _send_email(to: str, subject: str, body: str) -> None:
-    """Send via Zoho SMTP. All settings from config — no hardcoded values."""
+def _send_email(to: str, subject: str, body: str) -> bool:
+    """Send via Zoho SMTP. All settings from config — no hardcoded values.
+
+    Returns whether the send actually succeeded — every failure mode here
+    (missing SMTP password, auth failure, connection error) used to be
+    swallowed and reported identically to success at the call site, so a
+    guest-approval Telegram notification could confidently claim "email
+    sent" when it never left the server.
+    """
     import smtplib, ssl
     from email.mime.text import MIMEText
 
@@ -952,7 +975,7 @@ def _send_email(to: str, subject: str, body: str) -> None:
         )
         if not smtp_password:
             print("⚠️  SMTP password not found")
-            return
+            return False
 
         msg = MIMEText(body)
         msg["Subject"] = subject
@@ -965,15 +988,20 @@ def _send_email(to: str, subject: str, body: str) -> None:
             smtp.send_message(msg)
 
         print(f"✅ Email sent to {to}")
+        return True
     except Exception as e:
         print(f"⚠️  Email failed: {e}")
+        return False
 
 
-def _send_approval_email(guest: dict, temp_password: str = "") -> None:
-    """Send a guest approval email from no-reply@minimoi.ai via Zoho."""
+def _send_approval_email(guest: dict, temp_password: str = "") -> bool:
+    """Send a guest approval email from no-reply@minimoi.ai via Zoho.
+
+    Returns whether it actually sent — see _send_email.
+    """
     to_email = guest.get("email", "")
     if not to_email:
-        return
+        return False
     name = guest.get("display_name", "there")
     if temp_password:
         pw_line = f"Your temporary password is: {temp_password}\n\nPlease change it after you log in."
@@ -990,7 +1018,7 @@ Your access to mini-moi has been approved! You can sign in now at:
 Welcome,
 Robert
 """
-    _send_email(to_email, "You're in — mini-moi access approved", body)
+    return _send_email(to_email, "You're in — mini-moi access approved", body)
 
 
 def _send_login_link_email(email: str, name: str, token: str) -> bool:
@@ -1290,8 +1318,8 @@ def update_guest_request_status(req_id):
                     email=req["email"],
                 )
                 guest["must_change_password"] = True
-                _notify_telegram_approved(guest)
-                _send_approval_email(guest, temp_password=temp_pw)
+                email_sent = _send_approval_email(guest, temp_password=temp_pw)
+                _notify_telegram_approved(guest, email_sent=email_sent, temp_password=temp_pw)
                 print(f"✅ Guild Grant: created guest {guest['username']} for {req['email']}")
             except Exception as e:
                 print(f"⚠️  Guild Grant provisioning failed for request {req_id}: {e}")
