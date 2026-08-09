@@ -36,12 +36,12 @@
     "id": 135,
     "spec_title": "OpenClaw #2 — CoS-Scoped Gateway, Dev Setup",
     "spec_file": "spec_133_plan_openclaw2_dev_setup_v2_2026-07-14.md",
-    "status": "spec_ready",
+    "status": "superseded",
     "github_issue": null,
     "priority": "normal",
     "blocked_reason": "Blocked at session start on four items OpenClaw must supply: (1) npm install command, (2) CLI start command, (3) minimal config schema, (4) _collect_response protocol answer. Claude Code can implement everything else immediately once all four arrive.",
     "last_transition_at": "2026-07-14T00:00:00Z",
-    "notes": "Phase 1 Task 9 of spec #133 v1.3. Do not start build until all four OpenClaw answers are in hand. Claude Code implements: openclaw_backend.py WS client, COS_BACKEND_TYPE env-var switch in init_backend(), Dockerfile.openclaw-cos, openclaw-cos compose service, scripts/cos_ab_test.py A/B harness. Memory judgment stays in coordination layer (not in backend). See plan for full implementation detail."
+    "notes": "Phase 1 Task 9 of spec #133 v1.3. Do not start build until all four OpenClaw answers are in hand. Claude Code implements: openclaw_backend.py WS client, COS_BACKEND_TYPE env-var switch in init_backend(), Dockerfile.openclaw-cos, openclaw-cos compose service, scripts/cos_ab_test.py A/B harness. Memory judgment stays in coordination layer (not in backend). See plan for full implementation detail. Superseded by Spec #146 (2026-08-09)."
   },
   {
     "id": 134,
@@ -969,12 +969,12 @@
     "id": 135,
     "spec_title": "CoS Web Interface — Skeleton Now, Domain Later",
     "spec_file": "spec_cos_web_interface_v2_2026-07-12.md",
-    "status": "done",
+    "status": "superseded",
     "github_issue": null,
     "priority": "high",
     "blocked_reason": null,
     "last_transition_at": "2026-07-12T00:00:00Z",
-    "notes": "v2 complete: all four tabs functional (Talk + voice, Feed, To-do, Archive), parchment/dark-nav design system, Chicago photo banner, backend badge (/status), lazy tab loading, VAD voice via Whisper (/ui/transcribe). Portal: COS_BACKEND in config, /app/cos proxy (owner-only), dashboard tile. Phase A shipped first: /ui Talk tab, /ui/memory. v2 registered as spec_cos_web_interface_v2_2026-07-12.md."
+    "notes": "v2 complete: all four tabs functional (Talk + voice, Feed, To-do, Archive), parchment/dark-nav design system, Chicago photo banner, backend badge (/status), lazy tab loading, VAD voice via Whisper (/ui/transcribe). Portal: COS_BACKEND in config, /app/cos proxy (owner-only), dashboard tile. Phase A shipped first: /ui Talk tab, /ui/memory. v2 registered as spec_cos_web_interface_v2_2026-07-12.md. Superseded by Spec #146 (2026-08-09)."
   },
   {
     "id": 133,
@@ -1008,5 +1008,16 @@
     "blocked_reason": null,
     "last_transition_at": "2026-07-23T03:40:43Z",
     "notes": "Technically reviewed by Claude Code 2026-07-22, all 5 review questions in spec section 14 confirmed, no blocking findings. Findings recorded in spec section 15 as implementation caveats: (1) workspace registry must delegate 100% to existing _require_owner/_dauth.has_domain_access() checks, never re-derive its own -- doing so also fixes a pre-existing drift bug where /dashboard has a looser Portuguese-guest check than portuguese_root; (2) scripts/tools/capture_snapshot.py and tests/test_auth.py both have real /dashboard-keyed logic needing lockstep updates, beyond the ~10 template link references; (3) /preview/* serves from minimoi_portal/static/preview/ but capture_snapshot.py writes to a different directory (static/public/preview/) -- rollback preservation must target the former; (4) docs/screenshots/2026-07-21/ has usable curated images for /tour but is .dockerignored, so must be copied into minimoi_portal/static/ to ship. Repository-reorganization merges (#107/#108/#109) confirmed complete, main is clean. Implementation not authorized -- Codex builds, Robert reviews the PR before merge/deploy. Robert authorized implementation 2026-07-22: Codex builds from this spec in a clean codex/minimoi-front-door-143 worktree/branch, stops at a reviewable PR, no merge/deploy inferred. Claude Code reviews the implementation before merge."
+  },
+  {
+    "id": 146,
+    "spec_title": "OpenClaw CoS Gateway — Installation, Configuration and Acceptance",
+    "spec_file": "spec_146_openclaw_cos_gateway_2026-08-09.md",
+    "status": "spec_ready",
+    "github_issue": null,
+    "priority": "high",
+    "blocked_reason": null,
+    "last_transition_at": "2026-08-09T00:00:00Z",
+    "notes": "Reviewed by Codex and Claude Code (2026-08-09); both approved. Supersedes #135. Covers dedicated --profile cos Gateway for dev (port 18790) and prod (AWS EC2), model chain Grok/Claude/OpenAI/Ollama, 12 acceptance tests, version management, and mini-moi integration contract boundary. Implementation begins after Robert approves and voice Schreiben memo mode (Spec #145 Stage 1) is proven working. OpenClaw is build agent for standalone Gateway provisioning only."
   }
 ]
