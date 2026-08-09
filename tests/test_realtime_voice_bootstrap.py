@@ -13,6 +13,7 @@ from flask import Flask
 
 from core.realtime_voice.bootstrap import (
     _default_turn_detection,
+    _memo_duration_guard,
     create_bootstrap_blueprint,
 )
 
@@ -96,6 +97,75 @@ def test_authenticated_request_with_mocked_provider_succeeds(client):
     data = resp.get_json()
     assert data["ok"] is True
     assert data["provider"] == "openai"
+
+
+def test_memo_capabilities_require_identity(client):
+    response = client.get("/api/realtime-voice/memo/capabilities")
+    assert response.status_code == 401
+
+
+def test_memo_capabilities_only_advertise_ready_provider(client):
+    response = client.get(
+        "/api/realtime-voice/memo/capabilities",
+        headers={"X-Minimoi-Auth-Id": "42"},
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["mode"] == "memo"
+    assert data["default_provider"] == "openai"
+    assert [provider["provider"] for provider in data["providers"]] == ["openai"]
+
+
+def test_memo_bootstrap_mints_transcription_only_credential(client):
+    captured = {}
+
+    def fake_mint(**kwargs):
+        captured.update(kwargs)
+        return {
+            "provider": "openai",
+            "client_secret": "ek_memo",
+            "expires_at": 123,
+            "model": "gpt-live-transcribe",
+            "transport": "webrtc",
+        }
+
+    with patch(
+        "core.realtime_voice.bootstrap.openai_realtime.mint_transcription_credential",
+        side_effect=fake_mint,
+    ):
+        response = client.post(
+            "/api/realtime-voice/memo/bootstrap",
+            json={"provider": "openai"},
+            headers={"X-Minimoi-Auth-Id": "420"},
+        )
+
+    assert response.status_code == 200
+    assert captured == {
+        "transcription_language": "de",
+        "user_id_for_safety_identifier": "420",
+    }
+    data = response.get_json()
+    assert data["model"] == "gpt-live-transcribe"
+    assert data["warning_minutes"] == 13
+    assert data["max_minutes"] == 15
+
+
+def test_memo_bootstrap_rejects_xai_until_secure_proxy_exists(client):
+    response = client.post(
+        "/api/realtime-voice/memo/bootstrap",
+        json={"provider": "xai"},
+        headers={"X-Minimoi-Auth-Id": "421"},
+    )
+    assert response.status_code == 503
+    assert "WebSocket proxy" in response.get_json()["error"]
+
+
+def test_memo_duration_cap_is_separately_configurable(monkeypatch):
+    monkeypatch.setenv("VOICE_MEMO_WARNING_MINUTES", "11")
+    monkeypatch.setenv("VOICE_MEMO_MAX_MINUTES", "14")
+    guard = _memo_duration_guard()
+    assert guard.warning_minutes == 11
+    assert guard.max_minutes == 14
 
 
 def test_openai_bootstrap_enables_german_input_transcription(client):

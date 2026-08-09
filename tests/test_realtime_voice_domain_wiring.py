@@ -36,6 +36,24 @@ def test_portuguese_endpoint_registered_and_backed_by_shared_module(portuguese_c
     assert view_fn.__module__ == "core.realtime_voice.bootstrap"
 
 
+def test_german_writing_uses_shared_memo_controller_not_browser_recognition(german_client):
+    page = german_client.get("/schreiben").get_data(as_text=True)
+    assert "realtime-memo-controller.js" in page
+    assert "memo-voice-preference" in page
+    assert "SpeechRecognition" not in page
+    assert "webkitSpeechRecognition" not in page
+    assert "./api/realtime-voice/memo/bootstrap" in page
+
+
+def test_portuguese_writing_uses_shared_memo_controller_not_browser_recognition(portuguese_client):
+    page = portuguese_client.get("/escrita").get_data(as_text=True)
+    assert "realtime-memo-controller.js" in page
+    assert "memo-voice-preference" in page
+    assert "SpeechRecognition" not in page
+    assert "webkitSpeechRecognition" not in page
+    assert "./api/realtime-voice/memo/bootstrap" in page
+
+
 def test_german_personas_have_explicit_legacy_and_realtime_voices():
     from domains.german.html_server import _PERSONA_VOICES
 

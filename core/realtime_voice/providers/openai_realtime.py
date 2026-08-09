@@ -16,11 +16,74 @@ from core.get_secret import get_secret
 
 _CLIENT_SECRETS_URL = "https://api.openai.com/v1/realtime/client_secrets"
 _DEFAULT_MODEL = "gpt-realtime-2.1"
+_DEFAULT_TRANSCRIPTION_MODEL = "gpt-live-transcribe"
 _REQUEST_TIMEOUT_SECONDS = 10
 
 
 class OpenAIRealtimeError(Exception):
     pass
+
+
+def mint_transcription_credential(
+    *,
+    transcription_language: str,
+    user_id_for_safety_identifier: str,
+) -> dict:
+    """Mint a browser-safe credential for a transcription-only session.
+
+    Memo mode deliberately uses ``type=transcription`` rather than a muted
+    voice-agent session. Automatic turn detection is disabled so silence does
+    not close or commit the memo; the browser explicitly commits when Robert
+    taps stop.
+    """
+    api_key = get_secret("OPENAI_API_KEY", "openai", "api_key")
+    if not api_key:
+        raise OpenAIRealtimeError("OpenAI API key not configured")
+
+    payload = {
+        "session": {
+            "type": "transcription",
+            "audio": {
+                "input": {
+                    "transcription": {
+                        "model": _DEFAULT_TRANSCRIPTION_MODEL,
+                        "languages": [transcription_language],
+                        "delay": "low",
+                    },
+                    "turn_detection": None,
+                },
+            },
+        },
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "OpenAI-Safety-Identifier": _hash_user_id(user_id_for_safety_identifier),
+    }
+
+    try:
+        resp = requests.post(
+            _CLIENT_SECRETS_URL,
+            json=payload,
+            headers=headers,
+            timeout=_REQUEST_TIMEOUT_SECONDS,
+        )
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        raise OpenAIRealtimeError(f"OpenAI transcription credential request failed: {e}")
+
+    data = resp.json()
+    client_secret = data.get("value")
+    if not client_secret:
+        raise OpenAIRealtimeError("OpenAI response missing client secret value")
+
+    return {
+        "provider": "openai",
+        "client_secret": client_secret,
+        "expires_at": data.get("expires_at"),
+        "model": _DEFAULT_TRANSCRIPTION_MODEL,
+        "transport": "webrtc",
+    }
 
 
 def mint_ephemeral_credential(
