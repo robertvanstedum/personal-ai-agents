@@ -39,6 +39,14 @@ The roles are durable even as which agent fills them changes:
 - **One agent active on the repo at a time** — not simultaneous editing.
 - **Working cycle:** spec → approve → build → confirm → ship.
 
+## Specification standard
+
+Use [`docs/specs/SPEC_TEMPLATE.md`](docs/specs/SPEC_TEMPLATE.md) for every new
+or materially revised specification. Scale the document to the work and omit
+optional sections that contain no real constraint. Markdown is the source of
+truth; PDF is an optional reading export. Keep the separate design-approval and
+reviewed-diff approval gates recorded in the specification.
+
 ## Protected files
 
 Do not modify without explicit instruction from Robert:
