@@ -12,6 +12,7 @@ from core.realtime_voice.config import ALLOWED_PROVIDERS
 
 
 MEMO_MODE = "memo"
+AGENT_CONVERSATION_MODE = "agent_conversation"
 
 
 @dataclass(frozen=True)
@@ -19,11 +20,13 @@ class ProviderCapability:
     provider: str
     label: str
     streaming_transcription: bool
+    streaming_speech: bool
     browser_transport: str
     browser_direct_ephemeral_auth: bool
     server_proxy_required: bool
     supported_locales: tuple[str, ...]
     memo_available: bool
+    agent_conversation_available: bool
     unavailable_reason: str | None = None
 
     def public_dict(self) -> dict:
@@ -37,23 +40,27 @@ _CAPABILITIES = {
         provider="openai",
         label="OpenAI",
         streaming_transcription=True,
+        streaming_speech=True,
         browser_transport="webrtc",
         browser_direct_ephemeral_auth=True,
         server_proxy_required=False,
-        supported_locales=("de-AT", "pt-BR"),
+        supported_locales=("de-AT", "en-US", "pt-BR"),
         memo_available=True,
+        agent_conversation_available=True,
     ),
     "xai": ProviderCapability(
         provider="xai",
         label="Grok",
         streaming_transcription=True,
+        streaming_speech=True,
         browser_transport="websocket",
         browser_direct_ephemeral_auth=False,
         server_proxy_required=True,
-        supported_locales=("de-AT", "pt-BR"),
+        supported_locales=("de-AT", "en-US", "pt-BR"),
         memo_available=False,
+        agent_conversation_available=False,
         unavailable_reason=(
-            "xAI streaming STT requires a server-side WebSocket proxy; "
+            "xAI chained STT/TTS requires a secure server-side WebSocket proxy; "
             "browser-direct authentication is not supported"
         ),
     ),
@@ -67,15 +74,19 @@ def get_provider_capability(provider: str) -> ProviderCapability:
 
 
 def providers_for_mode(mode: str, locale: str, *, available_only: bool = True) -> list[ProviderCapability]:
-    if mode != MEMO_MODE:
+    if mode not in {MEMO_MODE, AGENT_CONVERSATION_MODE}:
         raise ValueError(f"Unknown voice mode: {mode!r}")
 
+    availability_field = (
+        "memo_available" if mode == MEMO_MODE else "agent_conversation_available"
+    )
     providers = [
         capability
         for capability in _CAPABILITIES.values()
         if capability.streaming_transcription
+        and (mode != AGENT_CONVERSATION_MODE or capability.streaming_speech)
         and locale in capability.supported_locales
-        and (capability.memo_available or not available_only)
+        and (getattr(capability, availability_field) or not available_only)
     ]
     return sorted(providers, key=lambda item: item.provider)
 
@@ -99,6 +110,34 @@ def resolve_memo_provider(requested: str | None, locale: str) -> ProviderCapabil
         return available_by_name[configured]
     if not available:
         raise ProviderUnavailableError("No voice provider is available for memo mode")
+    return available[0]
+
+
+def resolve_agent_conversation_provider(
+    requested: str | None,
+    locale: str,
+) -> ProviderCapability:
+    available = providers_for_mode(AGENT_CONVERSATION_MODE, locale)
+    available_by_name = {capability.provider: capability for capability in available}
+
+    if requested:
+        if requested not in ALLOWED_PROVIDERS:
+            raise ValueError(f"Unknown voice provider: {requested!r}")
+        if requested not in available_by_name:
+            capability = get_provider_capability(requested)
+            raise ProviderUnavailableError(
+                capability.unavailable_reason
+                or f"{requested} is unavailable for agent conversation mode"
+            )
+        return available_by_name[requested]
+
+    configured = os.environ.get("VOICE_CONFER_PROVIDER_DEFAULT", "openai")
+    if configured in available_by_name:
+        return available_by_name[configured]
+    if not available:
+        raise ProviderUnavailableError(
+            "No voice provider is available for agent conversation mode"
+        )
     return available[0]
 
 

@@ -60,6 +60,29 @@ def test_openai_memo_uses_transcription_only_session_without_turn_detection():
     }
 
 
+def test_openai_confer_uses_transcription_only_session_with_server_vad():
+    with (
+        patch("core.realtime_voice.providers.openai_realtime.get_secret", return_value="secret"),
+        patch(
+            "core.realtime_voice.providers.openai_realtime.requests.post",
+            return_value=_response({"value": "ephemeral", "expires_at": 123}),
+        ) as post,
+    ):
+        openai_realtime.mint_confer_transcription_credential(
+            transcription_language="en",
+            user_id_for_safety_identifier="42",
+        )
+
+    session = post.call_args.kwargs["json"]["session"]
+    assert session["type"] == "transcription"
+    assert session["audio"]["input"]["turn_detection"] == {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "prefix_padding_ms": 300,
+        "silence_duration_ms": 700,
+    }
+
+
 def test_xai_session_config_requests_input_transcription():
     with (
         patch("core.realtime_voice.providers.xai_voice.get_secret", return_value="secret"),

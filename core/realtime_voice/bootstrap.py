@@ -51,7 +51,7 @@ _DEFAULT_MEMO_WARNING_MINUTES = 13
 _DEFAULT_MEMO_MAX_MINUTES = 15
 
 
-def _check_rate_limit(user_id: str) -> bool:
+def check_voice_rate_limit(user_id: str) -> bool:
     now = time.monotonic()
     history = _rate_limit_state.setdefault(str(user_id), [])
     history[:] = [t for t in history if now - t < _RATE_LIMIT_WINDOW_SECONDS]
@@ -105,7 +105,7 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         if user_id is None:
             return jsonify({"ok": False, "error": "identity required"}), 401
 
-        if not _check_rate_limit(user_id):
+        if not check_voice_rate_limit(user_id):
             _log_outcome(domain, user_id, None, None, "memo_rate_limited")
             return jsonify({"ok": False, "error": "rate limited"}), 429
 
@@ -152,7 +152,7 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         if user_id is None:
             return jsonify({"ok": False, "error": "identity required"}), 401
 
-        if not _check_rate_limit(user_id):
+        if not check_voice_rate_limit(user_id):
             _log_outcome(domain, user_id, None, None, "rate_limited")
             return jsonify({"ok": False, "error": "rate limited"}), 429
 

@@ -36,6 +36,41 @@ def mint_transcription_credential(
     not close or commit the memo; the browser explicitly commits when Robert
     taps stop.
     """
+    return _mint_transcription_credential(
+        transcription_language=transcription_language,
+        user_id_for_safety_identifier=user_id_for_safety_identifier,
+        turn_detection=None,
+    )
+
+
+def mint_confer_transcription_credential(
+    *,
+    transcription_language: str,
+    user_id_for_safety_identifier: str,
+) -> dict:
+    """Mint a transcription session whose VAD creates conversational turns.
+
+    The transcription model only chunks and transcribes speech. It never
+    generates the CoS response; that remains behind ``call_backend``.
+    """
+    return _mint_transcription_credential(
+        transcription_language=transcription_language,
+        user_id_for_safety_identifier=user_id_for_safety_identifier,
+        turn_detection={
+            "type": "server_vad",
+            "threshold": 0.5,
+            "prefix_padding_ms": 300,
+            "silence_duration_ms": 700,
+        },
+    )
+
+
+def _mint_transcription_credential(
+    *,
+    transcription_language: str,
+    user_id_for_safety_identifier: str,
+    turn_detection: dict | None,
+) -> dict:
     api_key = get_secret("OPENAI_API_KEY", "openai", "api_key")
     if not api_key:
         raise OpenAIRealtimeError("OpenAI API key not configured")
@@ -50,7 +85,7 @@ def mint_transcription_credential(
                         "languages": [transcription_language],
                         "delay": "low",
                     },
-                    "turn_detection": None,
+                    "turn_detection": turn_detection,
                 },
             },
         },

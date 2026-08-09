@@ -42,9 +42,9 @@ def _identity() -> str:
     return f"{host} ({system}/{platform.machine()})"
 
 
-def _chat(text: str) -> str:
+def _chat(text: str, *, channel: str = "telegram_text") -> str:
     from domains.cos.chief_of_staff import _chat as cos_chat
-    return cos_chat(text)
+    return cos_chat(text, channel=channel)
 
 
 def _transcribe_voice(audio_path: str) -> str:
@@ -92,7 +92,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
     try:
-        reply = _chat(text)
+        reply = _chat(text, channel="telegram_text")
     except Exception as e:
         log.exception("_chat error")
         reply = f"CoS error: {e}"
@@ -119,9 +119,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         log.info("Voice note transcribed (%ds): %s", voice.duration, transcript[:80])
 
-        # Route through CoS — prefix lets the memory judgment and system prompt
-        # know this came from a voice note (relevant for action-item extraction)
-        reply = _chat(f"[Voice note] {transcript}")
+        reply = _chat(transcript, channel="telegram_voice")
     except Exception as e:
         log.exception("voice handler error")
         reply = f"CoS error processing voice note: {e}"

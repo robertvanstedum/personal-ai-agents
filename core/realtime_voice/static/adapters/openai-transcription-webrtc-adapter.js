@@ -20,7 +20,13 @@ export class OpenAITranscriptionWebRTCAdapter {
 
   async connect(credentials) {
     try {
-      this._micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this._micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
     } catch (error) {
       this._emit("fatal_error", { reason: "microphone_denied", detail: String(error) });
       throw error;
@@ -103,6 +109,12 @@ export class OpenAITranscriptionWebRTCAdapter {
 
   _handleServerEvent(event) {
     switch (event.type) {
+      case "input_audio_buffer.speech_started":
+        this._emit("speech_started", { provider_event_id: event.event_id });
+        break;
+      case "input_audio_buffer.speech_stopped":
+        this._emit("speech_stopped", { provider_event_id: event.event_id });
+        break;
       case "conversation.item.input_audio_transcription.delta":
         this._emit("transcript", {
           item_id: event.item_id,
