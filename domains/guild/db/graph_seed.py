@@ -22,9 +22,7 @@ from db.postgres import (
     list_topics, list_sources, list_groups,
     list_leanings, get_leaning, get_tag_aliases
 )
-
-NEO4J_URI  = "bolt://localhost:7687"
-NEO4J_AUTH = ("neo4j", "simple123")
+from db.neo4j_driver import NEO4J_URI, NEO4J_AUTH
 
 
 def seed(driver):

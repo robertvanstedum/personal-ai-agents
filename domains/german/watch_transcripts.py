@@ -27,6 +27,11 @@ HERE = Path(__file__).parent
 PROJECT_ROOT = HERE.parent.parent
 
 sys.path.insert(0, str(HERE.resolve()))
+# Needed for `from utils.telegram import ...` (container-safe token
+# resolution) — not required before this fix, since the old code only used
+# the raw keyring import.
+if str(PROJECT_ROOT.resolve()) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT.resolve()))
 from german_domain import GERMAN_DIR, GERMAN_STATE_DIR
 
 # ─── Config ──────────────────────────────────────────────────────────────────
@@ -71,9 +76,25 @@ import logging.handlers  # import here so the function above can reference it
 
 def _tg_send(text: str) -> None:
     try:
-        import keyring, requests as req
-        token   = keyring.get_password("telegram", "polling_bot_token")
-        chat_id = keyring.get_password("telegram", "chat_id")
+        import requests as req
+        token, chat_id = "", ""
+        # Preferred: role-aware system-bot token (SSM on EC2, keyring on
+        # Mac) — same resolution as get_german_session.py's _send_telegram,
+        # so this doesn't crash if a container has no macOS Keychain.
+        try:
+            from utils.telegram import get_system_token, get_chat_id
+            token = get_system_token()
+            chat_id = get_chat_id()
+        except Exception:
+            pass
+        # Legacy fallback: macOS Keychain directly.
+        if not token or not chat_id:
+            try:
+                import keyring
+                token = token or keyring.get_password("telegram", "polling_bot_token")
+                chat_id = chat_id or keyring.get_password("telegram", "chat_id")
+            except ImportError:
+                pass
         if not token or not chat_id:
             logging.warning("Telegram credentials missing — skipping notification")
             return
@@ -208,7 +229,27 @@ def _ensure_dirs() -> None:
         d.mkdir(parents=True, exist_ok=True)
 
 
+def _dropbox_available() -> bool:
+    """True if this node actually has the Dropbox sync root (the real
+    Dropbox client creates it) — false on any node without Dropbox, e.g. a
+    container or EC2, where BASE_PATH.parent not existing is the signal
+    that syncing here is meaningless: blindly mkdir(parents=True)-ing the
+    configured German_Sessions subfolder would "succeed" by creating a
+    local-only directory tree that nothing ever syncs into."""
+    return BASE_PATH.parent.exists()
+
+
 def main() -> None:
+    if not _dropbox_available():
+        # Deliberately not using the logging module here — _setup_logging()
+        # itself creates LOGS under BASE_PATH, which would recreate the same
+        # meaningless local directory tree this check exists to avoid.
+        print(
+            f"German watcher: {BASE_PATH.parent} not present on this node — "
+            "not Dropbox-capable, exiting without creating any directories.",
+            file=sys.stderr,
+        )
+        return
     _setup_logging()
     _ensure_dirs()
 

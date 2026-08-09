@@ -8,10 +8,17 @@ Usage:
     from db.neo4j_driver import get_topic_neighbors, get_related_topics
 """
 
+import os
+
 from neo4j import GraphDatabase
 
-NEO4J_URI  = "bolt://localhost:7687"
-NEO4J_AUTH = ("neo4j", "simple123")
+NEO4J_URI = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
+_NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD")
+if not _NEO4J_PASSWORD:
+    raise RuntimeError(
+        "NEO4J_PASSWORD must be set — no insecure default (issue #42)"
+    )
+NEO4J_AUTH = ("neo4j", _NEO4J_PASSWORD)
 
 
 def _driver():

@@ -351,6 +351,7 @@ body.landing-mode .cos-header { position: sticky; top: 0; }
 }
 #btn-voice:hover { background: var(--border); color: var(--ink); }
 #btn-voice.recording { background: #8A3020; border-color: #8A3020; color: #F5F0E8; }
+#btn-voice:disabled { opacity: 0.45; cursor: default; }
 
 #btn-send {
   background: var(--accent);
@@ -377,6 +378,19 @@ body.landing-mode .cos-header { position: sticky; top: 0; }
 }
 .talk-meta a { color: var(--muted); text-decoration: underline; }
 .talk-meta a:hover { color: var(--accent); }
+
+#voice-status:not(:empty), #voice-provider:not(:empty) {
+  padding-right: 12px;
+  border-right: 1px solid var(--border);
+}
+
+#voice-transcript {
+  min-height: 1.1rem;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-style: italic;
+}
 
 /* ── Notes / entry cards ───────────────────────────────────────────────────── */
 

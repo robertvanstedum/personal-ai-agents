@@ -215,6 +215,24 @@ def revoke_guest(username: str) -> bool:
     return True
 
 
+def is_guest_active(username: str) -> bool:
+    """True if username is still a non-expired guest. False if revoked (no
+    longer in guests.json) or expired — used to invalidate an existing
+    session cookie on each request, since revoke_guest() only removes the
+    credential and previously had no effect on a session already issued."""
+    for g in load_guests():
+        if g["username"] != username:
+            continue
+        try:
+            expires_at = datetime.fromisoformat(g["expires_at"])
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            return datetime.now(timezone.utc) <= expires_at
+        except (KeyError, ValueError):
+            return False
+    return False
+
+
 def extend_guest(username: str, days: int = 7) -> bool:
     """Extend a guest's expiry by N days from today. Returns True if found."""
     from datetime import timedelta

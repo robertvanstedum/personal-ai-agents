@@ -25,7 +25,30 @@ from pathlib import Path
 
 import requests
 from apscheduler.schedulers.background import BackgroundScheduler
-from flask import Flask, jsonify, request, render_template, redirect
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_from_directory,
+    stream_with_context,
+)
+
+from core.identity import resolve_user_id
+from core.realtime_voice.capabilities import (
+    ProviderUnavailableError,
+    resolve_agent_conversation_provider,
+)
+from core.realtime_voice.confer import create_confer_voice_blueprint
+from core.realtime_voice.providers import openai_speech
+from domains.cos.confer_service import (
+    ConferTurnRequest,
+    ConferTurnService,
+    InvalidConferTurn,
+)
+from domains.cos.spoken_reply_store import SpokenReplyStore
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -35,10 +58,14 @@ COS_SOUL_FILE    = BASE_DIR / "domains/guild/config/cos_soul.md"
 COS_MEMORY_FILE  = BASE_DIR / "data/cos_memory.md"
 AGENDA_FILE      = BASE_DIR / "data/guild/cos_agenda.json"
 LOGS_DIR         = BASE_DIR / "logs"
+_REALTIME_VOICE_STATIC_DIR = BASE_DIR / "core" / "realtime_voice" / "static"
+_spoken_replies = SpokenReplyStore()
 
 # ── DB (optional — degrades gracefully if Docker is down) ────────────────────
 
-DSN = os.environ.get("DATABASE_URL", "postgresql://minimoi:simple123@localhost:5432/personal_agents")
+DSN = os.environ.get("DATABASE_URL")
+if not DSN:
+    raise RuntimeError("DATABASE_URL must be set — no insecure default (issue #42)")
 _DB_AVAILABLE = False
 
 def _check_db():
@@ -650,17 +677,55 @@ def call_backend(prompt: str, context: dict, tool_policy: dict) -> str:
     return _backend.call_backend(prompt, context, tool_policy)
 
 
-def _chat(text: str) -> str:
-    """
-    Coordination layer: build context and route to call_backend().
-    Kept as the internal call site for the Flask /chat endpoint and Telegram handler.
-    """
-    context = {
+def _build_confer_context() -> dict:
+    return {
         "recent_memory": _read_memory(),
         "system_prompt": _build_system_prompt(),
     }
-    tool_policy = {"observation": True, "mutation": False}
-    return call_backend(text, context, tool_policy)
+
+
+def _backend_metadata() -> tuple[str, str]:
+    if _backend is None:
+        return "uninitialized", ""
+    return (
+        getattr(_backend, "backend_label", "unknown"),
+        getattr(_backend, "model_label", ""),
+    )
+
+
+def _process_confer_turn(
+    text: str,
+    *,
+    channel: str = "api_text",
+    conversation_id: str = "owner",
+):
+    service = ConferTurnService(
+        call_backend=call_backend,
+        build_context=_build_confer_context,
+        increment_chat=_inc_chat,
+        backend_metadata=_backend_metadata,
+    )
+    return service.handle(ConferTurnRequest(
+        text=text,
+        channel=channel,
+        conversation_id=conversation_id,
+    ))
+
+
+def _chat(
+    text: str,
+    *,
+    channel: str = "api_text",
+    conversation_id: str = "owner",
+) -> str:
+    """
+    Backward-compatible text-only facade over the canonical Confer turn service.
+    """
+    return _process_confer_turn(
+        text,
+        channel=channel,
+        conversation_id=conversation_id,
+    ).reply
 
 
 def init_backend():
@@ -867,8 +932,7 @@ def _handle_tg_text(text: str, token: str, chat_id: str):
 
         _tg_send(token, chat_id, "⏳ Thinking…")
         try:
-            reply = _chat(query)
-            _inc_chat()
+            reply = _chat(query, channel="telegram_text")
             _tg_send(token, chat_id, reply)
         except Exception as e:
             _log_file("chat_error", str(e))
@@ -878,8 +942,7 @@ def _handle_tg_text(text: str, token: str, chat_id: str):
     # ── Plain text — route to CoS chat (no prefix required) ──────────────────
     _tg_send(token, chat_id, "⏳ Thinking…")
     try:
-        reply = _chat(text)
-        _inc_chat()
+        reply = _chat(text, channel="telegram_text")
         _tg_send(token, chat_id, reply)
     except Exception as e:
         _log_file("chat_error", str(e))
@@ -946,6 +1009,12 @@ def _telegram_poll_loop():
 # ── Flask app ─────────────────────────────────────────────────────────────────
 
 app = Flask(__name__)
+app.register_blueprint(create_confer_voice_blueprint())
+
+
+@app.route("/static/realtime-voice/<path:filename>")
+def realtime_voice_static(filename):
+    return send_from_directory(_REALTIME_VOICE_STATIC_DIR, filename)
 
 
 @app.route("/chat", methods=["POST"])
@@ -956,9 +1025,14 @@ def chat_endpoint():
     if not text:
         return jsonify({"reply": "Nothing to respond to."})
     try:
-        reply = _chat(text)
-        _inc_chat()
-        return jsonify({"reply": reply})
+        result = _process_confer_turn(
+            text,
+            channel=body.get("channel") or "api_text",
+            conversation_id=body.get("conversation_id") or "owner",
+        )
+        return jsonify(result.public_dict())
+    except InvalidConferTurn as e:
+        return jsonify({"reply": str(e)}), 400
     except Exception as e:
         _log_file("chat_endpoint_error", str(e))
         return jsonify({"reply": f"CoS error: {e}"}), 500
@@ -1090,12 +1164,76 @@ def ui_send():
     if not text:
         return jsonify({"reply": "Nothing to respond to."})
     try:
-        reply = _chat(text)
-        _inc_chat()
-        return jsonify({"reply": reply})
+        channel = body.get("channel") or "html_text"
+        if channel not in {"html_text", "html_voice"}:
+            raise InvalidConferTurn(f"Unknown Confer channel: {channel!r}")
+        voice_provider = None
+        user_id = None
+        if channel == "html_voice":
+            user_id = resolve_user_id(request)
+            if user_id is None:
+                return jsonify({"reply": "Identity required for voice."}), 401
+            voice_provider = resolve_agent_conversation_provider(
+                body.get("voice_provider"), "en-US"
+            ).provider
+        result = _process_confer_turn(
+            text,
+            channel=channel,
+            conversation_id=body.get("conversation_id") or "owner",
+        )
+        payload = result.public_dict()
+        if voice_provider:
+            _spoken_replies.put(
+                result.turn_id,
+                text=result.reply,
+                provider=voice_provider,
+                user_id=str(user_id),
+            )
+            # Keep this relative so the same response works both directly at
+            # /ui/confer and through the portal's /app/cos/ui/confer proxy.
+            payload["speech_url"] = f"speech/{result.turn_id}"
+        return jsonify(payload)
+    except ValueError as e:
+        return jsonify({"reply": str(e)}), 400
+    except ProviderUnavailableError as e:
+        return jsonify({"reply": str(e)}), 503
+    except InvalidConferTurn as e:
+        return jsonify({"reply": str(e)}), 400
     except Exception as e:
         _log_file("ui_send_error", str(e))
         return jsonify({"reply": f"CoS error: {e}"}), 500
+
+
+@app.route("/ui/speech/<turn_id>")
+def ui_speech(turn_id):
+    user_id = resolve_user_id(request)
+    if user_id is None:
+        return jsonify({"error": "identity required"}), 401
+    reply = _spoken_replies.get(turn_id, user_id=str(user_id))
+    if reply is None:
+        return jsonify({"error": "speech reply unavailable or expired"}), 404
+    if reply.provider != "openai":
+        return jsonify({"error": "speech provider unavailable"}), 503
+
+    try:
+        provider_response = openai_speech.create_speech_stream(
+            text=reply.text,
+            user_id=str(user_id),
+        )
+    except openai_speech.OpenAISpeechError as error:
+        _log_file("ui_speech_error", str(error))
+        return jsonify({"error": str(error)}), 502
+
+    @stream_with_context
+    def generate():
+        try:
+            yield from provider_response.iter_content(chunk_size=8192)
+        finally:
+            provider_response.close()
+
+    response = Response(generate(), mimetype="audio/mpeg")
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.route("/ui/memory")

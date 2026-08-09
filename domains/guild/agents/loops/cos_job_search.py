@@ -71,8 +71,7 @@ def _load_existing_urls() -> set[str]:
     try:
         import psycopg2
         conn = psycopg2.connect(
-            host="localhost", port=5432, dbname="personal_agents",
-            user="minimoi", password="simple123"
+            os.environ["DATABASE_URL"]
         )
         cur = conn.cursor()
         cur.execute("SELECT url FROM pipeline.items WHERE url IS NOT NULL")
@@ -103,8 +102,7 @@ def _write_opportunity(record: dict) -> bool:
     try:
         import psycopg2
         conn = psycopg2.connect(
-            host="localhost", port=5432, dbname="personal_agents",
-            user="minimoi", password="simple123"
+            os.environ["DATABASE_URL"]
         )
         cur = conn.cursor()
         cur.execute(

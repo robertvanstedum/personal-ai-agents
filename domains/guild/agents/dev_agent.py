@@ -463,10 +463,7 @@ def log_to_db(event_type: str, file_path: str, doc_type: str,
               completeness_failures: list[str] | None = None) -> None:
     try:
         import psycopg2
-        conn = psycopg2.connect(
-            dbname="personal_agents", user="minimoi",
-            password="simple123", host="localhost", port=5432
-        )
+        conn = psycopg2.connect(os.environ["DATABASE_URL"])
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO guild.design_log "
@@ -501,10 +498,7 @@ def _log_transition(design_log_id: int, from_status: str | None,
     """Write a single row to guild.design_log_transitions."""
     try:
         import psycopg2
-        conn = psycopg2.connect(
-            dbname="personal_agents", user="minimoi",
-            password="simple123", host="localhost", port=5432
-        )
+        conn = psycopg2.connect(os.environ["DATABASE_URL"])
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO guild.design_log_transitions "
@@ -639,10 +633,7 @@ def start_build():
 
     try:
         import psycopg2
-        conn = psycopg2.connect(
-            dbname="personal_agents", user="minimoi",
-            password="simple123", host="localhost", port=5432
-        )
+        conn = psycopg2.connect(os.environ["DATABASE_URL"])
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT id, status FROM guild.design_log "

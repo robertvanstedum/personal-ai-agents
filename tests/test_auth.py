@@ -651,3 +651,53 @@ def test_portuguese_routes_require_domain_decorator(client):
 
     resp2 = client.get("/app/portuguese/", follow_redirects=False)
     assert resp2.status_code == 302
+
+
+# ── Guest session revocation (issue #97 finding 2) ─────────────────────────────
+# revoke_guest() only ever removed the guests.json credential; a session
+# issued before revocation stayed valid (client-side cookie, never
+# re-checked) until it naturally expired. _require_login now re-validates
+# guests.json-backed sessions (username always "guest_<hex>", the only
+# pattern create_guest() ever produces) on every request.
+
+def test_revoked_json_guest_session_is_invalidated(client):
+    with client.session_transaction() as sess:
+        sess["user"] = {
+            "username": "guest_deadbeef",
+            "display_name": "Some Guest",
+            "tier": "guest",
+        }
+    with patch("minimoi_portal.app._auth.is_guest_active", return_value=False):
+        resp = client.get("/dashboard", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/login" in resp.headers["Location"]
+    with client.session_transaction() as sess:
+        assert "user" not in sess
+
+
+def test_active_json_guest_session_is_not_disturbed(client):
+    with client.session_transaction() as sess:
+        sess["user"] = {
+            "username": "guest_deadbeef",
+            "display_name": "Some Guest",
+            "tier": "guest",
+        }
+    with patch("minimoi_portal.app._auth.is_guest_active", return_value=True):
+        resp = client.get("/dashboard", follow_redirects=False)
+    assert resp.status_code == 200
+
+
+def test_domain_family_guest_session_is_not_checked_against_guests_json(client):
+    """A Postgres-backed domain/family guest (email or legacy plain username,
+    no guest_ prefix) must never be re-validated against guests.json — even
+    if is_guest_active would say False, the request should proceed."""
+    with client.session_transaction() as sess:
+        sess["user"] = {
+            "username": "family",
+            "display_name": "Family",
+            "tier": "guest",
+        }
+    with patch("minimoi_portal.app._auth.is_guest_active", return_value=False) as mocked:
+        resp = client.get("/dashboard", follow_redirects=False)
+    mocked.assert_not_called()
+    assert resp.status_code == 200

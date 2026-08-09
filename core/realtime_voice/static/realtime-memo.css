@@ -1,0 +1,56 @@
+.memo-voice-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.memo-voice-toolbar .mode-toggle {
+  margin-bottom: 0;
+}
+
+.memo-voice-preference {
+  min-height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.memo-voice-preference-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+
+.memo-voice-preference-select {
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0.28rem 1.5rem 0.28rem 0.45rem;
+}
+
+.btn-voice[data-voice-state="requesting"],
+.btn-voice[data-voice-state="reconnecting"],
+.btn-voice[data-voice-state="finalizing"] {
+  opacity: 0.72;
+}
+
+@media (max-width: 720px) {
+  .memo-voice-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .memo-voice-preference {
+    justify-content: flex-start;
+  }
+}

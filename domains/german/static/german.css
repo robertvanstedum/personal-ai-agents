@@ -3935,6 +3935,12 @@ a.admin-list-link:hover { background: var(--md-parch-mid); }
     display: flex;
     gap: 0.5rem;
     align-items: flex-start;
+    min-width: 0;
+}
+.input-with-voice .notizen-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
 }
 .btn-voice {
     flex-shrink: 0;
@@ -4632,4 +4638,22 @@ body.archiv-mode .page {
   color: var(--text-dim);
   margin-top: 10px;
   line-height: 1.5;
+}
+
+/* ── Mobile writing containment ── */
+@media (max-width: 768px) {
+  body.reading-mode .reading-article-scroll,
+  body.reading-mode .reading-notizen,
+  body.reading-mode .input-with-voice {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body.reading-mode .notizen-actions {
+    flex-wrap: wrap;
+  }
+
+  body.reading-mode .notizen-status {
+    flex: 1 0 100%;
+  }
 }

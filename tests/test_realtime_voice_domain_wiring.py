@@ -36,6 +36,44 @@ def test_portuguese_endpoint_registered_and_backed_by_shared_module(portuguese_c
     assert view_fn.__module__ == "core.realtime_voice.bootstrap"
 
 
+def test_german_writing_uses_shared_memo_controller_not_browser_recognition(german_client):
+    page = german_client.get("/schreiben").get_data(as_text=True)
+    assert "realtime-memo-controller.js" in page
+    assert "memo-voice-preference" in page
+    assert "SpeechRecognition" not in page
+    assert "webkitSpeechRecognition" not in page
+    assert "./api/realtime-voice/memo/bootstrap" in page
+
+
+def test_german_reading_notes_use_shared_memo_controller_not_browser_recognition(german_client):
+    page = german_client.get("/lesen").get_data(as_text=True)
+    assert "realtime-memo-controller.js" in page
+    assert "voice-notizen" in page
+    assert "notizen-original" in page
+    assert "SpeechRecognition" not in page
+    assert "webkitSpeechRecognition" not in page
+    assert "./api/realtime-voice/memo/bootstrap" in page
+
+
+def test_portuguese_writing_uses_shared_memo_controller_not_browser_recognition(portuguese_client):
+    page = portuguese_client.get("/escrita").get_data(as_text=True)
+    assert "realtime-memo-controller.js" in page
+    assert "memo-voice-preference" in page
+    assert "SpeechRecognition" not in page
+    assert "webkitSpeechRecognition" not in page
+    assert "./api/realtime-voice/memo/bootstrap" in page
+
+
+def test_portuguese_reading_notes_use_shared_memo_controller_not_browser_recognition(portuguese_client):
+    page = portuguese_client.get("/leitura").get_data(as_text=True)
+    assert "realtime-memo-controller.js" in page
+    assert "voice-notizen" in page
+    assert "notizen-original" in page
+    assert "SpeechRecognition" not in page
+    assert "webkitSpeechRecognition" not in page
+    assert "./api/realtime-voice/memo/bootstrap" in page
+
+
 def test_german_personas_have_explicit_legacy_and_realtime_voices():
     from domains.german.html_server import _PERSONA_VOICES
 
@@ -84,7 +122,7 @@ def test_german_dev_ui_makes_realtime_primary(monkeypatch, german_client):
     # the portal's /app/german proxy prefix, leaving the Start button inert.
     assert (
         'from "./static/realtime-voice/realtime-voice-controller.js'
-        '?v=20260725-transcript1"' in page
+        '?v=20260809-ga1"' in page
     )
     assert "bootstrapUrl: './api/realtime-voice/bootstrap'" in page
     assert "source: session.source || 'ki_sitzung'" in page
@@ -114,7 +152,7 @@ def test_portuguese_dev_ui_makes_realtime_primary(monkeypatch, portuguese_client
     assert "realtime-transcript" in page
     assert (
         'from "./static/realtime-voice/realtime-voice-controller.js'
-        '?v=20260725-transcript1"' in page
+        '?v=20260809-ga1"' in page
     )
     assert "bootstrapUrl: './api/realtime-voice/bootstrap'" in page
     assert "source: session.source || 'ki_sessao'" in page

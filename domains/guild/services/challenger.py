@@ -327,9 +327,7 @@ class ChallengerService:
         """Write exchange to guild.challenger_exchanges. Returns row id or None."""
         try:
             import psycopg2
-            conn = psycopg2.connect(
-                os.environ.get("DATABASE_URL", "postgresql://minimoi:simple123@localhost:5432/personal_agents")
-            )
+            conn = psycopg2.connect(os.environ["DATABASE_URL"])
             with conn.cursor() as cur:
                 cur.execute(
                     """INSERT INTO guild.challenger_exchanges (

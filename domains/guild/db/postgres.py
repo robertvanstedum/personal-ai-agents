@@ -17,7 +17,9 @@ from typing import Optional
 import psycopg2
 import psycopg2.extras
 
-DSN = os.environ.get("DATABASE_URL", "postgresql://minimoi:simple123@localhost:5432/personal_agents")
+DSN = os.environ.get("DATABASE_URL")
+if not DSN:
+    raise RuntimeError("DATABASE_URL must be set — no insecure default (issue #42)")
 
 
 @contextmanager

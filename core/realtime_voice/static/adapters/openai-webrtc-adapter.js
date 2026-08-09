@@ -74,8 +74,11 @@ export class OpenAIWebRTCAdapter {
 
     let resp;
     try {
+      // The ephemeral credential is already bound to the configured session
+      // and model. The GA WebRTC contract accepts the SDP at this URL without
+      // a model query parameter.
       resp = await fetch(
-        `https://api.openai.com/v1/realtime/calls?model=${encodeURIComponent(credentials.model)}`,
+        "https://api.openai.com/v1/realtime/calls",
         {
           method: "POST",
           headers: {

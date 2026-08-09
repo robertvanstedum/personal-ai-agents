@@ -342,8 +342,14 @@ def api_lesen_category():
 
 @app.route("/api/lesen-refresh", methods=["POST"])
 def api_lesen_refresh():
+    # A request with the header entirely absent used to fall through this
+    # check silently — only a present-and-wrong tier was rejected. The
+    # portal proxy always sets this header for every proxied request
+    # (proxy.py, X-Minimoi-User-Tier), so a genuinely missing header means
+    # the request bypassed the proxy (e.g. reached this container directly
+    # over the docker-compose network) rather than a legitimate caller.
     caller_tier = request.headers.get("X-Minimoi-User-Tier")
-    if caller_tier and caller_tier != "owner":
+    if caller_tier != "owner":
         return jsonify({"ok": False, "error": "owner refresh required"}), 403
     try:
         result = refresh_lesen_feed()

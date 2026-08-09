@@ -22,7 +22,9 @@ from psycopg2.extras import execute_values
 REPO = Path(__file__).parent.parent
 RI   = REPO / "_NewDomains" / "research-intelligence" / "data"
 
-DSN  = os.environ.get("DATABASE_URL", "postgresql://minimoi:simple123@localhost:5432/personal_agents")
+DSN = os.environ.get("DATABASE_URL")
+if not DSN:
+    raise RuntimeError("DATABASE_URL must be set — no insecure default (issue #42)")
 
 
 def connect():

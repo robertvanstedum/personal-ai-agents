@@ -16,11 +16,18 @@ Per _working/CLAUDE_CODE_BUILD_SPEC_voice_realtime_2026-07-24.md Section 6:
   - log user_id/domain/provider/model/start time/outcome, never credentials,
     raw audio, or full prompt content
 """
+import os
 import time
 
 from flask import Blueprint, jsonify, request
 
 from core.identity import resolve_user_display_name, resolve_user_id
+from core.realtime_voice.capabilities import (
+    MEMO_MODE,
+    ProviderUnavailableError,
+    providers_for_mode,
+    resolve_memo_provider,
+)
 from core.realtime_voice import config as rv_config
 from core.realtime_voice.duration_guard import DurationGuard
 from core.realtime_voice.prompt_builder import build_realtime_instructions
@@ -39,9 +46,32 @@ _TRANSCRIPTION_LANGUAGE = {
     "openai": {"de-AT": "de", "pt-BR": "pt"},
     "xai": {"de-AT": "de", "pt-BR": "pt-BR"},
 }
+_MEMO_TRANSCRIPTION_LANGUAGE = {"de-AT": "de", "pt-BR": "pt"}
+_DEFAULT_MEMO_WARNING_MINUTES = 13
+_DEFAULT_MEMO_MAX_MINUTES = 15
+_MEMO_TRANSCRIPTION_CONTEXT = {
+    "de-AT": {
+        "prompt": (
+            "German-language personal journal dictation for a writing-practice "
+            "surface. The speaker may pause, self-correct, or restart. Produce "
+            "verbatim German text with natural punctuation; do not translate, "
+            "answer, comment, or add language labels."
+        ),
+        "keywords": ["mini-moi", "Mein Deutsch", "Schreiben", "Gespräche"],
+    },
+    "pt-BR": {
+        "prompt": (
+            "Brazilian Portuguese personal journal dictation for a writing-"
+            "practice surface. The speaker may pause, self-correct, or restart. "
+            "Produce verbatim Portuguese text with natural punctuation; do not "
+            "translate, answer, comment, or add language labels."
+        ),
+        "keywords": ["mini-moi", "Meu Português", "Escrita", "Conversas"],
+    },
+}
 
 
-def _check_rate_limit(user_id: str) -> bool:
+def check_voice_rate_limit(user_id: str) -> bool:
     now = time.monotonic()
     history = _rate_limit_state.setdefault(str(user_id), [])
     history[:] = [t for t in history if now - t < _RATE_LIMIT_WINDOW_SECONDS]
@@ -49,6 +79,17 @@ def _check_rate_limit(user_id: str) -> bool:
         return False
     history.append(now)
     return True
+
+
+def _memo_duration_guard() -> DurationGuard:
+    return DurationGuard(
+        warning_minutes=int(os.environ.get(
+            "VOICE_MEMO_WARNING_MINUTES", _DEFAULT_MEMO_WARNING_MINUTES
+        )),
+        max_minutes=int(os.environ.get(
+            "VOICE_MEMO_MAX_MINUTES", _DEFAULT_MEMO_MAX_MINUTES
+        )),
+    )
 
 
 def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_production):
@@ -63,13 +104,78 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
     """
     bp = Blueprint(f"realtime_voice_bootstrap_{domain}", __name__)
 
+    @bp.route("/api/realtime-voice/memo/capabilities", methods=["GET"])
+    def memo_capabilities():
+        user_id = resolve_user_id(request)
+        if user_id is None:
+            return jsonify({"ok": False, "error": "identity required"}), 401
+
+        providers = providers_for_mode(MEMO_MODE, locale)
+        default = resolve_memo_provider(None, locale)
+        return jsonify({
+            "ok": True,
+            "mode": MEMO_MODE,
+            "default_provider": default.provider,
+            "providers": [provider.public_dict() for provider in providers],
+        })
+
+    @bp.route("/api/realtime-voice/memo/bootstrap", methods=["POST"])
+    def memo_bootstrap():
+        user_id = resolve_user_id(request)
+        if user_id is None:
+            return jsonify({"ok": False, "error": "identity required"}), 401
+
+        if not check_voice_rate_limit(user_id):
+            _log_outcome(domain, user_id, None, None, "memo_rate_limited")
+            return jsonify({"ok": False, "error": "rate limited"}), 429
+
+        body = request.get_json(force=True) or {}
+        requested_provider = body.get("provider")
+        try:
+            capability = resolve_memo_provider(requested_provider, locale)
+        except ValueError as error:
+            _log_outcome(domain, user_id, requested_provider, None, "memo_invalid_provider")
+            return jsonify({"ok": False, "error": str(error)}), 400
+        except ProviderUnavailableError as error:
+            _log_outcome(domain, user_id, requested_provider, None, "memo_provider_unavailable")
+            return jsonify({"ok": False, "error": str(error)}), 503
+
+        try:
+            if capability.provider == "openai":
+                transcription_context = _MEMO_TRANSCRIPTION_CONTEXT[locale]
+                credential = openai_realtime.mint_transcription_credential(
+                    transcription_language=_MEMO_TRANSCRIPTION_LANGUAGE[locale],
+                    user_id_for_safety_identifier=str(user_id),
+                    transcription_prompt=transcription_context["prompt"],
+                    transcription_keywords=transcription_context["keywords"],
+                )
+            else:  # Fail closed if registry and implementation ever drift.
+                raise ProviderUnavailableError(
+                    f"{capability.provider} memo transport is not implemented"
+                )
+        except openai_realtime.OpenAIRealtimeError as error:
+            _log_outcome(domain, user_id, capability.provider, None, "memo_provider_error")
+            return jsonify({"ok": False, "error": str(error)}), 502
+        except ProviderUnavailableError as error:
+            _log_outcome(domain, user_id, capability.provider, None, "memo_provider_unavailable")
+            return jsonify({"ok": False, "error": str(error)}), 503
+
+        _log_outcome(domain, user_id, capability.provider, credential.get("model"), "memo_started")
+        guard = _memo_duration_guard()
+        return jsonify({
+            "ok": True,
+            **credential,
+            "warning_minutes": guard.warning_minutes,
+            "max_minutes": guard.max_minutes,
+        })
+
     @bp.route("/api/realtime-voice/bootstrap", methods=["POST"])
     def bootstrap():
         user_id = resolve_user_id(request)
         if user_id is None:
             return jsonify({"ok": False, "error": "identity required"}), 401
 
-        if not _check_rate_limit(user_id):
+        if not check_voice_rate_limit(user_id):
             _log_outcome(domain, user_id, None, None, "rate_limited")
             return jsonify({"ok": False, "error": "rate limited"}), 429
 

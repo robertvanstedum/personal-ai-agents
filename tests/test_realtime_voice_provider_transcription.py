@@ -30,6 +30,59 @@ def test_openai_ephemeral_session_requests_input_transcription():
     assert transcription == {"model": "gpt-4o-transcribe", "language": "de"}
 
 
+def test_openai_memo_uses_transcription_only_session_without_turn_detection():
+    with (
+        patch("core.realtime_voice.providers.openai_realtime.get_secret", return_value="secret"),
+        patch(
+            "core.realtime_voice.providers.openai_realtime.requests.post",
+            return_value=_response({"value": "ephemeral", "expires_at": 123}),
+        ) as post,
+    ):
+        result = openai_realtime.mint_transcription_credential(
+            transcription_language="pt",
+            user_id_for_safety_identifier="42",
+            transcription_prompt="Portuguese journal dictation.",
+            transcription_keywords=["Meu Português", "Escrita"],
+        )
+
+    session = post.call_args.kwargs["json"]["session"]
+    assert session["type"] == "transcription"
+    assert session["audio"]["input"]["turn_detection"] is None
+    assert session["audio"]["input"]["transcription"] == {
+        "model": "gpt-live-transcribe",
+        "languages": ["pt"],
+        "delay": "medium",
+        "prompt": "Portuguese journal dictation.",
+        "keywords": ["Meu Português", "Escrita"],
+    }
+    assert result == {
+        "provider": "openai",
+        "client_secret": "ephemeral",
+        "expires_at": 123,
+        "model": "gpt-live-transcribe",
+        "transport": "webrtc",
+    }
+
+
+def test_openai_confer_uses_transcription_only_session_with_browser_vad():
+    with (
+        patch("core.realtime_voice.providers.openai_realtime.get_secret", return_value="secret"),
+        patch(
+            "core.realtime_voice.providers.openai_realtime.requests.post",
+            return_value=_response({"value": "ephemeral", "expires_at": 123}),
+        ) as post,
+    ):
+        openai_realtime.mint_confer_transcription_credential(
+            transcription_language="en",
+            user_id_for_safety_identifier="42",
+        )
+
+    session = post.call_args.kwargs["json"]["session"]
+    assert session["type"] == "transcription"
+    assert session["audio"]["input"]["turn_detection"] is None
+    assert session["audio"]["input"]["transcription"]["delay"] == "low"
+
+
 def test_xai_session_config_requests_input_transcription():
     with (
         patch("core.realtime_voice.providers.xai_voice.get_secret", return_value="secret"),

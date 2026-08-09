@@ -1,5 +1,8 @@
 {% extends "german_base.html" %}
 {% block title %}Schreiben{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="./static/realtime-voice/realtime-memo.css?v=20260809-memo1">
+{% endblock %}
 
 {% block content %}
 <div class="tab-layout-split">
@@ -10,10 +13,13 @@
       <p class="tab-description">Schreib auf Deutsch — mit Korrektur und Verlauf.</p>
     </div>
 
-<div class="mode-toggle">
-  <button class="mode-btn active" data-mode="tagebuch" title="Journal writing mode">Tagebuch</button>
-  <button class="mode-btn" data-mode="kontext" title="Practice writing in context">Im Kontext</button>
-  <button class="mode-btn" data-mode="woerter" title="Vocabulary practice mode">Wörter üben</button>
+<div class="memo-voice-toolbar">
+  <div class="mode-toggle">
+    <button class="mode-btn active" data-mode="tagebuch" title="Journal writing mode">Tagebuch</button>
+    <button class="mode-btn" data-mode="kontext" title="Practice writing in context">Im Kontext</button>
+    <button class="mode-btn" data-mode="woerter" title="Vocabulary practice mode">Wörter üben</button>
+  </div>
+  <div class="memo-voice-preference" id="memo-voice-preference"></div>
 </div>
 
 <!-- ── Im Kontext ─────────────────────────────────────────────────────────── -->
@@ -360,31 +366,6 @@ function showSaveToast() {
     }
   }
 
-  // ── Voice input ─────────────────────────────────────────────────────────────
-  function attachVoiceButton(textareaId, buttonId, lang) {
-    const btn = document.getElementById(buttonId);
-    const textarea = document.getElementById(textareaId);
-    if (!btn || !textarea) return;
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { btn.style.display = 'none'; return; }
-    let recognition = null;
-    btn.addEventListener('click', () => {
-      if (recognition) { recognition.stop(); recognition = null; btn.textContent = '🎤'; return; }
-      recognition = new SR();
-      recognition.lang = lang || 'de-DE';
-      recognition.interimResults = false;
-      recognition.onresult = e => {
-        textarea.value += (textarea.value ? ' ' : '') + e.results[0][0].transcript;
-      };
-      recognition.onend = () => { recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
-      recognition.onerror = () => { recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
-      recognition.onstart = () => { btn.textContent = '⏹'; btn.classList.add('listening'); };
-      recognition.start();
-    });
-  }
-  attachVoiceButton('tagebuch-input', 'voice-tagebuch', 'de-DE');
-  attachVoiceButton('kontext-input', 'voice-kontext', 'de-DE');
-
 })();
 
 // ── Word capture on corrected text ────────────────────────────────────────────
@@ -547,5 +528,32 @@ function showSaveToast() {
     }
   });
 })();
+</script>
+<script type="module">
+import { initializeRealtimeMemo } from "./static/realtime-voice/realtime-memo-controller.js?v=20260809-memo4";
+
+initializeRealtimeMemo({
+  capabilitiesUrl: './api/realtime-voice/memo/capabilities',
+  bootstrapUrl: './api/realtime-voice/memo/bootstrap',
+  preferenceHost: 'memo-voice-preference',
+  bindings: [
+    { buttonId: 'voice-tagebuch', textareaId: 'tagebuch-input', statusId: 'tagebuch-status' },
+    { buttonId: 'voice-kontext', textareaId: 'kontext-input', statusId: 'kontext-status' },
+  ],
+  labels: {
+    preference: 'Voice',
+    start: 'Diktat starten',
+    warning: 'Das Diktat endet in zwei Minuten.',
+    error: 'Sprachaufnahme nicht verfügbar.',
+    states: {
+      requesting: 'Mikrofon wird vorbereitet…',
+      listening: 'Hört zu — zum Beenden tippen',
+      reconnecting: 'Verbindung wird wiederhergestellt…',
+      finalizing: 'Diktat wird abgeschlossen…',
+      stopped: 'Diktat beendet.',
+      error: 'Sprachaufnahme nicht verfügbar.',
+    },
+  },
+});
 </script>
 {% endblock %}

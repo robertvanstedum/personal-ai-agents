@@ -38,13 +38,16 @@
         <div id="chat-log"></div>
         <div class="input-row">
           <input id="send-input" type="text" placeholder="Message CoS…" autocomplete="off" autofocus>
-          <button id="btn-voice" title="Voice input (Whisper)">🎙</button>
+          <button id="btn-voice" title="Start voice conversation" aria-label="Start voice conversation">🎤</button>
           <button id="btn-send">Send</button>
         </div>
         <div class="talk-meta">
           <span id="voice-status"></span>
+          <span id="voice-provider"></span>
+          <span>Voice is AI-generated.</span>
           <a href="/ui/memory" target="_blank">memory ↗</a>
         </div>
+        <div id="voice-transcript" aria-live="polite"></div>
       </div>
 
       <!-- Record -->
@@ -167,7 +170,7 @@ async function sendMessage() {
     const resp = await fetch('/ui/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, channel: 'html_text', conversation_id: 'owner' }),
     });
     const data = await resp.json();
     thinking.remove();
@@ -184,90 +187,6 @@ async function sendMessage() {
 function setInputDisabled(disabled) {
   sendInput.disabled = disabled;
   btnSend.disabled   = disabled;
-}
-
-// ── Voice input (VAD + Whisper) ───────────────────────────────────────────────
-const btnVoice    = document.getElementById('btn-voice');
-const voiceStatus = document.getElementById('voice-status');
-let   isRecording = false;
-
-btnVoice.addEventListener('click', toggleVoice);
-
-async function toggleVoice() {
-  if (isRecording) return;
-  if (!navigator.mediaDevices || !window.MediaRecorder) {
-    voiceStatus.textContent = 'Microphone not available in this browser.';
-    return;
-  }
-  btnVoice.classList.add('recording');
-  btnVoice.title = 'Recording… speak, then pause';
-  isRecording = true;
-  voiceStatus.textContent = 'Listening…';
-
-  const blob = await captureWithVAD();
-
-  btnVoice.classList.remove('recording');
-  btnVoice.title = 'Voice input (Whisper)';
-  isRecording = false;
-
-  if (!blob) { voiceStatus.textContent = ''; return; }
-
-  voiceStatus.textContent = 'Transcribing…';
-  try {
-    const fd = new FormData();
-    fd.append('audio', blob, 'audio.webm');
-    const resp = await fetch('/ui/transcribe', { method: 'POST', body: fd });
-    const data = await resp.json();
-    if (data.error) { voiceStatus.textContent = 'Transcription error: ' + data.error; return; }
-    const t = (data.transcript || '').trim();
-    if (t) { sendInput.value = t; voiceStatus.textContent = ''; sendMessage(); }
-    else { voiceStatus.textContent = 'No speech detected.'; }
-  } catch(err) {
-    voiceStatus.textContent = 'Transcription failed: ' + err.message;
-  }
-}
-
-async function captureWithVAD() {
-  const SPEECH_RMS = 0.018, SILENCE_RMS = 0.012, SPEECH_MIN = 300, SILENCE_MS = 2000;
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg;codecs=opus']
-    .find(t => MediaRecorder.isTypeSupported(t)) || '';
-  const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
-  const chunks = [];
-  recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  await audioCtx.resume().catch(() => {});
-  const analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 256;
-  audioCtx.createMediaStreamSource(stream).connect(analyser);
-  const pcmData = new Float32Array(analyser.fftSize);
-  return new Promise(resolve => {
-    let speechStart = null, silenceFrom = null, recording = false, done = false;
-    function finish() {
-      if (done) return; done = true; clearInterval(vad);
-      if (recorder.state !== 'inactive') {
-        recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType || 'audio/webm' }));
-        recorder.stop();
-      } else { resolve(null); }
-      audioCtx.close(); stream.getTracks().forEach(t => t.stop());
-    }
-    recorder.start(100);
-    const vad = setInterval(() => {
-      analyser.getFloatTimeDomainData(pcmData);
-      let sum = 0;
-      for (let i = 0; i < pcmData.length; i++) sum += pcmData[i] * pcmData[i];
-      const rms = Math.sqrt(sum / pcmData.length);
-      if (rms >= SPEECH_RMS) {
-        if (!speechStart) speechStart = Date.now();
-        silenceFrom = null;
-        if (!recording && Date.now() - speechStart >= SPEECH_MIN) recording = true;
-      } else if (rms < SILENCE_RMS) {
-        if (recording && !silenceFrom) silenceFrom = Date.now();
-        if (recording && silenceFrom && Date.now() - silenceFrom >= SILENCE_MS) finish();
-      }
-    }, 50);
-    setTimeout(finish, 30000);
-  });
 }
 
 // ── Notes tab ─────────────────────────────────────────────────────────────────
@@ -395,6 +314,86 @@ function esc(s) {
 // ── Initialise on load ───────────────────────────────────────────────────────
 activateTab(INITIAL_TAB, false);
 if (INITIAL_TAB !== 'confer') loadTab(INITIAL_TAB);
+</script>
+<script type="module">
+import { ConferVoiceController } from "../static/realtime-voice/realtime-confer-controller.js?v=20260809-confer5";
+
+const voiceButton = document.getElementById('btn-voice');
+const voiceStatus = document.getElementById('voice-status');
+const voiceProvider = document.getElementById('voice-provider');
+const voiceTranscript = document.getElementById('voice-transcript');
+let voiceRunning = false;
+let thinking = null;
+
+const stateLabels = {
+  requesting: 'Connecting…',
+  listening: 'Listening',
+  thinking: 'Thinking',
+  speaking: 'Speaking',
+  interrupted: 'Interrupted',
+  reconnecting: 'Reconnecting…',
+  stopped: '',
+  error: 'Voice error',
+};
+
+const voiceController = new ConferVoiceController({
+  capabilitiesUrl: '../api/realtime-voice/confer/capabilities',
+  bootstrapUrl: '../api/realtime-voice/confer/bootstrap',
+  turnUrl: 'send',
+  onStateChange: (state) => {
+    if (['stopped', 'error'].includes(state)) voiceRunning = false;
+    const voiceActive = voiceRunning && !['stopped', 'error'].includes(state);
+    voiceStatus.textContent = stateLabels[state] || state;
+    voiceButton.classList.toggle('recording', voiceActive);
+    voiceButton.textContent = voiceActive ? '■' : '🎤';
+    voiceButton.title = voiceActive ? 'Stop voice conversation' : 'Start voice conversation';
+    voiceButton.setAttribute('aria-label', voiceButton.title);
+  },
+  onProvisionalTranscript: (text) => {
+    voiceTranscript.textContent = text ? `Hearing: ${text}` : '';
+  },
+  onUserTurn: (text) => {
+    appendMsg('user', text);
+    thinking = appendThinking();
+  },
+  onAssistantTurn: (text) => {
+    thinking?.remove();
+    thinking = null;
+    appendMsg('cos', text);
+  },
+  onWarning: () => {
+    voiceStatus.textContent = 'Voice will stop in two minutes.';
+  },
+  onError: (error) => {
+    thinking?.remove();
+    thinking = null;
+    voiceTranscript.textContent = `Voice error: ${error?.detail || error?.reason || 'unknown error'}`;
+  },
+});
+
+try {
+  const capabilities = await voiceController.availableProviders();
+  const providers = capabilities.providers || [];
+  const selected = providers.find(item => item.provider === capabilities.default_provider) || providers[0];
+  voiceProvider.textContent = selected ? `Voice: ${selected.label}` : 'Voice unavailable';
+  voiceButton.disabled = !selected;
+} catch (_) {
+  voiceProvider.textContent = 'Voice unavailable';
+  voiceButton.disabled = true;
+}
+
+voiceButton.addEventListener('click', async () => {
+  if (voiceRunning) {
+    voiceController.stop();
+    return;
+  }
+  voiceRunning = true;
+  try {
+    await voiceController.start();
+  } catch (_) {
+    voiceRunning = false;
+  }
+});
 </script>
 </body>
 </html>
