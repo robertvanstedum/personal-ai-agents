@@ -28,6 +28,8 @@ def mint_transcription_credential(
     *,
     transcription_language: str,
     user_id_for_safety_identifier: str,
+    transcription_prompt: str | None = None,
+    transcription_keywords: list[str] | None = None,
 ) -> dict:
     """Mint a browser-safe credential for a transcription-only session.
 
@@ -40,6 +42,9 @@ def mint_transcription_credential(
         transcription_language=transcription_language,
         user_id_for_safety_identifier=user_id_for_safety_identifier,
         turn_detection=None,
+        transcription_delay="medium",
+        transcription_prompt=transcription_prompt,
+        transcription_keywords=transcription_keywords,
     )
 
 
@@ -47,6 +52,8 @@ def mint_confer_transcription_credential(
     *,
     transcription_language: str,
     user_id_for_safety_identifier: str,
+    transcription_prompt: str | None = None,
+    transcription_keywords: list[str] | None = None,
 ) -> dict:
     """Mint a transcription-only session for chained CoS conversation.
 
@@ -59,6 +66,9 @@ def mint_confer_transcription_credential(
         transcription_language=transcription_language,
         user_id_for_safety_identifier=user_id_for_safety_identifier,
         turn_detection=None,
+        transcription_delay="low",
+        transcription_prompt=transcription_prompt,
+        transcription_keywords=transcription_keywords,
     )
 
 
@@ -67,21 +77,30 @@ def _mint_transcription_credential(
     transcription_language: str,
     user_id_for_safety_identifier: str,
     turn_detection: dict | None,
+    transcription_delay: str,
+    transcription_prompt: str | None,
+    transcription_keywords: list[str] | None,
 ) -> dict:
     api_key = get_secret("OPENAI_API_KEY", "openai", "api_key")
     if not api_key:
         raise OpenAIRealtimeError("OpenAI API key not configured")
+
+    transcription = {
+        "model": _DEFAULT_TRANSCRIPTION_MODEL,
+        "languages": [transcription_language],
+        "delay": transcription_delay,
+    }
+    if transcription_prompt:
+        transcription["prompt"] = transcription_prompt
+    if transcription_keywords:
+        transcription["keywords"] = transcription_keywords
 
     payload = {
         "session": {
             "type": "transcription",
             "audio": {
                 "input": {
-                    "transcription": {
-                        "model": _DEFAULT_TRANSCRIPTION_MODEL,
-                        "languages": [transcription_language],
-                        "delay": "low",
-                    },
+                    "transcription": transcription,
                     "turn_detection": turn_detection,
                 },
             },

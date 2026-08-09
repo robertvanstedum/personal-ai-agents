@@ -18,6 +18,15 @@ from core.realtime_voice.providers import openai_realtime
 
 _DEFAULT_WARNING_MINUTES = 13
 _DEFAULT_MAX_MINUTES = 15
+_CONFER_TRANSCRIPTION_PROMPT = (
+    "English-language personal Chief of Staff conversation. Transcribe the "
+    "speaker verbatim with natural punctuation; preserve product and domain "
+    "names and do not answer, summarize, or add language labels."
+)
+_CONFER_TRANSCRIPTION_KEYWORDS = [
+    "mini-moi", "Curator", "Guild", "Mein Deutsch", "Meu Português",
+    "Chief of Staff", "CoS", "OpenClaw", "Grok",
+]
 
 
 def _duration_guard() -> DurationGuard:
@@ -75,6 +84,8 @@ def create_confer_voice_blueprint(*, locale: str = "en-US") -> Blueprint:
             credential = openai_realtime.mint_confer_transcription_credential(
                 transcription_language="en",
                 user_id_for_safety_identifier=str(user_id),
+                transcription_prompt=_CONFER_TRANSCRIPTION_PROMPT,
+                transcription_keywords=_CONFER_TRANSCRIPTION_KEYWORDS,
             )
         except ValueError as error:
             return jsonify({"ok": False, "error": str(error)}), 400

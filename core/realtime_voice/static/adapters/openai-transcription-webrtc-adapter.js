@@ -1,6 +1,6 @@
 /** Browser-direct OpenAI transcription transport using an ephemeral key. */
 export class OpenAITranscriptionWebRTCAdapter {
-  constructor() {
+  constructor({ autoCommitOnSilence = false, finishTimeoutMs = 2500 } = {}) {
     this._listeners = {};
     this._pc = null;
     this._dc = null;
@@ -14,6 +14,8 @@ export class OpenAITranscriptionWebRTCAdapter {
     this._speaking = false;
     this._speechStartedAt = 0;
     this._lastVoiceAt = 0;
+    this._autoCommitOnSilence = autoCommitOnSilence;
+    this._finishTimeoutMs = finishTimeoutMs;
   }
 
   on(eventName, handler) {
@@ -59,7 +61,7 @@ export class OpenAITranscriptionWebRTCAdapter {
       }
     });
     this._dc.addEventListener("open", () => {
-      this._startLocalTurnDetection();
+      if (this._autoCommitOnSilence) this._startLocalTurnDetection();
       this._emit("connected", { provider: "openai" });
     });
     this._dc.addEventListener("close", () => {
@@ -69,8 +71,11 @@ export class OpenAITranscriptionWebRTCAdapter {
     const offer = await this._pc.createOffer();
     await this._pc.setLocalDescription(offer);
 
+    // The ephemeral credential is already bound to the transcription session
+    // and model. The GA WebRTC contract posts the SDP to /v1/realtime/calls
+    // without repeating the model in the query string.
     const response = await fetch(
-      `https://api.openai.com/v1/realtime/calls?model=${encodeURIComponent(credentials.model)}`,
+      "https://api.openai.com/v1/realtime/calls",
       {
         method: "POST",
         headers: {
@@ -95,7 +100,7 @@ export class OpenAITranscriptionWebRTCAdapter {
     return new Promise((resolve) => {
       this._finishResolve = resolve;
       this._dc.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
-      this._finishTimer = setTimeout(() => this._resolveFinish(), 2500);
+      this._finishTimer = setTimeout(() => this._resolveFinish(), this._finishTimeoutMs);
     });
   }
 

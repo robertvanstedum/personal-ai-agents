@@ -1,5 +1,8 @@
 {% extends "portuguese_base.html" %}
 {% block title %}Leitura{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="./static/realtime-voice/realtime-memo.css?v=20260809-memo1">
+{% endblock %}
 
 {% block content %}
 
@@ -672,21 +675,7 @@ document.body.classList.add('parch-mode');
     const btn = document.getElementById('voice-notizen');
     const textarea = document.getElementById('notizen-original');
     if (!btn || !textarea) return;
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { btn.style.display = 'none'; return; }
-    let recognition = null;
-    btn.addEventListener('click', () => {
-      if (recognition) { recognition.stop(); recognition = null; btn.textContent = '🎤'; return; }
-      recognition = new SR();
-      recognition.lang = 'pt-BR'; recognition.interimResults = false;
-      recognition.onresult = e => {
-        textarea.value += (textarea.value ? ' ' : '') + e.results[0][0].transcript;
-      };
-      recognition.onend = () => { recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
-      recognition.onerror = () => { recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
-      recognition.onstart = () => { btn.textContent = '⏹'; btn.classList.add('listening'); };
-      recognition.start();
-    });
+    // The shared memo controller attaches the recording behavior below.
   })();
 
   document.getElementById('btn-vorlesen').addEventListener('click', () => {
@@ -699,5 +688,31 @@ document.body.classList.add('parch-mode');
 
   enterBrowse();
 })();
+</script>
+<script type="module">
+import { initializeRealtimeMemo } from "./static/realtime-voice/realtime-memo-controller.js?v=20260809-memo4";
+
+initializeRealtimeMemo({
+  capabilitiesUrl: './api/realtime-voice/memo/capabilities',
+  bootstrapUrl: './api/realtime-voice/memo/bootstrap',
+  preferenceHost: 'memo-voice-preference-leitura',
+  bindings: [
+    { buttonId: 'voice-notizen', textareaId: 'notizen-original', statusId: 'notizen-status' },
+  ],
+  labels: {
+    preference: 'Voz',
+    start: 'Iniciar ditado',
+    warning: 'O ditado termina em dois minutos.',
+    error: 'A gravação de voz não está disponível.',
+    states: {
+      requesting: 'Preparando o microfone…',
+      listening: 'Ouvindo — toque para encerrar',
+      reconnecting: 'Reconectando…',
+      finalizing: 'Finalizando o ditado…',
+      stopped: 'Ditado encerrado.',
+      error: 'A gravação de voz não está disponível.',
+    },
+  },
+});
 </script>
 {% endblock %}

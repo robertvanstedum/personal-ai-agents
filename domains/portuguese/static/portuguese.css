@@ -1884,6 +1884,18 @@ body.reading-mode nav { background: #1B2E1F; border-bottom-color: var(--parch-ac
 .notizen-status { font-size: 0.8rem; color: rgba(27, 46, 31, 0.5); font-style: italic; }
 .notizen-status--saved { color: var(--pt-accent); font-style: normal; }
 
+.input-with-voice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.input-with-voice .notizen-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+
 .notizen-correction {
   margin-top: 1rem; padding: 0.75rem 1rem;
   background: rgba(27, 46, 31, 0.04);
@@ -2489,4 +2501,83 @@ body.reading-mode nav { background: #1B2E1F; border-bottom-color: var(--parch-ac
   color: var(--pt-text-muted);
   margin-top: 10px;
   line-height: 1.5;
+}
+
+/* ── Mobile writing containment ── */
+@media (max-width: 768px) {
+  body.escrita-mode {
+    overflow-x: hidden;
+  }
+
+  body.escrita-mode .tab-layout-split,
+  body.escrita-mode .tab-content,
+  body.escrita-mode .memo-voice-toolbar,
+  body.escrita-mode .mode-pane,
+  body.escrita-mode .notebook-textarea,
+  body.escrita-mode .pane-actions,
+  body.escrita-mode .session-history {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body.escrita-mode .tab-content {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  body.escrita-mode .mode-toggle {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body.escrita-mode .mode-toggle::-webkit-scrollbar {
+    display: none;
+  }
+
+  body.escrita-mode .mode-btn {
+    flex: 0 0 auto;
+  }
+
+  body.escrita-mode .pane-actions {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  body.escrita-mode .pane-actions-left {
+    min-width: 0;
+  }
+
+  body.escrita-mode .pane-actions > .btn-primary {
+    flex: 1 1 7rem;
+    min-height: 44px;
+  }
+
+  body.escrita-mode .session-entry {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body.escrita-mode .session-preview {
+    min-width: 0;
+  }
+
+  body.reading-mode .reading-article-scroll,
+  body.reading-mode .reading-notizen,
+  body.reading-mode .input-with-voice {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body.reading-mode .notizen-actions {
+    flex-wrap: wrap;
+  }
+
+  body.reading-mode .notizen-status {
+    flex: 1 0 100%;
+  }
 }

@@ -53,6 +53,16 @@ def test_confer_bootstrap_mints_transcription_only_credential():
     mint.assert_called_once_with(
         transcription_language="en",
         user_id_for_safety_identifier="42",
+        transcription_prompt=(
+            "English-language personal Chief of Staff conversation. Transcribe "
+            "the speaker verbatim with natural punctuation; preserve product "
+            "and domain names and do not answer, summarize, or add language "
+            "labels."
+        ),
+        transcription_keywords=[
+            "mini-moi", "Curator", "Guild", "Mein Deutsch", "Meu Português",
+            "Chief of Staff", "CoS", "OpenClaw", "Grok",
+        ],
     )
 
 

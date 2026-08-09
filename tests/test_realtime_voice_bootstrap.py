@@ -143,6 +143,15 @@ def test_memo_bootstrap_mints_transcription_only_credential(client):
     assert captured == {
         "transcription_language": "de",
         "user_id_for_safety_identifier": "420",
+        "transcription_prompt": (
+            "German-language personal journal dictation for a writing-practice "
+            "surface. The speaker may pause, self-correct, or restart. Produce "
+            "verbatim German text with natural punctuation; do not translate, "
+            "answer, comment, or add language labels."
+        ),
+        "transcription_keywords": [
+            "mini-moi", "Mein Deutsch", "Schreiben", "Gespräche"
+        ],
     }
     data = response.get_json()
     assert data["model"] == "gpt-live-transcribe"

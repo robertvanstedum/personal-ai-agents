@@ -1,4 +1,4 @@
-import { OpenAITranscriptionWebRTCAdapter } from "./adapters/openai-transcription-webrtc-adapter.js?v=20260809-confer2";
+import { OpenAITranscriptionWebRTCAdapter } from "./adapters/openai-transcription-webrtc-adapter.js?v=20260809-confer4";
 
 const PREFERENCE_KEY = "minimoi.voice.provider";
 
@@ -92,7 +92,9 @@ export class ConferVoiceController {
     this._maxMinutes = credentials.max_minutes || 15;
 
     const generation = ++this._generation;
-    const adapter = new OpenAITranscriptionWebRTCAdapter();
+    // Confer is conversational: a short silence completes one user turn and
+    // sends it to the configured CoS reasoning backend.
+    const adapter = new OpenAITranscriptionWebRTCAdapter({ autoCommitOnSilence: true });
     this._adapter = adapter;
     adapter.on("connected", () => {
       if (this._isCurrent(generation)) this._onStateChange("listening");

@@ -41,6 +41,8 @@ def test_openai_memo_uses_transcription_only_session_without_turn_detection():
         result = openai_realtime.mint_transcription_credential(
             transcription_language="pt",
             user_id_for_safety_identifier="42",
+            transcription_prompt="Portuguese journal dictation.",
+            transcription_keywords=["Meu Português", "Escrita"],
         )
 
     session = post.call_args.kwargs["json"]["session"]
@@ -49,7 +51,9 @@ def test_openai_memo_uses_transcription_only_session_without_turn_detection():
     assert session["audio"]["input"]["transcription"] == {
         "model": "gpt-live-transcribe",
         "languages": ["pt"],
-        "delay": "low",
+        "delay": "medium",
+        "prompt": "Portuguese journal dictation.",
+        "keywords": ["Meu Português", "Escrita"],
     }
     assert result == {
         "provider": "openai",
@@ -76,6 +80,7 @@ def test_openai_confer_uses_transcription_only_session_with_browser_vad():
     session = post.call_args.kwargs["json"]["session"]
     assert session["type"] == "transcription"
     assert session["audio"]["input"]["turn_detection"] is None
+    assert session["audio"]["input"]["transcription"]["delay"] == "low"
 
 
 def test_xai_session_config_requests_input_transcription():

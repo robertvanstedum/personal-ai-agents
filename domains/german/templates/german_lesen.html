@@ -1,5 +1,8 @@
 {% extends "german_base.html" %}
 {% block title %}Lesen{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="./static/realtime-voice/realtime-memo.css?v=20260809-memo1">
+{% endblock %}
 
 {% block content %}
 
@@ -783,26 +786,7 @@
     const btn = document.getElementById('voice-notizen');
     const textarea = document.getElementById('notizen-original');
     if (!btn || !textarea) return;
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { btn.style.display = 'none'; return; }
-    let recognition = null;
-    btn.addEventListener('click', () => {
-      if (recognition) { recognition.stop(); recognition = null; btn.textContent = '🎤'; return; }
-      recognition = new SR();
-      recognition.lang = 'de-DE';
-      recognition.interimResults = false;
-      recognition.onresult = e => {
-        textarea.value += (textarea.value ? ' ' : '') + e.results[0][0].transcript;
-      };
-      recognition.onend = () => {
-        recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening');
-      };
-      recognition.onerror = () => {
-        recognition = null; btn.textContent = '🎤'; btn.classList.remove('listening');
-      };
-      recognition.onstart = () => { btn.textContent = '⏹'; btn.classList.add('listening'); };
-      recognition.start();
-    });
+    // The shared memo controller attaches the recording behavior below.
   })();
 
   // ── Vorlesen ──────────────────────────────────────────────────────────
@@ -818,5 +802,31 @@
   enterBrowse();
 
 })();
+</script>
+<script type="module">
+import { initializeRealtimeMemo } from "./static/realtime-voice/realtime-memo-controller.js?v=20260809-memo4";
+
+initializeRealtimeMemo({
+  capabilitiesUrl: './api/realtime-voice/memo/capabilities',
+  bootstrapUrl: './api/realtime-voice/memo/bootstrap',
+  preferenceHost: 'memo-voice-preference-lesen',
+  bindings: [
+    { buttonId: 'voice-notizen', textareaId: 'notizen-original', statusId: 'notizen-status' },
+  ],
+  labels: {
+    preference: 'Voice',
+    start: 'Diktat starten',
+    warning: 'Das Diktat endet in zwei Minuten.',
+    error: 'Sprachaufnahme nicht verfügbar.',
+    states: {
+      requesting: 'Mikrofon wird vorbereitet…',
+      listening: 'Hört zu — zum Beenden tippen',
+      reconnecting: 'Verbindung wird wiederhergestellt…',
+      finalizing: 'Diktat wird abgeschlossen…',
+      stopped: 'Diktat beendet.',
+      error: 'Sprachaufnahme nicht verfügbar.',
+    },
+  },
+});
 </script>
 {% endblock %}

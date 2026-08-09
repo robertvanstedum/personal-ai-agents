@@ -49,6 +49,26 @@ _TRANSCRIPTION_LANGUAGE = {
 _MEMO_TRANSCRIPTION_LANGUAGE = {"de-AT": "de", "pt-BR": "pt"}
 _DEFAULT_MEMO_WARNING_MINUTES = 13
 _DEFAULT_MEMO_MAX_MINUTES = 15
+_MEMO_TRANSCRIPTION_CONTEXT = {
+    "de-AT": {
+        "prompt": (
+            "German-language personal journal dictation for a writing-practice "
+            "surface. The speaker may pause, self-correct, or restart. Produce "
+            "verbatim German text with natural punctuation; do not translate, "
+            "answer, comment, or add language labels."
+        ),
+        "keywords": ["mini-moi", "Mein Deutsch", "Schreiben", "Gespräche"],
+    },
+    "pt-BR": {
+        "prompt": (
+            "Brazilian Portuguese personal journal dictation for a writing-"
+            "practice surface. The speaker may pause, self-correct, or restart. "
+            "Produce verbatim Portuguese text with natural punctuation; do not "
+            "translate, answer, comment, or add language labels."
+        ),
+        "keywords": ["mini-moi", "Meu Português", "Escrita", "Conversas"],
+    },
+}
 
 
 def check_voice_rate_limit(user_id: str) -> bool:
@@ -122,9 +142,12 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
 
         try:
             if capability.provider == "openai":
+                transcription_context = _MEMO_TRANSCRIPTION_CONTEXT[locale]
                 credential = openai_realtime.mint_transcription_credential(
                     transcription_language=_MEMO_TRANSCRIPTION_LANGUAGE[locale],
                     user_id_for_safety_identifier=str(user_id),
+                    transcription_prompt=transcription_context["prompt"],
+                    transcription_keywords=transcription_context["keywords"],
                 )
             else:  # Fail closed if registry and implementation ever drift.
                 raise ProviderUnavailableError(

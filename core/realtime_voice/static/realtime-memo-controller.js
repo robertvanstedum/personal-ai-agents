@@ -1,4 +1,4 @@
-import { OpenAITranscriptionWebRTCAdapter } from "./adapters/openai-transcription-webrtc-adapter.js?v=20260809-memo1";
+import { OpenAITranscriptionWebRTCAdapter } from "./adapters/openai-transcription-webrtc-adapter.js?v=20260809-memo4";
 
 const PREFERENCE_KEY = "minimoi.voice.provider";
 let activeBinding = null;
@@ -58,7 +58,14 @@ export class RealtimeMemoController {
     }
 
     const generation = ++this._generation;
-    const adapter = new OpenAITranscriptionWebRTCAdapter();
+    // Memo mode is one continuous recording. Pauses must not create separate
+    // turns; the user explicitly commits the complete memo by tapping stop.
+    const adapter = new OpenAITranscriptionWebRTCAdapter({
+      autoCommitOnSilence: false,
+      // Memo transcription favors accuracy over latency and can take longer
+      // than a conversational turn to emit its completed event after commit.
+      finishTimeoutMs: 10000,
+    });
     this._adapter = adapter;
     adapter.on("connected", () => {
       if (generation === this._generation && !this._stopping) this._onStateChange("listening");

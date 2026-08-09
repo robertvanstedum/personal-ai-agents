@@ -33,3 +33,8 @@ def test_openai_adapter_commits_browser_detected_speech_turns():
     assert "createAnalyser" in source
     assert 'source: "browser_vad"' in source
     assert 'type: "input_audio_buffer.commit"' in source
+
+    controller = (
+        ROOT / "core/realtime_voice/static/realtime-confer-controller.js"
+    ).read_text()
+    assert "autoCommitOnSilence: true" in controller
