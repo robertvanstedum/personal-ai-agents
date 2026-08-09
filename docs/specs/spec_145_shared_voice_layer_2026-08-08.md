@@ -148,17 +148,19 @@ permission model.
 ### Guild #135: OpenClaw #2 dependency
 
 **OpenClaw #2 — CoS-Scoped Gateway, Dev Setup** is a prerequisite for OpenClaw-
-backed Confer. It is currently blocked until OpenClaw supplies all four items:
+backed Confer and is scoped to Stage 3. The installed runtime, OpenClaw 2026.7.1,
+has been inventoried. The integration contract is authenticated WebSocket JSON
+RPC; `call_backend(...) -> str` remains a valid first integration shape.
+External `@openclaw/gateway-client` and `@openclaw/gateway-protocol` npm packages
+are not available for this pinned runtime and must not be assumed. Gateway
+lifecycle commands and the live configuration schema are confirmed.
 
-1. the supported npm install command;
-2. the CLI start command;
-3. the minimal configuration schema; and
-4. the `_collect_response` protocol answer.
-
-The bounded gateway must be installed and pass a text-only CoS conformance test
-before voice is connected to it. Voice work must not guess these details,
-embed an unofficial OpenClaw launch path, or make an agent runtime dependency
-part of the shared audio controller.
+The provisional `_collect_response` exchange in the older #135 plan is retired;
+the documented request, response, and event frame contract applies. Guild #135
+must be revised against the pinned runtime before Stage 3 begins. The bounded
+CoS agent must then pass a text-only conformance test before voice is connected
+to it. That revision and test are Stage 3 entry gates, not blockers for the
+shared voice foundation, journal memo mode, or Grok-backed Confer validation.
 
 ## 4. Goals and scope
 
@@ -368,8 +370,8 @@ The current synchronous backend contract, `call_backend(...) -> str`, remains
 valid for typed chat and compatibility. Confer voice will probably require an
 optional streaming contract, for example `stream_backend(...) -> events`, with
 a synchronous adapter for backends that do not stream. The exact event schema
-must be decided alongside #133/#135 after the OpenClaw protocol answer arrives;
-this spec does not pre-empt it.
+must be decided alongside #133/#135 after the pinned Gateway method surface is
+verified and the #135 plan is revised; this spec does not pre-empt it.
 
 ### Provider and backend selection are separate
 
@@ -571,9 +573,10 @@ usable with assistive technology in memo and conversation modes.
 - **Journal memo mode is not blocked by OpenClaw.** It may begin after the
   unmerged shared-voice branch is reconciled and the first transcription
   provider's secure session/bootstrap path is confirmed.
-- Guild #135's four OpenClaw answers and text-only conformance block only the
-  acceptance of **OpenClaw-backed Confer**. They do not block the journal fix or
-  early Confer validation through the existing Grok backend.
+- Revision of Guild #135 against the pinned OpenClaw Gateway method surface and
+  text-only conformance block only the acceptance of **OpenClaw-backed
+  Confer**. They do not block the journal fix or early Confer validation through
+  the existing Grok backend.
 - The optional backend streaming schema belongs to #133/#135. Its absence does
   not block a synchronous first Confer path.
 - Provider capabilities, authentication shape, event normalization, limits,
@@ -615,12 +618,17 @@ Phase 1 depends on Phase 0A only.
 
 ### Phase 0B — close CoS/OpenClaw prerequisites
 
-1. Obtain the four missing OpenClaw answers recorded under Guild #135.
-2. Install and run the bounded OpenClaw #2 gateway in dev using the approved
-   configuration.
-3. Complete a text-only conformance path through `chief_of_staff.py` and
+1. Revise Guild #135 to replace its provisional `_collect_response` exchange
+   with the authenticated WebSocket JSON RPC contract exposed by the pinned
+   OpenClaw runtime.
+2. Verify the required run, final-result, session, event, and cancellation
+   methods through live Gateway discovery; do not assume newer documentation is
+   available in OpenClaw 2026.7.1.
+3. Configure and run the bounded CoS agent in dev using the approved agent,
+   workspace, authentication, tool-policy, and audit boundaries.
+4. Complete a text-only conformance path through `chief_of_staff.py` and
    `OpenClawBackend` before adding OpenClaw-backed voice.
-4. Confirm the backend boundary and any streaming event extension under Guild
+5. Confirm the backend boundary and any streaming event extension under Guild
    #133, including fallback behavior when a backend cannot stream.
 
 Phase 0B may proceed independently. It blocks OpenClaw-backed Confer acceptance,
@@ -765,8 +773,9 @@ the CoS backend contract or removing the future swap point.
 3. The speech/transcription provider never acts as or bypasses the CoS agent.
 4. Spoken responses, interruption, transcript visibility, stop, and reconnect
    work on representative desktop and mobile devices.
-5. The #135 four-item blocker is resolved and OpenClaw passes text conformance
-   before it is accepted as the voice-backed production CoS.
+5. The #135 plan is revised against the pinned Gateway contract and OpenClaw
+   passes text conformance before it is accepted as the voice-backed production
+   CoS.
 6. CoS domain access remains bounded and auditable for voice-originated turns.
 7. OpenAI/xAI differences are contained in provider modules and declared in the
    capability registry; domain pages contain no provider-specific transport
@@ -822,8 +831,8 @@ the CoS backend contract or removing the future swap point.
 ## 14. Registration
 
 - Keep Guild #133 as the governing intelligence-layer architecture.
-- Keep Guild #135 as the OpenClaw dev/gateway prerequisite with its four named
-  blockers.
+- Keep Guild #135 as the Stage 3 OpenClaw dev/gateway prerequisite and revise
+  its provisional protocol before that stage begins.
 - Link issue #177 to the journal memo-mode implementation work.
 - Treat CoS voice as the channel capability promised by Roadmap §3 and an
   addendum to #133/#135, not a new competing CoS or OpenClaw program.

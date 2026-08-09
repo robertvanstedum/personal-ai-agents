@@ -8,7 +8,7 @@
     "priority": "high",
     "blocked_reason": null,
     "last_transition_at": "2026-08-08T00:00:00Z",
-    "notes": "Approved to build by Robert on 2026-08-08 after Grok and Claude Code design review. Day-one target is OpenAI and xAI for journal memo and chained CoS Confer A/B comparison; a documented provider blocker permits a single-provider first release without removing the swap point. Journal memo is not blocked by OpenClaw. OpenClaw-backed Confer depends on #135 text conformance and its four named upstream answers. A second implementer must review the actual implementation diff, followed by separate Robert ship approval. This is the first Codex-authored pilot candidate under specification-standard item #144; Robert's format verification remains pending."
+    "notes": "Approved to build by Robert on 2026-08-08 after Grok and Claude Code design review. Day-one target is OpenAI and xAI for journal memo and chained CoS Confer A/B comparison; a documented provider blocker permits a single-provider first release without removing the swap point. Journal memo and Grok-backed Confer validation are not blocked by OpenClaw. OpenClaw-backed Confer is Stage 3 and depends on revising #135 against the pinned Gateway WebSocket RPC surface plus text-only CoS conformance. A second implementer must review the actual implementation diff, followed by separate Robert ship approval. This is the first Codex-authored pilot candidate under specification-standard item #144; Robert's format verification remains pending."
   },
   {
     "id": 144,
@@ -36,12 +36,12 @@
     "id": 135,
     "spec_title": "OpenClaw #2 — CoS-Scoped Gateway, Dev Setup",
     "spec_file": "spec_133_plan_openclaw2_dev_setup_v2_2026-07-14.md",
-    "status": "spec_ready",
+    "status": "design",
     "github_issue": null,
     "priority": "normal",
-    "blocked_reason": "Blocked at session start on four items OpenClaw must supply: (1) npm install command, (2) CLI start command, (3) minimal config schema, (4) _collect_response protocol answer. Claude Code can implement everything else immediately once all four arrive.",
+    "blocked_reason": null,
     "last_transition_at": "2026-07-14T00:00:00Z",
-    "notes": "Phase 1 Task 9 of spec #133 v1.3. Do not start build until all four OpenClaw answers are in hand. Claude Code implements: openclaw_backend.py WS client, COS_BACKEND_TYPE env-var switch in init_backend(), Dockerfile.openclaw-cos, openclaw-cos compose service, scripts/cos_ab_test.py A/B harness. Memory judgment stays in coordination layer (not in backend). See plan for full implementation detail."
+    "notes": "Stage 3 prerequisite for Shared Voice Layer #145 and Phase 1 Task 9 of intelligence-layer #133. The installed OpenClaw 2026.7.1 runtime exposes authenticated WebSocket JSON RPC; the older plan's provisional _collect_response exchange and four-upstream-answer blocker are retired. Before implementation, revise this plan against live Gateway method discovery, decide the bounded agent/process topology, and verify run/final-result, sessions, events, cancellation, scopes, tool policy, and audit behavior. Then implement the backend behind chief_of_staff.py and pass text-only CoS conformance before attaching voice. Memory judgment remains in the permanent coordination layer. This Stage 3 design work does not block voice foundation, journal memo mode, or Grok-backed Confer validation."
   },
   {
     "id": 134,
