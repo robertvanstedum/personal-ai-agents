@@ -38,7 +38,7 @@
         <div id="chat-log"></div>
         <div class="input-row">
           <input id="send-input" type="text" placeholder="Message CoS…" autocomplete="off" autofocus>
-          <button id="btn-voice" title="Start voice conversation" aria-label="Start voice conversation">🎙</button>
+          <button id="btn-voice" title="Start voice conversation" aria-label="Start voice conversation">🎤</button>
           <button id="btn-send">Send</button>
         </div>
         <div class="talk-meta">
@@ -316,7 +316,7 @@ activateTab(INITIAL_TAB, false);
 if (INITIAL_TAB !== 'confer') loadTab(INITIAL_TAB);
 </script>
 <script type="module">
-import { ConferVoiceController } from "/static/realtime-voice/realtime-confer-controller.js?v=20260809-confer4";
+import { ConferVoiceController } from "../static/realtime-voice/realtime-confer-controller.js?v=20260809-confer5";
 
 const voiceButton = document.getElementById('btn-voice');
 const voiceStatus = document.getElementById('voice-status');
@@ -337,16 +337,17 @@ const stateLabels = {
 };
 
 const voiceController = new ConferVoiceController({
-  capabilitiesUrl: '/api/realtime-voice/confer/capabilities',
-  bootstrapUrl: '/api/realtime-voice/confer/bootstrap',
-  turnUrl: '/ui/send',
+  capabilitiesUrl: '../api/realtime-voice/confer/capabilities',
+  bootstrapUrl: '../api/realtime-voice/confer/bootstrap',
+  turnUrl: 'send',
   onStateChange: (state) => {
-    voiceStatus.textContent = stateLabels[state] || state;
-    voiceButton.classList.toggle('recording', voiceRunning && state !== 'error');
-    voiceButton.textContent = voiceRunning && state !== 'error' ? '■' : '🎙';
-    voiceButton.title = voiceRunning ? 'Stop voice conversation' : 'Start voice conversation';
-    voiceButton.setAttribute('aria-label', voiceButton.title);
     if (['stopped', 'error'].includes(state)) voiceRunning = false;
+    const voiceActive = voiceRunning && !['stopped', 'error'].includes(state);
+    voiceStatus.textContent = stateLabels[state] || state;
+    voiceButton.classList.toggle('recording', voiceActive);
+    voiceButton.textContent = voiceActive ? '■' : '🎤';
+    voiceButton.title = voiceActive ? 'Stop voice conversation' : 'Start voice conversation';
+    voiceButton.setAttribute('aria-label', voiceButton.title);
   },
   onProvisionalTranscript: (text) => {
     voiceTranscript.textContent = text ? `Hearing: ${text}` : '';

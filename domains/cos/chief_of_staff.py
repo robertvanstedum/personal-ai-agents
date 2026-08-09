@@ -1189,7 +1189,9 @@ def ui_send():
                 provider=voice_provider,
                 user_id=str(user_id),
             )
-            payload["speech_url"] = f"/ui/speech/{result.turn_id}"
+            # Keep this relative so the same response works both directly at
+            # /ui/confer and through the portal's /app/cos/ui/confer proxy.
+            payload["speech_url"] = f"speech/{result.turn_id}"
         return jsonify(payload)
     except ValueError as e:
         return jsonify({"reply": str(e)}), 400
