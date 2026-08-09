@@ -495,3 +495,21 @@ def test_refresh_api_blocks_guest_and_reports_retryable_failure(monkeypatch, ger
     )
     assert owner.status_code == 503
     assert owner.get_json()["retry"] is True
+
+
+def test_refresh_api_blocks_missing_tier_header(monkeypatch, german_client):
+    """A request with no X-Minimoi-User-Tier header at all used to fall
+    through the old `if caller_tier and caller_tier != "owner"` check —
+    only a present-and-wrong tier was rejected, so a request that bypassed
+    the portal proxy (which always sets this header) reached refresh_lesen_feed
+    unauthenticated (issue #97 finding 4)."""
+    calls = []
+    monkeypatch.setattr(
+        html_server,
+        "refresh_lesen_feed",
+        lambda: calls.append(True) or {"ok": True},
+    )
+
+    headerless = german_client.post("/api/lesen-refresh")
+    assert headerless.status_code == 403
+    assert calls == []

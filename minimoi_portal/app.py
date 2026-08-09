@@ -156,11 +156,27 @@ def _current_user() -> dict | None:
 def _require_login(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not _current_user():
+        user = _current_user()
+        if not user:
+            return redirect(url_for("login", next=request.path))
+        # revoke_guest() only removed the credential — a session issued
+        # before revocation stayed valid until it naturally expired, since
+        # the session cookie is a client-side snapshot never re-checked
+        # against guests.json. Re-validate on every request, but only for
+        # guests.json-backed guests: create_guest() is the only writer of
+        # that population and always names them "guest_<8 hex>", so that
+        # prefix reliably distinguishes them from Postgres-backed domain/
+        # family guests (magic-link login, username is their email or a
+        # legacy plain name) — those guests' revocation is a separate,
+        # broader identity review (issue #97 finding 3), not this fix.
+        username = user.get("username", "")
+        if (user.get("tier") == "guest" and username.startswith("guest_")
+                and not _auth.is_guest_active(username)):
+            session.clear()
             return redirect(url_for("login", next=request.path))
         # Enforce forced password change on every authenticated request
         if request.endpoint != "account_password":
-            if _auth.check_must_change_password(_current_user()["username"]):
+            if _auth.check_must_change_password(user["username"]):
                 return redirect(url_for("account_password", forced=1))
         return f(*args, **kwargs)
     return decorated
