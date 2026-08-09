@@ -29,6 +29,38 @@ def test_german_serves_xai_adapter(german_client):
     assert b"XAIWebSocketAdapter" in resp.data
 
 
+def test_german_serves_shared_memo_controller(german_client):
+    response = german_client.get("/static/realtime-voice/realtime-memo-controller.js")
+    assert response.status_code == 200
+    assert "RealtimeMemoController" in response.get_data(as_text=True)
+
+
+def test_portuguese_serves_shared_memo_controller(portuguese_client):
+    response = portuguese_client.get("/static/realtime-voice/realtime-memo-controller.js")
+    assert response.status_code == 200
+    assert "RealtimeMemoController" in response.get_data(as_text=True)
+
+
+def test_openai_memo_adapter_commits_only_on_explicit_finish(german_client):
+    response = german_client.get(
+        "/static/realtime-voice/adapters/openai-transcription-webrtc-adapter.js"
+    )
+    source = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'type: "input_audio_buffer.commit"' in source
+    assert "conversation.item.input_audio_transcription.delta" in source
+    assert "conversation.item.input_audio_transcription.completed" in source
+    assert "SpeechRecognition" not in source
+
+
+def test_memo_provider_preference_only_renders_when_choice_exists(german_client):
+    response = german_client.get("/static/realtime-voice/realtime-memo-controller.js")
+    source = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "available.length > 1" in source
+    assert "approved single-provider fallback" in source
+
+
 def test_shared_controller_starts_with_persona_and_hides_live_transcript(german_client):
     resp = german_client.get("/static/realtime-voice/realtime-voice-controller.js")
     source = resp.get_data(as_text=True)
