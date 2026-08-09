@@ -14,12 +14,12 @@
     "id": 135,
     "spec_title": "OpenClaw #2 — CoS-Scoped Gateway, Dev Setup",
     "spec_file": "spec_133_plan_openclaw2_dev_setup_v2_2026-07-14.md",
-    "status": "spec_ready",
+    "status": "superseded",
     "github_issue": null,
     "priority": "normal",
     "blocked_reason": "Blocked at session start on four items OpenClaw must supply: (1) npm install command, (2) CLI start command, (3) minimal config schema, (4) _collect_response protocol answer. Claude Code can implement everything else immediately once all four arrive.",
     "last_transition_at": "2026-07-14T00:00:00Z",
-    "notes": "Phase 1 Task 9 of spec #133 v1.3. Do not start build until all four OpenClaw answers are in hand. Claude Code implements: openclaw_backend.py WS client, COS_BACKEND_TYPE env-var switch in init_backend(), Dockerfile.openclaw-cos, openclaw-cos compose service, scripts/cos_ab_test.py A/B harness. Memory judgment stays in coordination layer (not in backend). See plan for full implementation detail."
+    "notes": "Phase 1 Task 9 of spec #133 v1.3. Do not start build until all four OpenClaw answers are in hand. Claude Code implements: openclaw_backend.py WS client, COS_BACKEND_TYPE env-var switch in init_backend(), Dockerfile.openclaw-cos, openclaw-cos compose service, scripts/cos_ab_test.py A/B harness. Memory judgment stays in coordination layer (not in backend). See plan for full implementation detail. Superseded by Spec #146 (2026-08-09)."
   },
   {
     "id": 134,
@@ -947,12 +947,12 @@
     "id": 135,
     "spec_title": "CoS Web Interface — Skeleton Now, Domain Later",
     "spec_file": "spec_cos_web_interface_v2_2026-07-12.md",
-    "status": "done",
+    "status": "superseded",
     "github_issue": null,
     "priority": "high",
     "blocked_reason": null,
     "last_transition_at": "2026-07-12T00:00:00Z",
-    "notes": "v2 complete: all four tabs functional (Talk + voice, Feed, To-do, Archive), parchment/dark-nav design system, Chicago photo banner, backend badge (/status), lazy tab loading, VAD voice via Whisper (/ui/transcribe). Portal: COS_BACKEND in config, /app/cos proxy (owner-only), dashboard tile. Phase A shipped first: /ui Talk tab, /ui/memory. v2 registered as spec_cos_web_interface_v2_2026-07-12.md."
+    "notes": "v2 complete: all four tabs functional (Talk + voice, Feed, To-do, Archive), parchment/dark-nav design system, Chicago photo banner, backend badge (/status), lazy tab loading, VAD voice via Whisper (/ui/transcribe). Portal: COS_BACKEND in config, /app/cos proxy (owner-only), dashboard tile. Phase A shipped first: /ui Talk tab, /ui/memory. v2 registered as spec_cos_web_interface_v2_2026-07-12.md. Superseded by Spec #146 (2026-08-09)."
   },
   {
     "id": 133,
