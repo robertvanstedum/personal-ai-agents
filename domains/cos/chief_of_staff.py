@@ -38,7 +38,9 @@ LOGS_DIR         = BASE_DIR / "logs"
 
 # ── DB (optional — degrades gracefully if Docker is down) ────────────────────
 
-DSN = os.environ.get("DATABASE_URL", "postgresql://minimoi:simple123@localhost:5432/personal_agents")
+DSN = os.environ.get("DATABASE_URL")
+if not DSN:
+    raise RuntimeError("DATABASE_URL must be set — no insecure default (issue #42)")
 _DB_AVAILABLE = False
 
 def _check_db():

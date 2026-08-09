@@ -53,10 +53,7 @@ def _write_agenda(item: dict) -> None:
     # Try DB
     try:
         import psycopg2
-        conn = psycopg2.connect(
-            host="localhost", port=5432, dbname="personal_agents",
-            user="minimoi", password="simple123"
-        )
+        conn = psycopg2.connect(os.environ["DATABASE_URL"])
         cur = conn.cursor()
         cur.execute(
             "INSERT INTO guild.cos_agenda (domain, description, confidence, loop_name) VALUES (%s,%s,%s,%s)",

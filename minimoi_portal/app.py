@@ -1197,8 +1197,6 @@ def score_color(score):
     return '#9e9080'
 
 
-_DEFAULT_DB_URL = "postgresql://minimoi:simple123@localhost:5432/personal_agents"
-
 # File-first build queue — source of truth for UI; DB is analytics/archive only
 _BQ_PATH = Path(__file__).parent.parent / "data" / "guild" / "build_queue.json"
 
@@ -1221,7 +1219,7 @@ def _save_build_queue(items: list):
 def _guild_db_query(sql, params=None):
     """Run a SELECT against the personal_agents DB. Returns list of dicts."""
     import psycopg2, psycopg2.extras
-    db_url = os.environ.get("DATABASE_URL", _DEFAULT_DB_URL)
+    db_url = os.environ["DATABASE_URL"]
     conn = psycopg2.connect(db_url, cursor_factory=psycopg2.extras.RealDictCursor)
     with conn.cursor() as cur:
         cur.execute(sql, params or [])
@@ -1233,7 +1231,7 @@ def _guild_db_query(sql, params=None):
 def _guild_db_execute(sql, params=None):
     """Run an INSERT/UPDATE/DELETE against the personal_agents DB."""
     import psycopg2
-    db_url = os.environ.get("DATABASE_URL", _DEFAULT_DB_URL)
+    db_url = os.environ["DATABASE_URL"]
     conn = psycopg2.connect(db_url)
     with conn.cursor() as cur:
         cur.execute(sql, params or [])

@@ -14,11 +14,11 @@ import psycopg2
 import psycopg2.extras
 from werkzeug.security import check_password_hash, generate_password_hash
 
-_DEFAULT_DB_URL = "postgresql://minimoi:simple123@localhost:5432/personal_agents"
-
-
 def _db_url() -> str:
-    return os.environ.get("DATABASE_URL", _DEFAULT_DB_URL)
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        raise RuntimeError("DATABASE_URL must be set — no insecure default (issue #42)")
+    return db_url
 
 
 def _query(sql: str, params=None) -> list:

@@ -20,7 +20,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 import psycopg2
 import psycopg2.extras
 
-DSN = os.environ.get("DATABASE_URL", "postgresql://minimoi:simple123@localhost:5432/personal_agents")
+DSN = os.environ.get("DATABASE_URL")
+if not DSN:
+    raise RuntimeError("DATABASE_URL must be set — no insecure default (issue #42)")
 
 PASS = "✅"
 FAIL = "❌"
@@ -157,9 +159,14 @@ def run():
 
     # ── User permissions ──────────────────────────────────────────────────────
     print("\nUser permissions:")
+    ro_dsn = os.environ.get("ROBERT_RO_DATABASE_URL")
+    if not ro_dsn:
+        check("  robert_ro read access", False,
+              "ROBERT_RO_DATABASE_URL not set — no insecure default (issue #42), skipping")
+        return
     try:
         ro_conn = psycopg2.connect(
-            "postgresql://robert_ro:simple123@localhost:5432/personal_agents",
+            ro_dsn,
             cursor_factory=psycopg2.extras.RealDictCursor
         )
         ro_cur = ro_conn.cursor()

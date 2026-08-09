@@ -124,13 +124,20 @@ venv/bin/python3 domains/guild/db/test_schema.py
 
 ## Users
 
-| User | Role | Password | Access |
-|---|---|---|---|
-| `postgres` | Superuser | `simple123` | Everything |
-| `minimoi` | App user | `simple123` | Full CRUD on research.*, guild.*, jobs.* |
-| `robert_ro` | Read-only | `simple123` | SELECT only on all named schemas |
+| User | Role | Access |
+|---|---|---|
+| `postgres` | Superuser | Everything |
+| `minimoi` | App user | Full CRUD on research.*, guild.*, jobs.* |
+| `robert_ro` | Read-only | SELECT only on all named schemas |
 
-TablePlus connection: `localhost:5432 / personal_agents / robert_ro / simple123`
+Passwords were rotated off the `simple123` default 2026-07-16/17 (see
+`_working/sql-queries/EXECUTION_password_rotation_2026-07-16.md`) — local dev
+values live in `.env` (`DATABASE_URL`, `POSTGRES_PASSWORD`), production values
+in AWS SSM under `/minimoi/production/{name}_password`. No password is
+documented here; the app code has no hardcoded fallback either (issue #42).
+
+TablePlus connection: `localhost:5432 / personal_agents / robert_ro` — get the
+password from `.env` or Keychain, not from this document.
 
 ---
 

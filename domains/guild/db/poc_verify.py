@@ -17,9 +17,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import psycopg2
 import psycopg2.extras
-from db.neo4j_driver import get_related_topics, get_sources_for_leaning, get_node_counts
+from db.neo4j_driver import (
+    get_related_topics, get_sources_for_leaning, get_node_counts,
+    NEO4J_URI, NEO4J_AUTH,
+)
 
-DSN = os.environ.get("DATABASE_URL", "postgresql://minimoi:simple123@localhost:5432/personal_agents")
+DSN = os.environ.get("DATABASE_URL")
+if not DSN:
+    raise RuntimeError("DATABASE_URL must be set — no insecure default (issue #42)")
 
 
 def q1_postgres_topics():
@@ -46,7 +51,7 @@ def q2_neo4j_traversal():
     """Neo4j traversal: all Topic pairs connected via shared Tags or Sources."""
     print("\n── Q2: Connected Topic pairs via shared Tags/Sources (Neo4j) ─")
     from neo4j import GraphDatabase as _GDB
-    drv = _GDB.driver("bolt://localhost:7687", auth=("neo4j", "simple123"))
+    drv = _GDB.driver(NEO4J_URI, auth=NEO4J_AUTH)
     with drv.session() as s:
         result = s.run(
             "MATCH (t1:Topic)-[:TAGGED]->(tag:Tag)<-[:TAGGED]-(t2:Topic) "
