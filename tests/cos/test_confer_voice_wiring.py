@@ -23,3 +23,13 @@ def test_shared_confer_controller_keeps_voice_and_agent_boundaries_separate():
     assert "OpenAITranscriptionWebRTCAdapter" in source
     assert "GrokBackend" not in source
     assert "OpenClaw" not in source
+
+
+def test_openai_adapter_commits_browser_detected_speech_turns():
+    source = (
+        ROOT
+        / "core/realtime_voice/static/adapters/openai-transcription-webrtc-adapter.js"
+    ).read_text()
+    assert "createAnalyser" in source
+    assert 'source: "browser_vad"' in source
+    assert 'type: "input_audio_buffer.commit"' in source

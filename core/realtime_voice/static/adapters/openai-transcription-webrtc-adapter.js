@@ -8,6 +8,12 @@ export class OpenAITranscriptionWebRTCAdapter {
     this._ending = false;
     this._finishResolve = null;
     this._finishTimer = null;
+    this._audioContext = null;
+    this._analyser = null;
+    this._vadTimer = null;
+    this._speaking = false;
+    this._speechStartedAt = 0;
+    this._lastVoiceAt = 0;
   }
 
   on(eventName, handler) {
@@ -52,7 +58,10 @@ export class OpenAITranscriptionWebRTCAdapter {
         this._emit("recoverable_error", { reason: "invalid_provider_event", detail: String(error) });
       }
     });
-    this._dc.addEventListener("open", () => this._emit("connected", { provider: "openai" }));
+    this._dc.addEventListener("open", () => {
+      this._startLocalTurnDetection();
+      this._emit("connected", { provider: "openai" });
+    });
     this._dc.addEventListener("close", () => {
       if (!this._ending) this._emit("recoverable_error", { reason: "data_channel_closed" });
     });
@@ -93,8 +102,11 @@ export class OpenAITranscriptionWebRTCAdapter {
   end(reason = "user_ended") {
     this._ending = true;
     clearTimeout(this._finishTimer);
+    clearInterval(this._vadTimer);
+    this._vadTimer = null;
     this._resolveFinish();
     for (const track of this._micStream?.getAudioTracks() || []) track.stop();
+    this._audioContext?.close().catch(() => {});
     this._dc?.close();
     this._pc?.close();
     this._emit("closed", { reason });
@@ -105,6 +117,54 @@ export class OpenAITranscriptionWebRTCAdapter {
     const resolve = this._finishResolve;
     this._finishResolve = null;
     resolve();
+  }
+
+  _startLocalTurnDetection() {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass || !this._micStream) {
+      this._emit("fatal_error", {
+        reason: "local_turn_detection_unavailable",
+        detail: "This browser cannot detect speech boundaries.",
+      });
+      return;
+    }
+
+    this._audioContext = new AudioContextClass();
+    const source = this._audioContext.createMediaStreamSource(this._micStream);
+    this._analyser = this._audioContext.createAnalyser();
+    this._analyser.fftSize = 1024;
+    source.connect(this._analyser);
+    const samples = new Float32Array(this._analyser.fftSize);
+    const threshold = 0.025;
+    const minimumSpeechMs = 250;
+    const silenceMs = 800;
+
+    this._vadTimer = setInterval(() => {
+      if (this._ending || !this._analyser) return;
+      this._analyser.getFloatTimeDomainData(samples);
+      let energy = 0;
+      for (const sample of samples) energy += sample * sample;
+      const rms = Math.sqrt(energy / samples.length);
+      const now = Date.now();
+
+      if (rms >= threshold) {
+        this._lastVoiceAt = now;
+        if (!this._speaking) {
+          this._speaking = true;
+          this._speechStartedAt = now;
+          this._emit("speech_started", { source: "browser_vad" });
+        }
+        return;
+      }
+
+      if (!this._speaking || now - this._lastVoiceAt < silenceMs) return;
+      const speechDuration = now - this._speechStartedAt;
+      this._speaking = false;
+      this._emit("speech_stopped", { source: "browser_vad" });
+      if (speechDuration >= minimumSpeechMs && this._dc?.readyState === "open") {
+        this._dc.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+      }
+    }, 50);
   }
 
   _handleServerEvent(event) {

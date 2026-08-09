@@ -48,20 +48,17 @@ def mint_confer_transcription_credential(
     transcription_language: str,
     user_id_for_safety_identifier: str,
 ) -> dict:
-    """Mint a transcription session whose VAD creates conversational turns.
+    """Mint a transcription-only session for chained CoS conversation.
 
-    The transcription model only chunks and transcribes speech. It never
-    generates the CoS response; that remains behind ``call_backend``.
+    ``gpt-live-transcribe`` currently rejects server turn detection on client
+    secrets. The browser adapter therefore detects speech/silence locally and
+    explicitly commits each audio turn. The transcription model still only
+    transcribes; CoS reasoning remains behind ``call_backend``.
     """
     return _mint_transcription_credential(
         transcription_language=transcription_language,
         user_id_for_safety_identifier=user_id_for_safety_identifier,
-        turn_detection={
-            "type": "server_vad",
-            "threshold": 0.5,
-            "prefix_padding_ms": 300,
-            "silence_duration_ms": 700,
-        },
+        turn_detection=None,
     )
 
 

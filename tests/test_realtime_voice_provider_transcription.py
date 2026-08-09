@@ -60,7 +60,7 @@ def test_openai_memo_uses_transcription_only_session_without_turn_detection():
     }
 
 
-def test_openai_confer_uses_transcription_only_session_with_server_vad():
+def test_openai_confer_uses_transcription_only_session_with_browser_vad():
     with (
         patch("core.realtime_voice.providers.openai_realtime.get_secret", return_value="secret"),
         patch(
@@ -75,12 +75,7 @@ def test_openai_confer_uses_transcription_only_session_with_server_vad():
 
     session = post.call_args.kwargs["json"]["session"]
     assert session["type"] == "transcription"
-    assert session["audio"]["input"]["turn_detection"] == {
-        "type": "server_vad",
-        "threshold": 0.5,
-        "prefix_padding_ms": 300,
-        "silence_duration_ms": 700,
-    }
+    assert session["audio"]["input"]["turn_detection"] is None
 
 
 def test_xai_session_config_requests_input_transcription():

@@ -1,4 +1,4 @@
-import { OpenAITranscriptionWebRTCAdapter } from "./adapters/openai-transcription-webrtc-adapter.js?v=20260809-confer1";
+import { OpenAITranscriptionWebRTCAdapter } from "./adapters/openai-transcription-webrtc-adapter.js?v=20260809-confer2";
 
 const PREFERENCE_KEY = "minimoi.voice.provider";
 
