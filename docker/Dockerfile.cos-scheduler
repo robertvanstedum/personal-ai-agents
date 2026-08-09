@@ -11,6 +11,7 @@ COPY domains/guild/ domains/guild/
 COPY domains/cos/ domains/cos/
 
 ENV PORT=8769
+ENV PYTHONPATH=/app
 EXPOSE 8769
 
 CMD ["python", "domains/cos/chief_of_staff.py"]

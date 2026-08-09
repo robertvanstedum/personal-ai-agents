@@ -72,3 +72,16 @@ def test_remote_deploy_stops_on_failure_and_manages_unused_images():
         '"docker-compose -f /opt/minimoi/docker-compose.prod.yml pull",'
     )
     assert "docker inspect --format={{.Config.Image}}" in deploy_step
+
+
+def test_cos_images_can_import_shared_core_package():
+    for path in ("docker/Dockerfile.cos", "docker/Dockerfile.cos-scheduler"):
+        dockerfile = (ROOT / path).read_text(encoding="utf-8")
+        assert "ENV PYTHONPATH=/app" in dockerfile
+
+
+def test_remote_deploy_requires_cos_health():
+    workflow = (ROOT / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
+    deploy_step = workflow[workflow.index("- name: Deploy on EC2") :]
+
+    assert '"curl -sf http://localhost:8769/health || exit 1",' in deploy_step

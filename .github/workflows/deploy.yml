@@ -185,6 +185,7 @@ jobs:
               "curl -sf http://localhost:8766/health || exit 1",
               "curl -sf http://localhost:8767/health || exit 1",
               "curl -sf http://localhost:8770/health || exit 1",
+              "curl -sf http://localhost:8769/health || exit 1",
               "/opt/minimoi/scripts/install_lesen_refresh_cron.sh",
               "runuser -u ec2-user -- /opt/minimoi/scripts/setup_ec2_cron.sh"
             ]' \

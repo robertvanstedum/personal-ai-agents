@@ -21,5 +21,6 @@ RUN mkdir -p data/guild logs agent_logs
 
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8769
+ENV PYTHONPATH=/app
 
 CMD ["python", "domains/cos/chief_of_staff.py"]
