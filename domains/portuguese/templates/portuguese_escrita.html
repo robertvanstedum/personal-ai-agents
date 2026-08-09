@@ -1,5 +1,8 @@
 {% extends "portuguese_base.html" %}
 {% block title %}Escrita{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="./static/realtime-voice/realtime-memo.css?v=20260809-memo1">
+{% endblock %}
 
 {% block content %}
 <div class="tab-layout-split">
@@ -10,10 +13,13 @@
       <p class="tab-description">Escreva em português — diário, contexto e vocabulário.</p>
     </div>
 
-<div class="mode-toggle">
-  <button class="mode-btn active" data-mode="diario" title="Journal writing mode">Diário</button>
-  <button class="mode-btn" data-mode="contexto" title="Practice writing in context">Em Contexto</button>
-  <button class="mode-btn" data-mode="vocabulario" title="Vocabulary practice mode">Vocabulário</button>
+<div class="memo-voice-toolbar">
+  <div class="mode-toggle">
+    <button class="mode-btn active" data-mode="diario" title="Journal writing mode">Diário</button>
+    <button class="mode-btn" data-mode="contexto" title="Practice writing in context">Em Contexto</button>
+    <button class="mode-btn" data-mode="vocabulario" title="Vocabulary practice mode">Vocabulário</button>
+  </div>
+  <div class="memo-voice-preference" id="memo-voice-preference"></div>
 </div>
 
 <!-- ── Diário ────────────────────────────────────────────────────── -->
@@ -369,26 +375,6 @@ function showSaveToast() {
     setTimeout(() => { btn.textContent = '↑ Aceitar'; btn.disabled = false; }, 2000);
   });
 
-  // ── Voice helpers ─────────────────────────────────────────────
-  function addVoice(btnId, textareaId, lang) {
-    const btn = document.getElementById(btnId);
-    const ta  = document.getElementById(textareaId);
-    if (!btn || !ta) return;
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { btn.style.display = 'none'; return; }
-    let rec = null;
-    btn.addEventListener('click', () => {
-      if (rec) { rec.stop(); rec = null; btn.textContent = '🎤'; return; }
-      rec = new SR(); rec.lang = lang; rec.interimResults = false;
-      rec.onresult = e => { ta.value += (ta.value ? ' ' : '') + e.results[0][0].transcript; };
-      rec.onend = () => { rec = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
-      rec.onerror = () => { rec = null; btn.textContent = '🎤'; btn.classList.remove('listening'); };
-      rec.onstart = () => { btn.textContent = '⏹'; btn.classList.add('listening'); };
-      rec.start();
-    });
-  }
-  addVoice('voice-kontext', 'kontext-input', 'pt-BR');
-  addVoice('voice-diario', 'diario-input', 'pt-BR');
 })();
 
 // ── Word capture on corrected text ────────────────────────────────────────────
@@ -537,5 +523,32 @@ function showSaveToast() {
     }
   });
 })();
+</script>
+<script type="module">
+import { initializeRealtimeMemo } from "./static/realtime-voice/realtime-memo-controller.js?v=20260809-memo1";
+
+initializeRealtimeMemo({
+  capabilitiesUrl: './api/realtime-voice/memo/capabilities',
+  bootstrapUrl: './api/realtime-voice/memo/bootstrap',
+  preferenceHost: 'memo-voice-preference',
+  bindings: [
+    { buttonId: 'voice-diario', textareaId: 'diario-input', statusId: 'diario-status' },
+    { buttonId: 'voice-kontext', textareaId: 'kontext-input', statusId: 'kontext-status' },
+  ],
+  labels: {
+    preference: 'Voice',
+    start: 'Iniciar ditado',
+    warning: 'O ditado termina em dois minutos.',
+    error: 'A gravação de voz não está disponível.',
+    states: {
+      requesting: 'Preparando o microfone…',
+      listening: 'Ouvindo — toque para encerrar',
+      reconnecting: 'Reconectando…',
+      finalizing: 'Finalizando o ditado…',
+      stopped: 'Ditado encerrado.',
+      error: 'A gravação de voz não está disponível.',
+    },
+  },
+});
 </script>
 {% endblock %}
