@@ -16,6 +16,7 @@ documents:
 - [Backlog](BACKLOG.md)
 - [Changelog](CHANGELOG.md)
 - [Workspace setup](WORKSPACE-SETUP.md)
+- [CoS and Master Craftsman living product and solution approach](design/SOLUTION_APPROACH_COS_MASTER_CRAFTSMAN.md)
 - [Specifications](specs/)
 - [Release notes](releases/)
 - [Build journal](journal/)
