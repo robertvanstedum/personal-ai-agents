@@ -178,6 +178,13 @@ authority merely by recommending or selecting an action. Authority is granted
 outside the model by explicit product policy and Robert's decision gates; side
 effects occur only through named, bounded operations.
 
+The separation is analogous to established policy decision point (PDP) and
+policy enforcement point (PEP) patterns: the authority gate decides whether a
+proposed operation is allowed, and the bounded tool or workflow enforces that
+decision. The reasoning model is neither point. This is architectural lineage,
+not a claim that mini-moi already implements a particular access-control
+standard.
+
 ```mermaid
 flowchart LR
     A["Context, signals, and approved memory"] --> B["1. Probabilistic reasoning<br/>Interpret · diagnose · propose"]
@@ -245,8 +252,8 @@ as **implemented and verified**, **implemented but not yet verified**,
 | Layer | CoS reality now | Gap to prove | Master Craftsman reality now |
 |---|---|---|---|
 | Probabilistic reasoning | A direct-model backend and the live CoS voice layer support conversational judgment; current context is a simple capped read of platform memory | The first bounded CoS responsibility is not selected, and the OpenClaw backend remains a stub rather than a proven reasoning/runtime path | The role and useful quality questions are planned; there is no approved Master Craftsman v0 capability yet |
-| Deterministic policy/gate | The platform coordination layer owns routing, offered-tool policy, and the approved memory write path. The current direct backend exposes observational functions and a pending-recommendation write, not unrestricted mutation | The broader partner contract is documented direction, not proof of an explicit policy decision for every capability. OpenClaw-native tool restrictions and approval handling still require conformance evidence | The authority table in this document is illustrative. Existing Guild watch/log/notify behavior is useful precedent, not a Master Craftsman permission model |
-| Deterministic bounded execution | Current named operations can observe health or logs and create a pending item or memory entry through platform-owned paths | External action and handoff execution remain manual or unimplemented; fixed execution, cancellation, safe failure, and rollback must be proven per selected capability | No Master Craftsman executor is approved; the first spec must name exact commands, targets, credentials, edits, and prohibited side effects |
+| Deterministic policy/gate | The current main-branch `ConferTurnService` applies the same hardcoded observation-only policy to every supported Confer channel before each backend call. The platform coordination layer also owns routing, offered-tool policy, and the approved memory write path; the direct backend exposes observational functions and a pending-recommendation write, not unrestricted mutation | The Confer contract is covered by channel-neutral unit tests, but this review did not independently reverify every production channel. The broader partner contract is not proof of an explicit policy decision for every capability; OpenClaw-native tool restrictions and approval handling still require conformance evidence | The authority table in this document is illustrative. Existing Guild watch/log/notify behavior is useful precedent, not a Master Craftsman permission model |
+| Deterministic bounded execution | Current named operations can observe health or logs, create a pending item or memory entry through platform-owned paths, and route a Confer turn through a fixed contract with mutation disabled | The existing Confer path proves a bounded turn contract, not general action execution. External action and handoff execution remain manual or unimplemented; cancellation, safe failure, rollback, and production behavior must be proven for each newly selected capability | No Master Craftsman executor is approved; the first spec must name exact commands, targets, credentials, edits, and prohibited side effects |
 | Feedback and observability | CoS has file logs, platform memory, and a pending agenda surface | Those artifacts are not yet a correlated proposal → gate → execution → outcome trace. Scheduled loops do not yet read accumulated common memory, so the feedback loop is open | Guild has build, test, and watcher evidence to build on, but Master Craftsman's audit and learning path has not been defined or validated |
 
 Memory supports feedback, but memory is not itself the observability layer.
@@ -919,6 +926,7 @@ silently erasing why important choices changed.
 | 2026-08-11 | Claude handoff review | Claude found the approach sound and identified several places where illustrative material could appear more decided than intended | Clarified reader context, provisional evaluation, spike duration, illustrative Master Craftsman scope, and working versus durable memory | v0.5 |
 | 2026-08-13 | Governed architecture and current-state review | Interview preparation named the four-layer pattern; Claude mapped it to CoS and Master Craftsman; repository verification found both real implementation seams and still-aspirational controls | Added the reference architecture, invariants, separate role mapping, current-versus-target assessment, control-path evidence, and risks | v0.6 |
 | 2026-08-13 | Guild communication boundary | Robert clarified that Master Craftsman should notify him directly and CoS should mainly support Robert-initiated ad hoc Guild requests | Made direct Master Craftsman-to-Robert notification the normal path; kept CoS outside routine quality reporting, supervision, and task assignment | v0.6 |
+| 2026-08-13 | Claude v0.6 baseline review | Claude found the architecture sound and the role separation consistent; repository recheck confirmed the merged Confer turn contract and channel-neutral policy tests while not independently proving every production path | Credited the implemented Confer observation-only gate, retained per-capability proof requirements, and recorded the Claude baseline-review gate as satisfied | v0.6 |
 
 ### Open product decisions
 
@@ -952,7 +960,7 @@ Promote this working draft to **Living baseline v1.0** when:
   evidence responsibilities and proves that policy is enforced outside the
   prompt;
 - Claude has reviewed the product framing, domain boundaries, and learning
-  sequence;
+  sequence (**satisfied 2026-08-13**);
 - Robert confirms the document as the current durable approach.
 
 Baseline v1.0 will not mean the agent architecture is final. It will mean the
@@ -973,6 +981,10 @@ decision gates are stable enough to govern the next component specs.
 - Added a current-state-versus-target assessment so existing CoS seams are
   distinguished from unverified OpenClaw controls, the still-open feedback
   loop, and the not-yet-built Master Craftsman role.
+- Incorporated Claude's v0.6 review by grounding the pattern in policy decision
+  and enforcement lineage and crediting the merged, channel-neutral Confer
+  observation-only contract without treating it as proof of broader action or
+  every production path.
 - Made Master Craftsman's direct notification to Robert the normal quality
   path; limited CoS's Guild interface to Robert-initiated ad hoc inquiry and
   material cross-domain awareness rather than supervision or routine relay.
