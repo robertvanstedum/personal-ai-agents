@@ -34,7 +34,8 @@ evidence emerges.
   tools and memory → prove the agent mechanics in real CoS use → assess what is
   reusable → define and build Master Craftsman separately in Guild.
 - **Hard boundary:** CoS does not guide Build, supervise Master Craftsman, own
-  development verification, or carry Guild quality memory.
+  development verification, carry Guild quality memory, or serve as the
+  required relay for Master Craftsman notifications.
 - **First technical candidate:** OpenClaw receives the first serious live
   evaluation because of its history in mini-moi; it is not selected by default.
 - **Memory preference:** Durable meaning and history remain platform-owned or
@@ -46,7 +47,8 @@ evidence emerges.
   consumers to demonstrate the same need.
 - **Master Craftsman direction:** A separate conversational, memory-bearing
   Guild agent with small, explicit authority for useful development
-  verification—not a permanently read-only observer.
+  verification—not a permanently read-only observer. It reports its findings
+  and requests for action directly to Robert.
 - **Decision now:** Select the first bounded CoS capability and its authority
   envelope before behavioral implementation begins.
 
@@ -117,9 +119,13 @@ The two agent efforts are related only in this initial sense:
 > Building and using the CoS agent should answer technical questions that would
 > otherwise have to be rediscovered when Master Craftsman is built.
 
-Any future communication between CoS and Master Craftsman would be a later,
-separately justified capability. It is not required for either agent's first
-useful version.
+The initial CoS-to-Guild interface is narrow: Robert may use CoS as a
+conversational front door for an ad hoc question or request to an approved Guild
+inquiry capability. CoS may also include a material Guild issue or required
+operator action in Robert's broader view. It does not assign Master Craftsman
+work, approve its findings, or become the required path for its notifications.
+Broader autonomous communication remains a later, separately justified
+capability.
 
 ---
 
@@ -224,9 +230,9 @@ The pattern is shared; the responsibility, policy, tools, and memory are not.
 | Layer | Chief of Staff | Master Craftsman |
 |---|---|---|
 | Probabilistic reasoning | Interpret dialogue and approved context, investigate a bounded CoS matter, notice a material change, and propose follow-through | Compare a spec, branch, diff, tests, and prior evidence; diagnose coverage or release risk; propose verification or a bounded change |
-| Deterministic authority gate | Enforce the selected CoS domain, approved sources and tools, privacy boundary, proactive-contact triggers, and approval for external side effects | Enforce repository, branch, task, command, environment, protected-file, credential, edit, commit, deploy, and production-observation rules |
-| Deterministic bounded execution | Perform approved research or observation, update an approved CoS store, and deliver a proactive message when a defined trigger is satisfied | Run named tests or analysis, perform an approved UAT, capture evidence, or edit explicitly granted test files; no merge, deploy, or production mutation by default |
-| Feedback and observability | Record why the trigger fired, sources and tools used, message delivery, Robert's response, outcome, and memory provenance | Record code version, environment, commands, exit status, artifacts, screenshots, diff, verdict, reviewer decision, and later defect or release outcome |
+| Deterministic authority gate | Enforce the selected CoS domain, approved sources and tools, privacy boundary, proactive-contact triggers, approval for external side effects, and Robert-initiation for ad hoc Guild requests | Enforce repository, branch, task, command, environment, protected-file, credential, edit, commit, deploy, production-observation, and direct-notification rules |
+| Deterministic bounded execution | Perform approved research or observation, update an approved CoS store, deliver a proactive message when a defined trigger is satisfied, or invoke an approved Guild inquiry for a Robert-initiated ad hoc request | Run named tests or analysis, perform an approved UAT, capture evidence, edit explicitly granted test files, and notify Robert directly of findings or required action; no merge, deploy, or production mutation by default |
+| Feedback and observability | Record why the trigger or ad hoc request occurred, sources and tools used, any Guild capability invoked, message delivery, Robert's response, outcome, and memory provenance | Record code version, environment, commands, exit status, artifacts, screenshots, diff, verdict, direct notification, reviewer decision, and later defect or release outcome |
 
 ### Current state versus target state
 
@@ -357,6 +363,8 @@ reasonably include:
 
 It should not mutate domain data, manage Guild work, deploy, modify code, or
 take external action on Robert's behalf without separate explicit authority.
+For Guild, it may relay a Robert-initiated ad hoc inquiry through an approved
+read or query capability; this is an inquiry boundary, not build management.
 
 ### CoS evidence
 
@@ -602,6 +610,34 @@ The conversation is part of the product. Master Craftsman should remember the
 build context and prior verification findings so Robert does not have to begin
 each quality inquiry from zero.
 
+### Communication and notification boundary
+
+Master Craftsman communicates directly with Robert. It should notify him when
+an approved verification task completes, fails, is inconclusive, detects a
+material quality risk, becomes blocked, or requires an approval or action. The
+notification should state the evidence, impact, recommendation, and exact
+decision or action requested; it should not be routed through CoS as a matter of
+course.
+
+CoS has a different path. Robert may ask CoS an ad hoc question about Guild or
+ask it to obtain current Guild evidence through an approved inquiry capability.
+CoS can return that answer in the ongoing CoS conversation and can surface a
+material Guild issue in a cross-domain view. This does not make CoS Master
+Craftsman's supervisor, task allocator, reviewer, or standing message relay.
+
+The initial communication paths are therefore:
+
+1. **Routine quality work:** Robert ↔ Master Craftsman.
+2. **Master Craftsman finding or action needed:** Master Craftsman → Robert,
+   directly and with evidence.
+3. **Robert-initiated cross-domain or ad hoc inquiry:** Robert → CoS → approved
+   Guild inquiry capability → CoS → Robert.
+4. **Material Guild issue in Robert's broader view:** CoS may surface it, while
+   the Guild or Master Craftsman evidence remains authoritative.
+
+No autonomous CoS-to-Master-Craftsman task assignment or
+Master-Craftsman-to-CoS escalation is required for the first useful versions.
+
 ### Candidate first tasks
 
 These examples identify useful territory. The exact first one or two tasks
@@ -667,6 +703,7 @@ After an approved deployment, Master Craftsman may:
 | Read branches, diffs, specs, logs, and test definitions | Allowed within repository scope |
 | Run non-destructive local tests and analysis | Allowed within task scope |
 | Write findings and Master Craftsman memory | Allowed through its approved store |
+| Notify Robert of results, material risk, blocked state, or required action | Allowed and expected through the approved channel, with evidence and a clear requested decision |
 | Create or refine bounded regression tests | Allowed only when the task explicitly grants edit authority |
 | Use authenticated dev or production observation for an approved UAT | Turn-specific approval and credential boundary |
 | Create commits or handoff patches | Separate explicit approval; stop for diff review |
@@ -741,6 +778,7 @@ replace the runtime, narrow the task, or stop.
 | Collecting logs without an auditable causal chain | Correlate context, proposal, gate decision, execution, result, human decision, and later outcome |
 | Allowing feedback to become self-reinforcing memory | Keep factual episodes distinct from semantic lessons and require provenance and evidence for promotion |
 | Allowing CoS to drift into Guild | State and test the domain boundary; no build-guidance responsibility in CoS |
+| Making CoS a required relay for Guild quality findings | Master Craftsman notifies Robert directly; reserve CoS for Robert-initiated ad hoc Guild inquiry and material cross-domain awareness |
 | Designing Master Craftsman entirely from CoS assumptions | Conduct a reuse review, then write a Guild-specific component spec |
 | Making Master Craftsman permanently passive | Grant small, explicit action permissions such as safe test execution or bounded test edits |
 | Granting broad mutation authority too early | Expand per task and per evidence gate; keep merge, deploy, and production gates separate |
@@ -880,6 +918,7 @@ silently erasing why important choices changed.
 | 2026-08-11 | Grok baseline review | Grok assessed the artifact as a strong fit for an AI Product Owner and identified baseline-readiness improvements | Added the compact baseline, capability decision frame, gate-classified questions, spec relationship, and v1.0 readiness criteria | v0.4 |
 | 2026-08-11 | Claude handoff review | Claude found the approach sound and identified several places where illustrative material could appear more decided than intended | Clarified reader context, provisional evaluation, spike duration, illustrative Master Craftsman scope, and working versus durable memory | v0.5 |
 | 2026-08-13 | Governed architecture and current-state review | Interview preparation named the four-layer pattern; Claude mapped it to CoS and Master Craftsman; repository verification found both real implementation seams and still-aspirational controls | Added the reference architecture, invariants, separate role mapping, current-versus-target assessment, control-path evidence, and risks | v0.6 |
+| 2026-08-13 | Guild communication boundary | Robert clarified that Master Craftsman should notify him directly and CoS should mainly support Robert-initiated ad hoc Guild requests | Made direct Master Craftsman-to-Robert notification the normal path; kept CoS outside routine quality reporting, supervision, and task assignment | v0.6 |
 
 ### Open product decisions
 
@@ -897,6 +936,8 @@ silently erasing why important choices changed.
    requires it?
 8. What minimum conversation and episodic memory will make the first Master
    Craftsman quality inquiry better than a fresh coding-agent session?
+9. Which Master Craftsman events require an immediate direct notification, and
+   which can wait for Robert's next conversation with it?
 
 ### Readiness for living baseline v1.0
 
@@ -932,6 +973,9 @@ decision gates are stable enough to govern the next component specs.
 - Added a current-state-versus-target assessment so existing CoS seams are
   distinguished from unverified OpenClaw controls, the still-open feedback
   loop, and the not-yet-built Master Craftsman role.
+- Made Master Craftsman's direct notification to Robert the normal quality
+  path; limited CoS's Guild interface to Robert-initiated ad hoc inquiry and
+  material cross-domain awareness rather than supervision or routine relay.
 - Clarified that deterministic control means a rule-bound authority and
   execution path, not a guarantee that models or external systems produce the
   same outcome.
