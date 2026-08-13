@@ -1,7 +1,7 @@
 # CoS Agent and Master Craftsman — Living Product & Solution Approach
 
 **Subtitle:** Proving bounded agent mechanics in one domain, then applying the learning to another<br>
-**Status:** Working draft v0.6 — governed agentic architecture added, not approved to build<br>
+**Status:** Working draft v0.7 — baseline release candidate pending D1–D4, not approved to build<br>
 **Date:** 2026-08-13<br>
 **Owner / decision point:** Robert<br>
 **Audience:** Design, implementation, review, and planning collaborators
@@ -27,30 +27,23 @@ evidence emerges.
 
 ### Current baseline
 
-- **Existing direction:** CoS and Guild already have distinct purposes; this
-  work makes their planned agent roles tangible rather than inventing a new
-  domain strategy.
 - **Learning sequence:** Select one bounded CoS capability → review current
   tools and memory → prove the agent mechanics in real CoS use → assess what is
   reusable → define and build Master Craftsman separately in Guild.
 - **Hard boundary:** CoS does not guide Build, supervise Master Craftsman, own
   development verification, carry Guild quality memory, or serve as the
-  required relay for Master Craftsman notifications.
-- **First technical candidate:** OpenClaw receives the first serious live
-  evaluation because of its history in mini-moi; it is not selected by default.
-- **Memory preference:** Durable meaning and history remain platform-owned or
-  demonstrably portable and rebuildable.
-- **Architecture principle:** Probabilistic reasoning may interpret, diagnose,
-  and propose; deterministic policy and execution controls govern side
-  effects; correlated evidence closes the loop. Reasoning is not authority.
+  required relay for Master Craftsman notifications. Master Craftsman reports
+  findings and requested actions directly to Robert.
+- **Architecture:** Governed agentic architecture (Section 4). Reasoning is not
+  authority; deterministic describes the controlled policy and execution path,
+  not a guarantee about model output or the external world.
+- **Technical starting point:** Evaluate OpenClaw first because of mini-moi's
+  history with it, not because it is selected by default. Keep durable meaning
+  platform-owned or demonstrably portable and rebuildable.
 - **Reuse rule:** Shared agent code or framework extraction requires two real
   consumers to demonstrate the same need.
-- **Master Craftsman direction:** A separate conversational, memory-bearing
-  Guild agent with small, explicit authority for useful development
-  verification—not a permanently read-only observer. It reports its findings
-  and requests for action directly to Robert.
-- **Decision now:** Select the first bounded CoS capability and its authority
-  envelope before behavioral implementation begins.
+- **Decisions now:** Settle D1–D4 below. No behavioral implementation begins
+  from this document alone.
 
 ### Decisions needed next
 
@@ -160,6 +153,12 @@ together because agent behavior and technical mechanics jointly shape the
 product. The function does not erase specialist review or decision rights. It
 keeps the end-to-end intent coherent while component specs, implementation,
 independent review, and production approval remain distinct gates.
+
+This is not a greenfield thought exercise. mini-moi is a working multi-domain
+personal system with production workloads and an established discipline of
+verifying running behavior rather than inferring it from design or code. The
+bounded CoS expansion and Master Craftsman remain staged capabilities inside
+that real operating context, not claims of completed autonomy.
 
 ---
 
@@ -927,49 +926,76 @@ silently erasing why important choices changed.
 | 2026-08-13 | Governed architecture and current-state review | Interview preparation named the four-layer pattern; Claude mapped it to CoS and Master Craftsman; repository verification found both real implementation seams and still-aspirational controls | Added the reference architecture, invariants, separate role mapping, current-versus-target assessment, control-path evidence, and risks | v0.6 |
 | 2026-08-13 | Guild communication boundary | Robert clarified that Master Craftsman should notify him directly and CoS should mainly support Robert-initiated ad hoc Guild requests | Made direct Master Craftsman-to-Robert notification the normal path; kept CoS outside routine quality reporting, supervision, and task assignment | v0.6 |
 | 2026-08-13 | Claude v0.6 baseline review | Claude found the architecture sound and the role separation consistent; repository recheck confirmed the merged Confer turn contract and channel-neutral policy tests while not independently proving every production path | Credited the implemented Confer observation-only gate, retained per-capability proof requirements, and recorded the Claude baseline-review gate as satisfied | v0.6 |
+| 2026-08-13 | Grok v0.6 baseline review | Grok found no architectural blockers and recommended small external-readability improvements before D1–D4 and promotion | Tightened the opening baseline, added real-system context, made the control-path meaning of deterministic prominent, and simplified the v1.0 readiness gate | v0.7 |
 
-### Open product decisions
+### Baseline decisions still open
 
-1. Which single bounded capability should CoS and Robert use together first?
-2. What conditions may cause that CoS capability to initiate contact?
-3. What evidence is sufficient to declare the agent mechanics proven?
-4. What minimum proposal contract, deterministic policy gate, bounded execution
-   interface, and correlated evidence envelope must both roles prove?
-5. Which current tools and memory approaches merit a reference-task spike
-   alongside OpenClaw?
-6. Which one or two Master Craftsman tasks should follow: branch inquiry, test
+1. **D1 — CoS capability:** Which single bounded capability should CoS and
+   Robert use together first?
+2. **D2 — CoS initiative:** What observable conditions may cause that
+   capability to initiate contact, and what must remain quiet?
+3. **D3 — Technical discovery:** What bounded reference task, OpenClaw-first
+   comparison scope, candidate set, timebox, rollback, and acceptance scenarios
+   are approved?
+4. **D4 — Mechanics proof:** What binary evidence is sufficient for isolation,
+   sessions, memory, reasoning/authority separation, policy enforcement,
+   bounded execution, initiative, cancellation, recovery, portability, and
+   correlated observability?
+
+### Downstream product decisions
+
+These remain visible but do not block this solution approach from becoming the
+living baseline; they are resolved in the later Guild increments they govern.
+
+1. Which one or two Master Craftsman tasks should follow: branch inquiry, test
    execution, regression refinement, deployment verification, or a deliberate
    combination?
-7. What may Master Craftsman do without turn-specific approval, and what always
+2. What may Master Craftsman do without turn-specific approval, and what always
    requires it?
-8. What minimum conversation and episodic memory will make the first Master
+3. What minimum conversation and episodic memory will make the first Master
    Craftsman quality inquiry better than a fresh coding-agent session?
-9. Which Master Craftsman events require an immediate direct notification, and
+4. Which Master Craftsman events require an immediate direct notification, and
    which can wait for Robert's next conversation with it?
 
 ### Readiness for living baseline v1.0
 
 Promote this working draft to **Living baseline v1.0** when:
 
-- D1 and D2 are decided;
+- D1–D4 are decided;
 - the pre-spec technical blockers above are resolved or explicitly parked with
-  an owner, rationale, and required evidence;
-- the technical review and reference-task spike have an approved scope and
-  timebox;
-- the first component spec identifies the reasoning, authority, execution, and
-  evidence responsibilities and proves that policy is enforced outside the
-  prompt;
+  an owner, rationale, required evidence, and the later gate they block;
 - Claude has reviewed the product framing, domain boundaries, and learning
   sequence (**satisfied 2026-08-13**);
+- Grok has reviewed the architecture and baseline readiness (**satisfied
+  2026-08-13**);
 - Robert confirms the document as the current durable approach.
 
 Baseline v1.0 will not mean the agent architecture is final. It will mean the
 current direction, boundaries, first product choice, discovery method, and
-decision gates are stable enough to govern the next component specs.
+decision gates are stable enough to govern the next component specs. The first
+component spec must define how its policy and evidence requirements will be
+tested; only reviewed implementation and runtime evidence can prove them.
 
 ---
 
 ## Change log
+
+### 2026-08-13 — Working draft v0.7
+
+- Incorporated Grok's v0.6 baseline-readiness review.
+- Tightened the opening baseline around sequence, hard boundary, architecture,
+  technical starting point, reuse, and the four decisions now required.
+- Added concise context that mini-moi is a real multi-domain system with
+  production workloads while keeping the two new agent capabilities explicitly
+  staged.
+- Kept the governed agentic definition canonical in Section 4 and made the
+  meaning of deterministic prominent in the at-a-glance summary.
+- Separated D1–D4 baseline decisions from downstream Master Craftsman choices.
+- Corrected the v1.0 gate: the baseline governs the next component specs; specs
+  define proof requirements, while implementation and runtime evidence prove
+  them.
+- Kept the candidate CoS shapes in the main body for now because they are active
+  decision material for D1 rather than background reference.
 
 ### 2026-08-13 — Working draft v0.6
 
