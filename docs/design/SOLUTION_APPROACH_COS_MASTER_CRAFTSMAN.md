@@ -1,8 +1,8 @@
 # CoS Agent and Master Craftsman — Living Product & Solution Approach
 
 **Subtitle:** Proving bounded agent mechanics in one domain, then applying the learning to another<br>
-**Status:** Working draft v0.5 — baseline candidate after Claude review, not approved to build<br>
-**Date:** 2026-08-11<br>
+**Status:** Working draft v0.6 — governed agentic architecture added, not approved to build<br>
+**Date:** 2026-08-13<br>
 **Owner / decision point:** Robert<br>
 **Audience:** Design, implementation, review, and planning collaborators
 
@@ -39,6 +39,9 @@ evidence emerges.
   evaluation because of its history in mini-moi; it is not selected by default.
 - **Memory preference:** Durable meaning and history remain platform-owned or
   demonstrably portable and rebuildable.
+- **Architecture principle:** Probabilistic reasoning may interpret, diagnose,
+  and propose; deterministic policy and execution controls govern side
+  effects; correlated evidence closes the loop. Reasoning is not authority.
 - **Reuse rule:** Shared agent code or framework extraction requires two real
   consumers to demonstrate the same need.
 - **Master Craftsman direction:** A separate conversational, memory-bearing
@@ -51,10 +54,10 @@ evidence emerges.
 
 | ID | Decision | Owner | Evidence needed |
 |---|---|---|---|
-| D1 | Select the first bounded CoS capability | Robert | A current personally valuable situation that meets the selection criteria in Section 4 |
+| D1 | Select the first bounded CoS capability | Robert | A current personally valuable situation that meets the selection criteria in Section 5 |
 | D2 | Define when that capability may initiate contact | Robert | Observable material-change triggers and examples of useful versus distracting contact |
 | D3 | Approve the OpenClaw-first technical review and reference-task spike | Robert | Reconciled baseline, bounded reference task, acceptance scenarios, timebox, and rollback |
-| D4 | Define what counts as mechanics proven | Robert, informed by technical review | Binary evidence for isolation, sessions, memory, tools, cancellation, recovery, and observability |
+| D4 | Define what counts as mechanics proven | Robert, informed by technical review | Binary evidence for isolation, sessions, memory, separation of reasoning from authority, bounded execution, cancellation, recovery, and correlated observability |
 
 Chief of Staff and Guild were created with distinct purposes. CoS is Robert's
 cross-domain working partner. Guild is the workshop for building, operating,
@@ -74,7 +77,8 @@ The proposed sequence is:
    runtime candidate, using the selected CoS capability as the reference task.
 3. Use that real capability to prove the mechanics of operating a bounded agent:
    runtime, sessions, tools, memory, proactive behavior, failure handling,
-   observability, and authority controls.
+   observability, and the separation of probabilistic reasoning from
+   deterministic authority and execution controls.
 4. Review what was actually reusable. Carry the proven technical mechanics and
    lessons into Guild, not CoS's responsibility, identity, or memory.
 5. Create Master Craftsman as a separate Guild agent with its own conversation,
@@ -153,7 +157,108 @@ independent review, and production approval remain distinct gates.
 
 ---
 
-## 4. CoS agent: one bounded capability first
+## 4. Governed agentic reference architecture
+
+The architectural pattern for both roles is:
+
+> **Governed agentic architecture:** a hybrid probabilistic–deterministic,
+> closed-loop control pattern. Models reason and propose; deterministic policy
+> and bounded workflows control side effects; observable outcomes support
+> audit and learning.
+
+This names mini-moi's intended operating model more precisely than “an LLM with
+tools.” The model contributes interpretation and judgment. It does not acquire
+authority merely by recommending or selecting an action. Authority is granted
+outside the model by explicit product policy and Robert's decision gates; side
+effects occur only through named, bounded operations.
+
+```mermaid
+flowchart LR
+    A["Context, signals, and approved memory"] --> B["1. Probabilistic reasoning<br/>Interpret · diagnose · propose"]
+    B --> C["2. Deterministic authority gate<br/>Scope · policy · approval · bounds"]
+    C -->|Allowed| D["3. Deterministic bounded execution<br/>Approved tool or workflow"]
+    C -->|Denied or approval required| H["Refuse, narrow, or ask Robert"]
+    D --> E["4. Observable outcome<br/>Result · evidence · audit · health"]
+    E --> F["Controlled history and learning"]
+    F --> A
+```
+
+| Layer | Role in the system | Required boundary |
+|---|---|---|
+| 1. Probabilistic reasoning | Interpret conversation and evidence; diagnose; compare options; propose a candidate action and expected result | Treat output as a proposal, not permission or fact; expose material uncertainty and supporting evidence |
+| 2. Deterministic authority gate | Validate identity, domain, target, capability, policy, approval, limits, and current state | Enforce in application or runtime controls outside the prompt; the same validated request and state follow the same rule path |
+| 3. Deterministic bounded execution | Perform one approved operation through a fixed, testable tool or workflow | Least authority, explicit inputs and outputs, timeout and cancellation, idempotency where practical, and rollback or safe-stop behavior |
+| 4. Feedback and observability | Correlate the proposal, gate decision, operation, outcome, and human response | Preserve sufficient evidence to audit what happened and improve future reasoning without silently promoting every result into durable memory |
+
+“Deterministic” does not mean the external world or result is guaranteed. A
+test, network request, browser journey, or deployment observation may fail or
+vary. It means the authority decision and execution path are rule-bound and
+testable: who may invoke which operation, against what target, with which
+approval and limits. Failure must be explicit and observable rather than
+reinterpreted as success by the model.
+
+### Architectural invariants
+
+1. **Reasoning is separated from actuation.** The model can recommend or
+   select a candidate operation but cannot bypass the authority gate.
+2. **Prompts are not security boundaries.** Permissions, target restrictions,
+   protected-file rules, and approval requirements are technically enforced.
+3. **Authority is capability-specific.** Each operation has the least scope
+   needed for the task; greater blast radius or uncertainty raises the human
+   approval level.
+4. **Side effects use named operations.** No unrestricted shell, repository,
+   credential, or production access is implied by the agent's role.
+5. **Evidence is correlated end to end.** A reviewer can connect the context
+   and proposal to the gate decision, execution, result, and later outcome.
+6. **Learning is controlled.** Operational history remains factual; promotion
+   into semantic or procedural memory requires provenance, correction, and
+   evidence rather than automatic self-reinforcement.
+7. **Human judgment remains explicit.** The system may return `INCONCLUSIVE`,
+   `DENIED`, or `HUMAN JUDGMENT NEEDED`; it must not manufacture certainty to
+   complete a workflow.
+
+### Role-specific application
+
+The pattern is shared; the responsibility, policy, tools, and memory are not.
+
+| Layer | Chief of Staff | Master Craftsman |
+|---|---|---|
+| Probabilistic reasoning | Interpret dialogue and approved context, investigate a bounded CoS matter, notice a material change, and propose follow-through | Compare a spec, branch, diff, tests, and prior evidence; diagnose coverage or release risk; propose verification or a bounded change |
+| Deterministic authority gate | Enforce the selected CoS domain, approved sources and tools, privacy boundary, proactive-contact triggers, and approval for external side effects | Enforce repository, branch, task, command, environment, protected-file, credential, edit, commit, deploy, and production-observation rules |
+| Deterministic bounded execution | Perform approved research or observation, update an approved CoS store, and deliver a proactive message when a defined trigger is satisfied | Run named tests or analysis, perform an approved UAT, capture evidence, or edit explicitly granted test files; no merge, deploy, or production mutation by default |
+| Feedback and observability | Record why the trigger fired, sources and tools used, message delivery, Robert's response, outcome, and memory provenance | Record code version, environment, commands, exit status, artifacts, screenshots, diff, verdict, reviewer decision, and later defect or release outcome |
+
+### Current state versus target state
+
+The pattern is partly visible in today's CoS implementation, but it is not yet
+an end-to-end proven architecture. To preserve mini-moi's “verify production
+reality” discipline, future specs and evidence records should label each claim
+as **implemented and verified**, **implemented but not yet verified**,
+**documented target**, or **proposed**.
+
+| Layer | CoS reality now | Gap to prove | Master Craftsman reality now |
+|---|---|---|---|
+| Probabilistic reasoning | A direct-model backend and the live CoS voice layer support conversational judgment; current context is a simple capped read of platform memory | The first bounded CoS responsibility is not selected, and the OpenClaw backend remains a stub rather than a proven reasoning/runtime path | The role and useful quality questions are planned; there is no approved Master Craftsman v0 capability yet |
+| Deterministic policy/gate | The platform coordination layer owns routing, offered-tool policy, and the approved memory write path. The current direct backend exposes observational functions and a pending-recommendation write, not unrestricted mutation | The broader partner contract is documented direction, not proof of an explicit policy decision for every capability. OpenClaw-native tool restrictions and approval handling still require conformance evidence | The authority table in this document is illustrative. Existing Guild watch/log/notify behavior is useful precedent, not a Master Craftsman permission model |
+| Deterministic bounded execution | Current named operations can observe health or logs and create a pending item or memory entry through platform-owned paths | External action and handoff execution remain manual or unimplemented; fixed execution, cancellation, safe failure, and rollback must be proven per selected capability | No Master Craftsman executor is approved; the first spec must name exact commands, targets, credentials, edits, and prohibited side effects |
+| Feedback and observability | CoS has file logs, platform memory, and a pending agenda surface | Those artifacts are not yet a correlated proposal → gate → execution → outcome trace. Scheduled loops do not yet read accumulated common memory, so the feedback loop is open | Guild has build, test, and watcher evidence to build on, but Master Craftsman's audit and learning path has not been defined or validated |
+
+Memory supports feedback, but memory is not itself the observability layer.
+Operational evidence should remain an immutable factual record; selected results
+may later be promoted into episodic, semantic, or procedural memory through a
+controlled process. This prevents a model from turning its own unverified
+output into reinforcing “knowledge.”
+
+A small common proposal contract can make the separation testable across both
+roles. Before an operation, the agent should identify the intended action and
+target, rationale and evidence, confidence or uncertainty, expected outcome,
+risk and safe-stop or rollback, and required approval. The exact schema belongs
+in the first approved component spec; this document establishes the separation
+it must preserve.
+
+---
+
+## 5. CoS agent: one bounded capability first
 
 The first CoS capability must be more meaningful than note-taking, reminders,
 or email cleanup. It should require Robert and CoS to work together and should
@@ -270,7 +375,7 @@ agent produces fluent responses.
 
 ---
 
-## 5. Technical component and tool review
+## 6. Technical component and tool review
 
 OpenClaw is the intentional first candidate. Robert adopted it early and used
 it during mini-moi's design and build, so the project has real experience and
@@ -304,13 +409,14 @@ The review covers six technical components:
    lessons, procedural knowledge, retrieval, compaction, provenance, correction,
    deletion, privacy, and portability.
 3. **Tool and authority model** — tool discovery, sandboxing, observation versus
-   mutation, per-turn grants, credential boundaries, audit trail, and rollback.
+   mutation, proposal-to-policy separation, per-turn grants, credential
+   boundaries, deterministic gate enforcement, audit trail, and rollback.
 4. **Model and provider access** — quality, latency, fallback behavior, local
    options, cost visibility, and the ability to change models without moving
    product responsibility into the runtime.
 5. **Integration and operations** — adapter complexity, process isolation,
    deployment topology, health, logs, traces, testability, version pinning, and
-   recovery.
+   recovery, including correlation from proposal through outcome.
 6. **Role-specific fit** — conversational initiative for CoS versus branch,
    test, browser, and development-environment work for Master Craftsman.
 
@@ -396,6 +502,7 @@ Expected lightweight outputs:
 - current technical landscape note;
 - role-specific evaluation scorecard;
 - OpenClaw live-capability and gap report;
+- capability and authority map showing where policy is enforced;
 - reference-task spike evidence;
 - memory approach recommendation;
 - runtime and adapter decision record;
@@ -408,7 +515,7 @@ limit belongs in D3 after the reference task and candidate shortlist are known.
 
 ---
 
-## 6. What CoS is expected to prove technically
+## 7. What CoS is expected to prove technically
 
 The CoS implementation is the first real consumer of the bounded agent
 mechanics. It should provide evidence about:
@@ -419,11 +526,13 @@ mechanics. It should provide evidence about:
 | Authentication | Can only the approved application and operator reach it? |
 | Sessions | Does relevant conversational state survive reconnects and restarts? |
 | Memory boundary | Does platform-owned memory remain intact if the backend changes? |
-| Tool policy | Are allowed and disallowed actions enforced rather than merely suggested? |
+| Reasoning/authority separation | Can the model propose an operation without possessing the permission or credentials to execute it directly? |
+| Tool policy | Are identity, target, operation, limits, and approval enforced outside the prompt rather than merely suggested? |
+| Deterministic bounded execution | Does each allowed operation have a fixed, testable path with validated inputs, explicit results, timeout or cancellation, and safe failure behavior? |
 | Initiative | Can defined triggers cause useful contact without uncontrolled behavior? |
 | Cancellation | Can Robert stop an active task and receive an honest partial result? |
 | Failure handling | Are provider, tool, network, and runtime failures visible and recoverable? |
-| Observability | Can a reviewer understand model, tool, latency, error, and cost behavior? |
+| Observability | Can a reviewer correlate the reasoning context, proposal, policy decision, tool execution, outcome, latency, error, and cost? |
 | Portability | Can the backend be swapped without moving CoS responsibility into the runtime? |
 
 Passing these checks does not prove Master Craftsman. It only prevents Guild
@@ -431,7 +540,7 @@ from rediscovering the same infrastructure facts from zero.
 
 ---
 
-## 7. Reuse: technical mechanics, not domain responsibility
+## 8. Reuse: technical mechanics, not domain responsibility
 
 After CoS has been used, review what genuinely transfers.
 
@@ -440,9 +549,11 @@ After CoS has been used, review what genuinely transfers.
 - isolated runtime provisioning and lifecycle;
 - authenticated backend connection;
 - session, wait, timeout, and cancellation handling;
-- tool registration and authority enforcement;
+- proposal contracts, tool registration, deterministic authority gates, and
+  bounded execution wrappers;
 - model selection and fallback behavior;
-- logging, traces, health, cost, and error evidence;
+- correlated logging and traces from proposal through gate, execution, and
+  outcome, plus health, cost, and error evidence;
 - platform-owned memory interfaces;
 - safe restart and upgrade procedure;
 - testing patterns for runtime conformance.
@@ -469,7 +580,7 @@ is preferable to institutionalizing an imagined abstraction.
 
 ---
 
-## 8. Master Craftsman: separate conversation, memory, and bounded action
+## 9. Master Craftsman: separate conversation, memory, and bounded action
 
 Master Craftsman is an advisory development-quality agent in Guild. Advisory
 does not mean passive or read-only. It should be able to do useful verification
@@ -562,11 +673,13 @@ After an approved deployment, Master Craftsman may:
 | Merge, deploy, roll back, or mutate production | Not initially allowed; existing Robert approval gates remain |
 | Modify protected files | Never without Robert's explicit instruction |
 
-The correct boundary is “bounded and observable,” not “read-only forever.”
+The correct boundary is “bounded, governed, and observable,” not “read-only
+forever.” Master Craftsman's advisory role permits action inside an approved
+capability; it does not make the model itself the source of authority.
 
 ---
 
-## 9. Master Craftsman memory
+## 10. Master Craftsman memory
 
 Memory should support real quality conversations before a detailed schema is
 designed. Start with the minimum needed and let use reveal the stable shape.
@@ -596,16 +709,16 @@ their authoritative source rather than silently replacing it.
 
 ---
 
-## 10. Learning increments, not a dated roadmap
+## 11. Learning increments, not a dated roadmap
 
 | Increment | Product capability | Principal question | Evidence gate |
 |---|---|---|---|
 | 0. Align | Coherent current technical baseline | Do gateway, adapter, queue, ports, runtime assumptions, and approval state agree? | Conflicts resolved or explicitly recorded |
 | 1. Choose CoS capability | One bounded CoS responsibility | Is the task valuable, conversational, memorable, actionable, and clearly outside Guild? | Robert selects capability and authority envelope |
-| 2. Review tools and memory | Current landscape plus OpenClaw-first evaluation | Is OpenClaw still the best first fit, and which memory responsibilities remain platform-owned? | Shortlist, live capability report, scorecard, and spike plan |
-| 3. Prove CoS mechanics | CoS agent performs the capability in development | Do runtime, sessions, tools, memory, initiative, cancellation, and observation work? | Technical acceptance plus safe rollback |
+| 2. Review tools and memory | Current landscape plus OpenClaw-first evaluation | Is OpenClaw still the best first fit, which memory responsibilities remain platform-owned, and where are policy and execution controls enforced? | Shortlist, live capability report, scorecard, authority map, and spike plan |
+| 3. Prove CoS mechanics | CoS agent performs the capability in development | Do runtime, sessions, memory, initiative, and the reasoning → authority gate → bounded execution → observable outcome loop work? | Correlated technical evidence plus safe rollback |
 | 4. Use CoS for real | Robert and CoS use the capability together | Does it improve a real decision or situation over time? | Live-use evidence and keep/change/stop decision |
-| 5. Reuse review | Technical lessons evaluated for Guild | Which mechanics truly transfer, and which were CoS-specific? Would a different runtime better fit development work? | Explicit reuse and tool decisions; no premature framework |
+| 5. Reuse review | Technical lessons evaluated for Guild | Which proposal, policy, execution, observability, runtime, and memory mechanics truly transfer, and which were CoS-specific? Would a different runtime better fit development work? | Explicit reuse and tool decisions; no premature framework |
 | 6. Define Master Craftsman v0 | One or two development-verification tasks | Which task and technical combination provide immediate quality value with a small safe authority envelope? | Reviewed component spec and testable measures |
 | 7. Use Master Craftsman | Ongoing quality conversation and bounded work | Does it improve verification, regression coverage, or release confidence? | Evidence from real branches, tests, or deployments |
 | 8. Expand carefully | Additional tools or authority | Has observed value justified a larger action boundary? | Separate reviewed decision and rollback |
@@ -615,7 +728,7 @@ replace the runtime, narrow the task, or stop.
 
 ---
 
-## 11. Avoiding long dead ends
+## 12. Avoiding long dead ends
 
 | Risk | Mitigation |
 |---|---|
@@ -623,6 +736,10 @@ replace the runtime, narrow the task, or stop.
 | Choosing OpenClaw only because it was valuable earlier | Verify the current live version and compare it against the bounded reference task |
 | Endless framework and memory research | Timebox the landscape review; shortlist only material alternatives; prefer small comparable spikes |
 | Mistaking fluent conversation for agency | Require memory, tool action, initiative, and real-world usefulness evidence |
+| Treating prompt instructions as deterministic guardrails | Enforce capability, target, credential, and approval policy outside the model and test both allowed and denied paths |
+| Giving a reasoning model direct ambient authority | Separate proposal from permission; expose only named bounded operations after the authority gate |
+| Collecting logs without an auditable causal chain | Correlate context, proposal, gate decision, execution, result, human decision, and later outcome |
+| Allowing feedback to become self-reinforcing memory | Keep factual episodes distinct from semantic lessons and require provenance and evidence for promotion |
 | Allowing CoS to drift into Guild | State and test the domain boundary; no build-guidance responsibility in CoS |
 | Designing Master Craftsman entirely from CoS assumptions | Conduct a reuse review, then write a Guild-specific component spec |
 | Making Master Craftsman permanently passive | Grant small, explicit action permissions such as safe test execution or bounded test edits |
@@ -636,7 +753,7 @@ replace the runtime, narrow the task, or stop.
 
 ---
 
-## 12. Artifact model
+## 13. Artifact model
 
 This document is the narrative spine connecting product intent, architectural
 choices, learning sequence, and evidence. It does not replace component specs.
@@ -646,6 +763,7 @@ choices, learning sequence, and evidence. It does not replace component specs.
 | Living Product & Solution Approach | Current end-to-end intent, boundaries, unknowns, and learning sequence | Update when evidence changes the preferred approach |
 | Technical landscape and spike report | Compare current tools, memory approaches, and observed reference-task behavior | Refresh at a major selection or reconsideration point |
 | Decision record | Preserve why a consequential choice was made or replaced | Additive; supersede rather than erase history |
+| Capability and authority map | Name each proposed operation, target, policy owner, approval level, credential boundary, and evidence requirement | Define per component; revise only through a reviewed authority decision |
 | Component spec | Define one approved implementable capability and acceptance evidence | Create just in time; review before build |
 | Implementation diff | Realize an approved component spec | Independent review from the actual diff |
 | Evidence record | Show what happened in runtime acceptance, live use, testing, and deployment | Add factual results after each increment |
@@ -674,7 +792,7 @@ the explicit requirements above govern the next spec.
 
 ---
 
-## 13. Related current artifacts
+## 14. Related current artifacts
 
 These are inputs to the approach, not automatically approved implementation
 instructions.
@@ -702,6 +820,8 @@ instructions.
   stub and gateway spec;
 - state which durable memory is authoritative and which component owns its
   approved write path;
+- define the minimum proposal-to-policy contract, capability map, and human
+  approval rule for the selected CoS operation;
 - define the development spike's scope, acceptance evidence, timebox, and safe
   rollback.
 
@@ -711,9 +831,13 @@ production enablement:**
 - the pinned runtime's actual session, wait/resume, timeout, and cancellation
   behavior;
 - the available token or role-scoping mechanism and connection authentication;
-- technical enforcement of allowed and disallowed tools;
+- technical enforcement of allowed and disallowed operations, targets, limits,
+  and approval states outside the prompt;
+- proof that the reasoning component cannot directly access credentials or
+  bypass the policy gate;
 - restart, reconnect, failure, and partial-result behavior;
-- available logs and evidence for model, tool, latency, error, and cost activity;
+- the minimum correlation identifier and evidence envelope connecting context,
+  proposal, gate decision, execution, outcome, latency, error, and cost;
 - export, correction, isolation, and rebuild behavior for any runtime-native
   working memory.
 
@@ -730,7 +854,7 @@ assign CoS responsibility for later Guild work.
 
 ---
 
-## 14. How this document lives
+## 15. How this document lives
 
 “Living” means the document remains the best current understanding without
 silently erasing why important choices changed.
@@ -755,20 +879,23 @@ silently erasing why important choices changed.
 | 2026-08-11 | Technical review added | Robert identified OpenClaw history and the possibility of newer runtimes and memory approaches | Added an OpenClaw-first but evidence-based tool, runtime, and memory review with role-specific criteria | v0.3 |
 | 2026-08-11 | Grok baseline review | Grok assessed the artifact as a strong fit for an AI Product Owner and identified baseline-readiness improvements | Added the compact baseline, capability decision frame, gate-classified questions, spec relationship, and v1.0 readiness criteria | v0.4 |
 | 2026-08-11 | Claude handoff review | Claude found the approach sound and identified several places where illustrative material could appear more decided than intended | Clarified reader context, provisional evaluation, spike duration, illustrative Master Craftsman scope, and working versus durable memory | v0.5 |
+| 2026-08-13 | Governed architecture and current-state review | Interview preparation named the four-layer pattern; Claude mapped it to CoS and Master Craftsman; repository verification found both real implementation seams and still-aspirational controls | Added the reference architecture, invariants, separate role mapping, current-versus-target assessment, control-path evidence, and risks | v0.6 |
 
 ### Open product decisions
 
 1. Which single bounded capability should CoS and Robert use together first?
 2. What conditions may cause that CoS capability to initiate contact?
 3. What evidence is sufficient to declare the agent mechanics proven?
-4. Which current tools and memory approaches merit a reference-task spike
+4. What minimum proposal contract, deterministic policy gate, bounded execution
+   interface, and correlated evidence envelope must both roles prove?
+5. Which current tools and memory approaches merit a reference-task spike
    alongside OpenClaw?
-5. Which one or two Master Craftsman tasks should follow: branch inquiry, test
+6. Which one or two Master Craftsman tasks should follow: branch inquiry, test
    execution, regression refinement, deployment verification, or a deliberate
    combination?
-6. What may Master Craftsman do without turn-specific approval, and what always
+7. What may Master Craftsman do without turn-specific approval, and what always
    requires it?
-7. What minimum conversation and episodic memory will make the first Master
+8. What minimum conversation and episodic memory will make the first Master
    Craftsman quality inquiry better than a fresh coding-agent session?
 
 ### Readiness for living baseline v1.0
@@ -780,6 +907,9 @@ Promote this working draft to **Living baseline v1.0** when:
   an owner, rationale, and required evidence;
 - the technical review and reference-task spike have an approved scope and
   timebox;
+- the first component spec identifies the reasoning, authority, execution, and
+  evidence responsibilities and proves that policy is enforced outside the
+  prompt;
 - Claude has reviewed the product framing, domain boundaries, and learning
   sequence;
 - Robert confirms the document as the current durable approach.
@@ -791,6 +921,25 @@ decision gates are stable enough to govern the next component specs.
 ---
 
 ## Change log
+
+### 2026-08-13 — Working draft v0.6
+
+- Named the shared pattern as governed agentic architecture: a hybrid
+  probabilistic–deterministic, closed-loop pattern with probabilistic reasoning,
+  deterministic policy and execution controls, and observable evidence.
+- Added the four-layer reference loop, architectural invariants, and separate
+  CoS and Master Craftsman mappings without blending their responsibilities.
+- Added a current-state-versus-target assessment so existing CoS seams are
+  distinguished from unverified OpenClaw controls, the still-open feedback
+  loop, and the not-yet-built Master Craftsman role.
+- Clarified that deterministic control means a rule-bound authority and
+  execution path, not a guarantee that models or external systems produce the
+  same outcome.
+- Made reasoning-to-authority separation, prompt-external enforcement, bounded
+  execution, and end-to-end evidence part of the CoS technical proof.
+- Added a capability and authority map to the lightweight artifact set and
+  extended risks, learning increments, open decisions, and baseline readiness
+  to cover the governed control path.
 
 ### 2026-08-11 — Working draft v0.5
 
