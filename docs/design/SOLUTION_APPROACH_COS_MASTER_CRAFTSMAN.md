@@ -1,8 +1,8 @@
 # CoS Agent and Master Craftsman — Living Product & Solution Approach
 
 **Subtitle:** Proving bounded agent mechanics in one domain, then applying the learning to another<br>
-**Status:** Working draft v0.7 — baseline release candidate pending D1–D4, not approved to build<br>
-**Date:** 2026-08-13<br>
+**Status:** Working draft v0.8 — baseline release candidate pending D1–D4, not approved to build<br>
+**Date:** 2026-08-14<br>
 **Owner / decision point:** Robert<br>
 **Audience:** Design, implementation, review, and planning collaborators
 
@@ -52,7 +52,7 @@ evidence emerges.
 | D1 | Select the first bounded CoS capability | Robert | A current personally valuable situation that meets the selection criteria in Section 5 |
 | D2 | Define when that capability may initiate contact | Robert | Observable material-change triggers and examples of useful versus distracting contact |
 | D3 | Approve the OpenClaw-first technical review and reference-task spike | Robert | Reconciled baseline, bounded reference task, acceptance scenarios, timebox, and rollback |
-| D4 | Define what counts as mechanics proven | Robert, informed by technical review | Binary evidence for isolation, sessions, memory, separation of reasoning from authority, bounded execution, cancellation, recovery, and correlated observability |
+| D4 | Define what counts as mechanics proven | Robert, informed by technical review | Binary evidence for deterministic controls and repeated evidence for probabilistic behavior, covering isolation, sessions, memory, reasoning/authority separation, bounded execution, cancellation, recovery, and correlated observability |
 
 Chief of Staff and Guild were created with distinct purposes. CoS is Robert's
 cross-domain working partner. Guild is the workshop for building, operating,
@@ -766,6 +766,25 @@ their authoritative source rather than silently replacing it.
 | 7. Use Master Craftsman | Ongoing quality conversation and bounded work | Does it improve verification, regression coverage, or release confidence? | Evidence from real branches, tests, or deployments |
 | 8. Expand carefully | Additional tools or authority | Has observed value justified a larger action boundary? | Separate reviewed decision and rollback |
 
+### Evaluation discipline to decide with Guild
+
+Guild should evaluate whether a lightweight probabilistic-evaluation practice
+belongs in the Master Craftsman component spec and later build. This document
+does not select an evaluation framework or authorize one. The Guild-specific
+spec should decide **where, when, and how** evaluation adds enough rigor to
+justify its cost.
+
+Use three evidence lanes: deterministic regression tests for exact contracts
+and controls; repeated behavioral evaluations for outputs that can legitimately
+vary; and production evidence for actual outcomes. For each probabilistic
+behavior included, the spec should name the cases, number of trials, grader,
+threshold, uncertainty or abstention treatment, evidence location, cost limit,
+and how real failures become future regression cases.
+
+Start with component-local cases and a simple runner or manual record. Do not
+create a shared evaluation framework until CoS and Master Craftsman have both
+demonstrated the same need under the two-consumer rule.
+
 Each increment earns the next. Valid outcomes include proceed, revise, pause,
 replace the runtime, narrow the task, or stop.
 
@@ -927,6 +946,7 @@ silently erasing why important choices changed.
 | 2026-08-13 | Guild communication boundary | Robert clarified that Master Craftsman should notify him directly and CoS should mainly support Robert-initiated ad hoc Guild requests | Made direct Master Craftsman-to-Robert notification the normal path; kept CoS outside routine quality reporting, supervision, and task assignment | v0.6 |
 | 2026-08-13 | Claude v0.6 baseline review | Claude found the architecture sound and the role separation consistent; repository recheck confirmed the merged Confer turn contract and channel-neutral policy tests while not independently proving every production path | Credited the implemented Confer observation-only gate, retained per-capability proof requirements, and recorded the Claude baseline-review gate as satisfied | v0.6 |
 | 2026-08-13 | Grok v0.6 baseline review | Grok found no architectural blockers and recommended small external-readability improvements before D1–D4 and promotion | Tightened the opening baseline, added real-system context, made the control-path meaning of deterministic prominent, and simplified the v1.0 readiness gate | v0.7 |
+| 2026-08-14 | Evaluation-discipline decision | Robert chose to consider probabilistic behavioral evaluation during the Guild/Master Craftsman spec rather than design or build a framework now | Added a short three-lane evaluation approach, required future spec decisions, and a component-local starting rule | v0.8 |
 
 ### Baseline decisions still open
 
@@ -937,10 +957,12 @@ silently erasing why important choices changed.
 3. **D3 — Technical discovery:** What bounded reference task, OpenClaw-first
    comparison scope, candidate set, timebox, rollback, and acceptance scenarios
    are approved?
-4. **D4 — Mechanics proof:** What binary evidence is sufficient for isolation,
+4. **D4 — Mechanics proof:** What must pass as a binary deterministic control,
+   and what probabilistic behavior requires repeated trials, explicit graders,
+   thresholds, and uncertainty treatment? Evidence must cover isolation,
    sessions, memory, reasoning/authority separation, policy enforcement,
    bounded execution, initiative, cancellation, recovery, portability, and
-   correlated observability?
+   correlated observability.
 
 ### Downstream product decisions
 
@@ -979,6 +1001,20 @@ tested; only reviewed implementation and runtime evidence can prove them.
 ---
 
 ## Change log
+
+### 2026-08-14 — Working draft v0.8
+
+- Added a short Guild evaluation-discipline section without selecting or
+  authorizing an evaluation framework.
+- Established three evidence lanes: deterministic regression, repeated
+  probabilistic behavioral evaluation, and production outcomes.
+- Required the future Guild/Master Craftsman component spec to decide where,
+  when, and how probabilistic evaluation is useful, including cases, trials,
+  graders, thresholds, uncertainty, evidence, cost, and failure promotion.
+- Kept the initial approach component-local and subject to the two-consumer
+  rule before any shared evaluation framework is extracted.
+- Updated D4 to distinguish binary control-plane proof from repeated evidence
+  for probabilistic behavior.
 
 ### 2026-08-13 — Working draft v0.7
 
