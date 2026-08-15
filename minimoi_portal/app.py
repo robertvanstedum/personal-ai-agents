@@ -1730,6 +1730,7 @@ def guild_build_spec(filename):
     repo_root = Path(__file__).parent.parent
     candidates = [
         repo_root / "docs" / "specs" / filename,
+        repo_root / "docs" / "design" / filename,
         repo_root / "docs" / filename,
         repo_root / "_working" / filename,
     ]
@@ -1755,6 +1756,7 @@ def guild_build_spec_raw(filename):
     repo_root = Path(__file__).parent.parent
     candidates = [
         repo_root / "docs" / "specs" / filename,
+        repo_root / "docs" / "design" / filename,
         repo_root / "docs" / filename,
         repo_root / "_working" / filename,
     ]

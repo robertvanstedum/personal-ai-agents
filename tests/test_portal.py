@@ -25,6 +25,20 @@ def test_curator_proxy_reachable_or_redirects(portal_client):
     assert r.status_code in [200, 302]
 
 
+def test_guild_build_spec_serves_docs_design_files(portal_client):
+    """docs/design/ living docs (e.g. the CoS/Master Craftsman solution
+    approach) must resolve at the same /guild/build/spec/ URL as docs/specs/
+    component specs, not just render a "not found" placeholder."""
+    with portal_client.session_transaction() as sess:
+        sess["user"] = {"username": "owner", "tier": "owner"}
+    r = portal_client.get(
+        "/guild/build/spec/SOLUTION_APPROACH_COS_MASTER_CRAFTSMAN.md"
+    )
+    assert r.status_code == 200
+    assert b"Spec file not found" not in r.data
+    assert b"Living Product" in r.data
+
+
 def test_proxy_nav_hides_owner_workspaces_from_non_owner():
     from minimoi_portal.proxy import _portal_nav_html
 
