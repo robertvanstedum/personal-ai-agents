@@ -147,6 +147,7 @@ services:
       - COS_MODEL_GATEWAY_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in .env}
     volumes:
       - ./domains/cos:/app/domains/cos
+      - ./services/model_gateway:/app/services/model_gateway:ro
       - ./data:/app/data
       - ./docs:/app/docs
       - ./data/guild/build_queue.json:/app/data/guild/build_queue.json

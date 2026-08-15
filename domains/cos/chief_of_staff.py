@@ -50,8 +50,10 @@ from domains.cos.confer_service import (
     ConferTurnService,
     InvalidConferTurn,
 )
+from domains.cos.cost_checkpoint import run_cost_checkpoint
 from domains.cos.spoken_reply_store import SpokenReplyStore
 from domains.cos.routing_receipts import RoutingReceiptStore
+from services.model_gateway.cost_reporting import checkpoint_from_files
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -62,8 +64,10 @@ COS_MEMORY_FILE  = BASE_DIR / "data/cos_memory.md"
 AGENDA_FILE      = BASE_DIR / "data/guild/cos_agenda.json"
 LOGS_DIR         = BASE_DIR / "logs"
 _REALTIME_VOICE_STATIC_DIR = BASE_DIR / "core" / "realtime_voice" / "static"
+MODEL_GATEWAY_RECEIPT_FILE = BASE_DIR / "data/model_gateway_receipts.jsonl"
+MODEL_GATEWAY_COST_POLICY_FILE = BASE_DIR / "services/model_gateway/cost_policy.json"
 _spoken_replies = SpokenReplyStore()
-_routing_receipts = RoutingReceiptStore(BASE_DIR / "data/model_gateway_receipts.jsonl")
+_routing_receipts = RoutingReceiptStore(MODEL_GATEWAY_RECEIPT_FILE)
 
 # ── DB (optional — degrades gracefully if Docker is down) ────────────────────
 
@@ -820,6 +824,7 @@ _loop_state: dict[str, dict] = {
     "loop_f": {"name": "build_discipline_check", "last_run": None, "last_result": None, "error": None},
     "loop_g": {"name": "guest_nudge_check",      "last_run": None, "last_result": None, "error": None},
     "loop_h": {"name": "ec2_health_check",       "last_run": None, "last_result": None, "error": None},
+    "loop_i": {"name": "model_gateway_cost_check", "last_run": None, "last_result": None, "error": None},
 }
 _loop_lock = threading.Lock()
 
@@ -843,6 +848,29 @@ def _inc_chat():
         _state["chat_count"] += 1
         _state["state"] = "running"
         _state["last_chat"] = datetime.now(timezone.utc).isoformat()
+
+
+def _send_cost_checkpoint_alert(message: str) -> None:
+    """Send one production-only COS alert through the existing Telegram path."""
+    from utils.telegram import get_cos_token, get_chat_id
+
+    token = get_cos_token()
+    chat_id = get_chat_id()
+    if not token or not chat_id:
+        raise RuntimeError("COS Telegram credentials are unavailable")
+    _tg_send(token, chat_id, message)
+
+
+def _run_model_gateway_cost_checkpoint() -> dict:
+    """Loop I — summarize model spend and warn without changing routing/budgets."""
+    from utils.role import is_production
+
+    return run_cost_checkpoint(
+        MODEL_GATEWAY_RECEIPT_FILE,
+        MODEL_GATEWAY_COST_POLICY_FILE,
+        production=is_production(),
+        notify=_send_cost_checkpoint_alert,
+    )
 
 # ── Telegram polling (rvsopenbot) ─────────────────────────────────────────────
 
@@ -1147,6 +1175,15 @@ def loops_status():
     with _loop_lock:
         snap = {k: dict(v) for k, v in _loop_state.items()}
     return jsonify(snap)
+
+
+@app.route("/costs/model-gateway")
+def model_gateway_costs():
+    """Read-only sanitized cost and routing checkpoint for COS."""
+    return jsonify(checkpoint_from_files(
+        MODEL_GATEWAY_RECEIPT_FILE,
+        MODEL_GATEWAY_COST_POLICY_FILE,
+    ))
 
 
 # ── Web UI data helpers ───────────────────────────────────────────────────────
@@ -1522,6 +1559,12 @@ def _start_cos():
         lambda: _run_loop("loop_h", _check_ec2_health),
         "interval", minutes=30, id="loop_h", misfire_grace_time=300
     )
+    # Loop I — daily gateway cost and fallback checkpoint. It reports and
+    # recommends only; it cannot mutate budgets, routes, or infrastructure.
+    scheduler.add_job(
+        lambda: _run_loop("loop_i", _run_model_gateway_cost_checkpoint),
+        "cron", hour=7, minute=45, id="loop_i", misfire_grace_time=600
+    )
 
     if loops_ok:
         # Loop A — twice daily
@@ -1544,9 +1587,9 @@ def _start_cos():
             lambda: _run_loop("loop_d", run_novelty_watch),
             "cron", day="1,15", hour=8, id="loop_d", misfire_grace_time=600
         )
-        print("   Scheduler: loop_a(6+18h) loop_b(Sun 9h) loop_c(Sun 10h) loop_d(1st+15th 8h) loop_f(daily 7:30) loop_g(hourly) loop_h(30min) ✅")
+        print("   Scheduler: loop_a(6+18h) loop_b(Sun 9h) loop_c(Sun 10h) loop_d(1st+15th 8h) loop_f(daily 7:30) loop_g(hourly) loop_h(30min) loop_i(daily 7:45) ✅")
     else:
-        print("   Scheduler: loop_f(daily 7:30) loop_g(hourly) loop_h(30min) ✅ — loop_a/b/c/d disabled (import error)")
+        print("   Scheduler: loop_f(daily 7:30) loop_g(hourly) loop_h(30min) loop_i(daily 7:45) ✅ — loop_a/b/c/d disabled (import error)")
 
     scheduler.start()
 
