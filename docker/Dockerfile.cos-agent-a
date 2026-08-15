@@ -1,0 +1,5 @@
+FROM ghcr.io/openclaw/openclaw:2026.7.1
+
+# Seed only the isolated COS Agent A state volume. Docker copies this file into
+# a newly-created named volume on first use; credentials remain runtime env vars.
+COPY --chown=node:node docker/cos-agent-a/openclaw.json /home/node/.openclaw/openclaw.json

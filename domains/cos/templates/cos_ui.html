@@ -162,6 +162,7 @@ sendInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKe
 async function sendMessage() {
   const text = sendInput.value.trim();
   if (!text) return;
+  const requestId = crypto.randomUUID();
   sendInput.value = '';
   setInputDisabled(true);
   appendMsg('user', text);
@@ -170,7 +171,12 @@ async function sendMessage() {
     const resp = await fetch('/ui/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, channel: 'html_text', conversation_id: 'owner' }),
+      body: JSON.stringify({
+        text,
+        channel: 'html_text',
+        conversation_id: 'owner',
+        request_id: requestId,
+      }),
     });
     const data = await resp.json();
     thinking.remove();

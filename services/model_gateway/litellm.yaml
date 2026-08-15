@@ -1,0 +1,92 @@
+# MinimoI shared model gateway
+#
+# Provider order and fallback policy live here, never in domain business code.
+# Secret values are resolved from the gateway container environment.
+
+# ── Logical models and concrete deployments ──────────────────────────────────
+
+model_list:
+  - model_name: minimoi-cos-agent
+    litellm_params:
+      model: xai/grok-4
+      api_key: os.environ/XAI_API_KEY
+      timeout: 120
+    model_info:
+      id: cos-xai-primary
+      base_model: xai/grok-4
+      mode: chat
+      supports_function_calling: true
+      fallback_position: 0
+
+  - model_name: minimoi-cos-agent-xai-fast
+    litellm_params:
+      model: xai/grok-4-1-fast
+      api_key: os.environ/XAI_API_KEY
+      timeout: 120
+    model_info:
+      id: cos-xai-fast
+      base_model: xai/grok-4-1-fast
+      mode: chat
+      supports_function_calling: true
+      fallback_position: 1
+
+  - model_name: minimoi-cos-agent-anthropic
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+      timeout: 120
+    model_info:
+      id: cos-anthropic-secondary
+      base_model: anthropic/claude-sonnet-4-6
+      mode: chat
+      supports_function_calling: true
+      fallback_position: 2
+
+  # OpenAI is intentionally absent until its credential, exact model ID, tool
+  # support, and live acceptance have all passed. Do not add a false fallback.
+
+  - model_name: minimoi-cos-agent-local
+    litellm_params:
+      model: ollama_chat/qwen3:4b
+      api_base: os.environ/OLLAMA_API_BASE
+      timeout: 180
+      # Keep reasoning in Ollama's separate thinking field so OpenClaw does not
+      # expose the trace as assistant-visible content.
+      think: true
+    model_info:
+      id: cos-ollama-local
+      base_model: qwen3:4b
+      mode: chat
+      max_input_tokens: 32768
+      max_output_tokens: 8192
+      supports_function_calling: true
+      fallback_position: 3
+
+# ── Ordered reliability policy ────────────────────────────────────────────────
+
+router_settings:
+  fallbacks:
+    - minimoi-cos-agent:
+        - minimoi-cos-agent-xai-fast
+        - minimoi-cos-agent-anthropic
+        - minimoi-cos-agent-local
+  num_retries: 0
+  allowed_fails: 1
+  cooldown_time: 60
+  timeout: 180
+  enable_pre_call_checks: true
+
+# ── Gateway behavior and authentication ───────────────────────────────────────
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false
+  callbacks:
+    - receipt_callback.receipt_callback
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  disable_spend_logs: true
+  disable_error_logs: false
+  store_model_in_db: false
+  disable_admin_ui: true

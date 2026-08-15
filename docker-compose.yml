@@ -80,6 +80,51 @@ services:
       - curator
       - german
 
+  # Shared provider gateway. Domains and agent runtimes request stable logical
+  # models; this service alone owns concrete providers and fallback policy.
+  model-gateway:
+    image: ghcr.io/berriai/litellm-non_root@sha256:4a5befcc82c01af9fa2b66ed3c139ea2eff31a5b75babc448e6341157e27ff79
+    container_name: minimoi-model-gateway
+    restart: unless-stopped
+    command:
+      - --config
+      - /app/config.yaml
+      - --port
+      - "4000"
+      - --num_workers
+      - "1"
+    environment:
+      - LITELLM_MASTER_KEY=${MINIMOI_MODEL_GATEWAY_KEY:?set MINIMOI_MODEL_GATEWAY_KEY in .env}
+      - XAI_API_KEY=${XAI_API_KEY:?set XAI_API_KEY in .env}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OLLAMA_API_BASE=${MINIMOI_OLLAMA_URL:-http://host.docker.internal:11434}
+      - MINIMOI_RECEIPT_ENDPOINT=http://cos:18769/internal/model-gateway/receipt
+      - MINIMOI_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in .env}
+    volumes:
+      - ./services/model_gateway/litellm.yaml:/app/config.yaml:ro
+      - ./services/model_gateway/receipt_callback.py:/app/receipt_callback.py:ro
+    ports:
+      - "127.0.0.1:14000:4000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    labels:
+      - minimoi.runtime.role=model-gateway
+      - minimoi.runtime.implementation=litellm
+      - minimoi.runtime.scope=shared
+
   # CoS scheduler — Phase 1 containerized version. Runs on port 18769 (dev)
   # so it coexists with the bare launchd process on 8769 during testing.
   # Rollback: docker stop minimoi-cos-dev, bare process continues on 8769.
@@ -93,6 +138,13 @@ services:
       - MINIMOI_ROLE=standby
       - PORT=18769
       - DISABLE_TELEGRAM_POLL=1
+      - COS_BACKEND_TYPE=${COS_BACKEND_TYPE:-grok}
+      - COS_AGENT_RUNTIME_URL=${COS_AGENT_RUNTIME_URL:-http://cos-agent-a:18789/v1}
+      # Optional at Compose parsing time so the existing Grok backend remains a
+      # valid rollback. OpenClawBackend itself fails closed if selected without it.
+      - COS_AGENT_RUNTIME_TOKEN=${COS_AGENT_A_GATEWAY_TOKEN:-}
+      - COS_AGENT_RUNTIME_AGENT_ID=${COS_AGENT_RUNTIME_AGENT_ID:-cos-agent-a}
+      - COS_MODEL_GATEWAY_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in .env}
     volumes:
       - ./domains/cos:/app/domains/cos
       - ./data:/app/data
@@ -104,6 +156,41 @@ services:
     depends_on:
       - postgres
 
+  # Swappable agent runtime for future CoS use. This first implementation is
+  # OpenClaw, isolated from both the Python CoS service and personal OpenClaw.
+  cos-agent-a:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.cos-agent-a
+    image: minimoi/cos-agent-a:openclaw-2026.7.1
+    container_name: minimoi-cos-agent-a
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18790:18789"
+    environment:
+      - OPENCLAW_GATEWAY_TOKEN=${COS_AGENT_A_GATEWAY_TOKEN:?set COS_AGENT_A_GATEWAY_TOKEN in .env}
+      - MINIMOI_MODEL_GATEWAY_KEY=${MINIMOI_MODEL_GATEWAY_KEY:?set MINIMOI_MODEL_GATEWAY_KEY in .env}
+      - OPENCLAW_STATE_DIR=/home/node/.openclaw
+      - OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json
+      - OPENCLAW_DISABLE_BONJOUR=1
+      - OPENCLAW_DEBUG_MODEL_PAYLOAD=${OPENCLAW_DEBUG_MODEL_PAYLOAD:-off}
+    volumes:
+      - cos-agent-a-state:/home/node/.openclaw
+      - cos-agent-a-auth:/home/node/.config/openclaw
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      model-gateway:
+        condition: service_healthy
+    labels:
+      - minimoi.runtime.role=cos-agent
+      - minimoi.runtime.identity=agent-a
+      - minimoi.runtime.implementation=openclaw
+
 volumes:
   neo4j-data:
   postgres-data:
+  cos-agent-a-state:
+  cos-agent-a-auth:

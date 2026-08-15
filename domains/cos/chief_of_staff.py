@@ -13,6 +13,7 @@ DISABLE_TELEGRAM_POLL=1 must be set when cos-scheduler runs alongside cos-bot.
 """
 
 import json
+import hmac
 import logging
 import os
 import subprocess
@@ -44,11 +45,13 @@ from core.realtime_voice.capabilities import (
 from core.realtime_voice.confer import create_confer_voice_blueprint
 from core.realtime_voice.providers import openai_speech
 from domains.cos.confer_service import (
+    ConferOperationFailed,
     ConferTurnRequest,
     ConferTurnService,
     InvalidConferTurn,
 )
 from domains.cos.spoken_reply_store import SpokenReplyStore
+from domains.cos.routing_receipts import RoutingReceiptStore
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -60,6 +63,7 @@ AGENDA_FILE      = BASE_DIR / "data/guild/cos_agenda.json"
 LOGS_DIR         = BASE_DIR / "logs"
 _REALTIME_VOICE_STATIC_DIR = BASE_DIR / "core" / "realtime_voice" / "static"
 _spoken_replies = SpokenReplyStore()
+_routing_receipts = RoutingReceiptStore(BASE_DIR / "data/model_gateway_receipts.jsonl")
 
 # ── DB (optional — degrades gracefully if Docker is down) ────────────────────
 
@@ -122,20 +126,46 @@ def _read_memory() -> str:
 
 def _append_memory(entry: str):
     """Append a dated entry to cos_memory.md. Refuses if file > MEMORY_CAP chars."""
+    return _append_memory_entry(entry, entry_type="chat")["saved"]
+
+
+def _append_memory_entry(
+    entry: str,
+    *,
+    entry_type: str,
+    operation_id: str | None = None,
+) -> dict:
+    """Write one platform memory entry with optional durable deduplication."""
     try:
         current = _read_memory()
         if current == "(no memory yet)":
             current = ""
-        if len(current) > MEMORY_CAP:
+        marker = f"<!-- cos-operation:{operation_id} -->" if operation_id else None
+        if marker and marker in current:
+            return {"saved": True, "deduplicated": True}
+        marker_line = f"\n{marker}" if marker else ""
+        dated = (
+            f"{marker_line}\n[{entry_type}] "
+            f"{datetime.now(timezone.utc).strftime('%Y-%m-%d')}: {entry}\n"
+        )
+        if len(current) + len(dated) > MEMORY_CAP:
             _log_file("memory_write_blocked",
-                      f"File at {len(current)} chars — distillation needed")
-            return False
-        dated = f"\n[chat] {datetime.now(timezone.utc).strftime('%Y-%m-%d')}: {entry}\n"
+                      f"Write would exceed {MEMORY_CAP} character cap")
+            return {"saved": False, "deduplicated": False}
         COS_MEMORY_FILE.write_text(current + dated)
-        return True
+        return {"saved": True, "deduplicated": False}
     except Exception as e:
         _log_file("memory_write_error", str(e))
-        return False
+        return {"saved": False, "deduplicated": False}
+
+
+def _save_explicit_note(note_text: str, operation_id: str) -> dict:
+    """Persist an explicit note through the platform-owned memory path."""
+    return _append_memory_entry(
+        note_text,
+        entry_type="note",
+        operation_id=operation_id,
+    )
 
 # ── System prompt ─────────────────────────────────────────────────────────────
 
@@ -582,8 +612,9 @@ def _build_system_prompt() -> str:
 # ── Tools ─────────────────────────────────────────────────────────────────────
 
 # ── Backend ───────────────────────────────────────────────────────────────────
-# Active backend instance — initialized in main(). Always GrokBackend unless
-# explicitly swapped. Swapping does not change the coordination layer.
+# Active backend instance — initialized in main(). The environment selects the
+# legacy direct Grok rollback or the gateway-backed COS Agent A runtime.
+# Swapping implementations does not change this coordination layer.
 _backend = None
 
 
@@ -693,22 +724,47 @@ def _backend_metadata() -> tuple[str, str]:
     )
 
 
+def _reset_backend_conversation(conversation_id: str) -> bool:
+    """Reset one runtime conversation only when the active backend supports it."""
+    if _backend is None:
+        raise ConferOperationFailed("Backend is not initialized.")
+    reset = getattr(_backend, "reset_conversation", None)
+    if reset is None:
+        raise ConferOperationFailed("The active COS backend cannot reset sessions.")
+    return bool(reset(conversation_id))
+
+
+def _get_routing_receipt(receipt_id: str) -> dict | None:
+    """Resolve LiteLLM's asynchronous receipt without guessing the serving model."""
+    return _routing_receipts.wait_for(receipt_id, timeout_seconds=1.0)
+
+
 def _process_confer_turn(
     text: str,
     *,
     channel: str = "api_text",
     conversation_id: str = "owner",
+    request_id: str | None = None,
 ):
+    receipt_resolver = (
+        _get_routing_receipt
+        if getattr(_backend, "supports_routing_receipts", False)
+        else None
+    )
     service = ConferTurnService(
         call_backend=call_backend,
         build_context=_build_confer_context,
         increment_chat=_inc_chat,
         backend_metadata=_backend_metadata,
+        save_note=_save_explicit_note,
+        reset_conversation=_reset_backend_conversation,
+        get_routing_receipt=receipt_resolver,
     )
     return service.handle(ConferTurnRequest(
         text=text,
         channel=channel,
         conversation_id=conversation_id,
+        request_id=request_id,
     ))
 
 
@@ -731,9 +787,19 @@ def _chat(
 def init_backend():
     """Initialize the active backend. Called once from main() at startup."""
     global _backend
-    from domains.cos.backends.grok_backend import GrokBackend
-    _backend = GrokBackend(write_memory=_append_memory, dispatch_tool=_dispatch_tool)
-    log.info("Backend initialized: GrokBackend (grok-4-1-fast-reasoning)")
+    backend_type = os.environ.get("COS_BACKEND_TYPE", "grok").strip().lower()
+    if backend_type == "grok":
+        from domains.cos.backends.grok_backend import GrokBackend
+        _backend = GrokBackend(write_memory=_append_memory, dispatch_tool=_dispatch_tool)
+    elif backend_type == "openclaw":
+        from domains.cos.backends.openclaw_backend import OpenClawBackend
+        _backend = OpenClawBackend(
+            write_memory=_append_memory,
+            dispatch_tool=_dispatch_tool,
+        )
+    else:
+        raise ValueError(f"Unknown COS_BACKEND_TYPE: {backend_type!r}")
+    log.info("Backend initialized: %s (%s)", _backend.backend_label, _backend.model_label)
 
 # ── Agent state ───────────────────────────────────────────────────────────────
 
@@ -1012,6 +1078,20 @@ app = Flask(__name__)
 app.register_blueprint(create_confer_voice_blueprint())
 
 
+@app.route("/internal/model-gateway/receipt", methods=["POST"])
+def model_gateway_receipt():
+    """Receive sanitized serving metadata from the authenticated gateway."""
+    expected = os.environ.get("COS_MODEL_GATEWAY_RECEIPT_KEY", "")
+    supplied = request.headers.get("Authorization", "").removeprefix("Bearer ")
+    if not expected or not supplied or not hmac.compare_digest(expected, supplied):
+        return jsonify({"error": "unauthorized"}), 401
+    try:
+        receipt = _routing_receipts.record(request.get_json(silent=True))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"receipt_id": receipt["receipt_id"], "status": "recorded"})
+
+
 @app.route("/static/realtime-voice/<path:filename>")
 def realtime_voice_static(filename):
     return send_from_directory(_REALTIME_VOICE_STATIC_DIR, filename)
@@ -1029,10 +1109,13 @@ def chat_endpoint():
             text,
             channel=body.get("channel") or "api_text",
             conversation_id=body.get("conversation_id") or "owner",
+            request_id=body.get("request_id"),
         )
         return jsonify(result.public_dict())
     except InvalidConferTurn as e:
         return jsonify({"reply": str(e)}), 400
+    except ConferOperationFailed as e:
+        return jsonify({"reply": str(e)}), 500
     except Exception as e:
         _log_file("chat_endpoint_error", str(e))
         return jsonify({"reply": f"CoS error: {e}"}), 500
@@ -1180,6 +1263,7 @@ def ui_send():
             text,
             channel=channel,
             conversation_id=body.get("conversation_id") or "owner",
+            request_id=body.get("request_id"),
         )
         payload = result.public_dict()
         if voice_provider:
@@ -1199,6 +1283,8 @@ def ui_send():
         return jsonify({"reply": str(e)}), 503
     except InvalidConferTurn as e:
         return jsonify({"reply": str(e)}), 400
+    except ConferOperationFailed as e:
+        return jsonify({"reply": str(e)}), 500
     except Exception as e:
         _log_file("ui_send_error", str(e))
         return jsonify({"reply": f"CoS error: {e}"}), 500
@@ -1387,10 +1473,10 @@ def _start_cos():
     else:
         print("   DB: unavailable — queue_recommendation will use file fallback")
 
-    # 2. Initialize backend (GrokBackend wrapping the Grok API call)
+    # 2. Initialize the configured swappable conversation backend.
     try:
         init_backend()
-        print("   Backend: GrokBackend initialized ✅")
+        print(f"   Backend: {_backend.backend_label} initialized ✅")
     except Exception as e:
         print(f"   ⚠️  Backend init failed: {e} — chat will fail")
 
