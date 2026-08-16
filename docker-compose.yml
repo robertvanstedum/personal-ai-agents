@@ -144,7 +144,11 @@ services:
       # valid rollback. OpenClawBackend itself fails closed if selected without it.
       - COS_AGENT_RUNTIME_TOKEN=${COS_AGENT_A_GATEWAY_TOKEN:-}
       - COS_AGENT_RUNTIME_AGENT_ID=${COS_AGENT_RUNTIME_AGENT_ID:-cos-agent-a}
+      - COS_AGENT_TIMEZONE=${COS_AGENT_TIMEZONE:-America/Chicago}
       - COS_MODEL_GATEWAY_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in .env}
+      # COS owns browser voice transport and speech. Keep this credential at
+      # the platform boundary; never pass provider credentials to Agent A.
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     volumes:
       - ./domains/cos:/app/domains/cos
       - ./services/model_gateway:/app/services/model_gateway:ro
@@ -175,6 +179,7 @@ services:
       - OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json
       - OPENCLAW_DISABLE_BONJOUR=1
       - OPENCLAW_DEBUG_MODEL_PAYLOAD=${OPENCLAW_DEBUG_MODEL_PAYLOAD:-off}
+      - TZ=${COS_AGENT_TIMEZONE:-America/Chicago}
     volumes:
       - cos-agent-a-state:/home/node/.openclaw
       - cos-agent-a-auth:/home/node/.config/openclaw

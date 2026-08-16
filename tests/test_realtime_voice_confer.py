@@ -1,5 +1,6 @@
 from unittest.mock import Mock, patch
 
+import pytest
 from flask import Flask
 
 from core.realtime_voice.bootstrap import _rate_limit_state
@@ -33,14 +34,16 @@ def test_confer_capabilities_advertise_only_secure_chained_provider():
     assert [provider["provider"] for provider in data["providers"]] == ["openai"]
 
 
-def test_confer_bootstrap_mints_transcription_only_credential():
+def test_confer_bootstrap_mints_chained_conversation_credential():
     with patch(
         "core.realtime_voice.confer.openai_realtime.mint_confer_transcription_credential",
         return_value={
             "provider": "openai",
             "client_secret": "ephemeral",
-            "model": "gpt-live-transcribe",
+            "model": "gpt-realtime-2.1",
+            "transcription_model": "gpt-4o-transcribe",
             "transport": "webrtc",
+            "turn_detection": "server_vad",
         },
     ) as mint:
         response = _client().post(
@@ -49,7 +52,8 @@ def test_confer_bootstrap_mints_transcription_only_credential():
             headers={"X-Minimoi-Auth-Id": "42"},
         )
     assert response.status_code == 200
-    assert response.get_json()["model"] == "gpt-live-transcribe"
+    assert response.get_json()["model"] == "gpt-realtime-2.1"
+    assert response.get_json()["turn_detection"] == "server_vad"
     mint.assert_called_once_with(
         transcription_language="en",
         user_id_for_safety_identifier="42",
@@ -101,3 +105,16 @@ def test_openai_speech_stream_uses_exact_server_owned_reply():
     assert post.call_args.kwargs["json"]["input"] == "Canonical CoS reply."
     assert post.call_args.kwargs["json"]["model"] == "gpt-4o-mini-tts"
     assert post.call_args.kwargs["stream"] is True
+
+
+def test_openai_speech_translates_secret_store_failure():
+    with patch.object(
+        openai_speech,
+        "get_secret",
+        side_effect=RuntimeError("secret backend unavailable"),
+    ):
+        with pytest.raises(
+            openai_speech.OpenAISpeechError,
+            match="OpenAI API key not configured",
+        ):
+            openai_speech.create_speech_stream(text="Reply.", user_id="42")

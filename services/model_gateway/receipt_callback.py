@@ -8,6 +8,7 @@ import json
 import os
 import re
 import urllib.request
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from litellm.integrations.custom_logger import CustomLogger
 
@@ -16,6 +17,12 @@ _RECEIPT_PATTERN = re.compile(
     r"minimoi-routing-receipt:([0-9a-fA-F-]{36});"
     r"logical-model:([a-z0-9._-]+)"
 )
+
+# Gateway-owned capabilities do not share the conversational turn marker, but
+# their successful serving costs still belong in the same sanitized ledger.
+_OPERATIONAL_ROUTES = {
+    "cos-xai-bounded-web-search": "minimoi-cos-web-search",
+}
 
 
 def _model_dump(value) -> dict:
@@ -62,14 +69,38 @@ def _provider_and_model(kwargs: dict) -> tuple[str, str]:
     served_model = str(kwargs.get("model") or "").strip()
     litellm_params = kwargs.get("litellm_params") or {}
     provider = str(litellm_params.get("custom_llm_provider") or "").strip()
+    model_info = litellm_params.get("model_info") or {}
+    base_model = str(model_info.get("base_model") or "").strip()
     if not provider and "/" in served_model:
         provider = served_model.split("/", 1)[0]
+    if not provider and "/" in base_model:
+        provider = base_model.split("/", 1)[0]
     return provider or "unknown", served_model or "unknown"
+
+
+def _operational_identity(kwargs: dict, response: dict) -> tuple[str, str] | None:
+    litellm_params = kwargs.get("litellm_params") or {}
+    model_info = litellm_params.get("model_info") or {}
+    deployment_id = str(model_info.get("id") or "")
+    logical_model = _OPERATIONAL_ROUTES.get(deployment_id)
+    if logical_model is None:
+        return None
+
+    # Responses API ids are provider-generated and stable. Use one only as an
+    # opaque deduplication seed; never include request or response content.
+    response_id = str(response.get("id") or "").strip()
+    receipt_id = (
+        uuid5(NAMESPACE_URL, f"minimoi:{deployment_id}:{response_id}")
+        if response_id
+        else uuid4()
+    )
+    return str(receipt_id), logical_model
 
 
 def build_receipt(kwargs: dict, response_obj, start_time, end_time) -> dict | None:
     """Build a strict receipt without retaining messages or response content."""
-    identity = _receipt_identity(kwargs)
+    response = _model_dump(response_obj)
+    identity = _receipt_identity(kwargs) or _operational_identity(kwargs, response)
     if identity is None:
         return None
     receipt_id, logical_model = identity
@@ -77,7 +108,6 @@ def build_receipt(kwargs: dict, response_obj, start_time, end_time) -> dict | No
     metadata = litellm_params.get("metadata") or {}
     model_info = litellm_params.get("model_info") or {}
     provider, served_model = _provider_and_model(kwargs)
-    response = _model_dump(response_obj)
     usage = _model_dump(response.get("usage") or getattr(response_obj, "usage", {}))
     latency_ms = max(0.0, (end_time - start_time).total_seconds() * 1000)
     return {
@@ -90,8 +120,8 @@ def build_receipt(kwargs: dict, response_obj, start_time, end_time) -> dict | No
         "served_provider": provider,
         "served_model": served_model,
         "latency_ms": round(latency_ms, 3),
-        "input_tokens": usage.get("prompt_tokens"),
-        "output_tokens": usage.get("completion_tokens"),
+        "input_tokens": usage.get("prompt_tokens", usage.get("input_tokens")),
+        "output_tokens": usage.get("completion_tokens", usage.get("output_tokens")),
         "total_tokens": usage.get("total_tokens"),
         "cost_usd": kwargs.get("response_cost"),
         "fallback_position": model_info.get("fallback_position"),

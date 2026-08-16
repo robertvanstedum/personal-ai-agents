@@ -1,8 +1,12 @@
 """Tests for COS's read-only scheduled model-cost checkpoint."""
 
+from datetime import datetime, timezone
 import json
 
 from domains.cos.cost_checkpoint import run_cost_checkpoint
+
+
+CHECKPOINT_TIME = datetime(2026, 8, 15, 20, 0, tzinfo=timezone.utc)
 
 
 def _files(tmp_path, *, unpriced=False):
@@ -33,6 +37,7 @@ def test_nonproduction_checkpoint_never_sends_external_alert(tmp_path):
         policy,
         production=False,
         notify=messages.append,
+        now=CHECKPOINT_TIME,
     )
 
     assert checkpoint["alerts"][0]["type"] == "unpriced_requests"
@@ -49,6 +54,7 @@ def test_production_alert_is_summary_only(tmp_path):
         policy,
         production=True,
         notify=messages.append,
+        now=CHECKPOINT_TIME,
     )
 
     assert checkpoint["notification"] == "sent"

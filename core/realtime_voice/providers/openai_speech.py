@@ -17,11 +17,20 @@ class OpenAISpeechError(RuntimeError):
     pass
 
 
-def create_speech_stream(*, text: str, user_id: str):
-    """Return a streaming provider response for server-owned reply text."""
-    api_key = get_secret("OPENAI_API_KEY", "openai", "api_key")
+def _require_api_key() -> str:
+    """Keep credential lookup failures inside the speech-provider contract."""
+    try:
+        api_key = get_secret("OPENAI_API_KEY", "openai", "api_key")
+    except RuntimeError as error:
+        raise OpenAISpeechError("OpenAI API key not configured") from error
     if not api_key:
         raise OpenAISpeechError("OpenAI API key not configured")
+    return api_key
+
+
+def create_speech_stream(*, text: str, user_id: str):
+    """Return a streaming provider response for server-owned reply text."""
+    api_key = _require_api_key()
 
     headers = {
         "Authorization": f"Bearer {api_key}",

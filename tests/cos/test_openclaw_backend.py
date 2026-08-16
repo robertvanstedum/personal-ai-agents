@@ -72,10 +72,19 @@ def test_success_uses_agent_target_opaque_session_and_platform_context():
     assert request["allow_redirects"] is False
     assert request["json"]["model"] == "openclaw/cos-agent-a"
     assert request["json"]["stream"] is False
-    assert request["json"]["messages"] == [
-        {"role": "system", "content": "platform context"},
-        {"role": "user", "content": "hello"},
-    ]
+    assert len(request["json"]["messages"]) == 2
+    assert request["json"]["messages"][0]["role"] == "system"
+    assert request["json"]["messages"][1] == {
+        "role": "user",
+        "content": "hello",
+    }
+    system_message = request["json"]["messages"][0]["content"]
+    assert system_message.startswith("platform context\n\n")
+    assert "Authoritative COS platform time:" in system_message
+    assert "(America/Chicago)" in system_message
+    assert "owner's current local calendar date is" in system_message
+    assert "happened today and must never be called yesterday" in system_message
+    assert "conflicting UTC-relative label" in system_message
     session_user = request["json"]["user"]
     assert session_user.startswith("cos-confer:")
     assert "private-owner-id" not in session_user
@@ -88,6 +97,26 @@ def test_session_mapping_is_stable_and_separates_conversations():
     assert first == backend._session_user("conversation-a")
     assert first != backend._session_user("conversation-b")
     assert len(first.removeprefix("cos-confer:")) == 32
+
+
+def test_relative_date_is_resolved_next_to_user_prompt(monkeypatch):
+    calls = []
+
+    def post(url, **kwargs):
+        calls.append(kwargs)
+        return StubResponse(payload={
+            "choices": [{"message": {"content": "date resolved"}}],
+        })
+
+    monkeypatch.setenv("COS_AGENT_TIMEZONE", "America/Chicago")
+    backend = _backend(post)
+    assert backend.call_backend("score today?", _context(), {}) == "date resolved"
+
+    user_message = calls[0]["json"]["messages"][-1]["content"]
+    assert user_message.endswith("\n\nscore today?")
+    assert "Robert's local calendar date is" in user_message
+    assert "in America/Chicago" in user_message
+    assert "is today" in user_message
 
 
 def test_receipt_id_is_embedded_only_in_system_context_for_gateway_correlation():

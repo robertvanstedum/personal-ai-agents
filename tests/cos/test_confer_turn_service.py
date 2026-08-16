@@ -178,6 +178,9 @@ def test_unknown_channel_fails_closed():
         ("/NOTE\tKeep the tab form", "Keep the tab form"),
         ("Save a note: Review the COS diff", "Review the COS diff"),
         ("save   a note :   Keep   whitespace tidy", "Keep whitespace tidy"),
+        ("Okay, save this note: The Bears won today.", "The Bears won today."),
+        ("Please save this note: Natural spoken command", "Natural spoken command"),
+        ("OK please save a note: Keep this too", "Keep this too"),
     ],
 )
 def test_explicit_note_is_platform_operation_and_bypasses_model(command, expected_note):
@@ -230,6 +233,30 @@ def test_correlated_retry_returns_deduplicated_receipt_without_model_call():
     assert result.operation["status"] == "deduplicated"
 
 
+@pytest.mark.parametrize("channel", ["html_text", "html_voice"])
+def test_html_channels_share_explicit_note_correlation_contract(channel):
+    request_id = str(uuid4())
+    note_writes = []
+    service = _service([], [], note_writes)
+
+    result = service.handle(ConferTurnRequest(
+        text="Save a note: channel parity",
+        channel=channel,
+        conversation_id="owner",
+        request_id=request_id,
+    ))
+
+    assert note_writes == [("channel parity", request_id)]
+    assert result.channel == channel
+    assert result.conversation_id == "owner"
+    assert result.operation == {
+        "type": "note_save",
+        "status": "saved",
+        "operation_id": request_id,
+        "storage": "cos_platform_memory",
+    }
+
+
 @pytest.mark.parametrize(
     ("command", "message"),
     [
@@ -262,6 +289,32 @@ def test_invalid_request_id_fails_before_write():
         ))
 
     assert note_writes == []
+
+
+@pytest.mark.parametrize(
+    "false_claim",
+    [
+        "Note saved through the platform-owned path.",
+        "I've saved your note.",
+        "Your note has been successfully recorded.",
+    ],
+)
+def test_backend_cannot_claim_unverified_note_success(false_claim):
+    service = ConferTurnService(
+        call_backend=lambda *_: false_claim,
+        build_context=lambda: {},
+        increment_chat=lambda: None,
+        backend_metadata=lambda: ("COS Agent A", "test-model"),
+    )
+
+    result = service.handle(ConferTurnRequest(
+        text="Please take a note.",
+        channel="html_voice",
+    ))
+
+    assert result.operation is None
+    assert result.reply.startswith("No note was saved")
+    assert "Save a note:" in result.reply
 
 
 def test_failed_platform_write_cannot_return_success_receipt():

@@ -13,6 +13,7 @@ https://developers.openai.com/api/docs/guides/realtime-webrtc.
 import requests
 
 from core.get_secret import get_secret
+from core.realtime_voice.standards import conversation_turn_detection
 
 _CLIENT_SECRETS_URL = "https://api.openai.com/v1/realtime/client_secrets"
 _DEFAULT_MODEL = "gpt-realtime-2.1"
@@ -22,6 +23,17 @@ _REQUEST_TIMEOUT_SECONDS = 10
 
 class OpenAIRealtimeError(Exception):
     pass
+
+
+def _require_api_key() -> str:
+    """Translate secret-store failures into the provider's public error type."""
+    try:
+        api_key = get_secret("OPENAI_API_KEY", "openai", "api_key")
+    except RuntimeError as error:
+        raise OpenAIRealtimeError("OpenAI API key not configured") from error
+    if not api_key:
+        raise OpenAIRealtimeError("OpenAI API key not configured")
+    return api_key
 
 
 def mint_transcription_credential(
@@ -55,21 +67,75 @@ def mint_confer_transcription_credential(
     transcription_prompt: str | None = None,
     transcription_keywords: list[str] | None = None,
 ) -> dict:
-    """Mint a transcription-only session for chained CoS conversation.
+    """Mint a server-VAD session for a chained agent conversation.
 
-    ``gpt-live-transcribe`` currently rejects server turn detection on client
-    secrets. The browser adapter therefore detects speech/silence locally and
-    explicitly commits each audio turn. The transcription model still only
-    transcribes; CoS reasoning remains behind ``call_backend``.
+    The Realtime session performs turn detection and transcription only.
+    ``create_response=False`` prevents the speech provider from competing with
+    the platform-selected CoS runtime for reasoning or assistant output.
     """
-    return _mint_transcription_credential(
-        transcription_language=transcription_language,
-        user_id_for_safety_identifier=user_id_for_safety_identifier,
-        turn_detection=None,
-        transcription_delay="low",
-        transcription_prompt=transcription_prompt,
-        transcription_keywords=transcription_keywords,
-    )
+    api_key = _require_api_key()
+    prompt = transcription_prompt or ""
+    if transcription_keywords:
+        prompt = (
+            f"{prompt} Relevant terms: {', '.join(transcription_keywords)}."
+        ).strip()
+    transcription = {
+        "model": "gpt-4o-transcribe",
+        "language": transcription_language,
+    }
+    if prompt:
+        transcription["prompt"] = prompt
+    payload = {
+        "session": {
+            "type": "realtime",
+            "model": _DEFAULT_MODEL,
+            "instructions": (
+                "This is a chained transcription session. Do not create an "
+                "assistant response; the platform owns reasoning and speech."
+            ),
+            "audio": {
+                "output": {"voice": "marin"},
+                "input": {
+                    "turn_detection": conversation_turn_detection(
+                        "openai", create_response=False
+                    ),
+                    "transcription": transcription,
+                },
+            },
+        },
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "OpenAI-Safety-Identifier": _hash_user_id(
+            user_id_for_safety_identifier
+        ),
+    }
+    try:
+        resp = requests.post(
+            _CLIENT_SECRETS_URL,
+            json=payload,
+            headers=headers,
+            timeout=_REQUEST_TIMEOUT_SECONDS,
+        )
+        resp.raise_for_status()
+    except requests.RequestException as error:
+        raise OpenAIRealtimeError(
+            f"OpenAI chained transcription credential request failed: {error}"
+        ) from error
+    data = resp.json()
+    client_secret = data.get("value")
+    if not client_secret:
+        raise OpenAIRealtimeError("OpenAI response missing client secret value")
+    return {
+        "provider": "openai",
+        "client_secret": client_secret,
+        "expires_at": data.get("expires_at"),
+        "model": _DEFAULT_MODEL,
+        "transcription_model": "gpt-4o-transcribe",
+        "transport": "webrtc",
+        "turn_detection": "server_vad",
+    }
 
 
 def _mint_transcription_credential(
@@ -81,9 +147,7 @@ def _mint_transcription_credential(
     transcription_prompt: str | None,
     transcription_keywords: list[str] | None,
 ) -> dict:
-    api_key = get_secret("OPENAI_API_KEY", "openai", "api_key")
-    if not api_key:
-        raise OpenAIRealtimeError("OpenAI API key not configured")
+    api_key = _require_api_key()
 
     transcription = {
         "model": _DEFAULT_TRANSCRIPTION_MODEL,
@@ -153,9 +217,7 @@ def mint_ephemeral_credential(
     {"client_secret": ..., "expires_at": ..., "model": ...}. Never returns
     the long-lived OPENAI_API_KEY.
     """
-    api_key = get_secret("OPENAI_API_KEY", "openai", "api_key")
-    if not api_key:
-        raise OpenAIRealtimeError("OpenAI API key not configured")
+    api_key = _require_api_key()
 
     payload = {
         "session": {

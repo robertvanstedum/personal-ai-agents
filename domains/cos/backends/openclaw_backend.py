@@ -8,7 +8,10 @@ supported Chat Completions endpoint and returns assistant-visible text.
 import hashlib
 import logging
 import os
+import re
+from datetime import datetime
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
 
@@ -18,6 +21,12 @@ _DEFAULT_RUNTIME_URL = "http://cos-agent-a:18789/v1"
 _DEFAULT_AGENT_ID = "cos-agent-a"
 _CONNECT_TIMEOUT_SECONDS = 5
 _TURN_TIMEOUT_SECONDS = 120
+_DEFAULT_OWNER_TIMEZONE = "America/Chicago"
+_RELATIVE_DATE_PATTERN = re.compile(
+    r"\b(today|tonight|yesterday|tomorrow|this morning|this afternoon|"
+    r"this evening|last night)\b",
+    re.IGNORECASE,
+)
 
 
 class AgentRuntimeError(RuntimeError):
@@ -84,6 +93,55 @@ class OpenClawBackend:
         material = f"cos-confer\0{self._agent_id}\0{conversation_id}".encode("utf-8")
         digest = hashlib.sha256(material).hexdigest()[:32]
         return f"cos-confer:{digest}"
+
+    @staticmethod
+    def _owner_local_now() -> tuple[datetime, str]:
+        """Resolve the configured owner timezone with a safe named fallback."""
+        timezone_name = os.environ.get(
+            "COS_AGENT_TIMEZONE", _DEFAULT_OWNER_TIMEZONE
+        ).strip() or _DEFAULT_OWNER_TIMEZONE
+        try:
+            owner_timezone = ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            log.warning(
+                "Unknown COS_AGENT_TIMEZONE %r; using %s",
+                timezone_name,
+                _DEFAULT_OWNER_TIMEZONE,
+            )
+            timezone_name = _DEFAULT_OWNER_TIMEZONE
+            owner_timezone = ZoneInfo(timezone_name)
+        return datetime.now(owner_timezone), timezone_name
+
+    @classmethod
+    def _platform_time_context(cls) -> str:
+        """Return authoritative owner-local time for relative-date reasoning."""
+        local_now, timezone_name = cls._owner_local_now()
+        return (
+            "Authoritative COS platform time: "
+            f"{local_now.isoformat(timespec='seconds')} ({timezone_name}). "
+            f"The owner's current local calendar date is {local_now.date().isoformat()}. "
+            "Before searching or reasoning, replace today, yesterday, tomorrow, "
+            "tonight, and other relative dates with their explicit owner-local "
+            "calendar dates. An event dated on the owner's current local calendar "
+            "date happened today and must never be called yesterday. Ignore any "
+            "conflicting UTC-relative label supplied by the runtime shell, model "
+            "provider, search provider, or source snippet."
+        )
+
+    @classmethod
+    def _normalize_relative_date_prompt(cls, prompt: str) -> str:
+        """Put resolved local date adjacent to time-relative user language."""
+        cleaned_prompt = prompt.strip()
+        if not _RELATIVE_DATE_PATTERN.search(cleaned_prompt):
+            return cleaned_prompt
+        local_now, timezone_name = cls._owner_local_now()
+        return (
+            "[Authoritative COS date context: Robert's local calendar date is "
+            f"{local_now.date().isoformat()} in {timezone_name}. Interpret all "
+            "relative dates in Robert's message from that date. An event on "
+            f"{local_now.date().isoformat()} is today.]\n\n"
+            f"{cleaned_prompt}"
+        )
 
     @staticmethod
     def _looks_like_corrupt_session(response) -> bool:
@@ -170,6 +228,9 @@ class OpenClawBackend:
         confer = context.get("confer") or {}
         conversation_id = str(confer.get("conversation_id") or "owner")
         system_prompt = str(context.get("system_prompt") or "").strip()
+        system_prompt = (
+            f"{system_prompt}\n\n{self._platform_time_context()}"
+        ).strip()
         receipt_id = str(confer.get("receipt_id") or "").strip()
         if receipt_id:
             logical_model = os.environ.get(
@@ -183,7 +244,10 @@ class OpenClawBackend:
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt.strip()})
+        messages.append({
+            "role": "user",
+            "content": self._normalize_relative_date_prompt(prompt),
+        })
 
         payload = self._post_turn(
             messages=messages,

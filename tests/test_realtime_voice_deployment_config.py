@@ -26,3 +26,10 @@ def test_standard_compose_enables_realtime_voice_for_german():
     # Portuguese dev currently runs as a native launchd service; German is the
     # language service defined in the standard Docker Compose file.
     assert SETTING in _service_block("docker-compose.yml", "german")
+
+
+def test_cos_receives_voice_provider_credential_at_platform_boundary():
+    service = _service_block("docker-compose.yml", "cos")
+
+    assert "OPENAI_API_KEY=${OPENAI_API_KEY:-}" in service
+    assert "COS_AGENT_RUNTIME_URL=" in service

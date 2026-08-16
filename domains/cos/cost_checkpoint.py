@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
@@ -28,9 +29,14 @@ def run_cost_checkpoint(
     *,
     production: bool,
     notify: Callable[[str], None] | None = None,
+    now: datetime | None = None,
 ) -> dict:
-    """Build the checkpoint and notify only for alerts on production."""
-    checkpoint = checkpoint_from_files(receipt_path, policy_path)
+    """Build the checkpoint and notify only for alerts on production.
+
+    ``now`` is an explicit clock seam for deterministic tests and historical
+    reports. Normal scheduled callers omit it and retain real-time UTC behavior.
+    """
+    checkpoint = checkpoint_from_files(receipt_path, policy_path, now=now)
     checkpoint["notification"] = "not_needed"
     if checkpoint["alerts"]:
         if production and notify is not None:

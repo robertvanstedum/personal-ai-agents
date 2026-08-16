@@ -43,6 +43,29 @@
       }
     }
   },
+  "plugins": {
+    "load": {
+      "paths": [
+        "/opt/minimoi/openclaw-plugins/cos-bounded-search"
+      ]
+    },
+    "entries": {
+      "cos-bounded-search": {
+        "enabled": true
+      }
+    }
+  },
+  "tools": {
+    "web": {
+      "search": {
+        "enabled": true,
+        "provider": "minimoi",
+        "maxResults": 20,
+        "timeoutSeconds": 60,
+        "cacheTtlMinutes": 15
+      }
+    }
+  },
   "agents": {
     "list": [
       {
@@ -63,12 +86,14 @@
         },
         "tools": {
           "allow": [
-            "session_status"
+            "session_status",
+            "web_search"
           ],
           "deny": [
             "group:fs",
             "group:runtime",
-            "group:web",
+            "web_fetch",
+            "x_search",
             "group:ui",
             "group:messaging",
             "cron",

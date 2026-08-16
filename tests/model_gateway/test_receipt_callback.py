@@ -91,3 +91,51 @@ def test_build_receipt_ignores_uncorrelated_calls():
     }
 
     assert callback.build_receipt(kwargs, {}, moment, moment) is None
+
+
+def test_build_receipt_accounts_for_bounded_search_without_retaining_content():
+    callback = _load_callback_module()
+    private_query = "private query must never enter the receipt"
+    private_answer = "private search answer must never enter the receipt"
+    start = datetime(2026, 8, 15, 20, 0, tzinfo=timezone.utc)
+    end = start + timedelta(milliseconds=400)
+    kwargs = {
+        "model": "xai/grok-4-1-fast",
+        "litellm_params": {
+            "model_info": {
+                "id": "cos-xai-bounded-web-search",
+                "base_model": "xai/grok-4-1-fast",
+            },
+            "proxy_server_request": {
+                "body": {"input": private_query},
+            },
+        },
+        "response_cost": 0.0025,
+    }
+    response = {
+        "id": "resp_search_123",
+        "usage": {
+            "input_tokens": 120,
+            "output_tokens": 30,
+            "total_tokens": 150,
+        },
+        "output": [{"content": [{"type": "output_text", "text": private_answer}]}],
+    }
+
+    receipt = callback.build_receipt(kwargs, response, start, end)
+
+    assert receipt is not None
+    assert receipt["logical_model"] == "minimoi-cos-web-search"
+    assert receipt["deployment_id"] == "cos-xai-bounded-web-search"
+    assert receipt["served_provider"] == "xai"
+    assert receipt["served_model"] == "xai/grok-4-1-fast"
+    assert receipt["input_tokens"] == 120
+    assert receipt["output_tokens"] == 30
+    assert receipt["total_tokens"] == 150
+    assert receipt["cost_usd"] == 0.0025
+    assert private_query not in repr(receipt)
+    assert private_answer not in repr(receipt)
+
+    duplicate = callback.build_receipt(kwargs, response, start, end)
+    assert duplicate is not None
+    assert duplicate["receipt_id"] == receipt["receipt_id"]

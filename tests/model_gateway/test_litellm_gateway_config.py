@@ -38,6 +38,7 @@ def test_gateway_has_one_logical_primary_and_ordered_fallbacks():
     assert deployments == {
         "minimoi-cos-agent": "xai/grok-4",
         "minimoi-cos-agent-xai-fast": "xai/grok-4-1-fast",
+        "minimoi-cos-web-search": "xai/grok-4-1-fast",
         "minimoi-cos-agent-anthropic": "anthropic/claude-sonnet-4-6",
         "minimoi-cos-agent-local": "ollama_chat/qwen3:4b",
     }
@@ -102,6 +103,27 @@ def test_gateway_emits_receipts_to_cos_over_an_independent_secret():
     ]
     assert "MINIMOI_RECEIPT_ENDPOINT=http://cos:18769/internal/model-gateway/receipt" in service
     assert "MINIMOI_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?" in service
+
+
+def test_bounded_search_uses_gateway_credential_boundary():
+    config = _config()
+    search_route = next(
+        item
+        for item in config["model_list"]
+        if item["model_name"] == "minimoi-cos-web-search"
+    )
+    agent_config = (REPO_ROOT / "docker/cos-agent-a/openclaw.json").read_text()
+    plugin = (
+        REPO_ROOT
+        / "docker/cos-agent-a/plugins/cos-bounded-search/index.ts"
+    ).read_text()
+
+    assert search_route["litellm_params"]["model"] == "xai/grok-4-1-fast"
+    assert search_route["model_info"]["supports_web_search"] is True
+    assert '"provider": "minimoi"' in agent_config
+    assert "minimoi-cos-web-search" in plugin
+    assert "process.env.MINIMOI_MODEL_GATEWAY_KEY" in plugin
+    assert "XAI_API_KEY" not in plugin
 
 
 def test_local_fallback_declares_tool_capability_and_realistic_token_budget():

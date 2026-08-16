@@ -30,6 +30,19 @@ model_list:
       supports_function_calling: true
       fallback_position: 1
 
+  # Stable search route used by the bounded OpenClaw provider. Concrete model
+  # selection stays here so it can be swapped without changing Agent A.
+  - model_name: minimoi-cos-web-search
+    litellm_params:
+      model: xai/grok-4-1-fast
+      api_key: os.environ/XAI_API_KEY
+      timeout: 60
+    model_info:
+      id: cos-xai-bounded-web-search
+      base_model: xai/grok-4-1-fast
+      mode: responses
+      supports_web_search: true
+
   - model_name: minimoi-cos-agent-anthropic
     litellm_params:
       model: anthropic/claude-sonnet-4-6

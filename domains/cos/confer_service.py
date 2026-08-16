@@ -22,8 +22,22 @@ ALLOWED_CHANNELS = frozenset({
     "telegram_voice",
 })
 MAX_EXPLICIT_NOTE_CHARS = 1_000
-_SAVE_NOTE_PREFIX = re.compile(r"^save\s+a\s+note\s*:", re.IGNORECASE)
+_SAVE_NOTE_PREFIX = re.compile(
+    r"^(?:(?:okay|ok)\s*,?\s+)?(?:please\s+)?"
+    r"save\s+(?:a|this)\s+note\s*:",
+    re.IGNORECASE,
+)
 _SLASH_NOTE_PREFIX = re.compile(r"^/note(?:\s+|$)", re.IGNORECASE)
+_UNVERIFIED_NOTE_SUCCESS = re.compile(
+    r"^\s*(?:"
+    r"note\s+(?:successfully\s+)?(?:saved|recorded|stored)\b|"
+    r"(?:i|we)(?:'ve| have)\s+(?:successfully\s+)?"
+    r"(?:saved|recorded|stored)\s+(?:the|your|that)\s+note\b|"
+    r"(?:your|the|that)\s+note\s+(?:is|was|has been)\s+"
+    r"(?:successfully\s+)?(?:saved|recorded|stored)\b"
+    r")",
+    re.IGNORECASE,
+)
 
 
 class InvalidConferTurn(ValueError):
@@ -204,6 +218,14 @@ class ConferTurnService:
         }
         tool_policy = {"observation": True, "mutation": False}
         reply = self._call_backend(text, context, tool_policy)
+        if _UNVERIFIED_NOTE_SUCCESS.search(reply):
+            # A backend has no note-write authority. Only the deterministic
+            # operation path above may return a save receipt or success claim.
+            reply = (
+                "No note was saved because this turn did not match a platform "
+                "note command. Say ‘Save a note: …’ or ‘Save this note: …’ "
+                "with the note text."
+            )
         self._increment_chat()
         backend_label, model_label = self._backend_metadata()
         runtime_route = context.get("runtime_route") or {}

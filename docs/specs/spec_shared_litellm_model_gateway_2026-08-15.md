@@ -1,6 +1,6 @@
 # Shared LiteLLM Model Gateway — Specification
 
-**Status:** Local G1/G2 and G3 receipt slice implemented; awaiting Robert's diff review  
+**Status:** Local G1/G2/G3 and COS bounded-search adapter implemented; awaiting Robert's diff review
 **Date:** 2026-08-15  
 **Owner / decision point:** Robert  
 **Initial consumer:** Chief of Staff / COS Agent A  
@@ -221,6 +221,71 @@ OpenClaw identity and session state remain in the existing Agent A volumes.
 - unpinned `latest` images;
 - provider fallback lists in domain Python;
 - enabled routes that have never passed capability acceptance.
+
+### COS Agent A bounded-search adapter
+
+COS Agent A retains OpenClaw's native agent loop and decides when to search,
+what query to submit, whether another search is useful, and how to synthesize
+the evidence. MinimoI does not pre-classify or mediate ordinary search intent.
+
+OpenClaw 2026.7.1's bundled xAI `web_search` provider sends configured base URLs
+through its public-endpoint SSRF guard. That guard correctly rejects the private
+Docker address used by LiteLLM, and the bundled provider exposes no supported
+configuration switch to its self-hosted path. Provider keys must not be copied
+into Agent A and LiteLLM must not be exposed publicly merely to bypass that
+guard.
+
+The approved solution is a small, image-bundled OpenClaw web-search provider:
+`docker/cos-agent-a/plugins/cos-bounded-search/`. It is an adapter, not a second
+agent or an orchestration layer. It uses OpenClaw's documented plugin SDK to
+register the standard `web_search` capability and sends requests only to the
+fixed internal LiteLLM Responses endpoint. The model cannot provide or alter
+the destination URL. Agent A receives only `MINIMOI_MODEL_GATEWAY_KEY`; xAI and
+other provider keys remain exclusive to LiteLLM.
+
+The adapter calls the stable logical route `minimoi-cos-web-search`. Concrete
+provider and model selection remains in LiteLLM YAML, so a provider swap does
+not require an OpenClaw or COS code change.
+
+Quality and safety bounds for the first accepted slice are:
+
+- public-search query of at most 500 characters;
+- 60-second adapter timeout;
+- up to five provider reasoning turns;
+- up to 20 materially relevant citation URLs;
+- at most 12,000 returned answer characters;
+- explicit preference for authoritative, primary, current, and directly
+  relevant sources;
+- no padding to reach 20 sources and no minimum citation quota;
+- retrieved content marked as untrusted evidence, never instructions;
+- `web_fetch`, browser, X search, filesystem, runtime, messaging, and subagent
+  tools remain denied.
+
+These limits can reduce depth for unusually complex research, but they do not
+filter topics, select an allowlist of websites, or rewrite the user's query.
+Deep page inspection remains out of scope while `web_fetch` is denied. Search
+costs are emitted through the same sanitized receipt ledger as model calls;
+prompts and responses are not retained.
+
+This adapter intentionally introduces a narrow OpenClaw-version coupling. The
+coupling is accepted to preserve OpenClaw as the agent rather than moving
+search intent into COS Python. Every OpenClaw upgrade must therefore pass all
+of the following on development before production is considered:
+
+1. image rebuild against the proposed pinned OpenClaw version;
+2. `openclaw config validate`;
+3. `openclaw plugins inspect cos-bounded-search --runtime --json`, proving the
+   plugin is loaded and owns only the `minimoi` web-search provider;
+4. focused structural and credential-boundary tests;
+5. a COS Confer search returning real citation URLs through
+   `minimoi-cos-web-search`;
+6. verification that prohibited tools remain absent and that a sanitized xAI
+   search-cost receipt is recorded.
+
+If the adapter fails after an OpenClaw upgrade, keep the prior pinned image or
+disable bounded search. Do not expose LiteLLM publicly, distribute provider
+keys to Agent A, enable generic runtime/network tools, or silently bypass the
+acceptance gate.
 
 ---
 
