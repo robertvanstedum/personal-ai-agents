@@ -29,13 +29,16 @@ _SAVE_NOTE_PREFIX = re.compile(
 )
 _SLASH_NOTE_PREFIX = re.compile(r"^/note(?:\s+|$)", re.IGNORECASE)
 _UNVERIFIED_NOTE_SUCCESS = re.compile(
+    r"(?:^\s*noted\b|"
+    r"\b(?:platform\s+)?note\s+(?:successfully\s+)?"
+    r"(?:saved|recorded|stored)\b|"
     r"^\s*(?:"
     r"note\s+(?:successfully\s+)?(?:saved|recorded|stored)\b|"
     r"(?:i|we)(?:'ve| have)\s+(?:successfully\s+)?"
     r"(?:saved|recorded|stored)\s+(?:the|your|that)\s+note\b|"
     r"(?:your|the|that)\s+note\s+(?:is|was|has been)\s+"
     r"(?:successfully\s+)?(?:saved|recorded|stored)\b"
-    r")",
+    r"))",
     re.IGNORECASE,
 )
 
@@ -216,6 +219,18 @@ class ConferTurnService:
             "input_channel": request.channel,
             "receipt_id": turn_id,
         }
+        if request.channel == "html_voice":
+            voice_instruction = (
+                "This is a live spoken conversation. Lead with the direct "
+                "answer and normally use one to three short, natural "
+                "sentences followed by at most one useful question. Do not "
+                "use Markdown headings or bullet lists. Expand only when "
+                "Robert asks for detail."
+            )
+            context["system_prompt"] = (
+                f"{context.get('system_prompt', '').rstrip()}\n\n"
+                f"{voice_instruction}"
+            ).strip()
         tool_policy = {"observation": True, "mutation": False}
         reply = self._call_backend(text, context, tool_policy)
         if _UNVERIFIED_NOTE_SUCCESS.search(reply):

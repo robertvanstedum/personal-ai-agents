@@ -1,5 +1,6 @@
 # Shared LiteLLM Model Gateway — Specification
 
+**Registered:** Build queue #148
 **Status:** Local G1/G2/G3 and COS bounded-search adapter implemented; awaiting Robert's diff review
 **Date:** 2026-08-15  
 **Owner / decision point:** Robert  

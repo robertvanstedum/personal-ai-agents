@@ -159,14 +159,14 @@ def test_memo_bootstrap_mints_transcription_only_credential(client):
     assert data["max_minutes"] == 15
 
 
-def test_memo_bootstrap_rejects_xai_until_secure_proxy_exists(client):
+def test_memo_bootstrap_rejects_xai_for_unsupported_mode(client):
     response = client.post(
         "/api/realtime-voice/memo/bootstrap",
         json={"provider": "xai"},
         headers={"X-Minimoi-Auth-Id": "421"},
     )
     assert response.status_code == 503
-    assert "WebSocket proxy" in response.get_json()["error"]
+    assert "unavailable for memo" in response.get_json()["error"]
 
 
 def test_memo_duration_cap_is_separately_configurable(monkeypatch):

@@ -33,6 +33,7 @@ export class XAIWebSocketAdapter {
     this._sessionReady = false;
     this._micReady = false;
     this._connectedEmitted = false;
+    this._playbackSources = new Set();
   }
 
   on(eventName, handler) {
@@ -177,6 +178,18 @@ export class XAIWebSocketAdapter {
     this._ws?.send(JSON.stringify({ type: "response.create" }));
   }
 
+  sendFunctionResult(callId, output) {
+    this._ws?.send(JSON.stringify({
+      type: "conversation.item.create",
+      item: {
+        type: "function_call_output",
+        call_id: callId,
+        output: typeof output === "string" ? output : JSON.stringify(output),
+      },
+    }));
+    this._ws?.send(JSON.stringify({ type: "response.create" }));
+  }
+
   _handleServerEvent(event) {
     switch (event.type) {
       case "session.updated":
@@ -201,8 +214,19 @@ export class XAIWebSocketAdapter {
         this._emit("assistant_started", {});
         break;
       case "response.done":
-        this._emit("assistant_stopped", { usage: event.usage });
-        if (event.usage) this._emit("usage", event.usage);
+        for (const item of event.response?.output || []) {
+          if (item.type === "function_call") {
+            this._emit("function_call", {
+              call_id: item.call_id,
+              name: item.name,
+              arguments: item.arguments,
+            });
+          }
+        }
+        this._emit("assistant_stopped", { usage: event.response?.usage || event.usage });
+        if (event.response?.usage || event.usage) {
+          this._emit("usage", event.response?.usage || event.usage);
+        }
         break;
       case "conversation.item.input_audio_transcription.updated":
         // xAI's own docs: "cumulative, not delta" -- is_delta: false tells
@@ -253,17 +277,18 @@ export class XAIWebSocketAdapter {
     const source = this._audioContext.createBufferSource();
     source.buffer = buffer;
     source.connect(this._audioContext.destination);
+    this._playbackSources.add(source);
+    source.addEventListener("ended", () => this._playbackSources.delete(source), { once: true });
     const startAt = Math.max(this._audioContext.currentTime, this._playbackQueueTime);
     source.start(startAt);
     this._playbackQueueTime = startAt + buffer.duration;
   }
 
   _stopPlayback() {
-    // Reset the playback queue so any already-scheduled-but-not-yet-played
-    // buffer sources naturally play out silently past this point rather
-    // than being individually tracked and stopped -- acceptable for a
-    // first release; a follow-up could track and .stop() active sources
-    // for an instantaneous cutoff.
+    for (const source of this._playbackSources) {
+      try { source.stop(); } catch (_) {}
+    }
+    this._playbackSources.clear();
     this._playbackQueueTime = this._audioContext?.currentTime || 0;
   }
 }

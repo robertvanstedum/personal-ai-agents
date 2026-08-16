@@ -7,14 +7,15 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_confer_page_uses_shared_controller_and_keeps_typed_path():
     template = (ROOT / "domains/cos/templates/cos_ui.html").read_text()
-    assert "realtime-confer-controller.js" in template
-    assert "realtime-confer-controller.js?v=20260815-confer8" in template
-    assert "../static/realtime-voice/realtime-confer-controller.js" in template
-    assert "capabilitiesUrl: '../api/realtime-voice/confer/capabilities'" in template
+    assert "realtime-voice-controller.js?v=20260816-cos1" in template
     assert "bootstrapUrl: '../api/realtime-voice/confer/bootstrap'" in template
-    assert "turnUrl: 'send'" in template
+    assert 'id="voice-provider-select"' in template
+    assert "OpenAI Voice" in template
+    assert "Grok Voice" in template
+    assert "onFunctionCall" in template
+    assert "speech_output: false" in template
+    assert "onFinalize: (result)" in template
     assert 'aria-label="Start voice conversation">🎤</button>' in template
-    assert "if (['stopped', 'error'].includes(state)) voiceRunning = false" in template
     assert "voiceButton.textContent = voiceActive ? '■' : '🎤'" in template
     assert "Voice is AI-generated." in template
     assert "channel: 'html_text'" in template

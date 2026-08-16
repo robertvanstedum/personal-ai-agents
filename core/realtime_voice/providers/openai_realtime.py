@@ -208,6 +208,8 @@ def mint_ephemeral_credential(
     turn_detection: dict,
     transcription_language: str,
     user_id_for_safety_identifier: str,
+    tools: list[dict] | None = None,
+    tool_choice: str | None = None,
 ) -> dict:
     """Requests a short-lived client secret from OpenAI, with the session's
     instructions and turn-detection config already attached server-side --
@@ -219,8 +221,7 @@ def mint_ephemeral_credential(
     """
     api_key = _require_api_key()
 
-    payload = {
-        "session": {
+    session = {
             "type": "realtime",
             "model": _DEFAULT_MODEL,
             "instructions": instructions,
@@ -234,8 +235,11 @@ def mint_ephemeral_credential(
                     },
                 },
             },
-        }
     }
+    if tools:
+        session["tools"] = tools
+        session["tool_choice"] = tool_choice or "auto"
+    payload = {"session": session}
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",

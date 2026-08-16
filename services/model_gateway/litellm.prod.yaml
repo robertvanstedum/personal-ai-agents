@@ -1,0 +1,74 @@
+# MinimoI shared model gateway — production routes
+# Production intentionally omits the Mac-hosted Ollama fallback.
+
+model_list:
+  - model_name: minimoi-cos-agent
+    litellm_params:
+      model: xai/grok-4
+      api_key: os.environ/XAI_API_KEY
+      timeout: 120
+    model_info:
+      id: cos-xai-primary
+      base_model: xai/grok-4
+      mode: chat
+      supports_function_calling: true
+      fallback_position: 0
+
+  - model_name: minimoi-cos-agent-xai-fast
+    litellm_params:
+      model: xai/grok-4-1-fast
+      api_key: os.environ/XAI_API_KEY
+      timeout: 120
+    model_info:
+      id: cos-xai-fast
+      base_model: xai/grok-4-1-fast
+      mode: chat
+      supports_function_calling: true
+      fallback_position: 1
+
+  - model_name: minimoi-cos-web-search
+    litellm_params:
+      model: xai/grok-4-1-fast
+      api_key: os.environ/XAI_API_KEY
+      timeout: 60
+    model_info:
+      id: cos-xai-bounded-web-search
+      base_model: xai/grok-4-1-fast
+      mode: responses
+      supports_web_search: true
+
+  - model_name: minimoi-cos-agent-anthropic
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+      timeout: 120
+    model_info:
+      id: cos-anthropic-secondary
+      base_model: anthropic/claude-sonnet-4-6
+      mode: chat
+      supports_function_calling: true
+      fallback_position: 2
+
+router_settings:
+  fallbacks:
+    - minimoi-cos-agent:
+        - minimoi-cos-agent-xai-fast
+        - minimoi-cos-agent-anthropic
+  num_retries: 0
+  allowed_fails: 1
+  cooldown_time: 60
+  timeout: 180
+  enable_pre_call_checks: true
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false
+  callbacks:
+    - receipt_callback.receipt_callback
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  disable_spend_logs: true
+  disable_error_logs: false
+  store_model_in_db: false
+  disable_admin_ui: true

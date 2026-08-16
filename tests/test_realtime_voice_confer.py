@@ -13,7 +13,9 @@ def _client():
     _rate_limit_state.clear()
     app = Flask(__name__)
     app.config["TESTING"] = True
-    app.register_blueprint(create_confer_voice_blueprint())
+    app.register_blueprint(create_confer_voice_blueprint(
+        build_voice_instructions=lambda user_id: f"COS voice for {user_id}",
+    ))
     return app.test_client()
 
 
@@ -22,7 +24,7 @@ def test_confer_capabilities_require_identity():
     assert response.status_code == 401
 
 
-def test_confer_capabilities_advertise_only_secure_chained_provider():
+def test_confer_capabilities_advertise_realtime_provider_choices():
     response = _client().get(
         "/api/realtime-voice/confer/capabilities",
         headers={"X-Minimoi-Auth-Id": "42"},
@@ -31,19 +33,16 @@ def test_confer_capabilities_advertise_only_secure_chained_provider():
     data = response.get_json()
     assert data["mode"] == "agent_conversation"
     assert data["default_provider"] == "openai"
-    assert [provider["provider"] for provider in data["providers"]] == ["openai"]
+    assert [provider["provider"] for provider in data["providers"]] == ["openai", "xai"]
 
 
-def test_confer_bootstrap_mints_chained_conversation_credential():
+def test_confer_bootstrap_mints_openai_realtime_conversation_credential():
     with patch(
-        "core.realtime_voice.confer.openai_realtime.mint_confer_transcription_credential",
+        "core.realtime_voice.confer.openai_realtime.mint_ephemeral_credential",
         return_value={
             "provider": "openai",
             "client_secret": "ephemeral",
             "model": "gpt-realtime-2.1",
-            "transcription_model": "gpt-4o-transcribe",
-            "transport": "webrtc",
-            "turn_detection": "server_vad",
         },
     ) as mint:
         response = _client().post(
@@ -53,31 +52,62 @@ def test_confer_bootstrap_mints_chained_conversation_credential():
         )
     assert response.status_code == 200
     assert response.get_json()["model"] == "gpt-realtime-2.1"
-    assert response.get_json()["turn_detection"] == "server_vad"
-    mint.assert_called_once_with(
-        transcription_language="en",
-        user_id_for_safety_identifier="42",
-        transcription_prompt=(
-            "English-language personal Chief of Staff conversation. Transcribe "
-            "the speaker verbatim with natural punctuation; preserve product "
-            "and domain names and do not answer, summarize, or add language "
-            "labels."
-        ),
-        transcription_keywords=[
-            "mini-moi", "Curator", "Guild", "Mein Deutsch", "Meu Português",
-            "Chief of Staff", "CoS", "OpenClaw", "Grok",
-        ],
+    kwargs = mint.call_args.kwargs
+    assert kwargs["instructions"].startswith("COS voice for 42\n\nSession facts:")
+    assert "active voice provider is OpenAI (openai)" in kwargs["instructions"]
+    assert "completed transcript to Confer" in kwargs["instructions"]
+    assert kwargs["voice"] == "cedar"
+    assert kwargs["user_id_for_safety_identifier"] == "42"
+    assert kwargs["tool_choice"] == "auto"
+    assert [tool["name"] for tool in kwargs["tools"]] == [
+        "consult_cos_agent", "save_cos_note",
+    ]
+    note_tool = kwargs["tools"][1]
+    assert "Do not prefix it with 'User asked'" in (
+        note_tool["parameters"]["properties"]["note"]["description"]
     )
 
 
-def test_confer_bootstrap_rejects_xai_until_proxy_exists():
-    response = _client().post(
-        "/api/realtime-voice/confer/bootstrap",
-        json={"provider": "xai"},
-        headers={"X-Minimoi-Auth-Id": "43"},
+def test_confer_bootstrap_returns_configured_session_duration(monkeypatch):
+    monkeypatch.setenv("VOICE_CONFER_WARNING_MINUTES", "18")
+    monkeypatch.setenv("VOICE_CONFER_MAX_MINUTES", "20")
+    with patch(
+        "core.realtime_voice.confer.openai_realtime.mint_ephemeral_credential",
+        return_value={"provider": "openai", "client_secret": "ephemeral"},
+    ) as mint:
+        response = _client().post(
+            "/api/realtime-voice/confer/bootstrap",
+            json={"provider": "openai"},
+            headers={"X-Minimoi-Auth-Id": "42"},
+        )
+
+    assert response.status_code == 200
+    assert response.get_json()["max_minutes"] == 20
+    assert mint.call_count == 1
+
+
+def test_confer_bootstrap_mints_xai_realtime_conversation_credential():
+    with patch(
+        "core.realtime_voice.confer.xai_voice.mint_ephemeral_credential",
+        return_value={
+            "provider": "xai",
+            "ephemeral_token": "ephemeral",
+            "model": "grok-voice-latest",
+            "session_config": {},
+        },
+    ) as mint:
+        response = _client().post(
+            "/api/realtime-voice/confer/bootstrap",
+            json={"provider": "xai"},
+            headers={"X-Minimoi-Auth-Id": "43"},
+        )
+    assert response.status_code == 200
+    assert response.get_json()["model"] == "grok-voice-latest"
+    assert mint.call_args.kwargs["instructions"].startswith(
+        "COS voice for 43\n\nSession facts:"
     )
-    assert response.status_code == 503
-    assert "WebSocket proxy" in response.get_json()["error"]
+    assert "active voice provider is Grok (xai)" in mint.call_args.kwargs["instructions"]
+    assert mint.call_args.kwargs["tool_choice"] == "auto"
 
 
 def test_spoken_reply_store_is_user_scoped_and_bounded(monkeypatch):

@@ -76,11 +76,27 @@ def test_all_channels_use_one_backend_contract_and_result_shape():
     assert len(increments) == len(ALLOWED_CHANNELS)
     for _, context, tool_policy in calls:
         assert context["recent_memory"] == "remembered"
-        assert context["system_prompt"] == "system"
+        if context["confer"]["input_channel"] == "html_voice":
+            assert context["system_prompt"].startswith("system\n\n")
+            assert "one to three short, natural sentences" in context["system_prompt"]
+            assert "Do not use Markdown headings or bullet lists" in context["system_prompt"]
+        else:
+            assert context["system_prompt"] == "system"
         assert context["confer"]["conversation_id"] == "owner"
         assert context["confer"]["input_channel"] in ALLOWED_CHANNELS
         assert context["confer"]["receipt_id"]
         assert tool_policy == {"observation": True, "mutation": False}
+
+
+def test_voice_concision_instruction_is_not_added_to_typed_turns():
+    calls = []
+    service = _service(calls, [])
+
+    service.handle(ConferTurnRequest(text="voice", channel="html_voice"))
+    service.handle(ConferTurnRequest(text="text", channel="html_text"))
+
+    assert "live spoken conversation" in calls[0][1]["system_prompt"]
+    assert calls[1][1]["system_prompt"] == "system"
 
 
 def test_runtime_route_metadata_reports_the_model_that_served_the_turn():
@@ -297,6 +313,8 @@ def test_invalid_request_id_fails_before_write():
         "Note saved through the platform-owned path.",
         "I've saved your note.",
         "Your note has been successfully recorded.",
+        "Noted.\n\nPlatform note recorded: loss of voice conversation.",
+        "Platform note recorded: loss of voice conversation.",
     ],
 )
 def test_backend_cannot_claim_unverified_note_success(false_claim):

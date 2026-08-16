@@ -104,6 +104,23 @@ jobs:
             docker push $REGISTRY/minimoi/$name:latest
           done
 
+          # The deploy IAM user is scoped to the established repositories.
+          # Keep beta components immutable and independently addressable via
+          # namespaced tags without widening production registry authority.
+          for component in cos-agent-a model-gateway; do
+            case "$component" in
+              cos-agent-a) dockerfile="docker/Dockerfile.cos-agent-a"; tag_prefix="agent-a" ;;
+              model-gateway) dockerfile="docker/Dockerfile.model-gateway"; tag_prefix="model-gateway" ;;
+            esac
+            docker build \
+              -f "$dockerfile" \
+              -t "$REGISTRY/minimoi/cos-scheduler:$tag_prefix-$SHA" \
+              -t "$REGISTRY/minimoi/cos-scheduler:$tag_prefix-latest" \
+              .
+            docker push "$REGISTRY/minimoi/cos-scheduler:$tag_prefix-$SHA"
+            docker push "$REGISTRY/minimoi/cos-scheduler:$tag_prefix-latest"
+          done
+
   deploy:
     needs: build-push
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -128,10 +145,11 @@ jobs:
           CURATOR_CRON=$(base64 -w 0 scripts/run_curator_cron_ec2.sh)
           INTELLIGENCE_CRON=$(base64 -w 0 scripts/run_intelligence_cron_ec2.sh)
           CURATOR_CRON_SETUP=$(base64 -w 0 scripts/setup_ec2_cron.sh)
+          COS_SECRET_SYNC=$(base64 -w 0 scripts/credentials/sync_cos_runtime_secrets_from_ssm.sh)
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
             --document-name "AWS-RunShellScript" \
-            --parameters "commands=[\"mkdir -p /opt/minimoi/scripts\",\"echo $COMPOSE | base64 -d > /opt/minimoi/docker-compose.prod.yml\",\"echo $CURATOR_CRON | base64 -d > /opt/minimoi/scripts/run_curator_cron_ec2.sh\",\"echo $INTELLIGENCE_CRON | base64 -d > /opt/minimoi/scripts/run_intelligence_cron_ec2.sh\",\"echo $CURATOR_CRON_SETUP | base64 -d > /opt/minimoi/scripts/setup_ec2_cron.sh\",\"echo $LESEN_CRON | base64 -d > /opt/minimoi/scripts/install_lesen_refresh_cron.sh\",\"chmod +x /opt/minimoi/scripts/install_lesen_refresh_cron.sh /opt/minimoi/scripts/run_curator_cron_ec2.sh /opt/minimoi/scripts/run_intelligence_cron_ec2.sh /opt/minimoi/scripts/setup_ec2_cron.sh\"]" \
+            --parameters "commands=[\"mkdir -p /opt/minimoi/scripts\",\"echo $COMPOSE | base64 -d > /opt/minimoi/docker-compose.prod.yml\",\"echo $CURATOR_CRON | base64 -d > /opt/minimoi/scripts/run_curator_cron_ec2.sh\",\"echo $INTELLIGENCE_CRON | base64 -d > /opt/minimoi/scripts/run_intelligence_cron_ec2.sh\",\"echo $CURATOR_CRON_SETUP | base64 -d > /opt/minimoi/scripts/setup_ec2_cron.sh\",\"echo $COS_SECRET_SYNC | base64 -d > /opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh\",\"echo $LESEN_CRON | base64 -d > /opt/minimoi/scripts/install_lesen_refresh_cron.sh\",\"chmod +x /opt/minimoi/scripts/install_lesen_refresh_cron.sh /opt/minimoi/scripts/run_curator_cron_ec2.sh /opt/minimoi/scripts/run_intelligence_cron_ec2.sh /opt/minimoi/scripts/setup_ec2_cron.sh /opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh\"]" \
             --query 'Command.CommandId' \
             --output text)
 
@@ -172,8 +190,10 @@ jobs:
               "mkdir -p /opt/minimoi/data/portuguese",
               "mkdir -p /opt/minimoi/data/german",
               "mkdir -p /opt/minimoi/data/guild",
+              "touch /opt/minimoi/data/model_gateway_receipts.jsonl",
               "curl -sf https://raw.githubusercontent.com/robertvanstedum/personal-ai-agents/main/data/guild/build_queue.json -o /opt/minimoi/data/guild/build_queue.json",
               "cd /opt/minimoi",
+              "/opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/.env",
               "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 332704997792.dkr.ecr.us-east-1.amazonaws.com",
               "export MINIMOI_IMAGE_TAG=${{ needs.build-push.outputs.image_tag }}",
               "docker image prune -af",
@@ -181,6 +201,11 @@ jobs:
               "docker-compose -f /opt/minimoi/docker-compose.prod.yml up -d --remove-orphans",
               "sleep 15",
               "for c in minimoi-curator minimoi-german minimoi-portuguese minimoi-portal minimoi-system-bot minimoi-cos-bot minimoi-cos-scheduler; do test \\\"$(docker inspect --format={{.Config.Image}} $c)\\\" = \\\"332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/$(case $c in minimoi-german) echo mein-deutsch;; minimoi-*) echo ${c#minimoi-};; esac):${{ needs.build-push.outputs.image_tag }}\\\" || exit 1; done",
+              "test \\\"$(docker inspect --format={{.Config.Image}} minimoi-cos-agent-a)\\\" = \\\"332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:agent-a-${{ needs.build-push.outputs.image_tag }}\\\"",
+              "test \\\"$(docker inspect --format={{.Config.Image}} minimoi-model-gateway)\\\" = \\\"332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:model-gateway-${{ needs.build-push.outputs.image_tag }}\\\"",
+              "for i in $(seq 1 18); do test \\\"$(docker inspect --format={{.State.Health.Status}} minimoi-model-gateway)\\\" = healthy && test \\\"$(docker inspect --format={{.State.Health.Status}} minimoi-cos-agent-a)\\\" = healthy && break; sleep 5; done",
+              "test \\\"$(docker inspect --format={{.State.Health.Status}} minimoi-model-gateway)\\\" = healthy",
+              "test \\\"$(docker inspect --format={{.State.Health.Status}} minimoi-cos-agent-a)\\\" = healthy",
               "curl -sf http://localhost:5001/health || exit 1",
               "curl -sf http://localhost:8766/health || exit 1",
               "curl -sf http://localhost:8767/health || exit 1",

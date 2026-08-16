@@ -41,6 +41,9 @@ def test_runtime_image_is_pinned_and_seeds_config_and_agent_policy():
     assert ":latest" not in dockerfile
     assert "COPY --chown=node:node docker/cos-agent-a/openclaw.json" in dockerfile
     assert "COPY --chown=node:node docker/cos-agent-a/AGENTS.md" in dockerfile
+    assert "COPY --chown=node:node docker/cos-agent-a/IDENTITY.md" in dockerfile
+    assert "COPY --chown=node:node docker/cos-agent-a/SOUL.md" in dockerfile
+    assert "COPY --chown=node:node docker/cos-agent-a/MEMORY.md" in dockerfile
     assert "docker/cos-agent-a/plugins/cos-bounded-search" in dockerfile
 
 

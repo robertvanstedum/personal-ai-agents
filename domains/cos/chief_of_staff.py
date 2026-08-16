@@ -613,6 +613,27 @@ def _build_system_prompt() -> str:
         date_str=date_str,
     )
 
+
+def _build_cos_voice_instructions(_user_id: str) -> str:
+    """Build the server-owned persona and tool boundary for realtime COS."""
+    return (
+        f"{_build_system_prompt()}\n\n"
+        "You are the low-latency voice surface for COS Agent A. Speak as "
+        "Robert's familiar, candid Chief of Staff partner. Keep ordinary "
+        "conversation natural and brief: usually one to three short sentences "
+        "and at most one useful question. Never use Markdown, headings, or "
+        "bullet lists in speech. Robert may interrupt you; stop cleanly and "
+        "listen. Use consult_cos_agent whenever the answer requires live or "
+        "current facts, web research, MinimoI state beyond the supplied "
+        "context, stored history, or substantive domain judgment. Give a very "
+        "brief spoken acknowledgment before consulting when helpful, then "
+        "faithfully communicate the returned answer. Use save_cos_note for an "
+        "explicit request to save or record a note. Never claim that a note "
+        "was saved unless that tool returned a successful platform receipt. "
+        "Pass the note's substance directly; do not reframe it as 'User asked' "
+        "or 'Robert asked' unless Robert explicitly wants that wording."
+    )
+
 # ── Tools ─────────────────────────────────────────────────────────────────────
 
 # ── Backend ───────────────────────────────────────────────────────────────────
@@ -1103,7 +1124,9 @@ def _telegram_poll_loop():
 # ── Flask app ─────────────────────────────────────────────────────────────────
 
 app = Flask(__name__)
-app.register_blueprint(create_confer_voice_blueprint())
+app.register_blueprint(create_confer_voice_blueprint(
+    build_voice_instructions=_build_cos_voice_instructions,
+))
 
 
 @app.route("/internal/model-gateway/receipt", methods=["POST"])
@@ -1289,6 +1312,9 @@ def ui_send():
             raise InvalidConferTurn(f"Unknown Confer channel: {channel!r}")
         voice_provider = None
         user_id = None
+        speech_output = body.get("speech_output", True)
+        if not isinstance(speech_output, bool):
+            raise InvalidConferTurn("speech_output must be true or false")
         if channel == "html_voice":
             user_id = resolve_user_id(request)
             if user_id is None:
@@ -1303,7 +1329,7 @@ def ui_send():
             request_id=body.get("request_id"),
         )
         payload = result.public_dict()
-        if voice_provider:
+        if voice_provider and speech_output:
             _spoken_replies.put(
                 result.turn_id,
                 text=result.reply,

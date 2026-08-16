@@ -33,7 +33,8 @@ const OPENING_INSTRUCTION =
 export class RealtimeVoiceController {
   constructor({
     bootstrapUrl, onStateChange, onInputState, onWarning, onStop,
-    onFatalError, onFinalize,
+    onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall,
+    openingInstruction = OPENING_INSTRUCTION,
   }) {
     this._bootstrapUrl = bootstrapUrl;
     this._onStateChange = onStateChange || (() => {});
@@ -42,6 +43,11 @@ export class RealtimeVoiceController {
     this._onStop = onStop || (() => {});
     this._onFatalError = onFatalError || (() => {});
     this._onFinalize = onFinalize || (() => {});
+    this._onUserTurn = onUserTurn || (() => {});
+    this._onAssistantTurn = onAssistantTurn || (() => {});
+    this._onFunctionCall = onFunctionCall || null;
+    this._openingInstruction = openingInstruction;
+    this._pendingAssistantTurns = [];
 
     this._state = "idle";
     this._adapter = null;
@@ -105,7 +111,9 @@ export class RealtimeVoiceController {
       this._setState("active");
       this._startedAt = Date.now();
       this._startDurationWatch();
-      this._adapter.sendContinuationInstruction(OPENING_INSTRUCTION);
+      if (this._openingInstruction) {
+        this._adapter.sendContinuationInstruction(this._openingInstruction);
+      }
     });
     this._adapter.on("provider_phase", (evt) => {
       this._onInputState(evt.phase);
@@ -114,9 +122,39 @@ export class RealtimeVoiceController {
     this._adapter.on("speech_stopped", () => this._onInputState("speech_stopped"));
     this._adapter.on("input_transcript", (evt) => {
       this._recordTranscriptEvent("user", evt);
-      if (evt.completed) this._onInputState("understood");
+      if (evt.completed) {
+        this._onInputState("understood");
+        this._onUserTurn(evt.text || "");
+      }
     });
-    this._adapter.on("output_transcript", (evt) => this._recordTranscriptEvent("assistant", evt));
+    this._adapter.on("output_transcript", (evt) => {
+      this._recordTranscriptEvent("assistant", evt);
+      if (evt.completed && evt.text?.trim()) {
+        this._pendingAssistantTurns.push(evt.text.trim());
+      }
+    });
+    this._adapter.on("assistant_stopped", () => {
+      for (const text of this._pendingAssistantTurns.splice(0)) {
+        this._onAssistantTurn(text);
+      }
+    });
+    this._adapter.on("function_call", async (call) => {
+      if (!this._onFunctionCall) {
+        this._adapter.sendFunctionResult(call.call_id, {
+          error: "Function bridge unavailable",
+        });
+        return;
+      }
+      this._onInputState("consulting");
+      try {
+        const output = await this._onFunctionCall(call);
+        this._adapter.sendFunctionResult(call.call_id, output);
+      } catch (error) {
+        this._adapter.sendFunctionResult(call.call_id, {
+          error: error?.message || "COS function failed",
+        });
+      }
+    });
     this._adapter.on("interrupted", () => {
       // Barge-in must leave conversation state consistent (Section 9) --
       // nothing else to do here, both adapters already stop/cancel

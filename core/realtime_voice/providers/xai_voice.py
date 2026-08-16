@@ -37,6 +37,8 @@ def mint_ephemeral_credential(
     voice: str,
     turn_detection: dict,
     transcription_language: str,
+    tools: list[dict] | None = None,
+    tool_choice: str | None = None,
 ) -> dict:
     """Requests a short-lived token from xAI. Returns the minimum
     connection material the browser adapter needs, plus the session config
@@ -68,24 +70,29 @@ def mint_ephemeral_credential(
     if not token:
         raise XAIVoiceError("xAI response missing ephemeral token")
 
+    session_config = {
+        "voice": voice,
+        "instructions": instructions,
+        "turn_detection": turn_detection,
+        "audio": {
+            "input": {
+                "format": {"type": "audio/pcm", "rate": 24000},
+                "transcription": {
+                    "model": "grok-transcribe",
+                    "language_hint": transcription_language,
+                },
+            },
+            "output": {"format": {"type": "audio/pcm", "rate": 24000}},
+        },
+    }
+    if tools:
+        session_config["tools"] = tools
+        session_config["tool_choice"] = tool_choice or "auto"
+
     return {
         "provider": "xai",
         "ephemeral_token": token,
         "expires_after_seconds": _TOKEN_EXPIRES_AFTER_SECONDS,
         "model": _DEFAULT_MODEL,
-        "session_config": {
-            "voice": voice,
-            "instructions": instructions,
-            "turn_detection": turn_detection,
-            "audio": {
-                "input": {
-                    "format": {"type": "audio/pcm", "rate": 24000},
-                    "transcription": {
-                        "model": "grok-transcribe",
-                        "language_hint": transcription_language,
-                    },
-                },
-                "output": {"format": {"type": "audio/pcm", "rate": 24000}},
-            },
-        },
+        "session_config": session_config,
     }
