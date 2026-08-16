@@ -1,0 +1,6 @@
+FROM ghcr.io/berriai/litellm-non_root@sha256:4a5befcc82c01af9fa2b66ed3c139ea2eff31a5b75babc448e6341157e27ff79
+
+# Production uses an immutable application image rather than mutable host
+# config mounts. Provider credentials remain runtime environment variables.
+COPY services/model_gateway/litellm.prod.yaml /app/config.yaml
+COPY services/model_gateway/receipt_callback.py /app/receipt_callback.py

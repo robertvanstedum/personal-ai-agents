@@ -1,0 +1,7 @@
+{
+  "daily_warn_usd": null,
+  "monthly_warn_usd": null,
+  "fallback_rate_warn": 0.25,
+  "minimum_requests_for_fallback_rate": 10,
+  "unpriced_request_warn": 1
+}

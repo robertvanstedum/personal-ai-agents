@@ -1,4 +1,4 @@
-import { OpenAITranscriptionWebRTCAdapter } from "./adapters/openai-transcription-webrtc-adapter.js?v=20260809-confer4";
+import { OpenAITranscriptionWebRTCAdapter } from "./adapters/openai-transcription-webrtc-adapter.js?v=20260815-confer8";
 
 const PREFERENCE_KEY = "minimoi.voice.provider";
 
@@ -94,7 +94,12 @@ export class ConferVoiceController {
     const generation = ++this._generation;
     // Confer is conversational: a short silence completes one user turn and
     // sends it to the configured CoS reasoning backend.
-    const adapter = new OpenAITranscriptionWebRTCAdapter({ autoCommitOnSilence: true });
+    // The provider owns conversation turn detection. COS receives the same
+    // completed-turn events as Gespräche/Conversas without running a second
+    // browser timer or allowing the speech model to generate the reply.
+    const adapter = new OpenAITranscriptionWebRTCAdapter({
+      autoCommitOnSilence: false,
+    });
     this._adapter = adapter;
     adapter.on("connected", () => {
       if (this._isCurrent(generation)) this._onStateChange("listening");
@@ -129,8 +134,12 @@ export class ConferVoiceController {
       this._onProvisionalTranscript("");
       const text = (event.text || "").trim();
       if (text) {
+        // Correlate platform operations exactly as the typed Confer path does.
+        // The same id follows this committed transcript through submission so
+        // an explicit note cannot be duplicated by a correlated retry.
+        const requestId = crypto.randomUUID();
         this._turnChain = this._turnChain
-          .then(() => this._submitTurn(text))
+          .then(() => this._submitTurn(text, requestId))
           .catch((error) => {
             this._onError({ reason: "turn_failed", detail: error.message });
             if (this._active) this._onStateChange("listening");
@@ -148,7 +157,7 @@ export class ConferVoiceController {
     );
   }
 
-  async _submitTurn(text) {
+  async _submitTurn(text, requestId) {
     if (!this._active) return;
     this._onUserTurn(text);
     this._onStateChange("thinking");
@@ -159,6 +168,7 @@ export class ConferVoiceController {
         text,
         channel: "html_voice",
         conversation_id: this._conversationId,
+        request_id: requestId,
         voice_provider: this._provider,
       }),
     });

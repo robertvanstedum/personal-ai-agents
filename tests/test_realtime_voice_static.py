@@ -76,7 +76,7 @@ def test_shared_controller_starts_with_persona_and_hides_live_transcript(german_
 
     assert "one short, natural greeting" in source
     assert "Do not give directions" in source
-    assert "sendContinuationInstruction(OPENING_INSTRUCTION)" in source
+    assert "sendContinuationInstruction(this._openingInstruction)" in source
     assert 'this._onInputState("speech_started")' in source
     assert "never surfaced to the UI while active" in source
     assert "openai-webrtc-adapter.js?v=20260809-ga1" in source

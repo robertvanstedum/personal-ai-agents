@@ -134,6 +134,18 @@ export class OpenAIWebRTCAdapter {
     this._dc?.send(JSON.stringify({ type: "response.create" }));
   }
 
+  sendFunctionResult(callId, output) {
+    this._dc?.send(JSON.stringify({
+      type: "conversation.item.create",
+      item: {
+        type: "function_call_output",
+        call_id: callId,
+        output: typeof output === "string" ? output : JSON.stringify(output),
+      },
+    }));
+    this._dc?.send(JSON.stringify({ type: "response.create" }));
+  }
+
   _handleServerEvent(event) {
     switch (event.type) {
       case "input_audio_buffer.speech_started":
@@ -176,6 +188,15 @@ export class OpenAIWebRTCAdapter {
         this._emit("interrupted", {});
         break;
       case "response.done":
+        for (const item of event.response?.output || []) {
+          if (item.type === "function_call") {
+            this._emit("function_call", {
+              call_id: item.call_id,
+              name: item.name,
+              arguments: item.arguments,
+            });
+          }
+        }
         this._emit("assistant_stopped", { usage: event.response?.usage });
         if (event.response?.usage) this._emit("usage", event.response.usage);
         break;

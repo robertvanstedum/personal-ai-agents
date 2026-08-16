@@ -42,6 +42,8 @@
           <button id="btn-send">Send</button>
         </div>
         <div class="talk-meta">
+          <label for="voice-provider-select">Voice</label>
+          <select id="voice-provider-select" aria-label="Voice provider"></select>
           <span id="voice-status"></span>
           <span id="voice-provider"></span>
           <span>Voice is AI-generated.</span>
@@ -162,6 +164,7 @@ sendInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKe
 async function sendMessage() {
   const text = sendInput.value.trim();
   if (!text) return;
+  const requestId = crypto.randomUUID();
   sendInput.value = '';
   setInputDisabled(true);
   appendMsg('user', text);
@@ -170,7 +173,12 @@ async function sendMessage() {
     const resp = await fetch('/ui/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, channel: 'html_text', conversation_id: 'owner' }),
+      body: JSON.stringify({
+        text,
+        channel: 'html_text',
+        conversation_id: 'owner',
+        request_id: requestId,
+      }),
     });
     const data = await resp.json();
     thinking.remove();
@@ -316,67 +324,126 @@ activateTab(INITIAL_TAB, false);
 if (INITIAL_TAB !== 'confer') loadTab(INITIAL_TAB);
 </script>
 <script type="module">
-import { ConferVoiceController } from "../static/realtime-voice/realtime-confer-controller.js?v=20260809-confer5";
+import { RealtimeVoiceController } from "../static/realtime-voice/realtime-voice-controller.js?v=20260816-cos1";
 
 const voiceButton = document.getElementById('btn-voice');
 const voiceStatus = document.getElementById('voice-status');
 const voiceProvider = document.getElementById('voice-provider');
+const voiceProviderSelect = document.getElementById('voice-provider-select');
 const voiceTranscript = document.getElementById('voice-transcript');
 let voiceRunning = false;
-let thinking = null;
 
 const stateLabels = {
-  requesting: 'Connecting…',
-  listening: 'Listening',
-  thinking: 'Thinking',
-  speaking: 'Speaking',
-  interrupted: 'Interrupted',
+  requesting_mic: 'Connecting…',
+  connecting: 'Connecting…',
+  active: 'Listening',
+  ending: 'Stopping…',
+  ended: 'Stopped',
   reconnecting: 'Reconnecting…',
-  stopped: '',
-  error: 'Voice error',
 };
 
-const voiceController = new ConferVoiceController({
-  capabilitiesUrl: '../api/realtime-voice/confer/capabilities',
+const voiceController = new RealtimeVoiceController({
   bootstrapUrl: '../api/realtime-voice/confer/bootstrap',
-  turnUrl: 'send',
+  openingInstruction: null,
   onStateChange: (state) => {
-    if (['stopped', 'error'].includes(state)) voiceRunning = false;
-    const voiceActive = voiceRunning && !['stopped', 'error'].includes(state);
+    if (state === 'ended') voiceRunning = false;
+    const voiceActive = voiceRunning && state !== 'ended';
     voiceStatus.textContent = stateLabels[state] || state;
     voiceButton.classList.toggle('recording', voiceActive);
     voiceButton.textContent = voiceActive ? '■' : '🎤';
     voiceButton.title = voiceActive ? 'Stop voice conversation' : 'Start voice conversation';
     voiceButton.setAttribute('aria-label', voiceButton.title);
+    voiceProviderSelect.disabled = voiceActive;
   },
-  onProvisionalTranscript: (text) => {
-    voiceTranscript.textContent = text ? `Hearing: ${text}` : '';
+  onInputState: (state) => {
+    const labels = {
+      speech_started: 'Listening',
+      speech_stopped: 'Understanding…',
+      understood: 'Thinking…',
+      consulting: 'Consulting COS Agent A…',
+    };
+    if (labels[state]) voiceStatus.textContent = labels[state];
   },
   onUserTurn: (text) => {
-    appendMsg('user', text);
-    thinking = appendThinking();
+    // Match Gespräche/Conversas: voice stays primary while the session is
+    // active. The transcript is added to Confer only after voice stops.
   },
   onAssistantTurn: (text) => {
-    thinking?.remove();
-    thinking = null;
-    appendMsg('cos', text);
+    // Transcript rendering is intentionally deferred to onFinalize below.
+  },
+  onFunctionCall: async (call) => {
+    const args = JSON.parse(call.arguments || '{}');
+    let text;
+    if (call.name === 'consult_cos_agent') {
+      text = String(args.request || '').trim();
+    } else if (call.name === 'save_cos_note') {
+      text = `Save a note: ${String(args.note || '').trim()}`;
+    } else {
+      throw new Error(`Unsupported COS voice function: ${call.name}`);
+    }
+    if (!text) throw new Error('COS voice function content was empty.');
+    const response = await fetch('send', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        text,
+        channel: 'html_voice',
+        conversation_id: 'owner',
+        request_id: crypto.randomUUID(),
+        voice_provider: voiceProviderSelect.value,
+        speech_output: false,
+      }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body.reply || body.error || `COS function failed (HTTP ${response.status})`);
+    }
+    return JSON.stringify({reply: body.reply, operation: body.operation || null});
   },
   onWarning: () => {
     voiceStatus.textContent = 'Voice will stop in two minutes.';
   },
-  onError: (error) => {
-    thinking?.remove();
-    thinking = null;
+  onStop: () => {
+    voiceStatus.textContent = 'Voice duration limit reached.';
+  },
+  onFatalError: (error) => {
     voiceTranscript.textContent = `Voice error: ${error?.detail || error?.reason || 'unknown error'}`;
+  },
+  onFinalize: (result) => {
+    for (const turn of result.turns || []) {
+      const text = String(turn.text || '').trim();
+      if (text) appendMsg(turn.speaker === 'user' ? 'user' : 'cos', text);
+    }
+    voiceTranscript.textContent = result.partial
+      ? `Voice ended with a partial transcript (${result.partial_reason}).`
+      : 'Voice transcript added.';
   },
 });
 
 try {
-  const capabilities = await voiceController.availableProviders();
+  const response = await fetch('../api/realtime-voice/confer/capabilities');
+  const capabilities = await response.json();
+  if (!response.ok || !capabilities.ok) throw new Error(capabilities.error || 'Voice unavailable');
   const providers = capabilities.providers || [];
-  const selected = providers.find(item => item.provider === capabilities.default_provider) || providers[0];
+  const savedProvider = localStorage.getItem('minimoi.cos.voice.provider');
+  const selected = providers.find(item => item.provider === savedProvider)
+    || providers.find(item => item.provider === capabilities.default_provider)
+    || providers[0];
+  voiceProviderSelect.replaceChildren(...providers.map(item => {
+    const option = document.createElement('option');
+    option.value = item.provider;
+    option.textContent = item.provider === 'openai' ? 'OpenAI Voice' : 'Grok Voice';
+    return option;
+  }));
+  if (selected) voiceProviderSelect.value = selected.provider;
   voiceProvider.textContent = selected ? `Voice: ${selected.label}` : 'Voice unavailable';
   voiceButton.disabled = !selected;
+  voiceProviderSelect.disabled = !selected;
+  voiceProviderSelect.addEventListener('change', () => {
+    localStorage.setItem('minimoi.cos.voice.provider', voiceProviderSelect.value);
+    const item = providers.find(provider => provider.provider === voiceProviderSelect.value);
+    voiceProvider.textContent = item ? `Voice: ${item.label}` : 'Voice unavailable';
+  });
 } catch (_) {
   voiceProvider.textContent = 'Voice unavailable';
   voiceButton.disabled = true;
@@ -384,12 +451,17 @@ try {
 
 voiceButton.addEventListener('click', async () => {
   if (voiceRunning) {
-    voiceController.stop();
+    voiceController.endSession('user_ended');
     return;
   }
   voiceRunning = true;
   try {
-    await voiceController.start();
+    await voiceController.startSession({
+      provider: voiceProviderSelect.value,
+      persona: 'cos-agent-a',
+      scene: 'confer',
+      learner_name: 'Robert',
+    });
   } catch (_) {
     voiceRunning = false;
   }

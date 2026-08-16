@@ -15,6 +15,7 @@ COPY utils/ utils/
 COPY core/ core/
 COPY domains/cos/ domains/cos/
 COPY domains/guild/ domains/guild/
+COPY services/model_gateway/ services/model_gateway/
 
 # Data directories created at runtime via volume mounts
 RUN mkdir -p data/guild logs agent_logs

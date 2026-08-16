@@ -1,0 +1,17 @@
+{
+  "id": "cos-bounded-search",
+  "name": "COS Bounded Search",
+  "description": "Provides one bounded web-search capability through the internal MinimoI model gateway.",
+  "activation": {
+    "onStartup": false
+  },
+  "contracts": {
+    "webSearchProviders": [
+      "minimoi"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false
+  }
+}

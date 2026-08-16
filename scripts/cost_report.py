@@ -2,9 +2,10 @@
 """
 cost_report.py - Unified AI cost tracker across chat and curator runs.
 
-Reads two sources:
+Reads three sources:
   - ~/.openclaw/workspace/logs/usage/daily_usage.json  (chat / Sonnet costs)
   - ~/Projects/personal-ai-agents/curator_costs.json   (curator API costs per model)
+  - data/model_gateway_receipts.jsonl                 (LiteLLM actual routes)
 
 Usage:
     python cost_report.py          # today's breakdown
@@ -20,8 +21,16 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-CHAT_LOG    = Path.home() / '.openclaw' / 'workspace' / 'logs' / 'usage' / 'daily_usage.json'
-CURATOR_LOG = Path(__file__).parent.parent / 'curator_costs.json'
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from services.model_gateway.cost_reporting import load_receipts
+
+
+CHAT_LOG = Path.home() / '.openclaw' / 'workspace' / 'logs' / 'usage' / 'daily_usage.json'
+CURATOR_LOG = REPO_ROOT / 'curator_costs.json'
+GATEWAY_LOG = REPO_ROOT / 'data' / 'model_gateway_receipts.jsonl'
 
 
 # ---------------------------------------------------------------------------
@@ -53,6 +62,28 @@ def curator_by_date(runs: list) -> dict:
     return result
 
 
+def load_gateway_receipts() -> tuple[list[dict], int]:
+    """Return sanitized LiteLLM receipts plus any malformed-line count."""
+    return load_receipts(GATEWAY_LOG)
+
+
+def gateway_by_date(receipts: list[dict]) -> dict:
+    """Aggregate successfully served gateway requests by UTC date."""
+    result = defaultdict(lambda: {'cost': 0.0, 'requests': 0, 'fallbacks': 0})
+    for receipt in receipts:
+        date = str(receipt.get('occurred_at', ''))[:10]
+        if not date:
+            continue
+        result[date]['requests'] += 1
+        cost = receipt.get('cost_usd')
+        if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+            result[date]['cost'] += float(cost)
+        position = receipt.get('fallback_position')
+        if isinstance(position, int) and not isinstance(position, bool) and position > 0:
+            result[date]['fallbacks'] += 1
+    return result
+
+
 def fmt(amount: float) -> str:
     return f"${amount:.2f}"
 
@@ -61,7 +92,7 @@ def fmt(amount: float) -> str:
 # Reports
 # ---------------------------------------------------------------------------
 
-def report_today(chat: dict, curator_runs: list):
+def report_today(chat: dict, curator_runs: list, gateway_receipts: list, invalid_lines: int = 0):
     today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     month = today[:7]
 
@@ -74,11 +105,28 @@ def report_today(chat: dict, curator_runs: list):
         by_model[r['model']]['runs'] += 1
 
     curator_total = sum(v['cost'] for v in by_model.values())
-    grand_total   = chat_today + curator_total
+    gateway_today = [r for r in gateway_receipts if str(r.get('occurred_at', '')).startswith(today)]
+    gateway_cost = sum(
+        float(r['cost_usd'])
+        for r in gateway_today
+        if isinstance(r.get('cost_usd'), (int, float)) and not isinstance(r.get('cost_usd'), bool)
+    )
+    gateway_fallbacks = sum(
+        1 for r in gateway_today
+        if isinstance(r.get('fallback_position'), int) and r['fallback_position'] > 0
+    )
+    grand_total = chat_today + curator_total + gateway_cost
 
     month_chat    = sum(v for k, v in chat.items() if k.startswith(month))
     month_curator = sum(r.get('cost_usd', 0.0) for r in curator_runs if r['date'].startswith(month))
-    month_total   = month_chat + month_curator
+    month_gateway = sum(
+        float(r['cost_usd'])
+        for r in gateway_receipts
+        if str(r.get('occurred_at', '')).startswith(month)
+        and isinstance(r.get('cost_usd'), (int, float))
+        and not isinstance(r.get('cost_usd'), bool)
+    )
+    month_total = month_chat + month_curator + month_gateway
 
     lines = [
         f"Cost Report - {today}",
@@ -94,13 +142,25 @@ def report_today(chat: dict, curator_runs: list):
     else:
         lines.append("Curator:          $0.00  (no runs yet today)")
 
+    lines.append(
+        f"Model gateway:     {fmt(gateway_cost)}  "
+        f"({len(gateway_today)} request(s), {gateway_fallbacks} fallback(s))"
+    )
+    if invalid_lines:
+        lines.append(f"Gateway warning:  {invalid_lines} malformed receipt line(s) ignored")
+
     # Last 7 days for context
     today_date = datetime.now(timezone.utc).date()
     last7      = [(today_date - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(6, -1, -1)]
     c_by_d     = curator_by_date(curator_runs)
+    g_by_d     = gateway_by_date(gateway_receipts)
     recent     = []
     for d in last7:
-        total = chat.get(d, 0.0) + sum(c_by_d.get(d, {}).values())
+        total = (
+            chat.get(d, 0.0)
+            + sum(c_by_d.get(d, {}).values())
+            + g_by_d.get(d, {}).get('cost', 0.0)
+        )
         if total > 0:
             marker = " <- today" if d == today else ""
             recent.append(f"  {d}  {fmt(total)}{marker}")
@@ -109,7 +169,7 @@ def report_today(chat: dict, curator_runs: list):
         "-" * 32,
         f"Today total:      {fmt(grand_total)}",
         "",
-        "Recent days (chat + curator):",
+        "Recent days (chat + curator + gateway):",
     ] + recent + [
         "-" * 32,
         f"Month so far:     {fmt(month_total)}",
@@ -117,29 +177,36 @@ def report_today(chat: dict, curator_runs: list):
     print('\n'.join(lines))
 
 
-def report_days(chat: dict, curator_runs: list, dates: list, label: str):
+def report_days(chat: dict, curator_runs: list, gateway_receipts: list, dates: list, label: str):
     """Day-by-day table for a list of date strings."""
     c_by_d   = curator_by_date(curator_runs)
+    g_by_d   = gateway_by_date(gateway_receipts)
     today    = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     col_w    = 10
-    header   = f"{'Date':<12} {'Chat':>{col_w}} {'Curator':>{col_w}} {'Total':>{col_w}}"
+    header   = f"{'Date':<12} {'Chat':>{col_w}} {'Curator':>{col_w}} {'Gateway':>{col_w}} {'Total':>{col_w}}"
     sep      = "-" * len(header)
 
     lines = [f"Cost Report - {label}", sep, header, sep]
 
-    tot_chat = tot_cur = 0.0
+    tot_chat = tot_cur = tot_gateway = 0.0
     for d in dates:
         cc    = chat.get(d, 0.0)
         cur   = sum(c_by_d.get(d, {}).values())
-        tot   = cc + cur
+        gateway = g_by_d.get(d, {}).get('cost', 0.0)
+        tot   = cc + cur + gateway
         tot_chat += cc
         tot_cur  += cur
+        tot_gateway += gateway
         marker = " <- today" if d == today else ""
-        lines.append(f"{d:<12} {fmt(cc):>{col_w}} {fmt(cur):>{col_w}} {fmt(tot):>{col_w}}{marker}")
+        lines.append(
+            f"{d:<12} {fmt(cc):>{col_w}} {fmt(cur):>{col_w}} "
+            f"{fmt(gateway):>{col_w}} {fmt(tot):>{col_w}}{marker}"
+        )
 
     lines += [
         sep,
-        f"{'TOTAL':<12} {fmt(tot_chat):>{col_w}} {fmt(tot_cur):>{col_w}} {fmt(tot_chat + tot_cur):>{col_w}}",
+        f"{'TOTAL':<12} {fmt(tot_chat):>{col_w}} {fmt(tot_cur):>{col_w}} "
+        f"{fmt(tot_gateway):>{col_w}} {fmt(tot_chat + tot_cur + tot_gateway):>{col_w}}",
     ]
 
     # Curator model breakdown if any curator data exists
@@ -160,18 +227,18 @@ def report_days(chat: dict, curator_runs: list, dates: list, label: str):
     print('\n'.join(lines))
 
 
-def report_year(chat: dict, curator_runs: list):
+def report_year(chat: dict, curator_runs: list, gateway_receipts: list):
     """Month-by-month table for the current calendar year."""
     year     = datetime.now(timezone.utc).year
     today    = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     cur_month = today[:7]
 
     col_w  = 10
-    header = f"{'Month':<12} {'Chat':>{col_w}} {'Curator':>{col_w}} {'Total':>{col_w}}"
+    header = f"{'Month':<12} {'Chat':>{col_w}} {'Curator':>{col_w}} {'Gateway':>{col_w}} {'Total':>{col_w}}"
     sep    = "-" * len(header)
     lines  = [f"Cost Report - {year}", sep, header, sep]
 
-    tot_chat = tot_cur = 0.0
+    tot_chat = tot_cur = tot_gateway = 0.0
     for m in range(1, 13):
         month_str = f"{year}-{m:02d}"
         # Skip future months
@@ -179,16 +246,28 @@ def report_year(chat: dict, curator_runs: list):
             break
         cc  = sum(v for k, v in chat.items() if k.startswith(month_str))
         cur = sum(r.get('cost_usd', 0.0) for r in curator_runs if r['date'].startswith(month_str))
-        tot = cc + cur
+        gateway = sum(
+            float(r['cost_usd'])
+            for r in gateway_receipts
+            if str(r.get('occurred_at', '')).startswith(month_str)
+            and isinstance(r.get('cost_usd'), (int, float))
+            and not isinstance(r.get('cost_usd'), bool)
+        )
+        tot = cc + cur + gateway
         tot_chat += cc
         tot_cur  += cur
+        tot_gateway += gateway
         month_label = datetime(year, m, 1).strftime('%b %Y')
         marker = " <- current" if month_str == cur_month else ""
-        lines.append(f"{month_label:<12} {fmt(cc):>{col_w}} {fmt(cur):>{col_w}} {fmt(tot):>{col_w}}{marker}")
+        lines.append(
+            f"{month_label:<12} {fmt(cc):>{col_w}} {fmt(cur):>{col_w}} "
+            f"{fmt(gateway):>{col_w}} {fmt(tot):>{col_w}}{marker}"
+        )
 
     lines += [
         sep,
-        f"{'TOTAL':<12} {fmt(tot_chat):>{col_w}} {fmt(tot_cur):>{col_w}} {fmt(tot_chat + tot_cur):>{col_w}}",
+        f"{'TOTAL':<12} {fmt(tot_chat):>{col_w}} {fmt(tot_cur):>{col_w}} "
+        f"{fmt(tot_gateway):>{col_w}} {fmt(tot_chat + tot_cur + tot_gateway):>{col_w}}",
     ]
     print('\n'.join(lines))
 
@@ -200,26 +279,27 @@ def report_year(chat: dict, curator_runs: list):
 def main():
     chat         = load_chat_costs()
     curator_runs = load_curator_costs()
+    gateway_receipts, invalid_gateway_lines = load_gateway_receipts()
     arg          = sys.argv[1].lower() if len(sys.argv) > 1 else 'today'
     now          = datetime.now(timezone.utc)
 
     if arg == 'today':
-        report_today(chat, curator_runs)
+        report_today(chat, curator_runs, gateway_receipts, invalid_gateway_lines)
 
     elif arg == 'week':
         today = now.date()
         dates = [(today - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(6, -1, -1)]
-        report_days(chat, curator_runs, dates, "Last 7 Days")
+        report_days(chat, curator_runs, gateway_receipts, dates, "Last 7 Days")
 
     elif arg == 'month':
         month_str = now.strftime('%Y-%m')
         _, days_in_month = calendar.monthrange(now.year, now.month)
         dates = [f"{month_str}-{d:02d}" for d in range(1, days_in_month + 1)
                  if f"{month_str}-{d:02d}" <= now.strftime('%Y-%m-%d')]
-        report_days(chat, curator_runs, dates, now.strftime('%B %Y'))
+        report_days(chat, curator_runs, gateway_receipts, dates, now.strftime('%B %Y'))
 
     elif arg == 'year':
-        report_year(chat, curator_runs)
+        report_year(chat, curator_runs, gateway_receipts)
 
     else:
         print(f"Unknown argument: {arg}")

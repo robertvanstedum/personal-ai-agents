@@ -32,6 +32,7 @@ from core.realtime_voice import config as rv_config
 from core.realtime_voice.duration_guard import DurationGuard
 from core.realtime_voice.prompt_builder import build_realtime_instructions
 from core.realtime_voice.providers import openai_realtime, xai_voice
+from core.realtime_voice.standards import conversation_turn_detection
 
 _RATE_LIMIT_MAX_PER_WINDOW = 10
 _RATE_LIMIT_WINDOW_SECONDS = 60
@@ -257,20 +258,9 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
 
 
 def _default_turn_detection(provider: str) -> dict:
-    if provider == "openai":
-        # A predictable silence boundary is easier for a language learner
-        # than low-eagerness semantic VAD, which can wait a long time before
-        # deciding that a hesitant but complete utterance has ended.
-        return {
-            "type": "server_vad",
-            "prefix_padding_ms": 300,
-            "silence_duration_ms": 1200,
-        }
-    # xAI: server VAD with a longer-than-default silence threshold suitable
-    # for a learner (Section 9). xAI's default silence_duration_ms is not
-    # documented; this is an explicit, recorded choice, not an assumption
-    # that the provider default is already learner-appropriate.
-    return {"type": "server_vad", "silence_duration_ms": 1200}
+    # One platform conversation standard serves Gespräche, Conversas, and
+    # chained agent conversations. Provider adapters keep transport details.
+    return conversation_turn_detection(provider)
 
 
 def _log_outcome(domain, user_id, provider, model, outcome):

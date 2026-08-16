@@ -18,6 +18,60 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
 
+  model-gateway:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:model-gateway-${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-model-gateway
+    restart: unless-stopped
+    command:
+      - --config
+      - /app/config.yaml
+      - --port
+      - "4000"
+      - --num_workers
+      - "1"
+    environment:
+      - LITELLM_MASTER_KEY=${MINIMOI_MODEL_GATEWAY_KEY:?set MINIMOI_MODEL_GATEWAY_KEY in /opt/minimoi/.env}
+      - XAI_API_KEY=${XAI_API_KEY:?set XAI_API_KEY in /opt/minimoi/.env}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in /opt/minimoi/.env}
+      - MINIMOI_RECEIPT_ENDPOINT=http://cos-scheduler:8769/internal/model-gateway/receipt
+      - MINIMOI_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in /opt/minimoi/.env}
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  cos-agent-a:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:agent-a-${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-cos-agent-a
+    restart: unless-stopped
+    environment:
+      - OPENCLAW_GATEWAY_TOKEN=${COS_AGENT_A_GATEWAY_TOKEN:?set COS_AGENT_A_GATEWAY_TOKEN in /opt/minimoi/.env}
+      - MINIMOI_MODEL_GATEWAY_KEY=${MINIMOI_MODEL_GATEWAY_KEY:?set MINIMOI_MODEL_GATEWAY_KEY in /opt/minimoi/.env}
+      - OPENCLAW_STATE_DIR=/home/node/.openclaw
+      - OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json
+      - OPENCLAW_DISABLE_BONJOUR=1
+      - TZ=${COS_AGENT_TIMEZONE:-America/Chicago}
+    volumes:
+      - cos-agent-a-state:/home/node/.openclaw
+      - cos-agent-a-auth:/home/node/.config/openclaw
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      model-gateway:
+        condition: service_healthy
+
   curator:
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/curator:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-curator
@@ -87,6 +141,7 @@ services:
     environment:
       - FLASK_ENV=production
       - PORT=5001
+      - COS_BACKEND=http://cos-scheduler:8769
     volumes:
       - /opt/minimoi/data/guild/build_queue.json:/app/data/guild/build_queue.json
       - /opt/minimoi/docs/design:/app/docs/design
@@ -101,6 +156,7 @@ services:
       - german
       - portuguese
       - postgres
+      - cos-scheduler
 
   system-bot:
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/system-bot:${MINIMOI_IMAGE_TAG:-latest}
@@ -126,12 +182,20 @@ services:
     env_file: /opt/minimoi/.env
     environment:
       - MINIMOI_ROLE=production
+      - COS_BACKEND_TYPE=${COS_BACKEND_TYPE:-openclaw}
+      - COS_AGENT_RUNTIME_URL=http://cos-agent-a:18789/v1
+      - COS_AGENT_RUNTIME_TOKEN=${COS_AGENT_A_GATEWAY_TOKEN:?set COS_AGENT_A_GATEWAY_TOKEN in /opt/minimoi/.env}
+      - COS_AGENT_RUNTIME_AGENT_ID=${COS_AGENT_RUNTIME_AGENT_ID:-cos-agent-a}
+      - COS_AGENT_TIMEZONE=${COS_AGENT_TIMEZONE:-America/Chicago}
+      - COS_MODEL_GATEWAY_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in /opt/minimoi/.env}
     volumes:
       - /opt/minimoi/cos_memory.md:/app/data/cos_memory.md
+      - /opt/minimoi/data/model_gateway_receipts.jsonl:/app/data/model_gateway_receipts.jsonl
       - /opt/minimoi/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json
     depends_on:
       - postgres
       - cos-scheduler
+      - cos-agent-a
 
   cos-scheduler:
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:${MINIMOI_IMAGE_TAG:-latest}
@@ -143,14 +207,24 @@ services:
       - TELEGRAM_CHAT_ID=8379221702
       - PORT=8769
       - DISABLE_TELEGRAM_POLL=1
+      - COS_BACKEND_TYPE=${COS_BACKEND_TYPE:-openclaw}
+      - COS_AGENT_RUNTIME_URL=http://cos-agent-a:18789/v1
+      - COS_AGENT_RUNTIME_TOKEN=${COS_AGENT_A_GATEWAY_TOKEN:?set COS_AGENT_A_GATEWAY_TOKEN in /opt/minimoi/.env}
+      - COS_AGENT_RUNTIME_AGENT_ID=${COS_AGENT_RUNTIME_AGENT_ID:-cos-agent-a}
+      - COS_AGENT_TIMEZONE=${COS_AGENT_TIMEZONE:-America/Chicago}
+      - COS_MODEL_GATEWAY_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in /opt/minimoi/.env}
     volumes:
       - /opt/minimoi/cos_memory.md:/app/data/cos_memory.md
+      - /opt/minimoi/data/model_gateway_receipts.jsonl:/app/data/model_gateway_receipts.jsonl
       - /opt/minimoi/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "127.0.0.1:8769:8769"
     depends_on:
       - postgres
+      - cos-agent-a
 
 volumes:
   postgres-data:
+  cos-agent-a-state:
+  cos-agent-a-auth:

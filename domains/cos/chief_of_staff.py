@@ -13,6 +13,7 @@ DISABLE_TELEGRAM_POLL=1 must be set when cos-scheduler runs alongside cos-bot.
 """
 
 import json
+import hmac
 import logging
 import os
 import subprocess
@@ -44,11 +45,15 @@ from core.realtime_voice.capabilities import (
 from core.realtime_voice.confer import create_confer_voice_blueprint
 from core.realtime_voice.providers import openai_speech
 from domains.cos.confer_service import (
+    ConferOperationFailed,
     ConferTurnRequest,
     ConferTurnService,
     InvalidConferTurn,
 )
+from domains.cos.cost_checkpoint import run_cost_checkpoint
 from domains.cos.spoken_reply_store import SpokenReplyStore
+from domains.cos.routing_receipts import RoutingReceiptStore
+from services.model_gateway.cost_reporting import checkpoint_from_files
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -59,7 +64,10 @@ COS_MEMORY_FILE  = BASE_DIR / "data/cos_memory.md"
 AGENDA_FILE      = BASE_DIR / "data/guild/cos_agenda.json"
 LOGS_DIR         = BASE_DIR / "logs"
 _REALTIME_VOICE_STATIC_DIR = BASE_DIR / "core" / "realtime_voice" / "static"
+MODEL_GATEWAY_RECEIPT_FILE = BASE_DIR / "data/model_gateway_receipts.jsonl"
+MODEL_GATEWAY_COST_POLICY_FILE = BASE_DIR / "services/model_gateway/cost_policy.json"
 _spoken_replies = SpokenReplyStore()
+_routing_receipts = RoutingReceiptStore(MODEL_GATEWAY_RECEIPT_FILE)
 
 # ── DB (optional — degrades gracefully if Docker is down) ────────────────────
 
@@ -122,20 +130,46 @@ def _read_memory() -> str:
 
 def _append_memory(entry: str):
     """Append a dated entry to cos_memory.md. Refuses if file > MEMORY_CAP chars."""
+    return _append_memory_entry(entry, entry_type="chat")["saved"]
+
+
+def _append_memory_entry(
+    entry: str,
+    *,
+    entry_type: str,
+    operation_id: str | None = None,
+) -> dict:
+    """Write one platform memory entry with optional durable deduplication."""
     try:
         current = _read_memory()
         if current == "(no memory yet)":
             current = ""
-        if len(current) > MEMORY_CAP:
+        marker = f"<!-- cos-operation:{operation_id} -->" if operation_id else None
+        if marker and marker in current:
+            return {"saved": True, "deduplicated": True}
+        marker_line = f"\n{marker}" if marker else ""
+        dated = (
+            f"{marker_line}\n[{entry_type}] "
+            f"{datetime.now(timezone.utc).strftime('%Y-%m-%d')}: {entry}\n"
+        )
+        if len(current) + len(dated) > MEMORY_CAP:
             _log_file("memory_write_blocked",
-                      f"File at {len(current)} chars — distillation needed")
-            return False
-        dated = f"\n[chat] {datetime.now(timezone.utc).strftime('%Y-%m-%d')}: {entry}\n"
+                      f"Write would exceed {MEMORY_CAP} character cap")
+            return {"saved": False, "deduplicated": False}
         COS_MEMORY_FILE.write_text(current + dated)
-        return True
+        return {"saved": True, "deduplicated": False}
     except Exception as e:
         _log_file("memory_write_error", str(e))
-        return False
+        return {"saved": False, "deduplicated": False}
+
+
+def _save_explicit_note(note_text: str, operation_id: str) -> dict:
+    """Persist an explicit note through the platform-owned memory path."""
+    return _append_memory_entry(
+        note_text,
+        entry_type="note",
+        operation_id=operation_id,
+    )
 
 # ── System prompt ─────────────────────────────────────────────────────────────
 
@@ -579,11 +613,33 @@ def _build_system_prompt() -> str:
         date_str=date_str,
     )
 
+
+def _build_cos_voice_instructions(_user_id: str) -> str:
+    """Build the server-owned persona and tool boundary for realtime COS."""
+    return (
+        f"{_build_system_prompt()}\n\n"
+        "You are the low-latency voice surface for COS Agent A. Speak as "
+        "Robert's familiar, candid Chief of Staff partner. Keep ordinary "
+        "conversation natural and brief: usually one to three short sentences "
+        "and at most one useful question. Never use Markdown, headings, or "
+        "bullet lists in speech. Robert may interrupt you; stop cleanly and "
+        "listen. Use consult_cos_agent whenever the answer requires live or "
+        "current facts, web research, MinimoI state beyond the supplied "
+        "context, stored history, or substantive domain judgment. Give a very "
+        "brief spoken acknowledgment before consulting when helpful, then "
+        "faithfully communicate the returned answer. Use save_cos_note for an "
+        "explicit request to save or record a note. Never claim that a note "
+        "was saved unless that tool returned a successful platform receipt. "
+        "Pass the note's substance directly; do not reframe it as 'User asked' "
+        "or 'Robert asked' unless Robert explicitly wants that wording."
+    )
+
 # ── Tools ─────────────────────────────────────────────────────────────────────
 
 # ── Backend ───────────────────────────────────────────────────────────────────
-# Active backend instance — initialized in main(). Always GrokBackend unless
-# explicitly swapped. Swapping does not change the coordination layer.
+# Active backend instance — initialized in main(). The environment selects the
+# legacy direct Grok rollback or the gateway-backed COS Agent A runtime.
+# Swapping implementations does not change this coordination layer.
 _backend = None
 
 
@@ -693,22 +749,47 @@ def _backend_metadata() -> tuple[str, str]:
     )
 
 
+def _reset_backend_conversation(conversation_id: str) -> bool:
+    """Reset one runtime conversation only when the active backend supports it."""
+    if _backend is None:
+        raise ConferOperationFailed("Backend is not initialized.")
+    reset = getattr(_backend, "reset_conversation", None)
+    if reset is None:
+        raise ConferOperationFailed("The active COS backend cannot reset sessions.")
+    return bool(reset(conversation_id))
+
+
+def _get_routing_receipt(receipt_id: str) -> dict | None:
+    """Resolve LiteLLM's asynchronous receipt without guessing the serving model."""
+    return _routing_receipts.wait_for(receipt_id, timeout_seconds=1.0)
+
+
 def _process_confer_turn(
     text: str,
     *,
     channel: str = "api_text",
     conversation_id: str = "owner",
+    request_id: str | None = None,
 ):
+    receipt_resolver = (
+        _get_routing_receipt
+        if getattr(_backend, "supports_routing_receipts", False)
+        else None
+    )
     service = ConferTurnService(
         call_backend=call_backend,
         build_context=_build_confer_context,
         increment_chat=_inc_chat,
         backend_metadata=_backend_metadata,
+        save_note=_save_explicit_note,
+        reset_conversation=_reset_backend_conversation,
+        get_routing_receipt=receipt_resolver,
     )
     return service.handle(ConferTurnRequest(
         text=text,
         channel=channel,
         conversation_id=conversation_id,
+        request_id=request_id,
     ))
 
 
@@ -731,9 +812,19 @@ def _chat(
 def init_backend():
     """Initialize the active backend. Called once from main() at startup."""
     global _backend
-    from domains.cos.backends.grok_backend import GrokBackend
-    _backend = GrokBackend(write_memory=_append_memory, dispatch_tool=_dispatch_tool)
-    log.info("Backend initialized: GrokBackend (grok-4-1-fast-reasoning)")
+    backend_type = os.environ.get("COS_BACKEND_TYPE", "grok").strip().lower()
+    if backend_type == "grok":
+        from domains.cos.backends.grok_backend import GrokBackend
+        _backend = GrokBackend(write_memory=_append_memory, dispatch_tool=_dispatch_tool)
+    elif backend_type == "openclaw":
+        from domains.cos.backends.openclaw_backend import OpenClawBackend
+        _backend = OpenClawBackend(
+            write_memory=_append_memory,
+            dispatch_tool=_dispatch_tool,
+        )
+    else:
+        raise ValueError(f"Unknown COS_BACKEND_TYPE: {backend_type!r}")
+    log.info("Backend initialized: %s (%s)", _backend.backend_label, _backend.model_label)
 
 # ── Agent state ───────────────────────────────────────────────────────────────
 
@@ -754,6 +845,7 @@ _loop_state: dict[str, dict] = {
     "loop_f": {"name": "build_discipline_check", "last_run": None, "last_result": None, "error": None},
     "loop_g": {"name": "guest_nudge_check",      "last_run": None, "last_result": None, "error": None},
     "loop_h": {"name": "ec2_health_check",       "last_run": None, "last_result": None, "error": None},
+    "loop_i": {"name": "model_gateway_cost_check", "last_run": None, "last_result": None, "error": None},
 }
 _loop_lock = threading.Lock()
 
@@ -777,6 +869,29 @@ def _inc_chat():
         _state["chat_count"] += 1
         _state["state"] = "running"
         _state["last_chat"] = datetime.now(timezone.utc).isoformat()
+
+
+def _send_cost_checkpoint_alert(message: str) -> None:
+    """Send one production-only COS alert through the existing Telegram path."""
+    from utils.telegram import get_cos_token, get_chat_id
+
+    token = get_cos_token()
+    chat_id = get_chat_id()
+    if not token or not chat_id:
+        raise RuntimeError("COS Telegram credentials are unavailable")
+    _tg_send(token, chat_id, message)
+
+
+def _run_model_gateway_cost_checkpoint() -> dict:
+    """Loop I — summarize model spend and warn without changing routing/budgets."""
+    from utils.role import is_production
+
+    return run_cost_checkpoint(
+        MODEL_GATEWAY_RECEIPT_FILE,
+        MODEL_GATEWAY_COST_POLICY_FILE,
+        production=is_production(),
+        notify=_send_cost_checkpoint_alert,
+    )
 
 # ── Telegram polling (rvsopenbot) ─────────────────────────────────────────────
 
@@ -1009,7 +1124,23 @@ def _telegram_poll_loop():
 # ── Flask app ─────────────────────────────────────────────────────────────────
 
 app = Flask(__name__)
-app.register_blueprint(create_confer_voice_blueprint())
+app.register_blueprint(create_confer_voice_blueprint(
+    build_voice_instructions=_build_cos_voice_instructions,
+))
+
+
+@app.route("/internal/model-gateway/receipt", methods=["POST"])
+def model_gateway_receipt():
+    """Receive sanitized serving metadata from the authenticated gateway."""
+    expected = os.environ.get("COS_MODEL_GATEWAY_RECEIPT_KEY", "")
+    supplied = request.headers.get("Authorization", "").removeprefix("Bearer ")
+    if not expected or not supplied or not hmac.compare_digest(expected, supplied):
+        return jsonify({"error": "unauthorized"}), 401
+    try:
+        receipt = _routing_receipts.record(request.get_json(silent=True))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"receipt_id": receipt["receipt_id"], "status": "recorded"})
 
 
 @app.route("/static/realtime-voice/<path:filename>")
@@ -1029,10 +1160,13 @@ def chat_endpoint():
             text,
             channel=body.get("channel") or "api_text",
             conversation_id=body.get("conversation_id") or "owner",
+            request_id=body.get("request_id"),
         )
         return jsonify(result.public_dict())
     except InvalidConferTurn as e:
         return jsonify({"reply": str(e)}), 400
+    except ConferOperationFailed as e:
+        return jsonify({"reply": str(e)}), 500
     except Exception as e:
         _log_file("chat_endpoint_error", str(e))
         return jsonify({"reply": f"CoS error: {e}"}), 500
@@ -1064,6 +1198,15 @@ def loops_status():
     with _loop_lock:
         snap = {k: dict(v) for k, v in _loop_state.items()}
     return jsonify(snap)
+
+
+@app.route("/costs/model-gateway")
+def model_gateway_costs():
+    """Read-only sanitized cost and routing checkpoint for COS."""
+    return jsonify(checkpoint_from_files(
+        MODEL_GATEWAY_RECEIPT_FILE,
+        MODEL_GATEWAY_COST_POLICY_FILE,
+    ))
 
 
 # ── Web UI data helpers ───────────────────────────────────────────────────────
@@ -1169,6 +1312,9 @@ def ui_send():
             raise InvalidConferTurn(f"Unknown Confer channel: {channel!r}")
         voice_provider = None
         user_id = None
+        speech_output = body.get("speech_output", True)
+        if not isinstance(speech_output, bool):
+            raise InvalidConferTurn("speech_output must be true or false")
         if channel == "html_voice":
             user_id = resolve_user_id(request)
             if user_id is None:
@@ -1180,9 +1326,10 @@ def ui_send():
             text,
             channel=channel,
             conversation_id=body.get("conversation_id") or "owner",
+            request_id=body.get("request_id"),
         )
         payload = result.public_dict()
-        if voice_provider:
+        if voice_provider and speech_output:
             _spoken_replies.put(
                 result.turn_id,
                 text=result.reply,
@@ -1199,6 +1346,8 @@ def ui_send():
         return jsonify({"reply": str(e)}), 503
     except InvalidConferTurn as e:
         return jsonify({"reply": str(e)}), 400
+    except ConferOperationFailed as e:
+        return jsonify({"reply": str(e)}), 500
     except Exception as e:
         _log_file("ui_send_error", str(e))
         return jsonify({"reply": f"CoS error: {e}"}), 500
@@ -1387,10 +1536,10 @@ def _start_cos():
     else:
         print("   DB: unavailable — queue_recommendation will use file fallback")
 
-    # 2. Initialize backend (GrokBackend wrapping the Grok API call)
+    # 2. Initialize the configured swappable conversation backend.
     try:
         init_backend()
-        print("   Backend: GrokBackend initialized ✅")
+        print(f"   Backend: {_backend.backend_label} initialized ✅")
     except Exception as e:
         print(f"   ⚠️  Backend init failed: {e} — chat will fail")
 
@@ -1436,6 +1585,12 @@ def _start_cos():
         lambda: _run_loop("loop_h", _check_ec2_health),
         "interval", minutes=30, id="loop_h", misfire_grace_time=300
     )
+    # Loop I — daily gateway cost and fallback checkpoint. It reports and
+    # recommends only; it cannot mutate budgets, routes, or infrastructure.
+    scheduler.add_job(
+        lambda: _run_loop("loop_i", _run_model_gateway_cost_checkpoint),
+        "cron", hour=7, minute=45, id="loop_i", misfire_grace_time=600
+    )
 
     if loops_ok:
         # Loop A — twice daily
@@ -1458,9 +1613,9 @@ def _start_cos():
             lambda: _run_loop("loop_d", run_novelty_watch),
             "cron", day="1,15", hour=8, id="loop_d", misfire_grace_time=600
         )
-        print("   Scheduler: loop_a(6+18h) loop_b(Sun 9h) loop_c(Sun 10h) loop_d(1st+15th 8h) loop_f(daily 7:30) loop_g(hourly) loop_h(30min) ✅")
+        print("   Scheduler: loop_a(6+18h) loop_b(Sun 9h) loop_c(Sun 10h) loop_d(1st+15th 8h) loop_f(daily 7:30) loop_g(hourly) loop_h(30min) loop_i(daily 7:45) ✅")
     else:
-        print("   Scheduler: loop_f(daily 7:30) loop_g(hourly) loop_h(30min) ✅ — loop_a/b/c/d disabled (import error)")
+        print("   Scheduler: loop_f(daily 7:30) loop_g(hourly) loop_h(30min) loop_i(daily 7:45) ✅ — loop_a/b/c/d disabled (import error)")
 
     scheduler.start()
 

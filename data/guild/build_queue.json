@@ -1008,5 +1008,38 @@
     "blocked_reason": null,
     "last_transition_at": "2026-07-31T14:14:26Z",
     "notes": "Build authorized 2026-07-31. Phase 1 implements a shared Playwright capture and image-production pipeline, proven first with a Portuguese mobile reading flow. Robert may choose current content and perform authentic actions through declared operator pauses; validation, screenshots, filenames, PNG/WebP output, manifest, contact sheet, review page, reporting, and diagnostics are repeatable and automatic. Portuguese/German may use a guest profile; Curator, Guild, and Chief of Staff require an owner-session profile in later rollout. No article pinning, production capture, public viewer changes, video, or voice recording. Current tour remains until generated assets and the implementation diff are separately approved."
+  },
+  {
+    "id": 148,
+    "spec_title": "Shared LiteLLM Model Gateway",
+    "spec_file": "spec_shared_litellm_model_gateway_2026-08-15.md",
+    "status": "in_build",
+    "github_issue": null,
+    "priority": "high",
+    "blocked_reason": null,
+    "last_transition_at": "2026-08-15T00:00:00Z",
+    "notes": "Reusable provider-routing, fallback, health, and cost layer. Local gateway, COS Agent A integration, bounded search adapter, receipts, and cost checkpoints implemented on the COS release branch; awaiting reviewed-diff and production promotion gates."
+  },
+  {
+    "id": 149,
+    "spec_title": "Shared Voice Interaction Standard",
+    "spec_file": "spec_shared_voice_interaction_standard_2026-08-15.md",
+    "status": "in_build",
+    "github_issue": null,
+    "priority": "high",
+    "blocked_reason": null,
+    "last_transition_at": "2026-08-16T00:00:00Z",
+    "notes": "Shared conversation, memo, and command-mode contract. COS now uses the proven Gespräche/Conversas realtime pattern with configurable OpenAI or Grok voice, barge-in, transcript-after-stop, and bounded Agent A/note tools. Robert completed real-microphone acceptance on 2026-08-16; awaiting reviewed-diff and production promotion gates."
+  },
+  {
+    "id": 150,
+    "spec_title": "COS Conversation Memory, Privacy, and Natural Capture Intents",
+    "spec_file": "spec_cos_conversation_memory_privacy_and_intents_2026-08-16.md",
+    "status": "spec_ready",
+    "github_issue": null,
+    "priority": "high",
+    "blocked_reason": "Implementation requires Robert's decisions on raw retention, distilled-summary lifetime, backup deletion expectations, supported OpenClaw session cleanup, and agenda/research store boundaries.",
+    "last_transition_at": "2026-08-16T00:00:00Z",
+    "notes": "Follow-up after COS Agent A beta. Locks JSON-first/database-projection-second unless an explicit design decision says otherwise; specifies provider-neutral conversation storage, retention classes, deletion/off-record controls, natural capture intents, verified receipts, and phased delivery. Not authorized for implementation."
   }
 ]

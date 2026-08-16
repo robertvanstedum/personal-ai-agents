@@ -9,5 +9,6 @@ COPY core/ core/
 COPY utils/ utils/
 COPY domains/guild/ domains/guild/
 COPY domains/cos/ domains/cos/
+COPY services/model_gateway/ services/model_gateway/
 
 CMD ["python", "core/telegram/telegram_cos_bot.py"]

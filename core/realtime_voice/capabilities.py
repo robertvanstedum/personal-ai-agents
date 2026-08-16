@@ -54,15 +54,11 @@ _CAPABILITIES = {
         streaming_transcription=True,
         streaming_speech=True,
         browser_transport="websocket",
-        browser_direct_ephemeral_auth=False,
-        server_proxy_required=True,
+        browser_direct_ephemeral_auth=True,
+        server_proxy_required=False,
         supported_locales=("de-AT", "en-US", "pt-BR"),
         memo_available=False,
-        agent_conversation_available=False,
-        unavailable_reason=(
-            "xAI chained STT/TTS requires a secure server-side WebSocket proxy; "
-            "browser-direct authentication is not supported"
-        ),
+        agent_conversation_available=True,
     ),
 }
 

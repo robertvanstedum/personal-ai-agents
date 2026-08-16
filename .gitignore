@@ -112,6 +112,7 @@ logs/
 
 # Agent logs — host-mounted data on EC2, not tracked in repo
 agent_logs/
+data/model_gateway_receipts.jsonl
 
 # Cloudflare Wrangler local cache
 .wrangler/
