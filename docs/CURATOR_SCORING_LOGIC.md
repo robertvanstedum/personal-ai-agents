@@ -1,6 +1,6 @@
 # Curator Scoring Logic
-**Version:** 1.1
-**Last updated:** 2026-05-27
+**Version:** 1.2
+**Last updated:** 2026-08-17
 **Owner:** Robert Van Stedum
 **Code file:** `curator_rss_v2.py`, `curator_sources.json`
 
@@ -68,8 +68,8 @@ Saves Grok API tokens by not scoring low-quality content.
 
 ## Stage 4 — Grok Scoring
 
-**Model:** `grok-4-1-fast-reasoning` via xAI API
-**Temperature:** 1.0
+**Model:** `grok-4.3` via xAI API
+**Temperature:** 0.7 in both production cron wrappers
 **Output:** Raw score 0–10 per article + category label
 
 **Score guidance given to Grok:**

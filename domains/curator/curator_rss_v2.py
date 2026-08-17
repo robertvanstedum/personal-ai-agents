@@ -11,23 +11,25 @@ CHANGES from V1:
 - Ready for AI enhancement (Haiku pre-filter → Sonnet ranking)
 
 MODES:
-- mechanical: Keyword-based categories + scoring (FREE, always works)
-- ai: Single-stage Haiku scoring (~$0.20/day = $6/month)
-- ai-two-stage: Haiku pre-filter → Sonnet ranking (~$0.90/day = $27/month)
-- hybrid: Blend mechanical + AI with confidence weighting (Phase 2.2, not yet implemented)
+- ollama: Local scoring (no per-token API charge)
+- xai: Single-stage Grok 4.3 scoring (production default)
+- haiku: Single-stage Claude Haiku 4.5 scoring
+- sonnet: Haiku 4.5 pre-filter → Sonnet 4.5 ranking
 
-COST COMPARISON:
-- ollama: $0/month (free, local Ollama/phi)
-- xai: $0.18/day ($5.40/month, grok-3-mini)
-- sonnet: $0.90/day ($27/month, claude-sonnet-4, premium quality)
+COST NOTES:
+- ollama has no per-token API charge; host compute is not included
+- xAI production runs currently cost about $0.07–$0.09 per run
+- cloud alternatives vary with the number and size of candidates
 
 USAGE:
   python curator_rss_v2.py [options]
 
   Options:
-    --model=ollama       Use local Ollama/phi (default: FREE)
-    --model=xai          Use xAI grok-3-mini ($0.18/day - RECOMMENDED)
-    --model=sonnet       Use Anthropic claude-sonnet-4 (premium, $0.90/day)
+    --model=ollama       Use the configured local Ollama model
+    --model=xai          Use xAI Grok 4.3 (production default)
+    --model=grok-4.3     Explicit alias for the production xAI model
+    --model=haiku        Use Anthropic Claude Haiku 4.5
+    --model=sonnet       Use Anthropic Claude Sonnet 4.5
     
     --dry-run            Preview without saving (output to curator_preview.html)
                          Buttons disabled, no archive/history updates
@@ -42,7 +44,7 @@ USAGE:
     # Free local test (dry run)
     python curator_rss_v2.py --dry-run --model=ollama
     
-    # Production default (xAI grok-3-mini)
+    # Production default (xAI Grok 4.3)
     python curator_rss_v2.py --model=xai --telegram
     
     # Evaluate Sonnet quality (dry run)
@@ -77,6 +79,7 @@ sys.path.insert(0, str(REPO_ROOT))    # utils.role import below
 
 from curator_config import ACTIVE_DOMAIN
 from curator_utils import get_telegram_token, send_telegram_alert
+from core.get_secret import get_secret
 from utils.role import is_production as _is_production
 
 # Curator user data directory — same convention as curator_server.py and curator_feedback.py.
@@ -88,6 +91,50 @@ _DATA_DIR.mkdir(parents=True, exist_ok=True)
 # Cost logger — persists per-run API costs for cost_report.py
 # ---------------------------------------------------------------------------
 _COST_LOG = REPO_ROOT / 'curator_costs.json'
+
+# Current xAI production model and standard token rates. Keep the requested model
+# explicit: retired aliases can continue resolving while silently changing price
+# and behavior at the provider boundary.
+XAI_RANKING_MODEL = "grok-4.3"
+XAI_INPUT_USD_PER_MILLION = 1.25
+XAI_OUTPUT_USD_PER_MILLION = 2.50
+HAIKU_INPUT_USD_PER_MILLION = 1.00
+HAIKU_OUTPUT_USD_PER_MILLION = 5.00
+
+SCORING_MODE_MAP = {
+    'ollama': 'mechanical',
+    'xai': 'xai',
+    XAI_RANKING_MODEL: 'xai',
+    'haiku': 'ai',
+    'sonnet': 'ai-two-stage',
+}
+
+
+def calculate_xai_cost(input_tokens: int, output_tokens: int) -> float:
+    """Return the current standard token cost for the production xAI model."""
+    return (
+        input_tokens * XAI_INPUT_USD_PER_MILLION / 1_000_000
+        + output_tokens * XAI_OUTPUT_USD_PER_MILLION / 1_000_000
+    )
+
+
+def calculate_haiku_cost(input_tokens: int, output_tokens: int) -> float:
+    """Return Claude Haiku 4.5 cost at current standard token rates."""
+    return (
+        input_tokens * HAIKU_INPUT_USD_PER_MILLION / 1_000_000
+        + output_tokens * HAIKU_OUTPUT_USD_PER_MILLION / 1_000_000
+    )
+
+
+def resolve_scoring_mode(model: str) -> str:
+    """Resolve a supported CLI model name without silently accepting typos."""
+    try:
+        return SCORING_MODE_MAP[model]
+    except KeyError as error:
+        supported = ", ".join(SCORING_MODE_MAP)
+        raise ValueError(
+            f"Unsupported Curator model {model!r}. Supported values: {supported}"
+        ) from error
 
 def log_curator_cost(model: str, use_type: str, input_tokens: int, output_tokens: int, cost_usd: float):
     """Append one cost record to the curator cost log."""
@@ -437,29 +484,14 @@ def get_anthropic_api_key() -> str:
     return ""
 
 def get_xai_api_key() -> str:
+    """Resolve xAI through the platform credential contract.
+
+    Production receives ``XAI_API_KEY`` from the authoritative
+    ``/minimoi/production/xai_api_key`` SSM parameter through the deployment
+    secret-sync step. Dev may use its environment or the ``xai/api_key``
+    Keychain entry. No OpenClaw state file is part of this contract.
     """
-    Get xAI API key from (in priority order):
-    1. macOS Keychain (via keyring)
-    2. Environment variable XAI_API_KEY
-    3. .env file
-    
-    Returns empty string if not found.
-    """
-    # Try keychain first (most secure)
-    try:
-        import keyring
-        api_key = keyring.get_password("xai", "api_key")
-        if api_key:
-            return api_key
-    except Exception as e:
-        pass  # Keychain not available or error
-    
-    # Try environment variable (from .env or shell)
-    api_key = os.environ.get('XAI_API_KEY')
-    if api_key:
-        return api_key
-    
-    return ""
+    return get_secret("XAI_API_KEY", "xai", "api_key")
 
 def log_error(error_type: str, error_msg: str, context: str = ""):
     """
@@ -623,8 +655,8 @@ ARTICLES:
         input_tokens = response.usage.input_tokens
         output_tokens = response.usage.output_tokens
         
-        # Haiku pricing: $0.80/MTok input, $4.00/MTok output (as of Dec 2024)
-        cost = (input_tokens / 1_000_000 * 0.80) + (output_tokens / 1_000_000 * 4.00)
+        # Claude Haiku 4.5 standard pricing, reviewed 2026-08-17.
+        cost = calculate_haiku_cost(input_tokens, output_tokens)
         print(f"   💰 Haiku cost: ${cost:.4f} ({input_tokens:,} in + {output_tokens:,} out tokens)")
         log_curator_cost('claude-haiku', 'curator', input_tokens, output_tokens, cost)
         
@@ -817,7 +849,7 @@ ARTICLES:
         # Report costs
         input_tokens = response.usage.input_tokens
         output_tokens = response.usage.output_tokens
-        cost = (input_tokens / 1_000_000 * 0.80) + (output_tokens / 1_000_000 * 4.00)
+        cost = calculate_haiku_cost(input_tokens, output_tokens)
         
         print(f"   ✅ Stage 1 complete: {len(filtered)} candidates selected")
         print(f"   💰 Stage 1 cost: ${cost:.4f} ({input_tokens:,} in + {output_tokens:,} out)")
@@ -951,7 +983,7 @@ ARTICLES:
             raise
 
 
-def score_entries_xai(entries: List[Dict], fallback_on_error: bool = False, user_profile: str = "", model: str = "grok-4-1-fast-reasoning", temperature: float = 0.0) -> List[Dict]:
+def score_entries_xai(entries: List[Dict], fallback_on_error: bool = False, user_profile: str = "", model: str = XAI_RANKING_MODEL, temperature: float = 0.0) -> List[Dict]:
     """
     Score all entries using xAI Grok (batch processing)
     
@@ -959,39 +991,41 @@ def score_entries_xai(entries: List[Dict], fallback_on_error: bool = False, user
         entries: List of article entries
         fallback_on_error: If True, silently fall back to mechanical on API errors
         user_profile: User preference profile text
-        model: xAI model to use (grok-3-mini or grok-4-1-fast-reasoning)
+        model: xAI model to use. Production uses grok-4.3 explicitly.
     
     Returns list of dicts with 'score', 'category', 'method' = 'xai'
     """
-    from openai import OpenAI
     import json
     
-    # Get xAI API key from auth profiles
-    api_key = None
+    # Use the shared platform secret contract; Curator must not depend on an
+    # OpenClaw-managed state file merely because both happen to use xAI.
     try:
-        with open(os.path.expanduser('~/.openclaw/agents/main/agent/auth-profiles.json'), 'r') as f:
-            config = json.load(f)
-            api_key = config['profiles']['xai:default']['key']
+        api_key = get_xai_api_key()
     except Exception as e:
         error_msg = f"""
-❌ xAI API key not found in OpenClaw auth profiles!
+❌ xAI API key could not be resolved through the platform credential helper!
 
 Error: {e}
 
 To fix:
-  Check ~/.openclaw/agents/main/agent/auth-profiles.json
-  Ensure 'xai:default' profile exists with valid key
+  Production: verify /minimoi/production/xai_api_key and rerun the secret-sync step
+  Dev: set XAI_API_KEY or the xai/api_key Keychain entry
 
 To test with mechanical mode instead:
   python curator_rss_v2.py --model=ollama
 """
         if fallback_on_error:
-            print("⚠️  xAI API key not found, falling back to mechanical")
+            print("⚠️  xAI API key unavailable, falling back to mechanical")
             return [score_entry_mechanical(e) for e in entries]
         else:
             print(error_msg)
-            raise ValueError("xAI API key not found")
-    
+            raise ValueError("xAI API key unavailable through platform credential helper")
+
+    # Import the optional OpenAI-compatible client only after credential
+    # resolution succeeds. This keeps the documented mechanical fallback
+    # available in minimal environments where the cloud client is absent.
+    from openai import OpenAI
+
     client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
 
     # Build prompt with Grok's optimized instructions
@@ -1052,10 +1086,12 @@ ARTICLES:
         
         content = response.choices[0].message.content
         usage = response.usage
+        effective_model = getattr(response, "model", None) or model
         print(f"   Input: {usage.prompt_tokens} tokens, Output: {usage.completion_tokens} tokens")
-        cost = usage.prompt_tokens * 5 / 1_000_000 + usage.completion_tokens * 15 / 1_000_000
+        cost = calculate_xai_cost(usage.prompt_tokens, usage.completion_tokens)
+        print(f"   Effective model: {effective_model}")
         print(f"   Cost: ${cost:.4f}")
-        log_curator_cost(f'xai-{model}', 'curator', usage.prompt_tokens, usage.completion_tokens, cost)
+        log_curator_cost(f'xai-{effective_model}', 'curator', usage.prompt_tokens, usage.completion_tokens, cost)
         
     except Exception as e:
         error_msg = f"""
@@ -1696,7 +1732,7 @@ def find_radar_articles(pool: List[Dict], top_ids: set, topic_tags: dict,
 
 
 def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanical',
-           fallback_on_error: bool = False, xai_model: str = 'grok-4-1-fast-reasoning',
+           fallback_on_error: bool = False, xai_model: str = XAI_RANKING_MODEL,
            temperature: float = 0.0, return_pool: bool = False):
     """
     Fetch all feeds, score, rank, return top N.
@@ -1708,7 +1744,7 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
         fallback_on_error: Auto-fallback to mechanical if API fails
         return_pool: If True, return (top_articles, all_scored_entries) tuple
                      instead of just top_articles. Used by dormant-section routing.
-        xai_model: Which xAI model to use ('grok-3-mini' or 'grok-4-1-fast-reasoning')
+        xai_model: Which xAI model to use. Production uses grok-4.3.
     
     MODES:
     - mechanical: Fast, free, keyword-based
@@ -1818,7 +1854,7 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
             entry["method"] = results[i]['method']
             entry["raw_score"] = results[i].get('raw_score', entry["score"])  # AI doesn't have raw_score
     elif mode == 'xai':
-        # Single-stage xAI Grok scoring (grok-3-mini or grok-4-1-fast-reasoning)
+        # Single-stage xAI Grok scoring.
         results = score_entries_xai(all_entries, fallback_on_error=fallback_on_error, user_profile=user_profile, model=xai_model, temperature=temperature)
         for i, entry in enumerate(all_entries):
             entry["score"] = results[i]['score']
@@ -2101,8 +2137,10 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
     # Map model names to display names
     model_display_map = {
         'ollama': 'ollama/phi',
-        'xai': 'grok-3-mini',
-        'sonnet': 'claude-sonnet-4'
+        'xai': XAI_RANKING_MODEL,
+        'grok-4.3': XAI_RANKING_MODEL,
+        'haiku': 'claude-haiku-4-5',
+        'sonnet': 'claude-sonnet-4-5',
     }
     model_display = model_display_map.get(model, model)
     
@@ -3335,27 +3373,21 @@ def main():
     dry_run = "--dry-run" in sys.argv
 
     # Model selection (default: xai)
-    # --model=[ollama|xai|sonnet] controls which LLM is used
+    # --model=[ollama|xai|grok-4.3|haiku|sonnet] controls which scorer is used.
     model = 'xai'
     for arg in sys.argv:
         if arg.startswith('--model='):
             model = arg.split('=')[1]
             break
 
-    # Map --model= flag to internal scoring mode
-    mode_map = {
-        'ollama': 'mechanical',   # Free local, keyword-based
-        'xai':    'xai',          # xAI Grok-4-1-fast-reasoning (~$0.15/day) — production default
-        'grok-4-1': 'xai',        # xAI Grok-4-1-fast-reasoning (NEW - faster, better reasoning)
-        'haiku':  'ai',           # Anthropic Haiku (~$0.20/day) — single-stage
-        'sonnet': 'ai-two-stage', # Anthropic Haiku pre-filter + Sonnet ranking (~$0.90/day)
-    }
-    mode = mode_map.get(model, 'xai')  # Default: xai
+    # Resolve explicitly so a typo cannot silently select a different model.
+    try:
+        mode = resolve_scoring_mode(model)
+    except ValueError as error:
+        print(f"\n💥 {error}")
+        sys.exit(2)
     
-    # For grok-4-1, we need to track which xAI model variant to use
-    xai_model_variant = 'grok-4-1-fast-reasoning'  # default
-    if model == 'grok-4-1':
-        xai_model_variant = 'grok-4-1-fast-reasoning'
+    xai_model_variant = XAI_RANKING_MODEL
 
     # Temperature setting (default: 0 for deterministic production runs)
     # Temperature 1.0 — wider selection, A/B test vs 0.7 (week of Mar 11, 2026)
@@ -3401,7 +3433,7 @@ def main():
                 source=article["source"],
                 category=article.get("category", "other"),
                 score=article["score"],
-                model=model,
+                model=xai_model_variant if mode == 'xai' else model,
                 url=article.get("link"),
                 rank=rank,
                 metadata={
@@ -3591,7 +3623,7 @@ def main():
     if not dry_run:
         try:
             if top_articles:
-                top_articles[0]['briefing_model'] = xai_model_variant if model == 'grok-4-1' else model
+                top_articles[0]['briefing_model'] = xai_model_variant if mode == 'xai' else model
                 # Persist the generation date with the briefing itself. Host
                 # wrappers may still stamp it for compatibility, but the web UI
                 # and AI Observations must not depend on a later Telegram step.

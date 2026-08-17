@@ -86,7 +86,7 @@ def test_build_receipt_ignores_uncorrelated_calls():
     callback = _load_callback_module()
     moment = datetime(2026, 8, 15, 20, 0, tzinfo=timezone.utc)
     kwargs = {
-        "model": "xai/grok-4",
+        "model": "xai/grok-4.3",
         "messages": [{"role": "user", "content": "ordinary call"}],
     }
 
@@ -100,11 +100,11 @@ def test_build_receipt_accounts_for_bounded_search_without_retaining_content():
     start = datetime(2026, 8, 15, 20, 0, tzinfo=timezone.utc)
     end = start + timedelta(milliseconds=400)
     kwargs = {
-        "model": "xai/grok-4-1-fast",
+        "model": "xai/grok-4.3",
         "litellm_params": {
             "model_info": {
                 "id": "cos-xai-bounded-web-search",
-                "base_model": "xai/grok-4-1-fast",
+                "base_model": "xai/grok-4.3",
             },
             "proxy_server_request": {
                 "body": {"input": private_query},
@@ -128,7 +128,7 @@ def test_build_receipt_accounts_for_bounded_search_without_retaining_content():
     assert receipt["logical_model"] == "minimoi-cos-web-search"
     assert receipt["deployment_id"] == "cos-xai-bounded-web-search"
     assert receipt["served_provider"] == "xai"
-    assert receipt["served_model"] == "xai/grok-4-1-fast"
+    assert receipt["served_model"] == "xai/grok-4.3"
     assert receipt["input_tokens"] == 120
     assert receipt["output_tokens"] == 30
     assert receipt["total_tokens"] == 150

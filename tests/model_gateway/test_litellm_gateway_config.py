@@ -36,9 +36,9 @@ def test_gateway_has_one_logical_primary_and_ordered_fallbacks():
     }
 
     assert deployments == {
-        "minimoi-cos-agent": "xai/grok-4",
-        "minimoi-cos-agent-xai-fast": "xai/grok-4-1-fast",
-        "minimoi-cos-web-search": "xai/grok-4-1-fast",
+        "minimoi-cos-agent": "xai/grok-4.3",
+        "minimoi-cos-agent-xai-fast": "xai/grok-4.3",
+        "minimoi-cos-web-search": "xai/grok-4.3",
         "minimoi-cos-agent-anthropic": "anthropic/claude-sonnet-4-6",
         "minimoi-cos-agent-local": "ollama_chat/qwen3:4b",
     }
@@ -118,7 +118,7 @@ def test_bounded_search_uses_gateway_credential_boundary():
         / "docker/cos-agent-a/plugins/cos-bounded-search/index.ts"
     ).read_text()
 
-    assert search_route["litellm_params"]["model"] == "xai/grok-4-1-fast"
+    assert search_route["litellm_params"]["model"] == "xai/grok-4.3"
     assert search_route["model_info"]["supports_web_search"] is True
     assert '"provider": "minimoi"' in agent_config
     assert "minimoi-cos-web-search" in plugin

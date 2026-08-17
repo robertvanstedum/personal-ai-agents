@@ -114,7 +114,7 @@ def run_curator_scout() -> dict:
             )
             try:
                 resp = client.chat.completions.create(
-                    model="grok-4-1-fast-reasoning",
+                    model="grok-4.3",
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.2,
                 )

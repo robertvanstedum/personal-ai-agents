@@ -969,7 +969,7 @@
     "id": 140,
     "spec_title": "Repository Application Reorganization Phase 2",
     "spec_file": "spec_repository_application_reorganization_phase2_2026-07-21.md",
-    "status": "in_build",
+    "status": "done",
     "github_issue": null,
     "priority": "normal",
     "blocked_reason": null,
@@ -1013,23 +1013,23 @@
     "id": 148,
     "spec_title": "Shared LiteLLM Model Gateway",
     "spec_file": "spec_shared_litellm_model_gateway_2026-08-15.md",
-    "status": "in_build",
+    "status": "done",
     "github_issue": null,
     "priority": "high",
     "blocked_reason": null,
     "last_transition_at": "2026-08-15T00:00:00Z",
-    "notes": "Reusable provider-routing, fallback, health, and cost layer. Local gateway, COS Agent A integration, bounded search adapter, receipts, and cost checkpoints implemented on the COS release branch; awaiting reviewed-diff and production promotion gates."
+    "notes": "Production beta live and accepted 2026-08-16. Reusable provider routing, fallback, health, bounded search adapter, receipts, and cost checkpoints are running for COS Agent A. Rollout to other domains remains separately specified follow-up work."
   },
   {
     "id": 149,
     "spec_title": "Shared Voice Interaction Standard",
     "spec_file": "spec_shared_voice_interaction_standard_2026-08-15.md",
-    "status": "in_build",
+    "status": "done",
     "github_issue": null,
     "priority": "high",
     "blocked_reason": null,
     "last_transition_at": "2026-08-16T00:00:00Z",
-    "notes": "Shared conversation, memo, and command-mode contract. COS now uses the proven Gespräche/Conversas realtime pattern with configurable OpenAI or Grok voice, barge-in, transcript-after-stop, and bounded Agent A/note tools. Robert completed real-microphone acceptance on 2026-08-16; awaiting reviewed-diff and production promotion gates."
+    "notes": "Production beta live and accepted 2026-08-16. COS uses the proven Gespräche/Conversas realtime pattern with configurable OpenAI or Grok voice, barge-in, transcript-after-stop, and bounded Agent A/note tools. Robert completed the real-microphone production acceptance."
   },
   {
     "id": 150,
@@ -1041,5 +1041,27 @@
     "blocked_reason": "Implementation requires Robert's decisions on raw retention, distilled-summary lifetime, backup deletion expectations, supported OpenClaw session cleanup, and agenda/research store boundaries.",
     "last_transition_at": "2026-08-16T00:00:00Z",
     "notes": "Follow-up after COS Agent A beta. Locks JSON-first/database-projection-second unless an explicit design decision says otherwise; specifies provider-neutral conversation storage, retention classes, deletion/off-record controls, natural capture intents, verified receipts, and phased delivery. Not authorized for implementation."
+  },
+  {
+    "id": 151,
+    "spec_title": "Scoped Document and Domain Release Pipeline",
+    "spec_file": "spec_scoped_release_pipeline_2026-08-16.md",
+    "status": "in_build",
+    "github_issue": null,
+    "priority": "high",
+    "blocked_reason": null,
+    "last_transition_at": "2026-08-16T00:00:00Z",
+    "notes": "Separates document-only, domain-scoped, and full application releases. Explicit dependency mapping prevents unrelated domains from restarting, while unknown paths fall back safely to the full stack. Also moves image pruning after successful health checks and extends SSM execution/polling to 30 minutes. Dev implementation and regression verification complete; production review pending."
+  },
+  {
+    "id": 152,
+    "spec_title": "Defect: Curator xAI Credential Coupled to OpenClaw State",
+    "spec_file": null,
+    "status": "in_build",
+    "github_issue": null,
+    "priority": "high",
+    "blocked_reason": null,
+    "last_transition_at": "2026-08-17T00:00:00Z",
+    "notes": "Curator scoring bypassed the shared credential helper and read ~/.openclaw/agents/main/agent/auth-profiles.json directly. The review-branch fix resolves XAI_API_KEY through core.get_secret, aligned with /minimoi/production/xai_api_key and the deployment secret-sync step. Regression coverage passes; production release and verification remain pending."
   }
 ]

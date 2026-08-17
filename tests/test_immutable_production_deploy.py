@@ -32,21 +32,14 @@ def test_production_app_images_share_one_configurable_commit_tag():
         assert image.endswith(":${MINIMOI_IMAGE_TAG:-latest}")
 
 
-def test_main_workflow_exports_built_tag_before_pull_and_up():
+def test_scoped_deploy_exports_built_tag_before_pull_and_up():
     workflow = (ROOT / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
-    export = (
-        '"export MINIMOI_IMAGE_TAG='
-        "${{ needs.build-push.outputs.image_tag }}"
-        '",'
-    )
-    pull = '"docker-compose -f /opt/minimoi/docker-compose.prod.yml pull",'
-    up = (
-        '"docker-compose -f /opt/minimoi/docker-compose.prod.yml '
-        'up -d --remove-orphans",'
-    )
+    script = (ROOT / "scripts/operations/deploy_scoped_release.sh").read_text()
 
-    assert export in workflow
-    assert workflow.index(export) < workflow.index(pull) < workflow.index(up)
+    assert "deploy_scoped_release.sh ${{ needs.build-push.outputs.image_tag }}" in workflow
+    assert script.index('export MINIMOI_IMAGE_TAG="$IMAGE_TAG"') < script.index(
+        '"${COMPOSE[@]}" pull'
+    ) < script.index('"${COMPOSE[@]}" up -d --no-deps')
 
 
 def test_main_workflow_waits_for_compose_sync_before_deploying():
@@ -65,13 +58,23 @@ def test_main_workflow_waits_for_compose_sync_before_deploying():
 def test_remote_deploy_stops_on_failure_and_manages_unused_images():
     workflow = (ROOT / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
     deploy_step = workflow[workflow.index("- name: Deploy on EC2") :]
+    script = (ROOT / "scripts/operations/deploy_scoped_release.sh").read_text()
 
     assert '"set -e",' in deploy_step
-    assert '"docker image prune -af",' in deploy_step
-    assert deploy_step.index('"docker image prune -af",') < deploy_step.index(
-        '"docker-compose -f /opt/minimoi/docker-compose.prod.yml pull",'
-    )
-    assert "docker inspect --format={{.Config.Image}}" in deploy_step
+    assert "docker image prune -af" in script
+    assert script.index("docker image prune -af") > script.index("HEALTH_URLS")
+    assert "docker inspect --format='{{.Config.Image}}'" in script
+    assert "docker inspect --format='{{.State.Running}}'" in script
+
+
+def test_remote_deploy_allows_slow_image_pulls_before_timing_out():
+    workflow = (ROOT / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
+    deploy_step = workflow[workflow.index("- name: Deploy on EC2") :]
+
+    assert "--timeout-seconds 1800" in deploy_step
+    assert 'executionTimeout=["1800"]' in deploy_step
+    assert "for i in $(seq 1 180)" in deploy_step
+    assert "Deploy timed out after 30 minutes" in deploy_step
 
 
 def test_cos_images_can_import_shared_core_package():
@@ -81,7 +84,6 @@ def test_cos_images_can_import_shared_core_package():
 
 
 def test_remote_deploy_requires_cos_health():
-    workflow = (ROOT / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
-    deploy_step = workflow[workflow.index("- name: Deploy on EC2") :]
+    script = (ROOT / "scripts/operations/deploy_scoped_release.sh").read_text()
 
-    assert '"curl -sf http://localhost:8769/health || exit 1",' in deploy_step
+    assert '[cos-scheduler]="http://localhost:8769/health"' in script

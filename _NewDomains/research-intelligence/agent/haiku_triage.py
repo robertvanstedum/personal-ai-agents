@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Haiku triage for Session 001 source candidates.
-Model: claude-haiku-3-5-20241022
+Model: claude-haiku-4-5
 """
 
 import json
@@ -133,7 +133,7 @@ for c in candidates:
     )
     
     response = client.messages.create(
-        model="claude-3-haiku-20240307",
+        model="claude-haiku-4-5",
         max_tokens=200,
         messages=[{"role": "user", "content": prompt}]
     )

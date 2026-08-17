@@ -5,7 +5,8 @@
 # (issue #35 investigation, 2026-08-07) lived. The old native-venv version of
 # this script had real Keychain access and never hit that bug at all — it
 # only validated the idempotency-check fix, not the crash itself.
-# Model: xAI grok-4.3 (--model=grok-4.3) ~$0.30/day — fallback to mechanical if API down
+# Model: xAI grok-4.3 (--model=grok-4.3), typically ~$0.07-$0.09/day;
+# fallback to mechanical scoring if the API is unavailable.
 # Runs hourly via the existing launchd job (com.vanstedum.curator, StartInterval=3600).
 #
 # On/off toggle (default OFF):

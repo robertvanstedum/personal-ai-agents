@@ -3,6 +3,12 @@
 
 **Sources:** Three independent read-only code investigations by Claude Code (German, Portuguese, CoS/Guild — then Curator re-verification), each tracing every LLM/voice call site to file:line, cross-checked against each other. No code was changed producing any of this.
 
+**Resolution note, 2026-08-17:** The model-routing defect described below has been
+corrected on the current review branch. Active Grok 4.1 Fast aliases were replaced
+with explicit `grok-4.3`; Curator now recognizes the production CLI value and rejects
+unknown values; its xAI cost calculation now uses current Grok 4.3 rates. The July
+findings remain below as the evidence record of the condition before correction.
+
 ---
 
 ## Cross-cutting findings
@@ -114,7 +120,8 @@ The "verify production reality" principle (documented intent ≠ verified behavi
 1. **Is Curator's Deep Dive Challenger pattern, Guild's `ChallengerService`, and Research Intelligence's Synthesizer+Challenger framework one real capability or three separate things?** Needs direct code-level confirmation, not inference from naming/timing.
 2. **Does the platform depend on its orchestration agent, or does the agent depend on the platform?** March 2026 platform doc states the latter explicitly; the current agent's own self-description leans the other way. Needs an actual decision.
 3. **What is each of Curator's three Deep Dive-family scripts actually for?** Re-verify before writing any regression/cleanup spec — may be genuine feature distinctions (Scans/Deep Dive/Deeper Dive), not pure duplication.
-4. **Does the broken `--model=grok-4.3` production flag get reprioritized** now that it's freshly reconfirmed, or stay where it sits in the existing backlog (`spec_125`)?
+4. **Resolved 2026-08-17:** the broken `--model=grok-4.3` production flag was
+   corrected as part of the active-model retirement cleanup.
 
 ---
 

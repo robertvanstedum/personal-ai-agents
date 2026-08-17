@@ -206,7 +206,8 @@ const { port } = server.address();
 let browser;
 
 try {
-  browser = await chromium.launch({ headless: true });
+  const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined;
+  browser = await chromium.launch({ headless: true, executablePath });
   const page = await browser.newPage({
     viewport: { width: 1280, height: 900 },
     deviceScaleFactor: 1,

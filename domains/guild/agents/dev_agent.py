@@ -216,7 +216,7 @@ def classify_doc(file_path: str, content: str) -> dict:
             base_url="https://api.x.ai/v1",
         )
         resp = client.chat.completions.create(
-            model="grok-4-1-fast-reasoning",
+            model="grok-4.3",
             messages=[{"role": "user", "content": (
                 "Classify this mini-moi project document. "
                 "Return JSON only, no other text.\n\n"

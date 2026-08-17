@@ -89,14 +89,14 @@ def load_env():
 
 # ── Cost tracking ──────────────────────────────────────────────────────────────
 
-def track_cost(usage, model="claude-3-5-haiku-20241022"):
+def track_cost(usage, model="claude-haiku-4-5"):
     """Return USD cost for a single Haiku API call.
 
-    Pricing as of March 2026:
-      claude-3-5-haiku: $0.80/M input, $4.00/M output
+    Claude Haiku 4.5 standard pricing, reviewed 2026-08-17:
+      $1/M input, $5/M output.
     """
-    input_cost  = (usage.input_tokens  / 1_000_000) * 0.80
-    output_cost = (usage.output_tokens / 1_000_000) * 4.00
+    input_cost  = (usage.input_tokens  / 1_000_000) * 1.00
+    output_cost = (usage.output_tokens / 1_000_000) * 5.00
     return round(input_cost + output_cost, 6)
 
 
@@ -522,12 +522,12 @@ def main():
     ollama_model    = triage_cfg.get("primary", "ollama/gemma").split("/")[-1]
     ollama_endpoint = triage_cfg.get("ollama_endpoint", "http://localhost:11434/api/generate")
     ollama_timeout  = triage_cfg.get("ollama_timeout_seconds", 3)
-    haiku_model     = triage_cfg.get("fallback", "claude-3-5-haiku-20241022")
+    haiku_model     = triage_cfg.get("fallback", "claude-haiku-4-5")
     triage_temp     = cfg.get("models", {}).get("triage", {}).get("temperature", 0.0)
 
     # Translation config
     translation_cfg   = cfg.get("models", {}).get("translation", {})
-    translation_model = translation_cfg.get("model", "claude-3-5-haiku-20241022")
+    translation_model = translation_cfg.get("model", "claude-haiku-4-5")
     translation_temp  = translation_cfg.get("temperature", 0.3)
 
     # Search config

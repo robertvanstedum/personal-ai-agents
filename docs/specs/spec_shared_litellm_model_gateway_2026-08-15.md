@@ -1,7 +1,7 @@
 # Shared LiteLLM Model Gateway — Specification
 
 **Registered:** Build queue #148
-**Status:** Local G1/G2/G3 and COS bounded-search adapter implemented; awaiting Robert's diff review
+**Status:** COS production beta live and accepted; wider domain rollout remains follow-up
 **Date:** 2026-08-15  
 **Owner / decision point:** Robert  
 **Initial consumer:** Chief of Staff / COS Agent A  
@@ -163,8 +163,8 @@ agent group. It may later belong to a separately named chat-only group.
 
 The intended order is:
 
-1. `xai/grok-4`
-2. `xai/grok-4-1-fast`
+1. `xai/grok-4.3` with low reasoning
+2. `xai/grok-4.3` with reasoning disabled as the lower-latency xAI path
 3. `anthropic/claude-sonnet-4-6`
 4. accepted OpenAI model, disabled initially
 5. accepted tool-capable Ollama model for development

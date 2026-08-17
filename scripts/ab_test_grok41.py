@@ -2,6 +2,10 @@
 """
 A/B Test: grok-3-mini vs grok-4-1-fast-reasoning
 
+Historical harness only. Both compared model IDs are retired. The entry point is
+disabled so this retained experiment cannot make accidental paid calls through
+provider redirects.
+
 Scores the same recent article batch with both models.
 Generates comparison report showing:
 - Side-by-side rankings
@@ -185,6 +189,15 @@ ARTICLES:
 
 def main():
     """Run A/B test"""
+    print(
+        "This historical A/B harness is disabled: both model IDs are retired. "
+        "Create a new comparison with current explicit model IDs instead."
+    )
+    return 2
+
+
+def _historical_main():
+    """Retained June 2026 experiment implementation; do not call in automation."""
     print("=" * 70)
     print("🧪 A/B TEST: grok-3-mini vs grok-4-1-fast-reasoning")
     print("=" * 70)
@@ -347,4 +360,4 @@ def main():
     print("\n✅ A/B test complete!")
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

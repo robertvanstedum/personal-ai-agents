@@ -64,9 +64,9 @@ def _fail(msg: str):
 # Sonnet: $3.00 / 1M input, $15.00 / 1M output
 SONNET_COST_IN  = 3.00  / 1_000_000
 SONNET_COST_OUT = 15.00 / 1_000_000
-# Haiku:  $0.80 / 1M input,  $4.00 / 1M output
-HAIKU_COST_IN   = 0.80  / 1_000_000
-HAIKU_COST_OUT  = 4.00  / 1_000_000
+# Haiku 4.5: $1.00 / 1M input, $5.00 / 1M output
+HAIKU_COST_IN   = 1.00  / 1_000_000
+HAIKU_COST_OUT  = 5.00  / 1_000_000
 
 def compute_cost(tokens_in: int, tokens_out: int,
                  rate_in: float = SONNET_COST_IN,
@@ -265,7 +265,7 @@ def main():
     cfg         = load_config()
     model       = cfg.get("models", {}).get("synthesis", {}).get("model", "claude-sonnet-4-5")
     temp        = cfg.get("models", {}).get("synthesis", {}).get("temperature", 0.7)
-    haiku_model = cfg.get("triage_model", {}).get("fallback", "claude-3-5-haiku-20241022")
+    haiku_model = cfg.get("triage_model", {}).get("fallback", "claude-haiku-4-5")
     obs_dir     = ROOT / cfg.get("observations_dir", "data/observations")
 
     # ── Auth ──────────────────────────────────────────────────────────────────

@@ -40,7 +40,7 @@ def _backend(http_post, **overrides):
         gateway_url=overrides.get("gateway_url", "http://cos-agent-a:18789/v1"),
         gateway_token=overrides.get("gateway_token", "test-secret-token"),
         agent_id=overrides.get("agent_id", "cos-agent-a"),
-        model_label=overrides.get("model_label", "xai/grok-4"),
+        model_label=overrides.get("model_label", "xai/grok-4.3"),
         http_post=http_post,
     )
 
@@ -63,7 +63,7 @@ def test_success_uses_agent_target_opaque_session_and_platform_context():
 
     assert reply == "Olá, Robert."
     assert backend.backend_label == "COS Agent A (OpenClaw)"
-    assert backend.model_label == "xai/grok-4"
+    assert backend.model_label == "xai/grok-4.3"
     assert len(calls) == 1
     url, request = calls[0]
     assert url == "http://cos-agent-a:18789/v1/chat/completions"

@@ -2,7 +2,7 @@
 
 [Download the formatted PDF](ARCHITECTURE.pdf)
 
-*Maintained baseline, reviewed through 2026-07-21. This document separates the
+*Maintained baseline, reviewed through 2026-08-16. This document separates the
 design principles that have held since inception from the current implementation.
 It identifies where real growth has caused drift and ties each gap to follow-up work.*
 
@@ -64,34 +64,21 @@ interface. The laptop site supports more comfortable reading and commentary.
 Telegram, the original pre-UI channel, remains available for notifications and
 as an alternate path.
 
-**Mein Deutsch.** The German domain is built around simulated immersion rather
-than a course or coaching program. Unlike real-world immersion, its practice can
-be repeated and modified freely. It addresses three practical gaps: too few
-opportunities to speak; authentic reading that can become burdensome without
-well-placed support; and too few reasons to write something interesting in
-context and receive useful correction. Live voice conversation with AI personas
-(Gespräche) remains the central feature. Reading with contextual hints and
-translation (Lesen), writing with correction (Schreiben), vocabulary drills
-(Wörter), and the session archive (Archiv) reinforce one another around it.
-Human tutoring is supported alongside the AI practice. The domain also proved
-useful in real travel: difficult interactions could be recreated later as
-practice scenarios and repeated before the next encounter.
+**Mein Deutsch.** Inspired by an upcoming trip to Vienna and too few opportunities
+to speak German, this domain is built around immersion rather than fixed lessons.
+The learner chooses or designs AI personas and real-world scenes for unscripted
+conversation at an appropriate level of complexity. Reading and writing keep the
+context local and reinforce the loop. During the Vienna trip, unexpected
+communication challenges could be recreated as new scenes and relived later;
+activity and corrections then shape future practice.
 
-**Meu Português.** Portuguese was built as an intentional extension of the
-language architecture, with a third language already in view. Family members
-brought varied levels of fluency, exposure, and formal practice, along with a
-shared desire to maintain and develop their existing abilities. Each
-authenticated user has separate data, progress, and custom conversation
-personas.
-
-The first release deliberately emphasized the frontend, multi-user separation,
-and low-friction access. Features that require more setup or subscriptions, such
-as Anki generation and some mobile voice paths, were outside that initial scope.
-The implementation moved quickly so it could enter real family use and extend
-the broader mini-moi pattern beyond one language. The remaining differences
-from German reflect staged validation and intentionally different scope, not a
-failure to follow the German design. Convergence is still important before a
-third language is added.
+**Meu Português.** Portuguese fills a family need: maintaining a second language
+used at home across varying levels of proficiency. Brazilian-focused personas,
+scenes, and reading content support immersion without putting users into fixed
+levels. An advanced learner can choose a more demanding scenario and respond in
+more complex language; a novice can use simpler scenes, targeted drills,
+traditional vocabulary practice, hover translation, English tips, and speaking
+throughout. Each authenticated user has separate data and custom personas.
 
 **Guild.** Guild is the platform's workshop. Its three areas are **Build ·
 Operate · Improve**, and its working cycle is *spec → build → operate → improve*.
@@ -111,8 +98,10 @@ decisions, not only the task list; act within defined limits; watch across
 domains; surface unrequested but relevant information; and disagree when the
 evidence points away from the easy answer. Its current functions include a daily
 executive briefing, conversation, note-taking, and decision and action logs.
-Carrying intent with bounded authority is the longer-term role, and that work is
-still at an early stage.
+Carrying intent with bounded authority is the longer-term role. Its first agentic
+beta is now live: COS Agent A is an isolated, bounded runtime that handles typed
+conversation and can be consulted by the realtime voice surface. Explicit notes
+are written by the platform only after a verified mutation receipt.
 
 **All five domains emerged from actual use.** Each exists because it met a real
 need, and daily usefulness continues to drive focus and priority. This creates a
@@ -124,9 +113,9 @@ visible result of that rhythm, and the follow-up work is how it is corrected.
 
 | Domain(s)           | Maturity                                                                   | Key current gaps                                                                                                                                    |
 | ------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Curator             | Mature; daily production since Feb 2026                                    | Model override ignored (intended fallback still used); Deep Dive script consolidation; AI Observations automatic daily and weekly runs awaiting production verification |
-| German / Portuguese | Active twins; identical from the user's perspective, converging underneath | Bidirectional normalization before French; translation model choice not yet backend-configured; production Lesen refresh safe but not yet scheduled |
-| Guild / CoS         | Recently split; both in active redesign                                    | CoS partner layer just starting (Python-only today, bounded OpenClaw shortly); accumulate-then-synthesize pattern not yet extended here             |
+| Curator             | Mature; daily production since Feb 2026                                    | Model override ignored (intended fallback still used); Deep Dive script consolidation; observation responses do not yet close an automatic loop |
+| German / Portuguese | Active twins; identical from the user's perspective, converging underneath | Bidirectional normalization before French; translation model choice not yet backend-configured; Lesen refresh has two repeatedly failing sources |
+| Guild / CoS         | Separate domains; COS Agent A production beta live                         | Daily-use evaluation; conversation retention/privacy controls; broader cross-domain access; Guild Master Craftsman remains planned                 |
 
 ---
 
@@ -154,20 +143,15 @@ adopted if it performs better. This add-evaluate-switch cycle is normal operatio
 and bulk article filtering are not the same problem, and no provider is best at
 every task.
 
-**Independence:** the system is designed to retain a fully local path. It ran on
-local Ollama before any cloud model was used and should fall back to local
-operation at zero marginal cost if cloud providers become unavailable. As open
-models and local hardware improve, local inference is expected to handle more of
-the platform's work, including coding. Some call sites remain hard-coded; those
-gaps are documented below. `tests/test_local_llm.py` is part of the standard
-regression suite. On the development host, where a local model server is
-available, it makes a real call to the configured local model whenever the
-suite runs. The test protects end-to-end execution of the local inference
-path rather than measuring search or task quality. GitHub-hosted runners
-skip only this live call because they do not provide the machine-local
-model service. This keeps the zero-marginal-cost path exercised
-continuously and prevents it from silently degrading while cloud models
-handle production work.
+**Independence:** the system is designed to retain a fully local option. It ran
+on local Ollama before any cloud model was used. Today that option is exercised
+on the development Mac, where `tests/test_local_llm.py` makes a real call to the
+configured local model. GitHub-hosted runners skip that live call because they do
+not provide the machine-local service. The current CPU-only production host does
+not run Ollama, so production does not claim an automatic local fallback it
+cannot serve. Extending local inference to production requires suitable compute
+and an explicit operational design; it is a roadmap direction, not a current
+availability guarantee.
 
 **3. Swappable architecture, not merely swappable configuration.** Components
 should be replaceable without breaking the rest of the system. This is a
@@ -184,11 +168,11 @@ design, human review, build, human confirmation, and ship. It does not currently
 allow autonomous agent-to-agent execution. A July security remediation followed
 this process while finding and closing real cross-user data exposure risks.
 
-The principle can evolve without weakening. The planned next step is bounded
-agent-to-agent handoff, starting with CoS coordinating with Guild's
-Master Craftsman agent. CoS should notify the operator and gather information
-across agents, while the operator remains the final decision point. The goal is
-a single point of contact, not reduced control.
+The principle can evolve without weakening. Bounded handoffs may be tested only
+through explicit platform capabilities and approval gates. Guild's planned
+Master Craftsman remains a separate build-focused agent that communicates
+directly with Robert; CoS is neither its autonomous supervisor nor a required
+relay. Robert remains the decision point for both.
 
 **6. Extract shared code only after duplication has proved the pattern.** A new
 domain may begin by copying an existing implementation. Shared code should be
@@ -361,36 +345,39 @@ Not every stored response closes an automatic loop yet:
 | Research-thread wrap-up | Thread closes with a conclusion |
 | Response to an AI Observation | Stored in response memory; not automatically acted on yet |
 
-Tiered, purpose-fit model use, with real costs:
+Current model paths and available cost evidence:
 
-| Stage | Model | Cost | Config-driven? |
+| Capability | Current model path | Cost evidence | Selection |
 |---|---|---|---|
-| Daily ranking (production, single-stage) | `grok-4-1-fast-reasoning` | ~$0.314/run | Override ignored; intended fallback still used (see below) |
-| Two-stage alternate (pre-filter → rank) | Claude Haiku → Sonnet | ~$0.001 pre-filter | Selectable per run; not the live path |
-| Deep Dives | Claude Sonnet, on-demand | ~$0.25/session | No; hard-coded |
-| AI Observations (daily) | Claude Haiku | ~$0.005–0.01/run | No; hard-coded |
-| AI Observations (weekly) | Claude Sonnet, Sunday only | ~$0.07/week | No; hard-coded |
+| Daily ranking | xAI `grok-4.3` | 126 recorded runs average ~$0.074 when repriced at current rates; recent larger runs are about $0.09 | Explicit CLI value; validated, no silent fallback |
+| Single-stage alternate | Claude Haiku 4.5 | Not recently measured | Selectable per run; not production |
+| Two-stage alternate | Haiku 4.5 → Sonnet 4.5 | Haiku pre-filter averages ~$0.0013; full path not measured | Selectable per run; not production |
+| Article Scan | Claude Sonnet 4.5 | Observed artifacts are typically $0.013–$0.020 | Hard-coded |
+| Research triage | local Gemma 3 1B → Haiku 4.5 fallback | Local calls are $0; cloud fallback varies by session | Config-driven |
+| Research-session synthesis | Claude Sonnet 4.5 | Historical observation artifacts are about $0.004–$0.012 | Config-driven |
+| Deeper Dive closing synthesis | Opus 4.5 → Grok 4.3 challenge → Sonnet 4.6 final review → Opus 4.5 challenge | Existing $0.15–$0.32 artifact totals use stale Opus rates and omit the middle challenge calls; current total is not yet measured reliably | Mixed: Guild challenge models configured; Opus calls hard-coded |
+| AI Observations, daily | Claude Haiku 4.5, with call count driven by available inputs | Earlier ~$0.005–$0.01 estimate is not instrumented | Hard-coded |
+| AI Observations, weekly | Claude Sonnet 4.5, Sunday only | Earlier ~$0.07 estimate is not instrumented | Hard-coded |
 
-These costs are current evaluation points, not fixed targets. Model choices are
-reviewed continuously for both cost and output quality. The intent is to move
-work to lower-cost models when they meet the required quality threshold, while
-leaving current choices in place long enough to evaluate them reliably.
+Costs labeled *observed* come from stored token counts or generated artifacts.
+Other values remain estimates until those paths use the shared cost logger. Model
+choices are evaluated for both cost and output quality; a lower-cost model replaces
+another only when it meets the required quality threshold.
 
 **Local capability is real, proven, and deliberately retained.** The original
-architecture ran local-model calls in production. German's translation fallback
-still uses a live local provider as its final no-dependency option. Curator moved
-to cloud scoring after the per-run cost of a suitable cloud model became
-negligible. That was a convenience choice made possible by a quick backend swap,
-not a departure from the architecture.
+architecture ran local-model calls, and the development Mac still exercises a
+live Ollama path. German implements a local translation fallback where a local
+provider is available. The current production EC2 host does not run that provider,
+so the fallback is not a production availability claim. Curator moved to cloud
+scoring after the per-run cost of a suitable cloud model became negligible.
 
 One historical label remains from that change. The scoring script's free-tier
 mode is still called "ollama," although it currently uses keyword scoring rather
 than a live model. The label is imprecise; the behavior is intentional. The
-operational commitment remains that the system can return to local operation at
-zero marginal cost if cloud models become unavailable or too expensive. Re-verifying
-that swap end to end on the current EC2 environment is part of the planned model
-configuration work. It is a check on a proven capability, not a replacement for
-a missing one.
+architectural commitment remains that the platform retains a local option rather
+than binding personal context to one cloud provider. Re-verifying that option
+belongs on development or future appropriately sized infrastructure, not on the
+current CPU-only EC2 host.
 
 **AI Observations** is the platform's clearest working example of accumulating
 first and synthesizing later. Five observation types use model tiers matched to
@@ -401,25 +388,23 @@ before?* No other domain can answer that question about itself yet.
 
 This is also where the thinking-record goal becomes concrete. Observation
 responses, Deep Dive motivations, and reactions are the raw material of that
-record. The capability shipped and is proven historically, but it is not
-currently scheduled on EC2. Nothing invokes it in the EC2 cron, the Docker
-configuration, or the CoS scheduler. Restoring the schedule is an operations
-follow-up under Principle 7.
+record. The capability is scheduled on EC2. Production logs confirm automatic
+daily and Sunday weekly runs on 2026-08-16, with JSON outputs written and
+notifications sent. That verification closes the earlier uncertainty about
+whether the installed schedule actually produced results.
 
-**Current model-override gap.** Curator's `--model=` flag works for values it
-recognizes. Both production cron scripts currently pass an unrecognized value,
-so the override is ignored and the script uses its fallback default. That
-fallback still selects the intended production model, so there is no known
-impact on current Curator output. The gap is that the configured override cannot
-be relied on until the value is corrected. The defect is tracked and remains a
-clear example of Principle 7.
+**Current model selection.** Both production cron scripts pass
+`--model=grok-4.3`, and Curator now recognizes that value explicitly. Unknown
+model names fail validation instead of silently selecting the xAI default. The
+provider-reported effective model is written to the cost record, and the briefing
+stores the resolved model name.
 
-**Multi-model challenge capability.** Curator's Deep Dive pipeline supports one
-model drafting, other models cross-checking, and the first model reconciling the
-result. Live since June, it may overlap with Research Intelligence's
-Synthesizer+Challenger framework and Guild's `ChallengerService`. Direct
-confirmation is still needed. If they are the same underlying mechanism, the
-platform should give the capability one name and one home.
+**Multi-model challenge capability.** Curator's Deeper Dive closing path uses
+Opus for the first synthesis, Grok for a cross-provider challenge, Sonnet for the
+final review of that challenge, and Opus for the closing counter-analysis. The
+middle two calls use Guild's shared `ChallengerService`; the surrounding Opus
+calls remain in the Research Intelligence generator. The overlapping mechanisms
+still need consolidation under one name and one maintained implementation.
 
 **Known Deep Dive regression.** Several generation scripts coexist while the
 frontend offers Scans, Deep Dive, and Deeper Dive as related but distinct options.
@@ -483,12 +468,11 @@ The reviewer model choice is therefore surfaced in the UI, with one default and
 other providers one click away. The learner is the first to notice a drop in
 fluency and is best placed to switch.
 
-The current access paths involve a tradeoff. Exporting a persona prompt to a
-mobile model can provide the strongest voice experience, but copying, pasting,
-setup, and subscription requirements may confuse a new user. The in-browser path
-is easier to start but does not yet provide the same voice quality. Voice models,
-browser audio, and provider APIs are improving quickly, so this layer should
-remain adaptable and be revisited through the roadmap.
+The shared in-browser realtime path now provides selectable OpenAI and Grok voice
+with provider-owned turn detection, low-latency speech, and barge-in. It is the
+standard carried from Gespräche and Conversas into COS Confer. Provider quality
+can still vary, so model choice remains visible and swappable while transcripts
+and durable learning state stay platform-owned.
 
 The transcript pipeline separates concerns differently. Deterministic parsing
 normalizes the transcript first. A strong model then analyzes it and produces
@@ -589,62 +573,70 @@ flowchart TB
     style BOTTOM fill:transparent,stroke:transparent
 ```
 
-### CoS and Guild: separate roles, active redesign
+### CoS and Guild: separate roles; first bounded agent live
 
 ```mermaid
-flowchart TB
-    subgraph INPUTS[" "]
-        direction LR
-        A[external signals] --> B[scheduled loops<br/>fresh data only today]
-        C[build queue + specs]
-    end
-
-    subgraph REVIEW[" "]
-        direction LR
-        D[Chief of Staff<br/>daily briefing] --> F[operator review]
-        F --> G[approved changes<br/>update the build queue]
-        G --> E[(common memory)]
-    end
-
-    B --> D
-    C --> D
-    style INPUTS fill:transparent,stroke:transparent
-    style REVIEW fill:transparent,stroke:transparent
+flowchart LR
+    R[Robert<br/>typed Confer] --> P[COS platform<br/>identity + turn service]
+    P --> A[COS Agent A<br/>bounded OpenClaw runtime]
+    A --> G[LiteLLM gateway<br/>configurable route + receipts]
+    G --> M[cloud model]
+    A --> S[bounded search adapter<br/>up to 20 cited sources]
+    P --> N[(platform-owned<br/>notes and memory)]
+    V[Robert<br/>realtime voice] --> Q[OpenAI or Grok<br/>realtime provider]
+    Q -.allow-listed consult.-> P
+    Q -.verified note tool.-> N
 ```
 
-The common memory is not yet read by the scheduled loops. A revision returns to
-the briefing for another review; that return is stated here rather than drawn as
-a wide backward edge.
-
-The separation clarified what each domain is for; neither was broken. The
-description below is current direction rather than settled architecture. Guild
+The separation clarified what each domain is for; neither was broken. Guild
 owns visibility into specifications, build work, quality, and operations. CoS
 owns cross-domain coordination and judgment. Keeping the planned Master
 Craftsman inside Guild preserves that role boundary. It provides local access to
 build context without expanding CoS access or mixing build coordination into
 its broader responsibilities.
 
-**Current CoS implementation.** The chat backend and scheduled loops are ordinary
-Python code. No agent framework sits behind them yet. A bounded OpenClaw instance
-is planned as the Phase 1 agent layer. "Bounded" means restricted to mini-moi
-domains and the permission model below, not a general-purpose agent with
-unrestricted credentials. OpenClaw is intended to remain a swappable backend
-choice that is invisible to the user. Making that swap real is acknowledged
-integration work.
+**Current CoS implementation.** The platform owns authentication, session
+identity, note mutation, policy, and the stable turn interface. Typed Confer calls
+that interface and reaches COS Agent A, currently implemented as an isolated
+OpenClaw container. OpenClaw is the shell, not the domain: the name Agent A and
+the application-owned adapter keep a future runtime swap from changing CoS.
+
+Agent A reaches models through a shared LiteLLM gateway. Provider order is
+configuration, not hardcoded domain logic; the gateway records the served
+provider, model, fallback position, latency, and estimated cost. Development can
+include Ollama for private/local testing. Production currently uses configured
+cloud routes and does not claim a local fallback that the EC2 host cannot serve.
+AWS Bedrock remains a later provider option; GPU-oriented SGLang is deferred until
+usage justifies GPU cost.
+
+"Bounded" is concrete. The current search adapter accepts a query rather than an
+arbitrary URL, applies time and result bounds, returns as many as 20
+quality-relevant cited sources, and treats their contents as untrusted evidence.
+General browser, web-fetch, filesystem, runtime, messaging, and subagent tools are
+denied. This adapter is the documented OpenClaw coupling point and is covered by
+tests so a runtime upgrade cannot silently change the contract.
+
+**Voice is a distinct realtime path.** COS follows the proven Gespräche/Conversas
+conversation pattern. The user selects OpenAI or Grok voice; the provider owns
+turn detection, speech-to-speech latency, and barge-in. It may call only two COS
+capabilities: consult Agent A and save a note. The transcript is added to Confer
+after voice stops rather than competing visually with live speech. A successful
+note response is spoken only after the platform-owned write returns a receipt.
 
 The first partner tasks are deliberately practical: operations escalations, ad
-hoc questions, and notes about areas of the application. The partner role should
-be earned through real daily work before it expands. CoS already has a common
-memory repository with episodic, semantic, and procedural tiers. That memory is
-independent of the agent placed above it, so changing the agent should not reset
-the accumulated record.
+hoc questions, and explicit notes. The partner role should be earned through real
+daily work before it expands. Current durable memory is a platform-owned text/JSON
+note record, separate from Agent A. Richer episodic, semantic, and procedural
+memory remains design intent under the retention and privacy follow-up; it is not
+yet a completed repository.
 
 **The partner contract.** CoS follows a defined permission model: *propose freely,
-act within defined bounds, execute only with approval.* It may write to decision
-and action logs as part of normal operation, flag issues across domains, propose
-handoffs, retrieve documents, and file issues for identified defects. Writing to
-domain data, changing infrastructure, deploying, or executing a proposed handoff
-requires approval. Acting is bounded; informing is not.
+act only through explicitly exposed capabilities, and require approval where the
+capability says so.* In the beta it can converse, perform bounded cited search,
+and save a platform-owned note after a verified receipt. It cannot change domain
+data, infrastructure, deployments, repository files, or other agents. Decision
+logs, action logs, document retrieval, issue filing, and handoffs describe possible
+future platform capabilities, not permissions silently inherited by the agent.
 
 **The voice layer is designed for useful disagreement.** The standing identity
 is short and already live in production: direct, curious before certain,
@@ -654,29 +646,30 @@ conversation and judgment tasks such as chat, cross-domain health assessment,
 fit narratives, and novel suggestions. Mechanical operations and raw scoring
 remain accuracy-first. Partner is a mode, not a global override.
 
-**Current validation status.** The founding identity document defines explicit
+**Current validation status.** The bounded beta was promoted to production and
+Robert verified a real microphone conversation and note save on 2026-08-16. The
+founding identity document defines explicit
 success criteria, a two-to-three-week measurement period, and a subjective but
 decisive question: does the interaction feel like a working partner or a
 sophisticated tool? It also states the failure condition. If the result is
 indistinguishable from a well-prompted neutral agent, robotic agents are the
 better choice. The measurement has not run because the partner build is only
-starting. The design is ahead of the implementation, and this document treats
-it that way.
+starting its daily-use measurement. This is a meaningful agentic milestone, but
+not CoS 1.0: retention and deletion policy, natural capture intents, expanded
+domain access, and longer-term partner evaluation remain open.
 
-CoS is the first place planned bounded handoffs will be tested. The initial path
-is coordination with Guild's Master Craftsman agent. The operator should be able
-to ask CoS a question and let it gather information across agents instead of
-acting as the message bus personally. CoS is designed to inspect and communicate
-with any domain. It may instruct a domain only where that domain exposes an
-approved capability.
+Future read/consult access and bounded handoffs must preserve domain ownership.
+CoS may use only interfaces a domain deliberately exposes. The planned Master
+Craftsman is independently bounded inside Guild and reports directly to Robert;
+any later CoS-to-Guild exchange would be an optional, tested interface rather
+than a supervisory relationship.
 
-Four scheduled loops currently run: a twice-daily career scan and
-weekly-to-biweekly watches on language tooling, Curator's topic space, and
-competitive signals. Each loop evaluates only the external data fetched during
-that run. None reads the platform's accumulated memory before calling a model.
-Extending Curator's accumulate-and-synthesize pattern here is the next logical
-step because design queues, build status, and decisions need periodic
-reconciliation.
+Seven scheduler jobs currently run: a twice-daily career scan; weekly German and
+Curator watches; twice-monthly novelty watch; daily build-discipline check;
+hourly guest-access nudge; and 30-minute EC2 health check. Several evaluate fresh
+state without first reading accumulated memory. Extending Curator's
+accumulate-and-synthesize pattern remains a logical next step, but it must not
+blur the separate authority of CoS and Guild.
 
 ---
 
@@ -749,11 +742,8 @@ mechanism as Research Intelligence's Synthesizer+Challenger framework and Guild'
 
 1. **Instrumented live session.** Run a real end-to-end session with monitoring
    and document which code paths execute, what they do, and which paths never
-   fire. Static audits show what exists; this shows what is actually used. The
-   session must explicitly verify local-model operation in Curator. Confirm the
-   `--dry-run` local path and restore or verify the local-model fallback in
-   production scoring. Fully local operation at zero marginal cost is a founding
-   commitment, not an optional tier.
+   fire. Exercise the local-model path on the development host; production should
+   claim local fallback only after suitable compute and operations are provided.
 2. **Confirm or rule out** whether Curator's Deep Dive pipeline, Research
    Intelligence's `generate_dive.py`, and Guild's `ChallengerService` are the
    same underlying capability.
@@ -769,11 +759,12 @@ mechanism as Research Intelligence's Synthesizer+Challenger framework and Guild'
    directions before building French on the same template.
 7. **Move translation model choice into backend configuration.** Apply the
    change across both language domains after item 6.
-8. **Resolve the OpenClaw dependency direction.** Include the bounded
-   agent-to-agent handoff design, starting with CoS and the Guild build agent.
+8. **Exercise runtime swap boundaries.** OpenClaw now depends on the platform's
+   bounded interface. Prove that contract through upgrades and, later, a second
+   Agent Runtime implementation before claiming full runtime portability.
 9. **Build and measure the CoS partner layer.** The first work should remain
-   operations escalations, ad hoc tasks, questions, and notes, with a bounded
-   OpenClaw instance as the planned agent layer. Once the partner is in daily
+   operations escalations, ad hoc tasks, questions, and notes, with the bounded
+   Agent A beta now live. Once the partner is in daily
    use, run the founding two-to-three-week measurement. Compare before and after,
    track novel suggestions, and make the explicit "partner or tool" judgment.
    That process turns the design from documented intent into a validated or

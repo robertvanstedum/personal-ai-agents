@@ -115,9 +115,9 @@ _SPOKEN_NUMBERS = {
 # ─── LLM provider list ────────────────────────────────────────────────────────
 
 _LLM_PROVIDERS = [
-    # grok-4-1-fast: proven in production on Curator scoring; better German capability,
-    # lower latency for translation, writing correction, and phrase handling.
-    {"name": "grok-fast",    "type": "xai",       "model": "grok-4-1-fast"},
+    # grok-4.3: current xAI model used for translation, writing correction, and
+    # phrase handling. The older Grok 4.1 Fast alias was retired by xAI.
+    {"name": "grok-fast",    "type": "xai",       "model": "grok-4.3"},
     {"name": "claude-haiku", "type": "anthropic",  "model": "claude-haiku-4-5-20251001"},
     {"name": "ollama-gemma", "type": "ollama",     "model": "gemma3:1b"},
 ]

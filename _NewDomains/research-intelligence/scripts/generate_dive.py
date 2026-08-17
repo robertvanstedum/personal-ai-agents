@@ -302,8 +302,8 @@ def run_agent(client, system_prompt: str, user_prompt: str,
         messages=[{'role': 'user', 'content': user_prompt}],
     )
     text = response.content[0].text
-    # Opus pricing: $15/M input, $75/M output
-    cost = (response.usage.input_tokens * 0.000015) + (response.usage.output_tokens * 0.000075)
+    # Claude Opus 4.5 standard pricing, reviewed 2026-08-17: $5/M in, $25/M out.
+    cost = (response.usage.input_tokens * 0.000005) + (response.usage.output_tokens * 0.000025)
     print(f"     {label}: {response.usage.input_tokens} in + {response.usage.output_tokens} out tokens — ${cost:.4f}")
     return text, cost
 

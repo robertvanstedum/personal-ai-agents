@@ -5,14 +5,44 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  workflow_dispatch:
-    inputs:
-      image_tag:
-        description: 'Image tag to deploy (SHA or latest)'
-        default: 'latest'
+  workflow_dispatch: {}
 
 jobs:
+  classify:
+    runs-on: ubuntu-latest
+    outputs:
+      release_class: ${{ steps.changes.outputs.release_class }}
+      services: ${{ steps.changes.outputs.services }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify release contents
+        id: changes
+        shell: bash
+        run: |
+          # Manual runs are explicit application deployments. A normal push
+          # can take the lightweight document-release path when every changed
+          # file is documentation, generated documentation, or the release
+          # plumbing/tests that govern that path.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "release_class=full" >> "$GITHUB_OUTPUT"
+            echo "services=portal curator german portuguese system-bot cos-bot cos-scheduler cos-agent-a model-gateway" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BEFORE="${{ github.event.before }}"
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            BEFORE="${{ github.event.repository.default_branch }}"
+            git rev-parse "HEAD^" >/dev/null 2>&1 && BEFORE="HEAD^"
+          fi
+
+          git diff --name-only "$BEFORE" "${{ github.sha }}" |
+            python3 scripts/ci/classify_release.py --github-output "$GITHUB_OUTPUT"
+
   test:
+    needs: classify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,8 +87,8 @@ jobs:
             --branch $BRANCH
 
   build-push:
-    needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [classify, test]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.classify.outputs.release_class != 'documents'
     runs-on: ubuntu-latest
     outputs:
       image_tag: ${{ steps.tag.outputs.sha }}
@@ -79,50 +109,38 @@ jobs:
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push all images
+      - name: Build and push selected images
         run: |
           SHA=${{ steps.tag.outputs.sha }}
           REGISTRY=332704997792.dkr.ecr.us-east-1.amazonaws.com
-          declare -A IMAGES=(
-            ["portal"]="docker/Dockerfile.portal"
-            ["curator"]="docker/Dockerfile.curator"
-            ["mein-deutsch"]="docker/Dockerfile.german"
-            ["portuguese"]="docker/Dockerfile.portuguese"
-            ["system-bot"]="docker/Dockerfile.telegram"
-            ["cos-bot"]="docker/Dockerfile.cos-bot"
-            ["cos-scheduler"]="docker/Dockerfile.cos-scheduler"
-          )
-          for name in "${!IMAGES[@]}"; do
-            dockerfile="${IMAGES[$name]}"
-            echo "Building minimoi/$name from $dockerfile"
-            docker build \
-              -f $dockerfile \
-              -t $REGISTRY/minimoi/$name:$SHA \
-              -t $REGISTRY/minimoi/$name:latest \
-              .
-            docker push $REGISTRY/minimoi/$name:$SHA
-            docker push $REGISTRY/minimoi/$name:latest
-          done
-
-          # The deploy IAM user is scoped to the established repositories.
-          # Keep beta components immutable and independently addressable via
-          # namespaced tags without widening production registry authority.
-          for component in cos-agent-a model-gateway; do
-            case "$component" in
-              cos-agent-a) dockerfile="docker/Dockerfile.cos-agent-a"; tag_prefix="agent-a" ;;
-              model-gateway) dockerfile="docker/Dockerfile.model-gateway"; tag_prefix="model-gateway" ;;
+          for service in ${{ needs.classify.outputs.services }}; do
+            case "$service" in
+              portal) dockerfile="docker/Dockerfile.portal"; repository="portal"; tag="$SHA" ;;
+              curator) dockerfile="docker/Dockerfile.curator"; repository="curator"; tag="$SHA" ;;
+              german) dockerfile="docker/Dockerfile.german"; repository="mein-deutsch"; tag="$SHA" ;;
+              portuguese) dockerfile="docker/Dockerfile.portuguese"; repository="portuguese"; tag="$SHA" ;;
+              system-bot) dockerfile="docker/Dockerfile.telegram"; repository="system-bot"; tag="$SHA" ;;
+              cos-bot) dockerfile="docker/Dockerfile.cos-bot"; repository="cos-bot"; tag="$SHA" ;;
+              cos-scheduler) dockerfile="docker/Dockerfile.cos-scheduler"; repository="cos-scheduler"; tag="$SHA" ;;
+              cos-agent-a) dockerfile="docker/Dockerfile.cos-agent-a"; repository="cos-scheduler"; tag="agent-a-$SHA" ;;
+              model-gateway) dockerfile="docker/Dockerfile.model-gateway"; repository="cos-scheduler"; tag="model-gateway-$SHA" ;;
+              *) echo "Unknown service $service"; exit 1 ;;
             esac
+            latest_tag="latest"
+            [[ "$tag" == agent-a-* ]] && latest_tag="agent-a-latest"
+            [[ "$tag" == model-gateway-* ]] && latest_tag="model-gateway-latest"
+            echo "Building $service from $dockerfile as minimoi/$repository:$tag"
             docker build \
               -f "$dockerfile" \
-              -t "$REGISTRY/minimoi/cos-scheduler:$tag_prefix-$SHA" \
-              -t "$REGISTRY/minimoi/cos-scheduler:$tag_prefix-latest" \
+              -t "$REGISTRY/minimoi/$repository:$tag" \
+              -t "$REGISTRY/minimoi/$repository:$latest_tag" \
               .
-            docker push "$REGISTRY/minimoi/cos-scheduler:$tag_prefix-$SHA"
-            docker push "$REGISTRY/minimoi/cos-scheduler:$tag_prefix-latest"
+            docker push "$REGISTRY/minimoi/$repository:$tag"
+            docker push "$REGISTRY/minimoi/$repository:$latest_tag"
           done
 
   deploy:
-    needs: build-push
+    needs: [classify, build-push]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -146,10 +164,11 @@ jobs:
           INTELLIGENCE_CRON=$(base64 -w 0 scripts/run_intelligence_cron_ec2.sh)
           CURATOR_CRON_SETUP=$(base64 -w 0 scripts/setup_ec2_cron.sh)
           COS_SECRET_SYNC=$(base64 -w 0 scripts/credentials/sync_cos_runtime_secrets_from_ssm.sh)
+          SCOPED_DEPLOY=$(base64 -w 0 scripts/operations/deploy_scoped_release.sh)
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
             --document-name "AWS-RunShellScript" \
-            --parameters "commands=[\"mkdir -p /opt/minimoi/scripts\",\"echo $COMPOSE | base64 -d > /opt/minimoi/docker-compose.prod.yml\",\"echo $CURATOR_CRON | base64 -d > /opt/minimoi/scripts/run_curator_cron_ec2.sh\",\"echo $INTELLIGENCE_CRON | base64 -d > /opt/minimoi/scripts/run_intelligence_cron_ec2.sh\",\"echo $CURATOR_CRON_SETUP | base64 -d > /opt/minimoi/scripts/setup_ec2_cron.sh\",\"echo $COS_SECRET_SYNC | base64 -d > /opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh\",\"echo $LESEN_CRON | base64 -d > /opt/minimoi/scripts/install_lesen_refresh_cron.sh\",\"chmod +x /opt/minimoi/scripts/install_lesen_refresh_cron.sh /opt/minimoi/scripts/run_curator_cron_ec2.sh /opt/minimoi/scripts/run_intelligence_cron_ec2.sh /opt/minimoi/scripts/setup_ec2_cron.sh /opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh\"]" \
+            --parameters "commands=[\"mkdir -p /opt/minimoi/scripts\",\"echo $COMPOSE | base64 -d > /opt/minimoi/docker-compose.prod.yml\",\"echo $CURATOR_CRON | base64 -d > /opt/minimoi/scripts/run_curator_cron_ec2.sh\",\"echo $INTELLIGENCE_CRON | base64 -d > /opt/minimoi/scripts/run_intelligence_cron_ec2.sh\",\"echo $CURATOR_CRON_SETUP | base64 -d > /opt/minimoi/scripts/setup_ec2_cron.sh\",\"echo $COS_SECRET_SYNC | base64 -d > /opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh\",\"echo $LESEN_CRON | base64 -d > /opt/minimoi/scripts/install_lesen_refresh_cron.sh\",\"echo $SCOPED_DEPLOY | base64 -d > /opt/minimoi/scripts/deploy_scoped_release.sh\",\"chmod +x /opt/minimoi/scripts/install_lesen_refresh_cron.sh /opt/minimoi/scripts/run_curator_cron_ec2.sh /opt/minimoi/scripts/run_intelligence_cron_ec2.sh /opt/minimoi/scripts/setup_ec2_cron.sh /opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/scripts/deploy_scoped_release.sh\"]" \
             --query 'Command.CommandId' \
             --output text)
 
@@ -184,7 +203,7 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
             --document-name "AWS-RunShellScript" \
-            --timeout-seconds 600 \
+            --timeout-seconds 1800 \
             --parameters 'commands=[
               "set -e",
               "mkdir -p /opt/minimoi/data/portuguese",
@@ -194,26 +213,8 @@ jobs:
               "curl -sf https://raw.githubusercontent.com/robertvanstedum/personal-ai-agents/main/data/guild/build_queue.json -o /opt/minimoi/data/guild/build_queue.json",
               "cd /opt/minimoi",
               "/opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/.env",
-              "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 332704997792.dkr.ecr.us-east-1.amazonaws.com",
-              "export MINIMOI_IMAGE_TAG=${{ needs.build-push.outputs.image_tag }}",
-              "docker image prune -af",
-              "docker-compose -f /opt/minimoi/docker-compose.prod.yml pull",
-              "docker-compose -f /opt/minimoi/docker-compose.prod.yml up -d --remove-orphans",
-              "sleep 15",
-              "for c in minimoi-curator minimoi-german minimoi-portuguese minimoi-portal minimoi-system-bot minimoi-cos-bot minimoi-cos-scheduler; do test \\\"$(docker inspect --format={{.Config.Image}} $c)\\\" = \\\"332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/$(case $c in minimoi-german) echo mein-deutsch;; minimoi-*) echo ${c#minimoi-};; esac):${{ needs.build-push.outputs.image_tag }}\\\" || exit 1; done",
-              "test \\\"$(docker inspect --format={{.Config.Image}} minimoi-cos-agent-a)\\\" = \\\"332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:agent-a-${{ needs.build-push.outputs.image_tag }}\\\"",
-              "test \\\"$(docker inspect --format={{.Config.Image}} minimoi-model-gateway)\\\" = \\\"332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:model-gateway-${{ needs.build-push.outputs.image_tag }}\\\"",
-              "for i in $(seq 1 18); do test \\\"$(docker inspect --format={{.State.Health.Status}} minimoi-model-gateway)\\\" = healthy && test \\\"$(docker inspect --format={{.State.Health.Status}} minimoi-cos-agent-a)\\\" = healthy && break; sleep 5; done",
-              "test \\\"$(docker inspect --format={{.State.Health.Status}} minimoi-model-gateway)\\\" = healthy",
-              "test \\\"$(docker inspect --format={{.State.Health.Status}} minimoi-cos-agent-a)\\\" = healthy",
-              "curl -sf http://localhost:5001/health || exit 1",
-              "curl -sf http://localhost:8766/health || exit 1",
-              "curl -sf http://localhost:8767/health || exit 1",
-              "curl -sf http://localhost:8770/health || exit 1",
-              "curl -sf http://localhost:8769/health || exit 1",
-              "/opt/minimoi/scripts/install_lesen_refresh_cron.sh",
-              "runuser -u ec2-user -- /opt/minimoi/scripts/setup_ec2_cron.sh"
-            ]' \
+              "/opt/minimoi/scripts/deploy_scoped_release.sh ${{ needs.build-push.outputs.image_tag }} ${{ needs.classify.outputs.services }}"
+            ],executionTimeout=["1800"]' \
             --query 'Command.CommandId' \
             --output text)
 
@@ -221,12 +222,12 @@ jobs:
 
           # Poll until EC2 confirms completion. Use || echo "Pending" so set -e does not
           # abort on InvocationDoesNotExist (returned when polled too soon after send-command).
-          for i in $(seq 1 60); do
+          for i in $(seq 1 180); do
             STATUS=$(aws ssm get-command-invocation \
               --command-id "$COMMAND_ID" \
               --instance-id ${{ secrets.EC2_INSTANCE_ID }} \
               --query 'Status' --output text 2>/dev/null || echo "Pending")
-            echo "[$i/60] Deploy status: $STATUS"
+            echo "[$i/180] Deploy status: $STATUS"
             if [ "$STATUS" = "Success" ]; then break; fi
             if [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ] || [ "$STATUS" = "TimedOut" ]; then
               echo "EC2 deploy FAILED with status: $STATUS"
@@ -240,14 +241,31 @@ jobs:
           done
 
           if [ "$STATUS" != "Success" ]; then
-            echo "Deploy timed out after 10 minutes"
+            echo "Deploy timed out after 30 minutes"
             exit 1
           fi
 
           echo "Deploy confirmed successful on EC2"
 
+  deploy-docs:
+    needs: [classify, test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.classify.outputs.release_class == 'documents'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Publish docs/specs and build queue without restarting containers
+        run: ./scripts/sync_docs.sh
+
   notify:
-    needs: [test, build-push, deploy]
+    needs: [test, build-push, deploy, deploy-docs]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -260,7 +278,7 @@ jobs:
         run: |
           pip install requests -q
           python3 scripts/notify_deploy.py \
-            --deploy-status "${{ needs.deploy.result }}" \
+            --deploy-status "${{ needs.deploy.result == 'skipped' && needs.deploy-docs.result || needs.deploy.result }}" \
             --test-status "${{ needs.test.result }}" \
             --sha "${{ github.sha }}" \
             --branch "${{ github.ref_name }}"

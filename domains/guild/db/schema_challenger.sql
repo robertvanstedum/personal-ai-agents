@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS guild.challenger_exchanges (
 
     -- Models used
     primary_model       TEXT,           -- claude-sonnet-4-6
-    challenger_model    TEXT,           -- grok-4-1
+    challenger_model    TEXT,           -- for example, grok-4.3
 
     -- Exchange (digest — not full text)
     first_pass_summary  TEXT,           -- 1-2 sentence summary of what primary concluded
