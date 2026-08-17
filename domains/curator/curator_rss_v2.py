@@ -995,7 +995,6 @@ def score_entries_xai(entries: List[Dict], fallback_on_error: bool = False, user
     
     Returns list of dicts with 'score', 'category', 'method' = 'xai'
     """
-    from openai import OpenAI
     import json
     
     # Use the shared platform secret contract; Curator must not depend on an
@@ -1021,7 +1020,12 @@ To test with mechanical mode instead:
         else:
             print(error_msg)
             raise ValueError("xAI API key unavailable through platform credential helper")
-    
+
+    # Import the optional OpenAI-compatible client only after credential
+    # resolution succeeds. This keeps the documented mechanical fallback
+    # available in minimal environments where the cloud client is absent.
+    from openai import OpenAI
+
     client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
 
     # Build prompt with Grok's optimized instructions

@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 from domains.curator import curator_rss_v2
@@ -64,6 +66,9 @@ def test_curator_xai_scorer_calls_platform_key_resolver(monkeypatch):
         raise RuntimeError("test credential unavailable")
 
     monkeypatch.setattr(curator_rss_v2, "get_xai_api_key", unavailable_key)
+    # The mechanical fallback must remain usable even when the optional
+    # OpenAI-compatible client is not installed in the environment.
+    monkeypatch.setitem(sys.modules, "openai", None)
 
     assert curator_rss_v2.score_entries_xai([], fallback_on_error=True) == []
     assert calls["count"] == 1
