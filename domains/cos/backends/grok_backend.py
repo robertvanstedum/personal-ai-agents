@@ -16,7 +16,7 @@ import logging
 
 log = logging.getLogger("cos.grok_backend")
 
-_MODEL = "grok-4-1-fast-reasoning"
+_MODEL = "grok-4.3"
 _MAX_TOOL_ROUNDS = 3
 
 # Observation tools — always offered (unrestricted per observe/mutate principle)
@@ -114,7 +114,7 @@ class GrokBackend:
     """
 
     backend_label = "Grok (direct API)"
-    model_label   = "grok-4-1-fast-reasoning"
+    model_label   = _MODEL
 
     def __init__(self, write_memory, dispatch_tool):
         self._write_memory = write_memory

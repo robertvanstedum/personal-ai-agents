@@ -94,16 +94,18 @@ When a newer OpenClaw release is evaluated, run the full upgrade procedure
 
 ---
 
-## Confirmed model IDs (from `openclaw capability model list`, 2026-08-09)
+## Confirmed model routing (reviewed 2026-08-17)
 
-The following IDs are confirmed present in the installed catalog. Use these
-exact strings in configuration — do not assume aliases resolve the same way
-across profiles.
+OpenClaw now selects the stable logical model
+`minimoi-gateway/minimoi-cos-agent`. The shared LiteLLM gateway owns the
+provider sequence below, so an OpenClaw upgrade or model swap does not require
+rewriting the COS adapter. Do not rely on retired aliases to redirect silently
+at the provider boundary.
 
 | Tier | Provider/model ID | Purpose |
 |---|---|---|
-| Primary | `xai/grok-4` | Main advisory reasoning |
-| Fast fallback | `xai/grok-4-1-fast` | Lower latency / rate-limit relief |
+| Primary | `xai/grok-4.3` with low reasoning | Main advisory reasoning |
+| Fast fallback | `xai/grok-4.3` with reasoning disabled | Lower-latency path using the current model |
 | Secondary | `anthropic/claude-sonnet-4-6` | Second independent provider |
 | Tertiary | `openai/gpt-5.5` | Third independent provider |
 | Local | `ollama/gemma3:1b` | No-internet fallback; availability only, not full reasoning |
@@ -111,8 +113,8 @@ across profiles.
 **At setup time:** re-enumerate the live catalog on the target host with
 `openclaw --profile cos capability model list` and verify these IDs are still
 present before configuring the chain. Record the actual IDs used in the
-acceptance log. If `xai/grok-4-1-fast` is absent from the CoS profile catalog,
-remove it from the chain rather than configuring an unresolvable ID.
+acceptance log. Grok 4.1 Fast was retired on 2026-05-15; do not restore that
+alias to the chain even if a provider still redirects it.
 
 ---
 
@@ -163,7 +165,8 @@ First, confirm the model IDs are present in the CoS profile catalog:
 openclaw --profile cos capability model list
 ```
 
-Then configure primary and fallback chain:
+Then configure OpenClaw with the platform-owned logical model. The provider
+fallback chain is configured in LiteLLM, not duplicated here:
 
 ```bash
 # Write a patch file — do not use positional JSON
@@ -172,13 +175,8 @@ cat > /tmp/cos-model-patch.json5 << 'EOF'
   agents: {
     defaults: {
       model: {
-        primary: "xai/grok-4",
-        fallbacks: [
-          "xai/grok-4-1-fast",
-          "anthropic/claude-sonnet-4-6",
-          "openai/gpt-5.5",
-          "ollama/gemma3:1b"
-        ]
+        primary: "minimoi-gateway/minimoi-cos-agent",
+        fallbacks: []
       }
     }
   }
@@ -550,8 +548,9 @@ the thin integration spec and kept out of this document.
    MacBook. Confirm which Ollama model is pulled on prod; update the fallback
    chain if it differs from `gemma3:1b`.
 
-4. **`xai/grok-4-1-fast` in CoS catalog:** Verify this ID resolves in the
-   `--profile cos` capability catalog. Remove from fallback chain if absent.
+4. **xAI fast-path model:** Resolved 2026-08-17. Both xAI paths use
+   `xai/grok-4.3`; the primary requests low reasoning and the fast path disables
+   reasoning. The retired Grok 4.1 Fast alias is no longer configured.
 
 5. **Mini-moi prod network path:** How does CoS inside Docker reach an OpenClaw
    Gateway running as a host process? Decided in the thin integration spec.

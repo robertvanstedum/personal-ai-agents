@@ -1052,5 +1052,16 @@
     "blocked_reason": null,
     "last_transition_at": "2026-08-16T00:00:00Z",
     "notes": "Separates document-only, domain-scoped, and full application releases. Explicit dependency mapping prevents unrelated domains from restarting, while unknown paths fall back safely to the full stack. Also moves image pruning after successful health checks and extends SSM execution/polling to 30 minutes. Dev implementation and regression verification complete; production review pending."
+  },
+  {
+    "id": 152,
+    "spec_title": "Defect: Curator xAI Credential Coupled to OpenClaw State",
+    "spec_file": null,
+    "status": "in_build",
+    "github_issue": null,
+    "priority": "high",
+    "blocked_reason": null,
+    "last_transition_at": "2026-08-17T00:00:00Z",
+    "notes": "Curator scoring bypassed the shared credential helper and read ~/.openclaw/agents/main/agent/auth-profiles.json directly. The review-branch fix resolves XAI_API_KEY through core.get_secret, aligned with /minimoi/production/xai_api_key and the deployment secret-sync step. Regression coverage passes; production release and verification remain pending."
   }
 ]

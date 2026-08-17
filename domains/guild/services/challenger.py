@@ -148,7 +148,7 @@ class ChallengerService:
         result.enabled      = True
         result.show_process = dcfg.get("show_process", False)
         result.primary_model     = self._cfg.get("primary_model", "claude-sonnet-4-6")
-        result.challenger_model  = self._cfg.get("challenger_model", "grok-4-1-fast-reasoning")
+        result.challenger_model  = self._cfg.get("challenger_model", "grok-4.3")
         result.prompt_version    = dcfg.get("challenger_prompt", "")
 
         try:

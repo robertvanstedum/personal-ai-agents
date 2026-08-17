@@ -26,9 +26,9 @@ def test_production_gateway_omits_development_only_ollama():
     }
 
     assert deployments == {
-        "minimoi-cos-agent": "xai/grok-4",
-        "minimoi-cos-agent-xai-fast": "xai/grok-4-1-fast",
-        "minimoi-cos-web-search": "xai/grok-4-1-fast",
+        "minimoi-cos-agent": "xai/grok-4.3",
+        "minimoi-cos-agent-xai-fast": "xai/grok-4.3",
+        "minimoi-cos-web-search": "xai/grok-4.3",
         "minimoi-cos-agent-anthropic": "anthropic/claude-sonnet-4-6",
     }
     assert config["router_settings"]["fallbacks"] == [{

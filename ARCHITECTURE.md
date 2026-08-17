@@ -345,20 +345,24 @@ Not every stored response closes an automatic loop yet:
 | Research-thread wrap-up | Thread closes with a conclusion |
 | Response to an AI Observation | Stored in response memory; not automatically acted on yet |
 
-Tiered, purpose-fit model use, with real costs:
+Current model paths and available cost evidence:
 
-| Stage | Model | Cost | Config-driven? |
+| Capability | Current model path | Cost evidence | Selection |
 |---|---|---|---|
-| Daily ranking (production, single-stage) | `grok-4-1-fast-reasoning` | ~$0.314/run | Override ignored; intended fallback still used (see below) |
-| Two-stage alternate (pre-filter → rank) | Claude Haiku → Sonnet | ~$0.001 pre-filter | Selectable per run; not the live path |
-| Deep Dives | Claude Sonnet, on-demand | ~$0.25/session | No; hard-coded |
-| AI Observations (daily) | Claude Haiku | ~$0.005–0.01/run | No; hard-coded |
-| AI Observations (weekly) | Claude Sonnet, Sunday only | ~$0.07/week | No; hard-coded |
+| Daily ranking | xAI `grok-4.3` | 126 recorded runs average ~$0.074 when repriced at current rates; recent larger runs are about $0.09 | Explicit CLI value; validated, no silent fallback |
+| Single-stage alternate | Claude Haiku 4.5 | Not recently measured | Selectable per run; not production |
+| Two-stage alternate | Haiku 4.5 → Sonnet 4.5 | Haiku pre-filter averages ~$0.0013; full path not measured | Selectable per run; not production |
+| Article Scan | Claude Sonnet 4.5 | Observed artifacts are typically $0.013–$0.020 | Hard-coded |
+| Research triage | local Gemma 3 1B → Haiku 4.5 fallback | Local calls are $0; cloud fallback varies by session | Config-driven |
+| Research-session synthesis | Claude Sonnet 4.5 | Historical observation artifacts are about $0.004–$0.012 | Config-driven |
+| Deeper Dive closing synthesis | Opus 4.5 → Grok 4.3 challenge → Sonnet 4.6 final review → Opus 4.5 challenge | Existing $0.15–$0.32 artifact totals use stale Opus rates and omit the middle challenge calls; current total is not yet measured reliably | Mixed: Guild challenge models configured; Opus calls hard-coded |
+| AI Observations, daily | Claude Haiku 4.5, with call count driven by available inputs | Earlier ~$0.005–$0.01 estimate is not instrumented | Hard-coded |
+| AI Observations, weekly | Claude Sonnet 4.5, Sunday only | Earlier ~$0.07 estimate is not instrumented | Hard-coded |
 
-These costs are current evaluation points, not fixed targets. Model choices are
-reviewed continuously for both cost and output quality. The intent is to move
-work to lower-cost models when they meet the required quality threshold, while
-leaving current choices in place long enough to evaluate them reliably.
+Costs labeled *observed* come from stored token counts or generated artifacts.
+Other values remain estimates until those paths use the shared cost logger. Model
+choices are evaluated for both cost and output quality; a lower-cost model replaces
+another only when it meets the required quality threshold.
 
 **Local capability is real, proven, and deliberately retained.** The original
 architecture ran local-model calls, and the development Mac still exercises a
@@ -372,7 +376,7 @@ mode is still called "ollama," although it currently uses keyword scoring rather
 than a live model. The label is imprecise; the behavior is intentional. The
 architectural commitment remains that the platform retains a local option rather
 than binding personal context to one cloud provider. Re-verifying that option
-belongs on development or future appropriately sized infrastructure—not on the
+belongs on development or future appropriately sized infrastructure, not on the
 current CPU-only EC2 host.
 
 **AI Observations** is the platform's clearest working example of accumulating
@@ -389,20 +393,18 @@ daily and Sunday weekly runs on 2026-08-16, with JSON outputs written and
 notifications sent. That verification closes the earlier uncertainty about
 whether the installed schedule actually produced results.
 
-**Current model-override gap.** Curator's `--model=` flag works for values it
-recognizes. Both production cron scripts currently pass an unrecognized value,
-so the override is ignored and the script uses its fallback default. That
-fallback still selects the intended production model, so there is no known
-impact on current Curator output. The gap is that the configured override cannot
-be relied on until the value is corrected. The defect is tracked and remains a
-clear example of Principle 7.
+**Current model selection.** Both production cron scripts pass
+`--model=grok-4.3`, and Curator now recognizes that value explicitly. Unknown
+model names fail validation instead of silently selecting the xAI default. The
+provider-reported effective model is written to the cost record, and the briefing
+stores the resolved model name.
 
-**Multi-model challenge capability.** Curator's Deep Dive pipeline supports one
-model drafting, other models cross-checking, and the first model reconciling the
-result. Live since June, it may overlap with Research Intelligence's
-Synthesizer+Challenger framework and Guild's `ChallengerService`. Direct
-confirmation is still needed. If they are the same underlying mechanism, the
-platform should give the capability one name and one home.
+**Multi-model challenge capability.** Curator's Deeper Dive closing path uses
+Opus for the first synthesis, Grok for a cross-provider challenge, Sonnet for the
+final review of that challenge, and Opus for the closing counter-analysis. The
+middle two calls use Guild's shared `ChallengerService`; the surrounding Opus
+calls remain in the Research Intelligence generator. The overlapping mechanisms
+still need consolidation under one name and one maintained implementation.
 
 **Known Deep Dive regression.** Several generation scripts coexist while the
 frontend offers Scans, Deep Dive, and Deeper Dive as related but distinct options.
@@ -634,7 +636,7 @@ capability says so.* In the beta it can converse, perform bounded cited search,
 and save a platform-owned note after a verified receipt. It cannot change domain
 data, infrastructure, deployments, repository files, or other agents. Decision
 logs, action logs, document retrieval, issue filing, and handoffs describe possible
-future platform capabilities—not permissions silently inherited by the agent.
+future platform capabilities, not permissions silently inherited by the agent.
 
 **The voice layer is designed for useful disagreement.** The standing identity
 is short and already live in production: direct, curious before certain,

@@ -344,7 +344,7 @@ if __name__ == "__main__":
         source="Test Source",
         category="geo_major",
         score=8.5,
-        model="grok-3-mini",
+        model="grok-4.3",
         url="https://example.com/test",
         rank=1
     )

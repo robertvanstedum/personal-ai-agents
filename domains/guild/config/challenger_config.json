@@ -2,7 +2,7 @@
   "challenger": {
     "primary_model":       "claude-sonnet-4-6",
     "primary_provider":    "anthropic",
-    "challenger_model":    "grok-4-1-fast-reasoning",
+    "challenger_model":    "grok-4.3",
     "challenger_provider": "xai",
     "store_exchanges":     true,
     "domains": {

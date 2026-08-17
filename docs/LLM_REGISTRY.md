@@ -10,7 +10,11 @@
 
 ---
 
-## Part 1 — How the system uses AI (narrative)
+## Part 1 — Historical narrative (June 2026)
+
+This section records the model mix when the registry was created. It is retained
+as change history, not as current configuration. Use Part 2's reviewed subset and
+the root Architecture document for current operational claims.
 
 ### What mini-moi is
 
@@ -123,7 +127,9 @@ over structure.
 
 ## Part 2 — Model registry
 
-*Current as of 2026-06-07. Update this table and add a changelog entry every time a model or
+*Curator, language, and Research Intelligence subset reviewed 2026-08-17. CoS,
+Guild, Portuguese, and voice coverage still require the full registry audit tracked
+elsewhere. Update this table and add a changelog entry whenever a listed model or
 provider changes.*
 
 | # | Program | Domain | Feature | Model | Provider | Fallback chain |
@@ -131,7 +137,7 @@ provider changes.*
 | 1 | `curator_rss_v2.py` | Curator | Article pre-filter — 150 → 50 candidates | claude-haiku-4-5 | Anthropic | (two-stage) Haiku → Sonnet |
 | 2 | `curator_rss_v2.py` | Curator | Article scoring — category + relevance (Anthropic path) | claude-haiku-4-5 | Anthropic | (two-stage) Haiku → Sonnet |
 | 3 | `curator_rss_v2.py` | Curator | Article ranking — quality/originality/depth re-score | claude-sonnet-4-5 | Anthropic | (two-stage) Haiku → Sonnet |
-| 4 | `curator_rss_v2.py` | Curator | Article scoring — full score + category (xAI path, production) | grok-4-1 | xAI | none (xAI single-stage) |
+| 4 | `curator_rss_v2.py` | Curator | Article scoring — full score + category (xAI path, production) | grok-4.3 | xAI | mechanical scoring on API failure |
 | 5 | `curator_feedback.py` | Curator | Scan — deep analysis: implications, contrarian take, connections | claude-sonnet-4-5 | Anthropic | — |
 | 6 | `curator_feedback.py` | Curator | Feedback metadata extraction — user feedback → structured JSON | claude-sonnet-4-5 | Anthropic | — |
 | 7 | `curator_deepdive.py` | Curator | Deep article analysis — implications, angles, what to watch | claude-sonnet-4-5 | Anthropic | — |
@@ -139,7 +145,7 @@ provider changes.*
 | 9 | `curator_intelligence.py` | Curator | Weekly lateral connections — synthesis across tracked topics | claude-sonnet-4-5 | Anthropic | — |
 | 10 | `curator_utils.py` | Curator | X/bookmark entity extraction — topics and entities from tweet text | claude-haiku-4-5 | Anthropic | — |
 | 11 | `research_routes.py` | Curator | Leanings teammate read — AI brief on a research leaning, on demand | claude-sonnet-4-5 | Anthropic | — |
-| 12 | `german_domain.py` | German | Translation, correction, conjugation — primary | grok-4-1-fast | xAI | xAI → Haiku → Ollama |
+| 12 | `german_domain.py` | German | Translation, correction, conjugation — primary | grok-4.3 | xAI | xAI → Haiku → Ollama |
 | 13 | `german_domain.py` | German | Translation, correction, conjugation — fallback 1 | claude-haiku-4-5 | Anthropic | xAI → (this) → Ollama |
 | 14 | `german_domain.py` | German | Translation, correction, conjugation — fallback 2 (local) | gemma3:1b | Ollama | xAI → Haiku → (this) |
 | 15 | `get_german_session.py` | German | Prompt compression — condenses prompts for Telegram limits | claude-haiku-4-5 | Anthropic | — |
@@ -148,10 +154,10 @@ provider changes.*
 | 18 | `research.py` | Research Intelligence | Triage — classify search results (cloud fallback) | claude-haiku-4-5 | Anthropic | Ollama → (this) |
 | 19 | `observe.py` | Research Intelligence | Session synthesis — narrative summary of findings | claude-sonnet-4-5 | Anthropic | — |
 | 20 | `observe.py` | Research Intelligence | Query extraction — next research questions from synthesis | claude-haiku-4-5 | Anthropic | — |
-| 21 | `generate_dive.py` | Research Intelligence | Deeper Dive — Synthesizer + Challenger agents, thread wrap-up | claude-opus-4-5 | Anthropic | — |
+| 21 | `generate_dive.py` + `ChallengerService` | Research Intelligence | Deeper Dive closing synthesis and challenge | claude-opus-4-5 → grok-4.3 → claude-sonnet-4-6 → claude-opus-4-5 | Anthropic + xAI | Graceful return to first synthesis if shared challenge fails |
 | 22 | `telegram_bot.py` | Platform | Voice transcription — Telegram audio to text | whisper-1 | OpenAI | — |
-**Totals:** 3 LLM providers (Anthropic, xAI, Ollama/local) + 1 audio provider (OpenAI) ·
-6 distinct model IDs · 16 Python files · 22 call sites
+This table is not a complete call-site inventory. Its reviewed subset is current;
+the omitted CoS, Guild, Portuguese, and voice entries remain a tracked audit item.
 
 ---
 
@@ -161,15 +167,15 @@ provider changes.*
 
 | Tier | Models | When used | Why |
 |---|---|---|---|
-| Fast / cheap | Haiku, Grok-4-1-fast, gemma3:1b | Volume jobs, mechanical extraction, pre-filtering, agent loops | High call frequency; quality bar is "good enough to triage"; cost matters |
-| Quality | Sonnet (4-5, 4-6), Grok-4-1 | Final scoring, deep analysis, user-facing feedback, synthesis | Lower frequency; output is what the user reads; quality is felt directly |
+| Fast / cheap | Haiku, Grok 4.3 with no reasoning, gemma3:1b | Volume jobs, mechanical extraction, pre-filtering, agent loops | High call frequency; quality bar is "good enough to triage"; cost matters |
+| Quality | Sonnet (4.5, 4.6), Grok 4.3 | Final scoring, deep analysis, user-facing feedback, synthesis | Lower frequency; output is what the user reads; quality is felt directly |
 | Premium | Opus 4-5 | Research Deeper Dive essays only | Runs once per thread; two-agent reasoning; cost negligible at this frequency |
 
 ### Fallback chains
 
 ```
-German translation:   xAI grok-4-1-fast → Anthropic haiku-4-5 → Ollama gemma3:1b (local)
-Curator scoring:      xAI grok-4-1 (single-stage, production)
+German translation:   xAI grok-4.3 → Anthropic haiku-4-5 → Ollama gemma3:1b (local)
+Curator scoring:      xAI grok-4.3 (single-stage, production) → mechanical on API failure
                    OR Anthropic haiku-4-5 pre-filter → Anthropic sonnet-4-5 ranking (two-stage)
 Research triage:      Ollama gemma3:1b (local first) → Anthropic haiku-4-5
 ```
@@ -186,6 +192,15 @@ in plaintext. Ollama: local HTTP on `localhost:11434`, no authentication.
 ## Part 5 — Changelog
 
 *One entry per change. Date · what changed · which file · why.*
+
+### 2026-08-17 — Retired Grok 4.1 Fast aliases removed from active paths
+- **Files:** Curator scoring, German provider chain, CoS/Guild direct calls,
+  Challenger configuration, and LiteLLM gateway routes.
+- **Change:** Active xAI calls now request `grok-4.3` explicitly. Curator rejects
+  unknown CLI model values instead of silently selecting a default.
+- **Why:** xAI retired Grok 4.1 Fast on 2026-05-15 and redirected old aliases to
+  Grok 4.3. Explicit selection removes hidden provider behavior and permits correct
+  cost reporting.
 
 ### [Prior to 2026-06-07] — Curator scoring switched to xAI Grok-4-1 (single-stage)
 - **File:** `curator_rss_v2.py`

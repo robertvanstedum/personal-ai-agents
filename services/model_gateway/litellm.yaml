@@ -8,24 +8,26 @@
 model_list:
   - model_name: minimoi-cos-agent
     litellm_params:
-      model: xai/grok-4
+      model: xai/grok-4.3
       api_key: os.environ/XAI_API_KEY
       timeout: 120
+      reasoning_effort: low
     model_info:
       id: cos-xai-primary
-      base_model: xai/grok-4
+      base_model: xai/grok-4.3
       mode: chat
       supports_function_calling: true
       fallback_position: 0
 
   - model_name: minimoi-cos-agent-xai-fast
     litellm_params:
-      model: xai/grok-4-1-fast
+      model: xai/grok-4.3
       api_key: os.environ/XAI_API_KEY
       timeout: 120
+      reasoning_effort: none
     model_info:
       id: cos-xai-fast
-      base_model: xai/grok-4-1-fast
+      base_model: xai/grok-4.3
       mode: chat
       supports_function_calling: true
       fallback_position: 1
@@ -34,12 +36,13 @@ model_list:
   # selection stays here so it can be swapped without changing Agent A.
   - model_name: minimoi-cos-web-search
     litellm_params:
-      model: xai/grok-4-1-fast
+      model: xai/grok-4.3
       api_key: os.environ/XAI_API_KEY
       timeout: 60
+      reasoning_effort: low
     model_info:
       id: cos-xai-bounded-web-search
-      base_model: xai/grok-4-1-fast
+      base_model: xai/grok-4.3
       mode: responses
       supports_web_search: true
 

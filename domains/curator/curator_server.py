@@ -129,7 +129,7 @@ def _load_briefing_articles():
     day_str = briefing_dt.strftime('%A')
     date_str = briefing_dt.strftime('%B %d, %Y')
 
-    model_display = raw[0].get('briefing_model', 'grok-4-1') if raw else 'grok-4-1'
+    model_display = raw[0].get('briefing_model', 'unknown') if raw else 'unknown'
 
     articles = []
     for entry in raw:

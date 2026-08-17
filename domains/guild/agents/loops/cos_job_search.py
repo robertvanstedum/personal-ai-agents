@@ -419,7 +419,7 @@ def _filter_pass(candidates: list[dict], ctx: dict) -> list[dict]:
         )
         try:
             resp = client.chat.completions.create(
-                model="grok-4-1-fast-reasoning",
+                model="grok-4.3",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
             )
@@ -471,7 +471,7 @@ def _evaluate_pass(shortlist: list[dict], ctx: dict) -> list[dict]:
         )
         try:
             resp = client.chat.completions.create(
-                model="grok-4-1-fast-reasoning",
+                model="grok-4.3",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
             )
@@ -491,7 +491,7 @@ def _evaluate_pass(shortlist: list[dict], ctx: dict) -> list[dict]:
                 "fit_narrative": parsed.get("fit_narrative", ""),
                 "cos_notes": parsed.get("cos_notes", ""),
                 "source": c.get("source", "unknown"),
-                "model_used": "grok-4-1-fast-reasoning",
+                "model_used": "grok-4.3",
                 "warm_lead": False,
                 "warm_lead_contacts": None,
                 "published_date": c.get("published_date"),

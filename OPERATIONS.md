@@ -1,20 +1,18 @@
-# Operations — Mini-moi
+# Operations: Mini-moi
 
 [Download the formatted PDF](OPERATIONS.pdf)
 
-*Maintained baseline — reviewed through 2026-08-16. The production topology,
-containers, host services, schedules, memory pressure, storage, backup inputs,
-and recent job outcomes were rechecked against the running system on 2026-08-16.
-Automatic daily and Sunday AI Observations completed successfully that day.
-COS Agent A, its model gateway, authenticated round trip, platform note path,
-and real-microphone voice path were also verified in production. Companion evidence file:
-`CURRENT_STATE_OPERATIONS_2026-07-18.md`. System design and the reasoning behind it:
-[`ARCHITECTURE.md`](ARCHITECTURE.md) — this document is about keeping that system
-running.*
+*Maintained runbook, reviewed through 2026-08-17. Use this document to identify
+what runs where, deploy or roll back a release, check service health, inspect
+schedules, find persistent data and backups, and handle credentials. Production
+topology and recent job outcomes were verified on 2026-08-16; release code, model
+routing, and German source configuration were rechecked on 2026-08-17. Design
+rationale belongs in [`ARCHITECTURE.md`](ARCHITECTURE.md). Supporting operational
+evidence is in `CURRENT_STATE_OPERATIONS_2026-07-18.md`.*
 
 ---
 
-## Topology — what is actually running
+## Current topology
 
 Mini-moi runs across two nodes with distinct roles (see ARCHITECTURE.md for the design
 rationale; this is the operational view):
@@ -24,40 +22,82 @@ rationale; this is the operational view):
 | AWS EC2 (t3a.medium, us-east-1, `i-0d13db821169627e2`) | **Production** — live traffic, all bots, scheduled jobs | minimoi.ai | `docker-compose.prod.yml` |
 | Mac (local, Colima) | **Dev / standby** — development, private-repo sync, DNS-switchable fallback | dev.minimoi.ai | `docker-compose.yml` |
 
-### Production: 10 containers + 3 host-level services
+### Production runtime
+
+The primary web application is five Docker containers: the portal, three domain
+services, and PostgreSQL. COS Agent A adds three supporting runtime containers.
+Two lightweight Telegram adapters provide optional messaging channels. Three
+infrastructure services run directly on the EC2 host rather than in Docker.
 
 ```mermaid
 flowchart TD
-    A[Internet] --> T["Cloudflare Tunnel<br/>cloudflared on EC2 host"]
-    T --> B["nginx — on the EC2 host via systemd"]
-    B --> C["minimoi-portal :5001 — session auth + reverse proxy"]
-    C --> D["minimoi-curator :8766"]
-    C --> E["minimoi-german :8767"]
-    C --> F["minimoi-portuguese :8770"]
-    G["minimoi-system-bot"] -.Telegram.-> H[Robert]
-    I["minimoi-cos-bot"] -.Telegram.-> H
-    J["minimoi-cos-scheduler :8769"]
-    J --> M["minimoi-cos-agent-a<br/>bounded OpenClaw runtime"]
-    M --> N["minimoi-model-gateway<br/>LiteLLM routing + receipts"]
-    D --> K["postgres-ai-agents :5432"]
-    E --> K
-    F --> K
-    C --> K
-    L["host cron — backups + scheduled jobs"]
+    INTERNET["Internet"]
+    ROBERT["Robert"]
+
+    subgraph HOST["Host infrastructure - 3 services"]
+        TUNNEL["cloudflared<br/>Cloudflare Tunnel"]
+        NGINX["nginx<br/>reverse proxy"]
+        CRON["cron<br/>backups and scheduled jobs"]
+    end
+
+    subgraph APP["Primary application and data layer - 5 Docker containers"]
+        PORTAL["minimoi-portal :5001<br/>authentication and routing"]
+        CURATOR["minimoi-curator :8766"]
+        GERMAN["minimoi-german :8767"]
+        PORTUGUESE["minimoi-portuguese :8770"]
+        DB["postgres-ai-agents :5432"]
+
+        PORTAL --> CURATOR
+        PORTAL --> GERMAN
+        PORTAL --> PORTUGUESE
+        PORTAL --> DB
+        CURATOR --> DB
+        GERMAN --> DB
+        PORTUGUESE --> DB
+    end
+
+    subgraph AGENT["CoS agent runtime - 3 supporting Docker containers"]
+        SCHEDULER["minimoi-cos-scheduler :8769"]
+        RUNTIME["minimoi-cos-agent-a<br/>bounded OpenClaw runtime"]
+        GATEWAY["minimoi-model-gateway<br/>LiteLLM routing and receipts"]
+        SCHEDULER --> RUNTIME --> GATEWAY
+    end
+
+    subgraph MESSAGING["Messaging adapters - 2 supporting Docker containers"]
+        SYSTEMBOT["minimoi-system-bot"]
+        COSBOT["minimoi-cos-bot"]
+    end
+
+    INTERNET --> TUNNEL --> NGINX --> PORTAL
+    PORTAL --> SCHEDULER
+    SYSTEMBOT -.Telegram.-> ROBERT
+    COSBOT -.Telegram.-> ROBERT
 ```
+
+**Primary application and data layer (5 containers)**
 
 | Container | Port (localhost) | Purpose |
 |---|---|---|
-| `postgres-ai-agents` | 5432 | PostgreSQL (`personal_agents`) — auth, guild, portuguese, research, pipeline, jobs schemas |
-| `minimoi-portal` | 5001 | Session auth + reverse proxy — single entry point; forwards identity headers, domains never trust client-supplied identity |
+| `minimoi-portal` | 5001 | Session authentication and routing; forwards trusted identity to the domains |
 | `minimoi-curator` | 8766 | Curator Flask service |
 | `minimoi-german` | 8767 | Mein Deutsch Flask service |
 | `minimoi-portuguese` | 8770 | Meu Português Flask service |
-| `minimoi-system-bot` | — | Telegram polling bot — inbound system/German commands only; the Curator briefing is sent by `telegram_bot.py --send` inside `minimoi-curator`, via cron, on the separate outbound token |
-| `minimoi-cos-bot` | — | CoS chat bot |
+| `postgres-ai-agents` | 5432 | Shared PostgreSQL data layer (`personal_agents`) |
+
+**CoS agent runtime (3 supporting containers)**
+
+| Container | Port (localhost) | Purpose |
+|---|---|---|
 | `minimoi-cos-scheduler` | 8769 | CoS scheduled-loop agent |
 | `minimoi-cos-agent-a` | internal only | Isolated COS Agent A runtime; OpenClaw is the current swappable shell |
 | `minimoi-model-gateway` | internal only | LiteLLM provider routing, fallback policy, health, receipts, and cost records |
+
+**Messaging adapters (2 supporting containers)**
+
+| Container | Port (localhost) | Purpose |
+|---|---|---|
+| `minimoi-system-bot` | none | Optional Telegram adapter for inbound system and German commands |
+| `minimoi-cos-bot` | none | Optional Telegram chat adapter for CoS |
 
 **Three things run on the host, outside Docker:**
 
@@ -75,7 +115,7 @@ host nginx → portal; no application container is directly internet-exposed.
 
 ---
 
-## Deploy & Rollback
+## Deploy and rollback
 
 ### Deploy
 
@@ -99,20 +139,22 @@ deployed, it will add three classified paths:
   container restart occurs. The maintained root documents and generated PDFs
   publish in GitHub.
 
-Operational facts worth stating plainly:
+### Release behavior and safeguards
 
 - **Classification is fail-safe toward application deployment.** Mixed known
   domains use the union of their service mappings; any unrecognized runtime path
   uses the full path. A manual workflow dispatch is also always a full deployment.
   The PostgreSQL container remains host-stateful and outside the image build matrix.
-- **Pull before prune.** The deploy that introduced COS Agent A exhausted the old
-  ten-minute workflow poll while the EC2 SSM command continued. During recovery,
-  the SSM agent also temporarily lost usable instance credentials and the site
-  returned Cloudflare 530 until a graceful EC2 stop/start restored the agent. The
-  application itself was healthy once the command finished. The proposed scoped
-  path pulls first, validates the running immutable image set and health endpoints,
-  then prunes unused images. Its longer poll and terminal-error behavior remain
-  pending until the reviewed change is shipped.
+- **Deployment order validates before cleanup.** The scoped script pulls the
+  selected images, recreates only those services, verifies their immutable image
+  tags and health, and prunes unused images only after validation succeeds. The
+  prior container is replaced, but its image remains local during validation. If
+  the new service fails, the script exits before pruning. This temporarily needs
+  disk space for both releases, so check `df -h /` and `docker system df` before a
+  large deployment. The post-success
+  `docker image prune -af` removes unused local images; prior immutable tags remain
+  in ECR and may need to be pulled again for rollback. The longer workflow poll and
+  terminal-error handling remain pending until the reviewed release is shipped.
 - **There is no staging gate in the deploy pipeline.** A push to `main` goes
   straight to production. `dev.minimoi.ai` routes via Cloudflare Tunnel to the Mac
   dev environment (verified in the tunnel config) — a genuinely separate origin,
@@ -148,11 +190,16 @@ Production containers currently run immutable commit tags. Pulling and recreatin
 an exact prior tag from ECR is therefore possible, but the tested command sequence
 still needs to be written as a formal rollback runbook.
 
-### Manual health check (EC2)
+### First response and health checks (EC2)
+
+When the site is unavailable, check the host before changing application state:
+EC2 status checks, memory and disk, host nginx and cloudflared, container state,
+then the individual health endpoints and relevant logs.
 
 ```bash
 sudo docker ps --format "table {{.Names}}\t{{.Status}}"
-df -h /                                   # 30GB volume; alert threshold 80%
+df -h /                                   # 50 GiB volume; alert threshold 80%
+sudo docker system df                     # image/cache headroom before deployment
 free -m
 curl -s http://localhost:8766/health      # curator
 curl -s http://localhost:8767/health      # german
@@ -185,14 +232,16 @@ user—or only host cron—misses part of the production schedule.
 | root | 02:00 daily | `backup_local.sh` | Tier 1 — selected persistent paths to `/opt/minimoi/backups/YYYY-MM-DD/` |
 | root | 03:00 daily | `backup_s3.sh` | Tier 2 — S3 sync |
 | root | 04:00 Sunday | `backup_dropbox.sh` | Tier 3 — weekly Dropbox sync — **BROKEN: rclone not installed; fails silently every run** |
-| root | 5 minutes past each hour | `lesen_refresh_cli.py` in `minimoi-german` | Refreshes German reading material; recent runs complete partially because two configured sources return HTTP 404 |
+| root | 5 minutes past each hour | `lesen_refresh_cli.py` in `minimoi-german` | Checks for the day's German reading refresh during the 06:00–22:00 Chicago window; retries until one run succeeds |
 | ec2-user | hourly | `run_curator_cron_ec2.sh` | Curator pipeline — fires at most once/day, gated below |
 | ec2-user | 15 minutes past each hour | `run_intelligence_cron_ec2.sh` | AI Observations — waits for the daily briefing, runs at most once/day, and adds the weekly synthesis on Sunday; automatic daily and weekly outputs verified 2026-08-16 |
 
-German's Lesen refresh is scheduled hourly. It currently tolerates partial source
-failure and continues adding material, but two sources (ORF Kultur and Heute)
-repeatedly return HTTP 404. That is a source-maintenance defect, not a missing
-schedule.
+German's Lesen cron entry is hourly, but it is not an hourly content refresh. The
+command runs only from 06:00 through 21:59 Chicago time and exits after the first
+successful refresh of the local day. The repeated schedule supplies automatic
+retry when a source or network request fails. ORF Kultur and Heute are already
+disabled after confirmed HTTP 404 responses, so current runs do not request them.
+Replace or re-enable those sources only after confirming working feed URLs.
 
 The pipeline wrapper runs hourly but only actually fires once a day, gated in order:
 **role guard** (exits silently unless `MINIMOI_ROLE=production` inside the container —
@@ -200,11 +249,11 @@ safe on a standby node), **time gate** (12:00–20:00 UTC only), **idempotency c
 (reads `briefing_date` from `curator_latest.json`; skips if today already ran). When it
 fires: pulls new X bookmarks (non-fatal on failure), runs the scoring pipeline, sends
 the Telegram briefing, stamps the date. One known wart, documented in ARCHITECTURE.md
-and tracked separately: the `--model=grok-4.3` value the script passes isn't valid and
-silently falls through to the hardcoded default — the model that runs is right by
-coincidence, not by configuration.
+The reviewed model update makes `--model=grok-4.3` an explicit supported value;
+unknown values fail instead of silently selecting a default. This behavior is not
+live until that reviewed release is shipped.
 
-### In-container scheduling (APScheduler) — the second scheduling layer
+### In-container scheduling (APScheduler)
 
 Host cron is not the whole story. `minimoi-cos-scheduler` runs its own in-process
 scheduler with **seven jobs** (confirmed in `domains/cos/chief_of_staff.py`):
@@ -225,7 +274,7 @@ scheduling inventory is host cron (both users) **plus** this container scheduler
 
 ---
 
-## Data Persistence & Backups
+## Data persistence and backups
 
 ### Persistence
 
@@ -240,7 +289,7 @@ Also host-mounted: `guests.json`, `build_queue.json`, `cos_memory.md`,
 COS Agent A also uses named Docker volumes for runtime state and authentication;
 the model gateway writes receipts to `/opt/minimoi/data/model_gateway_receipts.jsonl`.
 
-### Backups — Tiers 1–2 live, Tier 3 broken
+### Backups: Tiers 1-2 live, Tier 3 broken
 
 - **Tier 1 (local, 02:00 daily):** confirmed working — dated folders in
   `/opt/minimoi/backups/` through today. The live script captures selected Curator,
@@ -300,7 +349,7 @@ Tier 3 backup failure.
 
 ---
 
-## Credentials & Third Parties
+## Credentials and third parties
 
 Production credentials are authoritative in AWS SSM Parameter Store under
 `/minimoi/production/*` and never enter git. Deployment renders the required
@@ -335,14 +384,12 @@ the four that actually run in production. Not broken — misfiled. Cleanup candi
 One residual thread: whether `telegram_polling_bot_token` is actively exercised in
 production today (vs. a webhook-testing leftover) was not verified in this pass.
 
-**One real exception to the SSM pattern:** Curator's production xAI scorer reads its
-key directly from `~/.openclaw/agents/main/agent/auth-profiles.json` — an
-OpenClaw-managed file at a fixed path — rather than the shared SSM helper every other
-service uses (German, Portuguese, CoS all resolve `xai_api_key` via the helper). This
-is fragile and undocumented anywhere else: the Curator container depends on that file
-existing. Related naming wrinkle to reconcile: the SSM inventory lists
-`grok_api_key` while the shared helper resolves `xai_api_key` — verify how the live
-container actually obtains the key, then document one authoritative name.
+**Curator xAI credential path:** defect #152 removes Curator's dependency on an
+OpenClaw-managed authentication file. The scorer now uses the shared credential
+helper with `XAI_API_KEY`, matching German, Portuguese, CoS, the model gateway, and
+the deployment secret-sync step. The authoritative production parameter is
+`/minimoi/production/xai_api_key`; dev may use its environment or the `xai/api_key`
+Keychain entry. The correction is not live until the reviewed release is shipped.
 
 DB roles are separated (`robert_sql`, `minimoi_agent`) and rotated off the old weak
 password — confirmed as distinct SSM parameters.
@@ -355,7 +402,7 @@ The production beta was accepted on 2026-08-16 at commit `b5bdda0`:
 
 - both `minimoi-cos-agent-a` and `minimoi-model-gateway` reported healthy;
 - an authenticated typed turn returned from COS Agent A through LiteLLM, served
-  by xAI `grok-4` at fallback position 0;
+  by the then-configured xAI `grok-4` route at fallback position 0;
 - the platform-owned note path persisted a receipt-backed milestone note; and
 - Robert completed a production microphone conversation and note save using the
   selectable OpenAI realtime voice path.
@@ -364,6 +411,8 @@ The browser never receives the long-lived Agent A or model-gateway tokens. Voice
 gets short-lived provider credentials and may call only the allow-listed Agent A
 consult and note-save tools. Production intentionally has no Ollama fallback on
 the current CPU host. Local Ollama remains a development/testing option.
+The reviewed next release replaces retired xAI aliases with explicit `grok-4.3`
+routing; production remains on its accepted configuration until that release ships.
 
 Useful checks:
 
@@ -433,17 +482,17 @@ down never affects production.
 
 ---
 
-## Known Gaps & Open Items
+## Known gaps and open items
 
 | Item | Tracked | Status |
 |---|---|---|
 | Curator cron wrapper masks failed scoring runs — `STATUS=$?` captures Telegram's exit code, not curator's; a failed run + successful stale send stamps `briefing_date` as success | — | **High — idempotency guarantee weaker than documented; found by Codex review 2026-07-18** |
 | Tier 3 Dropbox backup broken — rclone never installed; fails silently weekly | — | **High — fix before the restore test; found by review 2026-07-18** |
-| Curator xAI key read from an OpenClaw file path, outside the SSM pattern; SSM naming (`grok_api_key` vs `xai_api_key`) unreconciled | — | Open — verify live retrieval path, then standardize |
+| Curator xAI key depended on an OpenClaw state file | #152 | Fixed and tested in review branch; production release pending |
 | OOM recovery follow-up after resize to 4 GiB + 2 GiB swap | — | Resize complete 2026-08-16; resource budgets and memory/reachability alarms remain open |
 | COS memory, model-gateway receipts, and Agent A state/auth volumes absent from backup set | — | **High — add to Tier 1 and verify restore before relying on them as durable memory** |
 | Health loop omits Agent A, model gateway, nginx, and cloudflared | — | Open — extend expected services and external reachability checks |
-| German Lesen cron runs but ORF Kultur and Heute sources return HTTP 404 | #96 follow-up | Open — replace or correct sources and verify a clean scheduled run |
+| ORF Kultur and Heute Lesen feeds disabled after repeated HTTP 404 | #96 follow-up | Not an active failure; replace only when working feed URLs are found |
 | APScheduler timezone unconfirmed for the 7 in-container jobs | — | Open — verify before relying on clock times |
 | Tier 3 backup failure does not alert | — | Open — same silent-failure family as #84 |
 | No break-glass admin account | #87 | Open |
@@ -456,9 +505,3 @@ down never affects production.
 | Root/manual AWS access used for incident recovery | — | Replace routine production work with a least-privilege operator role; retain separately governed break-glass access |
 | Orphaned `gmail_app_password` SSM parameter | — | Delete or wire up |
 | #136 formally close with correcting comment | #136 | Robert/OpenClaw action |
-
----
-
-*Production topology, capacity, schedules, and backup inputs re-verified for the
-COS Agent A beta on 2026-08-16. When this document and the running system disagree,
-the system is right—fix the document, and say so in the commit.*

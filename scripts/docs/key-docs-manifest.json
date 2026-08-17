@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-17T11:56:08.816555+00:00",
+  "generated_at": "2026-08-17T13:10:06.296722+00:00",
   "publisher": "python3 scripts/docs/publish_key_docs.py",
   "documents": [
     {
@@ -17,23 +17,23 @@
     {
       "source": "ARCHITECTURE.md",
       "pdf": "ARCHITECTURE.pdf",
-      "source_sha256": "6ba0f0fb6abe2fdd039bdd095a456c4939ae765901cb39cd3f86e9c415a60f03",
+      "source_sha256": "ba8a5811b7d8d79b38232ea5b2eaf7fc374050b9b8cff99e424e38a91e57230a",
       "renderer_sha256": "d6b762ea5ed9e605152865845dca8ec2d3f7812d930f4a899774724578d88323",
-      "pdf_sha256": "1c76a9f29b66c507e4a9030b239487333d653cc5b848f8be506c1c994f91823c",
+      "pdf_sha256": "2dce9676798871b7501b9ff16608dd1941a88e42ad41d33b16371497a41bcd4c",
       "mermaid_diagrams": 9,
       "pages": 14,
-      "extractable_text_characters": 35767,
+      "extractable_text_characters": 36492,
       "title": "mini-moi Architecture"
     },
     {
       "source": "OPERATIONS.md",
       "pdf": "OPERATIONS.pdf",
-      "source_sha256": "f225c1e8967de8fd0a27e626ef8af0e603edfe488c0e0ce6c1b8a6576e030084",
+      "source_sha256": "acac10431ecab4466ce2eb010844080e9aba4298b63bf3cd0e023d5b6a0d196d",
       "renderer_sha256": "d6b762ea5ed9e605152865845dca8ec2d3f7812d930f4a899774724578d88323",
-      "pdf_sha256": "88a6254bd6c7d058a9401d9148eb5cd0ec45ddd82246decf59c811a594de58a3",
+      "pdf_sha256": "7550701e8523d2920e4bb1e04f60e8951e899aa1a5c105757c1c2c3ab9294662",
       "mermaid_diagrams": 1,
       "pages": 12,
-      "extractable_text_characters": 25781,
+      "extractable_text_characters": 26501,
       "title": "mini-moi Operations"
     },
     {

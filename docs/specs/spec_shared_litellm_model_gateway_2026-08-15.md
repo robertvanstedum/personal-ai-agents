@@ -163,8 +163,8 @@ agent group. It may later belong to a separately named chat-only group.
 
 The intended order is:
 
-1. `xai/grok-4`
-2. `xai/grok-4-1-fast`
+1. `xai/grok-4.3` with low reasoning
+2. `xai/grok-4.3` with reasoning disabled as the lower-latency xAI path
 3. `anthropic/claude-sonnet-4-6`
 4. accepted OpenAI model, disabled initially
 5. accepted tool-capable Ollama model for development
