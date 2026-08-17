@@ -47,14 +47,31 @@ for service in "${SERVICES[@]}"; do
   }
 done
 
+wait_for_container_health() {
+  local container="$1"
+  local max_attempts="$2"
+  local status="unknown"
+
+  for attempt in $(seq 1 "$max_attempts"); do
+    status=$(docker inspect --format='{{.State.Health.Status}}' "$container" 2>/dev/null || echo "missing")
+    [[ "$status" == "healthy" ]] && return 0
+    echo "[$attempt/$max_attempts] $container health: $status"
+    sleep 5
+  done
+
+  echo "$container did not become healthy; final status: $status"
+  docker inspect --format='{{json .State.Health}}' "$container" 2>/dev/null || true
+  docker logs --tail 80 "$container" 2>&1 || true
+  return 1
+}
+
 for service in model-gateway cos-agent-a; do
   if [[ " ${SERVICES[*]} " == *" $service "* ]]; then
     container="minimoi-$service"
-    for _ in $(seq 1 18); do
-      [[ "$(docker inspect --format='{{.State.Health.Status}}' "$container")" == "healthy" ]] && break
-      sleep 5
-    done
-    [[ "$(docker inspect --format='{{.State.Health.Status}}' "$container")" == "healthy" ]]
+    # OpenClaw's inherited Docker health check can remain in `starting` after
+    # its HTTP gateway is ready. Allow up to six minutes, while still failing
+    # closed with inspect/log evidence if the container never becomes healthy.
+    wait_for_container_health "$container" 72
   fi
 done
 
