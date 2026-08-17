@@ -87,3 +87,6 @@ def test_remote_deploy_requires_cos_health():
     script = (ROOT / "scripts/operations/deploy_scoped_release.sh").read_text()
 
     assert '[cos-scheduler]="http://localhost:8769/health"' in script
+    assert 'wait_for_container_health "$container" 72' in script
+    assert "docker logs --tail 80" in script
+    assert "did not become healthy" in script
