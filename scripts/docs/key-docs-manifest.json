@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-17T03:57:08.887423+00:00",
+  "generated_at": "2026-08-17T11:56:08.816555+00:00",
   "publisher": "python3 scripts/docs/publish_key_docs.py",
   "documents": [
     {
@@ -39,12 +39,12 @@
     {
       "source": "ROADMAP.md",
       "pdf": "ROADMAP.pdf",
-      "source_sha256": "0fa828af72d1b01b65c4e3602659541686284b7230a9a1f1cb56d456f416aee8",
+      "source_sha256": "2a1a8dfd776689976ca90244c09ee9d5ad83d1963cadee5d1a11d1da8dcf5ebb",
       "renderer_sha256": "d6b762ea5ed9e605152865845dca8ec2d3f7812d930f4a899774724578d88323",
-      "pdf_sha256": "545f7ea3e0d6264b6462d0ed518971bbd1eb21af4b8880779865e57eb60a3833",
+      "pdf_sha256": "33e89b565de38b7e2fd4dd570e6b5a0a615ea7622a845cf73e9bc8448ad4bdba",
       "mermaid_diagrams": 3,
-      "pages": 9,
-      "extractable_text_characters": 22116,
+      "pages": 8,
+      "extractable_text_characters": 20018,
       "title": "mini-moi Roadmap"
     }
   ]
