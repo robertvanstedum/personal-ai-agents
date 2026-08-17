@@ -185,6 +185,9 @@ def test_stale_briefing_uses_file_date_instead_of_today(tmp_path, monkeypatch):
 def test_production_deploy_refreshes_host_curator_cron_scripts():
     workflow = (ROOT / ".github/workflows/deploy.yml").read_text()
     curator_cron = (ROOT / "scripts/run_curator_cron_ec2.sh").read_text()
+    scoped_deploy = (
+        ROOT / "scripts/operations/deploy_scoped_release.sh"
+    ).read_text()
 
     for variable, path in (
         ("CURATOR_CRON", "scripts/run_curator_cron_ec2.sh"),
@@ -193,7 +196,8 @@ def test_production_deploy_refreshes_host_curator_cron_scripts():
     ):
         assert f"{variable}=$(base64 -w 0 {path})" in workflow
 
-    assert "runuser -u ec2-user -- /opt/minimoi/scripts/setup_ec2_cron.sh" in workflow
+    assert "SCOPED_DEPLOY=$(base64 -w 0 scripts/operations/deploy_scoped_release.sh)" in workflow
+    assert "runuser -u ec2-user -- /opt/minimoi/scripts/setup_ec2_cron.sh" in scoped_deploy
     assert "python -m scripts.x.x_pull_incremental" in curator_cron
     assert "python domains/curator/curator_rss_v2.py" in curator_cron
     assert "python core/telegram/telegram_bot.py --send" in curator_cron

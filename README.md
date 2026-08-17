@@ -5,12 +5,12 @@
 mini-moi is a personal AI agent platform. It carries
 context across reading and research, language learning, and the work of building
 and running the system itself. It remembers my interests, what I have already
-investigated, how my thinking develops, and what I decide to follow up on.
+investigated, how my thinking develops, what I decide to follow up on, and what
+I got wrong.
 
-The same pattern applies beyond one person. Persistent context and feedback that
-compounds instead of resetting is just as useful to a team or an organization
-that wants its systems to learn from repeated work rather than start over each
-time. This repository is the personal version.
+The same pattern applies beyond one person. Persistent context and feedback can
+help teams, organizations, and their systems learn and improve over time. This
+repository is the personal version.
 
 mini-moi has been in daily use since February 2026, on AWS since June 2026. This
 repository documents the system as it works today: architecture, operations,
@@ -19,20 +19,30 @@ planned work.
 
 ---
 
-## Current state (July 2026)
+## Current state (August 2026)
 
 | Domain | Current role |
 |---|---|
-| **Curator** | Supports daily reading and longer research in geopolitics and finance. Each morning it reduces roughly 700 candidates from international RSS feeds, X bookmarks, and theme-driven web search to 20 items on the web and 10 in Telegram. Reactions, saved items, comments, and investigations provide context for later selection. A separate serendipity pool helps prevent the learned profile from becoming a closed loop. Curator can also produce article scans, research threads, deeper-dive briefs, AI observations, and a weekly synthesis. |
-| **Mein Deutsch** | Combines simulated German immersion with interest-led reading and writing. Gespräche provides unscripted voice conversations with AI personas and user-chosen scenes. Lesen presents current German-language articles across everyday life, culture, news, and Vienna; each selection includes a short source excerpt and a link to the full original. Words and phrases can be translated and saved with context. Article-related notes can be typed or dictated, corrected and explained by AI, then retained with their original and corrected forms. Vocabulary, writing records, conversation reviews, and the archive provide material for repeated use across the different forms of practice. |
-| **Meu Português** | Followed German as an intentional copy-and-adapt extension for a mixed English-Portuguese household. Both parents use both languages, but each has a different stronger language; the children have different levels of fluency, exposure, and formal practice. The family shares a desire to maintain and develop those abilities over time. The first release deliberately emphasized a polished frontend, multi-user separation, and per-user data boundaries so real users could evaluate it quickly. The backend is now converging with German, especially in adaptive memory. |
-| **Guild** | Gives me one place to follow ongoing planning, development, and operations across the platform. That visibility becomes more important as multiple coding agents contribute build work. Its Build, Operate, and Improve sections remain in use while the domain is refocused after Chief of Staff moved out. The planned **Master Craftsman** will coordinate build quality, code review, domain standards, and consistency between specifications and implementation inside Guild, without mixing that role with Chief of Staff. |
-| **Chief of Staff** | Released as v0.9 after becoming a standalone domain in July 2026. It provides chat with a defined voice, its own working memory and agenda, scheduled watch loops, and health checks. It remains in use while its remaining dependencies on Guild are removed and its access across the other domains is expanded. The separation gives both Chief of Staff and Guild clearer boundaries for further development. |
+| **Curator** | Supports daily reading and sustained research in geopolitics and finance. Each morning, it distills roughly 700 candidates from international RSS feeds, X bookmarks, and theme-driven web search into a curated shortlist of 20. Selected articles can become scans, research threads, or deeper dives. Reactions, comments, and recorded leanings shape later selections. A serendipity pool guards against a closed loop, while AI synthesis surfaces patterns across the accumulated record. |
+| **Mein Deutsch** | Originally inspired by an upcoming trip to Vienna and a lack of opportunities to speak German, this domain uses AI personas in everyday scenarios for unscripted conversations adapted to the learner’s ability. The intent is immersion, including the tension of following and speaking in a new language. It was road-tested during the trip itself, when unexpected communication challenges could be turned into new scenes and relived later. Reading and writing reinforce the learning loop and preserve locally grounded context. The learner’s activity then shapes future sessions. |
+| **Meu Português** | Portuguese was chosen to fill a family need: maintaining a second language used at home across varying levels of proficiency. AI personas, scenes, and reading content are Brazilian-focused. The domain does not put users into fixed proficiency levels. The intent is still immersion. A more advanced learner can choose a more demanding scenario and speak or write in a more complex way. A novice can use simpler scenarios and rely more heavily on targeted drills or traditional vocabulary practice. Usability enhancements were added across the site, including hover translation, tips in English, and the option to speak throughout. |
+| **Guild** | Guild was created to bring discipline, visibility, and learning to the development of the platform. Build, Operate, and Improve are its three working areas. Build currently maintains a Kanban view of work in progress, an inventory of specifications, and an evolving roadmap. With more than one coding agent now in use and operational concerns becoming more important, the planned **Master Craftsman** will coordinate build quality, code review, domain standards, and consistency between specifications and implementation. |
+| **Chief of Staff** | Chief of Staff is intended to become my personal strategic thinking and cross-domain working partner. It will carry context across mini-moi, notice connections, support decisions, and help direct follow-through. Its scope will also extend to learning and professional priorities beyond the current domains, using the platform’s shared tools and capabilities. The beta supports discussion, investigation, and refinement of possible actions but cannot alter the platform itself. OpenClaw is the current bounded agent, running independently on AWS behind a stable interface so it can be replaced without redesigning the domain. Once proven, the same approach will support **Master Craftsman**, a separate build-focused agent in Guild. |
 
 Production runs on AWS EC2, with a Mac development standby. The deployment
-consists of eight containers plus host-level nginx and cron. CI/CD normally
-moves a pushed change to production in about five minutes. Error tracking and
-scheduled health checks monitor the running system.
+consists of nine application/runtime containers plus PostgreSQL, with host-level
+Cloudflare Tunnel, nginx, and cron. Production currently uses a full
+immutable-image, health-gated deployment. A reviewed but not yet shipped CI/CD
+change adds document-only and domain-scoped releases so documentation can publish
+without container restarts and one domain can deploy without interrupting the
+others; shared or ambiguous changes continue to select the full path.
+Error tracking and scheduled health checks monitor the running system.
+
+The August 16 milestone is deliberately called a **beta**, not 1.0. It proves a
+real agentic loop—conversation, bounded research, model routing, verified note
+mutation, and realtime voice—while longer-term conversation retention, privacy
+controls, natural capture intents, cross-domain reach, and cost governance remain
+explicit follow-up work.
 
 The maintained reference documents are:
 
@@ -151,18 +161,21 @@ and architecture describe its current limits.
 
 ### Language practice: conversation and return
 
-For my German, the domain addresses three practical gaps. First, I need more
-chances to speak, including the experience of getting stuck and recovering in a
-real exchange. Second, I want to read engaging, current material without the
-effort becoming burdensome; contextual hints, translation, audio, and shorter
-excerpts help me keep moving. Third, I want reasons to write about something I
-actually find interesting, with correction and explanation for the mistakes I
-make. Gespräche, Lesen, and Schreiben are complementary responses to those
-needs rather than separate exercises.
+German began with an upcoming trip to Vienna and a lack of opportunities to
+speak before going. The domain addresses three practical gaps. First, I need
+the experience of getting stuck and recovering in a real exchange. Second, I
+want to read engaging, current material without the effort becoming burdensome;
+contextual hints, translation, audio, and shorter excerpts help me keep moving.
+Third, I want reasons to write about something I actually find interesting,
+with correction and explanation for the mistakes I make. Gespräche, Lesen, and
+Schreiben are complementary responses to those needs rather than separate
+exercises.
 
 The persona opens the exchange. The conversation is free-form, and difficulty
 inside the conversation becomes evidence for later practice rather than a
-reason to replace it with a scripted lesson.
+reason to replace it with a scripted lesson. The approach was road-tested in
+Vienna, where unexpected communication challenges could become new scenes to
+relive later.
 
 ```mermaid
 flowchart TB
@@ -193,10 +206,12 @@ flowchart TB
 
 German came first and remains more developed in the backend, including the use
 of reviewed conversation context in later persona prompts. Portuguese followed
-as an intentional copy-and-adapt extension for family use in a mixed
-English-Portuguese household. It moved quickly and deliberately focused first on
-the frontend, multi-user separation, and per-user data boundaries so it could
-enter real family use and extend the language pattern beyond German.
+to meet a family need: maintaining a second language used at home across
+varying levels of proficiency. Each person begins with the same experience and
+keeps a separate learning record. The domain remains level-agnostic: advanced
+learners can choose more demanding scenes and language, while novices can rely
+more on simpler scenarios, hover translation, vocabulary practice, and targeted
+drills.
 
 The two domains are intended to converge into the same solution from interface
 through stored data and adaptive memory. A third language, new to the whole
@@ -316,11 +331,13 @@ design and is scheduled for end-to-end verification on the current EC2 setup.
 
 **Use AI agents as contributors, with human direction.** The director defines the
 intent, decides what enters the system, and remains responsible for the result.
-Different agents contribute design alternatives, implementation, testing, and
-review. The current set includes Claude Code, Claude.ai, OpenClaw, Grok, and
-OpenAI Codex. The particular models will change; the separation of roles is
-more durable. Important changes receive review from more than one agent before
-they are treated as complete.
+Claude Code, Claude.ai, OpenClaw, Grok, and OpenAI Codex contribute planning,
+design alternatives, implementation, testing, and review. Separately, the
+Chief of Staff beta introduces OpenClaw as the first bounded agent operating
+inside the product. The particular agents and models will change; the
+separation of roles and the platform-owned boundaries are more durable.
+Important changes receive review from more than one agent before they are
+treated as complete.
 
 **Operate while the system is evolving.** Keeping daily use dependable is
 important and not trivial, especially while development continues. Drift can
@@ -334,9 +351,10 @@ gaps in safeguards as they are found.
 
 ## Product tour
 
-These production captures from July 21, 2026 show the five domains as they are
-currently presented and several of the workflows behind their landing pages.
-Each image opens at full size.
+These production captures from July 21, 2026 show the five domain environments
+and several workflows behind their landing pages. The descriptions reflect the
+current August 16 state, including the newer Chief of Staff beta. Each image
+opens at full size.
 
 ### Five domains
 
@@ -348,7 +366,7 @@ Each image opens at full size.
 | Meu Português | Guild | Chief of Staff |
 |---|---|---|
 | [![Meu Português landing page with a Rio photograph and language-practice entry points](docs/screenshots/2026-07-21/portuguese-landing.jpg)](docs/screenshots/2026-07-21/portuguese-landing.jpg) | [![Guild landing page with Build, Operate, and Improve](docs/screenshots/2026-07-21/guild-landing.jpg)](docs/screenshots/2026-07-21/guild-landing.jpg) | [![Chief of Staff landing page with a Chicago photograph](docs/screenshots/2026-07-21/chief-of-staff-landing.jpg)](docs/screenshots/2026-07-21/chief-of-staff-landing.jpg) |
-| A family-use Portuguese version with per-user boundaries and a polished front end. | The build, operations, and improvement workspace. | A standalone coordination domain, still visibly marked as in development. |
+| Family Portuguese practice with separate learning records, level-agnostic immersion, and voice throughout. | Build, Operate, and Improve make platform development and operations visible. | A production beta for conversation, bounded investigation, and platform-owned notes; the image predates the agent release. |
 
 ### Curator: daily reading becomes research
 

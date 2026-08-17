@@ -83,15 +83,17 @@ def test_production_images_include_gateway_module_and_agent_identity():
 
 def test_ci_builds_and_verifies_the_two_new_production_services():
     workflow = WORKFLOW.read_text()
+    deploy_script = (
+        ROOT / "scripts/operations/deploy_scoped_release.sh"
+    ).read_text()
 
     assert 'cos-agent-a) dockerfile="docker/Dockerfile.cos-agent-a"' in workflow
     assert 'model-gateway) dockerfile="docker/Dockerfile.model-gateway"' in workflow
-    assert 'tag_prefix="agent-a"' in workflow
-    assert 'tag_prefix="model-gateway"' in workflow
-    assert "minimoi-cos-agent-a" in workflow
-    assert "minimoi-model-gateway" in workflow
-    assert "State.Health.Status}} minimoi-model-gateway" in workflow
-    assert "State.Health.Status}} minimoi-cos-agent-a" in workflow
+    assert 'tag="agent-a-$SHA"' in workflow
+    assert 'tag="model-gateway-$SHA"' in workflow
+    assert "cos-agent-a) echo" in deploy_script
+    assert "model-gateway) echo" in deploy_script
+    assert "State.Health.Status" in deploy_script
 
 
 def test_ssm_sync_uses_named_parameters_without_printing_values():

@@ -2,7 +2,7 @@
 
 <div><a name="overview"></a></div>
 
-*Maintained baseline — reviewed through 2026-07-21. This replaces the former root
+*Maintained baseline — reviewed through 2026-08-16. This replaces the former root
 roadmap; the separate Guild roadmap view remains temporarily in place until the
 Baseline document flow replaces it. Companion to ARCHITECTURE.md (what the system is
 and why) and OPERATIONS.md (how it runs). This document is what happens next — and,
@@ -62,32 +62,33 @@ flowchart LR
     N -.-> P
 ```
 
-**Chief of Staff** — conversations, light tags, and the knows-me corpus make the
-next conversation smarter. CoS is also the one domain that reaches into the
-others: it can inspect and talk to any domain to get information, and — where a
-domain exposes the capability — instruct it to do something.
+**Chief of Staff** — the current beta supports conversation, bounded investigation,
+and explicit platform-owned notes. The intended loop adds durable context and
+approved read/consult interfaces over time. It does not receive unrestricted
+backend access merely because its role is cross-domain.
 
-Cross-domain flow is limited and explicit: Guild lessons flow to CoS, CoS surfaces
-new areas worth exploring back to Guild, and I sit in the middle.
+Robert remains the direct decision point for CoS, Guild, and Guild's future Master
+Craftsman. Any later information flow between agents must be optional, bounded,
+and exposed by the owning domain—not an autonomous supervision chain.
 
 ```mermaid
 flowchart LR
-    A[me] --> B[Chief of Staff]
-    B --> C[Guild]
-    C --> A
-    C -.lessons.-> B
-    B -.new areas.-> C
+    A[Robert] --> B[Chief of Staff]
+    A --> C[Guild / Master Craftsman]
+    B -.approved consult interface.-> C
+    C -.bounded response.-> B
 ```
 
 Some of this is still aspirational — but the shape is the commitment: each loop
 stays inside its domain's purpose. A German mistake tunes German practice. It does
-not feed a work decision. No cross-domain suggestion creep, ever, even though the
-backend can see everything.
+not feed a work decision. No cross-domain suggestion creep, and no assumption that
+one agent can see data another domain has not explicitly exposed.
 
 The foundation for all of it accumulates **organically, through normal use** — not
 as a parallel habit or a formal record-keeping system (a formal decision-record
 practice was tried and didn't stick; that's fine, and it's not coming back). CoS
-keeps loose track of what was decided and what's worrying as conversations happen.
+currently retains explicit notes; broader conversation memory awaits the retention
+and privacy design.
 Language sessions have been accumulating the practice-and-error history all along.
 Curator reactions are the thinking record. The infrastructure that puts this
 accumulated record to full use is the one big aspiration at the end of this
@@ -150,7 +151,14 @@ of the system.
 
 ### 1. Technical debt cleanup (near-term, first)
 
-Four scoped blocks, mostly pre-decided:
+Five scoped blocks, mostly pre-decided:
+
+- **Production capacity and agent-state recovery.** The August 16 OOM proved that
+  2 GB RAM with no swap was not a resilient home for the expanded ten-container
+  stack. The host is now `t3a.medium` with 4 GiB RAM, a 50 GiB gp3 root volume,
+  and 2 GiB bounded swap. Remaining work is memory/reachability alarms, container
+  resource budgets, and inclusion of COS notes, gateway receipts, and Agent A
+  state/auth volumes in the backup and restore test.
 
 - **Repo and doc rationalization** — deprecate `_NewDomains/` (its original job —
   a safe place to build without breaking production — is now done by the dev
@@ -165,7 +173,8 @@ Four scoped blocks, mostly pre-decided:
   restore and closes the no-staging gap in the same act — and the bar just moved:
   the review of this very draft found Tier 3 (Dropbox) was never running at all
   (`rclone` never installed on EC2; the weekly job has failed silently since it was
-  added). So the item is: fix Tier 3 first, then restore-test all three tiers.
+  added). So the item is: expand Tier 1 for COS Agent A, fix Tier 3, then
+  restore-test all three tiers.
   Untested backups are assumptions; one of ours was a confirmed silent failure.
   Staging then becomes the deployment gate the platform currently lacks.
 - **Build-health observations — the capability that replaces hygiene-as-task.** An
@@ -203,32 +212,34 @@ where the topic demands them. Same pattern as German → Portuguese → French: 
 the template on the first instance, converge it, then instantiate. That's growth
 inside what exists, not a new domain.
 
-### 3. Chief of Staff — partner build, step one
+### 3. Chief of Staff — production beta evaluation
 
 The vision is a partner, not a task taker (ARCHITECTURE.md carries the full
-contract). Step one is deliberately practical:
+contract). The first bounded-agent beta shipped to production on 2026-08-16.
+Daily use now decides what earns expansion:
 
-- **A place to converse** — the current page is a skeleton by design; the
-  conversation surface becomes channel-agnostic: HTML with voice added, Telegram
-  integrated, the input channel irrelevant to the conversation.
-- **Light tagging** — actions, decisions, and risks arising in conversation get
-  lightly tagged (domain / actor / type / time) to bucket and analyze later — a
-  loose record kept as a side effect of talking, not a formal system to maintain.
-  This is the CoS feed into the learning layer.
-- **First focus: access.** CoS gets the ability to inspect and "talk" to any
-  domain to get information — and, where a domain exposes the capability, to
-  instruct it to do something. That's what's being proven, along with whether a
-  working relationship can actually be established. Concrete daily scope:
-  escalations from operations, and ad hoc tasks, questions, and notes checking on
-  areas of the application.
+- **Conversation is live.** Typed Confer reaches COS Agent A; selectable OpenAI
+  and Grok realtime voice follow the Gespräche/Conversas pattern and can consult
+  the agent or save a verified platform note through allow-listed tools.
+- **Runtime independence is real enough to test.** Agent A is isolated in its own
+  container, OpenClaw is the current shell, and LiteLLM makes cloud-provider order
+  configurable. A second runtime is not needed yet, but upgrades must continue to
+  prove the adapter contract.
+- **First focus remains access.** Expand read/consult capabilities across domains
+  only through explicit platform interfaces. Mutations remain platform-owned and
+  receipt-backed.
+- **Memory/privacy is the next design gate.** Spec #150 defines JSON/text-first,
+  database-projection-second storage, retention classes, explicit off-record and
+  deletion controls, natural phrases such as “save this” or “come back to this,”
+  and honest receipts. Raw conversation is not silently promoted to permanent
+  memory before those retention decisions are made.
 - **Stated plainly: this might not prove useful.** CoS is new enough that we don't
   know yet. The committed work is the experiment that finds out — everything
   further (periodic reviews over its record, expanded autonomy) waits on that
   proof, which is why none of it appears in the Planned tier below.
-- **Bounded OpenClaw instance** — the Phase 1 agent layer, scoped to mini-moi
-  domains under the permission model. Python-only today; the instance is spec-ready
-  and currently blocked on OpenClaw-side deliverables (package name, start command,
-  config schema).
+- **Bounded OpenClaw instance** — shipped as COS Agent A. Browser, arbitrary fetch,
+  filesystem, runtime, messaging, and subagents remain denied; the search adapter
+  returns up to 20 quality-relevant cited sources as untrusted evidence.
 - **The knows-me corpus begins** — background, plans, risks worried about,
   deliberately given over time. Intentional only, accumulating slowly, aiming at
   professional-friend-and-partner knowledge. The March research agent piloted
@@ -240,15 +251,21 @@ contract). Step one is deliberately practical:
 
 - **Model configuration made real.** Fix the broken `--model` flag path, make
   backend model choices (translation first) genuinely config-driven across the
-  language domains, and re-verify Curator's local-model swap end-to-end on EC2.
+  language domains, and re-verify the local-model path end-to-end on the
+  development Mac or later suitably sized infrastructure.
   Context that matters: local inference is proven on this platform — it ran in
-  production at genesis and runs today in German's translation fallback; Curator's
+  at genesis and runs today when German's translation fallback has a local provider; Curator's
   scoring moved to cloud when Haiku's cost proved negligible, as a deliberate quick
   backend swap (the designed pattern), and the scoring script's "ollama" label now
   maps to keyword scoring — a naming artifact to clean up, not a broken capability.
   The spec_125 model-standardization work, informed by the July audit's call-site
   inventory. User-facing model choices (voice, review) stay in the UI where they
   belong.
+- **Shared LiteLLM rollout and cost checkpoint.** COS Agent A proves the first
+  shared gateway route, fallback receipt, and cost record. Apply the same reusable
+  module to other domains through their own specs, then make model spend a regular
+  COS checkpoint. Evaluate AWS Bedrock as a later provider option. Keep SGLang on
+  the roadmap only for a future GPU-backed need; do not pay for idle GPU capacity.
 - **Curator Deep Dive consolidation.** Verify what each of the coexisting scripts
   actually serves (Scans vs. Deep Dive vs. Deeper Dive — at least four candidates at
   last count) — then consolidate as a regression-refactor. Design holds; the backend
@@ -294,9 +311,11 @@ allows.
   conversations as inputs that redirect open threads. Partially alive in CoS chat.
 - **Local-first at depth** — GPU hardware, on-device voice inference, local models
   taking on more work including coding, as models and hardware improve.
-- **If CoS proves its way of working** — bounded handoffs (approval workflow, then
-  coordination with Guild's master-craftsman agent, then policy engine and circuit breaker as trust is
-  earned), and Professional Opportunities as a standing CoS section: Loop A already
+- **If CoS proves its way of working** — bounded consult/handoff interfaces with
+  approval workflow, policy engine, and circuit breaker as trust is earned. The
+  Guild Master Craftsman remains separately governed and communicates directly
+  with Robert; any exchange with CoS is optional rather than supervisory. Also add
+  Professional Opportunities as a standing CoS section: Loop A already
   scouts (611 companies, output refreshing); its output lands in CoS once CoS has
   proven itself worth landing things in.
 - **Curator sources beyond English** — German, Portuguese, and eventually French
@@ -332,14 +351,14 @@ documents' current-state sections.
 
 | Domain | Released in 1.x (2026) |
 |---|---|
-| Platform | AWS migration + two-node architecture (Jun) · CI/CD pipeline, push-to-live ~5 min (Jun) · backups: Tiers 1–2 (local, S3) verified running daily; Tier 3 (Dropbox) confirmed broken — rclone missing, fix pending · Sentry error monitoring (Jun) · unified identity/auth across domains + security remediation (Jul) |
+| Platform | AWS migration + two-node architecture (Jun) · CI/CD pipeline, push-to-live ~5 min (Jun) · scoped document/domain release pipeline prepared for production review (Aug): unrelated domains stay up, ambiguous dependencies fall back to full deployment · shared LiteLLM routing, receipts, and cost foundation (Aug) · backups: Tiers 1–2 (local, S3) verified running daily; Tier 3 (Dropbox) confirmed broken — rclone missing, fix pending · Sentry error monitoring (Jun) · unified identity/auth across domains + security remediation (Jul) |
 | Curator | daily production (Feb) · v1.0 (Mar) · X bookmark integration (Feb–Mar) · AI Observations, five types + weekly synthesis · Deep Dive research briefs with multi-model cross-check (Jun) · priority feed · reading library + web portal · model rotation to current Grok tier |
 | Mein Deutsch | v1.1 (Jun) · seven-tab web interface (May) · live voice persona conversation — TTS + Whisper (May–Jun) · three transcript-review paths with user-selectable model · Anki card + lesson-plan pipeline · mobile fixes · legacy identity history reconciled and production Lesen refresh made safe and deployable (Jul) |
 | Meu Português | Full domain live (Jun) — sibling of German · in-website voice · multi-user with per-user custom personas · Leitura / Conversas / Escrita |
 | Guild | v1.0 (Jun — v0.9 shipped the concept, v1.0 shipped it as a production system) · build queue + specs views · operations dashboard |
-| Chief of Staff | v0.9 (Jul) · extracted from Guild as its own domain · four-tab web UI · 30-minute health monitoring loop + Telegram alerts · daily cross-domain briefing · chat with a defined voice |
+| Chief of Staff | v0.9 (Jul) · extracted from Guild as its own domain · four-tab web UI · 30-minute health monitoring loop + Telegram alerts · daily cross-domain briefing · **production agent beta (Aug): isolated COS Agent A/OpenClaw runtime, bounded cited search, configurable model gateway, typed Confer, OpenAI/Grok realtime voice, barge-in, transcript-after-stop, and verified platform-owned notes** |
 | Research Intelligence | PoC pilot (Mar) · merged into Curator's Deep Dive as its production home (Jun) |
 
 ---
 
-*Roadmap · mini-moi · reviewed 2026-07-21 · Review at major milestones or quarterly.*
+*Roadmap · mini-moi · reviewed 2026-08-16 · Review at major milestones or quarterly.*

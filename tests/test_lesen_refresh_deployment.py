@@ -24,14 +24,16 @@ def test_installer_uses_packaged_cli_preserves_crontab_and_rotates_logs():
 
 def test_main_deployment_installs_the_refresh_contract():
     workflow = WORKFLOW.read_text(encoding="utf-8")
+    scoped_deploy = (
+        ROOT / "scripts/operations/deploy_scoped_release.sh"
+    ).read_text(encoding="utf-8")
 
-    pushed = (
-        "/opt/minimoi/scripts/install_lesen_refresh_cron.sh"
-        '\\",\\"chmod +x'
-    )
-    executed = '"/opt/minimoi/scripts/install_lesen_refresh_cron.sh"'
+    encoded = "LESEN_CRON=$(base64 -w 0 scripts/operations/install_lesen_refresh_cron.sh)"
+    pushed = "echo $LESEN_CRON | base64 -d > /opt/minimoi/scripts/install_lesen_refresh_cron.sh"
+    executed = "/opt/minimoi/scripts/install_lesen_refresh_cron.sh"
+    assert encoded in workflow
     assert pushed in workflow
-    assert executed in workflow
+    assert executed in scoped_deploy
 
 
 def test_permanently_broken_sources_are_inactive():

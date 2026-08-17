@@ -2,13 +2,12 @@
 
 [Download the formatted PDF](OPERATIONS.pdf)
 
-*Maintained baseline — reviewed through 2026-07-21. The production topology and
-scheduled-job inventory were verified against the running system on 2026-07-18;
-the German identity and Lesen refresh updates were verified in production on
-2026-07-20. The restored AI Observations path was manually verified in production
-on 2026-07-21; its automatic daily and Sunday runs still await verification. Later
-claims are marked where they rely on repository state rather than another live
-production inspection. Companion evidence file:
+*Maintained baseline — reviewed through 2026-08-16. The production topology,
+containers, host services, schedules, memory pressure, storage, backup inputs,
+and recent job outcomes were rechecked against the running system on 2026-08-16.
+Automatic daily and Sunday AI Observations completed successfully that day.
+COS Agent A, its model gateway, authenticated round trip, platform note path,
+and real-microphone voice path were also verified in production. Companion evidence file:
 `CURRENT_STATE_OPERATIONS_2026-07-18.md`. System design and the reasoning behind it:
 [`ARCHITECTURE.md`](ARCHITECTURE.md) — this document is about keeping that system
 running.*
@@ -22,14 +21,15 @@ rationale; this is the operational view):
 
 | Node | Role | URL | Compose file |
 |---|---|---|---|
-| AWS EC2 (t3.small, us-east-1, `i-0d13db821169627e2`) | **Production** — live traffic, all bots, scheduled jobs | minimoi.ai | `docker-compose.prod.yml` |
+| AWS EC2 (t3a.medium, us-east-1, `i-0d13db821169627e2`) | **Production** — live traffic, all bots, scheduled jobs | minimoi.ai | `docker-compose.prod.yml` |
 | Mac (local, Colima) | **Dev / standby** — development, private-repo sync, DNS-switchable fallback | dev.minimoi.ai | `docker-compose.yml` |
 
-### Production: 8 containers + 2 host-level services
+### Production: 10 containers + 3 host-level services
 
 ```mermaid
 flowchart TD
-    A[Internet] --> B["nginx — on the EC2 HOST via systemd, NOT containerized"]
+    A[Internet] --> T["Cloudflare Tunnel<br/>cloudflared on EC2 host"]
+    T --> B["nginx — on the EC2 host via systemd"]
     B --> C["minimoi-portal :5001 — session auth + reverse proxy"]
     C --> D["minimoi-curator :8766"]
     C --> E["minimoi-german :8767"]
@@ -37,11 +37,13 @@ flowchart TD
     G["minimoi-system-bot"] -.Telegram.-> H[Robert]
     I["minimoi-cos-bot"] -.Telegram.-> H
     J["minimoi-cos-scheduler :8769"]
+    J --> M["minimoi-cos-agent-a<br/>bounded OpenClaw runtime"]
+    M --> N["minimoi-model-gateway<br/>LiteLLM routing + receipts"]
     D --> K["postgres-ai-agents :5432"]
     E --> K
     F --> K
     C --> K
-    L["host cron (root) — backups + scheduled jobs, NOT containerized"]
+    L["host cron — backups + scheduled jobs"]
 ```
 
 | Container | Port (localhost) | Purpose |
@@ -54,18 +56,22 @@ flowchart TD
 | `minimoi-system-bot` | — | Telegram polling bot — inbound system/German commands only; the Curator briefing is sent by `telegram_bot.py --send` inside `minimoi-curator`, via cron, on the separate outbound token |
 | `minimoi-cos-bot` | — | CoS chat bot |
 | `minimoi-cos-scheduler` | 8769 | CoS scheduled-loop agent |
+| `minimoi-cos-agent-a` | internal only | Isolated COS Agent A runtime; OpenClaw is the current swappable shell |
+| `minimoi-model-gateway` | internal only | LiteLLM provider routing, fallback policy, health, receipts, and cost records |
 
-**Two things run on the host, outside Docker — easy to forget, previously documented
-nowhere:**
+**Three things run on the host, outside Docker:**
 
 1. **nginx** — native systemd service (active since 2026-06-20), reverse proxy in front
    of the portal container. `systemctl status nginx` to check; config under
    `/etc/nginx/`.
-2. **cron (root)** — all backup jobs and scheduled pipelines. `sudo crontab -l` to see
-   the real schedule. A container-only mental model of production misses both of these.
+2. **cloudflared** — the Cloudflare Tunnel process that carries public traffic to
+   host nginx. `systemctl status cloudflared` to check it. A stopped tunnel produces
+   Cloudflare 1033 even when the containers themselves are healthy.
+3. **cron** — backup and pipeline jobs split across root and `ec2-user`. Inspect both
+   crontabs; a container-only mental model misses this entire host layer.
 
-All container ports bind to `127.0.0.1` — nothing is directly exposed except through
-nginx.
+All container ports bind to `127.0.0.1`. Public traffic follows Cloudflare Tunnel →
+host nginx → portal; no application container is directly internet-exposed.
 
 ---
 
@@ -73,26 +79,40 @@ nginx.
 
 ### Deploy
 
-Push to `main` triggers CI/CD (GitHub Actions): test → build images → push to ECR →
-deploy to EC2 via SSM. **~4–5 minutes to live.**
+**Current production path:** a push to `main` runs the full test/build/deploy
+workflow and promotes immutable commit-tagged application images. Shared and
+domain-specific changes currently use that same full application path.
 
-Two operational facts worth stating plainly:
+**Prepared for review, not yet live:** a scoped release change exists in the
+isolated review worktree. After its diff is reviewed, approved, committed, and
+deployed, it will add three classified paths:
 
-- **A plain `git push` to `main` rebuilds and redeploys all 7 built services
-  automatically — including on docs-only commits.** There's no path filtering in the
-  workflow, and a fresh CI build always produces a new image digest even for
-  byte-identical source, so `pull && up -d` recreates all 7. **`postgres-ai-agents` is
-  the one exception** — stock image, not in the build matrix, never touched by the
-  pipeline. Live proof: after a docs-only push, `docker inspect` showed all 7 app
-  containers sharing an identical start timestamp to the second, while postgres kept
-  its prior-day timestamp. All 7 restart *together*, not staggered — each comes back in
-  seconds, so in practice it reads as near-zero perceived downtime rather than a
-  visible outage. But it is all 7, not just the one you happened to be using.
-  Updating a *single* container is possible, but only via the manual path under
-  Rollback below — it is not something a push triggers.
-  One footnote: the workflow's `workflow_dispatch` trigger defines an `image_tag`
-  input that the deploy job never actually reads — it always pulls `:latest`. That
-  input is vestigial; don't mistake it for a working single-tag deploy capability.
+- **Domain-scoped release:** map changed paths to their owning services, build
+  only those immutable images, synchronize served documents, recreate only the
+  selected services with `--no-deps`, verify their identity and health, then
+  prune unused images. Known coupling is explicit—for example, German also
+  selects the system bot, while a COS change does not restart German.
+- **Full application release:** shared core/topology changes and unknown paths
+  use every application service. Ambiguity fails safely toward the full stack.
+- **Document-only release:** synchronize `docs/design/`, `docs/specs/`, and the
+  build queue through SSM. No image build, Docker Compose command, prune, or
+  container restart occurs. The maintained root documents and generated PDFs
+  publish in GitHub.
+
+Operational facts worth stating plainly:
+
+- **Classification is fail-safe toward application deployment.** Mixed known
+  domains use the union of their service mappings; any unrecognized runtime path
+  uses the full path. A manual workflow dispatch is also always a full deployment.
+  The PostgreSQL container remains host-stateful and outside the image build matrix.
+- **Pull before prune.** The deploy that introduced COS Agent A exhausted the old
+  ten-minute workflow poll while the EC2 SSM command continued. During recovery,
+  the SSM agent also temporarily lost usable instance credentials and the site
+  returned Cloudflare 530 until a graceful EC2 stop/start restored the agent. The
+  application itself was healthy once the command finished. The proposed scoped
+  path pulls first, validates the running immutable image set and health endpoints,
+  then prunes unused images. Its longer poll and terminal-error behavior remain
+  pending until the reviewed change is shipped.
 - **There is no staging gate in the deploy pipeline.** A push to `main` goes
   straight to production. `dev.minimoi.ai` routes via Cloudflare Tunnel to the Mac
   dev environment (verified in the tunnel config) — a genuinely separate origin,
@@ -103,9 +123,11 @@ Two operational facts worth stating plainly:
 
 ### Recovery options
 
-**Access channels** (always available, independent of any rollback action): SSH
-(security-group allowlisted) and AWS SSM Session Manager / EC2 Instance Connect —
-the fallback that works even when SSH rules are wrong. Both verified working.
+**Normal access channels:** SSH (security-group allowlisted), AWS SSM Session
+Manager, and EC2 Instance Connect. They are independent paths for many network or
+credential failures, but they are not guaranteed during host exhaustion. On
+2026-08-16 the instance status check failed and neither SSH nor an EC2 command-line
+session was usable; the AWS console reboot was the working break-glass path.
 
 **Rollback actions**, typical order:
 
@@ -122,9 +144,9 @@ sudo docker-compose -f docker-compose.prod.yml up -d --force-recreate <service-n
 # Use the Compose SERVICE name (e.g. curator), not the container name.
 ```
 
-Pulling a specific prior image from ECR is possible but Compose is pinned to
-`:latest` — an exact, tested command for that path is an open runbook item, not yet
-written.
+Production containers currently run immutable commit tags. Pulling and recreating
+an exact prior tag from ECR is therefore possible, but the tested command sequence
+still needs to be written as a formal rollback runbook.
 
 ### Manual health check (EC2)
 
@@ -136,39 +158,41 @@ curl -s http://localhost:8766/health      # curator
 curl -s http://localhost:8767/health      # german
 curl -s http://localhost:8770/health      # portuguese
 curl -s http://localhost:5001/health      # portal
+sudo docker inspect --format '{{.State.Health.Status}}' minimoi-model-gateway
+sudo docker inspect --format '{{.State.Health.Status}}' minimoi-cos-agent-a
 systemctl status nginx                    # host nginx — not in docker ps
+systemctl status cloudflared              # public tunnel — not in docker ps
 sudo docker logs minimoi-portal --tail 30 # when something looks wrong
 ```
 
-Automated version: CoS's Loop H runs every 30 minutes — checks the seven other
-expected containers (it cannot meaningfully check its own liveness from inside
-itself), disk < 80%, memory < 85%, and four /health endpoints — alerting via the
-**CoS bot token** (not the system bot). It does **not** check host nginx; nginx is
-currently unmonitored beyond systemd itself. CoS detects and escalates — **Robert
-decides the action.**
+Automated version: CoS's Loop H runs every 30 minutes — checks seven legacy
+expected containers, disk < 80%, memory < 85%, and four `/health` endpoints —
+alerting via the **CoS bot token**. Its expected set does not yet include
+`minimoi-cos-agent-a` or `minimoi-model-gateway`, and it checks neither nginx nor
+cloudflared. It also did not prevent the 2026-08-16 OOM incident. CoS detects and
+escalates within those current limits; **Robert decides the action.**
 
 ---
 
 ## Scheduled Jobs
 
-Cron, split across two users, is the entire scheduling story on this host — verified
-live 2026-07-18 (`crontab -l` as both users; `systemctl list-timers` confirmed no
-app-level systemd timers exist, only stock OS ones). Checking one crontab and assuming
-it's the whole picture misses the pipeline.
+Host cron is split across two users and works alongside the COS scheduler container.
+Both crontabs and recent job logs were rechecked on 2026-08-16. Checking only one
+user—or only host cron—misses part of the production schedule.
 
 | User | Time (UTC) | Job | What it does |
 |---|---|---|---|
-| root | 02:00 daily | `backup_local.sh` | Tier 1 — full local backup to `/opt/minimoi/backups/YYYY-MM-DD/` |
+| root | 02:00 daily | `backup_local.sh` | Tier 1 — selected persistent paths to `/opt/minimoi/backups/YYYY-MM-DD/` |
 | root | 03:00 daily | `backup_s3.sh` | Tier 2 — S3 sync |
 | root | 04:00 Sunday | `backup_dropbox.sh` | Tier 3 — weekly Dropbox sync — **BROKEN: rclone not installed; fails silently every run** |
+| root | 5 minutes past each hour | `lesen_refresh_cli.py` in `minimoi-german` | Refreshes German reading material; recent runs complete partially because two configured sources return HTTP 404 |
 | ec2-user | hourly | `run_curator_cron_ec2.sh` | Curator pipeline — fires at most once/day, gated below |
-| ec2-user | 15 minutes past each hour | `run_intelligence_cron_ec2.sh` | AI Observations — waits for the daily briefing, runs at most once/day, and adds the weekly synthesis on Sunday; installed and manually verified 2026-07-21, automatic runs awaiting verification |
+| ec2-user | 15 minutes past each hour | `run_intelligence_cron_ec2.sh` | AI Observations — waits for the daily briefing, runs at most once/day, and adds the weekly synthesis on Sunday; automatic daily and weekly outputs verified 2026-08-16 |
 
-German's Lesen refresh command is deployed and was exercised successfully on
-2026-07-20, adding 35 current articles while reporting two failed sources without
-writing a false success marker. **It is not yet installed as a production cron job.**
-Until that final scheduling step is completed, current reading material still
-requires an explicitly approved refresh.
+German's Lesen refresh is scheduled hourly. It currently tolerates partial source
+failure and continues adding material, but two sources (ORF Kultur and Heute)
+repeatedly return HTTP 404. That is a source-maintenance defect, not a missing
+schedule.
 
 The pipeline wrapper runs hourly but only actually fires once a day, gated in order:
 **role guard** (exits silently unless `MINIMOI_ROLE=production` inside the container —
@@ -213,13 +237,15 @@ unrecoverable, not an ongoing risk).
 
 Also host-mounted: `guests.json`, `build_queue.json`, `cos_memory.md`,
 `cos_context.json`, `docs/design/`, `docs/specs/`, and `/opt/minimoi/agent_logs/`.
+COS Agent A also uses named Docker volumes for runtime state and authentication;
+the model gateway writes receipts to `/opt/minimoi/data/model_gateway_receipts.jsonl`.
 
 ### Backups — Tiers 1–2 live, Tier 3 broken
 
 - **Tier 1 (local, 02:00 daily):** confirmed working — dated folders in
-  `/opt/minimoi/backups/` through today. What it captures: full `data/` rsync, auth
-  files, local Postgres dump, `agent_logs/` sync, retention prune. Includes a manual
-  pre-password-rotation Postgres dump (2026-07-16).
+  `/opt/minimoi/backups/` through today. The live script captures selected Curator,
+  interests, research-intelligence, German, Portuguese, and auth paths, then applies
+  14-day retention. It is not a full `/opt/minimoi/data` copy.
 - **Tier 2 (S3, 03:00 daily):** confirmed working — real objects in
   `s3://minimoi-backups/`, logs show clean completion on consecutive recent days.
 - **Tier 3 (Dropbox, 04:00 Sunday): broken, never ran successfully.** `rclone` was
@@ -236,10 +262,12 @@ checked cron entries and folder structure but not log output, which is exactly h
 a silently failing Tier 3 passed it. Verified means logs and outcomes, not
 schedules and folders.
 
-**Known gaps that remain true:** Tier 3 needs `rclone` installed and a first
-successful run; Tier 3 failure does not alert; and a backup that exists is not a
-backup that restores — no restore test has been run. All tracked below; the restore
-test is planned as the acceptance test for the staging environment.
+**Known gaps that remain true:** the live backup set does not include
+`/opt/minimoi/cos_memory.md`, `model_gateway_receipts.jsonl`, or the
+`minimoi_cos-agent-a-state` and `minimoi_cos-agent-a-auth` Docker volumes. Their
+first production data now exists, so this is a concrete recovery gap. Tier 3 also
+needs `rclone` and working failure alerting. No restore test has been run; the
+restore test remains the planned acceptance test for staging.
 
 ---
 
@@ -248,25 +276,43 @@ test is planned as the acceptance test for the staging environment.
 | Layer | Status | Detail |
 |---|---|---|
 | Sentry | **Live** | Wired into curator, german, portuguese servers and the portal (shipped 2026-06-23) |
-| CoS health loop | **Live** | Every 30 min on EC2: containers, disk, memory, /health endpoints → Telegram alert |
+| CoS health loop | **Live, incomplete** | Every 30 min: seven legacy containers, disk, memory, four endpoints → Telegram; excludes Agent A, model gateway, nginx, and cloudflared |
 | CloudWatch | **Live (basic)** | EBS disk cross-check used by the health loop |
 | Prometheus / Grafana | **Proposed, never built** | Exists only in spec documents. Do not treat any historical monitoring-stack spec as describing production. |
 
-Known monitoring gaps, tracked: silent Postgres failure during login `auth_id` lookup
-(#84 — `except Exception: pass` with no logging), and no break-glass admin account
-(#87).
+**Capacity incident, 2026-08-16.** The former 2 GB `t3.small` host, with no swap, failed
+its EC2 instance status check after an out-of-memory event. LiteLLM was killed at
+roughly 631 MB and OpenClaw was using roughly 291 MB around the incident. Public
+traffic returned Cloudflare 1033 and SSH/EC2 command-line access failed until an
+AWS console reboot. Three hours after recovery, only about 146 MB remained
+available; the gateway used about 605 MiB and Agent A about 267 MiB. The 30 GB gp3
+volume remained healthy with roughly 19 GB free. Immediate hardening is to resize
+memory, add a bounded swap file, set/observe container resource budgets, and add
+host reachability and memory alarms. The same day, production was resized to
+`t3a.medium` (4 GiB), its gp3 root volume was expanded from 30 to 50 GiB, and a
+2 GiB swap file with swappiness 10 was added. Both EC2 checks, all ten containers,
+host services, and public routing passed afterward. Resource budgets and alarms
+remain open hardening work.
+
+Other tracked monitoring gaps: silent Postgres failure during login `auth_id`
+lookup (#84), no break-glass admin account (#87), and no alert on cloudflared or
+Tier 3 backup failure.
 
 ---
 
 ## Credentials & Third Parties
 
-Production credentials live in AWS SSM Parameter Store under `/minimoi/production/*` —
-never in files, never in git. (Mac/dev uses macOS Keychain via `keyring`; that story is
-dev-only now.) The live parameter set is the authoritative third-party inventory:
+Production credentials are authoritative in AWS SSM Parameter Store under
+`/minimoi/production/*` and never enter git. Deployment renders the required
+values into the host runtime environment file for Docker Compose; that file is
+operational material on EC2, not a source artifact. Mac/dev uses local `.env` or
+Keychain-backed values and keeps them gitignored. The live parameter set is the
+authoritative third-party inventory:
 
 | Category | Parameters |
 |---|---|
-| LLM APIs | `grok_api_key` (xAI), `anthropic_api_key`, `openai_api_key` |
+| LLM APIs | `xai_api_key`, `anthropic_api_key`, `openai_api_key` |
+| COS agent/model gateway | `cos_agent_a_gateway_token`, `model_gateway_key`, `model_gateway_receipt_key` |
 | Search / retrieval | `brave_api_key`, `tavily_api_key` |
 | Translation | `deepl_api_key` |
 | Messaging (Telegram) | `telegram_bot_token`, `telegram_cos_bot_token`, `telegram_system_bot_token`, `telegram_polling_bot_token`, `telegram_agent_bot_token` |
@@ -303,16 +349,43 @@ password — confirmed as distinct SSM parameters.
 
 ---
 
+## COS Agent A Beta Operations
+
+The production beta was accepted on 2026-08-16 at commit `b5bdda0`:
+
+- both `minimoi-cos-agent-a` and `minimoi-model-gateway` reported healthy;
+- an authenticated typed turn returned from COS Agent A through LiteLLM, served
+  by xAI `grok-4` at fallback position 0;
+- the platform-owned note path persisted a receipt-backed milestone note; and
+- Robert completed a production microphone conversation and note save using the
+  selectable OpenAI realtime voice path.
+
+The browser never receives the long-lived Agent A or model-gateway tokens. Voice
+gets short-lived provider credentials and may call only the allow-listed Agent A
+consult and note-save tools. Production intentionally has no Ollama fallback on
+the current CPU host. Local Ollama remains a development/testing option.
+
+Useful checks:
+
+```bash
+sudo docker ps --filter name=minimoi-cos-agent-a --filter name=minimoi-model-gateway
+sudo docker logs minimoi-cos-agent-a --tail 50
+sudo docker logs minimoi-model-gateway --tail 50
+```
+
+Do not print SecureString values while diagnosing. Confirm parameter names and
+versions in SSM, then run the repository's COS secret-sync script. Root console
+access was used for the August recovery; replacing that routine path with a
+least-privilege operator role remains a security follow-up.
+
 ## Docs Sync
 
-Committed docs reach the production doc viewer via `scripts/sync_docs.sh`: git commit →
-GitHub raw URL → SSM pull to the host (docs paths are host-mounted into the portal
-container). **Exact scope, verified in the script:** `docs/design/*`, `docs/specs/*`,
-and `data/guild/build_queue.json` — and nothing else. Root documents
-(`ARCHITECTURE.md`, `OPERATIONS.md`, `ROADMAP.md`) are **not** synced: they are
-GitHub-only unless a copy is placed under `docs/design/` or the sync script is
-extended. **A git push alone does not make a new spec visible in prod** — the sync
-step is what lands it.
+The existing `scripts/sync_docs.sh` can copy committed `docs/design/*`,
+`docs/specs/*`, and `data/guild/build_queue.json` to the host through SSM; root
+documents remain GitHub-only unless separately published. The proposed
+document-only CI path automates this without rebuilding or restarting containers,
+but that classifier/workflow is still an uncommitted review-worktree change. Do
+not rely on document-only deployment until its diff is approved and shipped.
 
 ---
 
@@ -336,9 +409,10 @@ is the fully verified picture (live `launchctl`/`docker`/`crontab`/`lsof` inspec
 | cloudflared, Colima | — | launchd | Tunnel + Docker runtime |
 | Usage report | cron 08:00 + 10:00 | `scripts/track_usage_wrapper.sh` | No matching crontab entry was present on the Mac when checked 2026-07-26; restore deliberately if this report is still wanted |
 
-Dev-only by design, never migrating: Ollama (local models, `gemma3:1b`), the OpenClaw
-gateway, and the nightly private-repo sync (`scripts/sync_private_repo.sh`, 02:00
-local). Keychain-based credentials are the dev flow; production uses SSM.
+Dev-only by current design: Ollama (local models, `gemma3:1b`) and the nightly
+private-repo sync (`scripts/sync_private_repo.sh`, 02:00 local). The original
+personal OpenClaw remains Mac-local, while COS Agent A is a separate production
+container. Keychain-based credentials are the dev flow; production uses SSM.
 
 **Legacy automation still loaded:** five launchd jobs from the pre-AWS era remain
 loaded but idle (`com.vanstedum.curator`, `curator-intelligence`,
@@ -366,24 +440,25 @@ down never affects production.
 | Curator cron wrapper masks failed scoring runs — `STATUS=$?` captures Telegram's exit code, not curator's; a failed run + successful stale send stamps `briefing_date` as success | — | **High — idempotency guarantee weaker than documented; found by Codex review 2026-07-18** |
 | Tier 3 Dropbox backup broken — rclone never installed; fails silently weekly | — | **High — fix before the restore test; found by review 2026-07-18** |
 | Curator xAI key read from an OpenClaw file path, outside the SSM pattern; SSM naming (`grok_api_key` vs `xai_api_key`) unreconciled | — | Open — verify live retrieval path, then standardize |
-| Host nginx unmonitored (health loop doesn't check it) | — | Open |
-| AI Observations production scheduling | OpenClaw issue | Schedule installed and manual daily run verified 2026-07-21; automatic daily and Sunday weekly runs still require production confirmation |
-| German Lesen refresh command is deployed and production-tested but has no production schedule | #96 follow-up | Open — install and verify cron separately |
+| OOM recovery follow-up after resize to 4 GiB + 2 GiB swap | — | Resize complete 2026-08-16; resource budgets and memory/reachability alarms remain open |
+| COS memory, model-gateway receipts, and Agent A state/auth volumes absent from backup set | — | **High — add to Tier 1 and verify restore before relying on them as durable memory** |
+| Health loop omits Agent A, model gateway, nginx, and cloudflared | — | Open — extend expected services and external reachability checks |
+| German Lesen cron runs but ORF Kultur and Heute sources return HTTP 404 | #96 follow-up | Open — replace or correct sources and verify a clean scheduled run |
 | APScheduler timezone unconfirmed for the 7 in-container jobs | — | Open — verify before relying on clock times |
 | Tier 3 backup failure does not alert | — | Open — same silent-failure family as #84 |
 | No break-glass admin account | #87 | Open |
 | Silent Postgres failure on login lookup (no logging) | #84 | Open — next after current work per standing decision |
-| No isolated staging environment (dev = prod origin) | — | Acknowledged; future AWS staging |
+| No isolated AWS staging gate (Mac dev is separate but not part of promotion) | — | Acknowledged; future AWS staging |
 | Backup restore test never run | — | Open — instrumented follow-up |
 | `telegram_agent_bot_token` in production SSM namespace but Mac-only in code | — | Misfiled, not broken — naming/placement cleanup |
 | `telegram_polling_bot_token` — confirm actively used in prod vs. leftover | — | Open — one residual from token mapping |
 | Mac port 8766: native `curator_server.py` vs. Docker container both claim it | — | Open — resolve which one traffic actually reaches |
-| Vestigial `workflow_dispatch` `image_tag` input in deploy.yml | — | Remove or document — implies a capability that doesn't exist |
+| Root/manual AWS access used for incident recovery | — | Replace routine production work with a least-privilege operator role; retain separately governed break-glass access |
 | Orphaned `gmail_app_password` SSM parameter | — | Delete or wire up |
 | #136 formally close with correcting comment | #136 | Robert/OpenClaw action |
 
 ---
 
-*Production topology verified 2026-07-18; German identity and Lesen refresh state
-verified 2026-07-20. When this document and the running system disagree, the system
-is right — fix the document, and say so in the commit.*
+*Production topology, capacity, schedules, and backup inputs re-verified for the
+COS Agent A beta on 2026-08-16. When this document and the running system disagree,
+the system is right—fix the document, and say so in the commit.*

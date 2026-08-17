@@ -57,7 +57,10 @@ TOTAL=${#SRCS[@]}
 echo "Files to sync: ${TOTAL}"
 
 # Build a shell script to run on EC2 — one curl per file, fail-fast
-LINES=("set -e")
+LINES=(
+  "set -e"
+  "mkdir -p /opt/minimoi/data/guild /opt/minimoi/docs/design /opt/minimoi/docs/specs"
+)
 for i in "${!SRCS[@]}"; do
   LINES+=("curl -fsSL '${SRCS[$i]}' -o '${DSTS[$i]}' && echo \"OK ($(( i + 1 ))/${TOTAL}): $(basename "${DSTS[$i]}")\"")
 done
