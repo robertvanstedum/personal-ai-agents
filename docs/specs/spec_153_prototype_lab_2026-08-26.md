@@ -48,15 +48,12 @@ prototype built from that baseline. Its committed identity, deck, sample data,
 and interfaces must not reveal a real employer, interviewer, customer, prospect,
 or interview process.
 
-### The two important clarifications
+### Availability and cost clarification
 
-1. Robert intended **PostgreSQL**, not Postman, as the permanent operational
-   datastore. Postman remains the durable manual request, test, example, and
-   demonstration library.
-2. **“Always available” should not mean “all compute always running.”** The lab
-   control API can remain available on AWS while Snowflake warehouses, temporary
-   workers, and model activity suspend when idle. Availability and cost discipline
-   are compatible.
+**“Always available” should not mean “all compute always running.”** The lab
+control API can remain available on AWS while Snowflake warehouses, temporary
+workers, and model activity suspend when idle. Availability and cost discipline
+are compatible.
 
 ### Three distinct kinds of persistence
 
