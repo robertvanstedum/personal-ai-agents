@@ -1,5 +1,17 @@
 [
   {
+    "id": 153,
+    "spec_title": "Prototype Lab — Isolated Guild Prototyping Capability",
+    "spec_file": "spec_153_prototype_lab_2026-08-26.md",
+    "status": "spec_ready",
+    "github_issue": null,
+    "priority": "high",
+    "blocked_reason": "Official spec is review-ready; multi-agent review and Robert decision are required before a Phase 1 build spec or implementation.",
+    "last_transition_at": "2026-08-26T15:43:45Z",
+    "summary": "Guild Prototype Lab with Project Sable Alpha, Project Nightjar telecom BSS prototype, dedicated stoppable Mac/AWS runtimes and PostgreSQL databases, Postman/Swagger/API/data workflows, reusable-component lifecycle, and mandatory 2-5 slide product decks.",
+    "notes": "Official Spec #153 v1.0 review baseline. Claude, OpenClaw, and Grok are asked to review and comment in separate artifacts without editing the spec. Spec Ready means review-ready, not implementation-authorized. No implementation, database, AWS resource, GitHub issue, or production change is authorized. Codex compares reviews for Robert after receipt. Shared multi-agent memory/brain store is a related architecture initiative but is not included in Prototype Lab Phase 1. Handoff: _working/HANDOFF_PROTOTYPE_LAB_MULTI_AGENT_REVIEW_2026-08-26.md"
+  },
+  {
     "id": 136,
     "spec_title": "Defect: Container Data Persistence — Missing Volume Mounts",
     "spec_file": "defect_container_persistence_2026-07-14.md",
