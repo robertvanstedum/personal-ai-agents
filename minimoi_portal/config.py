@@ -13,11 +13,10 @@ CURATOR_BACKEND    = os.environ.get("CURATOR_BACKEND",    "http://localhost:8766
 GERMAN_BACKEND     = os.environ.get("GERMAN_BACKEND",     "http://localhost:8767")
 PORTUGUESE_BACKEND = os.environ.get("PORTUGUESE_BACKEND", "http://localhost:8770")
 COS_BACKEND        = os.environ.get("COS_BACKEND",        "http://localhost:8769")
-# Connect HQ reference demo (Guild / Prototype Lab). Owner-only in v0.9; see
-# docs/specs/spec_154_connect_hq_minimoi_production_hosting_2026-09-03.md
+# Connect HQ reference demo, shown in Guild as IoT Connect (Guild / Experiment).
+# Owner-only in v0.9; see spec_154_connect_hq_minimoi_production_hosting and
+# spec_155_guild_experiment_workspace under docs/specs/.
 CONNECTHQ_BACKEND  = os.environ.get("CONNECTHQ_BACKEND",  "http://localhost:8095")
-CONNECTHQ_RELEASE  = os.environ.get("CONNECTHQ_RELEASE",  "connecthq-v0.9.0-beta.1")
-CONNECTHQ_SPEC     = "spec_154_connect_hq_minimoi_production_hosting_2026-09-03.md"
 
 # ── Guild Experiment workspace (Spec #155) ───────────────────────────────────
 # Non-authoritative projection of Planning Studio initiative records. Planning

@@ -1,6 +1,7 @@
 """Connect HQ hosting adapter — portal-side contract (Spec #154, PR #193).
 
-Covers: owner-only access, Guild Improve placement (no global workspace entry),
+Covers: owner-only access, no global workspace entry (the demo's Guild surface
+moved to Experiment in Spec #155),
 trusted-identity header boundary (client X-Demo-* / X-Minimoi-* never reach the
 backend), idempotent prefix rewriting, no leakage into the Curator /api/*
 passthrough, and Compose-project isolation of the production definitions.
@@ -107,7 +108,7 @@ def test_owner_mutation_methods_are_proxied(portal_client, capture_backend):
     assert [c["method"] for c in capture_backend] == ["POST", "PATCH", "PUT", "DELETE"]
 
 
-# ── P0-1: Guild Improve placement, not global navigation ────────────────────
+# ── P0-1: not global navigation; Improve is a placeholder again ─────────────
 
 def test_connecthq_is_not_a_global_workspace():
     from minimoi_portal.workspaces import WORKSPACES, workspace_navigation
@@ -122,29 +123,34 @@ def test_proxy_nav_does_not_link_connecthq_for_owner():
     assert 'href="/guild"' in html
 
 
-def test_guild_improve_shows_one_connecthq_card(portal_client, monkeypatch):
-    import minimoi_portal.app as portal_app
-    monkeypatch.setattr(portal_app, "_connecthq_available", lambda: False)
+def test_guild_improve_is_a_placeholder_again_and_points_at_experiment(portal_client):
+    """Spec #155 §7: Experiment owns the demo, so Improve reverts to its stub."""
     _login(portal_client, OWNER)
     r = portal_client.get("/guild/improve")
     assert r.status_code == 200
     html = r.data.decode()
-    assert html.count('class="demo-card"') == 1
-    assert "Prototype Lab" in html and "Reference Demos" in html
-    assert "AWS demo" in html
-    assert "connecthq-v0.9.0-beta.1" in html
-    assert "Unavailable" in html
-    assert 'href="/app/connecthq"' in html and "Launch Connect HQ" in html
-    assert f'href="/guild/build/spec/{SPEC}"' in html and "View specification" in html
-    assert "In Redesign" not in html
+    assert "In Redesign" in html
+    assert "Explore · Experiment · Improve" in html
+    assert 'href="/guild/experiment"' in html
+    assert "Reference demos now live under" in html
+    assert 'class="demo-card"' not in html
+    for gone in ("Prototype Lab", "Reference Demos", "AWS demo", "Launch Connect HQ",
+                 "connecthq-v0.9.0-beta.1", f"/guild/build/spec/{SPEC}"):
+        assert gone not in html, gone
+    assert "/app/connecthq" not in html
 
 
-def test_guild_improve_reports_available_when_backend_healthy(portal_client, monkeypatch):
+def test_guild_improve_does_not_probe_any_backend(portal_client, monkeypatch):
+    """The Improve stub is static: no health check, no card state to compute."""
     import minimoi_portal.app as portal_app
-    monkeypatch.setattr(portal_app, "_connecthq_available", lambda: True)
+
+    def _boom(*a, **k):
+        raise AssertionError("Improve must not make outbound requests")
+
+    monkeypatch.setattr(portal_app._requests, "get", _boom)
     _login(portal_client, OWNER)
-    html = portal_client.get("/guild/improve").data.decode()
-    assert "health up" in html and ">Available<" in html
+    assert portal_client.get("/guild/improve").status_code == 200
+    assert not hasattr(portal_app, "_connecthq_available")
 
 
 def test_guild_improve_is_owner_only(portal_client):

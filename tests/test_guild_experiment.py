@@ -1,14 +1,18 @@
-"""Guild Experiment workspace — read-only slice (Spec #155, chunk 1).
+"""Guild Experiment workspace — read-only slice, G1 (Spec #155).
 
-Covers §9 items 1-5 and 8, plus the §7 config-validation half of item 7.
-Runtime join, surface actions, and the diagnostic page are chunk 2.
+Covers §9 items 1-9: access, landing and subnav, projection rendering and
+degradation, the runtime join (health probe, four surfaces, diagnostic page),
+surface safety, stage truthfulness, and the guarantee that the rest of Guild
+is untouched.
 """
 from __future__ import annotations
 
 import importlib
 import json
 import os
+import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
@@ -628,3 +632,81 @@ def test_stale_threshold_comes_from_configuration(portal_client, projection_file
 
     monkeypatch.setattr(portal_app._cfg, "GUILD_EXPERIMENT_STALE_DAYS", 5)
     assert 'class="xp-chip stale"' in _get(portal_client, projection_file, payload)
+
+
+# ── §9.6 property: nothing links to the backend while it is down ────────────
+
+def _all_hrefs(html):
+    return re.findall(r'href="([^"]*)"', html)
+
+
+def test_no_href_reaches_the_backend_while_it_is_unhealthy(
+        portal_client, projection_file, _health_probe, loopback_surfaces, three_rows):
+    """The whole-page property behind the unavailable-launch contract (§5.2).
+
+    Not just the action group: with the probe failing, *no* link anywhere on
+    the workspace page or on the diagnostic page may address the configured
+    base URL, so a click can never send the browser to a dead backend.
+    """
+    projection_file(three_rows)
+    _login(portal_client, OWNER)
+    pages = [portal_client.get("/guild/experiment"),
+             portal_client.get("/guild/experiment?stage=built"),
+             portal_client.get("/guild/experiment/unavailable/INIT-A")]
+    assert [p.status_code for p in pages] == [200, 200, 503]
+    for page in pages:
+        for href in _all_hrefs(page.data.decode()):
+            assert loopback_surfaces not in href, href
+    # On the workspace itself the base URL is absent entirely, not merely
+    # unlinked. The diagnostic page prints the health URL as text on purpose.
+    for page in pages[:2]:
+        assert loopback_surfaces not in page.data.decode()
+
+
+# ── §9.2 / §9.9 the rest of Guild is untouched ──────────────────────────────
+
+def _git_show(rev_path):
+    """File content at a revision, or None when git cannot answer (CI checkout)."""
+    import subprocess
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    try:
+        out = subprocess.run(["git", "show", rev_path], cwd=repo, capture_output=True, timeout=15)
+    except Exception:
+        return None
+    return out.stdout.decode() if out.returncode == 0 else None
+
+
+def _card_blocks(html):
+    """The three original landing cards, keyed by their HTML section comment."""
+    return {name: block.strip() for name, block in
+            re.findall(r"<!-- (Build|Operate|Improve) -->\n(.*?)</a>", html, re.S)}
+
+
+def test_the_three_original_landing_cards_are_byte_identical_to_main():
+    """§9.2: the landing differs only by the fourth card (and the row metrics)."""
+    baseline = _git_show("origin/main:minimoi_portal/templates/guild/guild_landing.html")
+    if baseline is None:
+        pytest.skip("origin/main not available in this checkout")
+    current = (Path(__file__).resolve().parent.parent
+               / "minimoi_portal" / "templates" / "guild" / "guild_landing.html").read_text()
+    before, after = _card_blocks(baseline), _card_blocks(current)
+    assert set(before) == {"Build", "Operate", "Improve"}
+    assert after == before
+
+
+@pytest.mark.parametrize("suite", ["tests/test_guild.py", "tests/test_portal.py",
+                                   "tests/test_cos_guild_visual_polish.py"])
+def test_existing_suites_are_not_modified_by_this_branch(suite):
+    """§9.9: these pass unchanged — so the branch must not have edited them."""
+    baseline = _git_show(f"origin/main:{suite}")
+    if baseline is None:
+        pytest.skip("origin/main not available in this checkout")
+    current = (Path(__file__).resolve().parent.parent / suite).read_text()
+    assert current == baseline, f"{suite} was modified; §9.9 requires it to pass unchanged"
+
+
+def test_placeholder_illustration_is_shipped():
+    """§5.1: art is non-blocking, but the card must not render a broken image."""
+    art = (Path(__file__).resolve().parent.parent
+           / "minimoi_portal" / "static" / "guild" / "guild-experiment.jpg")
+    assert art.is_file() and art.stat().st_size > 0

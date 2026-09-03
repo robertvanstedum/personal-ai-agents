@@ -1465,35 +1465,16 @@ def guild_guest_renew_and_reset(username):
     return redirect(url_for("guild_operate"))
 
 
-def _connecthq_available() -> bool:
-    """Best-effort health probe for the Guild Improve card (never raises)."""
-    try:
-        r = _requests.get(f"{_cfg.CONNECTHQ_BACKEND}/api/v1/health", timeout=1.5)
-        return r.status_code == 200
-    except Exception:
-        return False
-
-
 @app.route("/guild/improve")
 @_require_owner
 def guild_improve():
-    # Guild → Improve → Prototype Lab → Reference Demos → Connect HQ
-    # (Spec #154 §3.1). One restrained card; no general Prototype Lab UI.
-    connecthq = {
-        "name": "Connect HQ",
-        "classification": "Reference Demo",
-        "environment": "AWS demo",
-        "release": _cfg.CONNECTHQ_RELEASE,
-        "available": _connecthq_available(),
-        "scenario": "Enterprise IoT activation with integration evidence and summarized billing.",
-        "launch_url": "/app/connecthq",
-        "spec_url": f"/guild/build/spec/{_cfg.CONNECTHQ_SPEC}",
-    }
-    return render_template("guild/improve.html", user=_current_user(),
-                           reference_demos=[connecthq])
+    # Improve is a placeholder until it gets its own spec. The reference demo
+    # card PR #193 put here now lives in Experiment (Spec #155 §7), which owns
+    # the runtime join and the health probe; Improve does neither.
+    return render_template("guild/improve.html", user=_current_user())
 
 
-# ── Guild Experiment (Spec #155, chunk 1: read-only projection) ──────────────
+# ── Guild Experiment workspace — read-only projection, G1 (Spec #155) ────────
 
 _EXPERIMENT_STAGES = ("idea", "tinkering", "built", "operational")
 _EXPERIMENT_REQUIRED = ("initiative_id", "title", "summary", "experiment_stage",
@@ -1503,8 +1484,8 @@ _EXPERIMENT_HEALTH_TTL_SECONDS = 30.0
 _EXPERIMENT_HEALTH_TIMEOUT = 1.5
 _EXPERIMENT_FILTERS = ("stage", "scope", "domain")
 
-# Module-level probe cache: {"checked_at_monotonic": float, "result": dict|None}.
-# A plain dict so tests can clear it, and so a monkeypatched time.time() moves it.
+# Module-level probe cache: {"checked": float (time.time()), "result": dict|None}.
+# A plain dict rather than an lru_cache so a test can clear it outright.
 _experiment_health_cache = {"checked": 0.0, "result": None}
 
 
@@ -1569,8 +1550,9 @@ def _load_experiment_projection():
     if not isinstance(data, dict) or not isinstance(data.get("rows"), list):
         return [], warnings, generated_at, False
 
-    placeholder_ids = {str(i) for i in data.get("placeholder_ids", [])
-                       if isinstance(data.get("placeholder_ids"), list)}
+    raw_placeholders = data.get("placeholder_ids")
+    placeholder_ids = ({str(i) for i in raw_placeholders}
+                       if isinstance(raw_placeholders, list) else set())
     rows = []
     for raw in data["rows"]:
         row, error = _experiment_row(raw, placeholder_ids)
@@ -1650,12 +1632,12 @@ def _experiment_is_joined(row):
 
 
 def _experiment_join_runtime(rows, health):
+    """Attach the deployment-owned runtime facts to the joined row, in place."""
     for row in rows:
         joined = _experiment_is_joined(row)
         row["joined"] = joined
         row["release_label"] = _cfg.CONNECTHQ_RELEASE_LABEL if joined else None
         row["actions"] = _experiment_actions(row, health) if joined else []
-    return rows
 
 
 def _experiment_facet_values(rows, facet):
