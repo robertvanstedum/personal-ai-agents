@@ -1,9 +1,8 @@
-name: Connect HQ demo deploy
+name: Connect HQ demo release
 
-# Builds and deploys the standalone Connect HQ IoT demo as a FROZEN tag.
-# Runs only on a `connecthq-v*` tag (or a manual dispatch naming one). It never
-# runs on push to main, and the main pipeline never touches the demo because
-# the Connect HQ services sit behind the `connecthq` compose profile.
+# Tag-only release of the Connect HQ reference demo (Spec #154 §8.3).
+# Never runs on push to main. Deploys ONLY the independent `connecthq` Compose
+# project via scripts/operations/deploy_connecthq_ec2.sh.
 
 on:
   push:
@@ -11,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing connecthq-v* git tag to build and deploy'
+        description: 'Existing approved connecthq-v* tag to (re)deploy'
         required: true
 
 env:
@@ -25,26 +24,34 @@ jobs:
       tag: ${{ steps.t.outputs.tag }}
     steps:
       - id: t
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then TAG="$INPUT_TAG"; else TAG="${GITHUB_REF#refs/tags/}"; fi
+          # Validate before the value reaches any shell/SSM command.
+          [[ "$TAG" =~ ^connecthq-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]] || { echo "invalid tag '$TAG'"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-  build-push:
+  verify-build-push:
     needs: resolve
     runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.resolve.outputs.tag }}
 
-      - name: Sanity — app directory and lock file present at the tag
+      - name: Tagged source sanity
         run: |
-          test -f "$APP_DIR/Dockerfile"
-          test -f "$APP_DIR/requirements.lock"
-          test -f "$APP_DIR/docker-compose.yml"
+          test -f "$APP_DIR/Dockerfile" && test -f "$APP_DIR/requirements.lock" && test -f "$APP_DIR/Makefile"
+          grep -q '^FROM python:3.12-slim@sha256:' "$APP_DIR/Dockerfile"
+
+      - name: Standalone verification suite (tests + scan, memory backend)
+        working-directory: prototype-lab/projects/project-connect-hq
+        run: |
+          make test
+          make scan
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -56,16 +63,19 @@ jobs:
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push (linux/amd64 for the EC2 host)
+      - name: Build, push, record digest
+        id: push
         run: |
           TAG=${{ needs.resolve.outputs.tag }}
-          docker build --platform linux/amd64 \
-            -t "$REGISTRY/minimoi/connecthq:$TAG" \
-            "$APP_DIR"
-          docker push "$REGISTRY/minimoi/connecthq:$TAG"
+          IMG="$REGISTRY/minimoi/connecthq:$TAG"
+          docker build --platform linux/amd64 -t "$IMG" "$APP_DIR"
+          docker push "$IMG"
+          DIGEST=$(docker inspect --format '{{index .RepoDigests 0}}' "$IMG" | sed 's/.*@//')
+          echo "pushed $IMG @ $DIGEST"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
 
   deploy:
-    needs: [resolve, build-push]
+    needs: [resolve, verify-build-push]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -79,59 +89,31 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Push docker-compose.prod.yml from the tag to EC2
-        run: |
-          COMPOSE=$(base64 -w 0 docker-compose.prod.yml)
-          COMMAND_ID=$(aws ssm send-command \
-            --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
-            --document-name "AWS-RunShellScript" \
-            --parameters "commands=[\"echo $COMPOSE | base64 -d > /opt/minimoi/docker-compose.prod.yml\"]" \
-            --query 'Command.CommandId' --output text)
-          for i in $(seq 1 30); do
-            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" \
-              --instance-id ${{ secrets.EC2_INSTANCE_ID }} --query 'Status' --output text 2>/dev/null || echo Pending)
-            [ "$STATUS" = "Success" ] && break
-            case "$STATUS" in Failed|Cancelled|TimedOut) echo "compose sync $STATUS"; exit 1;; esac
-            sleep 5
-          done
-          [ "$STATUS" = "Success" ]
-
-      - name: Deploy the frozen tag on EC2
+      - name: Sync ONLY the Connect HQ compose file and deploy script, then deploy
         run: |
           TAG=${{ needs.resolve.outputs.tag }}
+          DIGEST=${{ needs.verify-build-push.outputs.digest }}
+          COMPOSE=$(base64 -w 0 docker-compose.connecthq.prod.yml)
+          SCRIPT=$(base64 -w 0 scripts/operations/deploy_connecthq_ec2.sh)
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
             --document-name "AWS-RunShellScript" \
-            --timeout-seconds 600 \
-            --parameters "commands=[
-              \"set -e\",
-              \"cd /opt/minimoi\",
-              \"grep -q '^CONNECTHQ_DB_PASSWORD=' /opt/minimoi/.env || printf 'CONNECTHQ_DB_PASSWORD=%s\\\\n' \\\"\$(aws ssm get-parameter --region us-east-1 --name /minimoi/production/connecthq_db_password --with-decryption --query Parameter.Value --output text)\\\" >> /opt/minimoi/.env\",
-              \"aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $REGISTRY\",
-              \"export CONNECTHQ_IMAGE_TAG=$TAG\",
-              \"docker-compose -f /opt/minimoi/docker-compose.prod.yml --profile connecthq pull connecthq connecthq-integrations\",
-              \"docker-compose -f /opt/minimoi/docker-compose.prod.yml --profile connecthq up -d connecthq-postgres connecthq-integrations connecthq\",
-              \"for i in \$(seq 1 24); do test \\\"\$(docker inspect --format={{.State.Health.Status}} minimoi-connecthq)\\\" = healthy && break; sleep 5; done\",
-              \"test \\\"\$(docker inspect --format={{.State.Health.Status}} minimoi-connecthq)\\\" = healthy\",
-              \"test \\\"\$(docker inspect --format={{.Config.Image}} minimoi-connecthq)\\\" = \\\"$REGISTRY/minimoi/connecthq:$TAG\\\"\",
-              \"curl -sf http://localhost:8095/api/v1/health\",
-              \"curl -sf -o /dev/null -w '%{http_code}' http://localhost:5001/health\",
-              \"docker-compose -f /opt/minimoi/docker-compose.prod.yml up -d --no-deps portal\",
-              \"sleep 5\",
-              \"curl -sf http://localhost:5001/health\"
-            ]" \
+            --timeout-seconds 900 \
+            --parameters "commands=[\"set -e\",\"mkdir -p /opt/minimoi/connecthq\",\"echo $COMPOSE | base64 -d > /opt/minimoi/connecthq/docker-compose.yml\",\"echo $SCRIPT | base64 -d > /opt/minimoi/connecthq/deploy.sh\",\"chmod +x /opt/minimoi/connecthq/deploy.sh\",\"/opt/minimoi/connecthq/deploy.sh $TAG $DIGEST\"]" \
             --query 'Command.CommandId' --output text)
           echo "Deploy command ID: $COMMAND_ID"
-          for i in $(seq 1 60); do
+          for i in $(seq 1 90); do
             STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" \
               --instance-id ${{ secrets.EC2_INSTANCE_ID }} --query 'Status' --output text 2>/dev/null || echo Pending)
-            echo "[$i/60] $STATUS"
+            echo "[$i/90] $STATUS"
             [ "$STATUS" = "Success" ] && break
             case "$STATUS" in Failed|Cancelled|TimedOut)
               aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id ${{ secrets.EC2_INSTANCE_ID }} \
-                --query 'StandardErrorContent' --output text 2>/dev/null || true
+                --query '[StandardOutputContent,StandardErrorContent]' --output text 2>/dev/null || true
               exit 1;;
             esac
             sleep 10
           done
           [ "$STATUS" = "Success" ]
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id ${{ secrets.EC2_INSTANCE_ID }} \
+            --query 'StandardOutputContent' --output text | tail -25

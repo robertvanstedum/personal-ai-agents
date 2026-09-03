@@ -55,15 +55,6 @@ WORKSPACES = (
         "image": "/static/tour/01-cos-landing-desktop.webp",
         "public_visible": False,
     },
-    {
-        "key": "connecthq",
-        "label": "Connect HQ",
-        "path": "/app/connecthq",
-        "eyebrow": "Telecom operations demo",
-        "summary": "IoT activation, integration evidence, and billing in a standalone reference demo.",
-        "image": "/static/tour/01-guild-landing-desktop.webp?v=20260805-guildrefresh1",
-        "public_visible": False,
-    },
 )
 
 
@@ -83,16 +74,14 @@ def can_access_workspace(user: dict | None, key: str) -> bool:
         # have an auth_id and do not receive those domains implicitly.
         return not (tier == "guest" and user.get("auth_id"))
 
-    if key in ("portuguese", "connecthq"):
-        # Owner/admin always. Guests only through an explicit per-domain grant
-        # (interviewer links for Connect HQ), never implicitly.
+    if key == "portuguese":
         if tier in ("owner", "admin"):
             return True
         auth_id = user.get("auth_id")
         if not auth_id:
             return False
         try:
-            return bool(domain_auth.has_domain_access(auth_id, key))
+            return bool(domain_auth.has_domain_access(auth_id, "portuguese"))
         except Exception:
             return False
 
