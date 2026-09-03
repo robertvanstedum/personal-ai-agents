@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://minimoi.local/schemas/planning-studio/initiative.schema.json",
+  "title": "Guild Planning Studio Initiative",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "initiative_id",
+    "slug",
+    "title",
+    "created_at",
+    "updated_at",
+    "status",
+    "origin",
+    "steward",
+    "decision_owner",
+    "domains",
+    "roadmap_authority",
+    "next_gate"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "initiative_id": {
+      "type": "string",
+      "pattern": "^INIT-[0-9]{4}-[0-9]{4}$"
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date"
+    },
+    "status": {
+      "enum": [
+        "captured",
+        "exploring",
+        "design_review",
+        "decision_pending",
+        "promoted",
+        "superseded",
+        "archived",
+        "discarded"
+      ]
+    },
+    "origin": {
+      "type": "object",
+      "required": [
+        "type"
+      ]
+    },
+    "steward": {
+      "type": "string",
+      "minLength": 1
+    },
+    "decision_owner": {
+      "type": "string",
+      "minLength": 1
+    },
+    "domains": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    },
+    "roadmap_authority": {
+      "enum": [
+        "none",
+        "candidate",
+        "approved"
+      ]
+    },
+    "release_target": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "next_gate": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tags": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
+
