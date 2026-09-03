@@ -12,6 +12,7 @@ import json
 import os
 import secrets
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
@@ -1498,7 +1499,13 @@ _EXPERIMENT_STAGES = ("idea", "tinkering", "built", "operational")
 _EXPERIMENT_REQUIRED = ("initiative_id", "title", "summary", "experiment_stage",
                         "scope", "updated_at", "domains")
 _EXPERIMENT_MAX_WARNINGS = 10
-_EXPERIMENT_STALE_DAYS = 30
+_EXPERIMENT_HEALTH_TTL_SECONDS = 30.0
+_EXPERIMENT_HEALTH_TIMEOUT = 1.5
+_EXPERIMENT_FILTERS = ("stage", "scope", "domain")
+
+# Module-level probe cache: {"checked_at_monotonic": float, "result": dict|None}.
+# A plain dict so tests can clear it, and so a monkeypatched time.time() moves it.
+_experiment_health_cache = {"checked": 0.0, "result": None}
 
 
 def _experiment_row(raw, placeholder_ids):
@@ -1534,14 +1541,14 @@ def _experiment_row(raw, placeholder_ids):
 
 
 def _experiment_is_stale(updated_at: str) -> bool:
-    """True when the record has not moved for 30 days (an indicator, not a status)."""
+    """True past the configured threshold (an indicator, not a second status)."""
     try:
         parsed = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
     except ValueError:
         return False
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
-    return (datetime.now(timezone.utc) - parsed).days > _EXPERIMENT_STALE_DAYS
+    return (datetime.now(timezone.utc) - parsed).days > _cfg.GUILD_EXPERIMENT_STALE_DAYS
 
 
 def _load_experiment_projection():
@@ -1576,15 +1583,145 @@ def _load_experiment_projection():
     return rows, warnings, generated_at, True
 
 
+def _experiment_health():
+    """Server-side health probe for the joined demo (spec §4.2, §6).
+
+    1.5 s timeout, result cached for 30 s, never raises: a refused, slow, or
+    non-200 probe yields ok=False with the reason. The browser never probes.
+    """
+    now = time.time()
+    cached = _experiment_health_cache["result"]
+    if cached is not None and (now - _experiment_health_cache["checked"]) < _EXPERIMENT_HEALTH_TTL_SECONDS:
+        return cached
+    try:
+        response = _requests.get(_cfg.CONNECTHQ_HEALTH_URL, timeout=_EXPERIMENT_HEALTH_TIMEOUT)
+        ok = response.status_code == 200
+        detail = ("HTTP 200 OK" if ok
+                  else f"health check returned HTTP {response.status_code}")
+    except Exception as exc:
+        ok = False
+        detail = f"health check failed: {type(exc).__name__}: {exc}"
+    result = {
+        "ok": ok,
+        "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "detail": detail,
+    }
+    _experiment_health_cache["result"] = result
+    _experiment_health_cache["checked"] = now
+    return result
+
+
+_EXPERIMENT_SURFACE_LABELS = (
+    ("launch", "Launch demo", "Demo unavailable"),
+    ("admin", "Admin workbench", "Admin workbench"),
+    ("billing_workbench", "Billing workbench", "Billing workbench"),
+    ("swagger", "Swagger", "Swagger"),
+)
+
+
+def _experiment_actions(row, health):
+    """The always-visible action group for a runtime-joined row (spec §5.2).
+
+    Healthy: the four configured surfaces. Unhealthy: the same four actions,
+    every one pointing at the Guild-owned diagnostic page — the browser is
+    never sent to a backend that is not answering.
+    """
+    if not health["ok"]:
+        diagnostic = url_for("guild_experiment_unavailable",
+                             initiative_id=row["initiative_id"])
+        return [{"key": key, "label": down_label, "href": diagnostic,
+                 "external": False, "primary": key == "launch"}
+                for key, _up, down_label in _EXPERIMENT_SURFACE_LABELS]
+    surfaces = _cfg.connecthq_surfaces()
+    external = _cfg.connecthq_surface_is_external()
+    return [{"key": key, "label": up_label, "href": surfaces[key],
+             "external": external, "primary": key == "launch"}
+            for key, up_label, _down in _EXPERIMENT_SURFACE_LABELS]
+
+
+def _experiment_is_joined(row):
+    """The runtime join is by initiative id (config), not by domain tag (§3.2).
+
+    Any operational row also carries the action group so the Operational
+    section needs no separate markup when the demo is promoted (G3).
+    """
+    return (row["initiative_id"] == _cfg.CONNECTHQ_INITIATIVE_ID
+            or row["experiment_stage"] == "operational")
+
+
+def _experiment_join_runtime(rows, health):
+    for row in rows:
+        joined = _experiment_is_joined(row)
+        row["joined"] = joined
+        row["release_label"] = _cfg.CONNECTHQ_RELEASE_LABEL if joined else None
+        row["actions"] = _experiment_actions(row, health) if joined else []
+    return rows
+
+
+def _experiment_facet_values(rows, facet):
+    if facet == "domain":
+        values = {d for row in rows for d in row["domains"]}
+    else:
+        key = "experiment_stage" if facet == "stage" else "scope"
+        values = {row[key] for row in rows}
+    return sorted(v for v in values if v)
+
+
+def _experiment_filters(rows, args):
+    """Server-side stage/scope/domain filters (spec §5.2).
+
+    Exact match, case-insensitive; a value not present in the rows is ignored
+    rather than emptying the matrix.
+    """
+    facets, selected = {}, {}
+    for facet in _EXPERIMENT_FILTERS:
+        values = _experiment_facet_values(rows, facet)
+        facets[facet] = values
+        requested = (args.get(facet) or "").strip()
+        match = next((v for v in values if v.casefold() == requested.casefold()), None)
+        if requested and match:
+            selected[facet] = match
+
+    def matches(row):
+        for facet, value in selected.items():
+            if facet == "domain":
+                if value.casefold() not in {d.casefold() for d in row["domains"]}:
+                    return False
+            else:
+                key = "experiment_stage" if facet == "stage" else "scope"
+                if row[key].casefold() != value.casefold():
+                    return False
+        return True
+
+    def link(facet, value):
+        query = {k: v for k, v in selected.items() if k != facet}
+        if value is not None and selected.get(facet) != value:
+            query[facet] = value
+        return url_for("guild_experiment", **query)
+
+    chips = []
+    for facet in _EXPERIMENT_FILTERS:
+        options = [{"value": value, "href": link(facet, value),
+                    "active": selected.get(facet) == value}
+                   for value in facets[facet]]
+        if options:
+            chips.append({"facet": facet, "options": options})
+    return [r for r in rows if matches(r)], chips, selected, url_for("guild_experiment")
+
+
 @app.route("/guild/experiment")
 @app.route("/guild/experiment/")
 @_require_owner
 def guild_experiment():
     # One working page from idea to operational. Planning Studio owns the
-    # record; this only renders a projection of it (Spec #155 §3.1).
+    # record; this only renders a projection of it (Spec #155 §3.1), joined by
+    # initiative id to deployment-owned runtime configuration (§3.2, §4.2).
     rows, warnings, generated_at, available = _load_experiment_projection()
+    health = _experiment_health()
+    _experiment_join_runtime(rows, health)
     operational = [r for r in rows if r["experiment_stage"] == "operational"]
     working = [r for r in rows if r["experiment_stage"] != "operational"]
+    working, filter_chips, selected, reset_url = _experiment_filters(working, request.args)
     return render_template(
         "guild/experiment.html",
         user=_current_user(),
@@ -1594,7 +1731,32 @@ def guild_experiment():
         generated_at=generated_at,
         register_available=available,
         release_label=_cfg.CONNECTHQ_RELEASE_LABEL,
+        health=health,
+        filter_chips=filter_chips,
+        selected_filters=selected,
+        filter_reset_url=reset_url,
     )
+
+
+@app.route("/guild/experiment/unavailable/<initiative_id>")
+@_require_owner
+def guild_experiment_unavailable(initiative_id):
+    """Guild-owned diagnostic page for an unhealthy demo (spec §5.2). HTTP 503.
+
+    Never a blank page, a raw 503 body, or a hang: the failed check, its URL,
+    and the time it was taken, with a link back to the workspace.
+    """
+    rows, _warnings, _generated_at, _available = _load_experiment_projection()
+    row = next((r for r in rows if r["initiative_id"] == initiative_id), None)
+    health = _experiment_health()
+    return render_template(
+        "guild/experiment_unavailable.html",
+        user=_current_user(),
+        row=row,
+        initiative_id=initiative_id,
+        health=health,
+        health_url=_cfg.CONNECTHQ_HEALTH_URL,
+    ), (503 if row else 404)
 
 
 @app.route("/guild/career")

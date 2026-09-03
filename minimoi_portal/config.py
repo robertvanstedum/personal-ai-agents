@@ -32,8 +32,16 @@ GUILD_EXPERIMENT_PROJECTION = os.environ.get(
 # reference demo — deployment-owned, never derived from repository content
 # (spec §4.2). Defaults are the AWS values; the Mac overrides them locally.
 CONNECTHQ_SURFACE_BASE_URL = os.environ.get("CONNECTHQ_SURFACE_BASE_URL", "/app/connecthq")
-CONNECTHQ_HEALTH_URL       = os.environ.get("CONNECTHQ_HEALTH_URL", f"{CONNECTHQ_BACKEND}/api/v1/health")
 CONNECTHQ_RELEASE_LABEL    = os.environ.get("CONNECTHQ_RELEASE_LABEL", "revision 4 candidate")
+
+# The projected row that receives the runtime join (launch, workbenches, health).
+# Matched against `initiative_id`, not the domain tag: the domain tag is
+# repository content, the initiative id is the identity the two sources are
+# joined by (spec §3.2). Default is the §5.3 placeholder.
+CONNECTHQ_INITIATIVE_ID    = os.environ.get("CONNECTHQ_INITIATIVE_ID", "INIT-2026-0004")
+
+# Stale indicator threshold in days (spec §5.2) — an indicator, not a status.
+GUILD_EXPERIMENT_STALE_DAYS = int(os.environ.get("GUILD_EXPERIMENT_STALE_DAYS", "30"))
 
 # Fixed, reviewed relative paths. Not overridable by environment or repository
 # content — the surfaces are joined safely to CONNECTHQ_SURFACE_BASE_URL.
@@ -65,6 +73,47 @@ def _validate_surface_base_url(value: str) -> str:
 
 
 CONNECTHQ_SURFACE_BASE_URL = _validate_surface_base_url(CONNECTHQ_SURFACE_BASE_URL)
+
+
+def _derive_health_url() -> str:
+    """Health URL for the probe (spec §4.2).
+
+    An explicit CONNECTHQ_HEALTH_URL always wins. Otherwise: when the surface
+    base URL is an absolute loopback origin the demo is the standalone Mac
+    stack, so health lives on that same origin; when it is a relative portal
+    path the demo is the hosted container behind the proxy, so health is
+    derived from CONNECTHQ_BACKEND as it was before.
+    """
+    explicit = os.environ.get("CONNECTHQ_HEALTH_URL")
+    if explicit:
+        return explicit
+    if CONNECTHQ_SURFACE_BASE_URL.startswith("http"):
+        return f"{CONNECTHQ_SURFACE_BASE_URL}/api/v1/health"
+    return f"{CONNECTHQ_BACKEND}/api/v1/health"
+
+
+CONNECTHQ_HEALTH_URL = _derive_health_url()
+
+
+def connecthq_surfaces() -> dict:
+    """The four demo surfaces, built only from configuration (spec §4.2, §6).
+
+    base_url is already validated to a relative portal path or a loopback
+    origin; the paths are the fixed table above. Nothing here reads repository
+    content, so the projection file can never inject a URL.
+    """
+    base = CONNECTHQ_SURFACE_BASE_URL.rstrip("/")  # validated; no trailing slash
+    surfaces = {}
+    for key, path in CONNECTHQ_SURFACE_PATHS.items():
+        if not path.startswith("/") or path.startswith("//") or ".." in path:
+            raise RuntimeError(f"unsafe Connect HQ surface path for {key!r}: {path!r}")
+        surfaces[key] = f"{base}{path}"
+    return surfaces
+
+
+def connecthq_surface_is_external() -> bool:
+    """True when the surfaces are an absolute origin (open in a new tab)."""
+    return CONNECTHQ_SURFACE_BASE_URL.startswith("http")
 
 # Flask session secret — MUST be set in the environment.
 # Generate: python3 -c "import secrets; print(secrets.token_hex(32))"

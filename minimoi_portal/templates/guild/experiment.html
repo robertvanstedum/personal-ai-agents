@@ -82,9 +82,45 @@
     .xp-warnings ul { margin: 0.4rem 0 0 1.1rem; }
     .xp-action { color: var(--accent); text-decoration: none; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.06em; }
     .xp-action:hover { text-decoration: underline; }
+    .xp-actions { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+    .xp-action.primary { font-weight: 500; color: var(--text); border-bottom: 1px solid var(--accent); }
+    .xp-action.primary.down { color: #8b5e2a; border-bottom-style: dashed; }
+    .xp-runtime { font-family: 'DM Mono', monospace; font-size: 10px; white-space: nowrap; }
+    .xp-runtime .dot { margin-right: 4px; }
+    .xp-runtime.up { color: #4a7a3f; }
+    .xp-runtime.down { color: #8b5e2a; }
+    .xp-filters {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px;
+      margin: 0 0 0.75rem; font-family: 'DM Mono', monospace; font-size: 10px;
+    }
+    .xp-filters .facet { color: var(--text-dim); letter-spacing: 0.12em; text-transform: uppercase; }
+    .xp-filter {
+      color: var(--text-muted); text-decoration: none; border: 1px solid var(--border);
+      border-radius: 3px; padding: 1px 7px; background: var(--surface);
+    }
+    .xp-filter:hover { color: var(--text); }
+    .xp-filter.active { color: var(--surface); background: var(--accent); border-color: var(--accent); }
   </style>
 </head>
 <body>
+{% macro runtime_cell(row) %}
+  {%- if row.joined -%}
+  <span class="xp-runtime {{ 'up' if health.ok else 'down' }}">
+    <span class="dot">{{ '&#9679;' | safe if health.ok else '&#9675;' | safe }}</span>{{ 'available' if health.ok else 'unavailable' }}
+  </span><br>
+  <span class="xp-muted">checked {{ health.checked_at }}</span>
+  {%- else -%}<span class="xp-muted">&mdash;</span>{%- endif -%}
+{% endmacro %}
+{% macro actions_cell(row) %}
+  <div class="xp-actions">
+    {% for action in row.actions %}
+    <a class="xp-action{% if action.primary %} primary{% if not health.ok %} down{% endif %}{% endif %}"
+       href="{{ action.href }}"{% if action.external %} target="_blank" rel="noopener"{% endif %}>{{ action.label }}</a>
+    {% endfor %}
+    {% if row.planning_url %}<a class="xp-action" href="{{ row.planning_url }}">open record</a>{% endif %}
+    {% if not row.actions and not row.planning_url %}<span class="xp-muted">&mdash;</span>{% endif %}
+  </div>
+{% endmacro %}
 {% include 'guild/_portal_nav.html' %}
 
 <nav class="guild-nav">
@@ -117,11 +153,9 @@
           data-scope="{{ row.scope }}" data-domains="{{ row.domains | join(',') }}">
         <td><span class="xp-name">{{ row.title }}</span></td>
         <td>{{ row.summary }}</td>
-        <td>{% if 'connecthq' in row.domains %}<span class="xp-muted">{{ release_label }}</span>{% else %}<span class="xp-muted">—</span>{% endif %}</td>
-        <td><span class="xp-muted">not checked (chunk 2)</span></td>
-        <td>
-          {% if row.planning_url %}<a class="xp-action" href="{{ row.planning_url }}">open record</a>{% else %}<span class="xp-muted">—</span>{% endif %}
-        </td>
+        <td>{% if row.release_label %}<span class="xp-muted">{{ row.release_label }}</span>{% else %}<span class="xp-muted">&mdash;</span>{% endif %}</td>
+        <td>{{ runtime_cell(row) }}</td>
+        <td>{{ actions_cell(row) }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -131,6 +165,17 @@
   {% endif %}
 
   <div class="lab-section">Working matrix</div>
+  {% if register_available and filter_chips %}
+  <div class="xp-filters">
+    {% for chip in filter_chips %}
+    <span class="facet">{{ chip.facet }}</span>
+    {% for option in chip.options %}
+    <a class="xp-filter{% if option.active %} active{% endif %}" href="{{ option.href }}">{{ option.value }}</a>
+    {% endfor %}
+    {% endfor %}
+    {% if selected_filters %}<a class="xp-filter" href="{{ filter_reset_url }}">clear</a>{% endif %}
+  </div>
+  {% endif %}
   {% if not register_available %}
   <div class="xp-unavailable">
     Working register unavailable.
@@ -139,7 +184,7 @@
   {% elif working %}
   <table class="xp-table">
     <thead>
-      <tr><th>ID</th><th>Activity</th><th>Scope</th><th>Stage</th><th>Updated</th><th>Next step</th><th>Actions</th></tr>
+      <tr><th>ID</th><th>Activity</th><th>Scope</th><th>Stage</th><th>Updated</th><th>Next step</th><th>Runtime</th><th>Actions</th></tr>
     </thead>
     <tbody>
       {% for row in working %}
@@ -152,7 +197,7 @@
         <td>
           <span class="xp-name">{{ row.title }}</span><br>
           {{ row.summary }}
-          {% if 'connecthq' in row.domains %}<br><span class="xp-muted">{{ release_label }}</span>{% endif %}
+          {% if row.release_label %}<br><span class="xp-muted">{{ row.release_label }}</span>{% endif %}
         </td>
         <td>{{ row.scope }}</td>
         <td><span class="xp-stage">{{ row.experiment_stage }}</span></td>
@@ -161,15 +206,14 @@
           {% if row.stale %}<span class="xp-chip stale">stale</span>{% endif %}
         </td>
         <td>{{ row.next_step }}</td>
-        <td>
-          {% if row.planning_url %}<a class="xp-action" href="{{ row.planning_url }}">open record</a>{% else %}<span class="xp-muted">—</span>{% endif %}
-        </td>
+        <td>{{ runtime_cell(row) }}</td>
+        <td>{{ actions_cell(row) }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
   {% else %}
-  <div class="xp-empty">No working entries yet.</div>
+  <div class="xp-empty">{% if selected_filters %}No entries match this filter.{% else %}No working entries yet.{% endif %}</div>
   {% endif %}
 </div>
 
