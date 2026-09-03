@@ -1624,11 +1624,14 @@ def _experiment_actions(row, health):
 def _experiment_is_joined(row):
     """The runtime join is by initiative id (config), not by domain tag (§3.2).
 
-    Any operational row also carries the action group so the Operational
-    section needs no separate markup when the demo is promoted (G3).
+    Stage is never part of the join: an operational row that is not the
+    configured initiative is simply not joined, and renders in the Operational
+    section with no release label, no runtime state, and no surface actions —
+    an em dash, exactly like a non-joined matrix row. The Operational section
+    still uses the same action markup, so promoting the configured initiative
+    (G3) needs no separate template.
     """
-    return (row["initiative_id"] == _cfg.CONNECTHQ_INITIATIVE_ID
-            or row["experiment_stage"] == "operational")
+    return row["initiative_id"] == _cfg.CONNECTHQ_INITIATIVE_ID
 
 
 def _experiment_join_runtime(rows, health):

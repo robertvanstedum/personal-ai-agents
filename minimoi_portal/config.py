@@ -5,8 +5,8 @@ Override via environment variables on Mac Mini.
 """
 
 import os
-import re
 from pathlib import Path
+from urllib.parse import urlsplit
 
 # Backend app URLs (all run locally on Mac Mini)
 CURATOR_BACKEND    = os.environ.get("CURATOR_BACKEND",    "http://localhost:8766")
@@ -30,7 +30,12 @@ GUILD_EXPERIMENT_PROJECTION = os.environ.get(
 # Per-environment surface configuration for the IoT Connect (Connect HQ)
 # reference demo — deployment-owned, never derived from repository content
 # (spec §4.2). Defaults are the AWS values; the Mac overrides them locally.
-CONNECTHQ_SURFACE_BASE_URL = os.environ.get("CONNECTHQ_SURFACE_BASE_URL", "/app/connecthq")
+#
+# HOSTED_PORTAL_PATH is the single reviewed hosted portal path and the whole
+# allow-list for the relative form — renaming the hosted surface later (IoT
+# Connect) is this one line.
+HOSTED_PORTAL_PATH = "/app/connecthq"
+CONNECTHQ_SURFACE_BASE_URL = os.environ.get("CONNECTHQ_SURFACE_BASE_URL", HOSTED_PORTAL_PATH)
 CONNECTHQ_RELEASE_LABEL    = os.environ.get("CONNECTHQ_RELEASE_LABEL", "revision 4 candidate")
 
 # The projected row that receives the runtime join (launch, workbenches, health).
@@ -51,23 +56,53 @@ CONNECTHQ_SURFACE_PATHS = {
     "swagger": "/docs",
 }
 
-_LOOPBACK_ORIGIN = re.compile(r"^https?://(127\.0\.0\.1|localhost)(:\d+)?$")
+_LOOPBACK_HOSTS = ("127.0.0.1", "localhost")
+
+
+def _is_loopback_origin(value: str) -> bool:
+    """True only for a bare http(s) loopback origin with a valid port.
+
+    Parsed with urlsplit rather than matched by prefix, so credentials, a
+    path, a query, or a fragment can never ride along on the origin.
+    """
+    parts = urlsplit(value)
+    if parts.scheme not in ("http", "https"):
+        return False
+    if parts.username or parts.password or parts.query or parts.fragment:
+        return False
+    if parts.path not in ("", "/"):
+        return False
+    if parts.hostname not in _LOOPBACK_HOSTS:
+        return False
+    try:
+        port = parts.port  # raises ValueError for a non-numeric or out-of-range port
+    except ValueError:
+        return False
+    if port is not None and not (1 <= port <= 65535):
+        return False
+    # netloc must be exactly host[:port] — no userinfo remnant.
+    expected = parts.hostname if port is None else f"{parts.hostname}:{port}"
+    return parts.netloc == expected
 
 
 def _validate_surface_base_url(value: str) -> str:
-    """Only a relative portal path or a loopback origin is accepted (spec §4.2).
+    """Exactly the hosted portal path, or a loopback origin (spec §4.2).
 
-    Anything else fails at startup rather than letting the page send the
-    browser to an unreviewed origin.
+    An arbitrary relative path is NOT accepted: the allow-list is exact, so
+    traversal, scheme-relative paths, query strings, fragments, credentials,
+    and invalid ports all fail at startup rather than letting the page send
+    the browser somewhere unreviewed.
     """
-    if value.startswith("/") and not value.startswith("//"):
-        return value.rstrip("/")
-    if _LOOPBACK_ORIGIN.match(value.rstrip("/")):
-        return value.rstrip("/")
+    candidate = value[:-1] if value.endswith("/") and value != "/" else value
+    if candidate == HOSTED_PORTAL_PATH:
+        return HOSTED_PORTAL_PATH
+    if _is_loopback_origin(candidate):
+        return candidate
     raise RuntimeError(
-        "CONNECTHQ_SURFACE_BASE_URL must be a relative portal path (starting "
-        "with '/') or a loopback origin (http(s)://127.0.0.1[:port] or "
-        f"http(s)://localhost[:port]) — got {value!r}."
+        "CONNECTHQ_SURFACE_BASE_URL must be the hosted portal path "
+        f"{HOSTED_PORTAL_PATH!r} or a loopback origin "
+        "(http(s)://127.0.0.1[:port] or http(s)://localhost[:port]) — "
+        f"got {value!r}."
     )
 
 

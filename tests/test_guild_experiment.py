@@ -295,18 +295,53 @@ def test_surface_paths_are_fixed():
     }
 
 
-@pytest.mark.parametrize("value", ["/app/connecthq", "http://127.0.0.1:8095",
-                                   "https://localhost:8095", "http://localhost"])
-def test_loopback_origins_and_portal_paths_are_accepted(monkeypatch, value):
-    cfg = _reload_config(monkeypatch, value)
-    assert cfg.CONNECTHQ_SURFACE_BASE_URL == value.rstrip("/") or value == "/"
+@pytest.mark.parametrize("value,expected", [
+    ("/app/connecthq", "/app/connecthq"),
+    ("/app/connecthq/", "/app/connecthq"),
+    ("http://127.0.0.1:8095", "http://127.0.0.1:8095"),
+    ("http://127.0.0.1:8095/", "http://127.0.0.1:8095"),
+    ("https://localhost", "https://localhost"),
+    ("http://localhost:5001", "http://localhost:5001"),
+    ("https://localhost:8095", "https://localhost:8095"),
+])
+def test_hosted_path_and_loopback_origins_are_accepted(value, expected):
+    from minimoi_portal.config import _validate_surface_base_url
+    assert _validate_surface_base_url(value) == expected
 
 
-@pytest.mark.parametrize("value", ["http://evil.example", "https://minimoi.ai/app/connecthq",
-                                   "//evil.example", "ftp://127.0.0.1", "http://127.0.0.1.evil.com"])
-def test_non_loopback_base_urls_are_rejected_at_import(monkeypatch, value):
+@pytest.mark.parametrize("value", [
+    # not the one reviewed hosted path
+    "/other", "/app", "/app/connecthq/admin", "/",
+    # traversal, query, fragment on the hosted path
+    "/app/connecthq/../admin", "/app/connecthq?x=1", "/app/connecthq#fragment",
+    "/guild/../admin?next=https://evil.example#x",
+    # scheme-relative and non-loopback origins
+    "//evil.example/app/connecthq", "//evil.example",
+    "http://evil.example", "https://minimoi.ai/app/connecthq",
+    "http://example.com:8095", "http://127.0.0.1.evil.com", "ftp://127.0.0.1",
+    # credentials, invalid ports, and anything after the origin
+    "http://user:pw@127.0.0.1:8095", "http://127.0.0.1:0",
+    "http://127.0.0.1:65536", "http://127.0.0.1:abc",
+    "http://127.0.0.1:8095/path", "http://127.0.0.1:8095?x=1",
+    "http://127.0.0.1:8095#x", "",
+])
+def test_everything_outside_the_allow_list_is_rejected(value):
+    from minimoi_portal.config import _validate_surface_base_url
     with pytest.raises(RuntimeError, match="CONNECTHQ_SURFACE_BASE_URL"):
-        _reload_config(monkeypatch, value)
+        _validate_surface_base_url(value)
+
+
+def test_hosted_portal_path_is_a_single_named_constant():
+    """The later IoT Connect rename must be one line, not a scattered literal."""
+    import minimoi_portal.config as cfg
+    assert cfg.HOSTED_PORTAL_PATH == "/app/connecthq"
+    assert cfg.CONNECTHQ_SURFACE_BASE_URL == cfg.HOSTED_PORTAL_PATH
+
+
+def test_a_rejected_base_url_fails_at_import(monkeypatch):
+    """The allow-list is enforced at module import, not only when called."""
+    with pytest.raises(RuntimeError, match="CONNECTHQ_SURFACE_BASE_URL"):
+        _reload_config(monkeypatch, "/guild/../admin?next=https://evil.example#x")
 
 
 # ── §9.6 runtime join: health probe, surfaces, diagnostic page ──────────────
@@ -509,7 +544,10 @@ def test_runtime_join_is_by_initiative_id_not_domain_tag(
 
 
 def test_operational_rows_use_the_same_action_markup(
-        portal_client, projection_file, _health_probe, loopback_surfaces):
+        portal_client, projection_file, _health_probe, loopback_surfaces, monkeypatch):
+    """The joined initiative, once operational, needs no separate markup."""
+    import minimoi_portal.app as portal_app
+    monkeypatch.setattr(portal_app._cfg, "CONNECTHQ_INITIATIVE_ID", "INIT-OPS")
     _health_probe.healthy()
     html = _get(portal_client, projection_file, _projection([
         _row(initiative_id="INIT-OPS", title="Hosted demo", experiment_stage="operational"),
@@ -517,6 +555,48 @@ def test_operational_rows_use_the_same_action_markup(
     operational_block = html[html.index("Operational"):html.index("Working matrix")]
     assert "Launch demo" in operational_block
     assert f"{loopback_surfaces}/workbench" in operational_block
+
+
+def test_unrelated_operational_row_is_not_joined_to_connect_hq(
+        portal_client, projection_file, _health_probe, loopback_surfaces, monkeypatch):
+    """Stage never joins: only the configured initiative gets the runtime.
+
+    An unrelated prototype promoted to Operational must not inherit the IoT
+    Connect release label, health result, or any of the four surface links.
+    """
+    import minimoi_portal.app as portal_app
+    monkeypatch.setattr(portal_app._cfg, "CONNECTHQ_INITIATIVE_ID", "INIT-JOINED")
+    _health_probe.healthy()
+    html = _get(portal_client, projection_file, _projection([
+        _row(initiative_id="INIT-JOINED", title="Joined demo",
+             experiment_stage="operational"),
+        _row(initiative_id="INIT-OTHER", title="Unrelated promotion",
+             experiment_stage="operational", domains=["guild", "connecthq"]),
+    ]))
+    joined = html[html.index("INIT-JOINED"):html.index("INIT-OTHER")]
+    other = html[html.index("INIT-OTHER"):html.index("Working matrix")]
+
+    # The unrelated operational row carries no runtime at all.
+    assert "revision 4 candidate" not in other
+    assert 'class="xp-runtime' not in other and "checked" not in other
+    for label in ("Launch demo", "Admin workbench", "Billing workbench", "Swagger"):
+        assert label not in other
+    assert loopback_surfaces not in other
+    assert "/guild/experiment/unavailable" not in other
+    assert "&mdash;" in other or "—" in other
+
+    # ...and the configured initiative still does.
+    assert "revision 4 candidate" in joined
+    assert "Launch demo" in joined and f"{loopback_surfaces}/workbench" in joined
+
+
+def test_join_is_stage_independent_at_the_predicate(monkeypatch):
+    import minimoi_portal.app as portal_app
+    monkeypatch.setattr(portal_app._cfg, "CONNECTHQ_INITIATIVE_ID", "INIT-CONNECTHQ")
+    assert portal_app._experiment_is_joined(
+        {"initiative_id": "INIT-CONNECTHQ", "experiment_stage": "built"}) is True
+    assert portal_app._experiment_is_joined(
+        {"initiative_id": "INIT-OTHER", "experiment_stage": "operational"}) is False
 
 
 # ── §9.7 safety: surfaces come only from configuration ──────────────────────
