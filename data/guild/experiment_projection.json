@@ -1,0 +1,30 @@
+{
+  "generated": true,
+  "source": "planning-studio",
+  "generated_at": "2026-09-03T00:00:00Z",
+  "placeholder_ids": ["INIT-2026-0004", "INIT-2026-0005"],
+  "rows": [
+    {
+      "initiative_id": "INIT-2026-0004",
+      "title": "IoT Connect",
+      "summary": "Enterprise IoT connectivity management: activation, integration evidence, and summarized billing on a standalone stack.",
+      "experiment_stage": "built",
+      "scope": "reference demo",
+      "updated_at": "2026-09-03",
+      "next_step": "Promote, tag, and host after Spec #154 gates",
+      "domains": ["guild", "connecthq"],
+      "planning_url": null
+    },
+    {
+      "initiative_id": "INIT-2026-0005",
+      "title": "Fiber order-to-cash demonstration",
+      "summary": "Fiber order-to-activate-to-bill demonstration derived from the IoT Connect release.",
+      "experiment_stage": "idea",
+      "scope": "reference demo",
+      "updated_at": "2026-09-03",
+      "next_step": "G3/G3A after standalone beta acceptance",
+      "domains": ["guild"],
+      "planning_url": null
+    }
+  ]
+}

@@ -1492,6 +1492,111 @@ def guild_improve():
                            reference_demos=[connecthq])
 
 
+# ── Guild Experiment (Spec #155, chunk 1: read-only projection) ──────────────
+
+_EXPERIMENT_STAGES = ("idea", "tinkering", "built", "operational")
+_EXPERIMENT_REQUIRED = ("initiative_id", "title", "summary", "experiment_stage",
+                        "scope", "updated_at", "domains")
+_EXPERIMENT_MAX_WARNINGS = 10
+_EXPERIMENT_STALE_DAYS = 30
+
+
+def _experiment_row(raw, placeholder_ids):
+    """Validate one projected row; return (row, error) with exactly one set.
+
+    Only the approved fields of spec §4.1 are carried through — anything else
+    in the file (URLs in particular) is dropped, never rendered.
+    """
+    if not isinstance(raw, dict):
+        return None, "row is not an object"
+    missing = [f for f in _EXPERIMENT_REQUIRED if not raw.get(f)]
+    if missing:
+        return None, f"row missing required field(s): {', '.join(missing)}"
+    stage = raw["experiment_stage"]
+    if stage not in _EXPERIMENT_STAGES:
+        return None, f"row {raw['initiative_id']}: unknown stage {stage!r}"
+    if not isinstance(raw["domains"], list):
+        return None, f"row {raw['initiative_id']}: domains must be a list"
+    planning_url = raw.get("planning_url")
+    return {
+        "initiative_id": str(raw["initiative_id"]),
+        "title": str(raw["title"]),
+        "summary": str(raw["summary"]),
+        "experiment_stage": stage,
+        "scope": str(raw["scope"]),
+        "updated_at": str(raw["updated_at"]),
+        "next_step": str(raw["next_step"]) if raw.get("next_step") else "",
+        "domains": [str(d) for d in raw["domains"]],
+        "planning_url": str(planning_url) if planning_url else None,
+        "placeholder": str(raw["initiative_id"]) in placeholder_ids,
+        "stale": _experiment_is_stale(str(raw["updated_at"])),
+    }, None
+
+
+def _experiment_is_stale(updated_at: str) -> bool:
+    """True when the record has not moved for 30 days (an indicator, not a status)."""
+    try:
+        parsed = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - parsed).days > _EXPERIMENT_STALE_DAYS
+
+
+def _load_experiment_projection():
+    """Read the non-authoritative Planning Studio projection (spec §3.3, §6).
+
+    Returns (rows, warnings, generated_at, available). A missing or invalid
+    file yields available=False so the page still renders with "working
+    register unavailable"; a single malformed row is skipped with a warning.
+    """
+    warnings, generated_at = [], None
+    try:
+        data = json.loads(Path(_cfg.GUILD_EXPERIMENT_PROJECTION).read_text(encoding="utf-8"))
+    except Exception:
+        return [], warnings, None, False
+    if isinstance(data, dict):
+        raw_generated = data.get("generated_at")
+        generated_at = str(raw_generated) if raw_generated else None
+    if not isinstance(data, dict) or not isinstance(data.get("rows"), list):
+        return [], warnings, generated_at, False
+
+    placeholder_ids = {str(i) for i in data.get("placeholder_ids", [])
+                       if isinstance(data.get("placeholder_ids"), list)}
+    rows = []
+    for raw in data["rows"]:
+        row, error = _experiment_row(raw, placeholder_ids)
+        if error:
+            if len(warnings) < _EXPERIMENT_MAX_WARNINGS:
+                warnings.append(error)
+            continue
+        rows.append(row)
+    rows.sort(key=lambda r: r["updated_at"], reverse=True)
+    return rows, warnings, generated_at, True
+
+
+@app.route("/guild/experiment")
+@app.route("/guild/experiment/")
+@_require_owner
+def guild_experiment():
+    # One working page from idea to operational. Planning Studio owns the
+    # record; this only renders a projection of it (Spec #155 §3.1).
+    rows, warnings, generated_at, available = _load_experiment_projection()
+    operational = [r for r in rows if r["experiment_stage"] == "operational"]
+    working = [r for r in rows if r["experiment_stage"] != "operational"]
+    return render_template(
+        "guild/experiment.html",
+        user=_current_user(),
+        operational=operational,
+        working=working,
+        warnings=warnings,
+        generated_at=generated_at,
+        register_available=available,
+        release_label=_cfg.CONNECTHQ_RELEASE_LABEL,
+    )
+
+
 @app.route("/guild/career")
 @app.route("/guild/career/positions")
 @_require_owner

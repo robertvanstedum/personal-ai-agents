@@ -5,6 +5,8 @@ Override via environment variables on Mac Mini.
 """
 
 import os
+import re
+from pathlib import Path
 
 # Backend app URLs (all run locally on Mac Mini)
 CURATOR_BACKEND    = os.environ.get("CURATOR_BACKEND",    "http://localhost:8766")
@@ -16,6 +18,53 @@ COS_BACKEND        = os.environ.get("COS_BACKEND",        "http://localhost:8769
 CONNECTHQ_BACKEND  = os.environ.get("CONNECTHQ_BACKEND",  "http://localhost:8095")
 CONNECTHQ_RELEASE  = os.environ.get("CONNECTHQ_RELEASE",  "connecthq-v0.9.0-beta.1")
 CONNECTHQ_SPEC     = "spec_154_connect_hq_minimoi_production_hosting_2026-09-03.md"
+
+# ── Guild Experiment workspace (Spec #155) ───────────────────────────────────
+# Non-authoritative projection of Planning Studio initiative records. Planning
+# Studio in the Central Personal Repository owns the durable record; Guild only
+# renders this generated file (spec §3.3).
+GUILD_EXPERIMENT_PROJECTION = os.environ.get(
+    "GUILD_EXPERIMENT_PROJECTION",
+    str(Path(__file__).resolve().parent.parent / "data" / "guild" / "experiment_projection.json"),
+)
+
+# Per-environment surface configuration for the IoT Connect (Connect HQ)
+# reference demo — deployment-owned, never derived from repository content
+# (spec §4.2). Defaults are the AWS values; the Mac overrides them locally.
+CONNECTHQ_SURFACE_BASE_URL = os.environ.get("CONNECTHQ_SURFACE_BASE_URL", "/app/connecthq")
+CONNECTHQ_HEALTH_URL       = os.environ.get("CONNECTHQ_HEALTH_URL", f"{CONNECTHQ_BACKEND}/api/v1/health")
+CONNECTHQ_RELEASE_LABEL    = os.environ.get("CONNECTHQ_RELEASE_LABEL", "revision 4 candidate")
+
+# Fixed, reviewed relative paths. Not overridable by environment or repository
+# content — the surfaces are joined safely to CONNECTHQ_SURFACE_BASE_URL.
+CONNECTHQ_SURFACE_PATHS = {
+    "launch": "/",
+    "admin": "/admin",
+    "billing_workbench": "/workbench",
+    "swagger": "/docs",
+}
+
+_LOOPBACK_ORIGIN = re.compile(r"^https?://(127\.0\.0\.1|localhost)(:\d+)?$")
+
+
+def _validate_surface_base_url(value: str) -> str:
+    """Only a relative portal path or a loopback origin is accepted (spec §4.2).
+
+    Anything else fails at startup rather than letting the page send the
+    browser to an unreviewed origin.
+    """
+    if value.startswith("/") and not value.startswith("//"):
+        return value.rstrip("/")
+    if _LOOPBACK_ORIGIN.match(value.rstrip("/")):
+        return value.rstrip("/")
+    raise RuntimeError(
+        "CONNECTHQ_SURFACE_BASE_URL must be a relative portal path (starting "
+        "with '/') or a loopback origin (http(s)://127.0.0.1[:port] or "
+        f"http(s)://localhost[:port]) — got {value!r}."
+    )
+
+
+CONNECTHQ_SURFACE_BASE_URL = _validate_surface_base_url(CONNECTHQ_SURFACE_BASE_URL)
 
 # Flask session secret — MUST be set in the environment.
 # Generate: python3 -c "import secrets; print(secrets.token_hex(32))"
