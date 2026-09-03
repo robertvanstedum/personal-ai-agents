@@ -41,37 +41,51 @@
     }
     .subnav-back:hover { color: rgba(198,138,94,0.75); }
 
-    .lab-wrap { max-width: 880px; margin: 0 auto; padding: 2.5rem 2rem 4rem; }
-    .lab-kicker {
-      font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.2em;
-      text-transform: uppercase; color: #8b5e2a; margin-bottom: 0.5rem;
+    .stub-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 80px);
+      padding: 3rem 2rem;
+      text-align: center;
     }
-    .lab-title { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 400; margin-bottom: 0.4rem; }
-    .lab-lede { font-size: 0.9rem; color: var(--text-muted); line-height: 1.6; max-width: 620px; margin-bottom: 2rem; }
-    .lab-section { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 0.75rem; }
-    .demo-card {
-      background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
-      padding: 1.4rem 1.6rem; max-width: 560px;
+    .stub-banner {
+      background: rgba(139,90,42,0.07);
+      border: 1px solid rgba(139,90,42,0.25);
+      border-radius: 5px;
+      padding: 1.5rem 2.5rem;
+      max-width: 480px;
     }
-    .demo-meta { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.8rem; }
-    .demo-badge {
-      font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.06em;
-      padding: 2px 8px; border-radius: 3px; border: 1px solid var(--border); color: var(--text-muted);
+    .stub-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #8b5e2a;
+      margin-bottom: 0.6rem;
     }
-    .demo-badge.health { display: inline-flex; align-items: center; gap: 6px; }
-    .demo-badge.health::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #9e9080; }
-    .demo-badge.health.up::before { background: #3f8f5a; }
-    .demo-badge.health.down::before { background: #b5533c; }
-    .demo-name { font-family: 'Playfair Display', serif; font-size: 1.3rem; margin-bottom: 0.25rem; }
-    .demo-class { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #8b5e2a; margin-bottom: 0.6rem; }
-    .demo-scenario { font-size: 0.9rem; color: var(--text-muted); line-height: 1.55; margin-bottom: 1.1rem; }
-    .demo-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
-    .demo-btn {
-      font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
-      text-decoration: none; padding: 8px 14px; border-radius: 4px; border: 1px solid var(--accent); color: var(--accent);
+    .stub-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.5rem;
+      font-weight: 400;
+      color: var(--text);
+      margin-bottom: 0.75rem;
     }
-    .demo-btn.primary { background: var(--accent); color: #fff; }
-    .demo-btn:hover { opacity: 0.85; }
+    .stub-body {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+    .stub-pointer {
+      margin-top: 0.75rem;
+    }
+    .stub-pointer a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(139,90,42,0.4);
+    }
+    .stub-pointer a:hover { color: var(--text); }
   </style>
 </head>
 <body>
@@ -81,28 +95,13 @@
   {% include 'guild/_section_subnav.html' %}
 </nav>
 
-<div class="lab-wrap">
-  <div class="lab-kicker">Guild · Improve</div>
-  <div class="lab-title">Prototype Lab</div>
-  <p class="lab-lede">Reference demos that have passed review and run as their own bounded application stacks. Discovery and launch live here; the specification, build trail, and reviews stay under Build → Docs.</p>
-
-  <div class="lab-section">Reference Demos</div>
-  {% for demo in reference_demos %}
-  <div class="demo-card" data-demo="{{ demo.name | lower | replace(' ', '-') }}">
-    <div class="demo-meta">
-      <span class="demo-badge">{{ demo.environment }}</span>
-      <span class="demo-badge">{{ demo.release }}</span>
-      <span class="demo-badge health {{ 'up' if demo.available else 'down' }}">{{ 'Available' if demo.available else 'Unavailable' }}</span>
-    </div>
-    <div class="demo-name">{{ demo.name }}</div>
-    <div class="demo-class">{{ demo.classification }}</div>
-    <p class="demo-scenario">{{ demo.scenario }}</p>
-    <div class="demo-actions">
-      <a class="demo-btn primary" href="{{ demo.launch_url }}">Launch {{ demo.name }}</a>
-      <a class="demo-btn" href="{{ demo.spec_url }}">View specification</a>
-    </div>
+<div class="stub-wrap">
+  <div class="stub-banner">
+    <div class="stub-label">In Redesign</div>
+    <div class="stub-title">Explore · Experiment · Improve</div>
+    <div class="stub-body">This section is being planned. Retrospectives, reviews, experiments, and craft-levelling tooling will live here.</div>
+    <div class="stub-body stub-pointer">Reference demos now live under <a href="/guild/experiment">Experiment</a>.</div>
   </div>
-  {% endfor %}
 </div>
 
 </body>

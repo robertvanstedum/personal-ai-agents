@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% if row %}{{ row.title }} is not running{% else %}Unknown experiment{% endif %} — Guild</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/guild.css">
+  <style>
+    :root {
+      --bg: #f5f0e8; --surface: #faf7f2;
+      --border: #ddd6c8; --text: #2a2418; --text-muted: #6b5f4e;
+      --text-dim: #9e9080; --accent: #8b5e2a;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+    nav.guild-nav {
+      position: sticky; top: 38px; z-index: 100;
+      background: #2a1f14; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .guild-subnav {
+      height: 36px; display: flex; align-items: center; padding: 0 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.15);
+    }
+
+    .lab-wrap { max-width: 720px; margin: 0 auto; padding: 2.5rem 2rem 4rem; }
+    .lab-kicker {
+      font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.2em;
+      text-transform: uppercase; color: #8b5e2a; margin-bottom: 0.5rem;
+    }
+    .lab-title { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 400; margin-bottom: 0.6rem; }
+    .lab-lede { font-size: 0.9rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 1.5rem; }
+    .xp-diag {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 3px;
+      padding: 1rem 1.1rem; margin-bottom: 1.5rem;
+    }
+    .xp-diag dl { display: grid; grid-template-columns: 140px 1fr; gap: 0.5rem 1rem; }
+    .xp-diag dt {
+      font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--text-dim); padding-top: 2px;
+    }
+    .xp-diag dd { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted); word-break: break-all; }
+    .xp-action { color: var(--accent); text-decoration: none; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.06em; }
+    .xp-action:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+{% include 'guild/_portal_nav.html' %}
+
+<nav class="guild-nav">
+  {% include 'guild/_section_subnav.html' %}
+</nav>
+
+<div class="lab-wrap">
+  <div class="lab-kicker">Guild · Experiment</div>
+  {% if row %}
+  <h1 class="lab-title">{{ row.title }} is not running.</h1>
+  <p class="lab-lede">The demo did not answer its health check, so Guild did not send the browser to it. The workspace page stays available; the actions return to their surfaces as soon as the check passes.</p>
+  <div class="xp-diag">
+    <dl>
+      <dt>Initiative</dt><dd>{{ row.initiative_id }}</dd>
+      <dt>Health URL</dt><dd>{{ health_url }}</dd>
+      <dt>Result</dt><dd>{{ health.detail }}</dd>
+      <dt>Checked at</dt><dd>{{ health.checked_at }}</dd>
+    </dl>
+  </div>
+  {% else %}
+  <h1 class="lab-title">Unknown experiment.</h1>
+  <p class="lab-lede">No projected initiative matches <strong>{{ initiative_id }}</strong>. It may have been removed from the working register, or the link is stale.</p>
+  {% endif %}
+  <a class="xp-action" href="/guild/experiment">&larr; back to Experiment</a>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Experiment — Guild</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/guild.css">
+  <style>
+    :root {
+      --bg: #f5f0e8; --surface: #faf7f2;
+      --border: #ddd6c8; --text: #2a2418; --text-muted: #6b5f4e;
+      --text-dim: #9e9080; --accent: #8b5e2a;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+    nav.guild-nav {
+      position: sticky; top: 38px; z-index: 100;
+      background: #2a1f14; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .guild-nav-brand {
+      height: 44px; display: flex; align-items: center; padding: 0 1.5rem;
+      font-family: 'DM Mono', monospace; font-size: var(--guild-nav-size); letter-spacing: 0.08em;
+    }
+    .guild-nav-brand a { color: #C68A5E; text-decoration: none; }
+    .guild-nav-brand a:hover { color: #ffffff; }
+    .guild-nav-brand a.nav-active { color: #ffffff; font-weight: 700; }
+    .nav-sep { color: rgba(255,255,255,0.2); margin: 0 12px; }
+    .guild-subnav {
+      height: 36px; display: flex; align-items: center; padding: 0 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.15);
+    }
+
+    .lab-wrap { max-width: 1040px; margin: 0 auto; padding: 2.5rem 2rem 4rem; }
+    .lab-kicker {
+      font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.2em;
+      text-transform: uppercase; color: #8b5e2a; margin-bottom: 0.5rem;
+    }
+    .lab-title { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 400; margin-bottom: 0.4rem; }
+    .lab-lede { font-size: 0.9rem; color: var(--text-muted); line-height: 1.6; max-width: 620px; margin-bottom: 2rem; }
+    .lab-section {
+      font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--text-dim); margin: 2rem 0 0.75rem;
+    }
+    .lab-section:first-of-type { margin-top: 0; }
+
+    .xp-table {
+      width: 100%; border-collapse: collapse; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 3px;
+    }
+    .xp-table th {
+      font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--text-dim); text-align: left;
+      padding: 8px 12px; border-bottom: 1px solid var(--border); font-weight: 500;
+    }
+    .xp-table td {
+      padding: 10px 12px; border-bottom: 1px solid var(--border);
+      color: var(--text-muted); vertical-align: top; line-height: 1.5;
+    }
+    .xp-table tr:last-child td { border-bottom: none; }
+    .xp-name { font-family: 'Playfair Display', serif; font-size: 1rem; color: var(--text); }
+    .xp-id { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text); white-space: nowrap; }
+    .xp-chip {
+      font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.08em;
+      text-transform: uppercase; padding: 1px 6px; border-radius: 3px;
+      border: 1px solid var(--border); color: var(--text-muted);
+      display: inline-block; margin-left: 6px;
+    }
+    .xp-chip.stale { color: #8b5e2a; border-color: #c8a882; }
+    .xp-stage { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+    .xp-muted { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); }
+    .xp-empty, .xp-unavailable {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 3px;
+      padding: 0.9rem 1rem; color: var(--text-muted); font-size: 0.9rem;
+    }
+    .xp-warnings {
+      border: 1px solid #c8a882; border-radius: 3px; background: var(--surface);
+      padding: 0.8rem 1rem; margin-bottom: 1.5rem; font-size: 0.85rem; color: var(--text-muted);
+    }
+    .xp-warnings ul { margin: 0.4rem 0 0 1.1rem; }
+    .xp-action { color: var(--accent); text-decoration: none; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.06em; }
+    .xp-action:hover { text-decoration: underline; }
+    .xp-actions { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+    .xp-action.primary { font-weight: 500; color: var(--text); border-bottom: 1px solid var(--accent); }
+    .xp-action.primary.down { color: #8b5e2a; border-bottom-style: dashed; }
+    .xp-runtime { font-family: 'DM Mono', monospace; font-size: 10px; white-space: nowrap; }
+    .xp-runtime .dot { margin-right: 4px; }
+    .xp-runtime.up { color: #4a7a3f; }
+    .xp-runtime.down { color: #8b5e2a; }
+    .xp-filters {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px;
+      margin: 0 0 0.75rem; font-family: 'DM Mono', monospace; font-size: 10px;
+    }
+    .xp-filters .facet { color: var(--text-dim); letter-spacing: 0.12em; text-transform: uppercase; }
+    .xp-filter {
+      color: var(--text-muted); text-decoration: none; border: 1px solid var(--border);
+      border-radius: 3px; padding: 1px 7px; background: var(--surface);
+    }
+    .xp-filter:hover { color: var(--text); }
+    .xp-filter.active { color: var(--surface); background: var(--accent); border-color: var(--accent); }
+  </style>
+</head>
+<body>
+{% macro runtime_cell(row) %}
+  {%- if row.joined -%}
+  <span class="xp-runtime {{ 'up' if health.ok else 'down' }}">
+    <span class="dot">{{ '&#9679;' | safe if health.ok else '&#9675;' | safe }}</span>{{ 'available' if health.ok else 'unavailable' }}
+  </span><br>
+  <span class="xp-muted">checked {{ health.checked_at }}</span>
+  {%- else -%}<span class="xp-muted">&mdash;</span>{%- endif -%}
+{% endmacro %}
+{% macro actions_cell(row) %}
+  <div class="xp-actions">
+    {% for action in row.actions %}
+    <a class="xp-action{% if action.primary %} primary{% if not health.ok %} down{% endif %}{% endif %}"
+       href="{{ action.href }}"{% if action.external %} target="_blank" rel="noopener"{% endif %}>{{ action.label }}</a>
+    {% endfor %}
+    {% if row.planning_url %}<a class="xp-action" href="{{ row.planning_url }}">open record</a>{% endif %}
+    {% if not row.actions and not row.planning_url %}<span class="xp-muted">&mdash;</span>{% endif %}
+  </div>
+{% endmacro %}
+{% include 'guild/_portal_nav.html' %}
+
+<nav class="guild-nav">
+  {% include 'guild/_section_subnav.html' %}
+</nav>
+
+<div class="lab-wrap">
+  <div class="lab-kicker">Guild · Experiment</div>
+  <h1 class="lab-title">Experiment</h1>
+  <p class="lab-lede">Efforts of any size whose purpose is learning or proving — a behaviour worth trying, an integration, a tool, or a complete demonstration. Planning Studio owns the record; this page renders a read-only projection of it.</p>
+
+  {% if warnings %}
+  <div class="xp-warnings">
+    Some rows in the working register were skipped:
+    <ul>
+      {% for warning in warnings %}<li>{{ warning }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="lab-section">Operational</div>
+  {% if operational %}
+  <table class="xp-table">
+    <thead>
+      <tr><th>Name</th><th>What it proves</th><th>Release</th><th>Runtime</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for row in operational %}
+      <tr data-initiative="{{ row.initiative_id }}" data-stage="{{ row.experiment_stage }}"
+          data-scope="{{ row.scope }}" data-domains="{{ row.domains | join(',') }}">
+        <td><span class="xp-name">{{ row.title }}</span></td>
+        <td>{{ row.summary }}</td>
+        <td>{% if row.release_label %}<span class="xp-muted">{{ row.release_label }}</span>{% else %}<span class="xp-muted">&mdash;</span>{% endif %}</td>
+        <td>{{ runtime_cell(row) }}</td>
+        <td>{{ actions_cell(row) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="xp-empty">No hosted demo yet. The local candidate is in the working matrix.</div>
+  {% endif %}
+
+  <div class="lab-section">Working matrix</div>
+  {% if register_available and filter_chips %}
+  <div class="xp-filters">
+    {% for chip in filter_chips %}
+    <span class="facet">{{ chip.facet }}</span>
+    {% for option in chip.options %}
+    <a class="xp-filter{% if option.active %} active{% endif %}" href="{{ option.href }}">{{ option.value }}</a>
+    {% endfor %}
+    {% endfor %}
+    {% if selected_filters %}<a class="xp-filter" href="{{ filter_reset_url }}">clear</a>{% endif %}
+  </div>
+  {% endif %}
+  {% if not register_available %}
+  <div class="xp-unavailable">
+    Working register unavailable.
+    {% if generated_at %}Last generated {{ generated_at }}.{% endif %}
+  </div>
+  {% elif working %}
+  <table class="xp-table">
+    <thead>
+      <tr><th>ID</th><th>Activity</th><th>Scope</th><th>Stage</th><th>Updated</th><th>Next step</th><th>Runtime</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for row in working %}
+      <tr data-initiative="{{ row.initiative_id }}" data-stage="{{ row.experiment_stage }}"
+          data-scope="{{ row.scope }}" data-domains="{{ row.domains | join(',') }}">
+        <td>
+          <span class="xp-id">{{ row.initiative_id }}</span>
+          {% if row.placeholder %}<span class="xp-chip">placeholder</span>{% endif %}
+        </td>
+        <td>
+          <span class="xp-name">{{ row.title }}</span><br>
+          {{ row.summary }}
+          {% if row.release_label %}<br><span class="xp-muted">{{ row.release_label }}</span>{% endif %}
+        </td>
+        <td>{{ row.scope }}</td>
+        <td><span class="xp-stage">{{ row.experiment_stage }}</span></td>
+        <td>
+          <span class="xp-muted">{{ row.updated_at }}</span>
+          {% if row.stale %}<span class="xp-chip stale">stale</span>{% endif %}
+        </td>
+        <td>{{ row.next_step }}</td>
+        <td>{{ runtime_cell(row) }}</td>
+        <td>{{ actions_cell(row) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="xp-empty">{% if selected_filters %}No entries match this filter.{% else %}No working entries yet.{% endif %}</div>
+  {% endif %}
+</div>
+
+</body>
+</html>
