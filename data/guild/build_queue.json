@@ -1075,5 +1075,17 @@
     "blocked_reason": null,
     "last_transition_at": "2026-08-17T00:00:00Z",
     "notes": "Curator scoring bypassed the shared credential helper and read ~/.openclaw/agents/main/agent/auth-profiles.json directly. The review-branch fix resolves XAI_API_KEY through core.get_secret, aligned with /minimoi/production/xai_api_key and the deployment secret-sync step. Regression coverage passes; production release and verification remain pending."
+  },
+  {
+    "id": 155,
+    "spec_title": "Guild Experiment Workspace — One Working Page, From Idea to Operational",
+    "spec_file": "spec_155_guild_experiment_workspace_2026-09-03.md",
+    "status": "spec_ready",
+    "github_issue": null,
+    "priority": "high",
+    "blocked_reason": null,
+    "last_transition_at": "2026-09-03T19:11:20Z",
+    "summary": "Fourth Guild landing card 'Experiment': a read-only working page with an Operational section (IoT Connect: launch, admin and billing workbenches, Swagger, live health) and a working matrix projected from Planning Studio records (Idea → Tinkering → Built → Operational). G1 only; notes/stage writes (G2) need the Central Personal Repository write contract.",
+    "notes": "Official Spec #155 v1.0. Approved by Robert 2026-09-03 for the G1 read-only slice; Claude Code builds in three ~40-minute chunks, Codex delta-checks the diff. Launch contract: opens the demo or shows a clear error; Mac user test = standalone demo on 8095 launched from Guild."
   }
 ]
