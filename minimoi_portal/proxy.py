@@ -32,49 +32,73 @@ _HOP_BY_HOP = frozenset({
 _JS_TYPES = ("application/javascript", "text/javascript", "application/x-javascript")
 
 
+
+def _already_prefixed(path: str, prefix: str) -> bool:
+    """True when an absolute path already carries the portal prefix.
+
+    Backends that know their own base path (Connect HQ with
+    CONNECTHQ_ROOT_PATH set) emit URLs that are already correct; rewriting
+    them again would produce /app/x/app/x/... . Every rewrite site below is
+    therefore idempotent.
+    """
+    if not prefix:
+        return True
+    return path == prefix or path.startswith(prefix + "/")
+
+
+def _prefix_match(m: "re.Match", prefix: str) -> str:
+    """Regex replacement: prefix group(2) unless the text at that point is
+    already prefixed (idempotent form of `group(1) + prefix + group(2)`)."""
+    s, i = m.string, m.start(2)
+    if s.startswith(prefix, i):
+        j = i + len(prefix)
+        if j == len(s) or s[j] in "/'\"`?#) ;,":
+            return m.group(0)
+    return m.group(1) + prefix + m.group(2)
+
 def _rewrite_js(text: str, portal_prefix: str) -> str:
     """Rewrite absolute URL paths inside a JavaScript string."""
     # fetch('/...') and fetch("/...")
     text = re.sub(
         r"""(fetch\s*\(\s*['"])(/[^'"?#`])""",
-        lambda m: m.group(1) + portal_prefix + m.group(2),
+        lambda m: _prefix_match(m, portal_prefix),
         text,
     )
     # fetch(`/...`) — template literals e.g. fetch(`/api/foo?x=${bar}`)
     # Rewrites the leading path prefix before any ${ expression or ?
     text = re.sub(
         r"""(fetch\s*\(\s*`)(/[^`?#$])""",
-        lambda m: m.group(1) + portal_prefix + m.group(2),
+        lambda m: _prefix_match(m, portal_prefix),
         text,
     )
     # postJSON('/...') — common helper wrapper around fetch used in German app
     text = re.sub(
         r"""(postJSON\s*\(\s*['"])(/[^'"?#`])""",
-        lambda m: m.group(1) + portal_prefix + m.group(2),
+        lambda m: _prefix_match(m, portal_prefix),
         text,
     )
     # axios.get('/...'), axios.post('/...'), etc.
     text = re.sub(
         r"""(axios\.\w+\s*\(\s*['"])(/[^'"?#`])""",
-        lambda m: m.group(1) + portal_prefix + m.group(2),
+        lambda m: _prefix_match(m, portal_prefix),
         text,
     )
     # url: '/...' patterns in JS objects/options
     text = re.sub(
         r"""(url\s*:\s*['"])(/[^'"?#`])""",
-        lambda m: m.group(1) + portal_prefix + m.group(2),
+        lambda m: _prefix_match(m, portal_prefix),
         text,
     )
     # XMLHttpRequest .open("GET", '/...')
     text = re.sub(
         r"""(\.open\s*\(\s*['"][A-Z]+['"]\s*,\s*['"])(/[^'"?#`])""",
-        lambda m: m.group(1) + portal_prefix + m.group(2),
+        lambda m: _prefix_match(m, portal_prefix),
         text,
     )
     # window.location assignments: window.location = '/...'
     text = re.sub(
         r"""(window\.location(?:\.href)?\s*=\s*['"])(/[^'"?#`])""",
-        lambda m: m.group(1) + portal_prefix + m.group(2),
+        lambda m: _prefix_match(m, portal_prefix),
         text,
     )
     return text
@@ -180,7 +204,9 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
 
 
 def proxy_to(backend_url: str, path: str, portal_prefix: str,
-             user: dict | None = None) -> Response:
+             user: dict | None = None,
+             strip_header_prefixes: tuple[str, ...] = (),
+             forward_prefix: bool = False) -> Response:
     """
     Forward the current Flask request to backend_url/path.
     Rewrites URLs in HTML, CSS, and JS responses so they resolve
@@ -190,8 +216,18 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
     backend_url:   e.g. 'http://localhost:8766'
     path:          the remaining path after stripping the portal prefix
     user:          current logged-in user dict (for nav bar injection)
+    strip_header_prefixes: extra client header prefixes (lower-case) that must
+                   never reach this backend — e.g. ("x-demo-",) for Connect HQ,
+                   whose local persona headers are not a hosted identity.
+    forward_prefix: send the backend the FULL path including portal_prefix.
+                   Required for backends configured with a root path (Connect HQ
+                   with CONNECTHQ_ROOT_PATH): Starlette matches routes on either
+                   form but serves mounted static files only under the prefix.
     """
-    target = f"{backend_url}/{path.lstrip('/')}"
+    if forward_prefix:
+        target = f"{backend_url}{portal_prefix}/{path.lstrip('/')}"
+    else:
+        target = f"{backend_url}/{path.lstrip('/')}"
     if request.query_string:
         target += f"?{request.query_string.decode()}"
 
@@ -205,6 +241,7 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
         if k.lower() not in _HOP_BY_HOP
         and k.lower() != "host"
         and not k.lower().startswith("x-minimoi-")
+        and not any(k.lower().startswith(p) for p in strip_header_prefixes)
     }
     if user:
         fwd_headers["X-Minimoi-User-Tier"] = user.get("tier", "guest")
@@ -234,7 +271,8 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
     # Rewrite Location header on redirects
     if resp.status_code in (301, 302, 303, 307, 308):
         location = resp.headers.get("Location", "")
-        if location.startswith("/"):
+        if location.startswith("/") and not location.startswith("//") \
+                and not _already_prefixed(location, portal_prefix):
             location = f"{portal_prefix}{location}"
         return Response(status=resp.status_code, headers={"Location": location})
 
@@ -254,7 +292,8 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
         for tag in soup.find_all(True):
             for attr in ("href", "src", "action", "data-src", "data-url"):
                 val = tag.get(attr, "")
-                if val and val.startswith("/") and not val.startswith("//"):
+                if (val and val.startswith("/") and not val.startswith("//")
+                        and not _already_prefixed(val, portal_prefix)):
                     tag[attr] = f"{portal_prefix}{val}"
 
             # Rewrite inline style background-image: url('/...')
@@ -262,7 +301,7 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
             if style_val and "url(" in style_val:
                 new_style = re.sub(
                     r"""(url\s*\(\s*['"]?)(/[^'")?#])""",
-                    lambda m: m.group(1) + portal_prefix + m.group(2),
+                    lambda m: _prefix_match(m, portal_prefix),
                     style_val,
                 )
                 if new_style != style_val:
@@ -276,7 +315,7 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
                 continue
             style.string = re.sub(
                 r"""(url\s*\(\s*['"]?)(/[^/'")?#])""",
-                lambda m: m.group(1) + portal_prefix + m.group(2),
+                lambda m: _prefix_match(m, portal_prefix),
                 style.string,
             )
 
@@ -326,7 +365,7 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
         text = resp.text
         text = re.sub(
             r"""(url\s*\(\s*['"]?)(/[^'")?#])""",
-            lambda m: m.group(1) + portal_prefix + m.group(2),
+            lambda m: _prefix_match(m, portal_prefix),
             text,
         )
         resp_headers.pop("Content-Type", None)

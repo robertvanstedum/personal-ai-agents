@@ -142,6 +142,11 @@ services:
       - FLASK_ENV=production
       - PORT=5001
       - COS_BACKEND=http://cos-scheduler:8769
+      # Connect HQ reference demo runs as its own Compose project
+      # (docker-compose.connecthq.prod.yml, project "connecthq"); the portal
+      # reaches it over the shared edge network created below.
+      - CONNECTHQ_BACKEND=http://minimoi-connecthq:8095
+      - CONNECTHQ_RELEASE=${CONNECTHQ_RELEASE:-connecthq-v0.9.0-beta.1}
     volumes:
       - /opt/minimoi/data/guild/build_queue.json:/app/data/guild/build_queue.json
       - /opt/minimoi/docs/design:/app/docs/design
@@ -151,6 +156,9 @@ services:
       - /opt/minimoi/agent_logs:/app/agent_logs
     ports:
       - "127.0.0.1:5001:5001"
+    networks:
+      - default
+      - connecthq-edge
     depends_on:
       - curator
       - german
@@ -228,3 +236,11 @@ volumes:
   postgres-data:
   cos-agent-a-state:
   cos-agent-a-auth:
+
+networks:
+  default:
+  # Fixed-name network the Connect HQ project joins as `external`. Created by
+  # the ordinary mini-moi deploy, so it exists before the Connect HQ workflow
+  # first runs (first-release sequencing: mini-moi main deploy → Connect HQ tag).
+  connecthq-edge:
+    name: connecthq-edge

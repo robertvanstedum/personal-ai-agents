@@ -665,6 +665,43 @@ def cos_proxy(path):
     return _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user)
 
 
+# ── Connect HQ reference demo (owner only in v0.9 — Spec #154 §4.1) ─────────
+# Connect HQ is the Guild / Prototype Lab reference demo, launched from
+# Guild → Improve. It is a separately bounded application stack (see
+# docker-compose.connecthq.prod.yml), proxied here under /app/connecthq.
+# Identity boundary (Spec #154 §4.3): the portal authenticates the session,
+# strips any client-supplied X-Minimoi-* (done for every backend) AND the
+# app's local X-Demo-* persona headers, then forwards its own verified
+# X-Minimoi-* identity. The hosted app runs in minimoi_proxy mode and maps
+# only the owner to its administrator / customer-persona capabilities.
+# No guest, admin-tier, domain-grant, or share-link access in this release.
+# Base-path contract (Spec #154 §5): the hosted app runs with
+# CONNECTHQ_ROOT_PATH=/app/connecthq and emits prefixed URLs; the portal
+# forwards the full prefixed path (forward_prefix) and its rewrite pass is
+# idempotent, so nothing is double-prefixed and static mounts resolve.
+
+_CONNECTHQ_STRIP = ("x-demo-",)
+
+
+@app.route("/app/connecthq")
+@app.route("/app/connecthq/")
+@_require_owner
+def connecthq_root():
+    user = _current_user()
+    return _proxy.proxy_to(_cfg.CONNECTHQ_BACKEND, "/", "/app/connecthq",
+                           user=user, strip_header_prefixes=_CONNECTHQ_STRIP,
+                           forward_prefix=True)
+
+
+@app.route("/app/connecthq/<path:path>", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+@_require_owner
+def connecthq_proxy(path):
+    user = _current_user()
+    return _proxy.proxy_to(_cfg.CONNECTHQ_BACKEND, path, "/app/connecthq",
+                           user=user, strip_header_prefixes=_CONNECTHQ_STRIP,
+                           forward_prefix=True)
+
+
 # ── Mein Deutsch proxy (owner + family full; guest: lesen only, no admin) ────
 
 @app.route("/app/german")
@@ -1427,10 +1464,32 @@ def guild_guest_renew_and_reset(username):
     return redirect(url_for("guild_operate"))
 
 
+def _connecthq_available() -> bool:
+    """Best-effort health probe for the Guild Improve card (never raises)."""
+    try:
+        r = _requests.get(f"{_cfg.CONNECTHQ_BACKEND}/api/v1/health", timeout=1.5)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
 @app.route("/guild/improve")
 @_require_owner
 def guild_improve():
-    return render_template("guild/improve.html", user=_current_user())
+    # Guild → Improve → Prototype Lab → Reference Demos → Connect HQ
+    # (Spec #154 §3.1). One restrained card; no general Prototype Lab UI.
+    connecthq = {
+        "name": "Connect HQ",
+        "classification": "Reference Demo",
+        "environment": "AWS demo",
+        "release": _cfg.CONNECTHQ_RELEASE,
+        "available": _connecthq_available(),
+        "scenario": "Enterprise IoT activation with integration evidence and summarized billing.",
+        "launch_url": "/app/connecthq",
+        "spec_url": f"/guild/build/spec/{_cfg.CONNECTHQ_SPEC}",
+    }
+    return render_template("guild/improve.html", user=_current_user(),
+                           reference_demos=[connecthq])
 
 
 @app.route("/guild/career")
