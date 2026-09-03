@@ -11,6 +11,7 @@ CURATOR_BACKEND    = os.environ.get("CURATOR_BACKEND",    "http://localhost:8766
 GERMAN_BACKEND     = os.environ.get("GERMAN_BACKEND",     "http://localhost:8767")
 PORTUGUESE_BACKEND = os.environ.get("PORTUGUESE_BACKEND", "http://localhost:8770")
 COS_BACKEND        = os.environ.get("COS_BACKEND",        "http://localhost:8769")
+CONNECTHQ_BACKEND  = os.environ.get("CONNECTHQ_BACKEND",  "http://localhost:8095")
 
 # Flask session secret — MUST be set in the environment.
 # Generate: python3 -c "import secrets; print(secrets.token_hex(32))"

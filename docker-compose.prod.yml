@@ -142,6 +142,7 @@ services:
       - FLASK_ENV=production
       - PORT=5001
       - COS_BACKEND=http://cos-scheduler:8769
+      - CONNECTHQ_BACKEND=http://connecthq:8095
     volumes:
       - /opt/minimoi/data/guild/build_queue.json:/app/data/guild/build_queue.json
       - /opt/minimoi/docs/design:/app/docs/design
@@ -224,7 +225,74 @@ services:
       - postgres
       - cos-agent-a
 
+  # ── Connect HQ standalone IoT demo (frozen tag, profile-gated) ─────────────
+  # Source: prototype-lab/projects/project-connect-hq. Deployed only by
+  # .github/workflows/deploy-connecthq.yml on a `connecthq-v*` tag. The
+  # `connecthq` profile keeps these services out of the ordinary main deploy so
+  # a routine push never rebuilds, moves, or pulls the demo. CONNECTHQ_IMAGE_TAG
+  # defaults to the frozen beta tag; only the Connect HQ workflow overrides it.
+  connecthq-postgres:
+    image: postgres:16-alpine
+    container_name: minimoi-connecthq-postgres
+    profiles: ["connecthq"]
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=connecthq
+      - POSTGRES_USER=connecthq_app
+      - POSTGRES_PASSWORD=${CONNECTHQ_DB_PASSWORD:?set CONNECTHQ_DB_PASSWORD in /opt/minimoi/.env (SSM /minimoi/production/connecthq_db_password)}
+    volumes:
+      - connecthq-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U connecthq_app -d connecthq"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  connecthq-integrations:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/connecthq:${CONNECTHQ_IMAGE_TAG:-connecthq-v0.9.0-beta.1}
+    container_name: minimoi-connecthq-integrations
+    profiles: ["connecthq"]
+    restart: unless-stopped
+    command: ["uvicorn", "integration_stubs.main:app", "--host", "0.0.0.0", "--port", "8096"]
+    # Internal only: the app reaches it on the compose network; never published.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8096/mock/flowone/v1/health', timeout=3).status == 200 else 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  connecthq:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/connecthq:${CONNECTHQ_IMAGE_TAG:-connecthq-v0.9.0-beta.1}
+    container_name: minimoi-connecthq
+    profiles: ["connecthq"]
+    restart: unless-stopped
+    environment:
+      - WHAM_V3_STORE=postgres
+      - POSTGRES_DSN=postgresql://connecthq_app:${CONNECTHQ_DB_PASSWORD:?set CONNECTHQ_DB_PASSWORD in /opt/minimoi/.env}@connecthq-postgres:5432/connecthq
+      - FLOWONE_BASE_URL=http://connecthq-integrations:8096
+      - AMDOCS_MIDDLEWARE_BASE_URL=http://connecthq-integrations:8096
+      - CONNECTHQ_INTEGRATIONS_URL=http://connecthq-integrations:8096
+      - CONNECTHQ_APP_URL=http://127.0.0.1:8095
+      - CONNECTHQ_SEED_TIMESTAMP=${CONNECTHQ_SEED_TIMESTAMP:-2026-08-01T00:00:00+00:00}
+      - CONNECTHQ_ROOT_PATH=/app/connecthq
+    ports:
+      - "127.0.0.1:8095:8095"
+    depends_on:
+      connecthq-postgres:
+        condition: service_healthy
+      connecthq-integrations:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8095/api/v1/health', timeout=3).status == 200 else 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
 volumes:
   postgres-data:
   cos-agent-a-state:
   cos-agent-a-auth:
+  connecthq-postgres-data:

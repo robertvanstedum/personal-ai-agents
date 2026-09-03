@@ -97,6 +97,7 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
     portuguese_active = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/portuguese" else ""
     guild_active      = "color:#ffffff;font-weight:600;" if portal_prefix == "/guild"          else ""
     cos_active        = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/cos"        else ""
+    connecthq_active  = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/connecthq"  else ""
 
     active_styles = {
         "curator": curator_active,
@@ -104,6 +105,7 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
         "portuguese": portuguese_active,
         "guild": guild_active,
         "cos": cos_active,
+        "connecthq": connecthq_active,
     }
     nav_links = []
     for workspace in workspace_navigation(user):

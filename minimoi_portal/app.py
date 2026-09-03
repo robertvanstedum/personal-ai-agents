@@ -665,6 +665,36 @@ def cos_proxy(path):
     return _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user)
 
 
+# ── Connect HQ proxy (owner/admin full; granted guests: demo only, no admin) ─
+# Connect HQ is the standalone IoT reference demo (prototype-lab/projects/
+# project-connect-hq), deployed as a frozen tag behind the portal. Guests need
+# an explicit domain grant ("connecthq"). Setup/admin API paths are owner-only
+# so a shared demo link can never reseed or reconfigure the running demo.
+
+_CONNECTHQ_OWNER_ONLY_PREFIXES = ("api/v1/admin",)
+
+
+@app.route("/app/connecthq")
+@app.route("/app/connecthq/")
+@_require_login
+def connecthq_root():
+    user = _current_user()
+    if not can_access_workspace(user, "connecthq"):
+        return render_template("access_denied.html", user=user), 403
+    return _proxy.proxy_to(_cfg.CONNECTHQ_BACKEND, "/", "/app/connecthq", user=user)
+
+
+@app.route("/app/connecthq/<path:path>", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+@_require_login
+def connecthq_proxy(path):
+    user = _current_user()
+    if not can_access_workspace(user, "connecthq"):
+        return render_template("access_denied.html", user=user), 403
+    if user.get("tier") not in ("owner", "admin") and path.startswith(_CONNECTHQ_OWNER_ONLY_PREFIXES):
+        return render_template("access_denied.html", user=user), 403
+    return _proxy.proxy_to(_cfg.CONNECTHQ_BACKEND, path, "/app/connecthq", user=user)
+
+
 # ── Mein Deutsch proxy (owner + family full; guest: lesen only, no admin) ────
 
 @app.route("/app/german")
