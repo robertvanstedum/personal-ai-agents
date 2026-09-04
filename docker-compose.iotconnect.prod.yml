@@ -1,0 +1,101 @@
+# IoT Connect reference demo — production Compose (EC2), INDEPENDENT of the
+# mini-moi project. Spec #154 (2026-09-04 revision) §6–§8.
+#
+#   Compose project name : iotconnect            (never the mini-moi project)
+#   Host path            : /opt/minimoi/iotconnect/docker-compose.yml
+#   Env file             : /opt/minimoi/iotconnect/.env  (written from SSM on every deploy)
+#   Deployed by          : .github/workflows/deploy-iotconnect.yml on an iotconnect-v* tag
+#   Image                : minimoi/iotconnect:${IOTCONNECT_IMAGE_TAG} — NEVER MINIMOI_IMAGE_TAG
+#
+# Isolation contract:
+#   * The mini-moi main deploy never pulls, recreates, or orphans these
+#     services (different project, different file).
+#   * This project never touches mini-moi containers; it only joins the
+#     pre-existing `iotconnect-edge` network so the portal can reach the app.
+#   * Only the app binds to EC2 loopback. Integrations and PostgreSQL have no
+#     host ports. The shared postgres-ai-agents database is not used.
+#
+# First-release sequencing:
+#   1. Merge the portal change (docker-compose.prod.yml gains IOTCONNECT_BACKEND
+#      and the iotconnect-edge network) and let the ordinary main deploy run.
+#   2. Create ECR repo minimoi/iotconnect + push rights; put the DB password in
+#      SSM /minimoi/production/iotconnect_db_password (Robert).
+#   3. Promote IoT Connect into prototype-lab/ and push tag iotconnect-v0.9.0-beta.1.
+#   4. The tag workflow builds, pushes, and runs scripts/operations/deploy_iotconnect_ec2.sh.
+#   5. Owner opens Guild → Experiment → Launch demo.
+
+name: iotconnect
+
+services:
+  postgres:
+    # Accepted beta gap: floating 16.x minor. Pin by digest before a later release.
+    image: postgres:16-alpine
+    container_name: minimoi-iotconnect-postgres
+    restart: unless-stopped
+    env_file: /opt/minimoi/iotconnect/.env
+    environment:
+      - POSTGRES_DB=iotconnect
+      - POSTGRES_USER=iotconnect_app
+      - POSTGRES_PASSWORD=${IOTCONNECT_DB_PASSWORD:?IOTCONNECT_DB_PASSWORD missing from /opt/minimoi/iotconnect/.env}
+    volumes:
+      - iotconnect-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iotconnect_app -d iotconnect"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  integrations:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/iotconnect:${IOTCONNECT_IMAGE_TAG:?IOTCONNECT_IMAGE_TAG must name the approved iotconnect-v* tag}
+    container_name: minimoi-iotconnect-integrations
+    restart: unless-stopped
+    command: ["uvicorn", "integration_stubs.main:app", "--host", "0.0.0.0", "--port", "8096"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8096/mock/flowone/v1/health', timeout=3).status == 200 else 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  app:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/iotconnect:${IOTCONNECT_IMAGE_TAG:?IOTCONNECT_IMAGE_TAG must name the approved iotconnect-v* tag}
+    container_name: minimoi-iotconnect
+    restart: unless-stopped
+    env_file: /opt/minimoi/iotconnect/.env
+    environment:
+      - IOTCONNECT_STORE=postgres
+      - POSTGRES_DSN=postgresql://iotconnect_app:${IOTCONNECT_DB_PASSWORD_URLENC:?IOTCONNECT_DB_PASSWORD_URLENC missing (percent-encoded copy written by deploy.sh)}@postgres:5432/iotconnect
+      - FLOWONE_BASE_URL=http://integrations:8096
+      - AMDOCS_MIDDLEWARE_BASE_URL=http://integrations:8096
+      - IOTCONNECT_INTEGRATIONS_URL=http://integrations:8096
+      - IOTCONNECT_APP_URL=http://127.0.0.1:8095
+      - IOTCONNECT_SEED_TIMESTAMP=${IOTCONNECT_SEED_TIMESTAMP:-2026-08-01T00:00:00+00:00}
+      # Hosted contract (Spec #154 §4.3, §5): trusted portal identity, one
+      # base-path strategy (app emits prefixed URLs; the portal rewrite is idempotent).
+      - IOTCONNECT_AUTH_MODE=minimoi_proxy
+      - IOTCONNECT_ROOT_PATH=/app/iotconnect
+    ports:
+      - "127.0.0.1:8095:8095"
+    networks:
+      - default
+      - iotconnect-edge
+    depends_on:
+      postgres:
+        condition: service_healthy
+      integrations:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8095/api/v1/health', timeout=3).status == 200 else 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  iotconnect-postgres-data:
+
+networks:
+  default:
+  iotconnect-edge:
+    external: true

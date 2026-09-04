@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IoT Connect · Boreal Equipment Group</title>
+  <link rel="stylesheet" href="/static/iotconnect/iotconnect.css">
+  <style>
+    .topbar.customer { grid-template-columns: 1fr auto; }
+    .customer-nav {
+      height: 49px;
+      display: flex;
+      align-items: end;
+      gap: 30px;
+      padding: 0 28px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .customer-tab {
+      height: 49px;
+      display: flex;
+      align-items: center;
+      position: relative;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .customer-tab.current { color: var(--teal); }
+    .customer-tab.current::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -1px;
+      height: 3px;
+      border-radius: 2px 2px 0 0;
+      background: var(--teal);
+    }
+    .customer-main { min-height: calc(100vh - 107px); padding: 16px 22px 22px; }
+    .customer-main .page-head { min-height: 66px; }
+    .plan-share { color: var(--muted); font-size: 10px; }
+    .share-track { width: 100%; height: 6px; margin-top: 5px; border-radius: 999px; background: #edf2f4; overflow: hidden; }
+    .share-fill { height: 100%; border-radius: inherit; background: #42a99f; }
+    .cycle-context { margin-top: 12px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+    @media (max-width: 850px) {
+      .customer-nav { gap: 17px; padding: 0 16px; }
+      .customer-tab { font-size: 11px; }
+      .metrics.four { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body data-iotconnect-page="portal-overview">
+  <header class="topbar customer">
+    <a class="brand brand-home-link" href="/" aria-label="Return to IoT Connect gateway"><div class="brand-mark">C</div><div><strong>IoT Connect</strong><small>Enterprise IoT Portal</small></div></a>
+    <div class="identity"><span class="name">Boreal Equipment Group</span><span class="chip role">Customer account</span><span class="chip">POC environment</span></div>
+  </header>
+
+  <nav class="customer-nav" aria-label="Account sections">
+    <a class="customer-tab current" href="/portal">Overview</a>
+    <a class="customer-tab" href="/portal/subscriptions">Subscriptions &amp; SIMs</a>
+    <a class="customer-tab" href="/portal/billing">Billing</a>
+  </nav>
+
+  <main class="customer-main">
+    <section class="page-head">
+      <div><h1>Boreal Equipment Group</h1><p>ACCT-000200 · August 2026 cycle in progress</p></div>
+    </section>
+
+    <section class="metrics four">
+      <div class="card metric primary"><span class="metric-dot"></span><span class="label">Available SIMs</span><strong>2,450</strong><small>assigned and ready to activate</small></div>
+      <div class="card metric"><span class="metric-dot"></span><span class="label">Active subscriptions</span><strong>49,940</strong><small>active on the network and billing</small></div>
+      <div class="card metric"><span class="metric-dot warn"></span><span class="label">Suspended</span><strong>40</strong><small>retained on the account, not billing</small></div>
+      <div class="card metric primary"><span class="label">Current cycle total</span><strong>$142,870</strong><small>all rated platform charges through August 29</small></div>
+    </section>
+
+    <section class="content-grid">
+      <article class="card panel">
+        <div class="panel-head"><h2>Activation activity</h2><span>Illustrative context · last 7 days</span></div>
+        <div class="health-summary">
+          <div class="health-stat"><span>Submitted</span><strong>1,180</strong></div>
+          <div class="health-stat good"><span>Succeeded</span><strong>1,162</strong></div>
+          <div class="health-stat bad"><span>Failed &amp; rolled back</span><strong>18</strong></div>
+        </div>
+        <div class="weekly-chart">
+          <div class="day"><span class="count">120</span><div class="bar-stack"><div class="bar-success" style="height:72px"></div><div class="bar-fail"></div></div><label>Mon</label></div>
+          <div class="day"><span class="count">175</span><div class="bar-stack"><div class="bar-success" style="height:106px"></div><div class="bar-fail"></div></div><label>Tue</label></div>
+          <div class="day"><span class="count">245</span><div class="bar-stack"><div class="bar-success" style="height:148px"></div><div class="bar-fail"></div></div><label>Wed</label></div>
+          <div class="day"><span class="count">225</span><div class="bar-stack"><div class="bar-success" style="height:135px"></div><div class="bar-fail"></div></div><label>Thu</label></div>
+          <div class="day"><span class="count">160</span><div class="bar-stack"><div class="bar-success" style="height:96px"></div><div class="bar-fail"></div></div><label>Fri</label></div>
+          <div class="day"><span class="count">135</span><div class="bar-stack"><div class="bar-success" style="height:81px"></div><div class="bar-fail"></div></div><label>Sat</label></div>
+          <div class="day"><span class="count">120</span><div class="bar-stack"><div class="bar-success" style="height:72px"></div><div class="bar-fail"></div></div><label>Sun</label></div>
+        </div>
+        <div class="legend"><span><i></i>Activated</span><span class="failed"><i></i>Failed and rolled back</span></div>
+      </article>
+
+      <article class="card panel">
+        <div class="panel-head"><h2>Active subscriptions by rate plan</h2><span>49,940 active subscriptions</span></div>
+        <table>
+          <thead><tr><th>Rate plan</th><th class="num">Active SIMs</th><th style="width:32%">Share of active base</th></tr></thead>
+          <tbody>
+            <tr><td>Connected Device Essential<span class="subtext">PLAN-IOT-001</span></td><td class="num">41,220</td><td><span class="plan-share">82.5%</span><div class="share-track"><div class="share-fill" style="width:82.5%"></div></div></td></tr>
+            <tr><td>Domestic Pool Plus<span class="subtext">PLAN-IOT-002</span></td><td class="num">6,180</td><td><span class="plan-share">12.4%</span><div class="share-track"><div class="share-fill" style="width:12.4%"></div></div></td></tr>
+            <tr><td>Private Network<span class="subtext">PLAN-IOT-003</span></td><td class="num">2,140</td><td><span class="plan-share">4.3%</span><div class="share-track"><div class="share-fill" style="width:4.3%"></div></div></td></tr>
+            <tr><td>Telemetry Standby<span class="subtext">PLAN-IOT-004</span></td><td class="num">400</td><td><span class="plan-share">0.8%</span><div class="share-track"><div class="share-fill" style="width:0.8%"></div></div></td></tr>
+          </tbody>
+          <tfoot><tr><td>Total</td><td class="num">49,940</td><td></td></tr></tfoot>
+        </table>
+        <p class="cycle-context">Rate-plan counts describe the subscription base, not billing allocation. Discounts, shared pools, account-level charges, and other commercial rules are reflected in the current-cycle total and the detailed Billing section.</p>
+      </article>
+    </section>
+  </main>
+  <script src="/static/api-client.js"></script>
+  <script src="/static/iotconnect/iotconnect.js"></script>
+</body>
+</html>

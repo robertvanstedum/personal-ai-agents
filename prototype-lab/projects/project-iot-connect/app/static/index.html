@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IoT Connect · Billing Workbench</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark">C</span><span><b>IoT Connect</b><small>Billing verification workbench</small></span></a>
+    <nav><a href="/admin">Admin Console</a><a class="active" href="/workbench">Billing Workbench</a><a href="/">Project home</a><a href="/docs">IoT Connect API (8095)</a></nav>
+    <span id="backendBadge" class="pill neutral">connecting</span>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="shell hero-content"><div><p class="eyebrow light">Enterprise IoT production proof</p><h1>Move service detail forward.<br><em>Keep finance whole.</em></h1><p>Prove that the new IoT platform can become authoritative for subscriptions and charges while the legacy biller receives complete, traceable financial output.</p></div><div class="hero-card"><small>Decision at hand</small><b>Can we onboard the next high-volume customer now?</b><span>Configuration → Activation → Billing → Reconciliation</span></div></div>
+    </section>
+
+    <div class="shell proof-shell">
+      <section class="panel account-selector">
+        <div class="panel-head"><div><p class="eyebrow">Prepared customers</p><h2>Select the operating model</h2></div><a href="/admin" class="button ghost">Open Admin Console</a></div>
+        <div id="accountCards" class="account-cards"></div>
+      </section>
+
+      <section class="proof-summary">
+        <div><span>Account</span><b id="proofAccount">—</b></div><div><span>Contract</span><b id="proofContract">—</b></div><div><span>Mode</span><b id="proofMode">—</b></div><div><span>Amdocs account</span><b id="proofLegacyAccount">—</b></div>
+      </section>
+
+      <section class="grid two">
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Operational evidence</p><h2>Platform footprints</h2></div><button id="refreshButton" class="button ghost">Refresh</button></div>
+          <div class="metric-row"><div><span>IoT subscriptions</span><b id="iotCount">0</b></div><div><span>Legacy standard lines</span><b id="legacyCount">0</b></div></div>
+          <div id="routingStatement" class="callout">Use the Admin Console to configure and activate this account.</div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Financial proof</p><h2>Run and reconcile billing</h2></div></div>
+          <label>Billing cycle<input id="billCycle" value="2026-08" pattern="\d{4}-\d{2}"></label>
+          <button id="runBillingButton" class="button primary full">Run billing proof</button>
+          <div id="runResult" class="result-box">No bill run in this session.</div>
+        </article>
+      </section>
+
+      <section id="billingEvidence" class="hidden">
+        <div id="billingMetrics" class="metrics"></div>
+        <section class="grid two">
+          <article class="panel"><div class="panel-head"><div><p class="eyebrow">Source</p><h2>IoT charges</h2></div><span id="chargeCount" class="pill"></span></div><div id="chargeTable"></div></article>
+          <article class="panel"><div class="panel-head"><div><p class="eyebrow">Output</p><h2>Legacy billing file</h2></div><span id="fileCount" class="pill"></span></div><div id="fileTable"></div></article>
+        </section>
+        <article id="reconciliationPanel" class="panel reconciliation"></article>
+        <article class="panel invoice-panel"><div class="panel-head"><div><p class="eyebrow">Legacy Billing artifact</p><h2>Illustrative customer statement</h2></div><div class="button-cluster"><a href="/artifacts/invoice-comparison" class="button ghost">Open A/B statements</a><button id="loadInvoiceButton" class="button secondary">Load statement</button></div></div><p class="artifact-note">The IoT platform supplies reconciled billing output. Legacy Billing produces the customer invoice and retains AR, payments, collections, and downstream financial processing.</p><div id="invoice"></div></article>
+      </section>
+    </div>
+  </main>
+  <div id="toast" class="toast hidden"></div>
+  <script src="/static/api-client.js"></script>
+  <script src="/static/demo.js"></script>
+</body>
+</html>

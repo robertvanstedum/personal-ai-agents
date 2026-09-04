@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IoT Connect · Operator SIM inventory</title>
+  <link rel="stylesheet" href="/static/iotconnect/iotconnect.css">
+  <style>
+    .topbar.operator{grid-template-columns:1fr auto}.operator-nav{height:45px;display:flex;align-items:end;gap:29px;padding:0 28px;border-bottom:1px solid var(--line);background:var(--surface)}.operator-tab{height:45px;display:flex;align-items:center;position:relative;color:var(--muted);font-size:12px;font-weight:600}.operator-tab.current{color:var(--teal)}.operator-tab.current::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--teal)}
+    .operator-main{min-height:calc(100vh - 103px);padding:14px 22px 22px}.page-head{min-height:64px;margin-bottom:9px}.metrics.compact{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:9px}.metrics.compact .metric{min-height:88px;padding:12px 14px}.metrics.compact .metric strong{margin-top:7px;font-size:27px}.metrics.compact .metric small{margin-top:6px}
+    .flow-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-bottom:9px;padding:10px 15px}.flow-step{display:flex;align-items:center;position:relative;gap:9px;color:var(--muted)}.flow-step:not(:last-child)::after{content:"";position:absolute;left:36px;right:11px;top:14px;height:1px;background:#cbd7dc}.flow-number{width:28px;height:28px;display:grid;place-items:center;position:relative;z-index:1;border:1px solid #8bc8c2;border-radius:50%;background:var(--teal-soft);color:var(--teal);font-size:10px;font-weight:700}.flow-copy{position:relative;z-index:1;padding-right:9px;background:white}.flow-copy strong{display:block;color:var(--text);font-size:10px}.flow-copy small{display:block;margin-top:2px;font-size:8px}
+    .inventory-grid{display:grid;grid-template-columns:minmax(500px,.9fr) minmax(560px,1.1fr);gap:9px;margin-bottom:9px}.panel-card{padding:0;overflow:visible}.card-head{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line)}.card-head h2{margin:0;font-size:14px}.card-head span{color:var(--muted);font-size:9px}.panel-body{padding:14px}.upload-zone{min-height:118px;display:grid;place-items:center;padding:16px;border:1px dashed #aebdc5;border-radius:6px;background:var(--soft);text-align:center}.upload-zone strong{display:block;font-size:12px}.upload-zone span{display:block;margin-top:5px;color:var(--muted);font-size:9px}.secondary-button{min-height:32px;margin-top:10px;padding:0 12px;border:1px solid #94aaaF;border-radius:5px;background:white;color:var(--text);font-size:9px;font-weight:650}.info-note{margin-top:10px;padding:9px 11px;border-radius:5px;background:#eef6f8;color:#45616f;font-size:8.5px;line-height:1.45}.form-row{display:grid;grid-template-columns:1fr 150px;gap:10px;margin-bottom:10px}.field label{display:block;margin-bottom:5px;color:var(--muted);font-size:8.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase}.field input{width:100%;height:34px;padding:0 9px;border:1px solid #c7d4d9;border-radius:5px;background:white;color:var(--text);font-size:9.5px}.account-search{position:relative}.account-matches{position:absolute;z-index:6;left:0;right:0;top:55px;max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:white;box-shadow:0 12px 28px rgba(13,43,57,.16)}.account-matches[hidden]{display:none}.account-match{display:block;width:100%;padding:10px 12px;border:0;border-bottom:1px solid var(--line);background:white;text-align:left;color:var(--text);font:inherit;cursor:pointer}.account-match:hover,.account-match.selected{background:var(--teal-soft);color:var(--teal)}.account-match small{display:block;margin-top:3px;color:var(--muted)}.assign-summary{display:flex;justify-content:space-between;gap:15px;margin:4px 0 10px;padding:10px 11px;border-radius:5px;background:var(--teal-soft);font-size:9px}.assign-summary span{color:var(--teal)}.assign-summary strong{font-size:11px}.primary-wide{width:100%;min-height:36px;border:0;border-radius:6px;background:var(--teal);color:white;font-size:10px;font-weight:700}.helper{margin:9px 0 0;color:var(--muted);font-size:8.5px;line-height:1.45}.recent-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.recent-card{padding:0;overflow:hidden}.recent-card table td{padding:8px 7px;font-size:9.5px}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:9px}.status.assigned{background:#edf3f7;color:#46647c}.open-link{color:var(--teal);font-weight:650}
+    @media(max-width:1050px){.inventory-grid,.recent-grid{grid-template-columns:1fr}.metrics.compact{grid-template-columns:repeat(2,1fr)}}
+  </style>
+</head>
+<body data-iotconnect-page="operator-inventory">
+  <header class="topbar operator"><a class="brand brand-home-link" href="/" aria-label="Return to IoT Connect gateway"><div class="brand-mark">C</div><div><strong>IoT Connect</strong><small>Enterprise IoT Operations</small></div></a><div class="identity"><span class="name">Business Operations</span><span class="chip role">Operator</span><span class="chip">POC environment</span></div></header>
+  <nav class="operator-nav" aria-label="Operator work areas"><a class="operator-tab" href="/operator">Portfolio</a><a class="operator-tab" href="/operator/accounts">Accounts</a><a class="operator-tab current" href="/operator/inventory">SIM Inventory</a><a class="operator-tab" href="/operator/bill-cycles">Bill Cycles</a><a class="operator-tab" href="/operator/catalog">Plan Catalog</a><a class="operator-tab" href="/operator/api-activity">API Activity</a></nav>
+  <main class="operator-main">
+    <section class="page-head"><div><h1>SIM inventory</h1><p>Load SIMs into operator stock, then assign them to one customer account</p></div></section>
+    <section class="metrics compact">
+      <div class="card metric primary"><span class="label">Operator stock</span><strong>36,500</strong><small>unassigned and available</small></div>
+      <div class="card metric"><span class="label">Assigned to customers</span><strong>5,050</strong><small>available in customer inventory</small></div>
+      <div class="card metric primary"><span class="label">Active subscriptions</span><strong>127,982</strong><small>activated from assigned inventory</small></div>
+      <div class="card metric"><span class="label">Loaded this month</span><strong>12,000</strong><small>illustrative vendor-load context</small></div>
+    </section>
+    <section class="card flow-strip" aria-label="Operator inventory flow">
+      <div class="flow-step"><span class="flow-number">1</span><span class="flow-copy"><strong>Load operator stock</strong><small>ICCID, IMSI and vendor batch reference</small></span></div>
+      <div class="flow-step"><span class="flow-number">2</span><span class="flow-copy"><strong>Assign to one customer</strong><small>inventory ownership changes; no activation</small></span></div>
+      <div class="flow-step"><span class="flow-number">3</span><span class="flow-copy"><strong>Open customer subscriptions</strong><small>select resources and manage status there</small></span></div>
+    </section>
+    <section class="inventory-grid">
+      <article class="card panel-card">
+        <div class="card-head"><h2>Load SIM batch</h2><span>Operator inventory</span></div>
+        <div class="panel-body">
+          <div class="upload-zone"><div><strong>Upload SIM personalization file</strong><span>CSV containing ICCID, IMSI and vendor batch reference</span><button class="secondary-button" disabled title="Seeded inventory is used in this POC">Choose file</button></div></div>
+          <div class="info-note">Loading creates inventory records only. The SIMs remain operator-owned and unassigned; no MDN, rate plan, customer ownership, or network activation is created.</div>
+        </div>
+      </article>
+      <article class="card panel-card">
+        <div class="card-head"><h2>Assign SIMs to customer</h2><span>One customer per assignment</span></div>
+        <div class="panel-body">
+          <div class="form-row"><div class="field account-search"><label>Customer account</label><input id="inventoryAccountSearch" autocomplete="off" placeholder="Search name, account, or external billing account"><div id="inventoryAccountMatches" class="account-matches" hidden></div></div><div class="field"><label>Quantity</label><input id="inventoryQuantity" type="number" min="1" max="1000" value="100"></div></div>
+          <div class="info-note" style="margin:0 0 10px">Assignment takes the oldest available operator stock. Historical load batches remain evidence of when inventory entered the platform; they are not separate assignable pools.</div>
+          <div class="assign-summary"><span>Assignment result</span><strong id="inventoryAssignmentResult">No assignment in this session</strong></div>
+          <button id="assignInventoryButton" class="primary-wide">Assign available SIMs</button>
+          <p class="helper">Assignment changes inventory ownership only. The operator or customer activates and manages the SIMs later from the selected account’s Subscriptions &amp; SIMs page.</p>
+        </div>
+      </article>
+    </section>
+    <section class="recent-grid">
+      <article class="card recent-card"><div class="card-head"><h2>Recent load batches</h2><span>Illustrative vendor-file context</span></div><table><thead><tr><th>Batch</th><th>Vendor reference</th><th class="num">Loaded</th><th>Status</th></tr></thead><tbody><tr><td class="mono">LOAD-2026-08-02</td><td>GD-88213</td><td class="num">8,000</td><td><span class="status">COMPLETE</span></td></tr><tr><td class="mono">LOAD-2026-08-01</td><td>GD-88190</td><td class="num">4,000</td><td><span class="status">COMPLETE</span></td></tr></tbody></table></article>
+      <article class="card recent-card"><div class="card-head"><h2>Recent customer assignments</h2><span>Illustrative operating context</span></div><table><thead><tr><th>Assignment</th><th>Customer</th><th class="num">SIMs</th><th>Next step</th></tr></thead><tbody><tr><td class="mono">ASN-0000142</td><td>Boreal Equipment Group</td><td class="num">500</td><td><a class="open-link" href="/operator/subscriptions">Open subscriptions →</a></td></tr><tr><td class="mono">ASN-0000141</td><td>Aster Field Systems</td><td class="num">250</td><td><span class="status assigned">ASSIGNED</span></td></tr></tbody></table></article>
+    </section>
+  </main>
+  <script src="/static/api-client.js"></script>
+  <script src="/static/iotconnect/iotconnect.js"></script>
+</body>
+</html>

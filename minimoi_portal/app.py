@@ -666,10 +666,10 @@ def cos_proxy(path):
     return _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user)
 
 
-# ── Connect HQ reference demo (owner only in v0.9 — Spec #154 §4.1) ─────────
-# Connect HQ is the Guild / Prototype Lab reference demo, launched from
-# Guild → Improve. It is a separately bounded application stack (see
-# docker-compose.connecthq.prod.yml), proxied here under /app/connecthq.
+# ── IoT Connect reference demo (owner only in v0.9 — Spec #154 §4.1) ────────
+# IoT Connect is the Guild / Prototype Lab reference demo, launched from
+# Guild → Experiment. It is a separately bounded application stack (see
+# docker-compose.iotconnect.prod.yml), proxied here under /app/iotconnect.
 # Identity boundary (Spec #154 §4.3): the portal authenticates the session,
 # strips any client-supplied X-Minimoi-* (done for every backend) AND the
 # app's local X-Demo-* persona headers, then forwards its own verified
@@ -677,30 +677,47 @@ def cos_proxy(path):
 # only the owner to its administrator / customer-persona capabilities.
 # No guest, admin-tier, domain-grant, or share-link access in this release.
 # Base-path contract (Spec #154 §5): the hosted app runs with
-# CONNECTHQ_ROOT_PATH=/app/connecthq and emits prefixed URLs; the portal
+# IOTCONNECT_ROOT_PATH=/app/iotconnect and emits prefixed URLs; the portal
 # forwards the full prefixed path (forward_prefix) and its rewrite pass is
 # idempotent, so nothing is double-prefixed and static mounts resolve.
 
-_CONNECTHQ_STRIP = ("x-demo-",)
+_IOTCONNECT_STRIP = ("x-demo-",)
 
+
+@app.route("/app/iotconnect")
+@app.route("/app/iotconnect/")
+@_require_owner
+def iotconnect_root():
+    user = _current_user()
+    return _proxy.proxy_to(_cfg.IOTCONNECT_BACKEND, "/", "/app/iotconnect",
+                           user=user, strip_header_prefixes=_IOTCONNECT_STRIP,
+                           forward_prefix=True)
+
+
+@app.route("/app/iotconnect/<path:path>", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+@_require_owner
+def iotconnect_proxy(path):
+    user = _current_user()
+    return _proxy.proxy_to(_cfg.IOTCONNECT_BACKEND, path, "/app/iotconnect",
+                           user=user, strip_header_prefixes=_IOTCONNECT_STRIP,
+                           forward_prefix=True)
+
+
+# Retired /app/connecthq path — kept for exactly one release as a permanent
+# redirect so bookmarks and the previous release's emitted URLs still land.
+# Nothing is proxied here: the request is redirected to the same path under
+# /app/iotconnect with its query string intact, and the real route does the
+# authentication and proxying.
 
 @app.route("/app/connecthq")
 @app.route("/app/connecthq/")
-@_require_owner
-def connecthq_root():
-    user = _current_user()
-    return _proxy.proxy_to(_cfg.CONNECTHQ_BACKEND, "/", "/app/connecthq",
-                           user=user, strip_header_prefixes=_CONNECTHQ_STRIP,
-                           forward_prefix=True)
-
-
-@app.route("/app/connecthq/<path:path>", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
-@_require_owner
-def connecthq_proxy(path):
-    user = _current_user()
-    return _proxy.proxy_to(_cfg.CONNECTHQ_BACKEND, path, "/app/connecthq",
-                           user=user, strip_header_prefixes=_CONNECTHQ_STRIP,
-                           forward_prefix=True)
+@app.route("/app/connecthq/<path:path>",
+           methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+def connecthq_legacy_redirect(path=""):
+    target = _cfg.HOSTED_PORTAL_PATH + (f"/{path}" if path else "")
+    if request.query_string:
+        target = f"{target}?{request.query_string.decode('utf-8', 'ignore')}"
+    return redirect(target, code=301)
 
 
 # ── Mein Deutsch proxy (owner + family full; guest: lesen only, no admin) ────
@@ -1576,7 +1593,7 @@ def _experiment_health():
     if cached is not None and (now - _experiment_health_cache["checked"]) < _EXPERIMENT_HEALTH_TTL_SECONDS:
         return cached
     try:
-        response = _requests.get(_cfg.CONNECTHQ_HEALTH_URL, timeout=_EXPERIMENT_HEALTH_TIMEOUT)
+        response = _requests.get(_cfg.IOTCONNECT_HEALTH_URL, timeout=_EXPERIMENT_HEALTH_TIMEOUT)
         ok = response.status_code == 200
         detail = ("HTTP 200 OK" if ok
                   else f"health check returned HTTP {response.status_code}")
@@ -1614,8 +1631,8 @@ def _experiment_actions(row, health):
         return [{"key": key, "label": down_label, "href": diagnostic,
                  "external": False, "primary": key == "launch"}
                 for key, _up, down_label in _EXPERIMENT_SURFACE_LABELS]
-    surfaces = _cfg.connecthq_surfaces()
-    external = _cfg.connecthq_surface_is_external()
+    surfaces = _cfg.iotconnect_surfaces()
+    external = _cfg.iotconnect_surface_is_external()
     return [{"key": key, "label": up_label, "href": surfaces[key],
              "external": external, "primary": key == "launch"}
             for key, up_label, _down in _EXPERIMENT_SURFACE_LABELS]
@@ -1631,16 +1648,45 @@ def _experiment_is_joined(row):
     still uses the same action markup, so promoting the configured initiative
     (G3) needs no separate template.
     """
-    return row["initiative_id"] == _cfg.CONNECTHQ_INITIATIVE_ID
+    return row["initiative_id"] == _cfg.IOTCONNECT_INITIATIVE_ID
+
+
+# An approved, immutable release tag — the only release label that can promote
+# the joined row to Operational (Spec #155 §3.2: stage is derived from runtime
+# deployment facts, never from the projection file). A candidate label such as
+# "revision 7 candidate" is deliberately not a tag and never promotes.
+# The single release-tag grammar lives in config (the workflow and the deploy
+# script carry the byte-identical POSIX ERE) — Codex release review 1, P1.
+_EXPERIMENT_RELEASE_TAG = _re.compile(_cfg.RELEASE_TAG_PATTERN)
+
+
+def _experiment_release_is_tagged(label) -> bool:
+    """True only for an approved immutable iotconnect-v<major>.<minor>.<patch>[-prerelease] tag.
+
+    Full match, never a prefix match: `iotconnect-v0.9.0evil`,
+    `iotconnect-v0.9.0/../../x`, `iotconnect-v0.9.0-`, a trailing newline or a
+    trailing space are all rejected.
+    """
+    return bool(label) and bool(_EXPERIMENT_RELEASE_TAG.fullmatch(str(label)))
 
 
 def _experiment_join_runtime(rows, health):
-    """Attach the deployment-owned runtime facts to the joined row, in place."""
+    """Attach the deployment-owned runtime facts to the joined row, in place.
+
+    Stage promotion (Spec #155): the joined row becomes "operational" when the
+    configured release label is an approved immutable tag AND the server-side
+    health check is ok — a tagged, deployed, answering demo. Otherwise the
+    projection's own stage stands, so a candidate build or a failing health
+    check leaves the row in the working matrix.
+    """
     for row in rows:
         joined = _experiment_is_joined(row)
         row["joined"] = joined
-        row["release_label"] = _cfg.CONNECTHQ_RELEASE_LABEL if joined else None
+        row["release_label"] = _cfg.IOTCONNECT_RELEASE_LABEL if joined else None
         row["actions"] = _experiment_actions(row, health) if joined else []
+        if (joined and health["ok"]
+                and _experiment_release_is_tagged(_cfg.IOTCONNECT_RELEASE_LABEL)):
+            row["experiment_stage"] = "operational"
 
 
 def _experiment_facet_values(rows, facet):
@@ -1703,7 +1749,7 @@ def guild_experiment():
         warnings=warnings,
         generated_at=generated_at,
         register_available=available,
-        release_label=_cfg.CONNECTHQ_RELEASE_LABEL,
+        release_label=_cfg.IOTCONNECT_RELEASE_LABEL,
         health=health,
         selected_filters=selected,
     )
@@ -1726,7 +1772,7 @@ def guild_experiment_unavailable(initiative_id):
         row=row,
         initiative_id=initiative_id,
         health=health,
-        health_url=_cfg.CONNECTHQ_HEALTH_URL,
+        health_url=_cfg.IOTCONNECT_HEALTH_URL,
     ), (503 if row else 404)
 
 

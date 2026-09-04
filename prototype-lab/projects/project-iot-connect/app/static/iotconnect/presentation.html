@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IoT Connect · Fast Follow</title>
+  <style>
+    :root{--navy:#0b2436;--teal:#0a7b6c;--muted:#63788a;--canvas:#dfe7e9;--slide-scale:1}
+    *{box-sizing:border-box}html,body{height:100%}body{margin:0;overflow:hidden;background:var(--canvas);color:var(--navy);font-family:Inter,"Segoe UI",system-ui,-apple-system,sans-serif}a{color:inherit;text-decoration:none}button{font:inherit}
+    .topbar{height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:var(--navy);color:white}.brand{display:flex;align-items:center;gap:11px}.mark{width:36px;height:36px;border-radius:9px;background:#079a8e;display:grid;place-items:center;font-size:19px;font-weight:800}.brand strong,.brand small{display:block}.brand strong{font-size:15px}.brand small{margin-top:2px;color:#c2d1db;font-size:10px}.top-controls{display:flex;align-items:center;gap:9px}.counter{min-width:52px;text-align:center;color:#c2d1db;font-size:12px}.control,.download-link,.live-link{min-height:34px;border:1px solid #7890a2;border-radius:6px;padding:0 12px;background:transparent;color:white;font-size:11px;font-weight:700;cursor:pointer}.control:hover,.control:focus-visible,.download-link:hover,.download-link:focus-visible{background:#173f57}.download-link,.live-link{display:inline-flex;align-items:center}.live-link{border-color:#35b7ab;background:#087f75}.live-link:hover,.live-link:focus-visible{background:#06988c}
+    .deck{position:relative;height:calc(100vh - 112px);overflow:hidden}.slide{position:absolute;left:50%;top:50%;width:1280px;height:700px;overflow:hidden;transform:translate(-50%,-50%) scale(var(--slide-scale));border-radius:8px;background:white;box-shadow:0 10px 32px rgba(11,43,66,.15);transform-origin:center}.slide[hidden]{display:none}.slide img{display:block;width:100%;height:100%;object-fit:contain}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    .deck-footer{height:48px;display:flex;align-items:center;justify-content:center;gap:14px;background:var(--canvas)}.nav-button{min-width:88px;height:32px;border:1px solid #9aabb5;border-radius:6px;background:white;color:var(--navy);font-size:11px;font-weight:750;cursor:pointer}.nav-button:disabled{opacity:.35;cursor:default}.progress{display:flex;gap:8px}.dot{width:8px;height:8px;border:0;border-radius:50%;padding:0;background:#9aabb5;cursor:pointer}.dot.active{background:var(--teal);transform:scale(1.35)}.key-hint{position:absolute;right:24px;color:var(--muted);font-size:10px}
+    @media(max-width:900px){.brand small,.counter,.key-hint{display:none}.topbar{padding:0 14px}.top-controls{gap:6px}.control,.download-link,.live-link{padding:0 9px}.download-link.pptx{display:none}}
+    @page{size:1280px 700px;margin:0}@media print{html,body{width:1280px;height:auto;overflow:visible;background:white}.topbar,.deck-footer{display:none}.deck{height:auto;overflow:visible}.slide,.slide[hidden]{position:relative;left:auto;top:auto;display:block!important;width:1280px;height:700px;transform:none;border-radius:0;box-shadow:none;break-after:page;page-break-after:always}.slide:last-child{break-after:auto;page-break-after:auto}}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Return to IoT Connect launch page"><span class="mark">C</span><span><strong>IoT Connect</strong><small>Enterprise Connectivity Management POC</small></span></a>
+    <div class="top-controls"><span id="slideCounter" class="counter">1 / 5</span><button id="fullscreenButton" class="control" type="button">Full screen</button><a class="live-link" href="/">Open live POC</a></div>
+  </header>
+
+  <main id="deck" class="deck" aria-live="polite">
+    <section class="slide" data-title="Decision context"><img src="/presentation/assets/slide-1.png" alt="IoT Connect fast-follow context: migration complete, committed enterprise demand arriving, and authorization requested for a production POC"><span class="sr-only">IoT Connect fast follow for large enterprises. Migration is complete and operating. Committed enterprise demand is arriving as planned. The technical solution is ready and the operating model requires validation. Decision request: authorize a production POC.</span></section>
+    <section class="slide" data-title="Meeting agenda" hidden><img src="/presentation/assets/slide-2.png" alt="Meeting agenda covering solution design, the live demonstration, production POC decision gates, and timeline"><span class="sr-only">Meeting agenda. Recap the solution design before and after migration. Demonstrate the key order-management and billing workflows. Toggle the Summarized Billing feature on. Order management stops sending subscriptions to Legacy Billing, and the bill file sends summarized charges only. Discuss the production proof-of-concept approach and decision gates. Align on the fast-follow timeline and next steps.</span></section>
+    <section class="slide" data-title="Before" hidden><img src="/presentation/assets/slide-3.png" alt="Before architecture: six activation steps and ten billing steps through legacy systems"><span class="sr-only">Before: activation requires six steps through Legacy IoT, middleware, Legacy Billing order management, and the network. Billing requires ten steps, including extract and enriched files before Legacy Billing.</span></section>
+    <section class="slide" data-title="After" hidden><img src="/presentation/assets/slide-4.png" alt="After architecture: three activation steps and five billing steps"><span class="sr-only">After: activation moves from enterprise channels to WDH, FlowOne, and the network with immediate success or failure. Billing uses convergent IoT billing and a fully calculated bill file before taxes, payments, distribution, and ERP.</span></section>
+    <section class="slide" data-title="Next steps" hidden><img src="/presentation/assets/slide-5.png" alt="Next steps from production POC to controlled launch"><span class="sr-only">Next steps: approve and prepare, production POC, controlled MVP, and controlled launch. Sales estimate 9 months from now: 7,000 customers, 900,000 billable SIMs, and 2.4 million inventory SIMs.</span></section>
+  </main>
+
+  <footer class="deck-footer"><button id="previousButton" class="nav-button" type="button">Previous</button><div id="progress" class="progress" aria-label="Choose slide"></div><button id="nextButton" class="nav-button" type="button">Next</button><span class="key-hint">Use arrow keys or Space</span></footer>
+  <script>
+    (() => {
+      const deck = document.getElementById("deck");
+      const slides = [...document.querySelectorAll(".slide")];
+      const previous = document.getElementById("previousButton");
+      const next = document.getElementById("nextButton");
+      const counter = document.getElementById("slideCounter");
+      const progress = document.getElementById("progress");
+      let current = 0;
+
+      slides.forEach((slide, index) => {
+        const dot = document.createElement("button");
+        dot.type = "button";
+        dot.className = "dot";
+        dot.setAttribute("aria-label", `Open slide ${index + 1}: ${slide.dataset.title}`);
+        dot.addEventListener("click", () => show(index));
+        progress.appendChild(dot);
+      });
+
+      function fitSlides() {
+        const scale = Math.min(deck.clientWidth / 1280, deck.clientHeight / 700, 1);
+        document.documentElement.style.setProperty("--slide-scale", String(scale));
+      }
+
+      function show(index) {
+        current = Math.max(0, Math.min(slides.length - 1, index));
+        slides.forEach((slide, slideIndex) => { slide.hidden = slideIndex !== current; });
+        [...progress.children].forEach((dot, dotIndex) => dot.classList.toggle("active", dotIndex === current));
+        counter.textContent = `${current + 1} / ${slides.length}`;
+        previous.disabled = current === 0;
+        next.disabled = current === slides.length - 1;
+        document.title = `IoT Connect · ${slides[current].dataset.title}`;
+      }
+
+      previous.addEventListener("click", () => show(current - 1));
+      next.addEventListener("click", () => show(current + 1));
+      window.addEventListener("resize", fitSlides);
+      document.addEventListener("keydown", (event) => {
+        if (["ArrowRight", "PageDown", " "].includes(event.key)) { event.preventDefault(); show(current + 1); }
+        if (["ArrowLeft", "PageUp"].includes(event.key)) { event.preventDefault(); show(current - 1); }
+        if (event.key === "Home") show(0);
+        if (event.key === "End") show(slides.length - 1);
+      });
+      document.getElementById("fullscreenButton").addEventListener("click", async () => {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        else await document.documentElement.requestFullscreen();
+      });
+      fitSlides();
+      show(0);
+    })();
+  </script>
+</body>
+</html>

@@ -7,18 +7,19 @@
 **Parent capability:** Guild
 **Builder:** Claude Code, in chunks of about 40 minutes, one reviewed diff per slice
 **Reviewers:** Codex (BUILD READY sign-off on v1.0 → v1.1, then delta check on the built diff), Robert
-**Related:** Spec #154 (Connect HQ hosting; PR #193); Spec #153 (Prototype Lab); Planning Studio INIT-2026-0001 (Central Personal Repository); Planning Studio Charter and Record Lifecycle v0.1
+**Related:** Spec #154 (IoT Connect hosting; PR #193); Spec #153 (Prototype Lab); Planning Studio INIT-2026-0001 (Central Personal Repository); Planning Studio Charter and Record Lifecycle v0.1
+**Revision 2026-09-04 (N3 hosting rename):** the hosted route is `/app/iotconnect` and the portal settings are `IOTCONNECT_*`; §2 decision 2 ("internal Connect HQ identifiers are not renamed") and the §12 out-of-scope line about renaming internals were superseded by the IoT Connect naming decision of 2026-09-03. Stage promotion is now derived at runtime: the joined row shows `operational` only when the release label is an approved `iotconnect-v*` tag and the health check is ok.
 
 ## 1. Executive decision
 
-Add one practical **Experiment** area to Guild as the fourth and final landing card. It is a working surface where Robert sees efforts of any size, a behaviour worth trying, an integration, a tool, or a complete demonstration, from idea to a runnable result. Finished demonstrations stay visible and launchable, with their working surfaces. The first reference demo is **IoT Connect** (internally Connect HQ). The Fiber demonstration appears as planned work with no artwork and no runnable application.
+Add one practical **Experiment** area to Guild as the fourth and final landing card. It is a working surface where Robert sees efforts of any size, a behaviour worth trying, an integration, a tool, or a complete demonstration, from idea to a runnable result. Finished demonstrations stay visible and launchable, with their working surfaces. The first reference demo is **IoT Connect**. The Fiber demonstration appears as planned work with no artwork and no runnable application.
 
 The first build is read-only. Guild renders a projection; Planning Studio in the Central Personal Repository owns the durable record.
 
 ## 2. Decisions taken (Robert, 2026-09-03)
 
 1. Landing cards: `Build · Operate · Improve · Experiment`. Landing title, tagline, and the other cards unchanged.
-2. Visible name on Guild surfaces: **IoT Connect**. Internal Connect HQ routes, repository names, image tags, and deployment identifiers are not renamed.
+2. Visible name on Guild surfaces: **IoT Connect**. *(Historical: this decision left the internal Connect HQ routes, repository names, image tags, and deployment identifiers unrenamed; superseded by the naming decision of 2026-09-03 — see the revision note above.)*
 3. One page: an **Operational** section and a **working matrix**. No hierarchy, no Prototype Lab application, no gallery.
 4. Lifecycle shown: `Idea → Tinkering → Built → Operational`, distinct from Planning Studio governance status.
 5. Planning Studio owns the durable record; Guild renders a projection. No second registry.
@@ -83,11 +84,11 @@ surfaces (fixed, reviewed relative paths, joined safely to base_url):
 | Environment | `base_url` | `health_url` |
 |---|---|---|
 | Mac (local portal + standalone demo) | `http://127.0.0.1:8095` (loopback origin; port configurable; opens in a new tab) | `http://127.0.0.1:8095/api/v1/health` |
-| AWS | `/app/connecthq` (owner-only portal route) | `{CONNECTHQ_BACKEND}/api/v1/health` |
+| AWS | `/app/iotconnect` (owner-only portal route) | `{IOTCONNECT_BACKEND}/api/v1/health` |
 
-Portal variables: `CONNECTHQ_SURFACE_BASE_URL`, `CONNECTHQ_HEALTH_URL`, `CONNECTHQ_RELEASE_LABEL`; defaults in `minimoi_portal/config.py` are the AWS values, the Mac overrides them locally. Only `http(s)://127.0.0.1[:port]`, `http(s)://localhost[:port]`, or a relative portal path are accepted for `base_url`; anything else fails at startup. Health is probed by the server, not by browser JavaScript.
+Portal variables: `IOTCONNECT_SURFACE_BASE_URL`, `IOTCONNECT_HEALTH_URL`, `IOTCONNECT_RELEASE_LABEL`; defaults in `minimoi_portal/config.py` are the AWS values, the Mac overrides them locally. Only `http(s)://127.0.0.1[:port]`, `http(s)://localhost[:port]`, or a relative portal path are accepted for `base_url`; anything else fails at startup. Health is probed by the server, not by browser JavaScript.
 
-Why two base URLs: the portal proxy (PR #193) forwards the full prefixed path because the hosted container runs with `CONNECTHQ_ROOT_PATH=/app/connecthq`; the standalone Mac demo is unprefixed, so the proxied route returns 404 against it. Verified on the Mac on 2026-09-03 with revision 4.
+Why two base URLs: the portal proxy (PR #193) forwards the full prefixed path because the hosted container runs with `IOTCONNECT_ROOT_PATH=/app/iotconnect`; the standalone Mac demo is unprefixed, so the proxied route returns 404 against it. Verified on the Mac on 2026-09-03 with revision 4.
 
 ### 4.3 Notes (G2, designed, not authorized)
 "Add note" creates a new Planning Studio note record linked to the initiative: generated record ID, initiative ID, author from the authenticated session, timestamp, text verbatim, origin `guild_experiment_ui`. Additive; corrections are new notes; secrets rejected; owner-only. Requires the Central Personal Repository write contract.
@@ -116,7 +117,7 @@ WORKING MATRIX          filters: stage · scope · domain        order: most rec
 ### 5.3 Initial rows
 1. **IoT Connect**. Stage and label follow the truthful state of the package:
    - **local tested candidate** (today: revision 4, verified by Codex on 2026-09-03): `experiment_stage: built`, label `revision 4 candidate` or the verified image digest; shown in the working matrix, not in the Operational section; Launch/workbench actions still work against the local demo through the Mac configuration;
-   - **approved immutable tag** (after promotion, commit, and tag): may display the release value `connecthq-v0.9.0-beta.1`;
+   - **approved immutable tag** (after promotion, commit, and tag): may display the release value `iotconnect-v0.9.0-beta.1`;
    - **hosted and healthy approved release** (after Spec #154's deployment gate, G3): `experiment_stage: operational`, eligible for the Operational section.
    G1 must not present `v0.9.0-beta.1` as an immutable operational release before that occurs. `initiative_id`: assigned in Planning Studio; G1 uses the placeholder `INIT-2026-0004` flagged as placeholder in the projection file.
 2. **Fiber order-to-cash demonstration**: `experiment_stage: idea`, `scope: reference demo`, `next_step: "G3/G3A after standalone beta acceptance"`, no image, no launch.
@@ -132,7 +133,7 @@ Owner-only page and controls; client headers never establish identity; launch an
 | File | Change |
 |---|---|
 | `minimoi_portal/app.py` | `GET /guild/experiment` (owner-only), `GET /guild/experiment/unavailable/<initiative_id>`; projection loader with validation and failure handling; runtime join; health probe with cache |
-| `minimoi_portal/config.py` | `GUILD_EXPERIMENT_PROJECTION` (default `data/guild/experiment_projection.json`), `CONNECTHQ_SURFACE_BASE_URL`, `CONNECTHQ_HEALTH_URL`, `CONNECTHQ_RELEASE_LABEL`, the fixed surface path table; `CONNECTHQ_RELEASE` and `CONNECTHQ_BACKEND` exist from PR #193 |
+| `minimoi_portal/config.py` | `GUILD_EXPERIMENT_PROJECTION` (default `data/guild/experiment_projection.json`), `IOTCONNECT_SURFACE_BASE_URL`, `IOTCONNECT_HEALTH_URL`, `IOTCONNECT_RELEASE_LABEL`, the fixed surface path table; `IOTCONNECT_RELEASE_LABEL` and `IOTCONNECT_BACKEND` exist from PR #193 |
 | `minimoi_portal/templates/guild/guild_landing.html` | fourth card |
 | `minimoi_portal/templates/guild/_section_subnav.html` | `Experiment` entry |
 | `minimoi_portal/templates/guild/experiment.html` | new page |
@@ -172,4 +173,4 @@ The feature branch is based on `main` **after PR #193 has merged and been verifi
 - Remaining, not blocking G1: the Central Personal Repository adapter and AWS read path (with CoS Career C0); the G2 write contract; final illustration.
 
 ## 12. Out of scope
-Redesigning Build, Build Log, Operate, Improve, or the Kanban; Operate KPIs; new monitoring; guest access; building the Fiber demo; renaming IoT Connect internals; notes and stage writes (G2); a gallery, marketplace, or multi-user platform.
+Redesigning Build, Build Log, Operate, Improve, or the Kanban; Operate KPIs; new monitoring; guest access; building the Fiber demo; notes and stage writes (G2); a gallery, marketplace, or multi-user platform.

@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pytest
 
+REPO = Path(__file__).resolve().parent.parent
+
 OWNER = {"username": "owner", "tier": "owner", "display_name": "Robert", "auth_id": 1}
 ADMIN = {"username": "admin", "tier": "admin", "display_name": "Admin", "auth_id": 2}
 GUEST = {"username": "guest_ab12cd34", "tier": "guest", "display_name": "Guest"}
@@ -58,7 +60,7 @@ def _row(**overrides):
         "scope": "reference demo",
         "updated_at": "2026-09-03",
         "next_step": "Promote, tag, and host after Spec #154 gates",
-        "domains": ["guild", "connecthq"],
+        "domains": ["guild", "iotconnect"],
         "planning_url": None,
     }
     row.update(overrides)
@@ -196,10 +198,10 @@ def test_placeholder_ids_are_visibly_marked(portal_client, projection_file):
 
 def test_release_label_comes_from_configuration(portal_client, projection_file, monkeypatch):
     import minimoi_portal.app as portal_app
-    monkeypatch.setattr(portal_app._cfg, "CONNECTHQ_RELEASE_LABEL", "revision 4 candidate")
+    monkeypatch.setattr(portal_app._cfg, "IOTCONNECT_RELEASE_LABEL", "revision 7 candidate")
     html = _get(portal_client, projection_file, _projection([_row()]))
-    assert "revision 4 candidate" in html
-    assert "connecthq-v0.9.0-beta.1" not in html
+    assert "revision 7 candidate" in html
+    assert "iotconnect-v0.9.0-beta.1" not in html
 
 
 def test_url_like_fields_in_the_projection_are_not_rendered(portal_client, projection_file):
@@ -271,7 +273,7 @@ def test_unparseable_json_renders_unavailable(portal_client, projection_file):
 
 def _reload_config(monkeypatch, value):
     import minimoi_portal.config as cfg
-    monkeypatch.setenv("CONNECTHQ_SURFACE_BASE_URL", value)
+    monkeypatch.setenv("IOTCONNECT_SURFACE_BASE_URL", value)
     return importlib.reload(cfg)
 
 
@@ -285,30 +287,30 @@ def _restore_config():
     """
     yield
     import minimoi_portal.config as cfg
-    for var in ("CONNECTHQ_SURFACE_BASE_URL", "CONNECTHQ_HEALTH_URL"):
+    for var in ("IOTCONNECT_SURFACE_BASE_URL", "IOTCONNECT_HEALTH_URL"):
         os.environ.pop(var, None)
     importlib.reload(cfg)
 
 
 def test_defaults_are_the_aws_values():
     import minimoi_portal.config as cfg
-    assert cfg.CONNECTHQ_SURFACE_BASE_URL == "/app/connecthq"
-    assert cfg.CONNECTHQ_HEALTH_URL == f"{cfg.CONNECTHQ_BACKEND}/api/v1/health"
-    assert cfg.CONNECTHQ_RELEASE_LABEL == "revision 4 candidate"
+    assert cfg.IOTCONNECT_SURFACE_BASE_URL == "/app/iotconnect"
+    assert cfg.IOTCONNECT_HEALTH_URL == f"{cfg.IOTCONNECT_BACKEND}/api/v1/health"
+    assert cfg.IOTCONNECT_RELEASE_LABEL == "revision 7 candidate"
     assert cfg.GUILD_EXPERIMENT_PROJECTION.endswith("data/guild/experiment_projection.json")
 
 
 def test_surface_paths_are_fixed():
     import minimoi_portal.config as cfg
-    assert cfg.CONNECTHQ_SURFACE_PATHS == {
+    assert cfg.IOTCONNECT_SURFACE_PATHS == {
         "launch": "/", "admin": "/admin",
         "billing_workbench": "/workbench", "swagger": "/docs",
     }
 
 
 @pytest.mark.parametrize("value,expected", [
-    ("/app/connecthq", "/app/connecthq"),
-    ("/app/connecthq/", "/app/connecthq"),
+    ("/app/iotconnect", "/app/iotconnect"),
+    ("/app/iotconnect/", "/app/iotconnect"),
     ("http://127.0.0.1:8095", "http://127.0.0.1:8095"),
     ("http://127.0.0.1:8095/", "http://127.0.0.1:8095"),
     ("https://localhost", "https://localhost"),
@@ -322,13 +324,13 @@ def test_hosted_path_and_loopback_origins_are_accepted(value, expected):
 
 @pytest.mark.parametrize("value", [
     # not the one reviewed hosted path
-    "/other", "/app", "/app/connecthq/admin", "/",
+    "/other", "/app", "/app/iotconnect/admin", "/",
     # traversal, query, fragment on the hosted path
-    "/app/connecthq/../admin", "/app/connecthq?x=1", "/app/connecthq#fragment",
+    "/app/iotconnect/../admin", "/app/iotconnect?x=1", "/app/iotconnect#fragment",
     "/guild/../admin?next=https://evil.example#x",
     # scheme-relative and non-loopback origins
-    "//evil.example/app/connecthq", "//evil.example",
-    "http://evil.example", "https://minimoi.ai/app/connecthq",
+    "//evil.example/app/iotconnect", "//evil.example",
+    "http://evil.example", "https://minimoi.ai/app/iotconnect",
     "http://example.com:8095", "http://127.0.0.1.evil.com", "ftp://127.0.0.1",
     # credentials, invalid ports, and anything after the origin
     "http://user:pw@127.0.0.1:8095", "http://127.0.0.1:0",
@@ -338,20 +340,20 @@ def test_hosted_path_and_loopback_origins_are_accepted(value, expected):
 ])
 def test_everything_outside_the_allow_list_is_rejected(value):
     from minimoi_portal.config import _validate_surface_base_url
-    with pytest.raises(RuntimeError, match="CONNECTHQ_SURFACE_BASE_URL"):
+    with pytest.raises(RuntimeError, match="IOTCONNECT_SURFACE_BASE_URL"):
         _validate_surface_base_url(value)
 
 
 def test_hosted_portal_path_is_a_single_named_constant():
-    """The later IoT Connect rename must be one line, not a scattered literal."""
+    """The hosted path is one named constant, not a scattered literal."""
     import minimoi_portal.config as cfg
-    assert cfg.HOSTED_PORTAL_PATH == "/app/connecthq"
-    assert cfg.CONNECTHQ_SURFACE_BASE_URL == cfg.HOSTED_PORTAL_PATH
+    assert cfg.HOSTED_PORTAL_PATH == "/app/iotconnect"
+    assert cfg.IOTCONNECT_SURFACE_BASE_URL == cfg.HOSTED_PORTAL_PATH
 
 
 def test_a_rejected_base_url_fails_at_import(monkeypatch):
     """The allow-list is enforced at module import, not only when called."""
-    with pytest.raises(RuntimeError, match="CONNECTHQ_SURFACE_BASE_URL"):
+    with pytest.raises(RuntimeError, match="IOTCONNECT_SURFACE_BASE_URL"):
         _reload_config(monkeypatch, "/guild/../admin?next=https://evil.example#x")
 
 
@@ -406,8 +408,8 @@ def loopback_surfaces(monkeypatch):
     """Point the surface configuration at the standalone Mac demo."""
     import minimoi_portal.app as portal_app
 
-    monkeypatch.setattr(portal_app._cfg, "CONNECTHQ_SURFACE_BASE_URL", "http://127.0.0.1:8095")
-    monkeypatch.setattr(portal_app._cfg, "CONNECTHQ_HEALTH_URL", "http://127.0.0.1:8095/api/v1/health")
+    monkeypatch.setattr(portal_app._cfg, "IOTCONNECT_SURFACE_BASE_URL", "http://127.0.0.1:8095")
+    monkeypatch.setattr(portal_app._cfg, "IOTCONNECT_HEALTH_URL", "http://127.0.0.1:8095/api/v1/health")
     return "http://127.0.0.1:8095"
 
 
@@ -441,8 +443,8 @@ def test_relative_base_url_produces_relative_hrefs_in_the_same_tab(
         portal_client, projection_file, _health_probe):
     _health_probe.healthy()
     html = _get(portal_client, projection_file, _projection([_row()]))
-    assert _hrefs(html) == ["/app/connecthq/", "/app/connecthq/admin",
-                            "/app/connecthq/workbench", "/app/connecthq/docs"]
+    assert _hrefs(html) == ["/app/iotconnect/", "/app/iotconnect/admin",
+                            "/app/iotconnect/workbench", "/app/iotconnect/docs"]
     assert 'target="_blank"' not in html
 
 
@@ -542,23 +544,23 @@ def test_probe_result_is_cached_for_thirty_seconds(
 def test_runtime_join_is_by_initiative_id_not_domain_tag(
         portal_client, projection_file, _health_probe, monkeypatch):
     import minimoi_portal.app as portal_app
-    monkeypatch.setattr(portal_app._cfg, "CONNECTHQ_INITIATIVE_ID", "INIT-JOINED")
+    monkeypatch.setattr(portal_app._cfg, "IOTCONNECT_INITIATIVE_ID", "INIT-JOINED")
     _health_probe.healthy()
     html = _get(portal_client, projection_file, _projection([
         _row(initiative_id="INIT-JOINED", title="Joined", domains=["guild"]),
-        _row(initiative_id="INIT-OTHER", title="Not joined", domains=["guild", "connecthq"]),
+        _row(initiative_id="INIT-OTHER", title="Not joined", domains=["guild", "iotconnect"]),
     ]))
     joined = html[html.index("INIT-JOINED"):html.index("INIT-OTHER")]
     other = html[html.index("INIT-OTHER"):]
-    assert "Launch demo" in joined and "revision 4 candidate" in joined
-    assert "Launch demo" not in other and "revision 4 candidate" not in other
+    assert "Launch demo" in joined and "revision 7 candidate" in joined
+    assert "Launch demo" not in other and "revision 7 candidate" not in other
 
 
 def test_operational_rows_use_the_same_action_markup(
         portal_client, projection_file, _health_probe, loopback_surfaces, monkeypatch):
     """The joined initiative, once operational, needs no separate markup."""
     import minimoi_portal.app as portal_app
-    monkeypatch.setattr(portal_app._cfg, "CONNECTHQ_INITIATIVE_ID", "INIT-OPS")
+    monkeypatch.setattr(portal_app._cfg, "IOTCONNECT_INITIATIVE_ID", "INIT-OPS")
     _health_probe.healthy()
     html = _get(portal_client, projection_file, _projection([
         _row(initiative_id="INIT-OPS", title="Hosted demo", experiment_stage="operational"),
@@ -568,7 +570,7 @@ def test_operational_rows_use_the_same_action_markup(
     assert f"{loopback_surfaces}/workbench" in operational_block
 
 
-def test_unrelated_operational_row_is_not_joined_to_connect_hq(
+def test_unrelated_operational_row_is_not_joined_to_iot_connect(
         portal_client, projection_file, _health_probe, loopback_surfaces, monkeypatch):
     """Stage never joins: only the configured initiative gets the runtime.
 
@@ -576,19 +578,19 @@ def test_unrelated_operational_row_is_not_joined_to_connect_hq(
     Connect release label, health result, or any of the four surface links.
     """
     import minimoi_portal.app as portal_app
-    monkeypatch.setattr(portal_app._cfg, "CONNECTHQ_INITIATIVE_ID", "INIT-JOINED")
+    monkeypatch.setattr(portal_app._cfg, "IOTCONNECT_INITIATIVE_ID", "INIT-JOINED")
     _health_probe.healthy()
     html = _get(portal_client, projection_file, _projection([
         _row(initiative_id="INIT-JOINED", title="Joined demo",
              experiment_stage="operational"),
         _row(initiative_id="INIT-OTHER", title="Unrelated promotion",
-             experiment_stage="operational", domains=["guild", "connecthq"]),
+             experiment_stage="operational", domains=["guild", "iotconnect"]),
     ]))
     joined = html[html.index("INIT-JOINED"):html.index("INIT-OTHER")]
     other = html[html.index("INIT-OTHER"):html.index("Working matrix")]
 
     # The unrelated operational row carries no runtime at all.
-    assert "revision 4 candidate" not in other
+    assert "revision 7 candidate" not in other
     assert 'class="xp-runtime' not in other and "checked" not in other
     for label in ("Launch demo", "Admin workbench", "Billing workbench", "Swagger"):
         assert label not in other
@@ -597,15 +599,15 @@ def test_unrelated_operational_row_is_not_joined_to_connect_hq(
     assert "&mdash;" in other or "—" in other
 
     # ...and the configured initiative still does.
-    assert "revision 4 candidate" in joined
+    assert "revision 7 candidate" in joined
     assert "Launch demo" in joined and f"{loopback_surfaces}/workbench" in joined
 
 
 def test_join_is_stage_independent_at_the_predicate(monkeypatch):
     import minimoi_portal.app as portal_app
-    monkeypatch.setattr(portal_app._cfg, "CONNECTHQ_INITIATIVE_ID", "INIT-CONNECTHQ")
+    monkeypatch.setattr(portal_app._cfg, "IOTCONNECT_INITIATIVE_ID", "INIT-IOTCONNECT")
     assert portal_app._experiment_is_joined(
-        {"initiative_id": "INIT-CONNECTHQ", "experiment_stage": "built"}) is True
+        {"initiative_id": "INIT-IOTCONNECT", "experiment_stage": "built"}) is True
     assert portal_app._experiment_is_joined(
         {"initiative_id": "INIT-OTHER", "experiment_stage": "operational"}) is False
 
@@ -627,9 +629,9 @@ def test_projection_cannot_override_the_surfaces(
 
 def test_surface_join_is_safe_for_every_configured_base(monkeypatch):
     import minimoi_portal.config as cfg
-    for base in ("/app/connecthq", "http://127.0.0.1:8095", "http://localhost"):
+    for base in ("/app/iotconnect", "http://127.0.0.1:8095", "http://localhost"):
         module = _reload_config(monkeypatch, base)
-        surfaces = module.connecthq_surfaces()
+        surfaces = module.iotconnect_surfaces()
         assert surfaces["launch"] == f"{base}/"
         assert surfaces["swagger"] == f"{base}/docs"
         assert "//" not in surfaces["admin"].replace("http://", "").replace("https://", "")
@@ -639,21 +641,21 @@ def test_surface_join_is_safe_for_every_configured_base(monkeypatch):
 # ── §4.2 health URL derivation ──────────────────────────────────────────────
 
 def test_health_url_is_derived_from_a_loopback_base(monkeypatch):
-    monkeypatch.delenv("CONNECTHQ_HEALTH_URL", raising=False)
+    monkeypatch.delenv("IOTCONNECT_HEALTH_URL", raising=False)
     cfg = _reload_config(monkeypatch, "http://127.0.0.1:8095")
-    assert cfg.CONNECTHQ_HEALTH_URL == "http://127.0.0.1:8095/api/v1/health"
+    assert cfg.IOTCONNECT_HEALTH_URL == "http://127.0.0.1:8095/api/v1/health"
 
 
 def test_health_url_falls_back_to_the_backend_for_a_relative_base(monkeypatch):
-    monkeypatch.delenv("CONNECTHQ_HEALTH_URL", raising=False)
-    cfg = _reload_config(monkeypatch, "/app/connecthq")
-    assert cfg.CONNECTHQ_HEALTH_URL == f"{cfg.CONNECTHQ_BACKEND}/api/v1/health"
+    monkeypatch.delenv("IOTCONNECT_HEALTH_URL", raising=False)
+    cfg = _reload_config(monkeypatch, "/app/iotconnect")
+    assert cfg.IOTCONNECT_HEALTH_URL == f"{cfg.IOTCONNECT_BACKEND}/api/v1/health"
 
 
 def test_explicit_health_url_wins(monkeypatch):
-    monkeypatch.setenv("CONNECTHQ_HEALTH_URL", "http://127.0.0.1:9999/health")
+    monkeypatch.setenv("IOTCONNECT_HEALTH_URL", "http://127.0.0.1:9999/health")
     cfg = _reload_config(monkeypatch, "http://127.0.0.1:8095")
-    assert cfg.CONNECTHQ_HEALTH_URL == "http://127.0.0.1:9999/health"
+    assert cfg.IOTCONNECT_HEALTH_URL == "http://127.0.0.1:9999/health"
 
 
 # ── §5.2 filters and the configured stale threshold ─────────────────────────
@@ -670,7 +672,7 @@ def _filtered(client, projection_file, payload, query):
 def three_rows():
     return _projection([
         _row(initiative_id="INIT-A", title="Alpha", experiment_stage="built",
-             scope="reference demo", domains=["guild", "connecthq"], updated_at="2026-09-03"),
+             scope="reference demo", domains=["guild", "iotconnect"], updated_at="2026-09-03"),
         _row(initiative_id="INIT-B", title="Bravo", experiment_stage="idea",
              scope="integration", domains=["cos"], updated_at="2026-09-02"),
         _row(initiative_id="INIT-C", title="Charlie", experiment_stage="idea",
@@ -905,3 +907,91 @@ def test_placeholder_illustration_is_shipped():
     art = (Path(__file__).resolve().parent.parent
            / "minimoi_portal" / "static" / "guild" / "guild-experiment.jpg")
     assert art.is_file() and art.stat().st_size > 0
+
+
+# ── N3: runtime stage promotion (tagged release + healthy → Operational) ─────
+
+def _stage_of(portal_client, projection_file, _health_probe, monkeypatch,
+              label, healthy=True, stage="built"):
+    """Render the page with a given release label and health, return the row's section."""
+    import minimoi_portal.app as portal_app
+    if healthy:
+        _health_probe.healthy()
+    else:
+        _health_probe.status(503)
+    monkeypatch.setattr(portal_app._cfg, "IOTCONNECT_RELEASE_LABEL", label)
+    html = _get(portal_client, projection_file,
+                _projection([_row(experiment_stage=stage)]))
+    head = html.index("INIT-2026-0004")
+    # the Operational section precedes the working matrix in the template
+    operational_at = html.index("Operational")
+    matrix_at = html.index("Working", operational_at)
+    return "operational" if head < matrix_at else "working"
+
+
+def test_tagged_release_and_healthy_demo_promotes_the_row_to_operational(
+        portal_client, projection_file, _health_probe, monkeypatch):
+    assert _stage_of(portal_client, projection_file, _health_probe, monkeypatch,
+                     "iotconnect-v0.9.0-beta.1") == "operational"
+
+
+def test_candidate_label_never_promotes_even_when_healthy(
+        portal_client, projection_file, _health_probe, monkeypatch):
+    assert _stage_of(portal_client, projection_file, _health_probe, monkeypatch,
+                     "revision 7 candidate") == "working"
+
+
+def test_tagged_release_does_not_promote_when_health_fails(
+        portal_client, projection_file, _health_probe, monkeypatch):
+    assert _stage_of(portal_client, projection_file, _health_probe, monkeypatch,
+                     "iotconnect-v0.9.0-beta.1", healthy=False) == "working"
+
+
+@pytest.mark.parametrize("label,expected", [
+    ("iotconnect-v0.9.0-beta.1", True),
+    ("iotconnect-v1.0.0", True),
+    ("iotconnect-v0.9.0", True),
+    ("revision 7 candidate", False),
+    ("iotconnect-v0.9", False),
+    ("connecthq-v0.9.0-beta.1", False),
+    ("sha256:deadbeef", False),
+    ("", False),
+    (None, False),
+    # Codex release review 1, P1 — the predicate is a full match, not a prefix
+    # match, and the prerelease grammar is exact.
+    ("iotconnect-v0.9.0evil", False),
+    ("iotconnect-v0.9.0/../../x", False),
+    ("iotconnect-v0.9.0-", False),
+    ("iotconnect-v0.9.0-beta.1\n", False),
+    ("iotconnect-v0.9.0 ", False),
+    (" iotconnect-v0.9.0", False),
+    ("iotconnect-v0.9.0-beta.", False),
+    ("iotconnect-v0.9.0-beta_1", False),
+    ("iotconnect-v0.9.0.1", False),
+    ("iotconnect-v0.9.0-rc.2", True),
+])
+def test_release_label_tag_predicate(label, expected):
+    import minimoi_portal.app as portal_app
+    assert portal_app._experiment_release_is_tagged(label) is expected
+
+
+def test_promotion_applies_only_to_the_joined_row(monkeypatch):
+    import minimoi_portal.app as portal_app
+    monkeypatch.setattr(portal_app._cfg, "IOTCONNECT_INITIATIVE_ID", "INIT-JOINED")
+    monkeypatch.setattr(portal_app._cfg, "IOTCONNECT_RELEASE_LABEL", "iotconnect-v0.9.0-beta.1")
+    rows = [
+        {"initiative_id": "INIT-JOINED", "experiment_stage": "built"},
+        {"initiative_id": "INIT-OTHER", "experiment_stage": "built"},
+    ]
+    portal_app._experiment_join_runtime(rows, {"ok": True})
+    assert rows[0]["experiment_stage"] == "operational"
+    assert rows[1]["experiment_stage"] == "built", "an unjoined row is never promoted"
+
+
+def test_projection_file_still_records_the_candidate_as_built():
+    """Promotion is runtime-derived; the tracked projection stays truthful."""
+    import json as _json
+    data = _json.loads((REPO / "data" / "guild" / "experiment_projection.json")
+                       .read_text(encoding="utf-8"))
+    row = next(r for r in data["rows"] if r["initiative_id"] == "INIT-2026-0004")
+    assert row["experiment_stage"] == "built"

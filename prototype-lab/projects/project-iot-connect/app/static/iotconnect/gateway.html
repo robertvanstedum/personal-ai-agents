@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IoT Connect</title>
+  <style>
+    :root{--navy:#0b2b42;--teal:#07897f;--teal-dark:#05736b;--ink:#13213a;--muted:#63728a;--line:#d9e3e7;--soft:#f3f7f8;--mint:#e0f4f1;--white:#fff}
+    *{box-sizing:border-box}body{margin:0;background:var(--soft);color:var(--ink);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    a{color:inherit;text-decoration:none}.topbar{height:72px;background:var(--navy);color:white;display:flex;align-items:center;justify-content:space-between;padding:0 42px}.brand{display:flex;align-items:center;gap:14px}.mark{width:42px;height:42px;border-radius:11px;background:#079a8e;display:grid;place-items:center;font-size:22px;font-weight:800}.brand strong{display:block;font-size:18px}.brand small{display:block;color:#c2d1db;margin-top:3px;font-size:12px}.top-actions{display:flex;align-items:center;gap:12px}.presentation-link{border:1px solid #27a99e;border-radius:999px;padding:8px 15px;color:#d8fffa;font-size:12px;font-weight:700}.presentation-link:hover,.presentation-link:focus-visible{background:#0d4a5b;outline:none}.badge{border:1px solid #7890a2;border-radius:999px;padding:7px 14px;font-size:12px}
+    main{max-width:1180px;margin:0 auto;padding:54px 30px 38px}.hero{display:grid;grid-template-columns:1.25fr .75fr;gap:38px;align-items:end;padding-bottom:38px;border-bottom:1px solid var(--line)}.eyebrow{margin:0 0 12px;color:var(--teal-dark);font-size:12px;font-weight:750;letter-spacing:.14em;text-transform:uppercase}.hero h1{font-size:46px;line-height:1.05;letter-spacing:-.035em;margin:0 0 18px}.hero p{max-width:720px;color:var(--muted);font-size:17px;line-height:1.6;margin:0}.scope{background:var(--navy);color:white;border-radius:8px;padding:22px 24px}.scope small{display:block;color:#9fc1d0;font-size:11px;text-transform:uppercase;letter-spacing:.12em}.scope strong{display:block;font-size:16px;line-height:1.45;margin-top:8px}
+    .views{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:30px}.view{background:white;border:1px solid var(--line);border-radius:8px;padding:28px;box-shadow:0 5px 18px rgba(12,42,61,.05)}.view h2{margin:0 0 9px;font-size:25px}.view p{color:var(--muted);line-height:1.55;margin:0 0 22px}.primary{display:inline-flex;align-items:center;justify-content:center;background:var(--teal);color:white;font-weight:700;border-radius:6px;padding:12px 18px}.primary:hover{background:var(--teal-dark)}.choice-label{display:block;margin:0 0 9px;color:var(--muted);font-size:11px;font-weight:750;letter-spacing:.1em;text-transform:uppercase}.account-links{display:grid;grid-template-columns:1fr 1fr;gap:10px}.account-link{display:flex;min-height:68px;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--teal);border-radius:6px;padding:12px 14px}.account-link::after{content:'Open →';color:var(--teal-dark);font-size:12px;font-weight:750}.account-link:hover{background:var(--mint)}.account-link span,.account-link strong,.account-link small{display:block}.account-link small{color:var(--muted);margin-top:4px;font-size:11px}.note{margin-top:25px;color:var(--muted);font-size:12px;line-height:1.55}.references{display:flex;flex-wrap:wrap;gap:18px;margin-top:30px;padding-top:20px;border-top:1px solid var(--line);color:#486477;font-size:12px}.references a:hover{color:var(--teal-dark);text-decoration:underline}
+    @media(max-width:800px){.topbar{padding:0 20px}.hero,.views{grid-template-columns:1fr}.hero h1{font-size:36px}.account-links{grid-template-columns:1fr}main{padding:36px 20px}}
+  </style>
+</head>
+<body>
+  <header class="topbar"><div class="brand"><span class="mark">C</span><span><strong>IoT Connect</strong><small>Enterprise Connectivity Management</small></span></div><div class="top-actions"><a class="presentation-link" href="/presentation">About this POC</a><span class="badge">POC environment</span></div></header>
+  <main>
+    <section class="hero">
+      <div><p class="eyebrow">Enterprise Connectivity Management</p><h1>A working enterprise connectivity platform.</h1><p>IoT Connect is a full-stack BSS/OSS platform for connectivity services. This POC runs a real database, internal APIs, synthetic external APIs, and condensed order-management and billing workflows.</p></div>
+      <aside class="scope"><small>Demonstration path</small><strong>Operator setup → customer activation → network result → summarized billing output</strong></aside>
+    </section>
+    <section class="views" aria-label="Application views">
+      <article class="view"><p class="eyebrow">Business operations</p><h2>Operator view</h2><p>Manage accounts and SIM inventory, review activation outcomes, configure billing behavior, and run the monthly billing cycle.</p><a class="primary" href="/operator">Open operator view</a></article>
+      <article class="view"><p class="eyebrow">Enterprise customer</p><h2>Customer view</h2><p>Work within one account to review assigned SIMs, submit activations, and inspect current and prior billing results.</p><span class="choice-label">Choose a customer</span><div class="account-links"><a class="account-link" href="/portal?account=ACCT-000100"><span><strong>Aster Field Systems</strong><small>ACCT-000100 · detailed posting</small></span></a><a class="account-link" href="/portal?account=ACCT-000200"><span><strong>Boreal Equipment Group</strong><small>ACCT-000200 · private APN scenario</small></span></a></div></article>
+    </section>
+    <p class="note">All names, identifiers, volumes, and financial values are illustrative. The application and database flows are executable; production network and legacy-billing integrations are represented by bounded adapters.</p>
+    <nav class="references" aria-label="Technical references"><a href="/project-design">Architecture</a><a href="/docs">IoT Connect API (8095)</a><a href="/admin">Developer and support workbench</a></nav>
+  </main>
+</body>
+</html>

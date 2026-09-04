@@ -1,0 +1,112 @@
+{
+  "info": {
+    "name": "IoT Connect Demo API",
+    "description": "Saved manual calls for the same v1 API used by the admin workbench and customer views. Contains no credentials.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1 - Discover",
+      "item": [
+        {
+          "name": "Health",
+          "request": {"method": "GET", "url": "{{base_url}}/api/v1/health"}
+        },
+        {
+          "name": "Rate plan catalog",
+          "request": {"method": "GET", "url": "{{base_url}}/api/v1/catalog/rate-plans"}
+        },
+        {
+          "name": "List and capture prepared accounts",
+          "event": [{"listen": "test", "script": {"exec": [
+            "const rows = pm.response.json();",
+            "const aster = rows.find(r => r.account_number === 'ACCT-000100');",
+            "const boreal = rows.find(r => r.account_number === 'ACCT-000200');",
+            "if (aster) pm.environment.set('aster_account_id', aster.account_id);",
+            "if (boreal) pm.environment.set('boreal_account_id', boreal.account_id);"
+          ]}}],
+          "request": {"method": "GET", "url": "{{base_url}}/api/v1/accounts"}
+        }
+      ]
+    },
+    {
+      "name": "2 - Admin setup",
+      "item": [
+        {
+          "name": "Create Cedar account and contract",
+          "event": [{"listen": "test", "script": {"exec": [
+            "const row = pm.response.json();",
+            "pm.environment.set('created_account_id', row.account_id);",
+            "pm.environment.set('created_contract_id', row.contract_id);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "X-Demo-Role", "value": "{{admin_role}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"account_name\": \"Cedar Logistics\",\n  \"external_customer_ref\": \"CRM-CEDAR-300\",\n  \"reason\": \"Postman hands-on account setup\"\n}"},
+            "url": "{{base_url}}/api/v1/admin/accounts"
+          }
+        },
+        {
+          "name": "Enable Cedar summarized mode",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "X-Demo-Role", "value": "{{admin_role}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"billing_mode\": \"SUMMARIZED\",\n  \"reason\": \"Accounting-approved Prototype Lab configuration\"\n}"},
+            "url": "{{base_url}}/api/v1/admin/accounts/{{created_account_id}}/billing-mode"
+          }
+        },
+        {
+          "name": "Upload four subscriptions",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "X-Demo-Role", "value": "{{admin_role}}"}, {"key": "Content-Type", "value": "text/csv"}],
+            "body": {"mode": "raw", "raw": "source_subscription_ref,sim_id,rate_plan_id\nDEVICE-001,89030000000000000001,PLAN-IOT-001\nDEVICE-002,89030000000000000002,PLAN-IOT-002\nDEVICE-003,89030000000000000003,PLAN-IOT-003\nDEVICE-004,89030000000000000004,PLAN-IOT-004\n"},
+            "url": "{{base_url}}/api/v1/admin/accounts/{{created_account_id}}/subscriptions:upload"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 - Bill and evidence",
+      "item": [
+        {
+          "name": "Run billing",
+          "event": [{"listen": "test", "script": {"exec": ["pm.environment.set('bill_run_id', pm.response.json().bill_run_id);"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "X-Demo-Role", "value": "{{admin_role}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"bill_cycle\": \"2026-08\"\n}"},
+            "url": "{{base_url}}/api/v1/admin/accounts/{{created_account_id}}/bill-runs"
+          }
+        },
+        {"name": "Reconciliation", "request": {"method": "GET", "url": "{{base_url}}/api/v1/bill-runs/{{bill_run_id}}/reconciliation"}},
+        {"name": "Legacy billing file", "request": {"method": "GET", "url": "{{base_url}}/api/v1/bill-runs/{{bill_run_id}}/file"}},
+        {"name": "Legacy statement artifact", "request": {"method": "GET", "url": "{{base_url}}/api/v1/artifacts/accounts/{{created_account_id}}/legacy-statement/2026-08"}}
+      ]
+    },
+    {
+      "name": "4 - Interview evidence",
+      "description": "Two read-only application APIs used during the IoT Connect demo. No role headers, request body, or internal UUIDs are required.",
+      "item": [
+        {
+          "name": "GET Aster activated subscriptions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/accounts/ACCT-000100/subscriptions?system=iot",
+            "description": "The real application GET for Aster's IoT subscriptions, including status, activation timestamp, and source batch number."
+          }
+        },
+        {
+          "name": "GET Boreal account summary and billing mode",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/accounts/ACCT-000200/summary",
+            "description": "The real application GET for Boreal's account summary. The account object includes billing_mode and send_subscriptions_to_amdocs."
+          }
+        }
+      ]
+    }
+  ]
+}

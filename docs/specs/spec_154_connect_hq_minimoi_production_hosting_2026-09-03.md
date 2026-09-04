@@ -1,5 +1,8 @@
 # Spec #154: Connect HQ on mini-moi Production Hosting
 
+> **Superseded 2026-09-04 by `spec_154_iot_connect_minimoi_production_hosting_2026-09-04.md`.**
+> Retained as history: the design is unchanged, but every Connect HQ name in it was retired by the IoT Connect naming decision (N3).
+
 **Version:** v0.9 design baseline  
 **Date:** 2026-09-03  
 **Status:** Proposed production-change spec; implementation not yet authorized  

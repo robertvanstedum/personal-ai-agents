@@ -1,0 +1,64 @@
+{
+  "info": {
+    "name": "IoT Connect - Interview Evidence",
+    "description": "Two read-only application APIs for the live IoT Connect demo. These are the same account APIs used by the web application. No headers, credentials, request bodies, or internal UUIDs are required.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8095"
+    }
+  ],
+  "item": [
+    {
+      "name": "1 - GET Aster activated subscriptions",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/v1/accounts/ACCT-000100/subscriptions?system=iot",
+        "description": "The real application GET for Aster's IoT subscriptions. Newly activated subscriptions appear with ACTIVE status, activation timestamp, and source batch number."
+      }
+    },
+    {
+      "name": "2 - GET Boreal account summary and billing mode",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/v1/accounts/ACCT-000200/summary",
+        "description": "The real application GET for Boreal's account summary. The nested account object shows billing_mode and send_subscriptions_to_amdocs before and after the summarized-billing change."
+      }
+    },
+    {
+      "name": "3 - GET latest Boreal activation batch",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const batches = pm.response.json();",
+              "if (batches.length) pm.collectionVariables.set('latest_batch_id', batches[0].batch_id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key": "X-Demo-Role", "value": "BUSINESS_OPS_ADMIN"}
+        ],
+        "url": "{{base_url}}/api/v1/admin/activation-batches?account_id=ACCT-000200",
+        "description": "The operator application's real batch-history GET. It automatically saves the newest batch_id for the next request."
+      }
+    },
+    {
+      "name": "4 - GET FlowOne and Legacy Billing outcomes",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/v1/activation-batches/{{latest_batch_id}}",
+        "description": "The application's real batch-detail GET. It shows FlowOne network-element results plus the Legacy Billing submission or policy-skip outcome for every SIM."
+      }
+    }
+  ]
+}

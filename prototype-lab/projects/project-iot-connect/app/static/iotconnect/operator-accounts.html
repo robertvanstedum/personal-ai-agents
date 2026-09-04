@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IoT Connect · Accounts</title>
+  <link rel="stylesheet" href="/static/iotconnect/iotconnect.css">
+  <style>
+    .topbar.operator { grid-template-columns: 1fr auto; }
+    .operator-nav { height: 49px; display: flex; align-items: end; gap: 29px; padding: 0 28px; border-bottom: 1px solid var(--line); background: white; }
+    .operator-tab { height: 49px; display: flex; align-items: center; position: relative; color: var(--muted); font-size: 12px; font-weight: 600; }
+    .operator-tab.current { color: var(--teal); }
+    .operator-tab.current::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--teal); }
+    .operator-main { min-height: calc(100vh - 107px); padding: 16px 22px 22px; }
+    .accounts-card { padding: 0; overflow: hidden; }
+    .accounts-card .panel-head { padding: 14px 16px 10px; }
+    .accounts-card tbody tr { cursor: pointer; }
+    .accounts-card tbody tr:hover { background: #f1faf8; }
+    .accounts-note { margin-top: 10px; color: var(--muted); font-size: 10px; }
+  </style>
+</head>
+<body data-iotconnect-page="operator-accounts">
+  <header class="topbar operator">
+    <a class="brand brand-home-link" href="/" aria-label="Return to IoT Connect gateway">
+      <div class="brand-mark">C</div>
+      <div><strong>IoT Connect</strong><small>Enterprise IoT Operations</small></div>
+    </a>
+    <div class="identity">
+      <span class="name">Business Operations</span>
+      <span class="chip role">Operator</span>
+      <span class="chip">POC environment</span>
+    </div>
+  </header>
+
+  <nav class="operator-nav" aria-label="Operator work areas">
+    <a class="operator-tab" href="/operator">Portfolio</a>
+    <a class="operator-tab current" href="/operator/accounts">Accounts</a>
+    <a class="operator-tab" href="/operator/inventory">SIM Inventory</a>
+    <a class="operator-tab" href="/operator/bill-cycles">Bill Cycles</a>
+    <a class="operator-tab" href="/operator/catalog">Plan Catalog</a>
+    <a class="operator-tab" href="/operator/api-activity">API Activity</a>
+  </nav>
+
+  <main class="operator-main">
+    <section class="page-head">
+      <div>
+        <h1>Customer accounts</h1>
+        <p>Select one live POC account to enter its account-scoped workspace</p>
+      </div>
+      <a class="button" href="/operator/accounts/new">Create customer account</a>
+    </section>
+
+    <section class="card accounts-card">
+      <div class="panel-head">
+        <h2>Live POC accounts</h2>
+        <span id="accountCount">Loading</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Customer</th>
+            <th>External billing account</th>
+            <th>Billing mode</th>
+            <th class="num">Active</th>
+            <th class="num">Available</th>
+            <th class="num">Suspended</th>
+            <th>Latest bill</th>
+          </tr>
+        </thead>
+        <tbody id="accountRows"></tbody>
+      </table>
+    </section>
+    <p class="accounts-note">Portfolio scale figures are illustrative. This table contains only accounts currently present in the active POC data store.</p>
+  </main>
+
+  <script src="/static/api-client.js"></script>
+  <script src="/static/iotconnect/iotconnect.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+.DS_Store
+.pytest_cache/
+.venv/
+__pycache__/
+*.py[cod]
+
+# Local configuration, verification scratch files, and the local scan denylist are never committed.
+.env
+.verify/
+scripts/scan_denylist.local
+
+# Generated presentation exports and third-party reference material stay
+# outside the standalone IoT Connect source tree.
+output/
+slides/
+docs/*.pdf
