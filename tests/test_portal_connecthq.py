@@ -130,7 +130,7 @@ def test_guild_improve_is_a_placeholder_again_and_points_at_experiment(portal_cl
     assert r.status_code == 200
     html = r.data.decode()
     assert "In Redesign" in html
-    assert "Explore · Experiment · Improve" in html
+    assert "Review · Analyze · Improve" in html
     assert 'href="/guild/experiment"' in html
     assert "Reference demos now live under" in html
     assert 'class="demo-card"' not in html
