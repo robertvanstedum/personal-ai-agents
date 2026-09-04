@@ -36,8 +36,8 @@ _JS_TYPES = ("application/javascript", "text/javascript", "application/x-javascr
 def _already_prefixed(path: str, prefix: str) -> bool:
     """True when an absolute path already carries the portal prefix.
 
-    Backends that know their own base path (Connect HQ with
-    CONNECTHQ_ROOT_PATH set) emit URLs that are already correct; rewriting
+    Backends that know their own base path (IoT Connect with
+    IOTCONNECT_ROOT_PATH set) emit URLs that are already correct; rewriting
     them again would produce /app/x/app/x/... . Every rewrite site below is
     therefore idempotent.
     """
@@ -217,11 +217,11 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
     path:          the remaining path after stripping the portal prefix
     user:          current logged-in user dict (for nav bar injection)
     strip_header_prefixes: extra client header prefixes (lower-case) that must
-                   never reach this backend — e.g. ("x-demo-",) for Connect HQ,
+                   never reach this backend — e.g. ("x-demo-",) for IoT Connect,
                    whose local persona headers are not a hosted identity.
     forward_prefix: send the backend the FULL path including portal_prefix.
-                   Required for backends configured with a root path (Connect HQ
-                   with CONNECTHQ_ROOT_PATH): Starlette matches routes on either
+                   Required for backends configured with a root path (IoT Connect
+                   with IOTCONNECT_ROOT_PATH): Starlette matches routes on either
                    form but serves mounted static files only under the prefix.
     """
     if forward_prefix:

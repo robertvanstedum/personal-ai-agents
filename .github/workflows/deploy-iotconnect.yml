@@ -1,21 +1,22 @@
-name: Connect HQ demo release
+name: IoT Connect demo release
 
-# Tag-only release of the Connect HQ reference demo (Spec #154 §8.3).
-# Never runs on push to main. Deploys ONLY the independent `connecthq` Compose
-# project via scripts/operations/deploy_connecthq_ec2.sh.
+# Tag-only release of the IoT Connect reference demo
+# (docs/specs/spec_154_iot_connect_minimoi_production_hosting_2026-09-04.md §8.3).
+# Never runs on push to main. Deploys ONLY the independent `iotconnect` Compose
+# project via scripts/operations/deploy_iotconnect_ec2.sh.
 
 on:
   push:
-    tags: ['connecthq-v*']
+    tags: ['iotconnect-v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing approved connecthq-v* tag to (re)deploy'
+        description: 'Existing approved iotconnect-v* tag to (re)deploy'
         required: true
 
 env:
   REGISTRY: 332704997792.dkr.ecr.us-east-1.amazonaws.com
-  APP_DIR: prototype-lab/projects/project-connect-hq
+  APP_DIR: prototype-lab/projects/project-iot-connect
 
 jobs:
   resolve:
@@ -29,7 +30,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then TAG="$INPUT_TAG"; else TAG="${GITHUB_REF#refs/tags/}"; fi
           # Validate before the value reaches any shell/SSM command.
-          [[ "$TAG" =~ ^connecthq-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]] || { echo "invalid tag '$TAG'"; exit 1; }
+          [[ "$TAG" =~ ^iotconnect-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]] || { echo "invalid tag '$TAG'"; exit 1; }
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
   verify-build-push:
@@ -48,7 +49,7 @@ jobs:
           grep -q '^FROM python:3.12-slim@sha256:' "$APP_DIR/Dockerfile"
 
       - name: Standalone verification suite (tests + scan, memory backend)
-        working-directory: prototype-lab/projects/project-connect-hq
+        working-directory: prototype-lab/projects/project-iot-connect
         run: |
           make test
           make scan
@@ -67,7 +68,7 @@ jobs:
         id: push
         run: |
           TAG=${{ needs.resolve.outputs.tag }}
-          IMG="$REGISTRY/minimoi/connecthq:$TAG"
+          IMG="$REGISTRY/minimoi/iotconnect:$TAG"
           docker build --platform linux/amd64 -t "$IMG" "$APP_DIR"
           docker push "$IMG"
           DIGEST=$(docker inspect --format '{{index .RepoDigests 0}}' "$IMG" | sed 's/.*@//')
@@ -89,17 +90,17 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Sync ONLY the Connect HQ compose file and deploy script, then deploy
+      - name: Sync ONLY the IoT Connect compose file and deploy script, then deploy
         run: |
           TAG=${{ needs.resolve.outputs.tag }}
           DIGEST=${{ needs.verify-build-push.outputs.digest }}
-          COMPOSE=$(base64 -w 0 docker-compose.connecthq.prod.yml)
-          SCRIPT=$(base64 -w 0 scripts/operations/deploy_connecthq_ec2.sh)
+          COMPOSE=$(base64 -w 0 docker-compose.iotconnect.prod.yml)
+          SCRIPT=$(base64 -w 0 scripts/operations/deploy_iotconnect_ec2.sh)
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
             --document-name "AWS-RunShellScript" \
             --timeout-seconds 900 \
-            --parameters "commands=[\"set -e\",\"mkdir -p /opt/minimoi/connecthq\",\"echo $COMPOSE | base64 -d > /opt/minimoi/connecthq/docker-compose.yml\",\"echo $SCRIPT | base64 -d > /opt/minimoi/connecthq/deploy.sh\",\"chmod +x /opt/minimoi/connecthq/deploy.sh\",\"/opt/minimoi/connecthq/deploy.sh $TAG $DIGEST\"]" \
+            --parameters "commands=[\"set -e\",\"mkdir -p /opt/minimoi/iotconnect\",\"echo $COMPOSE | base64 -d > /opt/minimoi/iotconnect/docker-compose.yml\",\"echo $SCRIPT | base64 -d > /opt/minimoi/iotconnect/deploy.sh\",\"chmod +x /opt/minimoi/iotconnect/deploy.sh\",\"/opt/minimoi/iotconnect/deploy.sh $TAG $DIGEST\"]" \
             --query 'Command.CommandId' --output text)
           echo "Deploy command ID: $COMMAND_ID"
           for i in $(seq 1 90); do
