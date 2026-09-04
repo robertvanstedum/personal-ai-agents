@@ -64,6 +64,27 @@ LEGACY_PORTAL_PATH = "/app/connecthq"
 IOTCONNECT_SURFACE_BASE_URL = _env("SURFACE_BASE_URL", HOSTED_PORTAL_PATH)
 IOTCONNECT_RELEASE_LABEL    = _env("RELEASE_LABEL", "revision 7 candidate")
 
+# ── The one release-tag grammar (Codex release review 1, P1) ─────────────────
+# `iotconnect-v<major>.<minor>.<patch>` with an optional prerelease
+# `-<ident>(.<ident>)*`, ident = [A-Za-z0-9]+. Nothing else is an approved
+# release label. Used with re.fullmatch() in minimoi_portal/app.py and, as the
+# byte-identical POSIX ERE below, in .github/workflows/deploy-iotconnect.yml
+# and scripts/operations/deploy_iotconnect_ec2.sh.
+RELEASE_TAG_PATTERN = r"iotconnect-v\d+\.\d+\.\d+(?:-[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*)?"
+
+
+def release_tag_ere(pattern: str = RELEASE_TAG_PATTERN) -> str:
+    """The same grammar as an anchored POSIX ERE, by a fixed transformation.
+
+    Python `(?:` groups become plain ERE groups and `\\d` becomes `[0-9]`; the
+    result is anchored. Tests assert the shell files contain exactly this text,
+    so the three copies of the grammar can never drift.
+    """
+    return "^" + pattern.replace("(?:", "(").replace(r"\d", "[0-9]") + "$"
+
+
+RELEASE_TAG_ERE = release_tag_ere()
+
 # The projected row that receives the runtime join (launch, workbenches, health).
 # Matched against `initiative_id`, not the domain tag: the domain tag is
 # repository content, the initiative id is the identity the two sources are

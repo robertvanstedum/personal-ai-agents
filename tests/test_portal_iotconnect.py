@@ -440,3 +440,206 @@ def test_default_release_label_is_the_untagged_candidate(monkeypatch):
         assert cfg.IOTCONNECT_INITIATIVE_ID == "INIT-2026-0004"
     finally:
         _reload_config(monkeypatch, {})
+
+
+# ── Codex release review 1 — release-path defects ────────────────────────────
+#
+# P0: the tag workflow must build the local application image BEFORE the
+# verification suite (the promoted Compose file declares `pull_policy: never`,
+# so a clean runner has no image) and must push the very image it tested.
+# P1: one exact release-tag grammar in the portal, the workflow and the deploy
+#     script; a database-password contract; a read-only hosted-mode smoke.
+
+WORKFLOW = REPO / ".github" / "workflows" / "deploy-iotconnect.yml"
+DEPLOY_SCRIPT = REPO / "scripts" / "operations" / "deploy_iotconnect_ec2.sh"
+DEPLOY_LIB = REPO / "scripts" / "operations" / "lib" / "iotconnect_release_lib.sh"
+PROMOTED_COMPOSE = (REPO / "prototype-lab" / "projects" / "project-iot-connect"
+                    / "docker-compose.yml")
+
+
+def _release_steps():
+    yaml = pytest.importorskip("yaml")
+    doc = yaml.safe_load(WORKFLOW.read_text())
+    return doc["jobs"]["verify-build-push"]["steps"]
+
+
+def _promoted_local_image_tag() -> str:
+    """The exact local tag the promoted Compose file names for the app service."""
+    yaml = pytest.importorskip("yaml")
+    doc = yaml.safe_load(PROMOTED_COMPOSE.read_text())
+    return doc["services"]["app"]["image"]
+
+
+def test_release_workflow_builds_the_image_before_it_tests_it():
+    steps = _release_steps()
+    names = [s.get("name", "") for s in steps]
+    build_i = next(i for i, n in enumerate(names) if n.startswith("Build the local application image"))
+    test_i = next(i for i, n in enumerate(names) if n.startswith("Standalone verification suite"))
+    login_i = next(i for i, n in enumerate(names) if n == "Login to ECR")
+    push_i = next(i for i, n in enumerate(names) if n == "Build, push, record digest")
+    assert build_i < test_i < login_i < push_i, names
+
+
+def test_release_workflow_pushes_the_image_it_tested_and_never_rebuilds():
+    steps = _release_steps()
+    runs = [s.get("run", "") for s in steps]
+    builds = [r for r in runs if "docker build" in r]
+    assert len(builds) == 1, "exactly one docker build, before the tests"
+    assert "docker build" in [s.get("run", "") for s in steps
+                              if s.get("name", "").startswith("Build the local application image")][0]
+    push = [s for s in steps if s.get("name") == "Build, push, record digest"][0]["run"]
+    assert "docker build" not in push, "the push step must not build a second image"
+    assert 'docker tag "$LOCAL_TAG" "$IMG"' in push
+    assert 'docker push "$IMG"' in push
+    assert "RepoDigests" in push, "the pushed digest is still recorded"
+
+
+def test_the_tested_tag_is_the_tag_the_promoted_compose_file_names():
+    """The tested image tag is read from the Compose file, never hard-coded."""
+    steps = _release_steps()
+    build = [s for s in steps
+             if s.get("name", "").startswith("Build the local application image")][0]
+    assert build["working-directory"] == "prototype-lab/projects/project-iot-connect"
+    run = build["run"]
+    assert "docker-compose.yml" in run, "the tag is derived from the Compose file"
+    assert 'docker build --platform linux/amd64 -t "$LOCAL_TAG" .' in run
+    # …and the tag that derivation yields is the one the test container needs.
+    local_tag = _promoted_local_image_tag()
+    assert local_tag == "iotconnect-app:0.9.0-beta.1"
+    compose_doc = pytest.importorskip("yaml").safe_load(PROMOTED_COMPOSE.read_text())
+    assert compose_doc["services"]["integrations"]["pull_policy"] == "never"
+    assert compose_doc["services"]["integrations"]["image"] == local_tag
+    makefile = (REPO / "prototype-lab" / "projects" / "project-iot-connect" / "Makefile").read_text()
+    assert "$(COMPOSE) run --rm --no-deps" in makefile, "make test runs a container from that image"
+
+
+# ── one release-tag grammar in three places ─────────────────────────────────
+
+def test_one_release_tag_grammar_in_portal_workflow_and_deploy_script():
+    from minimoi_portal import config as cfg
+    assert cfg.RELEASE_TAG_PATTERN == \
+        r"iotconnect-v\d+\.\d+\.\d+(?:-[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*)?"
+    ere = cfg.RELEASE_TAG_ERE
+    assert ere == r"^iotconnect-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+(\.[A-Za-z0-9]+)*)?$"
+    # byte-identical text in both shell copies
+    assert ere in WORKFLOW.read_text(), "workflow resolve job must use the one grammar"
+    assert ere in DEPLOY_SCRIPT.read_text(), "deploy script must use the one grammar"
+    assert ere in DEPLOY_LIB.read_text(), "the shared lib must carry the one grammar"
+
+
+@pytest.mark.parametrize("tag,ok", [
+    ("iotconnect-v0.9.0-beta.1", True),
+    ("iotconnect-v1.0.0", True),
+    ("iotconnect-v0.9.0evil", False),
+    ("iotconnect-v0.9.0/../../x", False),
+    ("iotconnect-v0.9.0-", False),
+    ("iotconnect-v0.9.0-beta.1\n", False),
+    ("iotconnect-v0.9.0 ", False),
+    ("connecthq-v0.9.0-beta.1", False),
+    ("revision 7 candidate", False),
+])
+def test_release_tag_grammar_python_and_shell_agree(tag, ok):
+    import subprocess
+    from minimoi_portal import config as cfg
+    assert bool(re.fullmatch(cfg.RELEASE_TAG_PATTERN, tag)) is ok
+    proc = subprocess.run(
+        ["bash", "-c", f'source "{DEPLOY_LIB}"; validate_release_tag "$1"', "_", tag],
+        capture_output=True)
+    assert (proc.returncode == 0) is ok, (tag, proc.returncode, proc.stderr)
+
+
+# ── database-password contract ───────────────────────────────────────────────
+
+def _validate_db_password(value: str) -> bool:
+    import subprocess
+    proc = subprocess.run(
+        ["bash", "-c", f'source "{DEPLOY_LIB}"; validate_db_password "$1"', "_", value],
+        capture_output=True)
+    return proc.returncode == 0
+
+
+@pytest.mark.parametrize("value,ok", [
+    ("a" * 40, True),                                   # 40 alphanumeric
+    ("Xy3Kq9Zt7Lm2Rb8Wn4Vc6Hd1Jf5Gs0Pa", True),          # base64 with /+= removed
+    ("Ab3-_.~!Ab3Ab3Ab3Ab3Ab3Ab3Ab3Ab3", True),         # -_.~! are safe
+    ("Ab3$dollarAb3Ab3Ab3Ab3Ab3Ab3Ab3", True),          # $ is safe: .env is single-quoted
+    ("a" * 12 + "@" + "a" * 15, False),                 # @ changes the parsed DSN host
+    ("a" * 12 + ":" + "a" * 15, False),                 # : is a DSN delimiter
+    ("a" * 12 + "/" + "a" * 15, False),
+    ("a" * 12 + "?" + "a" * 15, False),
+    ("a" * 12 + "#" + "a" * 15, False),
+    ("a" * 12 + "%" + "a" * 15, False),
+    ("a" * 12 + "'" + "a" * 15, False),                 # breaks the quoted .env line
+    ("a" * 12 + "\n" + "a" * 15, False),
+    ("a" * 12 + " " + "a" * 15, False),
+    ("short10aaa", False),                              # under 24
+    ("a" * 129, False),                                 # over 128
+    ("", False),
+])
+def test_db_password_contract(value, ok):
+    assert _validate_db_password(value) is ok
+
+
+def test_deploy_script_enforces_the_password_contract_before_writing_env():
+    script = DEPLOY_SCRIPT.read_text()
+    assert "iotconnect_release_lib.sh" in script, "the script sources the shared lib"
+    validate_at = script.index('validate_db_password "$PW"')
+    write_at = script.index('> "$DIR/.env"')
+    assert validate_at < write_at, "validate before writing .env"
+    assert 'printf "IOTCONNECT_DB_PASSWORD=\'%s\'' in script, \
+        "single-quoted values so Compose never interpolates $"
+    assert "umask 077" in script
+    assert "--env-file $DIR/.env" in script, "explicit env-file, not cwd-dependent lookup"
+    assert '"$PW"' in script and "echo $PW" not in script and "echo \"$PW\"" not in script
+
+
+def test_password_generation_rule_is_documented():
+    rule = "openssl rand -base64 48 | tr -d '/+=' | cut -c1-40"
+    for path in (DEPLOY_SCRIPT, DEPLOY_LIB, REPO / "docs" / "specs" / SPEC):
+        text = path.read_text()
+        assert rule in text, path.name
+        assert ": @ / ? # %" in text or "`:` `@` `/` `?` `#` `%`" in text, path.name
+
+
+# ── read-only hosted-mode smoke on EC2 ──────────────────────────────────────
+
+def test_hosted_smoke_uses_the_header_names_the_promoted_app_expects():
+    lib = DEPLOY_LIB.read_text()
+    deps = (REPO / "prototype-lab" / "projects" / "project-iot-connect"
+            / "app" / "dependencies.py").read_text()
+    for header in ("X-Minimoi-User-Tier", "X-Minimoi-Username", "X-Minimoi-Auth-Id"):
+        assert f'alias="{header}"' in deps, header
+        assert header in lib, header
+    assert "X-Demo-Role" not in lib, "hosted mode never sends the demo headers"
+    # owner reaches data, no identity and a non-owner tier are denied
+    assert "X-Minimoi-User-Tier: owner" in lib
+    assert "X-Minimoi-User-Tier: guest" in lib
+    assert "/api/v1/accounts" in lib and "ACCT-000100" in lib
+    assert "/api/v1/admin/activation-batches" in lib
+    assert '"servers":' in lib and '"url":"/app/iotconnect"' in lib
+    assert lib.count("403") >= 2
+
+
+def test_hosted_smoke_runs_after_health_and_before_done():
+    script = DEPLOY_SCRIPT.read_text()
+    health_at = script.index("== wait for health")
+    smoke_at = script.index("hosted_smoke http://127.0.0.1:8095")
+    done_at = script.index("== done:")
+    assert health_at < smoke_at < done_at
+    # non-zero exit propagates: the script runs under `set -e`
+    assert "set -euo pipefail" in script
+
+
+def test_hosted_smoke_is_read_only():
+    """Every request the smoke makes is a GET; it never resets or mutates data."""
+    lib = DEPLOY_LIB.read_text()
+    body = lib[lib.index("hosted_smoke()"):]
+    assert "-X POST" not in body and "--data" not in body and "-d " not in body
+    assert "/demo/reset" not in body
+
+
+def test_workflow_syncs_the_shared_lib_next_to_the_deploy_script():
+    wf = WORKFLOW.read_text()
+    assert "scripts/operations/lib/iotconnect_release_lib.sh" in wf
+    assert "/opt/minimoi/iotconnect/lib/iotconnect_release_lib.sh" in wf
+    assert "mkdir -p /opt/minimoi/iotconnect/lib" in wf

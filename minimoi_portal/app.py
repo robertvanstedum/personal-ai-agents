@@ -1655,12 +1655,19 @@ def _experiment_is_joined(row):
 # the joined row to Operational (Spec #155 §3.2: stage is derived from runtime
 # deployment facts, never from the projection file). A candidate label such as
 # "revision 7 candidate" is deliberately not a tag and never promotes.
-_EXPERIMENT_RELEASE_TAG = _re.compile(r"^iotconnect-v\d+\.\d+\.\d+")
+# The single release-tag grammar lives in config (the workflow and the deploy
+# script carry the byte-identical POSIX ERE) — Codex release review 1, P1.
+_EXPERIMENT_RELEASE_TAG = _re.compile(_cfg.RELEASE_TAG_PATTERN)
 
 
 def _experiment_release_is_tagged(label) -> bool:
-    """True only for an approved immutable iotconnect-v<major>.<minor>.<patch> tag."""
-    return bool(label) and bool(_EXPERIMENT_RELEASE_TAG.match(str(label)))
+    """True only for an approved immutable iotconnect-v<major>.<minor>.<patch>[-prerelease] tag.
+
+    Full match, never a prefix match: `iotconnect-v0.9.0evil`,
+    `iotconnect-v0.9.0/../../x`, `iotconnect-v0.9.0-`, a trailing newline or a
+    trailing space are all rejected.
+    """
+    return bool(label) and bool(_EXPERIMENT_RELEASE_TAG.fullmatch(str(label)))
 
 
 def _experiment_join_runtime(rows, health):

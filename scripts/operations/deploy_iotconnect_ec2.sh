@@ -7,13 +7,26 @@
 # Touches only /opt/minimoi/iotconnect/* and the `iotconnect` Compose project.
 # Never invokes the mini-moi project, never uses --remove-orphans against it,
 # never restarts unrelated containers. Proves that with a before/after snapshot.
+#
+# Database-password contract (Spec #154 §7). The value in SSM
+# /minimoi/production/iotconnect_db_password must be:
+#   24-128 printable ASCII characters, no whitespace, quotes, or the characters
+#   : @ / ? # %   -- e.g.  openssl rand -base64 48 | tr -d '/+=' | cut -c1-40
+# It is written single-quoted into $DIR/.env so `$` is literal to Compose, and
+# validated by validate_db_password() before anything is written. The value is
+# never printed.
 set -euo pipefail
 
+_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+# shellcheck source=lib/iotconnect_release_lib.sh
+. "$_LIB_DIR/iotconnect_release_lib.sh"
+
 TAG="${1:?tag}"; DIGEST="${2:?digest}"
-[[ "$TAG" =~ ^iotconnect-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]] || { echo "refusing tag '$TAG'"; exit 2; }
+# One release-tag grammar, byte-identical to minimoi_portal.config.RELEASE_TAG_ERE.
+[[ "$TAG" =~ ^iotconnect-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+(\.[A-Za-z0-9]+)*)?$ ]] || { echo "refusing tag '$TAG'"; exit 2; }
 REGISTRY=332704997792.dkr.ecr.us-east-1.amazonaws.com
 DIR=/opt/minimoi/iotconnect
-COMPOSE="docker-compose -p iotconnect -f $DIR/docker-compose.yml"
+COMPOSE="docker-compose -p iotconnect -f $DIR/docker-compose.yml --env-file $DIR/.env"
 
 echo "== preflight"
 docker network inspect iotconnect-edge >/dev/null 2>&1 || {
@@ -23,8 +36,16 @@ test -f "$DIR/docker-compose.yml" || { echo "$DIR/docker-compose.yml missing (wo
 echo "== secrets: write $DIR/.env fresh from SSM (a rotated parameter is picked up on the next deploy)"
 PW=$(aws ssm get-parameter --region us-east-1 --name /minimoi/production/iotconnect_db_password --with-decryption --query Parameter.Value --output text)
 [ -n "$PW" ] && [ "$PW" != "None" ] || { echo "SSM parameter empty"; exit 3; }
+validate_db_password "$PW" || {
+  unset PW
+  echo "SSM /minimoi/production/iotconnect_db_password does not meet the password contract:"
+  echo "  24-128 printable ASCII characters, no whitespace, quotes, or : @ / ? # %"
+  echo "  generate with: openssl rand -base64 48 | tr -d '/+=' | cut -c1-40"
+  echo "  (the value itself is never printed)"
+  exit 3; }
 umask 077
-printf 'IOTCONNECT_DB_PASSWORD=%s\nIOTCONNECT_IMAGE_TAG=%s\n' "$PW" "$TAG" > "$DIR/.env"
+# Single-quoted values: Compose reads them literally, so `$` is not interpolated.
+printf "IOTCONNECT_DB_PASSWORD='%s'\nIOTCONNECT_IMAGE_TAG='%s'\n" "$PW" "$TAG" > "$DIR/.env"
 unset PW
 # NOTE: rotating the SSM value does not change the password inside an existing
 # PostgreSQL volume; rotate the DB role too (ALTER ROLE) or reset the volume.
@@ -53,6 +74,9 @@ test "$(docker inspect --format '{{.Config.Image}}' minimoi-iotconnect)" = "$REG
 RUNNING=$(docker inspect --format '{{index .RepoDigests 0}}' "$REGISTRY/minimoi/iotconnect:$TAG")
 echo "running digest: $RUNNING"
 [[ "$RUNNING" == *"$DIGEST"* ]] || { echo "digest mismatch: expected $DIGEST"; exit 4; }
+
+echo "== read-only hosted-mode smoke (trusted portal identity headers)"
+hosted_smoke http://127.0.0.1:8095
 
 echo "== entry points"
 curl -sf http://127.0.0.1:8095/api/v1/health >/dev/null

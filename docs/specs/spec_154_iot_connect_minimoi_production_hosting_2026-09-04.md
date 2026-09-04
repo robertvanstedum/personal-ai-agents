@@ -228,8 +228,16 @@ The existing shared `postgres-ai-agents` container is not used by IoT Connect.
 - Generate a new AWS-only PostgreSQL password; do not reuse the published local
   demo default.
 - Store the credential under the established `/minimoi/production/` SSM
-  parameter hierarchy and materialize it into `/opt/minimoi/.env` through the
-  existing secret-sync mechanism.
+  parameter hierarchy (`/minimoi/production/iotconnect_db_password`). The IoT
+  Connect deploy script reads it from SSM on every deploy and writes it directly
+  into the isolated `/opt/minimoi/iotconnect/.env`; it is never materialized
+  into the shared `/opt/minimoi/.env` and does not use the mini-moi secret-sync
+  mechanism.
+- The stored value must be 24–128 printable ASCII characters with no whitespace,
+  quotes, or the characters `:` `@` `/` `?` `#` `%`, so the Compose `.env` line
+  and the PostgreSQL DSN stay unambiguous — for example
+  `openssl rand -base64 48 | tr -d '/+=' | cut -c1-40`. The deploy script
+  validates the value and refuses to deploy if it does not meet this rule.
 - No secret value is committed, printed in CI output, or returned by a health
   endpoint.
 - Only synthetic demo data is hosted.
@@ -325,7 +333,7 @@ scope.
 
 - Signed-out access redirects to login.
 - A non-owner authenticated account receives a denial.
-- The owner reaches the IoT Connect launch page from Guild Improve.
+- The owner reaches the IoT Connect launch page from Guild → Experiment → Launch demo.
 - Client-supplied `X-Minimoi-*` and `X-Demo-*` headers cannot elevate access.
 - Direct public access to ports 8095, 8096, and 5432 is unavailable.
 

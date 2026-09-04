@@ -957,6 +957,18 @@ def test_tagged_release_does_not_promote_when_health_fails(
     ("sha256:deadbeef", False),
     ("", False),
     (None, False),
+    # Codex release review 1, P1 — the predicate is a full match, not a prefix
+    # match, and the prerelease grammar is exact.
+    ("iotconnect-v0.9.0evil", False),
+    ("iotconnect-v0.9.0/../../x", False),
+    ("iotconnect-v0.9.0-", False),
+    ("iotconnect-v0.9.0-beta.1\n", False),
+    ("iotconnect-v0.9.0 ", False),
+    (" iotconnect-v0.9.0", False),
+    ("iotconnect-v0.9.0-beta.", False),
+    ("iotconnect-v0.9.0-beta_1", False),
+    ("iotconnect-v0.9.0.1", False),
+    ("iotconnect-v0.9.0-rc.2", True),
 ])
 def test_release_label_tag_predicate(label, expected):
     import minimoi_portal.app as portal_app
