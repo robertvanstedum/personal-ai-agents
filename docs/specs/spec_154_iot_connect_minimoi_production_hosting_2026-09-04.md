@@ -233,11 +233,12 @@ The existing shared `postgres-ai-agents` container is not used by IoT Connect.
   into the isolated `/opt/minimoi/iotconnect/.env`; it is never materialized
   into the shared `/opt/minimoi/.env` and does not use the mini-moi secret-sync
   mechanism.
-- The stored value must be 24–128 printable ASCII characters with no whitespace,
-  quotes, or the characters `:` `@` `/` `?` `#` `%`, so the Compose `.env` line
-  and the PostgreSQL DSN stay unambiguous — for example
-  `openssl rand -base64 48 | tr -d '/+=' | cut -c1-40`. The deploy script
-  validates the value and refuses to deploy if it does not meet this rule.
+- The stored value must be 24–128 printable ASCII characters with no whitespace
+  and no single quote — for example `openssl rand -base64 48 | cut -c1-40`. The
+  deploy script validates the value and refuses to deploy if it does not meet
+  this rule. It writes the raw value single-quoted for PostgreSQL and a
+  percent-encoded copy for the application's DSN, so URI delimiters such as
+  `@` or `/` in the password cannot change the parsed connection string.
 - No secret value is committed, printed in CI output, or returned by a health
   endpoint.
 - Only synthetic demo data is hosted.

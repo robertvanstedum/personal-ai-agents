@@ -17,13 +17,14 @@ validate_release_tag() {  # $1 candidate tag
 # ── database-password contract (Codex release review 1, P1) ──────────────────
 # Generation rule, also documented in Spec #154 §7 and the deploy-script header:
 #
-#   24–128 printable ASCII characters, no whitespace, quotes, or the characters
-#   : @ / ? # % — e.g.
-#     openssl rand -base64 48 | tr -d '/+=' | cut -c1-40
+#   24–128 printable ASCII characters, no whitespace and no single quote — any
+#   generator works, e.g.  openssl rand -base64 48 | cut -c1-40
 #
 # Rationale: the value is written single-quoted into the Compose .env file (so
-# `$` is literal to Compose) and interpolated into a PostgreSQL URI, where
-# : @ / ? # % are delimiters and would silently change the parsed DSN.
+# `$` is literal to Compose). For the PostgreSQL URI the deploy script writes a
+# second, percent-encoded copy (urlencode_db_password) so URI delimiters such as
+# : @ / ? # % cannot change the parsed DSN; PostgreSQL itself receives the raw
+# value through POSTGRES_PASSWORD.
 validate_db_password() {  # $1 candidate password; returns 0 when acceptable
   local pw="${1-}"
   [ -n "$pw" ] || return 1
@@ -37,11 +38,22 @@ validate_db_password() {  # $1 candidate password; returns 0 when acceptable
   case "$pw" in
     *"'"*) return 1 ;;
   esac
-  # URI delimiters that make the DSN ambiguous.
-  case "$pw" in
-    *[:@/?\#%]*) return 1 ;;
-  esac
   return 0
+}
+
+# Percent-encode for use inside a URI userinfo field: unreserved characters
+# (A-Z a-z 0-9 - _ . ~) pass through, everything else becomes %XX. Pure bash,
+# no python/jq dependency on the host. Prints the encoded value only.
+urlencode_db_password() {  # $1 raw password
+  local raw="${1-}" out="" c i
+  for (( i=0; i<${#raw}; i++ )); do
+    c="${raw:i:1}"
+    case "$c" in
+      [A-Za-z0-9._~-]) out+="$c" ;;
+      *) out+=$(printf '%%%02X' "'$c") ;;
+    esac
+  done
+  printf '%s' "$out"
 }
 
 # ── read-only hosted-mode smoke (Codex release review 1, P1) ─────────────────

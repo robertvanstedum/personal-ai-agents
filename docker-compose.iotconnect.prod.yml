@@ -65,7 +65,7 @@ services:
     env_file: /opt/minimoi/iotconnect/.env
     environment:
       - IOTCONNECT_STORE=postgres
-      - POSTGRES_DSN=postgresql://iotconnect_app:${IOTCONNECT_DB_PASSWORD:?IOTCONNECT_DB_PASSWORD missing}@postgres:5432/iotconnect
+      - POSTGRES_DSN=postgresql://iotconnect_app:${IOTCONNECT_DB_PASSWORD_URLENC:?IOTCONNECT_DB_PASSWORD_URLENC missing (percent-encoded copy written by deploy.sh)}@postgres:5432/iotconnect
       - FLOWONE_BASE_URL=http://integrations:8096
       - AMDOCS_MIDDLEWARE_BASE_URL=http://integrations:8096
       - IOTCONNECT_INTEGRATIONS_URL=http://integrations:8096

@@ -453,6 +453,7 @@ def test_default_release_label_is_the_untagged_candidate(monkeypatch):
 WORKFLOW = REPO / ".github" / "workflows" / "deploy-iotconnect.yml"
 DEPLOY_SCRIPT = REPO / "scripts" / "operations" / "deploy_iotconnect_ec2.sh"
 DEPLOY_LIB = REPO / "scripts" / "operations" / "lib" / "iotconnect_release_lib.sh"
+COMPOSE_FILE = REPO / "docker-compose.iotconnect.prod.yml"
 PROMOTED_COMPOSE = (REPO / "prototype-lab" / "projects" / "project-iot-connect"
                     / "docker-compose.yml")
 
@@ -563,12 +564,12 @@ def _validate_db_password(value: str) -> bool:
     ("Xy3Kq9Zt7Lm2Rb8Wn4Vc6Hd1Jf5Gs0Pa", True),          # base64 with /+= removed
     ("Ab3-_.~!Ab3Ab3Ab3Ab3Ab3Ab3Ab3Ab3", True),         # -_.~! are safe
     ("Ab3$dollarAb3Ab3Ab3Ab3Ab3Ab3Ab3", True),          # $ is safe: .env is single-quoted
-    ("a" * 12 + "@" + "a" * 15, False),                 # @ changes the parsed DSN host
-    ("a" * 12 + ":" + "a" * 15, False),                 # : is a DSN delimiter
-    ("a" * 12 + "/" + "a" * 15, False),
-    ("a" * 12 + "?" + "a" * 15, False),
-    ("a" * 12 + "#" + "a" * 15, False),
-    ("a" * 12 + "%" + "a" * 15, False),
+    ("a" * 12 + "@" + "a" * 15, True),                  # URI delimiters are percent-encoded for the DSN
+    ("a" * 12 + ":" + "a" * 15, True),
+    ("a" * 12 + "/" + "a" * 15, True),                  # plain `openssl rand -base64` output works
+    ("a" * 12 + "?" + "a" * 15, True),
+    ("a" * 12 + "#" + "a" * 15, True),
+    ("a" * 12 + "%" + "a" * 15, True),
     ("a" * 12 + "'" + "a" * 15, False),                 # breaks the quoted .env line
     ("a" * 12 + "\n" + "a" * 15, False),
     ("a" * 12 + " " + "a" * 15, False),
@@ -578,6 +579,29 @@ def _validate_db_password(value: str) -> bool:
 ])
 def test_db_password_contract(value, ok):
     assert _validate_db_password(value) is ok
+
+
+@pytest.mark.parametrize("raw,encoded", [
+    ("abcXYZ019-_.~", "abcXYZ019-_.~"),
+    ("a@b/c:d?e#f%g", "a%40b%2Fc%3Ad%3Fe%23f%25g"),
+    ("Ab3$dollar+equals=", "Ab3%24dollar%2Bequals%3D"),
+])
+def test_db_password_is_percent_encoded_for_the_dsn(raw, encoded):
+    import subprocess
+    proc = subprocess.run(
+        ["bash", "-c", f'source "{DEPLOY_LIB}"; urlencode_db_password "$1"', "_", raw],
+        capture_output=True, text=True)
+    assert proc.returncode == 0 and proc.stdout == encoded, proc.stdout
+
+
+def test_compose_dsn_uses_the_encoded_password_and_postgres_the_raw_one():
+    compose = COMPOSE_FILE.read_text()
+    assert "POSTGRES_PASSWORD=${IOTCONNECT_DB_PASSWORD:?" in compose
+    assert "postgresql://iotconnect_app:${IOTCONNECT_DB_PASSWORD_URLENC:?" in compose
+    script = DEPLOY_SCRIPT.read_text()
+    assert 'PW_URLENC=$(urlencode_db_password "$PW")' in script
+    assert "IOTCONNECT_DB_PASSWORD_URLENC='%s'" in script
+    assert "unset PW PW_URLENC" in script
 
 
 def test_deploy_script_enforces_the_password_contract_before_writing_env():
@@ -594,11 +618,11 @@ def test_deploy_script_enforces_the_password_contract_before_writing_env():
 
 
 def test_password_generation_rule_is_documented():
-    rule = "openssl rand -base64 48 | tr -d '/+=' | cut -c1-40"
+    rule = "openssl rand -base64 48 | cut -c1-40"
     for path in (DEPLOY_SCRIPT, DEPLOY_LIB, REPO / "docs" / "specs" / SPEC):
         text = path.read_text()
         assert rule in text, path.name
-        assert ": @ / ? # %" in text or "`:` `@` `/` `?` `#` `%`" in text, path.name
+        assert "percent-encod" in text, f"{path.name} must state the DSN copy is percent-encoded"
 
 
 # ── read-only hosted-mode smoke on EC2 ──────────────────────────────────────

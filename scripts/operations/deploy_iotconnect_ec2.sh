@@ -11,7 +11,8 @@
 # Database-password contract (Spec #154 §7). The value in SSM
 # /minimoi/production/iotconnect_db_password must be:
 #   24-128 printable ASCII characters, no whitespace, quotes, or the characters
-#   : @ / ? # %   -- e.g.  openssl rand -base64 48 | tr -d '/+=' | cut -c1-40
+#   no whitespace, no single quote -- e.g.  openssl rand -base64 48 | cut -c1-40
+# A percent-encoded copy (IOTCONNECT_DB_PASSWORD_URLENC) is written for the DSN.
 # It is written single-quoted into $DIR/.env so `$` is literal to Compose, and
 # validated by validate_db_password() before anything is written. The value is
 # never printed.
@@ -39,14 +40,15 @@ PW=$(aws ssm get-parameter --region us-east-1 --name /minimoi/production/iotconn
 validate_db_password "$PW" || {
   unset PW
   echo "SSM /minimoi/production/iotconnect_db_password does not meet the password contract:"
-  echo "  24-128 printable ASCII characters, no whitespace, quotes, or : @ / ? # %"
-  echo "  generate with: openssl rand -base64 48 | tr -d '/+=' | cut -c1-40"
+  echo "  24-128 printable ASCII characters, no whitespace, no single quote"
+  echo "  generate with: openssl rand -base64 48 | cut -c1-40"
   echo "  (the value itself is never printed)"
   exit 3; }
 umask 077
 # Single-quoted values: Compose reads them literally, so `$` is not interpolated.
-printf "IOTCONNECT_DB_PASSWORD='%s'\nIOTCONNECT_IMAGE_TAG='%s'\n" "$PW" "$TAG" > "$DIR/.env"
-unset PW
+PW_URLENC=$(urlencode_db_password "$PW")
+printf "IOTCONNECT_DB_PASSWORD='%s'\nIOTCONNECT_DB_PASSWORD_URLENC='%s'\nIOTCONNECT_IMAGE_TAG='%s'\n" "$PW" "$PW_URLENC" "$TAG" > "$DIR/.env"
+unset PW PW_URLENC
 # NOTE: rotating the SSM value does not change the password inside an existing
 # PostgreSQL volume; rotate the DB role too (ALTER ROLE) or reset the volume.
 
