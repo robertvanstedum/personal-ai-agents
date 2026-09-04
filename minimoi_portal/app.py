@@ -1653,15 +1653,16 @@ def _experiment_facet_values(rows, facet):
 
 
 def _experiment_filters(rows, args):
-    """Server-side stage/scope/domain filters (spec §5.2).
+    """Server-side stage/scope/domain filters, kept for deep links (spec §5.2).
 
+    The page itself sorts and filters client-side; these query parameters
+    remain so a saved or shared URL still narrows the table server-side.
     Exact match, case-insensitive; a value not present in the rows is ignored
     rather than emptying the matrix.
     """
-    facets, selected = {}, {}
+    selected = {}
     for facet in _EXPERIMENT_FILTERS:
         values = _experiment_facet_values(rows, facet)
-        facets[facet] = values
         requested = (args.get(facet) or "").strip()
         match = next((v for v in values if v.casefold() == requested.casefold()), None)
         if requested and match:
@@ -1678,20 +1679,7 @@ def _experiment_filters(rows, args):
                     return False
         return True
 
-    def link(facet, value):
-        query = {k: v for k, v in selected.items() if k != facet}
-        if value is not None and selected.get(facet) != value:
-            query[facet] = value
-        return url_for("guild_experiment", **query)
-
-    chips = []
-    for facet in _EXPERIMENT_FILTERS:
-        options = [{"value": value, "href": link(facet, value),
-                    "active": selected.get(facet) == value}
-                   for value in facets[facet]]
-        if options:
-            chips.append({"facet": facet, "options": options})
-    return [r for r in rows if matches(r)], chips, selected, url_for("guild_experiment")
+    return [r for r in rows if matches(r)], selected
 
 
 @app.route("/guild/experiment")
@@ -1706,7 +1694,7 @@ def guild_experiment():
     _experiment_join_runtime(rows, health)
     operational = [r for r in rows if r["experiment_stage"] == "operational"]
     working = [r for r in rows if r["experiment_stage"] != "operational"]
-    working, filter_chips, selected, reset_url = _experiment_filters(working, request.args)
+    working, selected = _experiment_filters(working, request.args)
     return render_template(
         "guild/experiment.html",
         user=_current_user(),
@@ -1717,9 +1705,7 @@ def guild_experiment():
         register_available=available,
         release_label=_cfg.CONNECTHQ_RELEASE_LABEL,
         health=health,
-        filter_chips=filter_chips,
         selected_filters=selected,
-        filter_reset_url=reset_url,
     )
 
 

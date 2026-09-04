@@ -112,6 +112,17 @@ def test_owner_gets_the_page(portal_client, path):
     assert "Guild · Experiment" in r.data.decode()
 
 
+def test_page_is_titled_prototype_lab_with_a_one_line_intro(portal_client):
+    """Visual review, 2026-09-03: shorter page, Prototype Lab name."""
+    _login(portal_client, OWNER)
+    html = portal_client.get("/guild/experiment").data.decode()
+    assert "<title>Prototype Lab — Guild</title>" in html
+    assert '<h1 class="lab-title">Prototype Lab</h1>' in html
+    assert '<p class="lab-lede">A place to experiment.</p>' in html
+    assert "Efforts of any size" not in html
+    assert "Guild · Experiment" in html
+
+
 # ── §9.2 landing ─────────────────────────────────────────────────────────────
 
 def test_landing_has_four_cards_and_experiment_links_to_the_page(portal_client):
@@ -151,7 +162,7 @@ def test_shipped_projection_renders_both_rows_with_all_fields(portal_client):
                      "G3/G3A after standalone beta acceptance"):
         assert fragment in html, fragment
     assert 'data-scope="reference demo"' in html
-    assert 'data-domains="guild,connecthq"' in html
+    assert 'data-domains="guild,iotconnect"' in html
 
 
 def test_rows_are_ordered_by_updated_at_descending(portal_client, projection_file):
@@ -689,18 +700,111 @@ def test_unknown_filter_values_are_ignored(portal_client, projection_file, three
     assert html.count('data-initiative="') == 3
 
 
-def test_filter_chips_are_built_from_the_values_present(
-        portal_client, projection_file, three_rows):
+def test_no_filter_chips_remain(portal_client, projection_file, three_rows):
+    """Visual review, 2026-09-03: chips replaced by a spreadsheet-style table."""
     html = _filtered(portal_client, projection_file, three_rows, "stage=idea")
-    for value in ("built", "idea", "reference demo", "integration", "tool", "guild", "cos"):
-        assert f">{value}</a>" in html, value
-    assert 'class="xp-filter active"' in html
-    assert ">clear</a>" in html
+    assert 'class="xp-filter"' not in html
+    assert 'class="xp-filter active"' not in html
+    assert "data-filter" not in html
+
+
+def test_every_column_is_sortable_and_has_a_filter_input(
+        portal_client, projection_file, three_rows):
+    html = _filtered(portal_client, projection_file, three_rows, "")
+    matrix = html[html.index("Working matrix"):]
+    header = matrix[matrix.index("<thead"):matrix.index("</thead>")]
+    assert header.count("<th data-sort=") == 8
+    assert 'data-sort="date"' in header
+    assert header.count('class="xp-filter-input"') == 8
+    for column in range(8):
+        assert f'data-column="{column}"' in header, column
+    assert ">clear</a>" in header
+    assert 'src="/static/guild-experiment.js"' in html
+
+
+def test_table_is_marked_for_the_grid_script(portal_client, projection_file, three_rows):
+    html = _filtered(portal_client, projection_file, three_rows, "")
+    assert '<table class="xp-table" data-grid>' in html
 
 
 def test_ordering_survives_filtering(portal_client, projection_file, three_rows):
     html = _filtered(portal_client, projection_file, three_rows, "stage=idea")
     assert html.index("INIT-B") < html.index("INIT-C")
+
+
+# ── PR #196 review: a deep-linked filter must be visible and clearable ──────
+
+def test_deep_linked_stage_prefills_its_column_and_offers_a_clean_clear_link(
+        portal_client, projection_file, three_rows):
+    """Codex, PR #196: ?stage=idea dropped rows with no visible reason."""
+    html = _filtered(portal_client, projection_file, three_rows, "stage=idea")
+    matrix = html[html.index("Working matrix"):]
+    header = matrix[matrix.index("<thead"):matrix.index("</thead>")]
+    assert 'value="idea"' in header
+    assert header.count('value=""') == 7  # every other column stays empty
+    assert '<a class="xp-clear" href="/guild/experiment">clear</a>' in header
+    assert 'data-active-query="1"' in matrix
+    assert "xp-grid-ready" in matrix  # the filter row is visible before the script runs
+    assert 'data-initiative="INIT-A"' not in matrix
+
+
+def test_deep_linked_scope_prefills_its_column(portal_client, projection_file, three_rows):
+    html = _filtered(portal_client, projection_file, three_rows, "scope=reference+demo")
+    matrix = html[html.index("Working matrix"):]
+    assert 'value="reference demo"' in matrix
+    assert 'data-initiative="INIT-A"' in matrix
+    assert 'data-initiative="INIT-B"' not in matrix
+
+
+def test_deep_linked_domain_is_named_in_a_notice_with_a_show_all_link(
+        portal_client, projection_file, three_rows):
+    """domain has no column, so the filter is explained above the table."""
+    html = _filtered(portal_client, projection_file, three_rows, "domain=guild")
+    assert "Filtered by domain: guild" in html
+    assert '<a href="/guild/experiment">show all</a>' in html
+    matrix = html[html.index("Working matrix"):]
+    assert 'data-initiative="INIT-B"' not in matrix
+    for row_id in ("INIT-A", "INIT-C"):
+        assert f'data-initiative="{row_id}"' in matrix, row_id
+
+
+def test_a_filter_combination_that_matches_nothing_explains_itself(
+        portal_client, projection_file, three_rows):
+    html = _filtered(portal_client, projection_file, three_rows, "scope=reference+demo&domain=cos")
+    assert "No rows match the active filter." in html
+    assert "Filtered by domain: cos" in html
+    assert '<a class="xp-clear" href="/guild/experiment">clear</a>' in html
+    assert 'data-initiative="' not in html[html.index("Working matrix"):]
+
+
+def test_an_unfiltered_page_carries_no_notice_and_empty_inputs(
+        portal_client, projection_file, three_rows):
+    html = _filtered(portal_client, projection_file, three_rows, "")
+    assert "Filtered by domain:" not in html
+    assert "data-active-query" not in html
+    matrix = html[html.index("Working matrix"):]
+    header = matrix[matrix.index("<thead"):matrix.index("</thead>")]
+    assert header.count('value=""') == 8
+
+
+def test_clearing_a_deep_linked_view_reloads_the_clean_url():
+    """Clearing the inputs cannot restore server-dropped rows; the script navigates."""
+    script = (Path(__file__).resolve().parent.parent
+              / "minimoi_portal" / "static" / "guild-experiment.js").read_text()
+    assert "window.location.assign(clear.href)" in script
+    assert "window.location.search" in script
+
+
+def test_the_grid_script_parses():
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not available in this environment")
+    script = (Path(__file__).resolve().parent.parent
+              / "minimoi_portal" / "static" / "guild-experiment.js")
+    out = subprocess.run([node, "--check", str(script)], capture_output=True, timeout=30)
+    assert out.returncode == 0, out.stderr.decode()
 
 
 def test_stale_threshold_comes_from_configuration(portal_client, projection_file, monkeypatch):

@@ -12,7 +12,7 @@
       "scope": "reference demo",
       "updated_at": "2026-09-03",
       "next_step": "Promote, tag, and host after Spec #154 gates",
-      "domains": ["guild", "connecthq"],
+      "domains": ["guild", "iotconnect"],
       "planning_url": null
     },
     {
