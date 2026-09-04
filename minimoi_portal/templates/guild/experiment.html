@@ -107,6 +107,13 @@
       color: var(--accent); text-decoration: none;
     }
     .xp-clear:hover { text-decoration: underline; }
+    .xp-notice {
+      font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em;
+      color: var(--text-muted); margin: 0 0 0.6rem;
+    }
+    .xp-notice a { color: var(--accent); text-decoration: none; margin-left: 10px; }
+    .xp-notice a:hover { text-decoration: underline; }
+    .xp-empty .xp-clear { margin-left: 10px; }
   </style>
 </head>
 <body>
@@ -128,7 +135,7 @@
     {% if not row.actions and not row.planning_url %}<span class="xp-muted">&mdash;</span>{% endif %}
   </div>
 {% endmacro %}
-{% macro grid_head(columns) %}
+{% macro grid_head(columns, prefill={}) %}
   <thead>
     <tr>
       {%- for column in columns %}<th data-sort="{{ column[1] }}">{{ column[0] }}</th>{% endfor %}
@@ -137,7 +144,8 @@
       {%- for column in columns %}
       <td>{% if loop.last %}<div class="xp-filter-cell">{% endif %}<input class="xp-filter-input" type="text"
              data-column="{{ loop.index0 }}" autocomplete="off"
-             aria-label="Filter by {{ column[0] }}">{% if loop.last %}<a class="xp-clear" href="#">clear</a></div>{% endif %}</td>
+             value="{{ prefill.get(column[0], '') }}"
+             aria-label="Filter by {{ column[0] }}">{% if loop.last %}<a class="xp-clear" href="/guild/experiment">clear</a></div>{% endif %}</td>
       {%- endfor %}
     </tr>
   </thead>
@@ -185,15 +193,19 @@
   {% endif %}
 
   <div class="lab-section">Working matrix</div>
+  {% if selected_filters.get('domain') %}
+  <p class="xp-notice">Filtered by domain: {{ selected_filters['domain'] }}<a href="/guild/experiment">show all</a></p>
+  {% endif %}
   {% if not register_available %}
   <div class="xp-unavailable">
     Working register unavailable.
     {% if generated_at %}Last generated {{ generated_at }}.{% endif %}
   </div>
   {% elif working %}
-  <table class="xp-table" data-grid>
+  <table class="xp-table{% if selected_filters %} xp-grid-ready{% endif %}" data-grid{% if selected_filters %} data-active-query="1"{% endif %}>
     {{ grid_head([('ID', 'text'), ('Activity', 'text'), ('Scope', 'text'), ('Stage', 'text'),
-                  ('Updated', 'date'), ('Next step', 'text'), ('Runtime', 'text'), ('Actions', 'text')]) }}
+                  ('Updated', 'date'), ('Next step', 'text'), ('Runtime', 'text'), ('Actions', 'text')],
+                 {'Scope': selected_filters.get('scope', ''), 'Stage': selected_filters.get('stage', '')}) }}
     <tbody>
       {% for row in working %}
       <tr data-initiative="{{ row.initiative_id }}" data-stage="{{ row.experiment_stage }}"
@@ -221,7 +233,7 @@
     </tbody>
   </table>
   {% else %}
-  <div class="xp-empty">{% if selected_filters %}No entries match this filter.{% else %}No working entries yet.{% endif %}</div>
+  <div class="xp-empty">{% if selected_filters %}No rows match the active filter.<a class="xp-clear" href="/guild/experiment">clear</a>{% else %}No working entries yet.{% endif %}</div>
   {% endif %}
 </div>
 

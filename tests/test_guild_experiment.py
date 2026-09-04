@@ -732,6 +732,81 @@ def test_ordering_survives_filtering(portal_client, projection_file, three_rows)
     assert html.index("INIT-B") < html.index("INIT-C")
 
 
+# ── PR #196 review: a deep-linked filter must be visible and clearable ──────
+
+def test_deep_linked_stage_prefills_its_column_and_offers_a_clean_clear_link(
+        portal_client, projection_file, three_rows):
+    """Codex, PR #196: ?stage=idea dropped rows with no visible reason."""
+    html = _filtered(portal_client, projection_file, three_rows, "stage=idea")
+    matrix = html[html.index("Working matrix"):]
+    header = matrix[matrix.index("<thead"):matrix.index("</thead>")]
+    assert 'value="idea"' in header
+    assert header.count('value=""') == 7  # every other column stays empty
+    assert '<a class="xp-clear" href="/guild/experiment">clear</a>' in header
+    assert 'data-active-query="1"' in matrix
+    assert "xp-grid-ready" in matrix  # the filter row is visible before the script runs
+    assert 'data-initiative="INIT-A"' not in matrix
+
+
+def test_deep_linked_scope_prefills_its_column(portal_client, projection_file, three_rows):
+    html = _filtered(portal_client, projection_file, three_rows, "scope=reference+demo")
+    matrix = html[html.index("Working matrix"):]
+    assert 'value="reference demo"' in matrix
+    assert 'data-initiative="INIT-A"' in matrix
+    assert 'data-initiative="INIT-B"' not in matrix
+
+
+def test_deep_linked_domain_is_named_in_a_notice_with_a_show_all_link(
+        portal_client, projection_file, three_rows):
+    """domain has no column, so the filter is explained above the table."""
+    html = _filtered(portal_client, projection_file, three_rows, "domain=guild")
+    assert "Filtered by domain: guild" in html
+    assert '<a href="/guild/experiment">show all</a>' in html
+    matrix = html[html.index("Working matrix"):]
+    assert 'data-initiative="INIT-B"' not in matrix
+    for row_id in ("INIT-A", "INIT-C"):
+        assert f'data-initiative="{row_id}"' in matrix, row_id
+
+
+def test_a_filter_combination_that_matches_nothing_explains_itself(
+        portal_client, projection_file, three_rows):
+    html = _filtered(portal_client, projection_file, three_rows, "scope=reference+demo&domain=cos")
+    assert "No rows match the active filter." in html
+    assert "Filtered by domain: cos" in html
+    assert '<a class="xp-clear" href="/guild/experiment">clear</a>' in html
+    assert 'data-initiative="' not in html[html.index("Working matrix"):]
+
+
+def test_an_unfiltered_page_carries_no_notice_and_empty_inputs(
+        portal_client, projection_file, three_rows):
+    html = _filtered(portal_client, projection_file, three_rows, "")
+    assert "Filtered by domain:" not in html
+    assert "data-active-query" not in html
+    matrix = html[html.index("Working matrix"):]
+    header = matrix[matrix.index("<thead"):matrix.index("</thead>")]
+    assert header.count('value=""') == 8
+
+
+def test_clearing_a_deep_linked_view_reloads_the_clean_url():
+    """Clearing the inputs cannot restore server-dropped rows; the script navigates."""
+    script = (Path(__file__).resolve().parent.parent
+              / "minimoi_portal" / "static" / "guild-experiment.js").read_text()
+    assert "window.location.assign(clear.href)" in script
+    assert "window.location.search" in script
+
+
+def test_the_grid_script_parses():
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not available in this environment")
+    script = (Path(__file__).resolve().parent.parent
+              / "minimoi_portal" / "static" / "guild-experiment.js")
+    out = subprocess.run([node, "--check", str(script)], capture_output=True, timeout=30)
+    assert out.returncode == 0, out.stderr.decode()
+
+
 def test_stale_threshold_comes_from_configuration(portal_client, projection_file, monkeypatch):
     import minimoi_portal.app as portal_app
     old = (datetime.now(timezone.utc) - timedelta(days=10)).date().isoformat()

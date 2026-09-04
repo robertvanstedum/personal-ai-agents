@@ -6,6 +6,7 @@
 
   var ASC = '▲';
   var DESC = '▼';
+  var DEEP_LINKED = /[?&](stage|scope|domain)=/;
 
   function cellText(cell) {
     return (cell ? cell.textContent : '').replace(/\s+/g, ' ').trim();
@@ -98,9 +99,15 @@
         event.preventDefault();
         inputs.forEach(function (input) { input.value = ''; });
         applyFilters();
+        // A deep link (?stage=, ?scope=, ?domain=) removed rows server-side,
+        // so clearing the inputs alone cannot bring them back: reload clean.
+        if (DEEP_LINKED.test(window.location.search)) {
+          window.location.assign(clear.href);
+        }
       });
     }
 
+    applyFilters();  // server-rendered filter values may already be present
     table.classList.add('xp-grid-ready');
   }
 
