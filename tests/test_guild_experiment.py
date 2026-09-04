@@ -112,6 +112,17 @@ def test_owner_gets_the_page(portal_client, path):
     assert "Guild · Experiment" in r.data.decode()
 
 
+def test_page_is_titled_prototype_lab_with_a_one_line_intro(portal_client):
+    """Visual review, 2026-09-03: shorter page, Prototype Lab name."""
+    _login(portal_client, OWNER)
+    html = portal_client.get("/guild/experiment").data.decode()
+    assert "<title>Prototype Lab — Guild</title>" in html
+    assert '<h1 class="lab-title">Prototype Lab</h1>' in html
+    assert '<p class="lab-lede">A place to experiment.</p>' in html
+    assert "Efforts of any size" not in html
+    assert "Guild · Experiment" in html
+
+
 # ── §9.2 landing ─────────────────────────────────────────────────────────────
 
 def test_landing_has_four_cards_and_experiment_links_to_the_page(portal_client):
@@ -151,7 +162,7 @@ def test_shipped_projection_renders_both_rows_with_all_fields(portal_client):
                      "G3/G3A after standalone beta acceptance"):
         assert fragment in html, fragment
     assert 'data-scope="reference demo"' in html
-    assert 'data-domains="guild,connecthq"' in html
+    assert 'data-domains="guild,iotconnect"' in html
 
 
 def test_rows_are_ordered_by_updated_at_descending(portal_client, projection_file):
@@ -689,13 +700,31 @@ def test_unknown_filter_values_are_ignored(portal_client, projection_file, three
     assert html.count('data-initiative="') == 3
 
 
-def test_filter_chips_are_built_from_the_values_present(
-        portal_client, projection_file, three_rows):
+def test_no_filter_chips_remain(portal_client, projection_file, three_rows):
+    """Visual review, 2026-09-03: chips replaced by a spreadsheet-style table."""
     html = _filtered(portal_client, projection_file, three_rows, "stage=idea")
-    for value in ("built", "idea", "reference demo", "integration", "tool", "guild", "cos"):
-        assert f">{value}</a>" in html, value
-    assert 'class="xp-filter active"' in html
-    assert ">clear</a>" in html
+    assert 'class="xp-filter"' not in html
+    assert 'class="xp-filter active"' not in html
+    assert "data-filter" not in html
+
+
+def test_every_column_is_sortable_and_has_a_filter_input(
+        portal_client, projection_file, three_rows):
+    html = _filtered(portal_client, projection_file, three_rows, "")
+    matrix = html[html.index("Working matrix"):]
+    header = matrix[matrix.index("<thead"):matrix.index("</thead>")]
+    assert header.count("<th data-sort=") == 8
+    assert 'data-sort="date"' in header
+    assert header.count('class="xp-filter-input"') == 8
+    for column in range(8):
+        assert f'data-column="{column}"' in header, column
+    assert ">clear</a>" in header
+    assert 'src="/static/guild-experiment.js"' in html
+
+
+def test_table_is_marked_for_the_grid_script(portal_client, projection_file, three_rows):
+    html = _filtered(portal_client, projection_file, three_rows, "")
+    assert '<table class="xp-table" data-grid>' in html
 
 
 def test_ordering_survives_filtering(portal_client, projection_file, three_rows):

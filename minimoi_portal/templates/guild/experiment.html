@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Experiment — Guild</title>
+  <title>Prototype Lab — Guild</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/guild.css">
@@ -39,7 +39,7 @@
       text-transform: uppercase; color: #8b5e2a; margin-bottom: 0.5rem;
     }
     .lab-title { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 400; margin-bottom: 0.4rem; }
-    .lab-lede { font-size: 0.9rem; color: var(--text-muted); line-height: 1.6; max-width: 620px; margin-bottom: 2rem; }
+    .lab-lede { font-size: 0.9rem; font-style: italic; color: var(--text-muted); line-height: 1.6; max-width: 620px; margin-bottom: 2rem; }
     .lab-section {
       font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.16em;
       text-transform: uppercase; color: var(--text-dim); margin: 2rem 0 0.75rem;
@@ -89,17 +89,24 @@
     .xp-runtime .dot { margin-right: 4px; }
     .xp-runtime.up { color: #4a7a3f; }
     .xp-runtime.down { color: #8b5e2a; }
-    .xp-filters {
-      display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px;
-      margin: 0 0 0.75rem; font-family: 'DM Mono', monospace; font-size: 10px;
+    .xp-table.xp-grid-ready th { cursor: pointer; user-select: none; }
+    .xp-table.xp-grid-ready th:hover { color: var(--text-muted); }
+    .xp-sort { margin-left: 5px; font-size: 8px; color: var(--accent); }
+    .xp-filter-row { display: none; }
+    .xp-table.xp-grid-ready .xp-filter-row { display: table-row; }
+    .xp-filter-row td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+    .xp-filter-input {
+      width: 100%; min-width: 60px; font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text); background: var(--surface); border: 1px solid #ddd6c8;
+      border-radius: 3px; padding: 3px 6px;
     }
-    .xp-filters .facet { color: var(--text-dim); letter-spacing: 0.12em; text-transform: uppercase; }
-    .xp-filter {
-      color: var(--text-muted); text-decoration: none; border: 1px solid var(--border);
-      border-radius: 3px; padding: 1px 7px; background: var(--surface);
+    .xp-filter-input:focus { outline: none; border-color: var(--accent); }
+    .xp-filter-cell { display: flex; align-items: center; gap: 8px; }
+    .xp-clear {
+      font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.06em;
+      color: var(--accent); text-decoration: none;
     }
-    .xp-filter:hover { color: var(--text); }
-    .xp-filter.active { color: var(--surface); background: var(--accent); border-color: var(--accent); }
+    .xp-clear:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -121,6 +128,20 @@
     {% if not row.actions and not row.planning_url %}<span class="xp-muted">&mdash;</span>{% endif %}
   </div>
 {% endmacro %}
+{% macro grid_head(columns) %}
+  <thead>
+    <tr>
+      {%- for column in columns %}<th data-sort="{{ column[1] }}">{{ column[0] }}</th>{% endfor %}
+    </tr>
+    <tr class="xp-filter-row">
+      {%- for column in columns %}
+      <td>{% if loop.last %}<div class="xp-filter-cell">{% endif %}<input class="xp-filter-input" type="text"
+             data-column="{{ loop.index0 }}" autocomplete="off"
+             aria-label="Filter by {{ column[0] }}">{% if loop.last %}<a class="xp-clear" href="#">clear</a></div>{% endif %}</td>
+      {%- endfor %}
+    </tr>
+  </thead>
+{% endmacro %}
 {% include 'guild/_portal_nav.html' %}
 
 <nav class="guild-nav">
@@ -129,8 +150,8 @@
 
 <div class="lab-wrap">
   <div class="lab-kicker">Guild · Experiment</div>
-  <h1 class="lab-title">Experiment</h1>
-  <p class="lab-lede">Efforts of any size whose purpose is learning or proving — a behaviour worth trying, an integration, a tool, or a complete demonstration. Planning Studio owns the record; this page renders a read-only projection of it.</p>
+  <h1 class="lab-title">Prototype Lab</h1>
+  <p class="lab-lede">A place to experiment.</p>
 
   {% if warnings %}
   <div class="xp-warnings">
@@ -143,10 +164,9 @@
 
   <div class="lab-section">Operational</div>
   {% if operational %}
-  <table class="xp-table">
-    <thead>
-      <tr><th>Name</th><th>What it proves</th><th>Release</th><th>Runtime</th><th>Actions</th></tr>
-    </thead>
+  <table class="xp-table" data-grid>
+    {{ grid_head([('Name', 'text'), ('What it proves', 'text'), ('Release', 'text'),
+                  ('Runtime', 'text'), ('Actions', 'text')]) }}
     <tbody>
       {% for row in operational %}
       <tr data-initiative="{{ row.initiative_id }}" data-stage="{{ row.experiment_stage }}"
@@ -165,27 +185,15 @@
   {% endif %}
 
   <div class="lab-section">Working matrix</div>
-  {% if register_available and filter_chips %}
-  <div class="xp-filters">
-    {% for chip in filter_chips %}
-    <span class="facet">{{ chip.facet }}</span>
-    {% for option in chip.options %}
-    <a class="xp-filter{% if option.active %} active{% endif %}" href="{{ option.href }}">{{ option.value }}</a>
-    {% endfor %}
-    {% endfor %}
-    {% if selected_filters %}<a class="xp-filter" href="{{ filter_reset_url }}">clear</a>{% endif %}
-  </div>
-  {% endif %}
   {% if not register_available %}
   <div class="xp-unavailable">
     Working register unavailable.
     {% if generated_at %}Last generated {{ generated_at }}.{% endif %}
   </div>
   {% elif working %}
-  <table class="xp-table">
-    <thead>
-      <tr><th>ID</th><th>Activity</th><th>Scope</th><th>Stage</th><th>Updated</th><th>Next step</th><th>Runtime</th><th>Actions</th></tr>
-    </thead>
+  <table class="xp-table" data-grid>
+    {{ grid_head([('ID', 'text'), ('Activity', 'text'), ('Scope', 'text'), ('Stage', 'text'),
+                  ('Updated', 'date'), ('Next step', 'text'), ('Runtime', 'text'), ('Actions', 'text')]) }}
     <tbody>
       {% for row in working %}
       <tr data-initiative="{{ row.initiative_id }}" data-stage="{{ row.experiment_stage }}"
@@ -217,5 +225,6 @@
   {% endif %}
 </div>
 
+<script src="/static/guild-experiment.js" defer></script>
 </body>
 </html>
